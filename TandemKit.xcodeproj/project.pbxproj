@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1A693F472D2B2B9100A65351 /* LoopKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F462D2B2B9100A65351 /* LoopKit.xcframework */; };
+		1A693F482D2B2B9100A65351 /* LoopKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F462D2B2B9100A65351 /* LoopKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1A693F4B2D2B2B9300A65351 /* LoopKitUI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */; };
+		1A693F4C2D2B2B9300A65351 /* LoopKitUI.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1A693F4E2D2B2B9500A65351 /* LoopTestingKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */; };
+		1A693F4F2D2B2B9500A65351 /* LoopTestingKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1A693F512D2B2B9A00A65351 /* MockKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F502D2B2B9A00A65351 /* MockKit.xcframework */; };
+		1A693F522D2B2B9A00A65351 /* MockKit.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F502D2B2B9A00A65351 /* MockKit.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1A693F542D2B2B9D00A65351 /* MockKitUI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */; };
+		1A693F552D2B2B9D00A65351 /* MockKitUI.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1AAA18792D2B1E060061C043 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -20,7 +30,31 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		1A693F492D2B2B9100A65351 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				1A693F522D2B2B9A00A65351 /* MockKit.xcframework in Embed Frameworks */,
+				1A693F4C2D2B2B9300A65351 /* LoopKitUI.xcframework in Embed Frameworks */,
+				1A693F4F2D2B2B9500A65351 /* LoopTestingKit.xcframework in Embed Frameworks */,
+				1A693F552D2B2B9D00A65351 /* MockKitUI.xcframework in Embed Frameworks */,
+				1A693F482D2B2B9100A65351 /* LoopKit.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		1A693F462D2B2B9100A65351 /* LoopKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKit.xcframework; path = Carthage/Build/LoopKit.xcframework; sourceTree = "<group>"; };
+		1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKitUI.xcframework; path = Carthage/Build/LoopKitUI.xcframework; sourceTree = "<group>"; };
+		1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopTestingKit.xcframework; path = Carthage/Build/LoopTestingKit.xcframework; sourceTree = "<group>"; };
+		1A693F502D2B2B9A00A65351 /* MockKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MockKit.xcframework; path = Carthage/Build/MockKit.xcframework; sourceTree = "<group>"; };
+		1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MockKitUI.xcframework; path = Carthage/Build/MockKitUI.xcframework; sourceTree = "<group>"; };
+		1A693F562D2B2BA200A65351 /* MockKitUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MockKitUI.framework; path = Carthage/Build/iOS/MockKitUI.framework; sourceTree = "<group>"; };
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -56,6 +90,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A693F512D2B2B9A00A65351 /* MockKit.xcframework in Frameworks */,
+				1A693F4B2D2B2B9300A65351 /* LoopKitUI.xcframework in Frameworks */,
+				1A693F4E2D2B2B9500A65351 /* LoopTestingKit.xcframework in Frameworks */,
+				1A693F542D2B2B9D00A65351 /* MockKitUI.xcframework in Frameworks */,
+				1A693F472D2B2B9100A65351 /* LoopKit.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,11 +109,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1A693F452D2B2B9100A65351 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1A693F562D2B2BA200A65351 /* MockKitUI.framework */,
+				1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */,
+				1A693F502D2B2B9A00A65351 /* MockKit.xcframework */,
+				1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */,
+				1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */,
+				1A693F462D2B2B9100A65351 /* LoopKit.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		1AAA18642D2B1E060061C043 = {
 			isa = PBXGroup;
 			children = (
 				1AAA18702D2B1E060061C043 /* TandemKit */,
 				1AAA187C2D2B1E060061C043 /* TandemKitTests */,
+				1A693F452D2B2B9100A65351 /* Frameworks */,
 				1AAA186F2D2B1E060061C043 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -105,10 +158,12 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 1AAA18812D2B1E060061C043 /* Build configuration list for PBXNativeTarget "TandemKit" */;
 			buildPhases = (
+				1A693F442D2B292F00A65351 /* ShellScript */,
 				1AAA18692D2B1E060061C043 /* Headers */,
 				1AAA186A2D2B1E060061C043 /* Sources */,
 				1AAA186B2D2B1E060061C043 /* Frameworks */,
 				1AAA186C2D2B1E060061C043 /* Resources */,
+				1A693F492D2B2B9100A65351 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -202,6 +257,31 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		1A693F442D2B292F00A65351 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 8;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Carthage/Build/LoopKit.xcframework",
+				"$(SRCROOT)/Carthage/Build/LoopKitUI.xcframework",
+				"$(SRCROOT)/Carthage/Build/LoopTestingKit.xcframework",
+				"$(SRCROOT)/Carthage/Build/MockKit.xcframework",
+				"$(SRCROOT)/Carthage/Build/MockKitUI.xcframework",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+			shellPath = /bin/sh;
+			shellScript = "carthage copy-frameworks\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		1AAA186A2D2B1E060061C043 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -231,7 +311,7 @@
 		1AAA18822D2B1E060061C043 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -241,6 +321,10 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Carthage/Build/iOS",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -268,7 +352,7 @@
 		1AAA18832D2B1E060061C043 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -278,6 +362,10 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Carthage/Build/iOS",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -356,11 +444,11 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx;
+				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VERSIONING_SYSTEM = "apple-generic";
@@ -416,10 +504,10 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = "";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				SDKROOT = macosx;
+				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
