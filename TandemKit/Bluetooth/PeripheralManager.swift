@@ -525,3 +525,64 @@ extension PeripheralManager {
         })
     }
 }
+
+// MARK: - Tandem Bluetooth Helpers
+extension PeripheralManager {
+    /// Sends raw data to the pump using the control characteristic.
+    /// - Parameters:
+    ///   - data: The packet data to transmit.
+    ///   - timeout: Time to wait for the write to complete.
+    /// - Throws: `PeripheralManagerError` when bluetooth is not ready or the write fails.
+    func sendData(_ data: Data, timeout: TimeInterval) throws {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        guard let characteristic = peripheral.getControlCharacteristic() else {
+            throw PeripheralManagerError.notReady
+        }
+
+        try writeValue(data, for: characteristic, type: .withResponse, timeout: timeout)
+    }
+
+    /// Waits for a response packet to arrive on any of the pump characteristics.
+    /// The received packet will be stored in `cmdQueue` by the value update macros.
+    /// - Parameter timeout: How long to wait for the notification.
+    /// - Throws: `PeripheralManagerError.timeout` if no packet is received.
+    func waitForResponse(timeout: TimeInterval) throws {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        let waitUntil = Date(timeIntervalSinceNow: timeout)
+        queueLock.lock()
+        while cmdQueue.isEmpty && queueLock.wait(until: waitUntil) {}
+        let hasData = !cmdQueue.isEmpty
+        queueLock.unlock()
+
+        if !hasData {
+            throw PeripheralManagerError.timeout([])
+        }
+    }
+
+    /// Reads the next packet received from the pump.
+    /// - Returns: Raw packet data if available.
+    func readMessagePacket() throws -> Data? {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        try waitForResponse(timeout: 5)
+
+        queueLock.lock()
+        let cmd = cmdQueue.isEmpty ? nil : cmdQueue.removeFirst()
+        queueLock.unlock()
+        return cmd?.value
+    }
+
+    /// Convenience wrapper for sending a single message packet.
+    func sendMessagePacket(_ data: Data) -> SendMessageResult {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        do {
+            try sendData(data, timeout: 5)
+            return .sentWithAcknowledgment
+        } catch {
+            return .unsentWithError(error)
+        }
+    }
+}
