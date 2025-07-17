@@ -7,8 +7,14 @@
 
 
 enum SendMessageResult {
+    /// The packet was sent and the pump acknowledged receipt.
     case sentWithAcknowledgment
-    case sentWithError
+
+    /// The packet was sent but the pump responded with an error.
+    case sentWithError(Error)
+
+    /// The packet could not be sent because of a bluetooth error.
+    case unsentWithError(Error)
 }
 
 extension PeripheralManager {
