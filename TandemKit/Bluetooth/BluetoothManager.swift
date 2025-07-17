@@ -248,6 +248,22 @@ class BluetoothManager: NSObject {
         }
     }
 
+    /// Determines if the discovered peripheral appears to be a Tandem pump.
+    /// This mirrors the logic from pumpx2's `BluetoothConstants.isTandemBluetoothDevice`.
+    private func isTandemPeripheral(_ peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool {
+        let name = (advertisementData?[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name
+        if BluetoothConstants.isTandemBluetoothDevice(name) {
+            return true
+        }
+
+        if let services = advertisementData?[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] {
+            if services.contains(ServiceUUID.PUMP_SERVICE.cbUUID) {
+                return true
+            }
+        }
+        return false
+    }
+
     // MARK: - Accessors
 
     var isScanning: Bool {
@@ -306,7 +322,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         log.info("%{public}@: %{public}@", #function, peripheral)
-        if delegate == nil || delegate!.bluetoothManager(self, shouldConnectPeripheral: peripheral, advertisementData: advertisementData) {
+        var shouldConnect = false
+        if let delegate = delegate {
+            shouldConnect = delegate.bluetoothManager(self, shouldConnectPeripheral: peripheral, advertisementData: advertisementData)
+        } else {
+            shouldConnect = isTandemPeripheral(peripheral, advertisementData: advertisementData)
+        }
+
+        if shouldConnect {
             self.peripheral = peripheral
 
             log.debug("connecting to peripheral %@", peripheral)
