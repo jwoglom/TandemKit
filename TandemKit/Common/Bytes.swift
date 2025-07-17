@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Foundation
+import Security
 
 struct Bytes {
 
@@ -160,5 +160,27 @@ struct Bytes {
             encoded.append(0)
         }
         return encoded
+    }
+
+    /// Returns 8 bytes of cryptographically secure random data.
+    /// (Equivalent to `getSecureRandom8Bytes` in Java.)
+    static func getSecureRandom8Bytes() -> Data {
+        return getSecureRandomBytes(count: 8)
+    }
+
+    /// Returns 10 bytes of cryptographically secure random data.
+    /// (Equivalent to `getSecureRandom10Bytes` in Java.)
+    static func getSecureRandom10Bytes() -> Data {
+        return getSecureRandomBytes(count: 10)
+    }
+
+    /// Helper which generates `count` bytes of secure random data.
+    private static func getSecureRandomBytes(count: Int) -> Data {
+        var bytes = Data(count: count)
+        let result = bytes.withUnsafeMutableBytes {
+            SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!)
+        }
+        precondition(result == errSecSuccess, "Failed to generate random bytes")
+        return bytes
     }
 }
