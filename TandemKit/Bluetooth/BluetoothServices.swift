@@ -21,7 +21,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 },
@@ -30,7 +30,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 },
@@ -39,7 +39,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 },
@@ -48,7 +48,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 },
@@ -57,7 +57,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 },
@@ -66,7 +66,7 @@ extension PeripheralManager.Configuration {
                     guard let value = characteristic.value else { return }
 
                     manager.queueLock.lock()
-                    manager.cmdQueue.append(value)
+                    manager.cmdQueue.append(BluetoothCmd(uuid: characteristic.uuid, value: value))
                     manager.queueLock.signal()
                     manager.queueLock.unlock()
                 }

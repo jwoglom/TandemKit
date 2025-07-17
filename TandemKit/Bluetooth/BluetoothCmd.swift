@@ -9,5 +9,5 @@ import CoreBluetooth
 
 struct BluetoothCmd {
     let uuid: CBUUID
-    let data: Data
+    let value: Data
 }
