@@ -49,16 +49,11 @@ extension PeripheralManager {
 
         do {
             for (index, packet) in packets.enumerated() {
-                // Consider starting the last packet send as the point at which the message may be received by the pod.
-                // A failure after data is actually sent, but before the sendData() returns can still be received.
-                if index == packets.count - 1 {
-                    didSend = true
-                }
-                try sendData(packet.toData(), timeout: 5)
-                try self.peekForNack()
+                try sendData(packet.build, timeout: 5)
             }
+            didSend = true
 
-            try waitForCommand(PodCommand.SUCCESS, timeout: 5)
+            try waitForResponse(timeout: 5)
         }
         catch {
             if didSend {
