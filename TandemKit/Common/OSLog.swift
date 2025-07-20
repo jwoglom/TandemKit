@@ -4,7 +4,7 @@
 //
 //  Created by James Woglom on 1/5/25.
 //
-//  Basis: OmnipodKit OSLog.swift
+//  Basis: PumpKit OSLog.swift
 //  Copyright © 2017 LoopKit Authors. All rights reserved.
 //
 
