@@ -6,7 +6,7 @@ struct TronMessageWrapper {
     let message: Message
     let packets: [Packet]
 
-    init(message: Message, currentTxId: UInt8, maxChunkSize: Int = 18) {
+    init(message: Message, currentTxId: UInt8) {
         self.message = message
         var authKey = Data()
         if type(of: message).props.signed {
@@ -19,6 +19,21 @@ struct TronMessageWrapper {
                                       authenticationKey: authKey,
                                       txId: currentTxId,
                                       timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?())
+    }
+
+    init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
+        self.message = message
+        var authKey = Data()
+        if type(of: message).props.signed {
+            authKey = PumpStateSupplier.authenticationKey()
+        } else {
+            authKey = PumpStateSupplier.authenticationKey()
+        }
+        self.packets = try! Packetize(message: message,
+                                      authenticationKey: authKey,
+                                      txId: currentTxId,
+                                      timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?(),
+                                      maxChunkSize: maxChunkSize)
     }
 
     func buildPacketArrayList(_ type: MessageType) -> PacketArrayList {
@@ -35,5 +50,17 @@ struct TronMessageWrapper {
                                expectedCargoSize: size,
                                expectedTxId: packets.first?.txId ?? 0,
                                isSigned: props.signed)
+    }
+
+    func mergeIntoSinglePacket() -> Packet? {
+        var packet: Packet?
+        for pkt in packets {
+            if let existing = packet {
+                packet = existing.merge(newPacket: pkt)
+            } else {
+                packet = pkt
+            }
+        }
+        return packet
     }
 }
