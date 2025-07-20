@@ -8,7 +8,7 @@
 import Foundation
 import Security
 
-struct Bytes {
+public struct Bytes {
 
     /// Drops the first `n` bytes from the data and returns the remainder.
     static func dropFirstN(_ data: Data, _ n: Int) -> Data {
