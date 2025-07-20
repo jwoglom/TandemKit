@@ -11,9 +11,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2.0'
       - name: Install Carthage
         run: brew install carthage
       - name: Bootstrap Carthage dependencies
-        run: ./carthage.sh bootstrap --platform iOS --no-use-binaries
+        run: ./carthage.sh bootstrap --platform iOS --no-use-binaries --use-xcframeworks
       - name: Build TandemKit
         run: xcodebuild -project TandemKit.xcodeproj -scheme TandemKit -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO build
