@@ -4,7 +4,7 @@
 //
 //  Created by James Woglom on 1/5/25.
 //
-//  Basis: OmniBLE/OmnipodKit PodComms.swift
+//  Basis: OmniBLE PumpComms.swift
 
 
 import Foundation
@@ -36,14 +36,14 @@ public class PumpComm: CustomDebugStringConvertible {
     
     public var isDevicePaired: Bool {
         get {
-            // return self.podState?.ltk != nil && (self.podState?.ltk.count ?? 0) > 0
+            // return self.pumpState?.ltk != nil && (self.pumpState?.ltk.count ?? 0) > 0
             return false
         }
     }
     
     public var isAuthenticated: Bool {
         get {
-            // return self.podState?.ltk != nil && (self.podState?.ltk.count ?? 0) > 0
+            // return self.pumpState?.ltk != nil && (self.pumpState?.ltk.count ?? 0) > 0
             return false
         }
     }

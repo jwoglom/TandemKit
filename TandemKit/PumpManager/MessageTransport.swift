@@ -84,7 +84,7 @@ protocol MessageTransport {
 class PumpMessageTransport: MessageTransport {
     private let manager: PeripheralManager
 
-    private let log = OSLog(category: "PodMessageTransport")
+    private let log = OSLog(category: "PumpMessageTransport")
     
     private(set) var state: MessageTransportState {
         didSet {
@@ -155,20 +155,20 @@ class PumpMessageTransport: MessageTransport {
                 break;
             case .sentWithError(let error):
                 messageLogger?.didError("Unacknowledged message sending command seq:\(message.sequenceNum), error = \(error)")
-                throw PodCommsError.unacknowledgedMessage(sequenceNumber: message.sequenceNum, error: error)
+                throw PumpCommsError.unacknowledgedMessage(sequenceNumber: message.sequenceNum, error: error)
             case .unsentWithError(let error):
-                throw PodCommsError.commsError(error: error)
+                throw PumpCommsError.commsError(error: error)
             }
         }
     }
     
     
     private func readAndAckResponse() throws -> Message {
-        // guard let enDecrypt = self.enDecrypt else { throw PodCommsError.podNotConnected }
+        // guard let enDecrypt = self.enDecrypt else { throw PumpCommsError.pumpNotConnected }
 
         let readResponse = try manager.readMessagePacket()
         guard let readMessage = readResponse else {
-            throw PodProtocolError.messageIOException("Could not read response")
+            throw PumpProtocolError.messageIOException("Could not read response")
         }
 
         incrementNonceSeq()
@@ -181,7 +181,7 @@ class PumpMessageTransport: MessageTransport {
         let ack = try getAck(response: decrypted)
         let ackResult = manager.sendMessagePacket(ack)
 
-        // verify that the Omnipod message # matches the expected value
+        // verify that the pump message number matches the expected value
         guard response.sequenceNum == messageNumber else {
             throw MessageError.invalidSequence
         }
@@ -190,18 +190,18 @@ class PumpMessageTransport: MessageTransport {
         case .sentWithAcknowledgment:
             break
         case .sentWithError, .unsentWithError:
-            // We had a communications error trying to send the response ack to the pod.
+            // We had a communications error trying to send the response ack to the pump.
             let ackErrStr = String(format: "Send of ack failed: %@", String(describing: ackResult))
 
             // The original behavior here was to throw for this error which will throw out the verified response
-            // for a received pod command which forces the unacknowledged response code to try to resolve any insulin
+            // for a received pump command which forces the unacknowledged response code to try to resolve any insulin
             // delivery related commands while treating other commands types as failures even though they were received.
-            // throw PodProtocolError.messageIOException(ackErrStr)
+            // throw PumpProtocolError.messageIOException(ackErrStr)
 
             // Since we already have a fully verified response, simply log the ack comms error and return
-            // the received response since the pod has already accepted the command and provided its response.
-            // This results in less bogus failures on successfully received and handled pod commands and
-            // could result in a failure trying to send the next pod command but with less ill side effects.
+            // the received response since the pump has already accepted the command and provided its response.
+            // This results in less bogus failures on successfully received and handled pump commands and
+            // could result in a failure trying to send the next pump command but with less ill side effects.
             log.error("%@, but still using validated response %@", ackErrStr, String(describing: response))
         }
 
@@ -212,8 +212,8 @@ class PumpMessageTransport: MessageTransport {
 
         let data = try StringLengthPrefixEncoding.parseKeys([RESPONSE_PREFIX], decrypted.payload)[0]
 
-        // Dash pods generates a CRC16 for Omnipod Messages, but the actual algorithm is not understood and doesn't match the CRC16
-        // that the pod enforces for incoming Omnipod command message. The Dash PDM explicitly ignores the CRC16 for incoming messages,
+        // Dash pumps generate a CRC16 for messages, but the actual algorithm is not understood and doesn't match the CRC16
+        // that the pump enforces for incoming command messages. The Dash PDM explicitly ignores the CRC16 for incoming messages,
         // so we ignore them as well and rely on higher level BLE & Dash message data checking to provide data corruption protection.
         let response = try Message(encodedData: data, checkCRC: false)
 
@@ -224,7 +224,7 @@ class PumpMessageTransport: MessageTransport {
     }
     
     private func getAck(response: MessagePacket) throws -> MessagePacket {
-        guard let enDecrypt = self.enDecrypt else { throw PodCommsError.podNotConnected }
+        guard let enDecrypt = self.enDecrypt else { throw PumpCommsError.pumpNotConnected }
 
         let ackNumber = (UInt(response.sequenceNumber) + 1) & 0xff
         let msg = MessagePacket(
@@ -245,10 +245,10 @@ class PumpMessageTransport: MessageTransport {
     }
 }
 
-extension PodMessageTransport: CustomDebugStringConvertible {
+extension PumpMessageTransport: CustomDebugStringConvertible {
     public var debugDescription: String {
         return [
-            "## PodMessageTransport",
+            "## PumpMessageTransport",
             "eapSeq: \(eapSeq)",
             "msgSeq: \(msgSeq)",
             "nonceSeq: \(nonceSeq)",
