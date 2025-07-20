@@ -9,6 +9,19 @@ struct PumpStateSupplier {
     static var controlIQSupported: () -> Bool = { false }
     static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
 
+    // Flags mirroring PumpX2 PumpState fields
+    static var tconnectAppConnectionSharing = false
+    static var sendSharedConnectionResponseMessages = false
+    static var relyOnConnectionSharingForAuthentication = false
+    static var tconnectAppAlreadyAuthenticated = false
+    static var tconnectAppConnectionSharingIgnoreInitialFailingWrite = false
+    static var onlySnoopBluetooth = false
+
+    static var processedResponseMessages = 0
+    static var processedResponseMessagesFromUs = 0
+
+    static var pairingCodeType: PairingCodeType = .long16Char
+
     static var authenticationKey: () -> Data = {
         determinePumpAuthKey()
     }
@@ -34,5 +47,27 @@ struct PumpStateSupplier {
             return Data(code.utf8)
         }
         return Data()
+    }
+
+    // MARK: - Configuration helpers
+
+    static func enableActionsAffectingInsulinDelivery() {
+        actionsAffectingInsulinDeliveryEnabled = { true }
+    }
+
+    static func enableTconnectAppConnectionSharing() {
+        tconnectAppConnectionSharing = true
+    }
+
+    static func enableSendSharedConnectionResponseMessages() {
+        sendSharedConnectionResponseMessages = true
+    }
+
+    static func relyOnConnectionSharingForAuthentication() {
+        relyOnConnectionSharingForAuthentication = true
+    }
+
+    static func enableOnlySnoopBluetooth() {
+        onlySnoopBluetooth = true
     }
 }
