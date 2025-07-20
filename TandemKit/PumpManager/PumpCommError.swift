@@ -7,7 +7,7 @@
 
 
 //
-//  Basis: OmniBLE/PumpManager/PodCommsSession.swift
+//  Basis: OmniBLE/PumpManager/PumpCommsSession.swift
 //  Created by Pete Schwamb on 10/13/17.
 //  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
