@@ -14,6 +14,6 @@ jobs:
       - name: Install Carthage
         run: brew install carthage
       - name: Bootstrap Carthage dependencies
-        run: ./carthage.sh bootstrap --platform iOS --no-use-binaries
+        run: ./carthage.sh bootstrap --platform iOS --no-use-binaries --use-xcframeworks
       - name: Build TandemKit
         run: xcodebuild -project TandemKit.xcodeproj -scheme TandemKit -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO build

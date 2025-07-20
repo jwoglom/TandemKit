@@ -10,7 +10,7 @@ This project relies on Carthage for several dependencies (LoopKit, LoopKitUI, Lo
 2. Run the following command from the repository root:
    
    ```bash
-   ./carthage.sh update --platform iOS
+   ./carthage.sh update --platform iOS --use-xcframeworks
    ```
 
    This script mirrors the one used by OmniBLE and ensures the correct build settings for modern Xcode versions.
