@@ -50,3 +50,28 @@ public enum KnownApiVersion {
         }
     }
 }
+
+extension ApiVersion {
+    func greaterThan(_ other: ApiVersion) -> Bool {
+        return major > other.major || (major == other.major && minor > other.minor)
+    }
+
+    func greaterThan(_ other: KnownApiVersion) -> Bool {
+        return greaterThan(other.value)
+    }
+
+    func serialize() -> String {
+        return "\(major),\(minor)"
+    }
+
+    static func deserialize(_ s: String?) -> ApiVersion? {
+        guard let s = s, !s.isEmpty else { return nil }
+        let parts = s.split(separator: ",")
+        guard parts.count == 2,
+              let major = Int(parts[0]),
+              let minor = Int(parts[1]) else {
+            return nil
+        }
+        return ApiVersion(major: major, minor: minor)
+    }
+}
