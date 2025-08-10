@@ -6,7 +6,10 @@
 //
 // see messages/src/main/java/com/jwoglom/pumpx2/pump/messages/bluetooth/models/Packet.java
 
+// CoreBluetooth is only needed for certain build environments. Use a stub when unavailable.
+#if canImport(CoreBluetooth)
 import CoreBluetooth
+#endif
 
 /**
  * Packet represents the raw byte string included within a single Bluetooth response packet

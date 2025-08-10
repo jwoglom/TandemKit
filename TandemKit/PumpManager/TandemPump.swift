@@ -67,20 +67,6 @@ public class TandemPump {
         self.appInstanceId = id
     }
 
-}
-
-extension TandemPump: BluetoothManagerDelegate {
-    func bluetoothManager(_ manager: BluetoothManager, peripheralManager: PeripheralManager, isReadyWithError error: Error?) {
-        // No-op in this simplified port
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager, shouldConnectPeripheral peripheral: CBPeripheral, advertisementData: [String : Any]?) -> Bool {
-        return true
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager, didCompleteConfiguration peripheralManager: PeripheralManager) {
-        // Intentionally left blank
-    }
     // MARK: - Bluetooth events
 
     func onPumpConnected(_ manager: PeripheralManager) {
