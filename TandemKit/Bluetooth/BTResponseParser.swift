@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreBluetooth)
 import CoreBluetooth
+#endif
 
 /// Parses raw Bluetooth notification packets into pump messages.
 /// This is a minimal Swift port of PumpX2 `BTResponseParser` used for unit testing.
