@@ -1,1 +1,2 @@
 github "LoopKit/LoopKit" "39e5b05eb57ec24adc176672ba59103ba95a5ef3"
+github "leif-ibsen/SwiftECC" "85c529c9c56b649a8d8edcef60aab3925ab0f69f"
