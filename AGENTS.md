@@ -1,0 +1,307 @@
+## Message types by category
+
+### Authentication
+Requests:
+- [ ] AbstractCentralChallengeRequest
+- [ ] CentralChallengeRequest
+- [ ] Jpake1aRequest
+- [ ] Jpake1bRequest
+- [ ] Jpake2Request
+- [ ] Jpake3SessionKeyRequest
+- [ ] Jpake4KeyConfirmationRequest
+- [ ] PumpChallengeRequest
+
+Responses:
+- [ ] AbstractCentralChallengeResponse
+- [ ] AbstractPumpChallengeResponse
+- [ ] CentralChallengeResponse
+- [ ] Jpake1aResponse
+- [ ] Jpake1bResponse
+- [ ] Jpake2Response
+- [ ] Jpake3SessionKeyResponse
+- [ ] Jpake4KeyConfirmationResponse
+- [ ] PumpChallengeResponse
+
+### Control
+Requests:
+- [x] BolusPermissionReleaseRequest
+- [ ] BolusPermissionRequest
+- [ ] CancelBolusRequest
+- [ ] ChangeControlIQSettingsRequest
+- [ ] ChangeTimeDateRequest
+- [ ] CreateIDPRequest
+- [ ] DeleteIDPRequest
+- [ ] DisconnectPumpRequest
+- [ ] DismissNotificationRequest
+- [ ] EnterChangeCartridgeModeRequest
+- [ ] EnterFillTubingModeRequest
+- [ ] ExitChangeCartridgeModeRequest
+- [ ] ExitFillTubingModeRequest
+- [ ] FillCannulaRequest
+- [ ] InitiateBolusRequest
+- [ ] PlaySoundRequest
+- [ ] RemoteBgEntryRequest
+- [ ] RemoteCarbEntryRequest
+- [ ] RenameIDPRequest
+- [ ] ResumePumpingRequest
+- [ ] SetActiveIDPRequest
+- [ ] SetDexcomG7PairingCodeRequest
+- [ ] SetG6TransmitterIdRequest
+- [ ] SetIDPSegmentRequest
+- [ ] SetIDPSettingsRequest
+- [ ] SetMaxBasalLimitRequest
+- [ ] SetMaxBolusLimitRequest
+- [ ] SetModesRequest
+- [ ] SetQuickBolusSettingsRequest
+- [ ] SetSleepScheduleRequest
+- [ ] SetTempRateRequest
+- [ ] StartDexcomG6SensorSessionRequest
+- [ ] StopDexcomCGMSensorSessionRequest
+- [ ] StopTempRateRequest
+- [ ] SuspendPumpingRequest
+
+Responses:
+- [x] BolusPermissionReleaseResponse
+- [ ] BolusPermissionResponse
+- [ ] CancelBolusResponse
+- [ ] ChangeControlIQSettingsResponse
+- [ ] ChangeTimeDateResponse
+- [ ] CreateIDPResponse
+- [ ] DeleteIDPResponse
+- [ ] DisconnectPumpResponse
+- [ ] DismissNotificationResponse
+- [ ] EnterChangeCartridgeModeResponse
+- [ ] EnterFillTubingModeResponse
+- [ ] ExitChangeCartridgeModeResponse
+- [ ] ExitFillTubingModeResponse
+- [ ] FillCannulaResponse
+- [ ] InitiateBolusResponse
+- [ ] PlaySoundResponse
+- [ ] RemoteBgEntryResponse
+- [ ] RemoteCarbEntryResponse
+- [ ] RenameIDPResponse
+- [ ] ResumePumpingResponse
+- [ ] SetActiveIDPResponse
+- [ ] SetDexcomG7PairingCodeResponse
+- [ ] SetG6TransmitterIdResponse
+- [ ] SetIDPSegmentResponse
+- [ ] SetIDPSettingsResponse
+- [ ] SetMaxBasalLimitResponse
+- [ ] SetMaxBolusLimitResponse
+- [ ] SetModesResponse
+- [ ] SetQuickBolusSettingsResponse
+- [ ] SetSleepScheduleResponse
+- [ ] SetTempRateResponse
+- [ ] StartDexcomG6SensorSessionResponse
+- [ ] StopDexcomCGMSensorSessionResponse
+- [ ] StopTempRateResponse
+- [ ] SuspendPumpingResponse
+
+### ControlStream
+Requests:
+- [ ] NonexistentDetectingCartridgeStateStreamRequest
+- [ ] NonexistentEnterChangeCartridgeModeStateStreamRequest
+- [ ] NonexistentExitFillTubingModeStateStreamRequest
+- [ ] NonexistentFillCannulaStateStreamRequest
+- [ ] NonexistentFillTubingStateStreamRequest
+- [ ] NonexistentPumpingStateStreamRequest
+
+Responses:
+- [ ] ControlStreamMessages
+- [ ] DetectingCartridgeStateStreamResponse
+- [ ] EnterChangeCartridgeModeStateStreamResponse
+- [ ] ExitFillTubingModeStateStreamResponse
+- [ ] FillCannulaStateStreamResponse
+- [ ] FillTubingStateStreamResponse
+- [ ] PumpingStateStreamResponse
+
+### CurrentStatus
+Requests:
+- [ ] AlarmStatusRequest
+- [ ] AlertStatusRequest
+- [ ] ApiVersionRequest
+- [ ] BasalIQAlertInfoRequest
+- [ ] BasalIQSettingsRequest
+- [ ] BasalIQStatusRequest
+- [ ] BasalLimitSettingsRequest
+- [ ] BolusCalcDataSnapshotRequest
+- [ ] BolusPermissionChangeReasonRequest
+- [ ] CGMAlertStatusRequest
+- [ ] CGMGlucoseAlertSettingsRequest
+- [ ] CGMHardwareInfoRequest
+- [ ] CGMOORAlertSettingsRequest
+- [ ] CGMRateAlertSettingsRequest
+- [ ] CGMStatusRequest
+- [ ] CommonSoftwareInfoRequest
+- [ ] ControlIQIOBRequest
+- [ ] ControlIQInfoV1Request
+- [ ] ControlIQInfoV2Request
+- [ ] ControlIQSleepScheduleRequest
+- [ ] CurrentBasalStatusRequest
+- [ ] CurrentBatteryV1Request
+- [ ] CurrentBatteryV2Request
+- [ ] CurrentBolusStatusRequest
+- [ ] CurrentEGVGuiDataRequest
+- [ ] ExtendedBolusStatusRequest
+- [ ] GetG6TransmitterHardwareInfoRequest
+- [ ] GetSavedG7PairingCodeRequest
+- [ ] GlobalMaxBolusSettingsRequest
+- [ ] HistoryLogRequest
+- [ ] HistoryLogStatusRequest
+- [ ] HomeScreenMirrorRequest
+- [ ] IDPSegmentRequest
+- [ ] IDPSettingsRequest
+- [ ] InsulinStatusRequest
+- [ ] LastBGRequest
+- [ ] LastBolusStatusRequest
+- [ ] LastBolusStatusV2Request
+- [ ] LocalizationRequest
+- [ ] MalfunctionStatusRequest
+- [ ] NonControlIQIOBRequest
+- [ ] OtherNotification2StatusRequest
+- [ ] OtherNotificationStatusRequest
+- [ ] ProfileStatusRequest
+- [ ] PumpFeaturesV1Request
+- [ ] PumpFeaturesV2Request
+- [ ] PumpGlobalsRequest
+- [ ] PumpSettingsRequest
+- [ ] PumpVersionRequest
+- [ ] ReminderStatusRequest
+- [ ] RemindersRequest
+- [ ] TempRateRequest
+- [ ] TimeSinceResetRequest
+- [ ] UnknownMobiOpcode110Request
+- [ ] UnknownMobiOpcode20Request
+- [ ] UnknownMobiOpcode30Request
+- [ ] UnknownMobiOpcodeNeg124Request
+- [ ] UnknownMobiOpcodeNeg66Request
+- [ ] UnknownMobiOpcodeNeg70Request
+
+Responses:
+- [ ] AlarmStatusResponse
+- [ ] AlertStatusResponse
+- [ ] ApiVersionResponse
+- [ ] BasalIQAlertInfoResponse
+- [ ] BasalIQSettingsResponse
+- [ ] BasalIQStatusResponse
+- [ ] BasalLimitSettingsResponse
+- [ ] BolusCalcDataSnapshotResponse
+- [ ] BolusPermissionChangeReasonResponse
+- [ ] CGMAlertStatusResponse
+- [ ] CGMGlucoseAlertSettingsResponse
+- [ ] CGMHardwareInfoResponse
+- [ ] CGMOORAlertSettingsResponse
+- [ ] CGMRateAlertSettingsResponse
+- [ ] CGMStatusResponse
+- [ ] CommonSoftwareInfoResponse
+- [ ] ControlIQIOBResponse
+- [ ] ControlIQInfoAbstractResponse
+- [ ] ControlIQInfoV1Response
+- [ ] ControlIQInfoV2Response
+- [ ] ControlIQSleepScheduleResponse
+- [ ] CurrentBasalStatusResponse
+- [ ] CurrentBatteryAbstractResponse
+- [ ] CurrentBatteryV1Response
+- [ ] CurrentBatteryV2Response
+- [ ] CurrentBolusStatusResponse
+- [ ] CurrentEGVGuiDataResponse
+- [ ] ExtendedBolusStatusResponse
+- [ ] GetG6TransmitterHardwareInfoResponse
+- [ ] GetSavedG7PairingCodeResponse
+- [ ] GlobalMaxBolusSettingsResponse
+- [ ] HistoryLogResponse
+- [ ] HistoryLogStatusResponse
+- [ ] HomeScreenMirrorResponse
+- [ ] IDPSegmentResponse
+- [ ] IDPSettingsResponse
+- [ ] InsulinStatusResponse
+- [ ] LastBGResponse
+- [ ] LastBolusStatusAbstractResponse
+- [ ] LastBolusStatusResponse
+- [ ] LastBolusStatusV2Response
+- [ ] LocalizationResponse
+- [ ] MalfunctionStatusResponse
+- [ ] NonControlIQIOBResponse
+- [ ] OtherNotification2StatusResponse
+- [ ] OtherNotificationStatusResponse
+- [ ] ProfileStatusResponse
+- [ ] PumpFeaturesAbstractResponse
+- [ ] PumpFeaturesV1Response
+- [ ] PumpFeaturesV2Response
+- [ ] PumpGlobalsResponse
+- [ ] PumpSettingsResponse
+- [ ] PumpVersionResponse
+- [ ] ReminderStatusResponse
+- [ ] RemindersResponse
+- [ ] TempRateResponse
+- [ ] TimeSinceResetResponse
+- [ ] UnknownMobiOpcode110Response
+- [ ] UnknownMobiOpcode20Response
+- [ ] UnknownMobiOpcode30Response
+- [ ] UnknownMobiOpcodeNeg124Response
+- [ ] UnknownMobiOpcodeNeg66Response
+- [ ] UnknownMobiOpcodeNeg70Response
+
+### HistoryLog
+Requests:
+- [ ] NonexistentHistoryLogStreamRequest
+
+Responses:
+- [ ] AlarmActivatedHistoryLog
+- [ ] AlertActivatedHistoryLog
+- [ ] BGHistoryLog
+- [ ] BasalDeliveryHistoryLog
+- [ ] BasalRateChangeHistoryLog
+- [ ] BolexActivatedHistoryLog
+- [ ] BolexCompletedHistoryLog
+- [ ] BolusActivatedHistoryLog
+- [ ] BolusCompletedHistoryLog
+- [ ] BolusDeliveryHistoryLog
+- [ ] BolusRequestedMsg1HistoryLog
+- [ ] BolusRequestedMsg2HistoryLog
+- [ ] BolusRequestedMsg3HistoryLog
+- [ ] CGMHistoryLog
+- [ ] CannulaFilledHistoryLog
+- [ ] CarbEnteredHistoryLog
+- [ ] CartridgeFilledHistoryLog
+- [ ] CgmCalibrationGxHistoryLog
+- [ ] CgmCalibrationHistoryLog
+- [ ] CgmDataGxHistoryLog
+- [ ] CgmDataSampleHistoryLog
+- [ ] ControlIQPcmChangeHistoryLog
+- [ ] ControlIQUserModeChangeHistoryLog
+- [ ] CorrectionDeclinedHistoryLog
+- [ ] DailyBasalHistoryLog
+- [ ] DataLogCorruptionHistoryLog
+- [ ] DateChangeHistoryLog
+- [ ] FactoryResetHistoryLog
+- [ ] HistoryLog
+- [ ] HistoryLogParser
+- [ ] HistoryLogStreamResponse
+- [ ] HypoMinimizerResumeHistoryLog
+- [ ] HypoMinimizerSuspendHistoryLog
+- [ ] IdpActionHistoryLog
+- [ ] IdpActionMsg2HistoryLog
+- [ ] IdpBolusHistoryLog
+- [ ] IdpListHistoryLog
+- [ ] IdpTimeDependentSegmentHistoryLog
+- [ ] LogErasedHistoryLog
+- [ ] NewDayHistoryLog
+- [ ] ParamChangeGlobalSettingsHistoryLog
+- [ ] ParamChangePumpSettingsHistoryLog
+- [ ] ParamChangeRemSettingsHistoryLog
+- [ ] ParamChangeReminderHistoryLog
+- [ ] PumpingResumedHistoryLog
+- [ ] PumpingSuspendedHistoryLog
+- [ ] TempRateActivatedHistoryLog
+- [ ] TempRateCompletedHistoryLog
+- [ ] TimeChangedHistoryLog
+- [ ] TubingFilledHistoryLog
+- [ ] UnknownHistoryLog
+- [ ] UsbConnectedHistoryLog
+- [ ] UsbDisconnectedHistoryLog
+- [ ] UsbEnumeratedHistoryLog
+
+### QualifyingEvent
+Responses:
+- [ ] QualifyingEvent
