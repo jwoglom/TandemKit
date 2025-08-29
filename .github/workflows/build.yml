@@ -30,7 +30,7 @@ jobs:
           echo "CARTHAGE_XCODEBUILD_LOG=$LOG_PATH" >> $GITHUB_ENV
       - name: Upload Carthage log
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: carthage-xcodebuild.log
           path: ${{ env.CARTHAGE_XCODEBUILD_LOG }}
