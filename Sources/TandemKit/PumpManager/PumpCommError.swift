@@ -12,15 +12,16 @@
 //  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
-import Foundation
-import LoopKit
-import os.log
+#if canImport(HealthKit)
 
-public enum PumpCommError: Error {
+import Foundation
+import TandemCore
+
+public enum PumpCommError: Error, @unchecked Sendable {
     case pumpNotConnected
     case noResponse
     case missingAuthenticationKey
-    case errorResponse(response: Message)
+    case errorResponse(response: any Message)
     case other
 }
 
@@ -47,3 +48,4 @@ extension PumpCommError: LocalizedError {
         }
     }
 }
+#endif

@@ -17,19 +17,44 @@ let package = Package(
             targets: ["TandemKit"]
         ),
     ],
-    targets: [
+    dependencies: [
+    ],
+      targets: [
+        .target(
+            name: "Bluetooth",
+            path: "Sources/Bluetooth"
+        ),
+        .target(
+            name: "CoreBluetooth",
+            dependencies: [
+                .target(name: "Bluetooth", condition: .when(platforms: [.linux]))
+            ],
+            path: "Sources/CoreBluetooth"
+        ),
+          .target(
+              name: "LoopKit",
+              path: "Sources/LoopKit"
+          ),
         .target(
             name: "TandemCore",
+            dependencies: [
+                .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
+            ],
             path: "Sources/TandemCore"
         ),
         .target(
             name: "TandemBLE",
-            dependencies: ["TandemCore"],
+            dependencies: [
+                "TandemCore",
+                "LoopKit",
+                .target(name: "Bluetooth", condition: .when(platforms: [.linux])),
+                .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
+            ],
             path: "Sources/TandemBLE"
         ),
         .target(
             name: "TandemKit",
-            dependencies: ["TandemCore", "TandemBLE"],
+            dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
             path: "Sources/TandemKit"
         ),
         .testTarget(

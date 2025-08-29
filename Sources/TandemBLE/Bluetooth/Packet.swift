@@ -6,10 +6,8 @@
 //
 // see messages/src/main/java/com/jwoglom/pumpx2/pump/messages/bluetooth/models/Packet.java
 
-// CoreBluetooth is only needed for certain build environments. Use a stub when unavailable.
-#if canImport(CoreBluetooth)
-import CoreBluetooth
-#endif
+import Foundation
+import TandemCore
 
 /**
  * Packet represents the raw byte string included within a single Bluetooth response packet
@@ -17,16 +15,16 @@ import CoreBluetooth
  * A combination of Packet's sent over a Bluetooth characteristic by one end of the BT communication
  * represents one Message.
  */
-struct Packet {
-    let packetsRemaining: UInt8
-    let txId: UInt8
-    let internalCargo: Data
+public struct Packet {
+    public let packetsRemaining: UInt8
+    public let txId: UInt8
+    public let internalCargo: Data
     
     public var build: Data {
-        return Bytes.combine(Data(packetsRemaining), Data(txId), internalCargo)
+        return Bytes.combine(Data([packetsRemaining]), Data([txId]), internalCargo)
     }
-    
+
     public func merge(newPacket: Packet) -> Packet {
-        return Packet(packetsRemaining: 1+max(packetsRemaining, newPacket.packetsRemaining), txId: txId, internalCargo: Bytes.combine(internalCargo, newPacket.internalCargo))
+        return Packet(packetsRemaining: 1 + max(packetsRemaining, newPacket.packetsRemaining), txId: txId, internalCargo: Bytes.combine(internalCargo, newPacket.internalCargo))
     }
 }

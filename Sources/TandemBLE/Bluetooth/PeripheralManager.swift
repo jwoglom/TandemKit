@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  PeripheralManager.swift
 //  TandemKit
@@ -11,9 +10,9 @@
 
 import CoreBluetooth
 import Foundation
-import os.log
+import TandemCore
 
-class PeripheralManager: NSObject {
+class PeripheralManager: NSObject, @unchecked Sendable {
 
     private let log = OSLog(category: "PeripheralManager")
 
@@ -25,7 +24,7 @@ class PeripheralManager: NSObject {
                 return
             }
 
-            log.error("Replacing peripheral reference %{public}@ -> %{public}@", oldValue, peripheral)
+            log.error("Replacing peripheral reference %{public}@ -> %{public}@", String(describing: oldValue), String(describing: peripheral))
 
             oldValue.delegate = nil
             peripheral.delegate = self
@@ -119,7 +118,7 @@ protocol PeripheralManagerDelegate: AnyObject {
 extension PeripheralManager {
 
 
-    func configureAndRun(_ block: @escaping (_ manager: PeripheralManager) -> Void) -> (() -> Void) {
+    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
         return {
             if self.needsReconnection {
                 self.log.default("Triggering forceful reconnect")
@@ -131,7 +130,7 @@ extension PeripheralManager {
             }
 
             if !self.needsConfiguration && self.peripheral.services == nil {
-                self.log.error("Configured peripheral has no services. Reconfiguring %{public}@", self.peripheral)
+                self.log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: self.peripheral))
             }
 
             if self.needsConfiguration || self.peripheral.services == nil {
@@ -157,7 +156,7 @@ extension PeripheralManager {
         }
     }
 
-    func perform(_ block: @escaping (_ manager: PeripheralManager) -> Void) {
+    func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
         queue.async(execute: configureAndRun(block))
     }
 
@@ -173,7 +172,7 @@ extension PeripheralManager {
         try discoverServices(configuration.serviceCharacteristics.keys.map { $0 }, timeout: discoveryTimeout)
 
         for service in peripheral.services ?? [] {
-            log.default("Discovered service: %{public}@", service)
+            log.default("Discovered service: %{public}@", String(describing: service))
             guard let characteristics = configuration.serviceCharacteristics[service.uuid] else {
                 // Not all services may have characteristics
                 continue
@@ -209,7 +208,7 @@ extension PeripheralManager {
         // Prelude
         dispatchPrecondition(condition: .onQueue(queue))
         guard central?.state == .poweredOn && peripheral.state == .connected else {
-            self.log.info("runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@", peripheral)
+            self.log.info("runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@", String(describing: peripheral))
             throw PeripheralManagerError.notReady
         }
 
@@ -324,19 +323,6 @@ extension PeripheralManager {
     }
 }
 
-extension PeripheralManager {
-    public override var debugDescription: String {
-        var items = [
-            "## PeripheralManager",
-            "peripheral: \(peripheral)",
-        ]
-        queue.sync {
-            items.append("needsConfiguration: \(needsConfiguration)")
-        }
-        return items.joined(separator: "\n")
-    }
-}
-
 // MARK: - Delegate methods executed on the central's queue
 extension PeripheralManager: CBPeripheralDelegate {
 
@@ -407,8 +393,8 @@ extension PeripheralManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
         
-        if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
-            if case .write(characteristic: characteristic) = condition {
+        if let index = commandConditions.firstIndex(where: { condition in
+            if case let .write(condChar) = condition, condChar === characteristic {
                 return true
             } else {
                 return false
@@ -432,8 +418,8 @@ extension PeripheralManager: CBPeripheralDelegate {
             macro(self)
         }
 
-        if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
-            if case .valueUpdate(characteristic: characteristic, matching: let matching) = condition {
+        if let index = commandConditions.firstIndex(where: { condition in
+            if case let .valueUpdate(condChar, matching) = condition, condChar === characteristic {
                 return matching?(characteristic.value) ?? true
             } else {
                 return false
@@ -474,13 +460,11 @@ extension PeripheralManager {
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnect peripheral: CBPeripheral, error: Error?) {
-        self.queue.async {
-            self.idleStart = nil
-        }
+        self.idleStart = nil
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        self.log.debug("PeripheralManager - didConnect: %@", peripheral)
+        self.log.debug("PeripheralManager - didConnect: %@", String(describing: peripheral))
         switch peripheral.state {
         case .connected:
             clearCommsQueues()
@@ -512,18 +496,8 @@ extension PeripheralManager {
 
 // MARK: - Command session management
 extension PeripheralManager {
-    public func runSession(withName name: String , _ block: @escaping () -> Void) {
-        self.log.default("Scheduling session %{public}@", name)
-
-        sessionQueue.addOperation({ [weak self] in
-            self?.perform { (manager) in
-                manager.log.default("======================== %{public}@ ===========================", name)
-                block()
-                manager.log.default("------------------------ %{public}@ ---------------------------", name)
-                self?.idleStart = Date()
-                self?.log.default("Start of idle at %{public}@", String(describing: self?.idleStart))
-            }
-        })
+    public func runSession(withName name: String, _ block: @escaping @Sendable () -> Void) {
+        perform { _ in block() }
     }
 }
 
@@ -587,4 +561,3 @@ extension PeripheralManager {
         }
     }
 }
-#endif

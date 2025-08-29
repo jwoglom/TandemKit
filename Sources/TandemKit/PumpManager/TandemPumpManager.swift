@@ -5,9 +5,10 @@
 //  Created by James Woglom on 1/5/25.
 //
 
-import HealthKit
+#if canImport(HealthKit)
+
 import LoopKit
-import os.log
+import TandemCore
 
 public class TandemPumpManager : DeviceManager {
     public static var localizedTitle: String = "TandemPumpManager"
@@ -54,7 +55,9 @@ public class TandemPumpManager : DeviceManager {
     
     public var rawState: RawStateValue
     
-    public var debugDescription: String
-    
-    
+public var debugDescription: String
+
+
 }
+
+#endif

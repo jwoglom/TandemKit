@@ -1,18 +1,23 @@
 import Foundation
 
-#if canImport(CryptoKit)
-import CryptoKit
-
 struct Hkdf {
     static func build(nonce: Data, keyMaterial: Data) -> Data {
-        let key = SymmetricKey(data: keyMaterial)
-        let derived = HKDF<SHA256>.deriveKey(
-            inputKeyMaterial: key,
-            salt: nonce,
-            info: Data(),
-            outputByteCount: 32
-        )
-        return Data(derived.withUnsafeBytes { Data($0) })
+        // HKDF-Extract
+        let prk = HmacSha256.hmac(keyMaterial, key: nonce)
+
+        // HKDF-Expand (info is empty, output 32 bytes)
+        var okm = Data()
+        var previous = Data()
+        var counter: UInt8 = 1
+        while okm.count < 32 {
+            var input = Data()
+            input.append(previous)
+            input.append(counter)
+            previous = HmacSha256.hmac(input, key: prk)
+            okm.append(previous)
+            counter &+= 1
+        }
+        return okm.prefix(32)
     }
 }
-#endif
+

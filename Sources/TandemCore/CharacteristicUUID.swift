@@ -5,9 +5,7 @@
 //  Created by James Woglom on 1/5/25.
 //
 
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
 
 public enum CharacteristicUUID: String, Sendable {
     // For reading pump state
@@ -31,3 +29,7 @@ public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
     .CONTROL_CHARACTERISTICS,
     .CONTROL_STREAM_CHARACTERISTICS
 ]
+
+public extension CharacteristicUUID {
+    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+}

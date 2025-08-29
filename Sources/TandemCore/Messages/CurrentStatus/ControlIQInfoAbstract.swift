@@ -12,12 +12,14 @@ import Foundation
 
 /// Base response shared by ControlIQInfoV1 and ControlIQInfoV2.
 public class ControlIQInfoAbstractResponse: Message {
-    public static let props = MessageProps(
-        opCode: 0,
-        size: 0,
-        type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
-    )
+    public class var props: MessageProps {
+        MessageProps(
+            opCode: 0,
+            size: 0,
+            type: .Response,
+            characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        )
+    }
 
     public var cargo: Data
 

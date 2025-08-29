@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  BluetoothServices.swift
 //  TandemKit
@@ -6,6 +5,8 @@
 //  Created by James Woglom on 1/13/25.
 //
 
+
+import TandemCore
 
 extension PeripheralManager.Configuration {
     static var tandemPeripheral: PeripheralManager.Configuration {
@@ -74,5 +75,4 @@ extension PeripheralManager.Configuration {
             ]
         )
     }
-}
-#endif
+  }

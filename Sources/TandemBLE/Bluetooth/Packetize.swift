@@ -5,6 +5,9 @@
 //  Created by James Woglom on 1/13/25.
 //
 
+import Foundation
+import TandemCore
+
 // Helper to chunk an array into fixed-size subarrays.
 extension Array {
     func chunked(into size: Int) -> [[Element]] {
@@ -25,7 +28,8 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
 }
 
 
-func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
+@MainActor
+public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
     var props = type(of: message).props
     var opCode = props.opCode
     var length = message.cargo.count
@@ -34,7 +38,7 @@ func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinc
         length += 24
         chunkSize = max(chunkSize, CONTROL_MAX_CHUNK_SIZE)
     }
-    var packet: Data = Bytes.combine(Data(opCode), Data(txId), Data(length - 3), message.cargo)
+    var packet: Data = Bytes.combine(Data([opCode]), Data([txId]), Data([UInt8(length - 3)]), message.cargo)
     
     if props.modifiesInsulinDelivery && !PumpStateSupplier.actionsAffectingInsulinDeliveryEnabled() {
         throw ActionsAffectingInsulinDeliveryNotEnabled()
@@ -44,7 +48,7 @@ func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinc
         guard let authenticationKey = authenticationKey,
               let timeSinceReset = timeSinceReset
         else {
-            throw PumpCommError.missingAuthenticationKey
+            throw PacketizeError.missingAuthenticationKey
         }
 
         let i = length - 20
@@ -73,3 +77,7 @@ func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinc
 }
 
 struct ActionsAffectingInsulinDeliveryNotEnabled: Error {}
+
+enum PacketizeError: Error {
+    case missingAuthenticationKey
+}

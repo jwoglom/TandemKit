@@ -33,7 +33,7 @@ struct PumpChallengeRequestBuilder {
         let hmacKey = challengeResponse.hmacKey
         let pairingChars = try processPairingCode(pairingCode, type: .long16Char)
         let challengeHash = HmacSha1(data: Data(pairingChars.utf8), key: hmacKey)
-        return PumpChallengeRequest(appInstanceId: Int(appInstanceId), challenge: challengeHash)
+        return PumpChallengeRequest(appInstanceId: Int(appInstanceId), pumpChallengeHash: challengeHash)
     }
 
     private static func createV2(challengeResponse: Jpake1aResponse, pairingCode: String) throws -> PumpChallengeRequest {
@@ -43,13 +43,13 @@ struct PumpChallengeRequestBuilder {
         throw InvalidPairingCodeFormat("ECJPAKE not implemented")
     }
 
-    class InvalidPairingCodeFormat: Error {
+    class InvalidPairingCodeFormat: Error, @unchecked Sendable {
         init(_ reason: String) {}
     }
-    class InvalidLongPairingCodeFormat: InvalidPairingCodeFormat {
+    final class InvalidLongPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
         init() { super.init("It should be 16 alphanumeric characters total across 5 groups of 4 characters each.") }
     }
-    class InvalidShortPairingCodeFormat: InvalidPairingCodeFormat {
+    final class InvalidShortPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
         init() { super.init("It should be 6 numbers.") }
     }
 }
