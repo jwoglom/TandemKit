@@ -9,8 +9,7 @@
 
 import Foundation
 import LoopKit
-import OSLog
-
+import TandemCore
 
 protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)

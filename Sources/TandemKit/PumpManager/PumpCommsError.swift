@@ -1,5 +1,5 @@
 import Foundation
-import LoopKit
+import TandemCore
 
 public enum PumpCommsError: Error {
     case noPumpPaired

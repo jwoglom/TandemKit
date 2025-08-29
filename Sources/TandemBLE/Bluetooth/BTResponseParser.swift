@@ -1,17 +1,17 @@
-#if canImport(CoreBluetooth)
 import Foundation
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
+import TandemCore
 
 /// Parses raw Bluetooth notification packets into pump messages.
 /// This is a minimal Swift port of PumpX2 `BTResponseParser` used for unit testing.
 struct BTResponseParser {
+    @MainActor
     static func parse(wrapper: TronMessageWrapper, output: Data, characteristic: CBUUID) -> PumpResponseMessage? {
         var packetArray = wrapper.buildPacketArrayList(.Response)
         return parse(message: wrapper.message, packetArrayList: &packetArray, output: output, uuid: characteristic)
     }
 
+    @MainActor
     static func parse(message: Message, packetArrayList: inout PacketArrayList, output: Data, uuid: CBUUID) -> PumpResponseMessage? {
         checkCharacteristicUuid(uuid, output: output)
         packetArrayList.validatePacket(output)
@@ -80,4 +80,3 @@ private struct RawMessage: Message {
         self.cargo = cargo
     }
 }
-#endif

@@ -1,9 +1,8 @@
 import Foundation
 
-#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+#if canImport(SwiftECC) && canImport(BigInt)
 import SwiftECC
 import BigInt
-import CryptoKit
 
 struct EcJpake {
     enum Role {
@@ -245,13 +244,13 @@ private struct DataReader {
 }
 
 private extension Data {
-    mutating func appendUInt8(_ v: UInt8) { append(&[v], count: 1) }
+    mutating func appendUInt8(_ v: UInt8) { append(contentsOf: [v]) }
     mutating func appendUInt16BE(_ v: UInt16) {
         var be = v.bigEndian
-        withUnsafeBytes(of: &be) { append($0) }
+        Swift.withUnsafeBytes(of: &be) { append(contentsOf: $0) }
     }
     mutating func appendUInt32BE(_ v: UInt32) {
         var be = v.bigEndian
-        withUnsafeBytes(of: &be) { append($0) }
+        Swift.withUnsafeBytes(of: &be) { append(contentsOf: $0) }
     }
 }

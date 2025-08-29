@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  PeripheralManager+TandemKit.swift
 //  TandemKit
@@ -72,4 +71,3 @@ extension PeripheralManager {
         return .sentWithAcknowledgment
     }
 }
-#endif

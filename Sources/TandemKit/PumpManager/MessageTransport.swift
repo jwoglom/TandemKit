@@ -4,14 +4,11 @@
 //
 //  Created by James Woglom on 1/13/25.
 //
-//
 //  Basis: OmniBLE/MessageTransport/MessageTransport.swift
 //  Created by Pete Schwamb on 8/5/18.
 //  Copyright © 2021 LoopKit Authors. All rights reserved.
-//
 
 import Foundation
-import os.log
 
 protocol MessageLogger: AnyObject {
     // Comms logging
@@ -121,9 +118,12 @@ class PumpMessageTransport: MessageTransport {
     }
 
     private let pumpSerial: String
-    
+
     weak var messageLogger: MessageLogger?
     weak var delegate: MessageTransportDelegate?
+
+    private var nonceSeq: UInt32 = 0
+    private var messageNumber: UInt32 = 0
 
     init(manager: PeripheralManager, pumpSerial: String, state: MessageTransportState) {
         self.manager = manager
@@ -256,3 +256,4 @@ extension PumpMessageTransport: CustomDebugStringConvertible {
         ].joined(separator: "\n")
     }
 }
+

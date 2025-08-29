@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  CBUUID.swift
 //  TandemKit
@@ -90,4 +89,3 @@ extension Collection where Element: CBAttribute {
         return nil
     }
 }
-#endif

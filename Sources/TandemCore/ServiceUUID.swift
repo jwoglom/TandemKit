@@ -5,9 +5,7 @@
 //  Created by James Woglom on 1/13/25.
 //
 
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
 
 public enum ServiceUUID: String, Sendable {
     // All pump operations

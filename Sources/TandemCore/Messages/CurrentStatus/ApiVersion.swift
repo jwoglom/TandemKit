@@ -7,6 +7,7 @@
 // https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ApiVersionRequest.java
 // https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ApiVersionResponse.java
 
+import Foundation
 
 /**
  * Returns the major and minor API version of the pump.
@@ -19,12 +20,19 @@ public class ApiVersionRequest: Message {
         characteristic: .CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true
     )
-    
+
     public var cargo: Data
-    
+
     public required init(cargo: Data) {
         self.cargo = cargo
     }
+
+    public init() {
+        self.cargo = Data()
+    }
+
+    public static let opCode = props.opCode
+    public var payload: Data { cargo }
 }
 
 /**

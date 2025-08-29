@@ -17,19 +17,41 @@ let package = Package(
             targets: ["TandemKit"]
         ),
     ],
-    targets: [
-        .target(
-            name: "TandemCore",
-            path: "Sources/TandemCore"
-        ),
-        .target(
-            name: "TandemBLE",
-            dependencies: ["TandemCore"],
-            path: "Sources/TandemBLE"
-        ),
+      dependencies: [
+          .package(url: "https://github.com/PureSwift/Bluetooth.git", branch: "master")
+      ],
+      targets: [
+          .target(
+              name: "CoreBluetooth",
+              dependencies: [
+                  .product(name: "Bluetooth", package: "Bluetooth", condition: .when(platforms: [.linux]))
+              ],
+              path: "Sources/CoreBluetooth"
+          ),
+          .target(
+              name: "LoopKit",
+              path: "Sources/LoopKit"
+          ),
+          .target(
+              name: "TandemCore",
+              dependencies: [
+                  .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
+              ],
+              path: "Sources/TandemCore"
+          ),
+          .target(
+              name: "TandemBLE",
+              dependencies: [
+                  "TandemCore",
+                  "LoopKit",
+                  .product(name: "Bluetooth", package: "Bluetooth", condition: .when(platforms: [.linux])),
+                  .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
+              ],
+              path: "Sources/TandemBLE"
+          ),
         .target(
             name: "TandemKit",
-            dependencies: ["TandemCore", "TandemBLE"],
+            dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
             path: "Sources/TandemKit"
         ),
         .testTarget(

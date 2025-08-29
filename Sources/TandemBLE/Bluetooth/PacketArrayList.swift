@@ -1,5 +1,5 @@
-#if canImport(CoreBluetooth)
 import Foundation
+import TandemCore
 
 /// Parses incoming packets from the pump and validates them.
 /// This mirrors the behaviour of PumpX2 `PacketArrayList`.
@@ -143,4 +143,3 @@ struct PacketArrayList {
     struct InvalidPacketSequenceError: Error {}
     struct InvalidCargoSizeError: Error { let expected: Int; let actual: Int }
 }
-#endif

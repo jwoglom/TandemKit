@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 import CoreBluetooth
 
 /// Enum counterpart to `CharacteristicUUID` providing type safety
@@ -43,4 +42,3 @@ enum Characteristic {
         }
     }
 }
-#endif

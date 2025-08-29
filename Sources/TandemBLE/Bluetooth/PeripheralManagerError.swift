@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  PeripheralManagerError.swift
 //  TandemKit
@@ -42,4 +41,3 @@ extension PeripheralManagerError {
         }
     }
 }
-#endif

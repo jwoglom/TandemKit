@@ -5,7 +5,7 @@
 //  Created by James Woglom on 1/14/25.
 //
 
-extension Collection {
+public extension Collection {
     func chunked(into size: Int) -> [SubSequence] {
         precondition(size > 0, "Chunk size must be greater than zero")
         var start = startIndex
