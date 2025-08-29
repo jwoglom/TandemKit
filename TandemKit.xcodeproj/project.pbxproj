@@ -154,17 +154,16 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
-		1AAA186D2D2B1E060061C043 /* TandemKit */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 1AAA18812D2B1E060061C043 /* Build configuration list for PBXNativeTarget "TandemKit" */;
-			buildPhases = (
-				1A693F442D2B292F00A65351 /* ShellScript */,
-				1AAA18692D2B1E060061C043 /* Headers */,
-				1AAA186A2D2B1E060061C043 /* Sources */,
-				1AAA186B2D2B1E060061C043 /* Frameworks */,
-				1AAA186C2D2B1E060061C043 /* Resources */,
-				1A693F492D2B2B9100A65351 /* Embed Frameworks */,
-			);
+1AAA186D2D2B1E060061C043 /* TandemKit */ = {
+isa = PBXNativeTarget;
+buildConfigurationList = 1AAA18812D2B1E060061C043 /* Build configuration list for PBXNativeTarget "TandemKit" */;
+buildPhases = (
+1AAA18692D2B1E060061C043 /* Headers */,
+1AAA186A2D2B1E060061C043 /* Sources */,
+1AAA186B2D2B1E060061C043 /* Frameworks */,
+1AAA186C2D2B1E060061C043 /* Resources */,
+1A693F492D2B2B9100A65351 /* Embed Frameworks */,
+);
 			buildRules = (
 			);
 			dependencies = (
@@ -257,30 +256,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		1A693F442D2B292F00A65351 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 8;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/Carthage/Build/LoopKit.xcframework",
-				"$(SRCROOT)/Carthage/Build/LoopKitUI.xcframework",
-				"$(SRCROOT)/Carthage/Build/LoopTestingKit.xcframework",
-				"$(SRCROOT)/Carthage/Build/MockKit.xcframework",
-				"$(SRCROOT)/Carthage/Build/MockKitUI.xcframework",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-			shellPath = /bin/sh;
-			shellScript = "carthage copy-frameworks\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1AAA186A2D2B1E060061C043 /* Sources */ = {
