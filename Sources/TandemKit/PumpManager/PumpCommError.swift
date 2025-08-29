@@ -12,6 +12,8 @@
 //  Copyright © 2021 LoopKit Authors. All rights reserved.
 //
 
+#if canImport(HealthKit)
+
 import Foundation
 import TandemCore
 
@@ -46,3 +48,4 @@ extension PumpCommError: LocalizedError {
         }
     }
 }
+#endif

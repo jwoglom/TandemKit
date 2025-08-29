@@ -6,6 +6,7 @@
 //
 //  Basis: OmniBLE PumpComms.swift
 
+#if canImport(HealthKit)
 
 import Foundation
 import LoopKit
@@ -100,3 +101,5 @@ extension PumpComm: PumpCommSessionDelegate {
         self.pumpState = state
     }
 }
+
+#endif
