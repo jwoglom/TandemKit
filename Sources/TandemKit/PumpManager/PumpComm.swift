@@ -18,12 +18,14 @@ protocol PumpCommDelegate: AnyObject {
 
 
 public class PumpComm: CustomDebugStringConvertible {
-    
+
     var manager: PeripheralManager?
-    
+
     weak var delegate: PumpCommDelegate?
-    
+
     public let log = OSLog(category: "PumpComm")
+
+    private var session: PumpCommSession?
 
     // Only valid to access on the session serial queue
     private var pumpState: PumpState? {
@@ -36,15 +38,13 @@ public class PumpComm: CustomDebugStringConvertible {
     
     public var isDevicePaired: Bool {
         get {
-            // return self.pumpState?.ltk != nil && (self.pumpState?.ltk.count ?? 0) > 0
-            return false
+            return self.pumpState?.derivedSecret != nil
         }
     }
-    
+
     public var isAuthenticated: Bool {
         get {
-            // return self.pumpState?.ltk != nil && (self.pumpState?.ltk.count ?? 0) > 0
-            return false
+            return self.pumpState?.derivedSecret != nil
         }
     }
     
@@ -52,8 +52,32 @@ public class PumpComm: CustomDebugStringConvertible {
     init(pumpState: PumpState?) {
         self.pumpState = pumpState
         self.delegate = nil
-        
+        if let pumpState = pumpState {
+            self.session = PumpCommSession(pumpState: pumpState, delegate: self)
+        }
     }
+
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+    public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
+        guard let session = self.session else {
+            throw PumpCommError.pumpNotConnected
+        }
+        var pairError: Error?
+        let semaphore = DispatchSemaphore(value: 0)
+        session.runSession(withName: "Pairing") {
+            do {
+                try session.pair(transport: transport, pairingCode: pairingCode)
+            } catch {
+                pairError = error
+            }
+            semaphore.signal()
+        }
+        semaphore.wait()
+        if let error = pairError {
+            throw error
+        }
+    }
+#endif
 
     // TODO(jwoglom): Performs pairing and returns (?) ( -> ApiVersionResponse?)
     private func sendMessage(transport: PumpMessageTransport, message: Message) throws {
