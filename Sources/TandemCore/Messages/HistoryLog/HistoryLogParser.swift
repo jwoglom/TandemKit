@@ -16,6 +16,18 @@ public enum HistoryLogParser {
         switch typeId {
         case AlarmActivatedHistoryLog.typeId:
             return AlarmActivatedHistoryLog(cargo: raw)
+        case AlertActivatedHistoryLog.typeId:
+            return AlertActivatedHistoryLog(cargo: raw)
+        case BasalRateChangeHistoryLog.typeId:
+            return BasalRateChangeHistoryLog(cargo: raw)
+        case BolusActivatedHistoryLog.typeId:
+            return BolusActivatedHistoryLog(cargo: raw)
+        case BolusCompletedHistoryLog.typeId:
+            return BolusCompletedHistoryLog(cargo: raw)
+        case PumpingSuspendedHistoryLog.typeId:
+            return PumpingSuspendedHistoryLog(cargo: raw)
+        case PumpingResumedHistoryLog.typeId:
+            return PumpingResumedHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
