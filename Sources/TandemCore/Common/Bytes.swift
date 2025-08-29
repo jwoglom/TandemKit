@@ -50,19 +50,21 @@ public struct Bytes {
     /// Reads a 16-bit little-endian integer from `data` at index `i`.
     /// (Equivalent to `readShort` in Java.)
     public static func readShort(_ data: Data, _ i: Int) -> Int {
-        precondition(i >= 0 && i + 1 < data.count, "Index out of bounds")
+        let start = data.startIndex
+        precondition(i >= 0 && start + i + 1 < data.endIndex, "Index out of bounds")
 
         // Same logic as Java: ((raw[i+1] & 0xFF) << 8) | (raw[i] & 0xFF)
-        let lo = UInt16(data[i] & 0xFF)
-        let hi = UInt16(data[i + 1] & 0xFF)
+        let lo = UInt16(data[start + i] & 0xFF)
+        let hi = UInt16(data[start + i + 1] & 0xFF)
         return Int((hi << 8) | lo)
     }
 
     /// Reads a 32-bit float (little-endian) from `data` at index `i`.
     /// (Equivalent to `readFloat` in Java.)
     public static func readFloat(_ data: Data, _ i: Int) -> Float {
-        precondition(i >= 0 && i + 3 < data.count, "Index out of bounds")
-        let sub = data.subdata(in: i..<(i + 4))
+        let start = data.startIndex
+        precondition(i >= 0 && start + i + 3 < data.endIndex, "Index out of bounds")
+        let sub = data.subdata(in: (start + i)..<(start + i + 4))
         // We'll interpret these 4 bytes as a Float in little-endian order.
         return sub.withUnsafeBytes { ptr -> Float in
             // Load raw bits from memory:
@@ -82,12 +84,13 @@ public struct Bytes {
     /// Reads a 32-bit unsigned value (little-endian) from `data` at index `i`.
     /// (Equivalent to `readUint32` in Java.)
     static func readUint32(_ data: Data, _ i: Int) -> UInt32 {
-        precondition(i >= 0 && i + 3 < data.count, "Index out of bounds")
+        let start = data.startIndex
+        precondition(i >= 0 && start + i + 3 < data.endIndex, "Index out of bounds")
         // Java code: (b[i+3] << 24) + (b[i+2] << 16) + (b[i+1] << 8) + b[i]
-        let b0 = UInt32(data[i])     // & 0xFF not really needed in Swift
-        let b1 = UInt32(data[i + 1])
-        let b2 = UInt32(data[i + 2])
-        let b3 = UInt32(data[i + 3])
+        let b0 = UInt32(data[start + i])
+        let b1 = UInt32(data[start + i + 1])
+        let b2 = UInt32(data[start + i + 2])
+        let b3 = UInt32(data[start + i + 3])
         return (b3 << 24) | (b2 << 16) | (b1 << 8) | b0
     }
 
@@ -95,10 +98,11 @@ public struct Bytes {
     /// Java version returns a `BigInteger`; here we return a `UInt64`.
     /// (Equivalent to `readUint64` in Java.)
     static func readUint64(_ data: Data, _ i: Int) -> UInt64 {
-        precondition(i >= 0 && i + 7 < data.count, "Index out of bounds")
+        let start = data.startIndex
+        precondition(i >= 0 && start + i + 7 < data.endIndex, "Index out of bounds")
         // The Java code reversed the bytes before creating the BigInteger
         // to interpret them in big-endian. We replicate that logic for a UInt64:
-        let sub = data.subdata(in: i..<(i + 8)).reversed()
+        let sub = data.subdata(in: (start + i)..<(start + i + 8)).reversed()
         return sub.reduce(UInt64(0)) { (acc, byte) in
             (acc << 8) | UInt64(byte)
         }
@@ -136,16 +140,17 @@ public struct Bytes {
     /// Reads a string from `data` starting at index `i`, until encountering
     /// a null byte (0) or reaching `length` characters. (Equivalent to `readString`.)
     static func readString(_ data: Data, _ i: Int, _ length: Int) -> String {
-        precondition(i >= 0 && i < data.count, "Index out of bounds")
-        var idx = i
+        let start = data.startIndex
+        precondition(i >= 0 && start + i < data.endIndex, "Index out of bounds")
+        var idx = start + i
         var strData = Data()
         // Read bytes until null or until we reach `length`
-        while idx < data.count && data[idx] != 0 {
+        while idx < data.endIndex && data[idx] != 0 {
             strData.append(data[idx])
             if strData.count >= length {
                 break
             }
-            idx += 1
+            idx = data.index(after: idx)
         }
         return String(data: strData, encoding: .utf8) ?? ""
     }
