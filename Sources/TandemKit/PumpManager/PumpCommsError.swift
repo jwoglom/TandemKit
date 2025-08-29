@@ -1,5 +1,7 @@
+#if canImport(HealthKit)
+
 import Foundation
-import LoopKit
+import TandemCore
 
 public enum PumpCommsError: Error {
     case noPumpPaired
@@ -34,3 +36,4 @@ extension PumpCommsError: LocalizedError {
         }
     }
 }
+#endif

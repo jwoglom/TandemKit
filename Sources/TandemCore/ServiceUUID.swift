@@ -5,9 +5,7 @@
 //  Created by James Woglom on 1/13/25.
 //
 
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
 
 public enum ServiceUUID: String, Sendable {
     // All pump operations
@@ -29,3 +27,7 @@ public let AllServiceUUIDs: [ServiceUUID] = [
     .GENERIC_ACCESS_SERVICE,
     .GENERIC_ATTRIBUTE_SERVICE
 ]
+
+public extension ServiceUUID {
+    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+}

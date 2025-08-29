@@ -1,20 +1,24 @@
-#if canImport(CoreBluetooth)
 import Foundation
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
+import TandemCore
 
 /// Parses raw Bluetooth notification packets into pump messages.
 /// This is a minimal Swift port of PumpX2 `BTResponseParser` used for unit testing.
 struct BTResponseParser {
+    @MainActor
     static func parse(wrapper: TronMessageWrapper, output: Data, characteristic: CBUUID) -> PumpResponseMessage? {
         var packetArray = wrapper.buildPacketArrayList(.Response)
         return parse(message: wrapper.message, packetArrayList: &packetArray, output: output, uuid: characteristic)
     }
 
+    @MainActor
     static func parse(message: Message, packetArrayList: inout PacketArrayList, output: Data, uuid: CBUUID) -> PumpResponseMessage? {
         checkCharacteristicUuid(uuid, output: output)
-        packetArrayList.validatePacket(output)
+        do {
+            try packetArrayList.validatePacket(output)
+        } catch {
+            return PumpResponseMessage(data: output)
+        }
         if packetArrayList.needsMorePacket() {
             return PumpResponseMessage(data: output)
         }
@@ -27,7 +31,7 @@ struct BTResponseParser {
         }
 
         if packetArrayList.validate(authKey) {
-            let allData = packetArrayList.messageData()
+            let allData = packetArrayList.buildMessageData()
             let payload = allData.dropFirst(3)
             // At present TandemKit does not implement message decoding; return raw payload
             return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
@@ -66,7 +70,7 @@ struct BTResponseParser {
 
 /// Simple container used when decoding of specific message types is unavailable.
 private struct RawMessage: Message {
-    static var props = MessageProps(opCode: 0, size: 0, type: .Response, characteristic: .CURRENT_STATUS_CHARACTERISTICS)
+    static let props = MessageProps(opCode: 0, size: 0, type: .Response, characteristic: .CURRENT_STATUS_CHARACTERISTICS)
     var opCode: UInt8
     var cargo: Data
 
@@ -80,4 +84,3 @@ private struct RawMessage: Message {
         self.cargo = cargo
     }
 }
-#endif

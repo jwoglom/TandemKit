@@ -1,11 +1,11 @@
-#if canImport(CoreBluetooth)
 import Foundation
+import TandemCore
 
 /// Parses incoming packets from the pump and validates them.
 /// This mirrors the behaviour of PumpX2 `PacketArrayList`.
 struct PacketArrayList {
     static let IGNORE_INVALID_HMAC = "IGNORE_HMAC_SIGNATURE_EXCEPTION"
-    static var ignoreInvalidTxId = false
+    static let ignoreInvalidTxId = false
 
     let expectedOpCode: UInt8
     private(set) var expectedCargoSize: UInt8
@@ -14,7 +14,7 @@ struct PacketArrayList {
 
     private var actualExpectedCargoSize: Int
     private var fullCargo: Data
-    private var messageData: Data
+    private var messageDataBuffer: Data
     private(set) var opCode: UInt8 = 0
     private var firstByteMod15: UInt8 = 0
     private var empty = true
@@ -28,7 +28,7 @@ struct PacketArrayList {
         self.expectedTxId = expectedTxId
         self.isSigned = isSigned
         self.fullCargo = Data(repeating: 0, count: self.actualExpectedCargoSize + 2)
-        self.messageData = Data(repeating: 0, count: 3)
+        self.messageDataBuffer = Data(repeating: 0, count: 3)
     }
 
     private mutating func parse(_ packet: Data) throws {
@@ -92,7 +92,7 @@ struct PacketArrayList {
 
     private mutating func createMessageData() {
         var header = Data([expectedOpCode, expectedTxId, expectedCargoSize])
-        messageData = header + fullCargo.dropLast(2)
+        messageDataBuffer = header + fullCargo.dropLast(2)
     }
 
     private mutating func createExpectedCrc() {
@@ -101,24 +101,24 @@ struct PacketArrayList {
         }
     }
 
-    mutating func messageData() -> Data {
+    mutating func buildMessageData() -> Data {
         createMessageData()
-        return messageData
+        return messageDataBuffer
     }
 
     mutating func validate(_ authKey: Data) -> Bool {
         if needsMorePacket() { return false }
         createMessageData()
         createExpectedCrc()
-        let crc = CalculateCRC16(messageData)
+        let crc = CalculateCRC16(messageDataBuffer)
         var ok = crc == expectedCrc
         if !ok {
             if shouldIgnoreInvalidHmac(authKey) { ok = true } else { return false }
         }
         if isSigned {
-            guard messageData.count >= 20 else { return false }
-            let msgData = messageData.dropLast(20)
-            let expectedHmac = messageData.suffix(20)
+            guard messageDataBuffer.count >= 20 else { return false }
+            let msgData = messageDataBuffer.dropLast(20)
+            let expectedHmac = messageDataBuffer.suffix(20)
             let mac = HmacSha1(data: msgData, key: authKey)
             if mac != expectedHmac {
                 if shouldIgnoreInvalidHmac(authKey) {
@@ -143,4 +143,3 @@ struct PacketArrayList {
     struct InvalidPacketSequenceError: Error {}
     struct InvalidCargoSizeError: Error { let expected: Int; let actual: Int }
 }
-#endif

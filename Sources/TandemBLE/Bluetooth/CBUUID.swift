@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  CBUUID.swift
 //  TandemKit
@@ -6,13 +5,14 @@
 //  Created by James Woglom on 1/13/25.
 //
 import CoreBluetooth
+import TandemCore
 
 
 // MARK: - CBUUID definition
 protocol CBUUIDRawValue: RawRepresentable {}
 extension CBUUIDRawValue where RawValue == String {
     var cbUUID: CBUUID {
-        return CBUUID(string: rawValue)
+        return CBUUID(uuidString: rawValue)
     }
 }
 
@@ -90,4 +90,3 @@ extension Collection where Element: CBAttribute {
         return nil
     }
 }
-#endif

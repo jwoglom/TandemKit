@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  BluetoothCmd.swift
 //  TandemKit
@@ -7,9 +6,9 @@
 //
 
 import CoreBluetooth
+import Foundation
 
 struct BluetoothCmd {
     let uuid: CBUUID
     let value: Data
 }
-#endif

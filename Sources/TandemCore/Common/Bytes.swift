@@ -10,30 +10,30 @@ import Foundation
 public struct Bytes {
 
     /// Drops the first `n` bytes from the data and returns the remainder.
-    static func dropFirstN(_ data: Data, _ n: Int) -> Data {
+    public static func dropFirstN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
         return data.subdata(in: n..<data.count)
     }
 
     /// Drops the last `n` bytes from the data and returns the remainder.
-    static func dropLastN(_ data: Data, _ n: Int) -> Data {
+    public static func dropLastN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
         return data.subdata(in: 0..<(data.count - n))
     }
 
     /// Gets the first `n` bytes from the data.
-    static func firstN(_ data: Data, _ n: Int) -> Data {
+    public static func firstN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
         return data.subdata(in: 0..<n)
     }
 
     /// Returns a reversed copy of the given data.
-    static func reverse(_ data: Data) -> Data {
+    public static func reverse(_ data: Data) -> Data {
         return Data(data.reversed())
     }
 
     /// Concatenates any number of `Data` objects into a single `Data`.
-    static func combine(_ items: Data...) -> Data {
+    public static func combine(_ items: Data...) -> Data {
         // You can also do: items.reduce(Data()) { $0 + $1 }
         var result = Data()
         for item in items {
@@ -43,13 +43,13 @@ public struct Bytes {
     }
 
     /// Returns a `Data` instance of the specified size, initialized to all 0s.
-    static func emptyBytes(_ size: Int) -> Data {
+    public static func emptyBytes(_ size: Int) -> Data {
         return Data(repeating: 0, count: size)
     }
 
     /// Reads a 16-bit little-endian integer from `data` at index `i`.
     /// (Equivalent to `readShort` in Java.)
-    static func readShort(_ data: Data, _ i: Int) -> Int {
+    public static func readShort(_ data: Data, _ i: Int) -> Int {
         precondition(i >= 0 && i + 1 < data.count, "Index out of bounds")
 
         // Same logic as Java: ((raw[i+1] & 0xFF) << 8) | (raw[i] & 0xFF)
@@ -60,7 +60,7 @@ public struct Bytes {
 
     /// Reads a 32-bit float (little-endian) from `data` at index `i`.
     /// (Equivalent to `readFloat` in Java.)
-    static func readFloat(_ data: Data, _ i: Int) -> Float {
+    public static func readFloat(_ data: Data, _ i: Int) -> Float {
         precondition(i >= 0 && i + 3 < data.count, "Index out of bounds")
         let sub = data.subdata(in: i..<(i + 4))
         // We'll interpret these 4 bytes as a Float in little-endian order.
@@ -74,7 +74,7 @@ public struct Bytes {
 
     /// Converts a `Float` to a 4-byte `Data` (little-endian).
     /// (Equivalent to `toFloat` in Java.)
-    static func toFloat(_ value: Float) -> Data {
+    public static func toFloat(_ value: Float) -> Data {
         var bitPattern = value.bitPattern.littleEndian
         return withUnsafeBytes(of: &bitPattern) { Data($0) }
     }
@@ -106,7 +106,7 @@ public struct Bytes {
 
     /// Converts a 64-bit value to a 4-byte `Data` (little-endian),
     /// returning only the lowest 4 bytes. (Equivalent to `toUint32`.)
-    static func toUint32(_ value: UInt32) -> Data {
+    public static func toUint32(_ value: UInt32) -> Data {
         var little = value.littleEndian
         let full8 = withUnsafeBytes(of: &little) { Data($0) } // 8 bytes
         return full8.prefix(4) // lowest 4 bytes
@@ -176,10 +176,17 @@ public struct Bytes {
     /// Helper which generates `count` bytes of secure random data.
     private static func getSecureRandomBytes(count: Int) -> Data {
         var bytes = Data(count: count)
+#if canImport(Security)
         let result = bytes.withUnsafeMutableBytes {
             SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!)
         }
         precondition(result == errSecSuccess, "Failed to generate random bytes")
         return bytes
+#else
+        for i in 0..<count {
+            bytes[i] = UInt8.random(in: UInt8.min...UInt8.max)
+        }
+        return bytes
+#endif
     }
 }

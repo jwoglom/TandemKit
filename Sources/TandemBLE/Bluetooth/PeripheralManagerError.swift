@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  PeripheralManagerError.swift
 //  TandemKit
@@ -11,7 +10,7 @@
 import CoreBluetooth
 
 
-enum PeripheralManagerError: Error {
+enum PeripheralManagerError: Error, @unchecked Sendable {
     case cbPeripheralError(Error)
     case notReady
     case busy
@@ -42,4 +41,3 @@ extension PeripheralManagerError {
         }
     }
 }
-#endif

@@ -6,11 +6,11 @@
 //
 //  Basis: OmniBLE PumpComms.swift
 
+#if canImport(HealthKit)
 
 import Foundation
 import LoopKit
-import OSLog
-
+import TandemCore
 
 protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
@@ -101,3 +101,5 @@ extension PumpComm: PumpCommSessionDelegate {
         self.pumpState = state
     }
 }
+
+#endif

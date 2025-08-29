@@ -1,5 +1,5 @@
-#if canImport(CoreBluetooth)
 import Foundation
+import TandemCore
 
 /// Wraps a pump `Message` and provides the packetized data for transmission.
 /// Mirrors the behavior of PumpX2 `TronMessageWrapper`.
@@ -7,6 +7,7 @@ struct TronMessageWrapper {
     let message: Message
     let packets: [Packet]
 
+    @MainActor
     init(message: Message, currentTxId: UInt8) {
         self.message = message
         var authKey = Data()
@@ -22,6 +23,7 @@ struct TronMessageWrapper {
                                       timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?())
     }
 
+    @MainActor
     init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
         self.message = message
         var authKey = Data()
@@ -37,11 +39,11 @@ struct TronMessageWrapper {
                                       maxChunkSize: maxChunkSize)
     }
 
-    func buildPacketArrayList(_ type: MessageType) -> PacketArrayList {
+    func buildPacketArrayList(_ messageType: MessageType) -> PacketArrayList {
         let props = type(of: message).props
         var opCode = props.opCode
         var size = props.size
-        if type == .Response {
+        if messageType == .Response {
             opCode = props.opCode
             size = props.size
         } else {
@@ -65,4 +67,3 @@ struct TronMessageWrapper {
         return packet
     }
 }
-#endif

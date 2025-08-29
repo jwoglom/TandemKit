@@ -1,5 +1,5 @@
-#if canImport(CoreBluetooth)
 import Foundation
+import TandemCore
 
 /// Container for data received from the pump over BLE.
 /// Mirrors PumpX2 `PumpResponseMessage` but simplified.
@@ -16,4 +16,4 @@ struct PumpResponseMessage {
         self.data = data
         self.message = message
     }
-}#endif
+}
