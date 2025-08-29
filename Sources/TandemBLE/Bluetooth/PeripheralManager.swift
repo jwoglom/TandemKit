@@ -12,8 +12,7 @@ import CoreBluetooth
 import Foundation
 import TandemCore
 
-@MainActor
-class PeripheralManager: NSObject {
+class PeripheralManager: NSObject, @unchecked Sendable {
 
     private let log = OSLog(category: "PeripheralManager")
 

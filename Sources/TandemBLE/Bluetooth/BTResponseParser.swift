@@ -14,7 +14,11 @@ struct BTResponseParser {
     @MainActor
     static func parse(message: Message, packetArrayList: inout PacketArrayList, output: Data, uuid: CBUUID) -> PumpResponseMessage? {
         checkCharacteristicUuid(uuid, output: output)
-        packetArrayList.validatePacket(output)
+        do {
+            try packetArrayList.validatePacket(output)
+        } catch {
+            return PumpResponseMessage(data: output)
+        }
         if packetArrayList.needsMorePacket() {
             return PumpResponseMessage(data: output)
         }

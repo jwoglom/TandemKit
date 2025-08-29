@@ -5,11 +5,12 @@
 //  Created by James Woglom on 1/5/25.
 //
 
+#if canImport(HealthKit)
 
 import Foundation
 import CoreBluetooth
 import LoopKit
-import OSLog
+import TandemCore
 
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
@@ -113,4 +114,6 @@ extension TandemPump: BluetoothManagerDelegate {
         delegate?.tandemPump(self, didCompleteConfiguration: peripheralManager)
     }
 }
+
+#endif
 
