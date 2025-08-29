@@ -27,5 +27,26 @@ jobs:
         with:
           name: carthage-xcodebuild.log
           path: carthage.log
-      - name: Build TandemKit
-        run: xcodebuild -project TandemKit.xcodeproj -scheme TandemKit -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO build
+      - name: Build TandemKit XCFramework
+        run: |
+          xcodebuild archive \
+            -project TandemKit.xcodeproj -scheme TandemKit \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/ios \
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+          xcodebuild archive \
+            -project TandemKit.xcodeproj -scheme TandemKit \
+            -destination 'generic/platform=iOS Simulator' \
+            -archivePath build/ios-sim \
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+          xcodebuild -create-xcframework \
+            -framework build/ios.xcarchive/Products/Library/Frameworks/TandemKit.framework \
+            -framework build/ios-sim.xcarchive/Products/Library/Frameworks/TandemKit.framework \
+            -output build/TandemKit.xcframework
+          cd build
+          zip -r TandemKit.xcframework.zip TandemKit.xcframework
+      - name: Upload TandemKit XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: TandemKit.xcframework
+          path: build/TandemKit.xcframework.zip
