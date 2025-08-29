@@ -1,13 +1,6 @@
-//
-//  HmacSha1.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
 import Foundation
 
-func HmacSha1(data: Data, key: Data) -> Data {
+public func HmacSha1(data: Data, key: Data) -> Data {
     let blockSize = 64
     var keyData = key
     if keyData.count > blockSize {
@@ -26,3 +19,4 @@ func HmacSha1(data: Data, key: Data) -> Data {
     let finalHash = SHA1.hash(oKey + innerHash)
     return finalHash
 }
+

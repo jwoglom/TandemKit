@@ -7,7 +7,7 @@
 
 import HealthKit
 import LoopKit
-import os.log
+import TandemCore
 
 public class TandemPumpManager : DeviceManager {
     public static var localizedTitle: String = "TandemPumpManager"

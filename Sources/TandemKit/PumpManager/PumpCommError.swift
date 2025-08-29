@@ -13,14 +13,13 @@
 //
 
 import Foundation
-import LoopKit
-import os.log
+import TandemCore
 
-public enum PumpCommError: Error {
+public enum PumpCommError: Error, @unchecked Sendable {
     case pumpNotConnected
     case noResponse
     case missingAuthenticationKey
-    case errorResponse(response: Message)
+    case errorResponse(response: any Message)
     case other
 }
 

@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  PeripheralManager.swift
 //  TandemKit
@@ -11,7 +10,7 @@
 
 import CoreBluetooth
 import Foundation
-import os.log
+import TandemCore
 
 class PeripheralManager: NSObject {
 
@@ -587,4 +586,3 @@ extension PeripheralManager {
         }
     }
 }
-#endif

@@ -70,3 +70,4 @@ struct SHA1 {
         return digest
     }
 }
+

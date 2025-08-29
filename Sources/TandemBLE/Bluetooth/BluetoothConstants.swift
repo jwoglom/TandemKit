@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 import Foundation
 
 /// Constants related to Tandem pump Bluetooth connections.
@@ -13,4 +12,3 @@ enum BluetoothConstants {
         return name.hasPrefix(deviceNameTSlimX2)
     }
 }
-#endif

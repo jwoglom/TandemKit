@@ -46,7 +46,7 @@ public class SetSleepScheduleRequest: Message {
         self.flag = flag
     }
 
-    public init(slot: Int, schedule: ControlIQSleepScheduleResponse.SleepSchedule, flag: Int) {
+    public convenience init(slot: Int, schedule: ControlIQSleepScheduleResponse.SleepSchedule, flag: Int) {
         self.init(slot: slot, rawSchedule: schedule.build(), flag: flag)
     }
 

@@ -1,10 +1,11 @@
 import Foundation
 
-struct PumpStateSupplier {
+@MainActor
+public struct PumpStateSupplier {
     static var pumpPairingCode: (() -> String)?
     static var jpakeDerivedSecretHex: (() -> String)?
     static var jpakeServerNonceHex: (() -> String)?
-    static var pumpTimeSinceReset: (() -> UInt32)?
+    public static var pumpTimeSinceReset: (() -> UInt32)?
     static var pumpApiVersion: (() -> ApiVersion)?
     static var controlIQSupported: () -> Bool = { false }
     static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
@@ -22,7 +23,7 @@ struct PumpStateSupplier {
 
     static var pairingCodeType: PairingCodeType = .long16Char
 
-    static var authenticationKey: () -> Data = {
+    public static var authenticationKey: () -> Data = {
         determinePumpAuthKey()
     }
 
@@ -63,7 +64,7 @@ struct PumpStateSupplier {
         sendSharedConnectionResponseMessages = true
     }
 
-    static func relyOnConnectionSharingForAuthentication() {
+    static func enableRelyOnConnectionSharingForAuthentication() {
         relyOnConnectionSharingForAuthentication = true
     }
 

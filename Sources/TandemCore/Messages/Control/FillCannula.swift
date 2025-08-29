@@ -19,9 +19,9 @@ public class FillCannulaRequest: Message {
         type: .Request,
         characteristic: .CONTROL_CHARACTERISTICS,
         signed: true,
-        supportedDevices: .mobiOnly,
+        modifiesInsulinDelivery: true,
         minApi: .mobiApiV3_5,
-        modifiesInsulinDelivery: true
+        supportedDevices: .mobiOnly
     )
 
     public var cargo: Data
@@ -46,9 +46,9 @@ public class FillCannulaResponse: Message, StatusMessage {
         type: .Response,
         characteristic: .CONTROL_CHARACTERISTICS,
         signed: true,
-        supportedDevices: .mobiOnly,
+        modifiesInsulinDelivery: true,
         minApi: .mobiApiV3_5,
-        modifiesInsulinDelivery: true
+        supportedDevices: .mobiOnly
     )
 
     public var cargo: Data

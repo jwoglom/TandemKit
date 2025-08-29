@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 import Foundation
 
 /// Container for data received from the pump over BLE.
@@ -16,4 +15,4 @@ struct PumpResponseMessage {
         self.data = data
         self.message = message
     }
-}#endif
+}

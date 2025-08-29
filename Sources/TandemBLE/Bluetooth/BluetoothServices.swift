@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  BluetoothServices.swift
 //  TandemKit
@@ -74,5 +73,4 @@ extension PeripheralManager.Configuration {
             ]
         )
     }
-}
-#endif
+  }

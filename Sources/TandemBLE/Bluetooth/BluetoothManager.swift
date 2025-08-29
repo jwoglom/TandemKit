@@ -1,4 +1,3 @@
-#if canImport(CoreBluetooth)
 //
 //  BluetoothManager.swift
 //  TandemKit
@@ -10,7 +9,7 @@
 import CoreBluetooth
 import Foundation
 import LoopKit
-import os.log
+import TandemCore
 
 
 protocol BluetoothManagerDelegate: AnyObject {
@@ -423,4 +422,3 @@ extension BluetoothManager: PeripheralManagerDelegate {
 
     }
 }
-#endif

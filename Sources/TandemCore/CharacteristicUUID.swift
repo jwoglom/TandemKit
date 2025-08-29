@@ -5,9 +5,7 @@
 //  Created by James Woglom on 1/5/25.
 //
 
-#if canImport(CoreBluetooth)
 import CoreBluetooth
-#endif
 
 public enum CharacteristicUUID: String, Sendable {
     // For reading pump state
