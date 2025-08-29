@@ -18,6 +18,21 @@ jobs:
       - name: Install Carthage
         run: brew install carthage
       - name: Bootstrap Carthage dependencies
-        run: ./carthage.sh bootstrap --platform iOS --no-use-binaries --use-xcframeworks
+        run: |
+          set -o pipefail
+          ./carthage.sh bootstrap --platform iOS --no-use-binaries --use-xcframeworks --verbose 2>&1 | tee carthage.log
+      - name: Collect Carthage logs
+        if: failure()
+        run: |
+          LOG_PATH=$(find /var/folders -name 'carthage-xcodebuild*.log' -print -quit)
+          echo "Carthage xcodebuild log at $LOG_PATH"
+          cat "$LOG_PATH"
+          echo "CARTHAGE_XCODEBUILD_LOG=$LOG_PATH" >> $GITHUB_ENV
+      - name: Upload Carthage log
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: carthage-xcodebuild.log
+          path: ${{ env.CARTHAGE_XCODEBUILD_LOG }}
       - name: Build TandemKit
         run: xcodebuild -project TandemKit.xcodeproj -scheme TandemKit -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO build
