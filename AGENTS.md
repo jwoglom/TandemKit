@@ -408,7 +408,7 @@ Responses:
    - [ ] Tests for InsulinStatusResponse
 - [x] LastBGResponse
    - [ ] Tests for LastBGResponse
-- [ ] LastBolusStatusAbstractResponse
+- [x] LastBolusStatusAbstractResponse
 - [x] LastBolusStatusResponse
    - [ ] Tests for LastBolusStatusResponse
 - [x] LastBolusStatusV2Response
@@ -460,18 +460,18 @@ Responses:
 
 ### HistoryLog
 Requests:
-- [ ] NonexistentHistoryLogStreamRequest
+- [x] NonexistentHistoryLogStreamRequest
 
 Responses:
-- [ ] AlarmActivatedHistoryLog
-- [ ] AlertActivatedHistoryLog
+- [x] AlarmActivatedHistoryLog
+- [x] AlertActivatedHistoryLog
 - [ ] BGHistoryLog
 - [ ] BasalDeliveryHistoryLog
-- [ ] BasalRateChangeHistoryLog
+- [x] BasalRateChangeHistoryLog
 - [ ] BolexActivatedHistoryLog
 - [ ] BolexCompletedHistoryLog
-- [ ] BolusActivatedHistoryLog
-- [ ] BolusCompletedHistoryLog
+- [x] BolusActivatedHistoryLog
+- [x] BolusCompletedHistoryLog
 - [ ] BolusDeliveryHistoryLog
 - [ ] BolusRequestedMsg1HistoryLog
 - [ ] BolusRequestedMsg2HistoryLog
@@ -491,9 +491,9 @@ Responses:
 - [ ] DataLogCorruptionHistoryLog
 - [ ] DateChangeHistoryLog
 - [ ] FactoryResetHistoryLog
-- [ ] HistoryLog
-- [ ] HistoryLogParser
-- [ ] HistoryLogStreamResponse
+- [x] HistoryLog
+- [x] HistoryLogParser
+- [x] HistoryLogStreamResponse
 - [ ] HypoMinimizerResumeHistoryLog
 - [ ] HypoMinimizerSuspendHistoryLog
 - [ ] IdpActionHistoryLog
@@ -507,13 +507,13 @@ Responses:
 - [ ] ParamChangePumpSettingsHistoryLog
 - [ ] ParamChangeRemSettingsHistoryLog
 - [ ] ParamChangeReminderHistoryLog
-- [ ] PumpingResumedHistoryLog
-- [ ] PumpingSuspendedHistoryLog
+- [x] PumpingResumedHistoryLog
+- [x] PumpingSuspendedHistoryLog
 - [ ] TempRateActivatedHistoryLog
 - [ ] TempRateCompletedHistoryLog
 - [ ] TimeChangedHistoryLog
 - [ ] TubingFilledHistoryLog
-- [ ] UnknownHistoryLog
+- [x] UnknownHistoryLog
 - [ ] UsbConnectedHistoryLog
 - [ ] UsbDisconnectedHistoryLog
 - [ ] UsbEnumeratedHistoryLog
