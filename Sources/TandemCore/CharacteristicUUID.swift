@@ -29,3 +29,7 @@ public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
     .CONTROL_CHARACTERISTICS,
     .CONTROL_STREAM_CHARACTERISTICS
 ]
+
+public extension CharacteristicUUID {
+    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+}

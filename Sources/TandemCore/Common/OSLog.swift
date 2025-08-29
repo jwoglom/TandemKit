@@ -53,7 +53,8 @@ extension OSLog {
 }
 #else
 public struct OSLog {
-    public init(category: String) {}
+    public init(subsystem: String = "com.jwoglom.TandemKit", category: String) {}
+    public init(category: String) { self.init(subsystem: "com.jwoglom.TandemKit", category: category) }
     public func debug(_ message: StaticString, _ args: CVarArg...) {}
     public func info(_ message: StaticString, _ args: CVarArg...) {}
     public func `default`(_ message: StaticString, _ args: CVarArg...) {}

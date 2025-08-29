@@ -10,7 +10,7 @@
 import CoreBluetooth
 
 
-enum PeripheralManagerError: Error {
+enum PeripheralManagerError: Error, @unchecked Sendable {
     case cbPeripheralError(Error)
     case notReady
     case busy
