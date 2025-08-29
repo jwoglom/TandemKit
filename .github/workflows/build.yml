@@ -33,12 +33,14 @@ jobs:
             -project TandemKit.xcodeproj -scheme TandemKit \
             -destination 'generic/platform=iOS' \
             -archivePath build/ios \
-            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
           xcodebuild archive \
             -project TandemKit.xcodeproj -scheme TandemKit \
             -destination 'generic/platform=iOS Simulator' \
             -archivePath build/ios-sim \
-            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
           xcodebuild -create-xcframework \
             -framework build/ios.xcarchive/Products/Library/Frameworks/TandemKit.framework \
             -framework build/ios-sim.xcarchive/Products/Library/Frameworks/TandemKit.framework \
