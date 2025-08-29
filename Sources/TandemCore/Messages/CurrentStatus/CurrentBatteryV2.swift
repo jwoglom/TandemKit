@@ -92,3 +92,5 @@ public class CurrentBatteryV2Response: Message {
     }
 }
 
+
+extension CurrentBatteryV2Response: CurrentBatteryAbstractResponse {}

@@ -65,3 +65,5 @@ public class CurrentBatteryV1Response: Message {
     }
 }
 
+
+extension CurrentBatteryV1Response: CurrentBatteryAbstractResponse {}
