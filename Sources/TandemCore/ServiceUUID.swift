@@ -29,5 +29,11 @@ public let AllServiceUUIDs: [ServiceUUID] = [
 ]
 
 public extension ServiceUUID {
-    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+    var cbUUID: CBUUID {
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || targetEnvironment(macCatalyst)
+        return CBUUID(string: rawValue)
+#else
+        return CBUUID(uuidString: rawValue)
+#endif
+    }
 }

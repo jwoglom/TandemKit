@@ -1,0 +1,31 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.4'
+      - name: Install Carthage
+        run: brew install carthage
+      - name: Bootstrap Carthage dependencies
+        run: |
+          set -o pipefail
+          ./carthage.sh bootstrap --platform iOS --no-use-binaries --use-xcframeworks --verbose 2>&1 | tee carthage.log
+      - name: Upload Carthage log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carthage-xcodebuild.log
+          path: carthage.log
+      - name: Run Swift tests
+        run: swift test
