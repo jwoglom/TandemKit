@@ -1,4 +1,5 @@
 import CoreBluetooth
+import TandemCore
 
 /// Enum counterpart to `CharacteristicUUID` providing type safety
 /// similar to `Characteristic` in pumpx2.

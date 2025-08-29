@@ -27,3 +27,7 @@ public let AllServiceUUIDs: [ServiceUUID] = [
     .GENERIC_ACCESS_SERVICE,
     .GENERIC_ATTRIBUTE_SERVICE
 ]
+
+public extension ServiceUUID {
+    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+}

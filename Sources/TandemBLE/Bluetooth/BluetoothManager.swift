@@ -354,10 +354,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
-        log.default("%{public}@: %{public}@", #function, peripheral)
-        // Ignore errors indicating the peripheral disconnected remotely, as that's expected behavior
-        if let error = error as NSError?, CBError(_nsError: error).code != .peripheralDisconnected {
-            log.error("%{public}@: %{public}@", #function, error)
+        log.default("%{public}@: %{public}@", #function, String(describing: peripheral))
+        if let error = error {
+            log.error("%{public}@: %{public}@", #function, String(describing: error))
             if let peripheralManager = peripheralManager {
                 self.delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: error)
             }

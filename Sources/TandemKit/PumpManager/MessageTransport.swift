@@ -9,6 +9,7 @@
 //  Copyright © 2021 LoopKit Authors. All rights reserved.
 
 import Foundation
+import TandemBLE
 
 protocol MessageLogger: AnyObject {
     // Comms logging

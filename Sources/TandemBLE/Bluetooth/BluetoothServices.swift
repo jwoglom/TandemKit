@@ -6,6 +6,8 @@
 //
 
 
+import TandemCore
+
 extension PeripheralManager.Configuration {
     static var tandemPeripheral: PeripheralManager.Configuration {
         return PeripheralManager.Configuration(

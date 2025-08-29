@@ -39,11 +39,11 @@ struct TronMessageWrapper {
                                       maxChunkSize: maxChunkSize)
     }
 
-    func buildPacketArrayList(_ type: MessageType) -> PacketArrayList {
+    func buildPacketArrayList(_ messageType: MessageType) -> PacketArrayList {
         let props = type(of: message).props
         var opCode = props.opCode
         var size = props.size
-        if type == .Response {
+        if messageType == .Response {
             opCode = props.opCode
             size = props.size
         } else {

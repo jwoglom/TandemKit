@@ -29,7 +29,7 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
 
 
 @MainActor
-func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
+public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
     var props = type(of: message).props
     var opCode = props.opCode
     var length = message.cargo.count
@@ -48,7 +48,7 @@ func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinc
         guard let authenticationKey = authenticationKey,
               let timeSinceReset = timeSinceReset
         else {
-            throw PumpCommError.missingAuthenticationKey
+            throw PacketizeError.missingAuthenticationKey
         }
 
         let i = length - 20
@@ -77,3 +77,7 @@ func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinc
 }
 
 struct ActionsAffectingInsulinDeliveryNotEnabled: Error {}
+
+enum PacketizeError: Error {
+    case missingAuthenticationKey
+}

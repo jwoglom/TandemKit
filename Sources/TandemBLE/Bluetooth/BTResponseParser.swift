@@ -27,7 +27,7 @@ struct BTResponseParser {
         }
 
         if packetArrayList.validate(authKey) {
-            let allData = packetArrayList.messageData()
+            let allData = packetArrayList.buildMessageData()
             let payload = allData.dropFirst(3)
             // At present TandemKit does not implement message decoding; return raw payload
             return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
@@ -66,7 +66,7 @@ struct BTResponseParser {
 
 /// Simple container used when decoding of specific message types is unavailable.
 private struct RawMessage: Message {
-    static var props = MessageProps(opCode: 0, size: 0, type: .Response, characteristic: .CURRENT_STATUS_CHARACTERISTICS)
+    static let props = MessageProps(opCode: 0, size: 0, type: .Response, characteristic: .CURRENT_STATUS_CHARACTERISTICS)
     var opCode: UInt8
     var cargo: Data
 

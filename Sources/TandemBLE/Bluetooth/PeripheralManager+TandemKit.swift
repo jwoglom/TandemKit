@@ -5,6 +5,8 @@
 //  Created by James Woglom on 1/13/25.
 //
 
+import Foundation
+import Dispatch
 
 enum SendMessageResult {
     /// The packet was sent and the pump acknowledged receipt.
@@ -54,7 +56,7 @@ extension PeripheralManager {
         var didSend = false
 
         do {
-            for (index, packet) in packets.enumerated() {
+            for packet in packets {
                 try sendData(packet.build, timeout: 5)
             }
             didSend = true

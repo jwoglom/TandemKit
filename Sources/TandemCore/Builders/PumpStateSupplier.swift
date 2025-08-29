@@ -8,7 +8,7 @@ public struct PumpStateSupplier {
     public static var pumpTimeSinceReset: (() -> UInt32)?
     static var pumpApiVersion: (() -> ApiVersion)?
     static var controlIQSupported: () -> Bool = { false }
-    static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
+    public static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
 
     // Flags mirroring PumpX2 PumpState fields
     static var tconnectAppConnectionSharing = false
@@ -52,7 +52,7 @@ public struct PumpStateSupplier {
 
     // MARK: - Configuration helpers
 
-    static func enableActionsAffectingInsulinDelivery() {
+    public static func enableActionsAffectingInsulinDelivery() {
         actionsAffectingInsulinDeliveryEnabled = { true }
     }
 

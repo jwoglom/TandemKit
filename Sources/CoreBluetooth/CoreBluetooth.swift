@@ -42,7 +42,12 @@ public protocol CBAttribute { var uuid: CBUUID { get } }
 
 public class CBCharacteristic: CBAttribute {
     public let uuid: CBUUID
-    public init(uuid: CBUUID) { self.uuid = uuid }
+    public var value: Data?
+    public var isNotifying: Bool = false
+    public init(uuid: CBUUID, value: Data? = nil) {
+        self.uuid = uuid
+        self.value = value
+    }
 }
 
 public class CBService: CBAttribute {
@@ -63,6 +68,8 @@ public class CBPeripheral {
     public let identifier: UUID
     public var services: [CBService]?
     public weak var delegate: CBPeripheralDelegate?
+    public enum State { case disconnected, connecting, connected }
+    public var state: State = .disconnected
 
     public init(identifier: UUID) {
         self.identifier = identifier
@@ -73,6 +80,7 @@ public class CBPeripheral {
     public func setNotifyValue(_ enabled: Bool, for characteristic: CBCharacteristic) { }
     public func writeValue(_ data: Data, for characteristic: CBCharacteristic, type: CBCharacteristicWriteType) { }
     public func readRSSI() { }
+    public func readValue(for characteristic: CBCharacteristic) { }
 }
 
 public class CBCentralManager {
