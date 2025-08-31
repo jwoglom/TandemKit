@@ -22,7 +22,7 @@ Requests:
 Responses:
 - [x] AbstractCentralChallengeResponse
    - [ ] Tests for AbstractCentralChallengeResponse
-- [ ] AbstractPumpChallengeResponse
+- [x] AbstractPumpChallengeResponse
 - [x] CentralChallengeResponse
    - [ ] Tests for CentralChallengeResponse
 - [x] Jpake1aResponse
@@ -480,10 +480,10 @@ Responses:
 - [x] CannulaFilledHistoryLog
 - [x] CarbEnteredHistoryLog
 - [x] CartridgeFilledHistoryLog
-- [ ] CgmCalibrationGxHistoryLog
-- [ ] CgmCalibrationHistoryLog
-- [ ] CgmDataGxHistoryLog
-- [ ] CgmDataSampleHistoryLog
+- [x] CgmCalibrationGxHistoryLog
+- [x] CgmCalibrationHistoryLog
+- [x] CgmDataGxHistoryLog
+- [x] CgmDataSampleHistoryLog
 - [ ] ControlIQPcmChangeHistoryLog
 - [ ] ControlIQUserModeChangeHistoryLog
 - [ ] CorrectionDeclinedHistoryLog
