@@ -5,8 +5,6 @@
 //  Created by James Woglom on 1/5/25.
 //
 
-#if canImport(HealthKit)
-
 import Foundation
 import TandemCore
 
@@ -139,5 +137,3 @@ public class TandemPumpManager: PumpManager {
         print("TandemPumpManager: disconnect() called")
     }
 }
-
-#endif
