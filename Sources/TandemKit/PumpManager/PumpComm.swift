@@ -20,7 +20,7 @@ protocol PumpCommDelegate: AnyObject {
 
 public class PumpComm: CustomDebugStringConvertible {
 
-    var manager: PeripheralManager?
+    var manager: Any? // TODO: Replace with actual PeripheralManager type when available
 
     weak var delegate: PumpCommDelegate?
 
