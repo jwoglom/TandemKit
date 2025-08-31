@@ -1,4 +1,3 @@
-#if canImport(HealthKit)
 import Foundation
 import TandemCore
 
@@ -42,4 +41,3 @@ public class PumpCommSession {
     }
     #endif
 }
-#endif

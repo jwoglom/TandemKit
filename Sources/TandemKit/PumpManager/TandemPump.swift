@@ -5,8 +5,6 @@
 //  Created by James Woglom on 1/5/25.
 //
 
-#if canImport(HealthKit)
-
 import Foundation
 import CoreBluetooth
 import TandemCore
@@ -130,6 +128,4 @@ extension TandemPump: BluetoothManagerDelegate {
         delegate?.tandemPump(self, didCompleteConfiguration: peripheralManager)
     }
 }
-
-#endif
 
