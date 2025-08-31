@@ -10,6 +10,7 @@ import CoreBluetooth
 import Foundation
 import LoopKit
 import TandemCore
+import os
 
 
 protocol BluetoothManagerDelegate: AnyObject {

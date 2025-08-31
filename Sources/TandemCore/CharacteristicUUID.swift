@@ -31,5 +31,5 @@ public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
 ]
 
 public extension CharacteristicUUID {
-    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+    var cbUUID: CBUUID { CBUUID(string: rawValue) }
 }

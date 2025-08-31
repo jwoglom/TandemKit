@@ -11,6 +11,7 @@
 import CoreBluetooth
 import Foundation
 import TandemCore
+import os
 
 class PeripheralManager: NSObject, @unchecked Sendable {
 

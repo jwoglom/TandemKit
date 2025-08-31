@@ -1,5 +1,3 @@
-#if canImport(HealthKit)
-
 import Foundation
 import TandemCore
 
@@ -36,4 +34,3 @@ extension PumpCommsError: LocalizedError {
         }
     }
 }
-#endif
