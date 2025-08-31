@@ -29,5 +29,5 @@ public let AllServiceUUIDs: [ServiceUUID] = [
 ]
 
 public extension ServiceUUID {
-    var cbUUID: CBUUID { CBUUID(uuidString: rawValue) }
+    var cbUUID: CBUUID { CBUUID(string: rawValue) }
 }
