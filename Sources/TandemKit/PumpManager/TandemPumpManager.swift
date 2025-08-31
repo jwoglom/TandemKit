@@ -7,57 +7,30 @@
 
 #if canImport(HealthKit)
 
+import Foundation
 import LoopKit
 import TandemCore
 
-public class TandemPumpManager : DeviceManager {
+public class TandemPumpManager: DeviceManager, PumpManager {
     public static var localizedTitle: String = "TandemPumpManager"
     public static var managerIdentifier: String = "Tandem"
-    
+
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
-    
+
     public var delegateQueue: DispatchQueue! {
-        get {
-            return pumpDelegate.queue
-        }
-        set {
-            pumpDelegate.queue = newValue
-        }
+        get { pumpDelegate.queue }
+        set { pumpDelegate.queue = newValue }
     }
-    
-    private var pumpComm: PumpComm {
-            get {
-                return tandemPump.pumpComm
-            }
-            set {
-                tandemPump.pumpComm = newValue
-            }
-        }
-    
-    public init(state: TandemPumpManagerState) {
-        self.lockedState = Locked(state)
-        self.tandemPump = TandemPump(state.pumpState)
 
-        self.tandemPump.delegate = self
+    public var rawState: PumpManager.RawStateValue
 
-        self.pumpComms.delegate = self
-        self.pumpComms.messageLogger = self
-    }
-    
     public required init?(rawState: PumpManager.RawStateValue) {
-        guard let state = TandemPumpManagerState(rawValue: rawState) else
-        {
-            return nil
-        }
-        
-        self.init(state: state)
+        self.rawState = rawState
     }
-    
-    public var rawState: RawStateValue
-    
-public var debugDescription: String
 
-
+    public var debugDescription: String {
+        "TandemPumpManager()"
+    }
 }
 
 #endif

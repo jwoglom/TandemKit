@@ -11,6 +11,10 @@ import Foundation
 import CoreBluetooth
 import LoopKit
 import TandemCore
+import TandemBLE
+#if canImport(os)
+import os.log
+#endif
 
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
@@ -44,23 +48,23 @@ public class TandemPump {
 
     // MARK: - Configuration helpers
 
-    func enableActionsAffectingInsulinDelivery() {
+    @MainActor func enableActionsAffectingInsulinDelivery() {
         PumpStateSupplier.enableActionsAffectingInsulinDelivery()
     }
 
-    func enableTconnectAppConnectionSharing() {
+    @MainActor func enableTconnectAppConnectionSharing() {
         PumpStateSupplier.enableTconnectAppConnectionSharing()
     }
 
-    func enableSendSharedConnectionResponseMessages() {
+    @MainActor func enableSendSharedConnectionResponseMessages() {
         PumpStateSupplier.enableSendSharedConnectionResponseMessages()
     }
 
-    func relyOnConnectionSharingForAuthentication() {
-        PumpStateSupplier.relyOnConnectionSharingForAuthentication()
+    @MainActor func relyOnConnectionSharingForAuthentication() {
+        PumpStateSupplier.enableRelyOnConnectionSharingForAuthentication()
     }
 
-    func onlySnoopBluetoothAndBlockAllPumpX2Functionality() {
+    @MainActor func onlySnoopBluetoothAndBlockAllPumpX2Functionality() {
         PumpStateSupplier.enableOnlySnoopBluetooth()
     }
 

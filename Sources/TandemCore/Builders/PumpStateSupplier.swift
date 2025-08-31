@@ -56,19 +56,19 @@ public struct PumpStateSupplier {
         actionsAffectingInsulinDeliveryEnabled = { true }
     }
 
-    static func enableTconnectAppConnectionSharing() {
+    public static func enableTconnectAppConnectionSharing() {
         tconnectAppConnectionSharing = true
     }
 
-    static func enableSendSharedConnectionResponseMessages() {
+    public static func enableSendSharedConnectionResponseMessages() {
         sendSharedConnectionResponseMessages = true
     }
 
-    static func enableRelyOnConnectionSharingForAuthentication() {
+    public static func enableRelyOnConnectionSharingForAuthentication() {
         relyOnConnectionSharingForAuthentication = true
     }
 
-    static func enableOnlySnoopBluetooth() {
+    public static func enableOnlySnoopBluetooth() {
         onlySnoopBluetooth = true
     }
 }

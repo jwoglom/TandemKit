@@ -11,6 +11,10 @@
 import Foundation
 import LoopKit
 import TandemCore
+import TandemBLE
+#if canImport(os)
+import os.log
+#endif
 
 protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
