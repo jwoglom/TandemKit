@@ -12,7 +12,7 @@ import TandemCore
 protocol CBUUIDRawValue: RawRepresentable {}
 extension CBUUIDRawValue where RawValue == String {
     var cbUUID: CBUUID {
-        return CBUUID(uuidString: rawValue)
+        return CBUUID(string: rawValue)
     }
 }
 
