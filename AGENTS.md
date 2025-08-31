@@ -468,17 +468,17 @@ Responses:
 - [x] BGHistoryLog
 - [x] BasalDeliveryHistoryLog
 - [x] BasalRateChangeHistoryLog
-- [ ] BolexActivatedHistoryLog
-- [ ] BolexCompletedHistoryLog
+- [x] BolexActivatedHistoryLog
+- [x] BolexCompletedHistoryLog
 - [x] BolusActivatedHistoryLog
 - [x] BolusCompletedHistoryLog
 - [x] BolusDeliveryHistoryLog
-- [ ] BolusRequestedMsg1HistoryLog
-- [ ] BolusRequestedMsg2HistoryLog
-- [ ] BolusRequestedMsg3HistoryLog
-- [ ] CGMHistoryLog
+- [x] BolusRequestedMsg1HistoryLog
+- [x] BolusRequestedMsg2HistoryLog
+- [x] BolusRequestedMsg3HistoryLog
+- [x] CGMHistoryLog
 - [x] CannulaFilledHistoryLog
-- [ ] CarbEnteredHistoryLog
+- [x] CarbEnteredHistoryLog
 - [x] CartridgeFilledHistoryLog
 - [ ] CgmCalibrationGxHistoryLog
 - [ ] CgmCalibrationHistoryLog
