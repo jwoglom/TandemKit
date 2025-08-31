@@ -17,18 +17,18 @@ Requests:
 - [x] Jpake4KeyConfirmationRequest
    - [x] Tests for Jpake4KeyConfirmationRequest
 - [x] PumpChallengeRequest
-   - [ ] Tests for PumpChallengeRequest
+   - [x] Tests for PumpChallengeRequest
 
 Responses:
 - [x] AbstractCentralChallengeResponse
    - [ ] Tests for AbstractCentralChallengeResponse
 - [x] AbstractPumpChallengeResponse
 - [x] CentralChallengeResponse
-   - [ ] Tests for CentralChallengeResponse
+   - [x] Tests for CentralChallengeResponse
 - [x] Jpake1aResponse
-   - [ ] Tests for Jpake1aResponse
+   - [x] Tests for Jpake1aResponse
 - [x] Jpake1bResponse
-   - [ ] Tests for Jpake1bResponse
+   - [x] Tests for Jpake1bResponse
 - [x] Jpake2Response
    - [ ] Tests for Jpake2Response
 - [x] Jpake3SessionKeyResponse
