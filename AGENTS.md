@@ -5,17 +5,17 @@ Requests:
 - [x] AbstractCentralChallengeRequest
    - [ ] Tests for AbstractCentralChallengeRequest
 - [x] CentralChallengeRequest
-   - [ ] Tests for CentralChallengeRequest
+   - [x] Tests for CentralChallengeRequest
 - [x] Jpake1aRequest
    - [x] Tests for Jpake1aRequest
 - [x] Jpake1bRequest
-   - [ ] Tests for Jpake1bRequest
+   - [x] Tests for Jpake1bRequest
 - [x] Jpake2Request
-   - [ ] Tests for Jpake2Request
+   - [x] Tests for Jpake2Request
 - [x] Jpake3SessionKeyRequest
-   - [ ] Tests for Jpake3SessionKeyRequest
+   - [x] Tests for Jpake3SessionKeyRequest
 - [x] Jpake4KeyConfirmationRequest
-   - [ ] Tests for Jpake4KeyConfirmationRequest
+   - [x] Tests for Jpake4KeyConfirmationRequest
 - [x] PumpChallengeRequest
    - [ ] Tests for PumpChallengeRequest
 
