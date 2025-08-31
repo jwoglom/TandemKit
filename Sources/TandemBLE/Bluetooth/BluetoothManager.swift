@@ -10,7 +10,9 @@ import CoreBluetooth
 import Foundation
 import LoopKit
 import TandemCore
+#if canImport(os)
 import os
+#endif
 
 
 protocol BluetoothManagerDelegate: AnyObject {
@@ -60,7 +62,17 @@ class BluetoothManager: NSObject, @unchecked Sendable {
 
     weak var delegate: BluetoothManagerDelegate?
 
-    private let log = OSLog(subsystem: "BluetoothManager", category: "TandemKit")
+    #if canImport(os)
+    private let log = Logger(subsystem: "BluetoothManager", category: "TandemKit")
+    #else
+    private struct DummyLogger {
+        func debug(_ message: String, _ args: CVarArg...) {}
+        func `default`(_ message: String, _ args: CVarArg...) {}
+        func info(_ message: String, _ args: CVarArg...) {}
+        func error(_ message: String, _ args: CVarArg...) {}
+    }
+    private let log = DummyLogger()
+    #endif
 
     private let concurrentReconnectSemaphore = DispatchSemaphore(value: 1)
 
