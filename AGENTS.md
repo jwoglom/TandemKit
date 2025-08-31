@@ -486,33 +486,33 @@ Responses:
 - [x] CgmDataSampleHistoryLog
 - [x] ControlIQPcmChangeHistoryLog
 - [x] ControlIQUserModeChangeHistoryLog
-- [ ] CorrectionDeclinedHistoryLog
-- [ ] DailyBasalHistoryLog
-- [ ] DataLogCorruptionHistoryLog
-- [ ] DateChangeHistoryLog
-- [ ] FactoryResetHistoryLog
+- [x] CorrectionDeclinedHistoryLog
+- [x] DailyBasalHistoryLog
+- [x] DataLogCorruptionHistoryLog
+- [x] DateChangeHistoryLog
+- [x] FactoryResetHistoryLog
 - [x] HistoryLog
 - [x] HistoryLogParser
 - [x] HistoryLogStreamResponse
-- [ ] HypoMinimizerResumeHistoryLog
-- [ ] HypoMinimizerSuspendHistoryLog
+- [x] HypoMinimizerResumeHistoryLog
+- [x] HypoMinimizerSuspendHistoryLog
 - [ ] IdpActionHistoryLog
 - [ ] IdpActionMsg2HistoryLog
 - [ ] IdpBolusHistoryLog
 - [ ] IdpListHistoryLog
 - [ ] IdpTimeDependentSegmentHistoryLog
 - [x] LogErasedHistoryLog
-- [ ] NewDayHistoryLog
+- [x] NewDayHistoryLog
 - [ ] ParamChangeGlobalSettingsHistoryLog
 - [ ] ParamChangePumpSettingsHistoryLog
 - [ ] ParamChangeRemSettingsHistoryLog
 - [ ] ParamChangeReminderHistoryLog
 - [x] PumpingResumedHistoryLog
 - [x] PumpingSuspendedHistoryLog
-- [ ] TempRateActivatedHistoryLog
-- [ ] TempRateCompletedHistoryLog
-- [ ] TimeChangedHistoryLog
-- [ ] TubingFilledHistoryLog
+- [x] TempRateActivatedHistoryLog
+- [x] TempRateCompletedHistoryLog
+- [x] TimeChangedHistoryLog
+- [x] TubingFilledHistoryLog
 - [x] UnknownHistoryLog
 - [x] UsbConnectedHistoryLog
 - [x] UsbDisconnectedHistoryLog
