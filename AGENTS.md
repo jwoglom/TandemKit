@@ -30,20 +30,20 @@ Responses:
 - [x] Jpake1bResponse
    - [x] Tests for Jpake1bResponse
 - [x] Jpake2Response
-   - [ ] Tests for Jpake2Response
+   - [x] Tests for Jpake2Response
 - [x] Jpake3SessionKeyResponse
-   - [ ] Tests for Jpake3SessionKeyResponse
+   - [x] Tests for Jpake3SessionKeyResponse
 - [x] Jpake4KeyConfirmationResponse
-   - [ ] Tests for Jpake4KeyConfirmationResponse
+   - [x] Tests for Jpake4KeyConfirmationResponse
 - [x] PumpChallengeResponse
-   - [ ] Tests for PumpChallengeResponse
+   - [x] Tests for PumpChallengeResponse
 
 ### Control
 Requests:
 - [x] BolusPermissionReleaseRequest
    - [x] Tests for BolusPermissionReleaseRequest
 - [x] BolusPermissionRequest
-   - [ ] Tests for BolusPermissionRequest
+   - [x] Tests for BolusPermissionRequest
 - [x] CancelBolusRequest
    - [ ] Tests for CancelBolusRequest
 - [x] ChangeControlIQSettingsRequest
