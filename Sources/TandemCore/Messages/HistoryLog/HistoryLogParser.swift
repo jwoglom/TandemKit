@@ -34,6 +34,30 @@ public enum HistoryLogParser {
             return CgmDataSampleHistoryLog(cargo: raw)
         case CgmDataGxHistoryLog.typeId:
             return CgmDataGxHistoryLog(cargo: raw)
+        case CorrectionDeclinedHistoryLog.typeId:
+            return CorrectionDeclinedHistoryLog(cargo: raw)
+        case DailyBasalHistoryLog.typeId:
+            return DailyBasalHistoryLog(cargo: raw)
+        case DataLogCorruptionHistoryLog.typeId:
+            return DataLogCorruptionHistoryLog(cargo: raw)
+        case DateChangeHistoryLog.typeId:
+            return DateChangeHistoryLog(cargo: raw)
+        case FactoryResetHistoryLog.typeId:
+            return FactoryResetHistoryLog(cargo: raw)
+        case HypoMinimizerResumeHistoryLog.typeId:
+            return HypoMinimizerResumeHistoryLog(cargo: raw)
+        case HypoMinimizerSuspendHistoryLog.typeId:
+            return HypoMinimizerSuspendHistoryLog(cargo: raw)
+        case NewDayHistoryLog.typeId:
+            return NewDayHistoryLog(cargo: raw)
+        case TempRateActivatedHistoryLog.typeId:
+            return TempRateActivatedHistoryLog(cargo: raw)
+        case TempRateCompletedHistoryLog.typeId:
+            return TempRateCompletedHistoryLog(cargo: raw)
+        case TimeChangedHistoryLog.typeId:
+            return TimeChangedHistoryLog(cargo: raw)
+        case TubingFilledHistoryLog.typeId:
+            return TubingFilledHistoryLog(cargo: raw)
         case PumpingSuspendedHistoryLog.typeId:
             return PumpingSuspendedHistoryLog(cargo: raw)
         case PumpingResumedHistoryLog.typeId:
