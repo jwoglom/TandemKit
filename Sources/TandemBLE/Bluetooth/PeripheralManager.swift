@@ -11,7 +11,9 @@
 import CoreBluetooth
 import Foundation
 import TandemCore
+#if os(macOS)
 import os
+#endif
 
 class PeripheralManager: NSObject, @unchecked Sendable {
 
