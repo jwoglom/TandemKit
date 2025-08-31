@@ -377,7 +377,7 @@ Responses:
    - [ ] Tests for ControlIQSleepScheduleResponse
 - [x] CurrentBasalStatusResponse
    - [ ] Tests for CurrentBasalStatusResponse
-- [ ] CurrentBatteryAbstractResponse
+- [x] CurrentBatteryAbstractResponse
 - [x] CurrentBatteryV1Response
    - [ ] Tests for CurrentBatteryV1Response
 - [x] CurrentBatteryV2Response
@@ -496,17 +496,17 @@ Responses:
 - [x] HistoryLogStreamResponse
 - [x] HypoMinimizerResumeHistoryLog
 - [x] HypoMinimizerSuspendHistoryLog
-- [ ] IdpActionHistoryLog
-- [ ] IdpActionMsg2HistoryLog
-- [ ] IdpBolusHistoryLog
-- [ ] IdpListHistoryLog
-- [ ] IdpTimeDependentSegmentHistoryLog
+- [x] IdpActionHistoryLog
+- [x] IdpActionMsg2HistoryLog
+- [x] IdpBolusHistoryLog
+- [x] IdpListHistoryLog
+- [x] IdpTimeDependentSegmentHistoryLog
 - [x] LogErasedHistoryLog
 - [x] NewDayHistoryLog
-- [ ] ParamChangeGlobalSettingsHistoryLog
-- [ ] ParamChangePumpSettingsHistoryLog
-- [ ] ParamChangeRemSettingsHistoryLog
-- [ ] ParamChangeReminderHistoryLog
+- [x] ParamChangeGlobalSettingsHistoryLog
+- [x] ParamChangePumpSettingsHistoryLog
+- [x] ParamChangeRemSettingsHistoryLog
+- [x] ParamChangeReminderHistoryLog
 - [x] PumpingResumedHistoryLog
 - [x] PumpingSuspendedHistoryLog
 - [x] TempRateActivatedHistoryLog
