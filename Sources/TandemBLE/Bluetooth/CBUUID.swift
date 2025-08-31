@@ -12,7 +12,11 @@ import TandemCore
 protocol CBUUIDRawValue: RawRepresentable {}
 extension CBUUIDRawValue where RawValue == String {
     var cbUUID: CBUUID {
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || targetEnvironment(macCatalyst)
+        return CBUUID(string: rawValue)
+#else
         return CBUUID(uuidString: rawValue)
+#endif
     }
 }
 
