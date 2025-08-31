@@ -1,8 +1,6 @@
 import Foundation
 import TandemCore
 
-#if canImport(HealthKit)
-
 public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public typealias RawValue = [String: Any]
 
@@ -22,4 +20,3 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         return [:]
     }
 }
-#endif

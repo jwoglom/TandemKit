@@ -1,5 +1,3 @@
-#if canImport(HealthKit)
-
 import Foundation
 
 public enum PumpProtocolError: Error {
@@ -14,5 +12,3 @@ extension PumpProtocolError: LocalizedError {
         }
     }
 }
-
-#endif

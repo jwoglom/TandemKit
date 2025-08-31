@@ -1,4 +1,3 @@
-#if canImport(HealthKit)
 import Foundation
 import TandemBLE
 
@@ -28,4 +27,3 @@ public struct MessageTransportState: Equatable, RawRepresentable {
         ]
     }
 }
-#endif

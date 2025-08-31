@@ -6,11 +6,10 @@
 //
 //  Basis: OmniBLE PumpComms.swift
 
-#if canImport(HealthKit)
-
 import Foundation
 import LoopKit
 import TandemCore
+import os
 
 protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
@@ -19,7 +18,7 @@ protocol PumpCommDelegate: AnyObject {
 
 public class PumpComm: CustomDebugStringConvertible {
 
-    var manager: PeripheralManager?
+    var manager: Any? // TODO: Replace with actual PeripheralManager type when available
 
     weak var delegate: PumpCommDelegate?
 
@@ -125,5 +124,3 @@ extension PumpComm: PumpCommSessionDelegate {
         self.pumpState = state
     }
 }
-
-#endif
