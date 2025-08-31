@@ -45,15 +45,15 @@ Requests:
 - [x] BolusPermissionRequest
    - [x] Tests for BolusPermissionRequest
 - [x] CancelBolusRequest
-   - [ ] Tests for CancelBolusRequest
+   - [x] Tests for CancelBolusRequest
 - [x] ChangeControlIQSettingsRequest
-   - [ ] Tests for ChangeControlIQSettingsRequest
+   - [x] Tests for ChangeControlIQSettingsRequest
 - [x] ChangeTimeDateRequest
-   - [ ] Tests for ChangeTimeDateRequest
+   - [x] Tests for ChangeTimeDateRequest
 - [x] CreateIDPRequest
-   - [ ] Tests for CreateIDPRequest
+   - [x] Tests for CreateIDPRequest
 - [x] DeleteIDPRequest
-   - [ ] Tests for DeleteIDPRequest
+   - [x] Tests for DeleteIDPRequest
 - [x] DisconnectPumpRequest
    - [ ] Tests for DisconnectPumpRequest
 - [x] DismissNotificationRequest
