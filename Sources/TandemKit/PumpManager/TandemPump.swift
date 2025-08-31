@@ -11,6 +11,7 @@ import Foundation
 import CoreBluetooth
 import LoopKit
 import TandemCore
+import os
 
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
