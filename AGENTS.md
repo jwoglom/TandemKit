@@ -195,10 +195,10 @@ Requests:
    - [ ] Tests for NonexistentFillCannulaStateStreamRequest
 - [x] NonexistentFillTubingStateStreamRequest
    - [ ] Tests for NonexistentFillTubingStateStreamRequest
-- [ ] NonexistentPumpingStateStreamRequest
+- [x] NonexistentPumpingStateStreamRequest
 
 Responses:
-- [ ] ControlStreamMessages
+- [x] ControlStreamMessages
 - [x] DetectingCartridgeStateStreamResponse
    - [ ] Tests for DetectingCartridgeStateStreamResponse
 - [x] EnterChangeCartridgeModeStateStreamResponse
@@ -209,7 +209,7 @@ Responses:
    - [ ] Tests for FillCannulaStateStreamResponse
 - [x] FillTubingStateStreamResponse
    - [ ] Tests for FillTubingStateStreamResponse
-- [ ] PumpingStateStreamResponse
+- [x] PumpingStateStreamResponse
 
 ### CurrentStatus
 Requests:
@@ -484,8 +484,8 @@ Responses:
 - [x] CgmCalibrationHistoryLog
 - [x] CgmDataGxHistoryLog
 - [x] CgmDataSampleHistoryLog
-- [ ] ControlIQPcmChangeHistoryLog
-- [ ] ControlIQUserModeChangeHistoryLog
+- [x] ControlIQPcmChangeHistoryLog
+- [x] ControlIQUserModeChangeHistoryLog
 - [ ] CorrectionDeclinedHistoryLog
 - [ ] DailyBasalHistoryLog
 - [ ] DataLogCorruptionHistoryLog
@@ -501,7 +501,7 @@ Responses:
 - [ ] IdpBolusHistoryLog
 - [ ] IdpListHistoryLog
 - [ ] IdpTimeDependentSegmentHistoryLog
-- [ ] LogErasedHistoryLog
+- [x] LogErasedHistoryLog
 - [ ] NewDayHistoryLog
 - [ ] ParamChangeGlobalSettingsHistoryLog
 - [ ] ParamChangePumpSettingsHistoryLog
