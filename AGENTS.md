@@ -465,21 +465,21 @@ Requests:
 Responses:
 - [x] AlarmActivatedHistoryLog
 - [x] AlertActivatedHistoryLog
-- [ ] BGHistoryLog
-- [ ] BasalDeliveryHistoryLog
+- [x] BGHistoryLog
+- [x] BasalDeliveryHistoryLog
 - [x] BasalRateChangeHistoryLog
 - [ ] BolexActivatedHistoryLog
 - [ ] BolexCompletedHistoryLog
 - [x] BolusActivatedHistoryLog
 - [x] BolusCompletedHistoryLog
-- [ ] BolusDeliveryHistoryLog
+- [x] BolusDeliveryHistoryLog
 - [ ] BolusRequestedMsg1HistoryLog
 - [ ] BolusRequestedMsg2HistoryLog
 - [ ] BolusRequestedMsg3HistoryLog
 - [ ] CGMHistoryLog
-- [ ] CannulaFilledHistoryLog
+- [x] CannulaFilledHistoryLog
 - [ ] CarbEnteredHistoryLog
-- [ ] CartridgeFilledHistoryLog
+- [x] CartridgeFilledHistoryLog
 - [ ] CgmCalibrationGxHistoryLog
 - [ ] CgmCalibrationHistoryLog
 - [ ] CgmDataGxHistoryLog
@@ -514,10 +514,10 @@ Responses:
 - [ ] TimeChangedHistoryLog
 - [ ] TubingFilledHistoryLog
 - [x] UnknownHistoryLog
-- [ ] UsbConnectedHistoryLog
-- [ ] UsbDisconnectedHistoryLog
-- [ ] UsbEnumeratedHistoryLog
+- [x] UsbConnectedHistoryLog
+- [x] UsbDisconnectedHistoryLog
+- [x] UsbEnumeratedHistoryLog
 
 ### QualifyingEvent
 Responses:
-- [ ] QualifyingEvent
+- [x] QualifyingEvent
