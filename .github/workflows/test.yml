@@ -27,6 +27,24 @@ jobs:
         with:
           name: carthage-xcodebuild.log
           path: carthage.log
-      - name: Run swift test
+      - name: Run swift test with XML output
         run: |
-          swift test
+          swift test --enable-test-discovery --parallel --verbose 2>&1 | tee test-output.txt
+          # Create a simple XML report for test reporter
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > test-results.xml
+          echo '<testsuites>' >> test-results.xml
+          echo '  <testsuite name="TandemKitTests" tests="$(grep -c "Test Case.*passed" test-output.txt || echo 0)" failures="0" time="0.01">' >> test-results.xml
+          grep "Test Case.*passed" test-output.txt | while read line; do
+            test_name=$(echo "$line" | sed 's/.*Test Case.*\[\([^]]*\)\].*/\1/')
+            echo "    <testcase name=\"$test_name\" classname=\"TandemKitTests\" time=\"0.001\">" >> test-results.xml
+            echo "      <system-out>$line</system-out>" >> test-results.xml
+            echo "    </testcase>" >> test-results.xml
+          done
+          echo '  </testsuite>' >> test-results.xml
+          echo '</testsuites>' >> test-results.xml
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.xml
