@@ -11,7 +11,7 @@ public class PumpCommSession {
     private(set) var state: PumpState
     weak var delegate: PumpCommSessionDelegate?
 
-    public init(pumpState: PumpState, delegate: PumpCommSessionDelegate? = nil) {
+    init(pumpState: PumpState, delegate: PumpCommSessionDelegate? = nil) {
         self.state = pumpState
         self.delegate = delegate
     }
