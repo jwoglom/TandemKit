@@ -29,5 +29,11 @@ public let AllServiceUUIDs: [ServiceUUID] = [
 ]
 
 public extension ServiceUUID {
-    var cbUUID: CBUUID { CBUUID(string: rawValue) }
+    var cbUUID: CBUUID {
+#if os(Linux)
+        return CBUUID(uuidString: rawValue)
+#else
+        return CBUUID(string: rawValue)
+#endif
+    }
 }
