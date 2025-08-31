@@ -62,6 +62,24 @@ public enum HistoryLogParser {
             return PumpingSuspendedHistoryLog(cargo: raw)
         case PumpingResumedHistoryLog.typeId:
             return PumpingResumedHistoryLog(cargo: raw)
+        case IdpActionHistoryLog.typeId:
+            return IdpActionHistoryLog(cargo: raw)
+        case IdpActionMsg2HistoryLog.typeId:
+            return IdpActionMsg2HistoryLog(cargo: raw)
+        case IdpBolusHistoryLog.typeId:
+            return IdpBolusHistoryLog(cargo: raw)
+        case IdpListHistoryLog.typeId:
+            return IdpListHistoryLog(cargo: raw)
+        case IdpTimeDependentSegmentHistoryLog.typeId:
+            return IdpTimeDependentSegmentHistoryLog(cargo: raw)
+        case ParamChangeGlobalSettingsHistoryLog.typeId:
+            return ParamChangeGlobalSettingsHistoryLog(cargo: raw)
+        case ParamChangePumpSettingsHistoryLog.typeId:
+            return ParamChangePumpSettingsHistoryLog(cargo: raw)
+        case ParamChangeRemSettingsHistoryLog.typeId:
+            return ParamChangeRemSettingsHistoryLog(cargo: raw)
+        case ParamChangeReminderHistoryLog.typeId:
+            return ParamChangeReminderHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
