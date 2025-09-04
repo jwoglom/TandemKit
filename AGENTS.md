@@ -55,15 +55,15 @@ Requests:
 - [x] DeleteIDPRequest
    - [x] Tests for DeleteIDPRequest
 - [x] DisconnectPumpRequest
-   - [ ] Tests for DisconnectPumpRequest
+   - [x] Tests for DisconnectPumpRequest
 - [x] DismissNotificationRequest
-   - [ ] Tests for DismissNotificationRequest
+   - [x] Tests for DismissNotificationRequest
 - [x] EnterChangeCartridgeModeRequest
-   - [ ] Tests for EnterChangeCartridgeModeRequest
+   - [x] Tests for EnterChangeCartridgeModeRequest
 - [x] EnterFillTubingModeRequest
-   - [ ] Tests for EnterFillTubingModeRequest
+   - [x] Tests for EnterFillTubingModeRequest
 - [x] ExitChangeCartridgeModeRequest
-   - [ ] Tests for ExitChangeCartridgeModeRequest
+   - [x] Tests for ExitChangeCartridgeModeRequest
 - [x] ExitFillTubingModeRequest
    - [ ] Tests for ExitFillTubingModeRequest
 - [x] FillCannulaRequest
