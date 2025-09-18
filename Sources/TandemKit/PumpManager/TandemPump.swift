@@ -8,7 +8,6 @@
 import Foundation
 import CoreBluetooth
 import TandemCore
-import os
 
 // Placeholder types for missing dependencies
 public protocol PeripheralManager {
