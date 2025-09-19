@@ -161,7 +161,7 @@ public struct Bytes {
         var encoded = Data(input.utf8)
         // Pad with null bytes up to the requested length
         while encoded.count < length {
-            encoded.append(0)
+            encoded.append(UInt8(0))
         }
         return encoded
     }
