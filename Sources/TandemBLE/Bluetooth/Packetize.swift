@@ -30,9 +30,9 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
 
 @MainActor
 public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
-    var props = type(of: message).props
-    var opCode = props.opCode
-    var length = message.cargo.count
+    let props = type(of: message).props
+    let opCode = props.opCode
+    var length = message.cargo.count + 3
     var chunkSize = maxChunkSize ?? determineMaxChunkSize(message)
     if props.signed {
         length += 24
@@ -61,8 +61,8 @@ public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, t
         packet.replaceSubrange(i..<i+hmacedOutput.count, with: hmacedOutput)
     }
     
-    var crc = CalculateCRC16(packet)
-    var packetWithCrc = Bytes.combine(packet, crc)
+    let crc = CalculateCRC16(packet)
+    let packetWithCrc = Bytes.combine(packet, crc)
     
     var packets: [Packet] = []
     let chunked = packetWithCrc.chunked(into: chunkSize)

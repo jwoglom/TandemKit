@@ -1,0 +1,13 @@
+[
+  {
+    "description": "CentralChallengeRequest matches PumpX2 and ControlX2 packet encoding",
+    "messageType": "CentralChallengeRequest",
+    "expectedFields": {
+      "appInstanceId": 0,
+      "centralChallenge": "4d08435da2694735"
+    },
+    "packets": [
+      "000010000a00004d08435da26947356d6f"
+    ]
+  }
+]

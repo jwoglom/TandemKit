@@ -65,7 +65,7 @@ struct TandemCLIMain {
     }
 }
 
-private extension TandemCLIMain {
+extension TandemCLIMain {
     static func runCLI() async throws {
         let args = CommandLine.arguments
         if args.count < 2 {
@@ -245,7 +245,7 @@ private extension TandemCLIMain {
         return options
     }
 
-    static func runDecode(options: DecodeOptions) throws {
+    static func decode(options: DecodeOptions) throws -> (DecodedMessageOutput, Message) {
         let packetData = try options.packets.map(dataFromHex)
         guard let first = packetData.first else {
             throw CLIError("At least one packet is required to decode a message.")
@@ -297,6 +297,11 @@ private extension TandemCLIMain {
                                         crc: crc,
                                         packets: sanitizedPackets)
 
+        return (output, message)
+    }
+
+    static func runDecode(options: DecodeOptions) throws {
+        let (output, message) = try decode(options: options)
         switch options.format {
         case .json:
             try printJSON(output)
@@ -306,7 +311,7 @@ private extension TandemCLIMain {
     }
 
     @MainActor
-    static func runEncode(options: EncodeOptions) throws {
+    static func encode(options: EncodeOptions) throws -> (EncodedMessageOutput, Message) {
         guard let metadata = MessageRegistry.metadata(forName: options.messageName) else {
             throw CLIError("Unknown message type " + options.messageName + ". Use '" + programName + " list' to view available names.")
         }
@@ -357,16 +362,22 @@ private extension TandemCLIMain {
                                              cargo: cargoData,
                                              packets: packets,
                                              merged: merged)
-            switch options.format {
-            case .json:
-                try printJSON(output)
-            case .text:
-                printEncodedText(output: output, message: message)
-            }
+            return (output, message)
         } catch is ActionsAffectingInsulinDeliveryNotEnabled {
             throw CLIError("Encoding aborted: actions affecting insulin delivery are disabled. Pass --allow-insulin-actions to override.")
         } catch PacketizeError.missingAuthenticationKey {
             throw CLIError("Authentication key and time since reset are required for signed messages.")
+        }
+    }
+
+    @MainActor
+    static func runEncode(options: EncodeOptions) throws {
+        let (output, message) = try encode(options: options)
+        switch options.format {
+        case .json:
+            try printJSON(output)
+        case .text:
+            printEncodedText(output: output, message: message)
         }
     }
 
