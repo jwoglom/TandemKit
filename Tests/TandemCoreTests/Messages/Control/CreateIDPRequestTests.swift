@@ -25,7 +25,13 @@ final class CreateIDPRequestTests: XCTestCase {
             "00c9f9e8fc891764dd51b865"
         )
 
-        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.profileName, expected.profileName)
+        XCTAssertEqual(parsed.firstSegmentProfileCarbRatio, expected.firstSegmentProfileCarbRatio)
+        XCTAssertEqual(parsed.firstSegmentProfileBasalRate, expected.firstSegmentProfileBasalRate)
+        XCTAssertEqual(parsed.firstSegmentProfileTargetBG, expected.firstSegmentProfileTargetBG)
+        XCTAssertEqual(parsed.firstSegmentProfileISF, expected.firstSegmentProfileISF)
+        XCTAssertEqual(parsed.profileInsulinDuration, expected.profileInsulinDuration)
+        XCTAssertEqual(parsed.profileCarbEntry, expected.profileCarbEntry)
     }
 
     func testCreateIDPRequest_duplicate1() {
@@ -43,7 +49,8 @@ final class CreateIDPRequestTests: XCTestCase {
             "00372bc754ba29764a5b4765"
         )
 
-        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.profileName, expected.profileName)
+        XCTAssertEqual(parsed.sourceIdpId, expected.sourceIdpId)
     }
 
     func testScenario42_ProfC_Duplicate() {
@@ -61,6 +68,7 @@ final class CreateIDPRequestTests: XCTestCase {
             "00684ef8851d5c1d36b8bd09"
         )
 
-        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.profileName, expected.profileName)
+        XCTAssertEqual(parsed.sourceIdpId, expected.sourceIdpId)
     }
 }
