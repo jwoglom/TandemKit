@@ -76,8 +76,8 @@ public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, t
     return packets
 }
 
-struct ActionsAffectingInsulinDeliveryNotEnabled: Error {}
+public struct ActionsAffectingInsulinDeliveryNotEnabled: Error {}
 
-enum PacketizeError: Error {
+public enum PacketizeError: Error {
     case missingAuthenticationKey
 }

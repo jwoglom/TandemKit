@@ -16,6 +16,10 @@ let package = Package(
             name: "TandemKit",
             targets: ["TandemKit"]
         ),
+        .executable(
+            name: "tandemkit-cli",
+            targets: ["TandemCLI"]
+        ),
     ],
     dependencies: [
     ],
@@ -56,6 +60,17 @@ let package = Package(
             name: "TandemKit",
             dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
             path: "Sources/TandemKit"
+        ),
+        .executableTarget(
+            name: "TandemCLI",
+            dependencies: [
+                "TandemCore",
+                "TandemBLE"
+            ],
+            path: "Sources/TandemCLI",
+            swiftSettings: [
+                .unsafeFlags(["-parse-as-library"])
+            ]
         ),
         .testTarget(
             name: "TandemCoreTests",
