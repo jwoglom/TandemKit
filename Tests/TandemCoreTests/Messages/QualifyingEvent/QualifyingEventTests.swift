@@ -11,18 +11,16 @@ final class QualifyingEventTests: XCTestCase {
         XCTAssertEqual(events.count, 3)
     }
 
-    @MainActor
-    func testSuggestedHandlersAlert() {
-        let handlers = QualifyingEvent.alert.suggestedHandlers
+    func testSuggestedHandlersAlert() async {
+        let handlers = await MainActor.run { QualifyingEvent.alert.suggestedHandlers }
         XCTAssertEqual(handlers.count, 1)
-        let msg = handlers[0]()
+        let msg = await MainActor.run { handlers[0]() }
         XCTAssertTrue(msg is AlertStatusRequest)
     }
 
-    @MainActor
-    func testGroupSuggestedHandlersDeduplicates() {
+    func testGroupSuggestedHandlersDeduplicates() async {
         let events: Set<QualifyingEvent> = [.pumpSuspend, .pumpResume]
-        let messages = QualifyingEvent.groupSuggestedHandlers(events)
+        let messages = await MainActor.run { QualifyingEvent.groupSuggestedHandlers(events) }
         // InsulinStatusRequest should only appear once
         let opcodes = messages.map { type(of: $0).props.opCode }
         XCTAssertEqual(opcodes.count, Set(opcodes).count)
