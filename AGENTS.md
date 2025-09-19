@@ -65,15 +65,15 @@ Requests:
 - [x] ExitChangeCartridgeModeRequest
    - [x] Tests for ExitChangeCartridgeModeRequest
 - [x] ExitFillTubingModeRequest
-   - [ ] Tests for ExitFillTubingModeRequest
+   - [x] Tests for ExitFillTubingModeRequest
 - [x] FillCannulaRequest
-   - [ ] Tests for FillCannulaRequest
+   - [x] Tests for FillCannulaRequest
 - [x] InitiateBolusRequest
-   - [ ] Tests for InitiateBolusRequest
+   - [x] Tests for InitiateBolusRequest
 - [x] PlaySoundRequest
-   - [ ] Tests for PlaySoundRequest
+   - [x] Tests for PlaySoundRequest
 - [x] RemoteBgEntryRequest
-   - [ ] Tests for RemoteBgEntryRequest
+   - [x] Tests for RemoteBgEntryRequest
 - [x] RemoteCarbEntryRequest
    - [ ] Tests for RemoteCarbEntryRequest
 - [x] RenameIDPRequest
