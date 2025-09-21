@@ -521,3 +521,56 @@ Responses:
 ### QualifyingEvent
 Responses:
 - [x] QualifyingEvent
+
+---
+
+## Pump Driver Implementation Plan (Loop/Trio)
+
+### Current Capabilities Implemented
+* **Pump protocol modeling (`Sources/TandemCore`)** – The repository already defines a large catalog of Tandem request/response message types and a registry for mapping opcodes, sizes, signing requirements, and supported devices. Paired builders cover HKDF/HMAC utilities, JPake scaffolding, and pairing code normalization so the core message layer is ready for reuse.
+* **BLE transport primitives (`Sources/TandemBLE`)** – There is an operational Bluetooth stack including a `BluetoothManager` with scanning/reconnect logic, a `PeripheralManager` that applies the Tandem service/characteristic configuration, packetization/HMAC/CRC helpers, and wrappers for assembling/disassembling Tron packets. These pieces mirror the OmniBLE architecture and can drive a pump once higher-level orchestration is added.
+* **Utility surface area** – `PumpStateSupplier` centralizes pairing-code/secret management and gating for insulin-affecting actions, while the command-line target (`Sources/TandemCLI`) already exposes decode/encode/list tooling to exercise message serialization during development.
+* **Existing validation** – Unit tests cover message metadata, pairing-code validation, and JPake builder behavior, providing an initial safety net that should be expanded as higher layers are implemented.
+
+### Gaps Blocking a Functional Loop/Trio Pump Driver
+* **LoopKit/Trio integration stubs** – `TandemPumpManager`, `TandemPumpManagerState`, and even the `LoopKit` target are placeholders. No real `PumpManager` conformance, state persistence, delegate wiring, or dosing interfaces exist, so neither Loop nor Trio can surface the driver yet.
+* **Pump session orchestration is incomplete** – `TandemPump` currently redefines lightweight stand-ins for the Bluetooth stack and leaves connection workflows, default startup requests, and message transmission unimplemented. `PumpMessageTransport` is only a protocol, and `PumpComm` lacks actual send/response handling, so the higher-level logic cannot yet talk to the pump over BLE.
+* **Authentication gaps** – The JPake flow is scaffolded but relies on optional dependencies and still throws for the v2 (6-digit PIN) handshake path. Pump state persistence does not capture derived secrets/nonces, and `PumpStateSupplier` is not yet fed by the manager lifecycle.
+* **Response decoding and device targeting** – BLE notifications are currently reduced to raw payloads, and `SupportedDevices` omits newer hardware such as Trio. Without typed decoding, Loop/Trio cannot react to reservoir, CGM, or alarm updates.
+* **Safety and gating** – Actions that modify insulin delivery rely on manual toggles; there is no persistence or UI for enabling them, nor safeguards for when Loop/Trio initiates therapy commands.
+
+### Proposed Roadmap
+1. **Phase 0 – Environment & dependency alignment**
+   * Ensure Carthage frameworks (LoopKit, etc.) build locally; replace the `LoopKit` stub with the actual dependency surfaces or modular shims required for Linux testing.
+   * Document and script any additional SwiftECC/BigInt/CryptoKit requirements so the JPake path builds in CI.
+
+2. **Phase 1 – Transport consolidation**
+   * Refactor `TandemPump` to reuse the real `BluetoothManager`/`PeripheralManager` from `TandemBLE` instead of placeholder types, wiring delegate callbacks for connection readiness and configuration completion.
+   * Implement a concrete `PumpMessageTransport` backed by `PeripheralManager.sendMessagePackets`, including creation of `TronMessageWrapper`s and routing responses through `BTResponseParser`.
+   * Finish `PumpComm.sendMessage` so it handles pump faults, retries, and message-type dispatch using the `MessageRegistry` metadata.
+
+3. **Phase 2 – Authentication and pairing**
+   * Complete `PumpChallengeRequestBuilder.createV2` to cover the JPake/short-PIN handshake used by newer firmware and Trio hardware, and persist resulting derived secrets/nonces into `PumpState`.
+   * Extend `PumpCommSession.pair` to store authentication artifacts via `PumpStateSupplier` and surface errors meaningfully to the manager delegate.
+   * Add persistence for pairing details inside `TandemPumpManagerState.rawValue` so Loop/Trio can survive restarts without re-pairing.
+
+4. **Phase 3 – Pump session lifecycle**
+   * Flesh out `TandemPump` connection workflows (scanning filters, auto-reconnect, startup message sequence) and bridge received notifications back into `PumpComm`.
+   * Implement message dispatchers for key status/control requests (basal status, bolus initiation, history streams) using the generated message types, and enrich `BTResponseParser` to instantiate concrete response models instead of raw payloads.
+   * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly.
+
+5. **Phase 4 – LoopKit/Trio integration**
+   * Replace the placeholder protocols with real LoopKit imports and conform `TandemPumpManager` to the pump manager APIs expected by Loop and Trio (state machine, status reporting, delivery limits, dosing delegates).
+   * Implement `TandemPumpManagerState` serialization/deserialization, ensuring pairing info, therapy settings, and pump status persist across launches.
+   * Surface pump data (reservoir, battery, IOB, alerts) through LoopKit data structures and implement command pathways (bolus, suspend/resume, temp basal) gated by the existing message set.
+
+6. **Phase 5 – Trio-specific validation**
+   * Confirm message compatibility with Trio hardware/firmware, updating opcodes or parsers where Trio deviates (e.g., Control-IQ variants, CGM sessions).
+   * Add targeted tests/fixtures for Trio logs and status responses, ensuring the driver negotiates the correct API version and pairing code path.
+
+7. **Phase 6 – Safety, tooling, and QA**
+   * Provide user-facing controls or configuration surfaces for insulin-affecting toggles managed by `PumpStateSupplier`, including persistence and audit logging.
+   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands; automate end-to-end smoke tests via `tandemkit-cli` where possible.
+   * Document manual validation steps for hardware testing (pairing, bolus, suspend/resume), and capture known limitations or required pump firmware versions before releasing to Loop/Trio users.
+
+This roadmap keeps the existing protocol/BLE groundwork intact while layering the missing pump-manager functionality required for a production Loop or Trio integration.
