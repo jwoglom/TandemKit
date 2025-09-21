@@ -92,6 +92,8 @@ public enum MessageRegistry {
         CGMStatusResponse.self,
         CancelBolusRequest.self,
         CancelBolusResponse.self,
+        CentralChallengeRequest.self,
+        CentralChallengeResponse.self,
         ChangeControlIQSettingsRequest.self,
         ChangeControlIQSettingsResponse.self,
         ChangeTimeDateRequest.self,

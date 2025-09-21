@@ -77,5 +77,13 @@ let package = Package(
             dependencies: ["TandemCore"],
             path: "Tests/TandemCoreTests"
         ),
+        .testTarget(
+            name: "TandemCoreIntegrationTests",
+            dependencies: ["TandemCore", "TandemCLI"],
+            path: "Tests/TandemCoreIntegrationTests",
+            resources: [
+                .process("Fixtures")
+            ]
+        ),
     ]
 )
