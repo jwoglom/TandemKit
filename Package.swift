@@ -16,6 +16,10 @@ let package = Package(
             name: "TandemKit",
             targets: ["TandemKit"]
         ),
+        .library(
+            name: "TandemKitPlugin",
+            targets: ["TandemKitPlugin"]
+        ),
         .executable(
             name: "tandemkit-cli",
             targets: ["TandemCLI"]
@@ -23,7 +27,7 @@ let package = Package(
     ],
     dependencies: [
     ],
-      targets: [
+    targets: [
         .target(
             name: "Bluetooth",
             path: "Sources/Bluetooth"
@@ -35,10 +39,15 @@ let package = Package(
             ],
             path: "Sources/CoreBluetooth"
         ),
-          .target(
-              name: "LoopKit",
-              path: "Sources/LoopKit"
-          ),
+        .target(
+            name: "LoopKit",
+            path: "Sources/LoopKit"
+        ),
+        .target(
+            name: "LoopKitUI",
+            dependencies: ["LoopKit"],
+            path: "Sources/LoopKitUI"
+        ),
         .target(
             name: "TandemCore",
             dependencies: [
@@ -60,6 +69,11 @@ let package = Package(
             name: "TandemKit",
             dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
             path: "Sources/TandemKit"
+        ),
+        .target(
+            name: "TandemKitPlugin",
+            dependencies: ["TandemKit", "LoopKitUI", "TandemCore"],
+            path: "Sources/TandemKitPlugin"
         ),
         .executableTarget(
             name: "TandemCLI",
