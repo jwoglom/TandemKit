@@ -629,8 +629,10 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 
 ## Summary: Unimplemented Behaviors (Running List)
 
+> **📋 See [docs/plans/wire_bt_transport.md](docs/plans/wire_bt_transport.md) for detailed step-by-step instructions to wire TandemPump to the real BLE transport layer.**
+
 ### Critical Path Items (Blocking Basic Functionality)
-1. **Wire TandemPump to real BLE transport** (`TandemPump.swift`)
+1. **Wire TandemPump to real BLE transport** (`TandemPump.swift`) - **See IMPLEMENTATION_PLAN.md**
    - Remove placeholder `BluetoothManager` and `PeripheralManager` types (lines 13-31)
    - Import and use real implementations from `Sources/TandemBLE`
    - Location: `Sources/TandemKit/PumpManager/TandemPump.swift`

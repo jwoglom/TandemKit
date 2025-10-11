@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import CoreBluetooth
 import LoopKit
 import TandemCore
+import TandemBLE
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -92,8 +94,8 @@ public class TandemPumpManager: PumpManager {
         self.lockedState = Locked(state)
         self.tandemPump = TandemPump(state.pumpState)
 
-        // Note: These delegate assignments will need to be fixed once the actual types are available
-        // self.tandemPump.delegate = self
+        self.tandemPump.delegate = self
+        // Note: pumpComm delegate will be wired when needed
         // self.pumpComm.delegate = self
     }
 
@@ -105,8 +107,8 @@ public class TandemPumpManager: PumpManager {
         self.lockedState = Locked(state)
         self.tandemPump = TandemPump(state.pumpState)
 
-        // Note: These delegate assignments will need to be fixed once the actual types are available
-        // self.tandemPump.delegate = self
+        self.tandemPump.delegate = self
+        // Note: pumpComm delegate will be wired when needed
         // self.pumpComm.delegate = self
     }
 
@@ -130,13 +132,12 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func connect() {
-        // TODO: Implement pump connection
-        print("TandemPumpManager: connect() called")
+        tandemPump.startScanning()
     }
 
     public func disconnect() {
-        // TODO: Implement pump disconnection
-        print("TandemPumpManager: disconnect() called")
+        // TODO: Call bluetoothManager.permanentDisconnect() through tandemPump
+        print("TandemPumpManager: disconnect() - not yet fully implemented")
     }
 
 #if canImport(UIKit)
@@ -175,4 +176,22 @@ extension TandemPumpManager: PumpManagerUI {
         return TandemPumpPairingViewController(pumpManager: self, completion: onFinished)
     }
 #endif
+}
+
+// MARK: - TandemPumpDelegate Conformance
+extension TandemPumpManager: TandemPumpDelegate {
+    public func tandemPump(_ pump: TandemPump,
+                          shouldConnect peripheral: CBPeripheral,
+                          advertisementData: [String: Any]?) -> Bool {
+        // TODO: Add filtering logic if needed (e.g., check peripheral name)
+        return true
+    }
+
+    @MainActor
+    public func tandemPump(_ pump: TandemPump,
+                          didCompleteConfiguration peripheralManager: PeripheralManager) {
+        // Create and store the transport
+        let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+        updateTransport(transport)
+    }
 }

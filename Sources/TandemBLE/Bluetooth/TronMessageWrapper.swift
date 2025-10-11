@@ -3,12 +3,12 @@ import TandemCore
 
 /// Wraps a pump `Message` and provides the packetized data for transmission.
 /// Mirrors the behavior of PumpX2 `TronMessageWrapper`.
-struct TronMessageWrapper {
-    let message: Message
-    let packets: [Packet]
+public struct TronMessageWrapper {
+    public let message: Message
+    public let packets: [Packet]
 
     @MainActor
-    init(message: Message, currentTxId: UInt8) {
+    public init(message: Message, currentTxId: UInt8) {
         self.message = message
         var authKey = Data()
         if type(of: message).props.signed {
@@ -24,7 +24,7 @@ struct TronMessageWrapper {
     }
 
     @MainActor
-    init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
+    public init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
         self.message = message
         var authKey = Data()
         if type(of: message).props.signed {
