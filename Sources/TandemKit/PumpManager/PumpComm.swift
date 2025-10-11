@@ -13,7 +13,7 @@ import TandemCore
 import os
 #endif
 
-protocol PumpCommDelegate: AnyObject {
+public protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
 }
 
@@ -22,7 +22,7 @@ public class PumpComm: CustomDebugStringConvertible {
 
     var manager: Any? // TODO: Replace with actual PeripheralManager type when available
 
-    weak var delegate: PumpCommDelegate?
+    public weak var delegate: PumpCommDelegate?
 
     public let log = OSLog(category: "PumpComm")
 

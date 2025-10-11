@@ -13,10 +13,26 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     }
 
     public init?(rawValue: RawValue) {
-        self.pumpState = nil
+        guard let version = rawValue["version"] as? Int, version == TandemPumpManagerState.version else {
+            return nil
+        }
+
+        if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
+            self.pumpState = PumpState(rawValue: pumpStateRaw)
+        } else {
+            self.pumpState = nil
+        }
     }
 
     public var rawValue: RawValue {
-        return [:]
+        var raw: RawValue = [
+            "version": TandemPumpManagerState.version
+        ]
+
+        if let pumpState = pumpState {
+            raw["pumpState"] = pumpState.rawValue
+        }
+
+        return raw
     }
 }
