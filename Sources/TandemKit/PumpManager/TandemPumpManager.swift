@@ -8,6 +8,9 @@
 import Foundation
 import LoopKit
 import TandemCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // Simple delegate wrapper
 private class WeakSynchronizedDelegate<T> {
@@ -60,6 +63,7 @@ public class TandemPumpManager: PumpManager {
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     private let lockedState: Locked<TandemPumpManagerState>
+    private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
 
     public var delegateQueue: DispatchQueue! {
@@ -78,6 +82,10 @@ public class TandemPumpManager: PumpManager {
         set {
             tandemPump.pumpComm = newValue
         }
+    }
+
+    public func updateTransport(_ transport: PumpMessageTransport?) {
+        transportLock.value = transport
     }
 
     public init(state: TandemPumpManagerState) {
@@ -130,6 +138,41 @@ public class TandemPumpManager: PumpManager {
         // TODO: Implement pump disconnection
         print("TandemPumpManager: disconnect() called")
     }
+
+#if canImport(UIKit)
+    public func pairPump(with pairingCode: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            let sanitizedCode = try PumpStateSupplier.sanitizeAndStorePairingCode(pairingCode)
+            tandemPump.startScanning()
+
+            guard let transport = transportLock.value else {
+                completion(.failure(PumpCommError.pumpNotConnected))
+                return
+            }
+
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+            DispatchQueue.global(qos: .userInitiated).async { [pumpComm] in
+                do {
+                    try pumpComm.pair(transport: transport, pairingCode: sanitizedCode)
+                    completion(.success(()))
+                } catch {
+                    completion(.failure(error))
+                }
+            }
+#else
+            completion(.failure(PumpCommError.other))
+#endif
+        } catch {
+            completion(.failure(error))
+        }
+    }
+#endif
 }
 
-extension TandemPumpManager: PumpManagerUI {}
+extension TandemPumpManager: PumpManagerUI {
+#if canImport(UIKit)
+    public func pairingViewController(onFinished: @escaping (Result<Void, Error>) -> Void) -> UIViewController {
+        return TandemPumpPairingViewController(pumpManager: self, completion: onFinished)
+    }
+#endif
+}
