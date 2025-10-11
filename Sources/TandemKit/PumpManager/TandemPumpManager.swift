@@ -95,8 +95,7 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
-        // Note: pumpComm delegate will be wired when needed
-        // self.pumpComm.delegate = self
+        self.pumpComm.delegate = self
     }
 
     public required init?(rawState: RawStateValue) {
@@ -108,8 +107,7 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
-        // Note: pumpComm delegate will be wired when needed
-        // self.pumpComm.delegate = self
+        self.pumpComm.delegate = self
     }
 
     public var rawState: RawStateValue {
@@ -193,5 +191,18 @@ extension TandemPumpManager: TandemPumpDelegate {
         // Create and store the transport
         let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
         updateTransport(transport)
+    }
+}
+
+// MARK: - PumpCommDelegate Conformance
+extension TandemPumpManager: PumpCommDelegate {
+    public func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState) {
+        // Update the stored state when pump state changes (e.g., after pairing)
+        var currentState = lockedState.value
+        currentState.pumpState = pumpState
+        lockedState.value = currentState
+
+        // The state change will be automatically persisted by Loop/Trio
+        // when it calls rawState during the next cycle
     }
 }
