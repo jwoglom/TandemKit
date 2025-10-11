@@ -108,9 +108,9 @@ struct EcJpake {
         let xm2s = mulSecret(xm2!, s, negate: true)
         let tmp = try! domain.multiplyPoint(Xp2!, xm2s)
         let K = try! domain.multiplyPoint(try! domain.addPoints(Xp!, tmp), xm2!)
-        let encoded = domain.encodePoint(K, compress: false)
+        let encoded = try! domain.encodePoint(K)
         let xCoord = Data(encoded.dropFirst(1).prefix(32))
-        derivedSecret = Data(SHA256.hash(data: xCoord))
+        derivedSecret = Data(SHA256.hash(xCoord))
         return derivedSecret!
     }
 
@@ -141,12 +141,12 @@ struct EcJpake {
         writeZkpHashPoint(X, to: &out)
         out.appendUInt32BE(UInt32(id.count))
         out.append(id)
-        let h = SHA256.hash(data: out)
+        let h = SHA256.hash(out)
         return BInt(magnitude: [UInt8](h)).mod(domain.order)
     }
 
     private func writeZkpHashPoint(_ point: Point, to out: inout Data) {
-        let enc = domain.encodePoint(point, compress: false)
+        let enc = try! domain.encodePoint(point)
         out.appendUInt32BE(UInt32(enc.count))
         out.append(contentsOf: enc)
     }
@@ -154,7 +154,7 @@ struct EcJpake {
     // MARK: - Encoding helpers
 
     private func writePoint(_ p: Point, to out: inout Data) {
-        let enc = domain.encodePoint(p, compress: false)
+        let enc = try! domain.encodePoint(p)
         precondition(enc.count < 256, "Encoded point too long")
         out.appendUInt8(UInt8(enc.count))
         out.append(contentsOf: enc)

@@ -2,7 +2,7 @@ import Foundation
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
 
-class JpakeAuthBuilder {
+public class JpakeAuthBuilder {
     private static var instance: JpakeAuthBuilder? = nil
 
     let pairingCode: String
@@ -91,7 +91,7 @@ class JpakeAuthBuilder {
         if let inst = instance, inst.pairingCode == pairingCode {
             return inst
         }
-        instance = JpakeAuthBuilder(pairingCode: pairingCode, derivedSecret: nil)
+        instance = JpakeAuthBuilder(pairingCode: pairingCode)
         return instance!
     }
 
@@ -129,11 +129,11 @@ class JpakeAuthBuilder {
             request = Jpake2Request(appInstanceId: 0, centralChallenge: challenge)
             step = .ROUND_2_SENT
         case .ROUND_2_RECEIVED:
-            request = Jpake3SessionKeyRequest(appInstanceId: 0)
+            request = Jpake3SessionKeyRequest(challengeParam: 0)
             derivedSecret = cli.deriveSecret()
             step = .CONFIRM_3_SENT
         case .CONFIRM_INITIAL:
-            request = Jpake3SessionKeyRequest(appInstanceId: 0)
+            request = Jpake3SessionKeyRequest(challengeParam: 0)
             step = .CONFIRM_3_SENT
         case .CONFIRM_3_RECEIVED:
             clientNonce4 = generateNonce()

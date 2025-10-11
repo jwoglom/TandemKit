@@ -3,6 +3,10 @@ import PackageDescription
 
 let package = Package(
     name: "TandemKit",
+    platforms: [
+        .macOS(.v10_15),
+        .iOS(.v14)
+    ],
     products: [
         .library(
             name: "TandemCore",
@@ -26,6 +30,8 @@ let package = Package(
         ),
     ],
     dependencies: [
+        .package(url: "https://github.com/leif-ibsen/SwiftECC", from: "3.0.0"),
+        .package(url: "https://github.com/leif-ibsen/BigInt", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -51,6 +57,8 @@ let package = Package(
         .target(
             name: "TandemCore",
             dependencies: [
+                .product(name: "SwiftECC", package: "SwiftECC"),
+                .product(name: "BigInt", package: "BigInt"),
                 .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
             ],
             path: "Sources/TandemCore"
