@@ -1,5 +1,30 @@
 import Foundation
 
+public enum PumpPairingCodeValidationError: Error {
+    case empty
+    case invalidLength
+}
+
+extension PumpPairingCodeValidationError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .empty:
+            return LocalizedString("Enter the pairing code shown on your pump.", comment: "Error message when pairing code text field is empty")
+        case .invalidLength:
+            return LocalizedString("Pairing codes are either 6 digits or 16 letters and numbers.", comment: "Error message when pairing code entry has the wrong length")
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case .empty:
+            return LocalizedString("Type the code displayed on the pump screen.", comment: "Recovery suggestion when pairing code text field is empty")
+        case .invalidLength:
+            return LocalizedString("Check the code on the pump and try again.", comment: "Recovery suggestion when pairing code entry has the wrong length")
+        }
+    }
+}
+
 @MainActor
 public struct PumpStateSupplier {
     static var pumpPairingCode: (() -> String)?
@@ -70,5 +95,32 @@ public struct PumpStateSupplier {
 
     static func enableOnlySnoopBluetooth() {
         onlySnoopBluetooth = true
+    }
+
+    /// Normalizes and stores a pump pairing code so that future requests can fetch it.
+    ///
+    /// - Parameter rawCode: The user entered pairing code which may include separators or lowercase letters.
+    /// - Returns: The sanitized pairing code that will be used for authentication.
+    /// - Throws: ``PumpPairingCodeValidationError`` when the supplied code is empty or has an unexpected length.
+    @discardableResult
+    public static func sanitizeAndStorePairingCode(_ rawCode: String) throws -> String {
+        let trimmed = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw PumpPairingCodeValidationError.empty }
+
+        let shortCode = PairingCodeType.short6Char.filterCharacters(trimmed)
+        if shortCode.count == 6 {
+            pumpPairingCode = { shortCode }
+            pairingCodeType = .short6Char
+            return shortCode
+        }
+
+        let longCode = PairingCodeType.long16Char.filterCharacters(trimmed).uppercased()
+        if longCode.count == 16 {
+            pumpPairingCode = { longCode }
+            pairingCodeType = .long16Char
+            return longCode
+        }
+
+        throw PumpPairingCodeValidationError.invalidLength
     }
 }
