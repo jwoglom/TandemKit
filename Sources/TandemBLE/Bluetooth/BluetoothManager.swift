@@ -15,7 +15,7 @@ import os
 #endif
 
 
-protocol BluetoothManagerDelegate: AnyObject {
+public protocol BluetoothManagerDelegate: AnyObject {
 
     /**
      Tells the delegate that the bluetooth manager has finished connecting to and discovering all required services of its peripheral, or that it failed to do so
@@ -46,7 +46,7 @@ protocol BluetoothManagerDelegate: AnyObject {
 }
 
 
-class BluetoothManager: NSObject, @unchecked Sendable {
+public class BluetoothManager: NSObject, @unchecked Sendable {
 
     var stayConnected: Bool {
         get {
@@ -60,19 +60,9 @@ class BluetoothManager: NSObject, @unchecked Sendable {
 
     private var isPermanentlyDisconnecting: Bool = false
 
-    weak var delegate: BluetoothManagerDelegate?
+    public weak var delegate: BluetoothManagerDelegate?
 
-    #if canImport(os)
-    private let log = Logger(subsystem: "BluetoothManager", category: "TandemKit")
-    #else
-    private struct DummyLogger {
-        func debug(_ message: String, _ args: CVarArg...) {}
-        func `default`(_ message: String, _ args: CVarArg...) {}
-        func info(_ message: String, _ args: CVarArg...) {}
-        func error(_ message: String, _ args: CVarArg...) {}
-    }
-    private let log = DummyLogger()
-    #endif
+    private let log = OSLog(category: "BluetoothManager")
 
     private let concurrentReconnectSemaphore = DispatchSemaphore(value: 1)
 
@@ -125,7 +115,7 @@ class BluetoothManager: NSObject, @unchecked Sendable {
     // MARK: - Synchronization
     private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.Bluetooth.bluetoothManagerQueue", qos: .unspecified)
 
-    override init() {
+    public override init() {
         super.init()
 
         managerQueue.sync {
@@ -135,7 +125,7 @@ class BluetoothManager: NSObject, @unchecked Sendable {
 
     // MARK: - Actions
 
-    func scanForPeripheral() {
+    public func scanForPeripheral() {
         dispatchPrecondition(condition: .notOnQueue(managerQueue))
 
         managerQueue.sync {
@@ -278,7 +268,7 @@ class BluetoothManager: NSObject, @unchecked Sendable {
         return isScanning
     }
 
-    override var debugDescription: String {
+    public override var debugDescription: String {
         return [
             "## BluetoothManager",
             peripheralManager.map(String.init(reflecting:)) ?? "No peripheral",
@@ -288,7 +278,7 @@ class BluetoothManager: NSObject, @unchecked Sendable {
 
 
 extension BluetoothManager: CBCentralManagerDelegate {
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+    public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         log.default("%{public}@: %{public}@", #function, String(describing: central.state.rawValue))
@@ -305,7 +295,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
+    public func centralManager(_ central: CBCentralManager, willRestoreState dict: [String : Any]) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
         log.info("%{public}@: %{public}@", #function, String(describing: dict))
 
@@ -320,7 +310,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+    public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         log.info("%{public}@: %{public}@", #function, String(describing: peripheral))
@@ -339,7 +329,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+    public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         log.default("%{public}@: %{public}@", #function, String(describing: peripheral))
@@ -354,7 +344,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+    public func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
         log.default("%{public}@: %{public}@", #function, String(describing: peripheral))
         if let error = error {
@@ -380,7 +370,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+    public func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         peripheralManager?.centralManager(central, didDisconnect: peripheral, error: error)

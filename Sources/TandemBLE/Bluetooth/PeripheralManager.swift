@@ -11,8 +11,11 @@
 import CoreBluetooth
 import Foundation
 import TandemCore
+#if canImport(os)
+import os
+#endif
 
-class PeripheralManager: NSObject, @unchecked Sendable {
+public class PeripheralManager: NSObject, @unchecked Sendable {
 
     private let log = OSLog(category: "PeripheralManager")
 
@@ -156,7 +159,7 @@ extension PeripheralManager {
         }
     }
 
-    func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
+    public func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
         queue.async(execute: configureAndRun(block))
     }
 
@@ -326,7 +329,7 @@ extension PeripheralManager {
 // MARK: - Delegate methods executed on the central's queue
 extension PeripheralManager: CBPeripheralDelegate {
 
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         log.default("didDiscoverServices")
         commandLock.lock()
 
@@ -348,7 +351,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
@@ -369,7 +372,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
@@ -390,9 +393,9 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
-        
+
         if let index = commandConditions.firstIndex(where: { condition in
             if case let .write(condChar) = condition, condChar === characteristic {
                 return true
@@ -411,7 +414,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
         
         if let macro = configuration.valueUpdateMacros[characteristic.uuid] {
@@ -437,7 +440,7 @@ extension PeripheralManager: CBPeripheralDelegate {
 
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+    public func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard error == nil else {
             self.log.error("Error reading rssi: %{public}@", String(describing: RSSI))
             return
@@ -538,7 +541,7 @@ extension PeripheralManager {
 
     /// Reads the next packet received from the pump.
     /// - Returns: Raw packet data if available.
-    func readMessagePacket() throws -> Data? {
+    public func readMessagePacket() throws -> Data? {
         dispatchPrecondition(condition: .onQueue(queue))
 
         try waitForResponse(timeout: 5)

@@ -8,7 +8,7 @@
 import Foundation
 import Dispatch
 
-enum SendMessageResult {
+public enum SendMessageResult {
     /// The packet was sent and the pump acknowledged receipt.
     case sentWithAcknowledgment
 
@@ -50,7 +50,7 @@ extension PeripheralManager {
     }
     
     
-    func sendMessagePackets(_ packets: [Packet]) -> SendMessageResult {
+    public func sendMessagePackets(_ packets: [Packet]) -> SendMessageResult {
         dispatchPrecondition(condition: .onQueue(queue))
         
         var didSend = false
