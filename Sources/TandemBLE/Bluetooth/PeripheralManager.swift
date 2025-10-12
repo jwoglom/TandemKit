@@ -52,6 +52,7 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
 
     /// The dispatch queue used to serialize operations on the peripheral
     let queue = DispatchQueue(label: "com.jwoglom.TandemKit.PeripheralManager.queue", qos: .unspecified)
+    let queueSpecificKey = DispatchSpecificKey<Void>()
 
     private let sessionQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -88,6 +89,7 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
 
         peripheral.delegate = self
 
+        queue.setSpecific(key: queueSpecificKey, value: ())
         assertConfiguration()
     }
 }
@@ -556,6 +558,11 @@ extension PeripheralManager {
         queueLock.lock()
         let cmd = cmdQueue.isEmpty ? nil : cmdQueue.removeFirst()
         queueLock.unlock()
+        if let value = cmd?.value {
+            print("[PeripheralManager] read packet len=\(value.count)")
+        } else {
+            print("[PeripheralManager] read packet nil")
+        }
         return cmd?.value
     }
 

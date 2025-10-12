@@ -16,12 +16,12 @@ import os
 #endif
 
 /// Concrete implementation of PumpMessageTransport using PeripheralManager from TandemBLE
-class PeripheralManagerTransport: PumpMessageTransport {
+public final class PeripheralManagerTransport: PumpMessageTransport {
     private let peripheralManager: PeripheralManager
     private var currentTxId: UInt8 = 0
     private let log = OSLog(category: "PeripheralManagerTransport")
 
-    init(peripheralManager: PeripheralManager) {
+    public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
     }
 
@@ -45,7 +45,7 @@ class PeripheralManagerTransport: PumpMessageTransport {
         return try unwrapped.get()
     }
 
-    func sendMessage(_ message: Message) throws -> Message {
+    public func sendMessage(_ message: Message) throws -> Message {
         // Create wrapper with current TxId
         let wrapper = try withMainActor {
             TronMessageWrapper(message: message, currentTxId: self.currentTxId)
@@ -53,6 +53,7 @@ class PeripheralManagerTransport: PumpMessageTransport {
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
         log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), currentTxId - 1)
+        print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1)")
 
         // Send packets via PeripheralManager synchronously on its queue
         let sendResult = peripheralManager.performSync { manager in
@@ -85,6 +86,7 @@ class PeripheralManagerTransport: PumpMessageTransport {
         }
 
         log.debug("Received response: %{public}@ bytes", String(describing: data.count))
+        print("[PeripheralManagerTransport] received \(data.count) bytes")
 
         // Parse response using BTResponseParser
         let characteristicUUID = type(of: message).props.characteristic.cbUUID
