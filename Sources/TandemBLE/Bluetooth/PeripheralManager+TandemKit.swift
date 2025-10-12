@@ -7,6 +7,7 @@
 
 import Foundation
 import Dispatch
+import TandemCore
 
 public enum SendMessageResult {
     /// The packet was sent and the pump acknowledged receipt.
@@ -34,48 +35,65 @@ extension PeripheralManager {
     public func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
         print("[PeripheralManager] enableNotifications begin")
-        guard let authChar = peripheral.getAuthorizationCharacteristic() else {
+
+        for uuid in TandemNotificationOrder {
+            guard let characteristic = peripheral.characteristic(for: uuid) else {
+                if uuid == .SERVICE_CHANGED {
+                    let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
+                    print("[PeripheralManager]   service-changed characteristic not exposed (services=\(services)); assuming availability per Tandem spec")
+                    subscribedCharacteristicUUIDs.insert(uuid)
+                    continue
+                }
+                let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
+                print("[PeripheralManager]   missing characteristic=\(uuid.prettyName) during subscription discoveredServices=\(services)")
+                throw PeripheralManagerError.notReady
+            }
+
+            if subscribedCharacteristicUUIDs.contains(uuid) {
+                print("[PeripheralManager]   notifications already enabled for \(uuid.prettyName); skipping")
+                continue
+            }
+
+            print("[PeripheralManager]   enabling notifications for \(uuid.prettyName)")
+            try setNotifyValue(true, for: characteristic, timeout: .seconds(2))
+            subscribedCharacteristicUUIDs.insert(uuid)
+            print("[PeripheralManager]   notifications enabled for \(uuid.prettyName)")
+        }
+
+        let required = Set(TandemNotificationOrder.filter { $0 != .SERVICE_CHANGED })
+        let missing = required.subtracting(subscribedCharacteristicUUIDs)
+        if !missing.isEmpty {
+            print("[PeripheralManager]   notification subscription incomplete missing=\(missing.map { $0.prettyName })")
             throw PeripheralManagerError.notReady
         }
-        guard let historyLogChar = peripheral.getHistoryLogCharacteristic() else {
-            throw PeripheralManagerError.notReady
+
+        if !subscribedCharacteristicUUIDs.contains(.SERVICE_CHANGED) {
+            print("[PeripheralManager]   service-changed notifications assumed active by spec")
         }
-        guard let controlChar = peripheral.getControlCharacteristic() else {
-            throw PeripheralManagerError.notReady
-        }
-        guard let controlStreamChar = peripheral.getControlStreamCharacteristic() else {
-            throw PeripheralManagerError.notReady
-        }
-        guard let currentStatusChar = peripheral.getCurrentStatusCharacteristic() else {
-            throw PeripheralManagerError.notReady
-        }
-        guard let qualEventsChar = peripheral.getQualifyingEventsCharacteristic() else {
-            throw PeripheralManagerError.notReady
-        }
-        try setNotifyValue(true, for: authChar, timeout: .seconds(2))
-        try setNotifyValue(true, for: historyLogChar, timeout: .seconds(2))
-        try setNotifyValue(true, for: controlChar, timeout: .seconds(2))
-        try setNotifyValue(true, for: controlStreamChar, timeout: .seconds(2))
-        try setNotifyValue(true, for: currentStatusChar, timeout: .seconds(2))
-        try setNotifyValue(true, for: qualEventsChar, timeout: .seconds(2))
+
         print("[PeripheralManager] enableNotifications complete")
     }
     
     
-    public func sendMessagePackets(_ packets: [Packet]) -> SendMessageResult {
+    public func sendMessagePackets(_ packets: [Packet], characteristic uuid: CharacteristicUUID) -> SendMessageResult {
         dispatchPrecondition(condition: .onQueue(queue))
         
         var didSend = false
 
+        guard let characteristic = peripheral.characteristic(for: uuid) else {
+            return .unsentWithError(PeripheralManagerError.notReady)
+        }
+
         do {
+            let pretty = uuid.prettyName
             for packet in packets {
-                let hex = packet.build.prefix(32).map { String(format: "%02X", $0) }.joined()
-                print("[PeripheralManager] write packet len=\(packet.build.count) hex=\(hex)…")
-                try sendData(packet.build, timeout: 5)
+                let hex = packet.build.map { String(format: "%02X", $0) }.joined()
+                print("[PeripheralManager] write packet len=\(packet.build.count) characteristic=\(pretty) hex=\(hex)")
+                try sendData(packet.build, characteristic: characteristic, timeout: 5)
             }
             didSend = true
 
-            try waitForResponse(timeout: 5)
+            try waitForResponse(timeout: 15, matching: uuid.cbUUID)
         }
         catch {
             if didSend {

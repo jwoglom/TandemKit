@@ -53,16 +53,22 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
         log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), currentTxId - 1)
-        if let firstPacket = wrapper.packets.first {
-            let hex = firstPacket.build.prefix(32).map { String(format: "%02X", $0) }.joined()
-            print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count) first=\(hex)…")
+        if wrapper.packets.isEmpty {
+            print("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
         } else {
-            print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1) pkts=0")
+            print("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)")
+            for (index, packet) in wrapper.packets.enumerated() {
+                let hex = packet.build.map { String(format: "%02X", $0) }.joined()
+                print("[PeripheralManagerTransport]   packet \(index) len=\(packet.build.count) hex=\(hex)")
+            }
         }
+
+        let characteristic = type(of: message).props.characteristic
+        let collector = PumpResponseCollector(wrapper: wrapper)
 
         // Send packets via PeripheralManager synchronously on its queue
         let sendResult = peripheralManager.performSync { manager in
-            manager.sendMessagePackets(wrapper.packets)
+            manager.sendMessagePackets(wrapper.packets, characteristic: characteristic)
         }
 
         // Handle send errors
@@ -80,41 +86,48 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             print("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
         }
 
-        // Read response packet
-        let data = try peripheralManager.performSync { manager -> Data in
-            guard let responseData = try manager.readMessagePacket() else {
+        var parsedMessage: Message?
+
+        while parsedMessage == nil {
+            let data = try peripheralManager.performSync { manager -> Data in
+                guard let responseData = try manager.readMessagePacket(for: characteristic, timeout: 15) else {
+                    throw PumpCommError.noResponse
+                }
+                return responseData
+            }
+
+            guard !data.isEmpty else {
+                log.error("No response data received")
                 throw PumpCommError.noResponse
             }
-            return responseData
-        }
 
-        guard !data.isEmpty else {
-            log.error("No response data received")
-            throw PumpCommError.noResponse
-        }
+            log.debug("Received response: %{public}@ bytes", String(describing: data.count))
+            let responsePreview = data.prefix(32).map { String(format: "%02X", $0) }.joined()
+            print("[PeripheralManagerTransport] received \(data.count) bytes preview=\(responsePreview)…")
 
-        log.debug("Received response: %{public}@ bytes", String(describing: data.count))
-        let responsePreview = data.prefix(32).map { String(format: "%02X", $0) }.joined()
-        print("[PeripheralManagerTransport] received \(data.count) bytes preview=\(responsePreview)…")
-
-        // Parse response using BTResponseParser
-        let characteristicUUID = type(of: message).props.characteristic.cbUUID
-        let pumpResponse = try withMainActor { () throws -> PumpResponseMessage in
-            guard let response = BTResponseParser.parse(wrapper: wrapper,
-                                                        output: data,
-                                                        characteristic: characteristicUUID) else {
+            let pumpResponse: PumpResponseMessage
+            do {
+                pumpResponse = try withMainActor {
+                    try collector.ingest(data, characteristic: characteristic.cbUUID)
+                }
+            } catch {
+                log.error("Failed to parse response chunk: %{public}@", String(describing: error))
                 throw PumpCommError.other
             }
-            return response
+
+            if let responseMessage = pumpResponse.message {
+                parsedMessage = responseMessage
+            } else {
+                print("[PeripheralManagerTransport] awaiting additional packets for \(type(of: message))")
+            }
         }
 
-        // Get response message (currently returns RawMessage from BTResponseParser)
-        guard let responseMessage = pumpResponse.message else {
-            log.error("No message in parsed response")
+        guard let finalMessage = parsedMessage else {
+            log.error("No message parsed from pump response")
             throw PumpCommError.other
         }
 
-        log.debug("Parsed response message: %{public}@", String(describing: responseMessage))
-        return responseMessage
+        log.debug("Parsed response message: %{public}@", String(describing: finalMessage))
+        return finalMessage
     }
 }

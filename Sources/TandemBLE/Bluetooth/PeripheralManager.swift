@@ -43,6 +43,13 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
 
     var idleStart: Date? = nil
 
+    private var connectionParametersVerified = false
+    private var didPerformInitialSetup = false
+    private var initialConnectionReady = false
+    var subscribedCharacteristicUUIDs = Set<CharacteristicUUID>()
+    private(set) var manufacturerName: String?
+    private(set) var modelNumber: String?
+
     var needsReconnection: Bool {
         guard let start = idleStart else { return false }
 
@@ -116,6 +123,11 @@ extension PeripheralManager {
 protocol PeripheralManagerDelegate: AnyObject {
     // Called from the PeripheralManager's queue
     func completeConfiguration(for manager: PeripheralManager) throws
+    func peripheralManager(_ manager: PeripheralManager, didIdentifyDevice manufacturer: String, model: String)
+}
+
+extension PeripheralManagerDelegate {
+    func peripheralManager(_ manager: PeripheralManager, didIdentifyDevice manufacturer: String, model: String) {}
 }
 
 
@@ -144,6 +156,8 @@ extension PeripheralManager {
             do {
                 self.log.default("Applying configuration")
                 try self.applyConfiguration()
+                try self.performInitialSetupIfNeeded()
+
                 self.needsConfiguration = false
 
                 if let delegate = self.delegate {
@@ -160,6 +174,102 @@ extension PeripheralManager {
         }
 
         return try block(self)
+    }
+
+    private func performInitialSetupIfNeeded() throws {
+        guard !didPerformInitialSetup else { return }
+
+        print("[PeripheralManager] init step 1: verifying MTU >= 185 and requesting high priority")
+        try ensureConnectionParameters()
+        print("[PeripheralManager] init step 1 complete")
+
+        print("[PeripheralManager] init step 2: reading Device Information Service manufacturer/model")
+        let (manufacturer, model) = try readDeviceInformation()
+        manufacturerName = manufacturer
+        modelNumber = model
+        print("[PeripheralManager] init step 2 complete manufacturer=\(manufacturer) model=\(model)")
+        delegate?.peripheralManager(self, didIdentifyDevice: manufacturer, model: model)
+
+        print("[PeripheralManager] init step 3: enabling characteristic notifications")
+        try enableNotifications()
+        print("[PeripheralManager] init step 3 complete")
+
+        didPerformInitialSetup = true
+        print("[PeripheralManager] initialization steps complete")
+        markInitializationReady()
+    }
+
+    private func ensureConnectionParameters() throws {
+        guard !connectionParametersVerified else { return }
+
+        let targetMTU: UInt16 = 185
+        let maxWithResponse = peripheral.maximumWriteValueLength(for: .withResponse)
+        let maxWithoutResponse = peripheral.maximumWriteValueLength(for: .withoutResponse)
+
+        print("[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)")
+
+        if maxWithResponse < Int(targetMTU - 3) { // Approximate payload length after headers
+            print("[PeripheralManager]   MTU verification failed – pump likely not in pairing mode")
+            throw PeripheralManagerError.notReady
+        }
+
+        print("[PeripheralManager]   MTU verification succeeded")
+
+        if let central = central {
+            let selector = NSSelectorFromString("setDesiredConnectionLatency:forPeripheral:")
+            if central.responds(to: selector) {
+                print("[PeripheralManager]   setting connection priority HIGH")
+                let latencyValue = NSNumber(value: 0) // CBPeripheralConnectionLatency.low
+                central.perform(selector, with: latencyValue, with: peripheral)
+                print("[PeripheralManager]   connection priority set")
+            } else {
+                print("[PeripheralManager]   central manager does not support connection latency adjustment")
+            }
+        } else {
+            print("[PeripheralManager]   central manager unavailable; skipping priority change")
+        }
+
+        connectionParametersVerified = true
+    }
+
+    private func markInitializationReady() {
+        guard !initialConnectionReady else { return }
+        initialConnectionReady = true
+        print("[PeripheralManager] initial pump connection established; authentication may proceed")
+    }
+
+    private func readDeviceInformation() throws -> (String, String) {
+        guard let manufacturerCharacteristic = peripheral.getManufacturerNameCharacteristic() else {
+            print("[PeripheralManager]   manufacturer characteristic unavailable")
+            throw PeripheralManagerError.notReady
+        }
+
+        guard let manufacturerValue = try readValue(for: manufacturerCharacteristic, timeout: TimeInterval.seconds(5)),
+              let manufacturer = string(from: manufacturerValue), !manufacturer.isEmpty else {
+            print("[PeripheralManager]   manufacturer value empty")
+            throw PeripheralManagerError.emptyValue
+        }
+
+        guard let modelCharacteristic = peripheral.getModelNumberCharacteristic() else {
+            print("[PeripheralManager]   model number characteristic unavailable")
+            throw PeripheralManagerError.notReady
+        }
+
+        guard let modelValue = try readValue(for: modelCharacteristic, timeout: TimeInterval.seconds(5)),
+              let model = string(from: modelValue), !model.isEmpty else {
+            print("[PeripheralManager]   model number value empty")
+            throw PeripheralManagerError.emptyValue
+        }
+
+        return (manufacturer, model)
+    }
+
+    private func string(from data: Data) -> String? {
+        if let string = String(data: data, encoding: .utf8) {
+            let trimSet = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{0000}"))
+            return string.trimmingCharacters(in: trimSet)
+        }
+        return nil
     }
 
     func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
@@ -192,23 +302,6 @@ extension PeripheralManager {
             try discoverCharacteristics(characteristics, for: service, timeout: discoveryTimeout)
         }
 
-        for (serviceUUID, characteristicUUIDs) in configuration.notifyingCharacteristics {
-            guard let service = peripheral.services?.itemWithUUID(serviceUUID) else {
-                throw PeripheralManagerError.unknownCharacteristic(serviceUUID)
-            }
-
-            for characteristicUUID in characteristicUUIDs {
-                guard let characteristic = service.characteristics?.itemWithUUID(characteristicUUID) else {
-                    throw PeripheralManagerError.unknownCharacteristic(characteristicUUID)
-                }
-
-                guard !characteristic.isNotifying else {
-                    continue
-                }
-
-                try setNotifyValue(true, for: characteristic, timeout: discoveryTimeout)
-            }
-        }
     }
 }
 
@@ -520,59 +613,69 @@ extension PeripheralManager {
     ///   - data: The packet data to transmit.
     ///   - timeout: Time to wait for the write to complete.
     /// - Throws: `PeripheralManagerError` when bluetooth is not ready or the write fails.
-    func sendData(_ data: Data, timeout: TimeInterval) throws {
+    func sendData(_ data: Data, characteristic: CBCharacteristic, timeout: TimeInterval) throws {
         dispatchPrecondition(condition: .onQueue(queue))
-
-        guard let characteristic = peripheral.getControlCharacteristic() else {
-            throw PeripheralManagerError.notReady
-        }
-
         try writeValue(data, for: characteristic, type: .withResponse, timeout: timeout)
     }
 
     /// Waits for a response packet to arrive on any of the pump characteristics.
     /// The received packet will be stored in `cmdQueue` by the value update macros.
-    /// - Parameter timeout: How long to wait for the notification.
+    /// - Parameters:
+    ///   - timeout: How long to wait for the notification.
+    ///   - uuid: Optional characteristic UUID to match.
     /// - Throws: `PeripheralManagerError.timeout` if no packet is received.
-    func waitForResponse(timeout: TimeInterval) throws {
+    func waitForResponse(timeout: TimeInterval, matching uuid: CBUUID? = nil) throws {
         dispatchPrecondition(condition: .onQueue(queue))
 
         let waitUntil = Date(timeIntervalSinceNow: timeout)
         queueLock.lock()
-        while cmdQueue.isEmpty && queueLock.wait(until: waitUntil) {}
-        let hasData = !cmdQueue.isEmpty
-        queueLock.unlock()
+        defer { queueLock.unlock() }
 
-        if !hasData {
-            throw PeripheralManagerError.timeout([])
+        while true {
+            let hasData: Bool
+            if let uuid {
+                hasData = cmdQueue.contains(where: { $0.uuid == uuid })
+            } else {
+                hasData = !cmdQueue.isEmpty
+            }
+
+            if hasData {
+                return
+            }
+
+            let signaled = queueLock.wait(until: waitUntil)
+            if !signaled {
+                throw PeripheralManagerError.timeout([])
+            }
         }
     }
 
-    /// Reads the next packet received from the pump.
+    /// Reads the next packet received from the pump for the specified characteristic.
     /// - Returns: Raw packet data if available.
-    public func readMessagePacket() throws -> Data? {
+    public func readMessagePacket(for uuid: CharacteristicUUID, timeout: TimeInterval = 15) throws -> Data? {
         dispatchPrecondition(condition: .onQueue(queue))
 
-        try waitForResponse(timeout: 5)
+        try waitForResponse(timeout: timeout, matching: uuid.cbUUID)
 
         queueLock.lock()
-        let cmd = cmdQueue.isEmpty ? nil : cmdQueue.removeFirst()
+        let index = cmdQueue.firstIndex(where: { $0.uuid == uuid.cbUUID })
+        let cmd = index.flatMap { cmdQueue.remove(at: $0) }
         queueLock.unlock()
         if let value = cmd?.value {
             let hex = value.prefix(32).map { String(format: "%02X", $0) }.joined()
-            print("[PeripheralManager] read packet len=\(value.count) hex=\(hex)…")
+            print("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hex)…")
         } else {
-            print("[PeripheralManager] read packet nil")
+            print("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
         }
         return cmd?.value
     }
 
-    /// Convenience wrapper for sending a single message packet.
-    func sendMessagePacket(_ data: Data) -> SendMessageResult {
+    /// Convenience wrapper for sending a single message packet on a specific characteristic.
+    func sendMessagePacket(_ data: Data, characteristic: CBCharacteristic) -> SendMessageResult {
         dispatchPrecondition(condition: .onQueue(queue))
 
         do {
-            try sendData(data, timeout: 5)
+            try sendData(data, characteristic: characteristic, timeout: 5)
             return .sentWithAcknowledgment
         } catch {
             return .unsentWithError(error)

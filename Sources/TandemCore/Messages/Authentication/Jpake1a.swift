@@ -12,7 +12,7 @@
 import Foundation
 
 /// First half of the first JPAKE round containing a 165-byte challenge.
-public class Jpake1aRequest: AbstractCentralChallengeRequest {
+public class Jpake1aRequest: AbstractCentralChallengeRequest, CustomStringConvertible {
     public static let props = MessageProps(
         opCode: 32,
         size: 167,
@@ -46,6 +46,11 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest {
         )
         cargo.replaceSubrange(0..<167, with: combined)
         return cargo
+    }
+
+    public var description: String {
+        let challengeHex = centralChallenge.map { String(format: "%02X", $0) }.joined()
+        return "Jpake1aRequest(appInstanceId=\(appInstanceId), centralChallenge=\(challengeHex))"
     }
 }
 
@@ -83,4 +88,3 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
         )
     }
 }
-

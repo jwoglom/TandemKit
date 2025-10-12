@@ -40,19 +40,25 @@ public struct TronMessageWrapper {
     }
 
     func buildPacketArrayList(_ messageType: MessageType) -> PacketArrayList {
-        let props = type(of: message).props
-        var opCode = props.opCode
-        var size = props.size
+        let requestProps = type(of: message).props
+        var opCode = requestProps.opCode
+        var size = requestProps.size
+        var isSigned = requestProps.signed
+
         if messageType == .Response {
-            opCode = props.opCode
-            size = props.size
-        } else {
-            if props.signed { size += 24 }
+            if let responseMeta = TronMessageWrapper.responseMetadata(for: message) {
+                opCode = responseMeta.opCode
+                size = UInt8(truncatingIfNeeded: responseMeta.size)
+                isSigned = responseMeta.signed
+            }
+        } else if requestProps.signed {
+            size &+= 24
         }
+
         return PacketArrayList(expectedOpCode: opCode,
                                expectedCargoSize: size,
                                expectedTxId: packets.first?.txId ?? 0,
-                               isSigned: props.signed)
+                               isSigned: isSigned)
     }
 
     func mergeIntoSinglePacket() -> Packet? {
@@ -65,5 +71,25 @@ public struct TronMessageWrapper {
             }
         }
         return packet
+    }
+
+    private static func responseMetadata(for message: Message) -> MessageMetadata? {
+        let requestTypeName = String(describing: type(of: message))
+        if let meta = MessageRegistry.metadata(forName: requestTypeName) {
+            if meta.messageType == .Response {
+                return meta
+            }
+        }
+
+        if requestTypeName.hasSuffix("Request") {
+            let base = requestTypeName.dropLast("Request".count)
+            let responseName = base + "Response"
+            if let meta = MessageRegistry.metadata(forName: String(responseName)) {
+                return meta
+            }
+        }
+
+        let fallback = requestTypeName + "Response"
+        return MessageRegistry.metadata(forName: fallback)
     }
 }

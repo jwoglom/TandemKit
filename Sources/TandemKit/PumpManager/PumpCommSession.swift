@@ -115,9 +115,9 @@ public class PumpCommSession {
             let maybeRequest = builder.nextRequest()
             print("[PumpCommSession] nextRequest -> \(String(describing: maybeRequest))")
             guard let request = maybeRequest else { break }
-            print("[PumpCommSession] Sending JPAKE request: \(type(of: request))")
+            print("[PumpCommSession] Sending JPAKE request: \(request)")
             let response = try transport.sendMessage(request)
-            print("[PumpCommSession] Received JPAKE response: \(type(of: response))")
+            print("[PumpCommSession] Received JPAKE response: \(response)")
             builder.processResponse(response)
             print("[PumpCommSession] builder state: done=\(builder.done()) invalid=\(builder.invalid())")
         }
