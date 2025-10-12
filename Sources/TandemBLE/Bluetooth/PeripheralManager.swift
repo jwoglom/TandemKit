@@ -121,46 +121,53 @@ protocol PeripheralManagerDelegate: AnyObject {
 extension PeripheralManager {
 
 
-    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
-        return {
-            if self.needsReconnection {
-                self.log.default("Triggering forceful reconnect")
-                do {
-                    try self.reconnect(timeout: 5)
-                } catch let error {
-                    self.log.error("Error while forcing reconnection: %{public}@", String(describing: error))
-                }
+    @discardableResult
+    func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        if self.needsReconnection {
+            self.log.default("Triggering forceful reconnect")
+            do {
+                try self.reconnect(timeout: 5)
+            } catch let error {
+                self.log.error("Error while forcing reconnection: %{public}@", String(describing: error))
             }
-
-            if !self.needsConfiguration && self.peripheral.services == nil {
-                self.log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: self.peripheral))
-            }
-
-            if self.needsConfiguration || self.peripheral.services == nil {
-                do {
-                    self.log.default("Applying configuration")
-                    try self.applyConfiguration()
-                    self.needsConfiguration = false
-
-                    if let delegate = self.delegate {
-                        try delegate.completeConfiguration(for: self)
-                        
-                        self.log.default("Delegate configuration notified")
-                    }
-
-                    self.log.default("Peripheral configuration completed")
-                } catch let error {
-                    self.log.error("Error applying peripheral configuration: %{public}@", String(describing: error))
-                    // Will retry
-                }
-            }
-
-            block(self)
         }
+
+        if !self.needsConfiguration && self.peripheral.services == nil {
+            self.log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: self.peripheral))
+        }
+
+        if self.needsConfiguration || self.peripheral.services == nil {
+            do {
+                self.log.default("Applying configuration")
+                try self.applyConfiguration()
+                self.needsConfiguration = false
+
+                if let delegate = self.delegate {
+                    try delegate.completeConfiguration(for: self)
+
+                    self.log.default("Delegate configuration notified")
+                }
+
+                self.log.default("Peripheral configuration completed")
+            } catch let error {
+                self.log.error("Error applying peripheral configuration: %{public}@", String(describing: error))
+                // Will retry
+            }
+        }
+
+        return try block(self)
+    }
+
+    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
+        return { self.runConfigured(block) }
     }
 
     public func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
-        queue.async(execute: configureAndRun(block))
+        queue.async {
+            self.runConfigured(block)
+        }
     }
 
     func assertConfiguration() {

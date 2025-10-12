@@ -106,7 +106,7 @@ public class TandemPumpManager: PumpManager {
         transportLock.value = transport
     }
 
-    private func makeDefaultStatus() -> PumpManagerStatus {
+    private static func makeDefaultStatus() -> PumpManagerStatus {
         return PumpManagerStatus(
             timeZone: TimeZone.current,
             device: HKDevice(
@@ -127,7 +127,7 @@ public class TandemPumpManager: PumpManager {
 
     public init(state: TandemPumpManagerState) {
         self.lockedState = Locked(state)
-        self.lockedStatus = Locked(makeDefaultStatus())
+        self.lockedStatus = Locked(Self.makeDefaultStatus())
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -141,7 +141,7 @@ public class TandemPumpManager: PumpManager {
         }
 
         self.lockedState = Locked(state)
-        self.lockedStatus = Locked(makeDefaultStatus())
+        self.lockedStatus = Locked(Self.makeDefaultStatus())
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -341,7 +341,7 @@ public class TandemPumpManager: PumpManager {
     public func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
         let startDate = Date()
         let endDate = startDate.addingTimeInterval(duration)
-        let dose = DoseEntry(
+        let _ = DoseEntry(
             type: .tempBasal,
             startDate: startDate,
             endDate: endDate,
@@ -411,7 +411,6 @@ extension TandemPumpManager: TandemPumpDelegate {
         return true
     }
 
-    @MainActor
     public func tandemPump(_ pump: TandemPump,
                           didCompleteConfiguration peripheralManager: PeripheralManager) {
         // Create and store the transport

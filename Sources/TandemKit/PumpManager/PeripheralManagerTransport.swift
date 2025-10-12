@@ -8,6 +8,7 @@
 //  from TandemBLE to PumpComm for actual pump communication.
 
 import Foundation
+import Dispatch
 import TandemCore
 import TandemBLE
 #if canImport(os)
@@ -15,7 +16,6 @@ import os
 #endif
 
 /// Concrete implementation of PumpMessageTransport using PeripheralManager from TandemBLE
-@MainActor
 class PeripheralManagerTransport: PumpMessageTransport {
     private let peripheralManager: PeripheralManager
     private var currentTxId: UInt8 = 0
@@ -25,17 +25,38 @@ class PeripheralManagerTransport: PumpMessageTransport {
         self.peripheralManager = peripheralManager
     }
 
+    private func withMainActor<T>(_ block: @MainActor @escaping () throws -> T) throws -> T {
+        if Thread.isMainThread {
+            return try MainActor.assumeIsolated { try block() }
+        }
+
+        var result: Result<T, Error>?
+        let semaphore = DispatchSemaphore(value: 0)
+        Task { @MainActor in
+            result = Result { try block() }
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        guard let unwrapped = result else {
+            fatalError("withMainActor completed without producing a result")
+        }
+
+        return try unwrapped.get()
+    }
+
     func sendMessage(_ message: Message) throws -> Message {
         // Create wrapper with current TxId
-        let wrapper = TronMessageWrapper(message: message, currentTxId: currentTxId)
+        let wrapper = try withMainActor {
+            TronMessageWrapper(message: message, currentTxId: self.currentTxId)
+        }
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
         log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), currentTxId - 1)
 
-        // Send packets via PeripheralManager
-        var sendResult: SendMessageResult?
-        peripheralManager.perform { manager in
-            sendResult = manager.sendMessagePackets(wrapper.packets)
+        // Send packets via PeripheralManager synchronously on its queue
+        let sendResult = peripheralManager.performSync { manager in
+            manager.sendMessagePackets(wrapper.packets)
         }
 
         // Handle send errors
@@ -48,18 +69,17 @@ class PeripheralManagerTransport: PumpMessageTransport {
             throw error
         case .sentWithAcknowledgment:
             log.debug("Message sent successfully")
-        case .none:
-            log.error("No send result received")
-            throw PumpCommError.noResponse
         }
 
         // Read response packet
-        var responseData: Data?
-        peripheralManager.perform { manager in
-            responseData = try? manager.readMessagePacket()
+        let data = try peripheralManager.performSync { manager -> Data in
+            guard let responseData = try manager.readMessagePacket() else {
+                throw PumpCommError.noResponse
+            }
+            return responseData
         }
 
-        guard let data = responseData else {
+        guard !data.isEmpty else {
             log.error("No response data received")
             throw PumpCommError.noResponse
         }
@@ -68,11 +88,13 @@ class PeripheralManagerTransport: PumpMessageTransport {
 
         // Parse response using BTResponseParser
         let characteristicUUID = type(of: message).props.characteristic.cbUUID
-        guard let pumpResponse = BTResponseParser.parse(wrapper: wrapper,
+        let pumpResponse = try withMainActor { () throws -> PumpResponseMessage in
+            guard let response = BTResponseParser.parse(wrapper: wrapper,
                                                         output: data,
                                                         characteristic: characteristicUUID) else {
-            log.error("Failed to parse response")
-            throw PumpCommError.other
+                throw PumpCommError.other
+            }
+            return response
         }
 
         // Get response message (currently returns RawMessage from BTResponseParser)
