@@ -1,5 +1,4 @@
 import Foundation
-import CryptoKit
 
 #if canImport(SwiftECC) && canImport(BigInt)
 import SwiftECC
@@ -195,7 +194,7 @@ final class EcJpake {
         let K = try! domain.multiplyPoint(try! domain.addPoints(Xp!, tmp), xm2!)
         let encoded = try! domain.encodePoint(K)
         let xCoord = Data(encoded.dropFirst(1).prefix(32))
-        derivedSecret = Data(SHA256.hash(xCoord))
+        derivedSecret = SHA256.hash(xCoord)
         return derivedSecret!
     }
 
