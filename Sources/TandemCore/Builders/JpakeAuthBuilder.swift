@@ -87,7 +87,7 @@ public class JpakeAuthBuilder {
         }
     }
 
-    static func initializeWithPairingCode(_ pairingCode: String) -> JpakeAuthBuilder {
+    public static func initializeWithPairingCode(_ pairingCode: String) -> JpakeAuthBuilder {
         if let inst = instance, inst.pairingCode == pairingCode {
             return inst
         }
@@ -95,23 +95,23 @@ public class JpakeAuthBuilder {
         return instance!
     }
 
-    static func initializeWithDerivedSecret(pairingCode: String, derivedSecret: Data) -> JpakeAuthBuilder {
+    public static func initializeWithDerivedSecret(pairingCode: String, derivedSecret: Data) -> JpakeAuthBuilder {
         instance = JpakeAuthBuilder(pairingCode: pairingCode, derivedSecret: derivedSecret)
         return instance!
     }
 
-    static func getInstance() -> JpakeAuthBuilder {
+    public static func getInstance() -> JpakeAuthBuilder {
         guard let inst = instance else {
             fatalError("JPAKE auth session does not exist")
         }
         return inst
     }
 
-    static func clearInstance() {
+    public static func clearInstance() {
         instance = nil
     }
 
-    func nextRequest() -> Message? {
+    public func nextRequest() -> Message? {
         var request: Message
         switch step {
         case .BOOTSTRAP_INITIAL:
@@ -155,7 +155,7 @@ public class JpakeAuthBuilder {
         return request
     }
 
-    func processResponse(_ response: Message) {
+    public func processResponse(_ response: Message) {
         receivedMessages.append(response)
         if let m = response as? Jpake1aResponse {
             serverRound1 = m.centralChallengeHash
@@ -202,19 +202,19 @@ public class JpakeAuthBuilder {
         case INVALID
     }
 
-    func done() -> Bool {
+    public func done() -> Bool {
         return step == .COMPLETE
     }
 
-    func invalid() -> Bool {
+    public func invalid() -> Bool {
         return step == .INVALID
     }
 
-    func getDerivedSecret() -> Data? {
+    public func getDerivedSecret() -> Data? {
         return derivedSecret
     }
 
-    func getServerNonce() -> Data? {
+    public func getServerNonce() -> Data? {
         return serverNonce3
     }
 
