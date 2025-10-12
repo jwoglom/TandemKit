@@ -1,10 +1,11 @@
 import Foundation
+import CryptoKit
 
 #if canImport(SwiftECC) && canImport(BigInt)
 import SwiftECC
 import BigInt
 
-struct EcJpake {
+final class EcJpake {
     enum Role {
         case client
         case server
@@ -30,41 +31,125 @@ struct EcJpake {
     let role: Role
     let myId: Data
     let peerId: Data
-    let domain: Domain
     let rand: RandomBytesGenerator
 
+    // Use computed property instead of stored property to avoid potential SwiftECC internal state issues
+    var domain: Domain {
+        Domain.instance(curve: .EC256r1)
+    }
+
     init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
+        print("[EcJpake.init] START")
         self.role = role
+        print("[EcJpake.init] role set")
         self.rand = random
-        self.domain = Domain.instance(curve: .EC256r1)
+        print("[EcJpake.init] rand set")
         self.s = BInt(magnitude: [UInt8](password))
+        print("[EcJpake.init] s (password BInt) set")
         if role == .client {
             self.myId = Data("client".utf8)
             self.peerId = Data("server".utf8)
+            print("[EcJpake.init] client IDs set")
         } else {
             self.myId = Data("server".utf8)
             self.peerId = Data("client".utf8)
+            print("[EcJpake.init] server IDs set")
         }
+
+        print("[EcJpake.init] COMPLETE")
     }
 
-    mutating func getRound1() -> Data {
-        if let data = myRound1 { return data }
+    func getRound1() -> Data {
+        print("[EcJpake.getRound1] ENTERED FUNCTION")
+        fflush(stdout)
+
+        if let data = myRound1 {
+            print("[EcJpake.getRound1] Returning cached data")
+            fflush(stdout)
+            return data
+        }
+
+        print("[EcJpake.getRound1] No cache, starting generation")
+        fflush(stdout)
+
         var out = Data()
+
+        print("[EcJpake.getRound1] Generating first key pair")
+        fflush(stdout)
         let kp1 = genKeyPair(domain.g)
         xm1 = kp1.priv
         Xm1 = kp1.pub
+        print("[EcJpake.getRound1] First key pair done")
+        fflush(stdout)
+
+        print("[EcJpake.getRound1] Writing first point")
+        fflush(stdout)
         writePoint(Xm1!, to: &out)
+        print("[EcJpake.getRound1] First point written")
+        fflush(stdout)
+
+        print("[EcJpake.getRound1] Writing first ZKP")
+        fflush(stdout)
         writeZkp(&out, base: domain.g, x: xm1!, X: Xm1!, id: myId)
+        print("[EcJpake.getRound1] First ZKP done")
+        fflush(stdout)
+
+        print("[EcJpake.getRound1] Generating second key pair")
+        fflush(stdout)
         let kp2 = genKeyPair(domain.g)
         xm2 = kp2.priv
         Xm2 = kp2.pub
+        print("[EcJpake.getRound1] Second key pair done")
+        fflush(stdout)
+
+        print("[EcJpake.getRound1] Writing second point")
+        fflush(stdout)
         writePoint(Xm2!, to: &out)
+        print("[EcJpake.getRound1] Second point written")
+        fflush(stdout)
+
+        print("[EcJpake.getRound1] Writing second ZKP")
+        fflush(stdout)
         writeZkp(&out, base: domain.g, x: xm2!, X: Xm2!, id: myId)
+        print("[EcJpake.getRound1] Second ZKP done")
+        fflush(stdout)
+
         myRound1 = out
         return out
     }
 
-    mutating func readRound1(_ data: Data) {
+    func getRound1_original() -> Data {
+        print("[EcJpake.getRound1] ENTERED FUNCTION")
+        if let data = myRound1 { return data }
+        print("[EcJpake.getRound1] Starting")
+        print("[EcJpake.getRound1] About to access domain.g...")
+        let g = domain.g
+        print("[EcJpake.getRound1] domain.g accessed: \(g)")
+        var out = Data()
+        print("[EcJpake.getRound1] Generating first key pair")
+        let kp1 = genKeyPair(g)
+        print("[EcJpake.getRound1] First key pair generated")
+        xm1 = kp1.priv
+        Xm1 = kp1.pub
+        print("[EcJpake.getRound1] Writing first point")
+        writePoint(Xm1!, to: &out)
+        print("[EcJpake.getRound1] Writing first ZKP")
+        writeZkp(&out, base: domain.g, x: xm1!, X: Xm1!, id: myId)
+        print("[EcJpake.getRound1] First ZKP written, generating second key pair")
+        let kp2 = genKeyPair(domain.g)
+        print("[EcJpake.getRound1] Second key pair generated")
+        xm2 = kp2.priv
+        Xm2 = kp2.pub
+        print("[EcJpake.getRound1] Writing second point")
+        writePoint(Xm2!, to: &out)
+        print("[EcJpake.getRound1] Writing second ZKP")
+        writeZkp(&out, base: domain.g, x: xm2!, X: Xm2!, id: myId)
+        print("[EcJpake.getRound1] Second ZKP written, done!")
+        myRound1 = out
+        return out
+    }
+
+    func readRound1(_ data: Data) {
         precondition(!hasPeerRound1, "Invalid protocol state")
         var r = DataReader(data)
         Xp1 = readPoint(&r)
@@ -74,7 +159,7 @@ struct EcJpake {
         hasPeerRound1 = true
     }
 
-    mutating func getRound2() -> Data {
+    func getRound2() -> Data {
         if let data = myRound2 { return data }
         precondition(hasPeerRound1 && myRound1 != nil, "Invalid protocol state")
         var out = Data()
@@ -90,7 +175,7 @@ struct EcJpake {
         return out
     }
 
-    mutating func readRound2(_ data: Data) {
+    func readRound2(_ data: Data) {
         precondition(!hasPeerRound2 && hasPeerRound1 && myRound1 != nil, "Invalid protocol state")
         var r = DataReader(data)
         if role == .client {
@@ -102,7 +187,7 @@ struct EcJpake {
         hasPeerRound2 = true
     }
 
-    mutating func deriveSecret() -> Data {
+    func deriveSecret() -> Data {
         if let d = derivedSecret { return d }
         precondition(hasPeerRound2, "Invalid protocol state")
         let xm2s = mulSecret(xm2!, s, negate: true)
@@ -116,7 +201,7 @@ struct EcJpake {
 
     // MARK: - ZKP helpers
 
-    private mutating func readZkp(_ reader: inout DataReader, base: Point, X: Point, id: Data) {
+    private func readZkp(_ reader: inout DataReader, base: Point, X: Point, id: Data) {
         let V = readPoint(&reader)
         let r = readNum(&reader)
         let h = zkpHash(base: base, V: V, X: X, id: id)
@@ -124,25 +209,78 @@ struct EcJpake {
         precondition(lhs == V, "Validation failed")
     }
 
-    private mutating func writeZkp(_ out: inout Data, base: Point, x: BInt, X: Point, id: Data) {
+    private func writeZkp(_ out: inout Data, base: Point, x: BInt, X: Point, id: Data) {
+        print("[writeZkp] START")
+        fflush(stdout)
+
+        print("[writeZkp] Calling genKeyPair")
+        fflush(stdout)
         let kp = genKeyPair(base)
+        print("[writeZkp] genKeyPair returned")
+        fflush(stdout)
+
         let v = kp.priv
         let V = kp.pub
+
+        print("[writeZkp] Calling zkpHash")
+        fflush(stdout)
         let h = zkpHash(base: base, V: V, X: X, id: id)
+        print("[writeZkp] zkpHash returned")
+        fflush(stdout)
+
+        print("[writeZkp] Computing r with mod")
+        fflush(stdout)
         let r = (v - x * h).mod(domain.order)
+        print("[writeZkp] Mod complete")
+        fflush(stdout)
+
+        print("[writeZkp] Writing point V")
+        fflush(stdout)
         writePoint(V, to: &out)
+        print("[writeZkp] Writing num r")
+        fflush(stdout)
         writeNum(r, to: &out)
+        print("[writeZkp] DONE")
+        fflush(stdout)
     }
 
     private func zkpHash(base: Point, V: Point, X: Point, id: Data) -> BInt {
+        print("[zkpHash] START")
+        fflush(stdout)
+
         var out = Data()
+
+        print("[zkpHash] Writing base point")
+        fflush(stdout)
         writeZkpHashPoint(base, to: &out)
+        print("[zkpHash] Base point written")
+        fflush(stdout)
+
+        print("[zkpHash] Writing V point")
+        fflush(stdout)
         writeZkpHashPoint(V, to: &out)
+        print("[zkpHash] V point written")
+        fflush(stdout)
+
+        print("[zkpHash] Writing X point")
+        fflush(stdout)
         writeZkpHashPoint(X, to: &out)
+        print("[zkpHash] X point written")
+        fflush(stdout)
+
+        print("[zkpHash] Appending id")
+        fflush(stdout)
         out.appendUInt32BE(UInt32(id.count))
         out.append(id)
+        print("[zkpHash] Computing SHA256")
+        fflush(stdout)
         let h = SHA256.hash(out)
-        return BInt(magnitude: [UInt8](h)).mod(domain.order)
+        print("[zkpHash] Computing mod")
+        fflush(stdout)
+        let result = BInt(magnitude: [UInt8](h)).mod(domain.order)
+        print("[zkpHash] DONE")
+        fflush(stdout)
+        return result
     }
 
     private func writeZkpHashPoint(_ point: Point, to out: inout Data) {

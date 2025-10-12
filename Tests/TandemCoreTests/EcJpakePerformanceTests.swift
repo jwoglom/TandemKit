@@ -33,45 +33,25 @@ final class EcJpakePerformanceTests: XCTestCase {
     func testEcJpakeGetRound1Performance() throws {
         // Test if getRound1() completes in reasonable time
         print("🔍 Testing EcJpake.getRound1() performance...")
+        print("  ⏱️  Starting getRound1() synchronously on test thread...")
 
-        let expectation = expectation(description: "getRound1 completes")
-        var completed = false
-        var result: Data?
-        var error: Error?
+        let start = Date()
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                print("  ⏱️  Starting getRound1()...")
-                let start = Date()
+        var jpake = EcJpake(
+            role: .client,
+            password: Data("123456".utf8),
+            random: JpakeAuthBuilder.defaultRandom
+        )
 
-                var jpake = EcJpake(
-                    role: .client,
-                    password: Data("123456".utf8),
-                    random: JpakeAuthBuilder.defaultRandom
-                )
+        print("  📊 EcJpake initialized, calling getRound1()...")
+        let result = jpake.getRound1()
 
-                result = jpake.getRound1()
+        let elapsed = Date().timeIntervalSince(start)
+        print("  ✅ getRound1() completed in \(elapsed)s")
+        print("  📦 Result size: \(result.count) bytes")
 
-                let elapsed = Date().timeIntervalSince(start)
-                print("  ✅ getRound1() completed in \(elapsed)s")
-                print("  📦 Result size: \(result?.count ?? 0) bytes")
-
-                completed = true
-                expectation.fulfill()
-            } catch let err {
-                print("  ❌ getRound1() threw error: \(err)")
-                error = err
-                expectation.fulfill()
-            }
-        }
-
-        // Wait with a timeout
-        wait(for: [expectation], timeout: 10.0)
-
-        XCTAssertTrue(completed, "getRound1 should complete")
-        XCTAssertNil(error, "getRound1 should not throw")
-        XCTAssertNotNil(result, "getRound1 should return data")
-        XCTAssertEqual(result?.count, 330, "getRound1 should return 330 bytes (2 key pairs)")
+        XCTAssertEqual(result.count, 330, "getRound1 should return 330 bytes (2 key pairs)")
+        XCTAssertLessThan(elapsed, 2.0, "getRound1 should complete in under 2 seconds")
     }
 
     func testJpakeAuthBuilderNextRequestPerformance() throws {
