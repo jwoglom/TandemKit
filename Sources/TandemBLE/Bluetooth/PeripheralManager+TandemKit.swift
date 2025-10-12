@@ -20,6 +20,12 @@ public enum SendMessageResult {
 }
 
 extension PeripheralManager {
+    public func performSync<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
+        try queue.sync {
+            try self.runConfigured(block)
+        }
+    }
+
     
     func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))

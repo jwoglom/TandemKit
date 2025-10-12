@@ -1,4 +1,5 @@
 import Foundation
+import Dispatch
 import TandemCore
 
 protocol PumpCommSessionDelegate: AnyObject {
@@ -17,6 +18,12 @@ public class PumpCommSession {
 
     public func runSession(withName name: String, _ block: @escaping @Sendable () -> Void) {
         sessionQueue.async(execute: block)
+    }
+
+    public func runSynchronously<T>(withName name: String, _ block: @escaping @Sendable () throws -> T) rethrows -> T {
+        try sessionQueue.sync {
+            try block()
+        }
     }
 
     public func assertOnSessionQueue() {

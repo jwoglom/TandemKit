@@ -61,19 +61,8 @@ public class PumpComm: CustomDebugStringConvertible {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
         let session = ensureSession()
-        var pairError: Error?
-        let semaphore = DispatchSemaphore(value: 0)
-        session.runSession(withName: "Pairing") {
-            do {
-                try session.pair(transport: transport, pairingCode: pairingCode)
-            } catch {
-                pairError = error
-            }
-            semaphore.signal()
-        }
-        semaphore.wait()
-        if let error = pairError {
-            throw error
+        try session.runSynchronously(withName: "Pairing") {
+            try session.pair(transport: transport, pairingCode: pairingCode)
         }
     }
 #endif
