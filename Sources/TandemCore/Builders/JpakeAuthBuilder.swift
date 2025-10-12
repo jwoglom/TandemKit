@@ -249,61 +249,31 @@ private final class NonBlockingRandom {
     static let shared = NonBlockingRandom()
 
     private let lock = NSLock()
-    private let handle: FileHandle?
 
-    private init() {
-        handle = FileHandle(forReadingAtPath: "/dev/urandom")
-    }
+    private init() {}
 
     func next(count: Int) -> Data {
         guard count > 0 else { return Data() }
 
-        if let handle {
-            lock.lock()
-            defer { lock.unlock() }
-
-            var buffer = Data(capacity: count)
-            var remaining = count
-
-            while remaining > 0 {
-                #if canImport(Darwin)
-                if #available(macOS 10.15.4, iOS 13.4, watchOS 6.2, tvOS 13.4, *) {
-                    do {
-                        guard let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty else {
-                            break
-                        }
-                        buffer.append(chunk)
-                        remaining -= chunk.count
-                    } catch {
-                        break
-                    }
-                } else {
-                    let chunk = handle.readData(ofLength: remaining)
-                    guard !chunk.isEmpty else {
-                        break
-                    }
-                    buffer.append(chunk)
-                    remaining -= chunk.count
-                }
-                #else
-                do {
-                    guard let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty else {
-                        break
-                    }
-                    buffer.append(chunk)
-                    remaining -= chunk.count
-                } catch {
-                    break
-                }
-                #endif
-            }
-
-            if buffer.count == count {
-                return buffer
-            }
-        }
+        lock.lock()
+        defer { lock.unlock() }
 
         var data = Data(count: count)
+
+        #if canImport(Darwin)
+        // Use Apple's secure random API which is guaranteed non-blocking
+        let result = data.withUnsafeMutableBytes { bufferPtr in
+            SecRandomCopyBytes(kSecRandomDefault, count, bufferPtr.baseAddress!)
+        }
+
+        if result == errSecSuccess {
+            return data
+        }
+
+        print("[NonBlockingRandom] Warning: SecRandomCopyBytes failed with \(result), falling back to SystemRandomNumberGenerator")
+        #endif
+
+        // Fallback to SystemRandomNumberGenerator
         var generator = SystemRandomNumberGenerator()
         for index in 0..<count {
             data[index] = UInt8.random(in: UInt8.min...UInt8.max, using: &generator)
