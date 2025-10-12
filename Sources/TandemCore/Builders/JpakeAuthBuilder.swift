@@ -112,6 +112,7 @@ public class JpakeAuthBuilder {
     }
 
     public func nextRequest() -> Message? {
+        print("[JpakeAuthBuilder] nextRequest start step=\(step)")
         var request: Message
         switch step {
         case .BOOTSTRAP_INITIAL:
@@ -119,47 +120,59 @@ public class JpakeAuthBuilder {
             let challenge = clientRound1!.subdata(in: 0..<165)
             request = Jpake1aRequest(appInstanceId: 0, centralChallenge: challenge)
             step = .ROUND_1A_SENT
+            print("[JpakeAuthBuilder] produced Jpake1aRequest")
         case .ROUND_1A_RECEIVED:
             let challenge = clientRound1!.subdata(in: 165..<330)
             request = Jpake1bRequest(appInstanceId: 0, centralChallenge: challenge)
             step = .ROUND_1B_SENT
+            print("[JpakeAuthBuilder] produced Jpake1bRequest")
         case .ROUND_1B_RECEIVED:
             clientRound2 = cli.getRound2()
             let challenge = clientRound2!.subdata(in: 0..<165)
             request = Jpake2Request(appInstanceId: 0, centralChallenge: challenge)
             step = .ROUND_2_SENT
+            print("[JpakeAuthBuilder] produced Jpake2Request")
         case .ROUND_2_RECEIVED:
             request = Jpake3SessionKeyRequest(challengeParam: 0)
             derivedSecret = cli.deriveSecret()
             step = .CONFIRM_3_SENT
+            print("[JpakeAuthBuilder] produced Jpake3SessionKeyRequest")
         case .CONFIRM_INITIAL:
             request = Jpake3SessionKeyRequest(challengeParam: 0)
             step = .CONFIRM_3_SENT
+            print("[JpakeAuthBuilder] produced Jpake3SessionKeyRequest (confirm)")
         case .CONFIRM_3_RECEIVED:
             clientNonce4 = generateNonce()
             let hashDigest3 = HmacSha256.hmac(clientNonce4!, key: Hkdf.build(nonce: serverNonce3!, keyMaterial: derivedSecret!))
             request = Jpake4KeyConfirmationRequest(appInstanceId: 0, nonce: clientNonce4!, reserved: Jpake4KeyConfirmationRequest.RESERVED, hashDigest: hashDigest3)
             step = .CONFIRM_4_SENT
+            print("[JpakeAuthBuilder] produced Jpake4KeyConfirmationRequest")
         case .CONFIRM_4_RECEIVED:
             let hashDigest4 = HmacSha256.hmac(serverNonce4!, key: Hkdf.build(nonce: serverNonce3!, keyMaterial: derivedSecret!))
             if serverHashDigest4 == hashDigest4 {
                 step = .COMPLETE
+                print("[JpakeAuthBuilder] pairing complete")
             } else {
                 step = .INVALID
+                print("[JpakeAuthBuilder] pairing invalid")
             }
             return nil
         default:
+            print("[JpakeAuthBuilder] nextRequest returning nil for step=\(step)")
             return nil
         }
         sentMessages.append(request)
+        print("[JpakeAuthBuilder] next step now \(step)")
         return request
     }
 
     public func processResponse(_ response: Message) {
         receivedMessages.append(response)
+        print("[JpakeAuthBuilder] processResponse \(type(of: response)) step(before)=\(step)")
         if let m = response as? Jpake1aResponse {
             serverRound1 = m.centralChallengeHash
             step = .ROUND_1A_RECEIVED
+            print("[JpakeAuthBuilder] step -> ROUND_1A_RECEIVED")
         } else if let m = response as? Jpake1bResponse {
             if let sr1 = serverRound1 {
                 let full = Bytes.combine(sr1, m.centralChallengeHash)
@@ -167,18 +180,23 @@ public class JpakeAuthBuilder {
                 cli.readRound1(full)
             }
             step = .ROUND_1B_RECEIVED
+            print("[JpakeAuthBuilder] step -> ROUND_1B_RECEIVED")
         } else if let m = response as? Jpake2Response {
             serverRound2 = m.centralChallengeHash
             cli.readRound2(serverRound2!)
             step = .ROUND_2_RECEIVED
+            print("[JpakeAuthBuilder] step -> ROUND_2_RECEIVED")
         } else if let m = response as? Jpake3SessionKeyResponse {
             serverNonce3 = m.deviceKeyNonce
             step = .CONFIRM_3_RECEIVED
+            print("[JpakeAuthBuilder] step -> CONFIRM_3_RECEIVED")
         } else if let m = response as? Jpake4KeyConfirmationResponse {
             serverNonce4 = m.nonce
             serverHashDigest4 = m.hashDigest
             step = .CONFIRM_4_RECEIVED
+            print("[JpakeAuthBuilder] step -> CONFIRM_4_RECEIVED")
         }
+        print("[JpakeAuthBuilder] step(after)=\(step)")
     }
 
     func generateNonce() -> Data {

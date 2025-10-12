@@ -33,6 +33,7 @@ extension PeripheralManager {
     
     public func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
+        print("[PeripheralManager] enableNotifications begin")
         guard let authChar = peripheral.getAuthorizationCharacteristic() else {
             throw PeripheralManagerError.notReady
         }
@@ -57,6 +58,7 @@ extension PeripheralManager {
         try setNotifyValue(true, for: controlStreamChar, timeout: .seconds(2))
         try setNotifyValue(true, for: currentStatusChar, timeout: .seconds(2))
         try setNotifyValue(true, for: qualEventsChar, timeout: .seconds(2))
+        print("[PeripheralManager] enableNotifications complete")
     }
     
     
@@ -67,7 +69,8 @@ extension PeripheralManager {
 
         do {
             for packet in packets {
-                print("[PeripheralManager] write packet len=\(packet.build.count)")
+                let hex = packet.build.prefix(32).map { String(format: "%02X", $0) }.joined()
+                print("[PeripheralManager] write packet len=\(packet.build.count) hex=\(hex)…")
                 try sendData(packet.build, timeout: 5)
             }
             didSend = true
@@ -76,8 +79,10 @@ extension PeripheralManager {
         }
         catch {
             if didSend {
+                print("[PeripheralManager] sendMessagePackets error after send: \(error)")
                 return .sentWithError(error)
             } else {
+                print("[PeripheralManager] sendMessagePackets error before send: \(error)")
                 return .unsentWithError(error)
             }
         }

@@ -715,13 +715,37 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
         guard shouldStartPairing, let transport else { return }
 
         do {
+            print("[PairingCoordinator] enabling notifications via performSync")
             try peripheralManager.performSync { manager -> Void in
                 try manager.enableNotifications()
             }
+            print("[PairingCoordinator] notifications enabled")
         } catch {
+            print("[PairingCoordinator] enableNotifications failed: \(error)")
             finish(.failure(error))
             return
         }
+
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+        if pairingCode.count == 6 {
+            print("[PairingCoordinator] priming JPAKE handshake")
+            let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
+            if let initialRequest = builder.nextRequest() {
+                print("[PairingCoordinator] sending initial JPAKE request \(type(of: initialRequest))")
+                do {
+                    let initialResponse = try pumpComm.sendMessage(transport: transport, message: initialRequest)
+                    print("[PairingCoordinator] received initial response \(type(of: initialResponse))")
+                    builder.processResponse(initialResponse)
+                } catch {
+                    print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
+                    finish(.failure(error))
+                    return
+                }
+            } else {
+                print("[PairingCoordinator] initial JPAKE request unavailable")
+            }
+        }
+#endif
 
         print("Peripheral configured. Beginning pairing exchange...")
 
@@ -761,6 +785,7 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
             self.finish(.failure(CLIError("Pairing timed out after \(Int(self.timeout)) seconds.")))
         }
         timeoutWorkItem = workItem
+        print("[PairingCoordinator] scheduling timeout in \(Int(timeout)) seconds")
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + self.timeout, execute: workItem)
     }
 
@@ -787,6 +812,9 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
         switch result {
         case .success(let value):
             print("[PairingCoordinator] Completing with success")
+            let derivedHex = value.pumpState.derivedSecret?.hexadecimalString ?? "none"
+            let nonceHex = value.pumpState.serverNonce?.hexadecimalString ?? "none"
+            print("[PairingCoordinator] PumpState derivedSecret=\(derivedHex) serverNonce=\(nonceHex)")
             continuation.resume(returning: value)
         case .failure(let error):
             print("[PairingCoordinator] Completing with failure: \(error)")

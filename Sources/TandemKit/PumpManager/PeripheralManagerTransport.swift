@@ -53,7 +53,12 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
         log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), currentTxId - 1)
-        print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1)")
+        if let firstPacket = wrapper.packets.first {
+            let hex = firstPacket.build.prefix(32).map { String(format: "%02X", $0) }.joined()
+            print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count) first=\(hex)…")
+        } else {
+            print("[PeripheralManagerTransport] send \(type(of: message)) txId=\(currentTxId &- 1) pkts=0")
+        }
 
         // Send packets via PeripheralManager synchronously on its queue
         let sendResult = peripheralManager.performSync { manager in
@@ -64,12 +69,15 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         switch sendResult {
         case .unsentWithError(let error):
             log.error("Failed to send message: %{public}@", String(describing: error))
+            print("[PeripheralManagerTransport] sendResult=unsentWithError error=\(error)")
             throw error
         case .sentWithError(let error):
             log.error("Message sent but pump returned error: %{public}@", String(describing: error))
+            print("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
             log.debug("Message sent successfully")
+            print("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
         }
 
         // Read response packet
@@ -86,7 +94,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         }
 
         log.debug("Received response: %{public}@ bytes", String(describing: data.count))
-        print("[PeripheralManagerTransport] received \(data.count) bytes")
+        let responsePreview = data.prefix(32).map { String(format: "%02X", $0) }.joined()
+        print("[PeripheralManagerTransport] received \(data.count) bytes preview=\(responsePreview)…")
 
         // Parse response using BTResponseParser
         let characteristicUUID = type(of: message).props.characteristic.cbUUID
