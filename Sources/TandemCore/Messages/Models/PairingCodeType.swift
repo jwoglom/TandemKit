@@ -1,10 +1,10 @@
 import Foundation
 
-enum PairingCodeType: String {
+public enum PairingCodeType: String {
     case long16Char = "LONG_16CHAR"
     case short6Char = "SHORT_6CHAR"
 
-    func filterCharacters(_ pairingCode: String) -> String {
+    public func filterCharacters(_ pairingCode: String) -> String {
         var processed = ""
         for c in pairingCode {
             switch self {
@@ -17,7 +17,7 @@ enum PairingCodeType: String {
         return processed
     }
 
-    static func fromLabel(_ label: String) -> PairingCodeType? {
+    public static func fromLabel(_ label: String) -> PairingCodeType? {
         return PairingCodeType(rawValue: label)
     }
 }
