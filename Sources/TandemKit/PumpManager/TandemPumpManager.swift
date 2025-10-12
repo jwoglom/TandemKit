@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreBluetooth
+import HealthKit
 import LoopKit
 import TandemCore
 import TandemBLE
@@ -69,6 +70,10 @@ public class TandemPumpManager: PumpManager {
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
 
+    // Status tracking
+    private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
+    private let lockedStatus: Locked<PumpManagerStatus>
+
     private func updatePairingArtifacts(with pumpState: PumpState?) {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
         let derivedSecret = pumpState?.derivedSecret
@@ -101,8 +106,28 @@ public class TandemPumpManager: PumpManager {
         transportLock.value = transport
     }
 
+    private func makeDefaultStatus() -> PumpManagerStatus {
+        return PumpManagerStatus(
+            timeZone: TimeZone.current,
+            device: HKDevice(
+                name: "TandemPump",
+                manufacturer: "Tandem",
+                model: "t:slim X2",
+                hardwareVersion: nil as String?,
+                firmwareVersion: nil as String?,
+                softwareVersion: nil as String?,
+                localIdentifier: nil as String?,
+                udiDeviceIdentifier: nil as String?
+            ),
+            pumpBatteryChargeRemaining: nil,
+            basalDeliveryState: .active(Date()),
+            bolusState: .none
+        )
+    }
+
     public init(state: TandemPumpManagerState) {
         self.lockedState = Locked(state)
+        self.lockedStatus = Locked(makeDefaultStatus())
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -116,6 +141,7 @@ public class TandemPumpManager: PumpManager {
         }
 
         self.lockedState = Locked(state)
+        self.lockedStatus = Locked(makeDefaultStatus())
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -129,6 +155,80 @@ public class TandemPumpManager: PumpManager {
 
     public var debugDescription: String {
         return "TandemPumpManager(state: \(lockedState.value))"
+    }
+
+    // MARK: - Pump Capabilities
+
+    public var supportedBasalRates: [Double] {
+        // Tandem t:slim X2 supports 0.001 to 35.0 U/hr in 0.001 U increments
+        return stride(from: 0.001, through: 35.0, by: 0.001).map { $0 }
+    }
+
+    public var supportedBolusVolumes: [Double] {
+        // Tandem t:slim X2 supports 0.01 to 25.0 U in 0.01 U increments
+        return stride(from: 0.01, through: 25.0, by: 0.01).map { $0 }
+    }
+
+    public var maximumBasalScheduleEntryCount: Int {
+        return 24 // One entry per hour
+    }
+
+    public var minimumBasalScheduleEntryDuration: TimeInterval {
+        return 30 * 60 // 30 minutes in seconds
+    }
+
+    public var pumpRecordsBasalProfileStartEvents: Bool {
+        return false // Tandem pumps do not explicitly record basal profile start events
+    }
+
+    public var pumpReservoirCapacity: Double {
+        return 300.0 // t:slim X2 reservoir capacity in units
+    }
+
+    public var lastReconciliation: Date? {
+        return lockedState.value.lastReconciliation
+    }
+
+    public var status: PumpManagerStatus {
+        return lockedStatus.value
+    }
+
+    // MARK: - Status Observers
+
+    public func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue) {
+        let uuid = UUID()
+        statusObservers.value[uuid] = (observer, queue)
+    }
+
+    public func removeStatusObserver(_ observer: PumpManagerStatusObserver) {
+        statusObservers.value = statusObservers.value.filter { _, value in
+            return value.observer !== observer
+        }
+    }
+
+    private func notifyStatusObservers(oldStatus: PumpManagerStatus, newStatus: PumpManagerStatus) {
+        guard oldStatus != newStatus else { return }
+
+        for (_, observerInfo) in statusObservers.value {
+            observerInfo.queue.async {
+                observerInfo.observer.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
+            }
+        }
+
+        // Also notify the main delegate
+        if let delegate = pumpManagerDelegate {
+            pumpDelegate.queue.async {
+                delegate.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
+            }
+        }
+    }
+
+    private func updateStatus(_ update: (inout PumpManagerStatus) -> Void) {
+        let oldStatus = lockedStatus.value
+        var newStatus = oldStatus
+        update(&newStatus)
+        lockedStatus.value = newStatus
+        notifyStatusObservers(oldStatus: oldStatus, newStatus: newStatus)
     }
 
     // MARK: - Basic Pump Manager Interface
@@ -148,6 +248,25 @@ public class TandemPumpManager: PumpManager {
 
     public func disconnect() {
         tandemPump.disconnect()
+    }
+
+    // MARK: - PumpManager Additional Methods
+
+    public func assertCurrentPumpData() {
+        // Request the pump to send current data
+        // This will be implemented when we have message handling for pump data queries
+        // For now, this is a no-op as data is pushed from the pump
+    }
+
+    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
+        // Store this setting to control heartbeat behavior
+        // The actual heartbeat logic will be implemented in future pump communication
+    }
+
+    public func createBolusProgressReporter(reportingOn dispatchQueue: DispatchQueue) -> DoseProgressReporter? {
+        // This will be implemented when we support bolus delivery
+        // For now, return nil to indicate no active bolus
+        return nil
     }
 
 #if canImport(UIKit)
@@ -178,6 +297,99 @@ public class TandemPumpManager: PumpManager {
         }
     }
 #endif
+
+    // MARK: - Dose Delivery Methods
+
+    public func enactBolus(units: Double, at startDate: Date, willRequest: @escaping (_ dose: DoseEntry) -> Void, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
+        let dose = DoseEntry(
+            type: .bolus,
+            startDate: startDate,
+            endDate: nil,
+            value: units,
+            unit: .units,
+            deliveredUnits: nil,
+            syncIdentifier: UUID().uuidString
+        )
+
+        willRequest(dose)
+
+        // Update status to show bolus is initiating
+        updateStatus { status in
+            status.bolusState = .initiating
+        }
+
+        // TODO: Implement actual bolus delivery via pump messages
+        // For now, return an error indicating this is not yet implemented
+        delegateQueue.async {
+            completion(.failure(PumpCommError.notImplemented))
+        }
+    }
+
+    public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
+        // Update status to show bolus is being canceled
+        updateStatus { status in
+            status.bolusState = .canceling
+        }
+
+        // TODO: Implement actual bolus cancellation via pump messages
+        // For now, return an error indicating this is not yet implemented
+        delegateQueue.async {
+            completion(.failure(PumpCommError.notImplemented))
+        }
+    }
+
+    public func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
+        let startDate = Date()
+        let endDate = startDate.addingTimeInterval(duration)
+        let dose = DoseEntry(
+            type: .tempBasal,
+            startDate: startDate,
+            endDate: endDate,
+            value: unitsPerHour,
+            unit: .unitsPerHour,
+            deliveredUnits: nil,
+            syncIdentifier: UUID().uuidString
+        )
+
+        // Update status to show temp basal is initiating
+        updateStatus { status in
+            status.basalDeliveryState = .initiatingTempBasal
+        }
+
+        // TODO: Implement actual temp basal delivery via pump messages
+        // For now, return an error indicating this is not yet implemented
+        delegateQueue.async {
+            completion(.failure(PumpCommError.notImplemented))
+        }
+    }
+
+    // MARK: - Delivery Control Methods
+
+    public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
+        // Update status to show suspension is in progress
+        updateStatus { status in
+            status.basalDeliveryState = .suspending
+        }
+
+        // TODO: Implement actual delivery suspension via pump messages
+        // For now, return an error indicating this is not yet implemented
+        delegateQueue.async {
+            completion(PumpCommError.notImplemented)
+        }
+    }
+
+    public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
+        // Update status to show resume is in progress
+        updateStatus { status in
+            status.basalDeliveryState = .resuming
+        }
+
+        // TODO: Implement actual delivery resumption via pump messages
+        // For now, return an error indicating this is not yet implemented
+        delegateQueue.async {
+            completion(PumpCommError.notImplemented)
+        }
+    }
 }
 
 @available(macOS 13.0, iOS 14.0, *)

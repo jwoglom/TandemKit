@@ -7,9 +7,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public static let version = 1
 
     public var pumpState: PumpState?
+    public var lastReconciliation: Date?
 
-    public init(pumpState: PumpState?) {
+    public init(pumpState: PumpState?, lastReconciliation: Date? = nil) {
         self.pumpState = pumpState
+        self.lastReconciliation = lastReconciliation
     }
 
     public init?(rawValue: RawValue) {
@@ -22,6 +24,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.pumpState = nil
         }
+
+        if let lastReconciliationInterval = rawValue["lastReconciliation"] as? TimeInterval {
+            self.lastReconciliation = Date(timeIntervalSinceReferenceDate: lastReconciliationInterval)
+        } else {
+            self.lastReconciliation = nil
+        }
     }
 
     public var rawValue: RawValue {
@@ -31,6 +39,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
         if let pumpState = pumpState {
             raw["pumpState"] = pumpState.rawValue
+        }
+
+        if let lastReconciliation = lastReconciliation {
+            raw["lastReconciliation"] = lastReconciliation.timeIntervalSinceReferenceDate
         }
 
         return raw
