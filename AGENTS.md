@@ -535,10 +535,10 @@ Responses:
   - Packet helpers for assembling/disassembling Tron messages with HMAC/CRC
 * **Authentication and pairing** – ⚠️ **MOSTLY IMPLEMENTED**:
   - `JpakeAuthBuilder`: ✅ Complete JPake authentication flow (requires SwiftECC/BigInt/CryptoKit dependencies)
-  - `PumpCommSession.pair()`: ✅ Implemented with full authentication workflow
-  - V1 pairing (16-char code via `PumpChallengeRequestBuilder.createV1`): ✅ Fully implemented
-  - V2 pairing (6-digit PIN via `PumpChallengeRequestBuilder.createV2`): ❌ **STUB** - throws "ECJPAKE not implemented"
-  - Pairing state persistence: ❌ Not implemented in `TandemPumpManagerState`
+  - `PumpCommSession.pair()`: ✅ Supports both legacy pump-challenge and JPake PIN flows
+- V1 pairing (16-char code via `PumpChallengeRequestBuilder.createV1`): ✅ Fully implemented
+- V2 pairing (6-digit PIN via `PumpChallengeRequestBuilder.createV2`): ✅ Uses JPAKE builder to advance pairing flow
+  - Pairing state persistence: ✅ TandemPumpManagerState persists derived secrets/server nonces
 * **Utility surface area** – ✅ **FULLY IMPLEMENTED**: `PumpStateSupplier` provides complete pairing code validation/sanitization (`sanitizeAndStorePairingCode`), authentication key derivation (`authenticationKey`), and configuration flags for insulin-affecting actions. Command-line target (`Sources/TandemCLI`) exposes decode/encode/list tooling.
 * **Existing validation** – ⚠️ **PARTIAL**: Unit tests cover message metadata, pairing-code validation, and JPake builder behavior. Many message types in AGENTS.md checklist are marked as lacking tests.
 
@@ -553,10 +553,9 @@ Responses:
   - No dosing interfaces (bolus, temp basal, suspend/resume) implemented
   - No status reporting to LoopKit delegates
   - No reservoir, battery, or CGM data surfaces
-* **`TandemPumpManagerState`** (`Sources/TandemKit/PumpManager/TandemPumpManagerState.swift`) – ❌ **STUB**:
-  - `init?(rawValue:)` doesn't deserialize anything, just returns nil pumpState (line 15-17)
-  - `rawValue` returns empty dictionary `[:]` (line 19-21)
-  - No persistence of pairing info, derived secrets, therapy settings, or pump status
+* **`TandemPumpManagerState`** (`Sources/TandemKit/PumpManager/TandemPumpManagerState.swift`) – ⚠️ **PARTIALLY IMPLEMENTED**:
+  - Serializes/deserializes `PumpState` including derived secret and server nonce
+  - Still lacks storage for therapy settings, pump status snapshots, and LoopKit-facing metadata
 
 #### 2. Pump Session Orchestration (INCOMPLETE)
 * **`TandemPump`** (`Sources/TandemKit/PumpManager/TandemPump.swift`) – ❌ **MOSTLY STUB**:
@@ -573,9 +572,8 @@ Responses:
 * **`PumpMessageTransport`** (`Sources/TandemKit/PumpManager/PumpMessageTransport.swift`) – ❌ **STUB**: Just a protocol definition with no concrete implementation that bridges to the real `PeripheralManager`
 
 #### 3. Authentication Gaps
-* **V2 pairing (6-digit PIN)** – ❌ **NOT IMPLEMENTED**: `PumpChallengeRequestBuilder.createV2()` throws "ECJPAKE not implemented" (line 40-44 in `Sources/TandemCore/Builders/PumpChallengeRequestBuilder.swift`)
-  - Note: `JpakeAuthBuilder` itself is fully implemented, but integration into the V2 challenge builder is missing
-* **Pairing state persistence** – ❌ **NOT IMPLEMENTED**: No serialization/deserialization of derived secrets, server nonces, or authentication state in `TandemPumpManagerState`
+* **V2 pairing (6-digit PIN)** – ✅ **IMPLEMENTED**: `PumpChallengeRequestBuilder.createV2()` advances the JPakeAuthBuilder and `PumpCommSession` now branches between JPAKE and legacy pump-challenge flows.
+* **Pairing state persistence** – ✅ **IMPLEMENTED**: `TandemPumpManagerState` serializes derived secrets and nonces, and `PumpCommSession` updates `PumpStateSupplier` artifacts.
 * **Dependency management** – ⚠️ All JPake functionality requires SwiftECC/BigInt/CryptoKit dependencies which may not be available on all platforms
 
 #### 4. Response Decoding and Device Targeting
@@ -600,9 +598,9 @@ Responses:
    * Finish `PumpComm.sendMessage` so it handles pump faults, retries, and message-type dispatch using the `MessageRegistry` metadata.
 
 3. **Phase 2 – Authentication and pairing**
-   * Complete `PumpChallengeRequestBuilder.createV2` to cover the JPake/short-PIN handshake used by newer firmware and Trio hardware, and persist resulting derived secrets/nonces into `PumpState`.
-   * Extend `PumpCommSession.pair` to store authentication artifacts via `PumpStateSupplier` and surface errors meaningfully to the manager delegate.
-   * Add persistence for pairing details inside `TandemPumpManagerState.rawValue` so Loop/Trio can survive restarts without re-pairing.
+   * Complete `PumpChallengeRequestBuilder.createV2` to cover the JPake/short-PIN handshake used by newer firmware and Trio hardware, and persist resulting derived secrets/nonces into `PumpState`. ✅ *Done*
+   * Extend `PumpCommSession.pair` to store authentication artifacts via `PumpStateSupplier` and surface errors meaningfully to the manager delegate. ✅ *Done*
+   * Add persistence for pairing details inside `TandemPumpManagerState.rawValue` so Loop/Trio can survive restarts without re-pairing. ✅ *Done*
 
 4. **Phase 3 – Pump session lifecycle**
    * Flesh out `TandemPump` connection workflows (scanning filters, auto-reconnect, startup message sequence) and bridge received notifications back into `PumpComm`.
@@ -658,10 +656,9 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
    - Handle typed responses instead of raw payloads
    - Location: `Sources/TandemKit/PumpManager/PumpComm.swift:81-104`
 
-6. **Implement TandemPumpManagerState persistence** (`TandemPumpManagerState.swift`)
-   - Deserialize pairing info, derived secrets, server nonces in `init?(rawValue:)` (currently returns nil)
-   - Serialize all state in `rawValue` (currently returns `[:]`)
-   - Location: `Sources/TandemKit/PumpManager/TandemPumpManagerState.swift:15-21`
+6. **Implement TandemPumpManagerState persistence** (`TandemPumpManagerState.swift`) ✅ *Done*
+   - Raw state now stores derived secret + server nonce so pairing survives restarts.
+   - Location: `Sources/TandemKit/PumpManager/TandemPumpManagerState.swift`
 
 7. **Implement TandemPumpManager.connect() and disconnect()** (`TandemPumpManager.swift:133-140`)
    - Replace print statements with actual BLE connection logic
@@ -689,10 +686,9 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
     - Surface alerts/alarms (via `AlarmStatusRequest/Response`, `AlertStatusRequest/Response`)
 
 ### Authentication and Pairing
-11. **Implement V2 pairing (6-digit PIN)** (`PumpChallengeRequestBuilder.swift:39-44`)
-    - Complete `createV2()` to use `JpakeAuthBuilder` (which is already fully implemented)
-    - Integrate EC-JPAKE flow that's in `JpakeAuthBuilder`
-    - Location: `Sources/TandemCore/Builders/PumpChallengeRequestBuilder.swift:39-44`
+11. **Implement V2 pairing (6-digit PIN)** (`PumpChallengeRequestBuilder.swift:39-44`) ✅ *Done*
+    - `createV2()` now advances the JPake auth builder after a `Jpake1aResponse` and returns the next message in the flow.
+    - Location: `Sources/TandemCore/Builders/PumpChallengeRequestBuilder.swift`
 
 12. **Implement TandemPump configuration methods** (`TandemPump.swift:63-86`)
     - Replace print statements with actual calls to `PumpStateSupplier`
