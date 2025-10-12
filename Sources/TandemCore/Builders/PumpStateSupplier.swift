@@ -123,4 +123,20 @@ public struct PumpStateSupplier {
 
         throw PumpPairingCodeValidationError.invalidLength
     }
+
+    public static func storePairingArtifacts(derivedSecret: Data?, serverNonce: Data?) {
+        if let derivedSecret = derivedSecret, !derivedSecret.isEmpty {
+            let derivedHex = derivedSecret.hexadecimalString
+            jpakeDerivedSecretHex = { derivedHex }
+        } else {
+            jpakeDerivedSecretHex = nil
+        }
+
+        if let serverNonce = serverNonce, !serverNonce.isEmpty {
+            let serverNonceHex = serverNonce.hexadecimalString
+            jpakeServerNonceHex = { serverNonceHex }
+        } else {
+            jpakeServerNonceHex = nil
+        }
+    }
 }

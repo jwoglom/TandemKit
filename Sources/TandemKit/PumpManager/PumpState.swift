@@ -20,6 +20,10 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         self.derivedSecret = derivedSecret
         self.serverNonce = serverNonce
     }
+
+    public init() {
+        self.init(address: 0, derivedSecret: nil, serverNonce: nil)
+    }
     
     public init?(rawValue: RawValue) {
         

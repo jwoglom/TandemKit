@@ -68,6 +68,16 @@ public class TandemPumpManager: PumpManager {
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
 
+    private func updatePairingArtifacts(with pumpState: PumpState?) {
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+        let derivedSecret = pumpState?.derivedSecret
+        let serverNonce = pumpState?.serverNonce
+        Task { @MainActor in
+            PumpStateSupplier.storePairingArtifacts(derivedSecret: derivedSecret, serverNonce: serverNonce)
+        }
+#endif
+    }
+
     public var delegateQueue: DispatchQueue! {
         get {
             return pumpDelegate.queue
@@ -96,6 +106,7 @@ public class TandemPumpManager: PumpManager {
 
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
+        updatePairingArtifacts(with: state.pumpState)
     }
 
     public required init?(rawState: RawStateValue) {
@@ -108,6 +119,7 @@ public class TandemPumpManager: PumpManager {
 
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
+        updatePairingArtifacts(with: state.pumpState)
     }
 
     public var rawState: RawStateValue {
@@ -201,6 +213,8 @@ extension TandemPumpManager: PumpCommDelegate {
         var currentState = lockedState.value
         currentState.pumpState = pumpState
         lockedState.value = currentState
+
+        updatePairingArtifacts(with: pumpState)
 
         // The state change will be automatically persisted by Loop/Trio
         // when it calls rawState during the next cycle
