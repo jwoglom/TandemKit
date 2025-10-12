@@ -51,18 +51,16 @@ public class PumpComm: CustomDebugStringConvertible {
     
     // TODO(jwoglom): device name or PIN?
     init(pumpState: PumpState?) {
-        self.pumpState = pumpState
         self.delegate = nil
-        if let pumpState = pumpState {
-            self.session = PumpCommSession(pumpState: pumpState, delegate: self)
-        }
+
+        let initialState = pumpState ?? PumpState()
+        self.pumpState = pumpState ?? initialState
+        self.session = PumpCommSession(pumpState: initialState, delegate: self)
     }
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
-        guard let session = self.session else {
-            throw PumpCommError.pumpNotConnected
-        }
+        let session = ensureSession()
         var pairError: Error?
         let semaphore = DispatchSemaphore(value: 0)
         session.runSession(withName: "Pairing") {
@@ -79,6 +77,18 @@ public class PumpComm: CustomDebugStringConvertible {
         }
     }
 #endif
+
+    private func ensureSession() -> PumpCommSession {
+        if let session = self.session {
+            return session
+        }
+
+        let state = pumpState ?? PumpState()
+        let newSession = PumpCommSession(pumpState: state, delegate: self)
+        self.session = newSession
+        self.pumpState = state
+        return newSession
+    }
 
     // TODO(jwoglom): Performs pairing and returns (?) ( -> ApiVersionResponse?)
     private func sendMessage(transport: PumpMessageTransport, message: Message) throws {

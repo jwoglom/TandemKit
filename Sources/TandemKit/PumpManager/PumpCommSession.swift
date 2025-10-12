@@ -26,17 +26,29 @@ public class PumpCommSession {
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
         assertOnSessionQueue()
+        defer {
+            JpakeAuthBuilder.clearInstance()
+        }
         let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
         while !builder.done() && !builder.invalid() {
             guard let request = builder.nextRequest() else { break }
             let response = try transport.sendMessage(request)
             builder.processResponse(response)
         }
-        guard builder.done(), let secret = builder.getDerivedSecret() else {
+        guard builder.done(), let secret = builder.getDerivedSecret(), let serverNonce = builder.getServerNonce() else {
             throw PumpCommError.missingAuthenticationKey
         }
+
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.main.async {
+            PumpStateSupplier.storePairingArtifacts(derivedSecret: secret, serverNonce: serverNonce)
+            group.leave()
+        }
+        group.wait()
+
         state.derivedSecret = secret
-        state.serverNonce = builder.getServerNonce()
+        state.serverNonce = serverNonce
         delegate?.pumpCommSession(self, didChange: state)
     }
     #endif
