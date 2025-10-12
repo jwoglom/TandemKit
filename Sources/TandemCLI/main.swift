@@ -1,6 +1,7 @@
 import Foundation
 import TandemCore
 import TandemBLE
+import TandemKit
 #if canImport(CoreBluetooth)
 import CoreBluetooth
 #endif
@@ -519,45 +520,51 @@ private extension TandemCLIMain {
 
     static func runPair(options: PairOptions) async throws {
         #if canImport(CoreBluetooth) && !os(Linux)
-        print("Starting pairing with code: \(options.pairingCode)")
-        print("Timeout: \(options.timeout) seconds")
-        print("")
-
-        // Validate pairing code format
-        let codeLength = options.pairingCode.filter { $0.isNumber || $0.isLetter }.count
-        if codeLength == 6 {
-            print("Detected 6-digit code - will use JPAKE authentication")
-        } else if codeLength == 16 {
-            print("Detected 16-character code - will use legacy authentication")
-        } else {
-            throw CLIError("Invalid pairing code format. Expected 6 digits or 16 alphanumeric characters.")
+        guard !options.pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CLIError("Pairing code cannot be empty.")
         }
 
-        print("")
-        print("⚠️  BLE pairing from CLI requires:")
-        print("   - Bluetooth permissions granted")
-        print("   - Pump in pairing mode nearby")
-        print("   - This CLI to run with proper entitlements")
-        print("")
-        print("For automated testing, use:")
-        print("  swift test --filter TandemPairingIntegrationTests")
-        print("")
+        let sanitizedCode = try await MainActor.run {
+            try PumpStateSupplier.sanitizeAndStorePairingCode(options.pairingCode)
+        }
 
-        // Just validate the pairing code format (don't create actual session in CLI)
+        let codeLength = sanitizedCode.count
+        let pairingMode = codeLength == 6 ? "JPAKE (6-digit)" : "Legacy (16-character)"
 
-        // For now, just validate the code can be processed
-        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+        print("Starting Tandem pump pairing")
+        print("  Pairing code: \(sanitizedCode)")
+        print("  Mode: \(pairingMode)")
+        print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
+        print("")
+        print("Searching for nearby Tandem pumps...")
+
+        let coordinator = PairingCoordinator(pairingCode: sanitizedCode, timeout: options.timeout)
+        let result: PairingResult
+
         do {
-            _ = try PumpChallengeRequestBuilder.processPairingCode(options.pairingCode)
-            print("✓ Pairing code format validated successfully")
+            result = try await coordinator.start()
         } catch {
-            throw CLIError("Invalid pairing code: \(error.localizedDescription)")
+            throw CLIError("Pairing failed: \(String(describing: error))")
         }
-        #endif
+
+        let derivedSecretHex = result.pumpState.derivedSecret?.hexadecimalString ?? "<not provided>"
+        let serverNonceHex = result.pumpState.serverNonce?.hexadecimalString ?? "<not provided>"
+        let authKeyHex = await MainActor.run { PumpStateSupplier.authenticationKey().hexadecimalString }
 
         print("")
-        print("Note: Full BLE pairing implementation requires running on iOS/macOS")
-        print("with proper Bluetooth permissions and pump hardware present.")
+        print("✅ Pairing completed successfully")
+        if let name = result.peripheralName {
+            print("  Pump name: \(name)")
+        }
+        if let identifier = result.peripheralIdentifier {
+            print("  Peripheral ID: \(identifier.uuidString)")
+        }
+        print("  Derived secret: \(derivedSecretHex)")
+        print("  Server nonce: \(serverNonceHex)")
+        print("  Authentication key: \(authKeyHex)")
+
+        print("")
+        print("You can persist these values for future sessions using TandemKit or Loop/Trio.")
         #else
         throw CLIError("Pairing command is only available on platforms with CoreBluetooth support.")
         #endif
@@ -618,3 +625,173 @@ private extension TandemCLIMain {
         print("Merged: " + output.mergedHex)
     }
 }
+
+#if canImport(CoreBluetooth) && !os(Linux)
+import CoreBluetooth
+
+private struct PairingResult {
+    let pumpState: PumpState
+    let peripheralName: String?
+    let peripheralIdentifier: UUID?
+}
+
+private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, PumpCommDelegate {
+    private let pairingCode: String
+    private let timeout: TimeInterval
+    private let bluetoothManager = BluetoothManager()
+    private let pumpComm: PumpComm
+    private var transport: PeripheralManagerTransport?
+
+    private var continuation: CheckedContinuation<PairingResult, Error>?
+    private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.PairingCoordinator.state")
+    private var timeoutWorkItem: DispatchWorkItem?
+    private var lastPumpState: PumpState = PumpState()
+    private var targetPeripheral: CBPeripheral?
+    private var didStartPairing = false
+
+    init(pairingCode: String, timeout: TimeInterval) {
+        self.pairingCode = pairingCode
+        self.timeout = timeout
+        self.pumpComm = PumpComm(pumpState: nil)
+        super.init()
+
+        bluetoothManager.delegate = self
+        pumpComm.delegate = self
+    }
+
+    deinit {
+        bluetoothManager.delegate = nil
+        pumpComm.delegate = nil
+    }
+
+    func start() async throws -> PairingResult {
+        try await withCheckedThrowingContinuation { continuation in
+            stateQueue.sync { self.continuation = continuation }
+            scheduleTimeout()
+            DispatchQueue.main.async {
+                self.bluetoothManager.scanForPeripheral()
+            }
+        }
+    }
+
+    // MARK: - BluetoothManagerDelegate
+
+    func bluetoothManager(_ manager: BluetoothManager,
+                          shouldConnectPeripheral peripheral: CBPeripheral,
+                          advertisementData: [String : Any]?) -> Bool {
+        return stateQueue.sync {
+            if let target = targetPeripheral, target.identifier != peripheral.identifier {
+                return false
+            }
+            if targetPeripheral == nil {
+                targetPeripheral = peripheral
+                print("Discovered pump candidate: \(peripheral.name ?? peripheral.identifier.uuidString)")
+            }
+            return true
+        }
+    }
+
+    func bluetoothManager(_ manager: BluetoothManager,
+                          peripheralManager: PeripheralManager,
+                          isReadyWithError error: Error?) {
+        if let error {
+            finish(.failure(error))
+        } else {
+            print("Connected. Waiting for configuration...")
+        }
+    }
+
+    func bluetoothManager(_ manager: BluetoothManager,
+                          didCompleteConfiguration peripheralManager: PeripheralManager) {
+        let shouldStartPairing: Bool = stateQueue.sync {
+            if didStartPairing {
+                return false
+            }
+            didStartPairing = true
+            transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+            return true
+        }
+
+        guard shouldStartPairing, let transport else { return }
+
+        do {
+            try peripheralManager.performSync { manager -> Void in
+                try manager.enableNotifications()
+            }
+        } catch {
+            finish(.failure(error))
+            return
+        }
+
+        print("Peripheral configured. Beginning pairing exchange...")
+
+        Task.detached { [weak self] in
+            guard let self else { return }
+            do {
+                print("[PairingCoordinator] invoking PumpComm.pair")
+                try self.pumpComm.pair(transport: transport, pairingCode: self.pairingCode)
+                let state = self.stateQueue.sync { self.lastPumpState }
+                self.finish(.success(PairingResult(pumpState: state,
+                                                   peripheralName: self.targetPeripheral?.name,
+                                                   peripheralIdentifier: self.targetPeripheral?.identifier)))
+            } catch {
+                print("[PairingCoordinator] PumpComm.pair failed: \(error)")
+                self.finish(.failure(CLIError(String(describing: error))))
+            }
+        }
+    }
+
+    // MARK: - PumpCommDelegate
+
+    func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState) {
+        stateQueue.sync {
+            self.lastPumpState = pumpState
+        }
+
+        let derivedHex = pumpState.derivedSecret?.hexadecimalString ?? "none"
+        let nonceHex = pumpState.serverNonce?.hexadecimalString ?? "none"
+        print("Pump state updated (derivedSecret: \(derivedHex.prefix(8))…, serverNonce: \(nonceHex.prefix(8))…)")
+    }
+
+    // MARK: - Helpers
+
+    private func scheduleTimeout() {
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.finish(.failure(CLIError("Pairing timed out after \(Int(self.timeout)) seconds.")))
+        }
+        timeoutWorkItem = workItem
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + self.timeout, execute: workItem)
+    }
+
+    private func cancelTimeout() {
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+    }
+
+    private func finish(_ result: Result<PairingResult, Error>) {
+        let continuation: CheckedContinuation<PairingResult, Error>? = stateQueue.sync {
+            defer { self.continuation = nil }
+            return self.continuation
+        }
+
+        guard let continuation else { return }
+
+        cancelTimeout()
+
+        DispatchQueue.main.async {
+            print("[PairingCoordinator] Disconnecting peripheral")
+            self.bluetoothManager.permanentDisconnect()
+        }
+
+        switch result {
+        case .success(let value):
+            print("[PairingCoordinator] Completing with success")
+            continuation.resume(returning: value)
+        case .failure(let error):
+            print("[PairingCoordinator] Completing with failure: \(error)")
+            continuation.resume(throwing: error)
+        }
+    }
+}
+#endif

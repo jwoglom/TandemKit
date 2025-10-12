@@ -87,7 +87,8 @@ let package = Package(
             name: "TandemCLI",
             dependencies: [
                 "TandemCore",
-                "TandemBLE"
+                "TandemBLE",
+                "TandemKit"
             ],
             path: "Sources/TandemCLI",
             swiftSettings: [

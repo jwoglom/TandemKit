@@ -21,13 +21,17 @@ public enum SendMessageResult {
 
 extension PeripheralManager {
     public func performSync<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
-        try queue.sync {
-            try self.runConfigured(block)
+        if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
+            return try runConfigured(block)
+        } else {
+            return try queue.sync {
+                try self.runConfigured(block)
+            }
         }
     }
 
     
-    func enableNotifications() throws {
+    public func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
         guard let authChar = peripheral.getAuthorizationCharacteristic() else {
             throw PeripheralManagerError.notReady
@@ -63,6 +67,7 @@ extension PeripheralManager {
 
         do {
             for packet in packets {
+                print("[PeripheralManager] write packet len=\(packet.build.count)")
                 try sendData(packet.build, timeout: 5)
             }
             didSend = true

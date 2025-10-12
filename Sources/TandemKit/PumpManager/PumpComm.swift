@@ -50,7 +50,7 @@ public class PumpComm: CustomDebugStringConvertible {
     }
     
     // TODO(jwoglom): device name or PIN?
-    init(pumpState: PumpState?) {
+    public init(pumpState: PumpState?) {
         self.delegate = nil
 
         let initialState = pumpState ?? PumpState()
@@ -61,9 +61,11 @@ public class PumpComm: CustomDebugStringConvertible {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
         let session = ensureSession()
+        log.debug("PumpComm pair started")
         try session.runSynchronously(withName: "Pairing") {
             try session.pair(transport: transport, pairingCode: pairingCode)
         }
+        log.debug("PumpComm pair finished")
     }
 #endif
 

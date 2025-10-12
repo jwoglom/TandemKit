@@ -32,6 +32,7 @@ public class PumpCommSession {
 
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
         assertOnSessionQueue()
+        print("[PumpCommSession] Starting pair, shortCode=\(isShortPairingCode(pairingCode))")
         if isShortPairingCode(pairingCode) {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
             try pairUsingJpake(transport: transport, pairingCode: pairingCode)
@@ -64,7 +65,9 @@ public class PumpCommSession {
         }
 
         let responseMessage = try transport.sendMessage(challengeRequest)
+        print("[PumpCommSession] Received central challenge response: \(type(of: responseMessage))")
         guard let centralResponse = responseMessage as? CentralChallengeResponse else {
+            print("[PumpCommSession] Unexpected central challenge response payload: \(String(describing: responseMessage))")
             throw PumpCommError.other
         }
 
@@ -74,7 +77,9 @@ public class PumpCommSession {
         }
 
         let pumpChallengeResponseMessage = try transport.sendMessage(pumpChallengeRequest)
+        print("[PumpCommSession] Received pump challenge response: \(type(of: pumpChallengeResponseMessage))")
         guard let pumpChallengeResponse = pumpChallengeResponseMessage as? PumpChallengeResponse, pumpChallengeResponse.success else {
+            print("[PumpCommSession] Pump challenge response invalid: \(String(describing: pumpChallengeResponseMessage))")
             throw PumpCommError.other
         }
 
@@ -85,6 +90,8 @@ public class PumpCommSession {
             artifactsGroup.leave()
         }
         artifactsGroup.wait()
+
+        print("[PumpCommSession] Legacy pairing succeeded; cleared artifacts")
 
         state.derivedSecret = nil
         state.serverNonce = nil
@@ -100,7 +107,9 @@ public class PumpCommSession {
         let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
         while !builder.done() && !builder.invalid() {
             guard let request = builder.nextRequest() else { break }
+            print("[PumpCommSession] Sending JPAKE request: \(type(of: request))")
             let response = try transport.sendMessage(request)
+            print("[PumpCommSession] Received JPAKE response: \(type(of: response))")
             builder.processResponse(response)
         }
         guard builder.done(), let secret = builder.getDerivedSecret(), let serverNonce = builder.getServerNonce() else {
@@ -114,6 +123,8 @@ public class PumpCommSession {
             group.leave()
         }
         group.wait()
+
+        print("[PumpCommSession] JPAKE pairing succeeded; stored artifacts")
 
         state.derivedSecret = secret
         state.serverNonce = serverNonce
