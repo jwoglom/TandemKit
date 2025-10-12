@@ -57,6 +57,7 @@ private class Locked<Value> {
     }
 }
 
+@available(macOS 13.0, iOS 14.0, *)
 public class TandemPumpManager: PumpManager {
     public static var localizedTitle: String = "TandemPumpManager"
     public static var managerIdentifier: String = "Tandem"
@@ -146,8 +147,7 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func disconnect() {
-        // TODO: Call bluetoothManager.permanentDisconnect() through tandemPump
-        print("TandemPumpManager: disconnect() - not yet fully implemented")
+        tandemPump.disconnect()
     }
 
 #if canImport(UIKit)
@@ -180,6 +180,7 @@ public class TandemPumpManager: PumpManager {
 #endif
 }
 
+@available(macOS 13.0, iOS 14.0, *)
 extension TandemPumpManager: PumpManagerUI {
 #if canImport(UIKit)
     public func pairingViewController(onFinished: @escaping (Result<Void, Error>) -> Void) -> UIViewController {
@@ -189,6 +190,7 @@ extension TandemPumpManager: PumpManagerUI {
 }
 
 // MARK: - TandemPumpDelegate Conformance
+@available(macOS 13.0, iOS 14.0, *)
 extension TandemPumpManager: TandemPumpDelegate {
     public func tandemPump(_ pump: TandemPump,
                           shouldConnect peripheral: CBPeripheral,
@@ -207,6 +209,7 @@ extension TandemPumpManager: TandemPumpDelegate {
 }
 
 // MARK: - PumpCommDelegate Conformance
+@available(macOS 13.0, iOS 14.0, *)
 extension TandemPumpManager: PumpCommDelegate {
     public func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState) {
         // Update the stored state when pump state changes (e.g., after pairing)

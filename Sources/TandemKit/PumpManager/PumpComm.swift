@@ -90,30 +90,60 @@ public class PumpComm: CustomDebugStringConvertible {
         return newSession
     }
 
-    // TODO(jwoglom): Performs pairing and returns (?) ( -> ApiVersionResponse?)
-    private func sendMessage(transport: PumpMessageTransport, message: Message) throws {
-        log.debug("sendPairMessage: attempting to use PumpMessageTransport %@ to send message %@", String(reflecting: transport), String(reflecting: message))
-        let pumpMessageResponse = try transport.sendMessage(message)
-        
+    /// Send a message to the pump and receive a response.
+    ///
+    /// This is a low-level method that sends a message through the transport layer
+    /// and returns the response. The transport layer handles packet assembly, HMAC,
+    /// CRC, and BLE communication.
+    ///
+    /// - Parameters:
+    ///   - transport: The message transport to use (usually PeripheralManagerTransport)
+    ///   - message: The message to send
+    /// - Returns: The response message from the pump
+    /// - Throws: PumpCommError if communication fails or response is invalid
+    public func sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
+        log.debug("sendMessage: attempting to send %@", String(describing: type(of: message)))
 
-        // fault -> error?
-        // TODO(jwoglom): handle error
-//        if let fault = pumpMessageResponse.fault {
-//            log.error("sendPairMessage pump fault: %{public}@", String(describing: fault))
-//            if let pumpState = self.pumpState, pumpState.fault == nil {
-//                self.pumpState!.fault = fault
-//            }
-//            throw PumpCommError.pumpFault(fault: fault)
-//        }
+        do {
+            let response = try transport.sendMessage(message)
+            log.debug("sendMessage: received response %@", String(describing: type(of: response)))
 
-//        guard let versionResponse = pumpMessageResponse.messageBlocks[0] as? ApiVersionResponse else {
-//            log.error("sendPairMessage unexpected response: %{public}@", String(describing: pumpMessageResponse))
-//            let responseType = pumpMessageResponse.messageBlocks[0].blockType
-//            throw PumpCommError.unexpectedResponse(response: responseType)
-//        }
-//
-//        log.debug("sendPairMessage: returning versionResponse %@", String(describing: versionResponse))
-//        return versionResponse
+            // Check if the response indicates an error condition
+            // Note: Different message types may have different error indicators
+            // For now, we just return the response and let the caller handle it
+
+            return response
+        } catch let error as PumpCommError {
+            log.error("sendMessage pump communication error: %{public}@", String(describing: error))
+            throw error
+        } catch {
+            log.error("sendMessage unexpected error: %{public}@", String(describing: error))
+            throw PumpCommError.other
+        }
+    }
+
+    /// Send a message and expect a specific response type.
+    ///
+    /// This is a convenience method that sends a message and automatically casts
+    /// the response to the expected type.
+    ///
+    /// - Parameters:
+    ///   - transport: The message transport to use
+    ///   - message: The message to send
+    ///   - expectedType: The expected response type
+    /// - Returns: The response message cast to the expected type
+    /// - Throws: PumpCommError if communication fails or response type doesn't match
+    public func sendMessage<T: Message>(transport: PumpMessageTransport, message: Message, expecting expectedType: T.Type) throws -> T {
+        let response = try sendMessage(transport: transport, message: message)
+
+        guard let typedResponse = response as? T else {
+            log.error("sendMessage unexpected response type: expected %@, got %@",
+                     String(describing: expectedType),
+                     String(describing: type(of: response)))
+            throw PumpCommError.errorResponse(response: response)
+        }
+
+        return typedResponse
     }
 
 

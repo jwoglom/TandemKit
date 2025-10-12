@@ -99,5 +99,10 @@ let package = Package(
             dependencies: ["TandemCore"],
             path: "Tests/TandemCoreTests"
         ),
+        .testTarget(
+            name: "TandemKitTests",
+            dependencies: ["TandemKit", "TandemCore", "TandemBLE"],
+            path: "Tests/TandemKitTests"
+        ),
     ]
 )

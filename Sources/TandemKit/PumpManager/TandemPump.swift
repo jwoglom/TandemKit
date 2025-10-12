@@ -41,6 +41,11 @@ public class TandemPump {
         bluetoothManager.scanForPeripheral()
     }
 
+    /// Permanently disconnect from the pump.
+    public func disconnect() {
+        bluetoothManager.permanentDisconnect()
+    }
+
     // MARK: - Configuration helpers
 
     func enableActionsAffectingInsulinDelivery() {
