@@ -239,12 +239,55 @@ public class JpakeAuthBuilder {
     }
 
     static func defaultRandom(_ count: Int) -> Data {
-        var data = Data(count: count)
-        for i in 0..<count {
-            data[i] = UInt8.random(in: 0...255)
-        }
-        return data
+        return NonBlockingRandom.shared.next(count: count)
     }
 }
 
 #endif
+
+private final class NonBlockingRandom {
+    static let shared = NonBlockingRandom()
+
+    private let lock = NSLock()
+    private let handle: FileHandle?
+
+    private init() {
+        handle = FileHandle(forReadingAtPath: "/dev/urandom")
+    }
+
+    func next(count: Int) -> Data {
+        guard count > 0 else { return Data() }
+
+        if let handle {
+            lock.lock()
+            defer { lock.unlock() }
+
+            var buffer = Data(capacity: count)
+            var remaining = count
+
+            while remaining > 0 {
+                do {
+                    if let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty {
+                        buffer.append(chunk)
+                        remaining -= chunk.count
+                    } else {
+                        break
+                    }
+                } catch {
+                    break
+                }
+            }
+
+            if buffer.count == count {
+                return buffer
+            }
+        }
+
+        var data = Data(count: count)
+        var generator = SystemRandomNumberGenerator()
+        for index in 0..<count {
+            data[index] = UInt8.random(in: UInt8.min...UInt8.max, using: &generator)
+        }
+        return data
+    }
+}
