@@ -37,7 +37,7 @@ final class EcJpakePerformanceTests: XCTestCase {
 
         let start = Date()
 
-        var jpake = EcJpake(
+        let jpake = EcJpake(
             role: .client,
             password: Data("123456".utf8),
             random: JpakeAuthBuilder.defaultRandom
@@ -64,24 +64,18 @@ final class EcJpakePerformanceTests: XCTestCase {
         var error: Error?
 
         DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                print("  ⏱️  Starting nextRequest()...")
-                let start = Date()
+            print("  ⏱️  Starting nextRequest()...")
+            let start = Date()
 
-                let builder = JpakeAuthBuilder(pairingCode: "123456")
-                request = builder.nextRequest()
+            let builder = JpakeAuthBuilder(pairingCode: "123456")
+            request = builder.nextRequest()
 
-                let elapsed = Date().timeIntervalSince(start)
-                print("  ✅ nextRequest() completed in \(elapsed)s")
-                print("  📦 Request type: \(type(of: request))")
+            let elapsed = Date().timeIntervalSince(start)
+            print("  ✅ nextRequest() completed in \(elapsed)s")
+            print("  📦 Request type: \(type(of: request))")
 
-                completed = true
-                expectation.fulfill()
-            } catch let err {
-                print("  ❌ nextRequest() threw error: \(err)")
-                error = err
-                expectation.fulfill()
-            }
+            completed = true
+            expectation.fulfill()
         }
 
         // Wait with a timeout
@@ -125,7 +119,7 @@ final class EcJpakePerformanceTests: XCTestCase {
         for i in 0..<3 {
             let start = Date()
 
-            var jpake = EcJpake(
+            let jpake = EcJpake(
                 role: .client,
                 password: Data("12345\(i)".utf8),
                 random: JpakeAuthBuilder.defaultRandom

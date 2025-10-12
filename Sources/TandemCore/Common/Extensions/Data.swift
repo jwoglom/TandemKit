@@ -50,7 +50,7 @@ extension Data {
 
 // String conversion methods, adapted from https://stackoverflow.com/questions/40276322/hex-binary-string-conversion-in-swift/40278391#40278391
 public extension Data {
-    public init?(hexadecimalString: String) {
+    init?(hexadecimalString: String) {
         self.init(capacity: hexadecimalString.utf16.count / 2)
 
         // Convert 0 ... 9, a ... f, A ...F to their decimal value,
@@ -83,7 +83,7 @@ public extension Data {
         guard even else { return nil }
     }
 
-    public var hexadecimalString: String {
+    var hexadecimalString: String {
         return map { String(format: "%02hhx", $0) }.joined()
     }
 }

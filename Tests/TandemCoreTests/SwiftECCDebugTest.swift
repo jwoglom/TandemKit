@@ -29,7 +29,7 @@ final class SwiftECCDebugTest: XCTestCase {
         let start2 = Date()
         let randomBytes = JpakeAuthBuilder.defaultRandom(32)
         let randomScalar = BInt(magnitude: [UInt8](randomBytes))
-        print("   ✅ Random scalar created in \(Date().timeIntervalSince(start2))s")
+        print("   ✅ Random scalar created in \(Date().timeIntervalSince(start2))s (bit width: \(randomScalar.bitWidth))")
 
         // Step 3: Single point multiplication
         print("3️⃣ Single point multiplication...")
@@ -60,7 +60,7 @@ final class SwiftECCDebugTest: XCTestCase {
         let start6 = Date()
         let point2 = try domain.multiplyPoint(domain.g, BInt(magnitude: [43]))
         let sumPoint = try domain.addPoints(point1, point2)
-        print("   ✅ Point addition in \(Date().timeIntervalSince(start6))s")
+        print("   ✅ Point addition in \(Date().timeIntervalSince(start6))s (x: \(sumPoint.x.asString(radix: 16)))")
 
         print("\n✅ All individual operations completed successfully")
     }

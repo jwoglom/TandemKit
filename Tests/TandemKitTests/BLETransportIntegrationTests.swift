@@ -103,7 +103,7 @@ final class BLETransportIntegrationTests: XCTestCase {
             } else if message is ResumePumpingRequest {
                 let response = ResumePumpingResponse(status: status)
                 enqueueRawResponse(response)
-            } else if let request = message as? SetTempRateRequest {
+            } else if message is SetTempRateRequest {
                 let response = SetTempRateResponse(status: status, tempRateId: 1)
                 enqueueRawResponse(response)
             } else if message is CurrentBatteryV2Request {

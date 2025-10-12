@@ -31,7 +31,7 @@ extension PumpCommError: LocalizedError {
             return LocalizedString("Pump not connected", comment: "Error message shown when pump expected to be connected but is not")
         case .noResponse:
             return LocalizedString("No response from pump", comment: "Error message shown when no pump response was received")
-        case .errorResponse(let response):
+        case .errorResponse:
             return LocalizedString("Pump Error", comment: "Error response")
         case .notImplemented:
             return LocalizedString("Feature not implemented", comment: "Error message shown when a feature is not yet implemented")

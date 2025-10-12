@@ -248,9 +248,8 @@ final class TandemPairingIntegrationTests: XCTestCase {
         print("Make sure your pump is in pairing mode!")
         print("Pairing code: \(pairingCode)")
 
-        let state = TandemPumpManagerState(pumpState: PumpState())
-
         #if canImport(UIKit)
+        let state = TandemPumpManagerState(pumpState: PumpState())
         let manager = TandemPumpManager(state: state)
 
         let expectation = XCTestExpectation(description: "Pump pairs successfully")
