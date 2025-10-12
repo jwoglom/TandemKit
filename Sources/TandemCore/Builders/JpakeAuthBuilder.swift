@@ -116,7 +116,9 @@ public class JpakeAuthBuilder {
         var request: Message
         switch step {
         case .BOOTSTRAP_INITIAL:
+            print("[JpakeAuthBuilder] calling cli.getRound1()")
             clientRound1 = cli.getRound1()
+            print("[JpakeAuthBuilder] getRound1 returned bytes=\(clientRound1?.count ?? -1)")
             let challenge = clientRound1!.subdata(in: 0..<165)
             request = Jpake1aRequest(appInstanceId: 0, centralChallenge: challenge)
             step = .ROUND_1A_SENT
