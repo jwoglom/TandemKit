@@ -134,7 +134,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
     }
 
     // This is a actually `permanentDisconnect` - we do not plan on connecting to this device anymore
-    func permanentDisconnect() {
+    public func permanentDisconnect() {
         dispatchPrecondition(condition: .notOnQueue(managerQueue))
 
         log.debug("permanentDisconnect called")

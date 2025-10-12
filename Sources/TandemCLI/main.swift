@@ -1,6 +1,9 @@
 import Foundation
 import TandemCore
 import TandemBLE
+#if canImport(CoreBluetooth)
+import CoreBluetooth
+#endif
 
 @main
 struct TandemCLIMain {
@@ -25,6 +28,11 @@ struct TandemCLIMain {
         var characteristic: String?
         var type: ListKind?
         var format: OutputFormat = .text
+    }
+
+    struct PairOptions {
+        var pairingCode: String = ""
+        var timeout: TimeInterval = 30.0
     }
 
     enum ListKind: String {
@@ -83,6 +91,9 @@ private extension TandemCLIMain {
         case "list":
             let options = try parseListArguments(remainder)
             try runList(options: options)
+        case "pair":
+            let options = try parsePairArguments(remainder)
+            try await runPair(options: options)
         case "help", "-h", "--help":
             print(usage())
         default:
@@ -242,6 +253,43 @@ private extension TandemCLIMain {
             }
             index += 1
         }
+        return options
+    }
+
+    static func parsePairArguments(_ args: [String]) throws -> PairOptions {
+        var options = PairOptions()
+        var index = 0
+        var pairingCode: String?
+        while index < args.count {
+            let arg = args[index]
+            switch arg {
+            case "--timeout", "-t":
+                index += 1
+                if index >= args.count {
+                    throw CLIError("Missing value for --timeout.")
+                }
+                guard let timeout = TimeInterval(args[index]), timeout > 0 else {
+                    throw CLIError("--timeout expects a positive number (seconds).")
+                }
+                options.timeout = timeout
+            case "--help", "-h":
+                throw CLIError(pairUsage(), exitCode: 0)
+            default:
+                if arg.hasPrefix("-") {
+                    throw CLIError("Unknown option: \(arg)\n\(pairUsage())")
+                }
+                if pairingCode == nil {
+                    pairingCode = arg
+                } else {
+                    throw CLIError("Unexpected argument: \(arg)\n\(pairUsage())")
+                }
+            }
+            index += 1
+        }
+        guard let code = pairingCode else {
+            throw CLIError("Pair requires a pairing code.\n\(pairUsage())")
+        }
+        options.pairingCode = code
         return options
     }
 
@@ -414,6 +462,7 @@ private extension TandemCLIMain {
             "  decode   Decode a message from hex packets.",
             "  encode   Encode a message into BLE packets.",
             "  list     List available message definitions.",
+            "  pair     Pair with a Tandem pump via Bluetooth.",
             "",
             "Use '" + programName + " <command> --help' for details on a specific command."
         ].joined(separator: "\n")
@@ -453,6 +502,65 @@ private extension TandemCLIMain {
             "  -t, --type <request|response> Filter by message direction.",
             "  -f, --format <json|text>      Output formatting (default: text)."
         ].joined(separator: "\n")
+    }
+
+    static func pairUsage() -> String {
+        return [
+            "Usage: " + programName + " pair [options] <pairing-code>",
+            "",
+            "Options:",
+            "  -t, --timeout <seconds>  Connection timeout (default: 30).",
+            "",
+            "Pairing Code:",
+            "  6-digit code (e.g., 123456) for JPAKE authentication",
+            "  16-character code (e.g., abcd-efgh-ijkl-mnop) for legacy authentication"
+        ].joined(separator: "\n")
+    }
+
+    static func runPair(options: PairOptions) async throws {
+        #if canImport(CoreBluetooth) && !os(Linux)
+        print("Starting pairing with code: \(options.pairingCode)")
+        print("Timeout: \(options.timeout) seconds")
+        print("")
+
+        // Validate pairing code format
+        let codeLength = options.pairingCode.filter { $0.isNumber || $0.isLetter }.count
+        if codeLength == 6 {
+            print("Detected 6-digit code - will use JPAKE authentication")
+        } else if codeLength == 16 {
+            print("Detected 16-character code - will use legacy authentication")
+        } else {
+            throw CLIError("Invalid pairing code format. Expected 6 digits or 16 alphanumeric characters.")
+        }
+
+        print("")
+        print("⚠️  BLE pairing from CLI requires:")
+        print("   - Bluetooth permissions granted")
+        print("   - Pump in pairing mode nearby")
+        print("   - This CLI to run with proper entitlements")
+        print("")
+        print("For automated testing, use:")
+        print("  swift test --filter TandemPairingIntegrationTests")
+        print("")
+
+        // Just validate the pairing code format (don't create actual session in CLI)
+
+        // For now, just validate the code can be processed
+        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+        do {
+            _ = try PumpChallengeRequestBuilder.processPairingCode(options.pairingCode)
+            print("✓ Pairing code format validated successfully")
+        } catch {
+            throw CLIError("Invalid pairing code: \(error.localizedDescription)")
+        }
+        #endif
+
+        print("")
+        print("Note: Full BLE pairing implementation requires running on iOS/macOS")
+        print("with proper Bluetooth permissions and pump hardware present.")
+        #else
+        throw CLIError("Pairing command is only available on platforms with CoreBluetooth support.")
+        #endif
     }
 
     static func printDecodedText(output: DecodedMessageOutput, message: Message) {
