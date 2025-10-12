@@ -20,6 +20,7 @@ public enum PumpCommError: Error, @unchecked Sendable {
     case noResponse
     case missingAuthenticationKey
     case errorResponse(response: any Message)
+    case notImplemented
     case other
 }
 
@@ -32,15 +33,19 @@ extension PumpCommError: LocalizedError {
             return LocalizedString("No response from pump", comment: "Error message shown when no pump response was received")
         case .errorResponse(let response):
             return LocalizedString("Pump Error", comment: "Error response")
+        case .notImplemented:
+            return LocalizedString("Feature not implemented", comment: "Error message shown when a feature is not yet implemented")
         default:
             return nil
         }
     }
-    
+
     public var recoverySuggestion: String? {
         switch self {
         case .pumpNotConnected, .noResponse:
             return LocalizedString("Make sure iPhone is nearby the active pump", comment: "Recovery suggestion when no response is received from pump")
+        case .notImplemented:
+            return LocalizedString("This feature requires additional pump message implementation", comment: "Recovery suggestion when a feature is not implemented")
         default:
             return nil
         }
