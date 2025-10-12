@@ -559,7 +559,8 @@ extension PeripheralManager {
         let cmd = cmdQueue.isEmpty ? nil : cmdQueue.removeFirst()
         queueLock.unlock()
         if let value = cmd?.value {
-            print("[PeripheralManager] read packet len=\(value.count)")
+            let hex = value.prefix(32).map { String(format: "%02X", $0) }.joined()
+            print("[PeripheralManager] read packet len=\(value.count) hex=\(hex)…")
         } else {
             print("[PeripheralManager] read packet nil")
         }

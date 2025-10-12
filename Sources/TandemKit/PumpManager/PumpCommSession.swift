@@ -64,6 +64,8 @@ public class PumpCommSession {
             throw PumpCommError.other
         }
 
+        print("[PumpCommSession] PumpChallenge centralChallengeRequest ready")
+
         let responseMessage = try transport.sendMessage(challengeRequest)
         print("[PumpCommSession] Received central challenge response: \(type(of: responseMessage))")
         guard let centralResponse = responseMessage as? CentralChallengeResponse else {
@@ -75,6 +77,8 @@ public class PumpCommSession {
         guard let pumpChallengeRequest = challengeMessage as? PumpChallengeRequest else {
             throw PumpCommError.other
         }
+
+        print("[PumpCommSession] Sending PumpChallengeRequest")
 
         let pumpChallengeResponseMessage = try transport.sendMessage(pumpChallengeRequest)
         print("[PumpCommSession] Received pump challenge response: \(type(of: pumpChallengeResponseMessage))")
@@ -96,6 +100,7 @@ public class PumpCommSession {
         state.derivedSecret = nil
         state.serverNonce = nil
         delegate?.pumpCommSession(self, didChange: state)
+        print("[PumpCommSession] delegate notified of PumpState change (legacy)")
     }
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -105,14 +110,19 @@ public class PumpCommSession {
         }
 
         let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
+        print("[PumpCommSession] initial state: done=\(builder.done()) invalid=\(builder.invalid())")
         while !builder.done() && !builder.invalid() {
-            guard let request = builder.nextRequest() else { break }
+            let maybeRequest = builder.nextRequest()
+            print("[PumpCommSession] nextRequest -> \(String(describing: maybeRequest))")
+            guard let request = maybeRequest else { break }
             print("[PumpCommSession] Sending JPAKE request: \(type(of: request))")
             let response = try transport.sendMessage(request)
             print("[PumpCommSession] Received JPAKE response: \(type(of: response))")
             builder.processResponse(response)
+            print("[PumpCommSession] builder state: done=\(builder.done()) invalid=\(builder.invalid())")
         }
         guard builder.done(), let secret = builder.getDerivedSecret(), let serverNonce = builder.getServerNonce() else {
+            print("[PumpCommSession] JPAKE failed: done=\(builder.done()) invalid=\(builder.invalid()) derivedSecret=\(builder.getDerivedSecret() != nil) serverNonce=\(builder.getServerNonce() != nil)")
             throw PumpCommError.missingAuthenticationKey
         }
 
@@ -129,6 +139,7 @@ public class PumpCommSession {
         state.derivedSecret = secret
         state.serverNonce = serverNonce
         delegate?.pumpCommSession(self, didChange: state)
+        print("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
     }
 #endif
 }
