@@ -752,3 +752,24 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 - ✅ **FULLY IMPLEMENTED**: Complete, working implementation
 - ⚠️ **PARTIALLY IMPLEMENTED**: Some functionality exists but incomplete
 - ❌ **STUB** or **NOT IMPLEMENTED**: Placeholder or missing entirely
+
+## Recent Session Notes (Jan 2025)
+
+### Pairing CLI Status
+- Tandem CLI now scaffolds a full pairing attempt, including BLE notification enablement and `PumpComm` invocation.
+- Logging added across the stack (`PairingCoordinator`, `PeripheralManager(Transport)`, `PumpCommSession`, `JpakeAuthBuilder`, `EcJpake`) to trace handshake progress.
+- Current behavior: connection established, notifications enabled, JPAKE builder initialised, but `EcJpake.getRound1()` never returns (appears to hang inside SwiftECC when generating the first key pair).
+- No BLE packets are sent; the CLI times out after 30 s. Likely causes: blocking randomness source (SecureRandom on macOS), or the SwiftECC JPAKE implementation not seeded correctly outside iOS.
+
+### Applied Changes This Session
+- CLI `pair` flow now primes JPAKE by sending the first request immediately after notifications are enabled.
+- Extensive debug prints added to: pairing coordinator, BLE transport, `PumpCommSession`, `JpakeAuthBuilder`, `EcJpake`, and `PeripheralManager` to surface packet contents and state transitions.
+- CLI now captures derived secret/server nonce on success (not yet reached) and reports detailed errors on failure.
+- `PumpComm` initialiser and `PeripheralManagerTransport` made public for CLI reuse.
+- `PeripheralManager` gains synchronous helper with queue awareness, avoids reentrant deadlock.
+- `TandemKitPlugin` marked as macOS 13+/iOS 14+ to satisfy availability constraints.
+
+### Outstanding Pairing Tasks
+- Diagnose why `EcJpake.getRound1()` blocks on macOS; compare with PumpX2’s Android implementation (uses `java.security.SecureRandom`) and SwiftECC expectations. Potential fixes: supply a deterministic/non-blocking RNG or move randomness generation off the main thread.
+- Once JPAKE round 1 is emitted, confirm packet flow by monitoring the new logs (`[PeripheralManagerTransport] send …`, `[PumpCommSession] nextRequest …`).
+- Validate the remainder of the pairing flow (rounds 2–4, legacy pump challenge) once `getRound1()` succeeds.
