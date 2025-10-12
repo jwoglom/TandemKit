@@ -64,4 +64,52 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
             XCTAssertTrue(error is PumpChallengeRequestBuilder.InvalidShortPairingCodeFormat)
         }
     }
+
+    func testCreateV1ChallengeReturnsPumpChallengeRequest() throws {
+        let pairingCode = "abcd-efgh-ijkl-mnop"
+        let response = CentralChallengeResponse(
+            appInstanceId: 1,
+            centralChallengeHash: Data(repeating: 0xBB, count: 20),
+            hmacKey: Data(repeating: 0xAA, count: 8)
+        )
+
+        let message = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
+
+        guard let challengeRequest = message as? PumpChallengeRequest else {
+            XCTFail("Expected PumpChallengeRequest, got \(type(of: message))")
+            return
+        }
+
+        XCTAssertEqual(challengeRequest.appInstanceId, 1)
+        XCTAssertEqual(challengeRequest.pumpChallengeHash.count, 20)
+    }
+
+    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+    func testCreateV2AdvancesJpakeFlow() throws {
+        let pairingCode = "123456"
+
+        // Initialize the JPake builder and send the initial request to mimic real flow
+        let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
+        defer { JpakeAuthBuilder.clearInstance() }
+        guard let firstMessage = builder.nextRequest() as? Jpake1aRequest else {
+            XCTFail("Expected first JPake message to be Jpake1aRequest")
+            return
+        }
+        XCTAssertEqual(firstMessage.centralChallenge.count, 165)
+
+        // Simulate pump response to the first round (165-byte payload)
+        let responsePayload = Data(repeating: 0xCD, count: 165)
+        let response = Jpake1aResponse(appInstanceId: firstMessage.appInstanceId, centralChallengeHash: responsePayload)
+
+        // Builder will process the response inside createV2 and return the next round request
+        let nextMessage = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
+
+        guard let round1b = nextMessage as? Jpake1bRequest else {
+            XCTFail("Expected next JPake message to be Jpake1bRequest, got \(type(of: nextMessage))")
+            return
+        }
+
+        XCTAssertEqual(round1b.centralChallenge.count, 165)
+    }
+    #endif
 }
