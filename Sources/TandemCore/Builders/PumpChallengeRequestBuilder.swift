@@ -1,7 +1,7 @@
 import Foundation
 
-struct PumpChallengeRequestBuilder {
-    static func processPairingCode(_ pairingCode: String, type: PairingCodeType) throws -> String {
+public struct PumpChallengeRequestBuilder {
+    public static func processPairingCode(_ pairingCode: String, type: PairingCodeType) throws -> String {
         let processed = type.filterCharacters(pairingCode)
         if type == .long16Char {
             guard processed.count == 16 else { throw InvalidLongPairingCodeFormat() }
@@ -11,14 +11,14 @@ struct PumpChallengeRequestBuilder {
         return processed
     }
 
-    static func processPairingCode(_ pairingCode: String) throws -> String {
+    public static func processPairingCode(_ pairingCode: String) throws -> String {
         if pairingCode.count == 6 || PairingCodeType.short6Char.filterCharacters(pairingCode).count == 6 {
             return try processPairingCode(pairingCode, type: .short6Char)
         }
         return try processPairingCode(pairingCode, type: .long16Char)
     }
 
-    static func create(challengeResponse: Message, pairingCode: String) throws -> Message {
+    public static func create(challengeResponse: Message, pairingCode: String) throws -> Message {
         if let resp = challengeResponse as? CentralChallengeResponse {
             return try createV1(challengeResponse: resp, pairingCode: pairingCode)
         } else if let resp = challengeResponse as? Jpake1aResponse {
@@ -57,13 +57,13 @@ struct PumpChallengeRequestBuilder {
 #endif
     }
 
-    class InvalidPairingCodeFormat: Error, @unchecked Sendable {
-        init(_ reason: String) {}
+    public class InvalidPairingCodeFormat: Error, @unchecked Sendable {
+        public init(_ reason: String) {}
     }
-    final class InvalidLongPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
-        init() { super.init("It should be 16 alphanumeric characters total across 5 groups of 4 characters each.") }
+    public final class InvalidLongPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
+        public init() { super.init("It should be 16 alphanumeric characters total across 5 groups of 4 characters each.") }
     }
-    final class InvalidShortPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
-        init() { super.init("It should be 6 numbers.") }
+    public final class InvalidShortPairingCodeFormat: InvalidPairingCodeFormat, @unchecked Sendable {
+        public init() { super.init("It should be 6 numbers.") }
     }
 }

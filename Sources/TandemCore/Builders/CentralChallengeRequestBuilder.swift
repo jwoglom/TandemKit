@@ -1,8 +1,8 @@
 import Foundation
 
-struct CentralChallengeRequestBuilder {
+public struct CentralChallengeRequestBuilder {
     @MainActor
-    static func create(appInstanceId: Int) -> CentralChallengeRequest? {
+    public static func create(appInstanceId: Int) -> CentralChallengeRequest? {
         if let apiVersion = PumpStateSupplier.pumpApiVersion?(), apiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {
             return nil
         } else {
