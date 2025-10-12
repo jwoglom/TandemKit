@@ -112,9 +112,10 @@ public class TandemPump {
     private func send(_ message: Message, via manager: PeripheralManager) {
         let wrapper = TronMessageWrapper(message: message, currentTxId: currentTxId)
         currentTxId = currentTxId &+ 1
+        let targetCharacteristic = type(of: message).props.characteristic
 
         manager.perform { peripheralManager in
-            let result = peripheralManager.sendMessagePackets(wrapper.packets)
+            let result = peripheralManager.sendMessagePackets(wrapper.packets, characteristic: targetCharacteristic)
             switch result {
             case .sentWithAcknowledgment:
                 self.log.default("Message sent successfully: %{public}@", String(describing: message))
@@ -151,4 +152,3 @@ extension TandemPump: BluetoothManagerDelegate {
         delegate?.tandemPump(self, didCompleteConfiguration: peripheralManager)
     }
 }
-

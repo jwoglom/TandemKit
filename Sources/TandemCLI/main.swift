@@ -33,7 +33,7 @@ struct TandemCLIMain {
 
     struct PairOptions {
         var pairingCode: String = ""
-        var timeout: TimeInterval = 30.0
+        var timeout: TimeInterval = 60.0
     }
 
     enum ListKind: String {
@@ -510,7 +510,7 @@ private extension TandemCLIMain {
             "Usage: " + programName + " pair [options] <pairing-code>",
             "",
             "Options:",
-            "  -t, --timeout <seconds>  Connection timeout (default: 30).",
+            "  -t, --timeout <seconds>  Connection timeout (default: 60).",
             "",
             "Pairing Code:",
             "  6-digit code (e.g., 123456) for JPAKE authentication",
@@ -714,18 +714,6 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
 
         guard shouldStartPairing, let transport else { return }
 
-        do {
-            print("[PairingCoordinator] enabling notifications via performSync")
-            try peripheralManager.performSync { manager -> Void in
-                try manager.enableNotifications()
-            }
-            print("[PairingCoordinator] notifications enabled")
-        } catch {
-            print("[PairingCoordinator] enableNotifications failed: \(error)")
-            finish(.failure(error))
-            return
-        }
-
         print("Peripheral configured. Beginning pairing exchange...")
 
         // Run JPAKE initialization and pairing on background queue to avoid blocking
@@ -737,10 +725,10 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
                     print("[PairingCoordinator] priming JPAKE handshake (background)")
                     let builder = JpakeAuthBuilder.initializeWithPairingCode(self.pairingCode)
                     if let initialRequest = builder.nextRequest() {
-                        print("[PairingCoordinator] sending initial JPAKE request \(type(of: initialRequest))")
+                    print("[PairingCoordinator] sending initial JPAKE request: \(initialRequest)")
                         do {
                             let initialResponse = try self.pumpComm.sendMessage(transport: transport, message: initialRequest)
-                            print("[PairingCoordinator] received initial response \(type(of: initialResponse))")
+                            print("[PairingCoordinator] received initial response: \(initialResponse)")
                             builder.processResponse(initialResponse)
                         } catch {
                             print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
@@ -764,6 +752,12 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
                 self.finish(.failure(CLIError(String(describing: error))))
             }
         }
+    }
+
+    func bluetoothManager(_ manager: BluetoothManager,
+                          didIdentifyPump manufacturer: String,
+                          model: String) {
+        print("[PairingCoordinator] pump model identified manufacturer=\(manufacturer) model=\(model)")
     }
 
     // MARK: - PumpCommDelegate

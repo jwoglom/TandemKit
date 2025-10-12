@@ -80,6 +80,49 @@ extension CBPeripheral {
 
         return service.characteristics?.itemWithUUID(CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS.cbUUID)
     }
+
+    func getServiceChangedCharacteristic() -> CBCharacteristic? {
+        guard let service = services?.itemWithUUID(ServiceUUID.GENERIC_ATTRIBUTE_SERVICE.cbUUID) else {
+            return nil
+        }
+
+        return service.characteristics?.itemWithUUID(CharacteristicUUID.SERVICE_CHANGED.cbUUID)
+    }
+
+    func getManufacturerNameCharacteristic() -> CBCharacteristic? {
+        guard let service = services?.itemWithUUID(ServiceUUID.DIS_SERVICE.cbUUID) else {
+            return nil
+        }
+
+        return service.characteristics?.itemWithUUID(DeviceInformationCharacteristicUUID.manufacturerName.cbUUID)
+    }
+
+    func getModelNumberCharacteristic() -> CBCharacteristic? {
+        guard let service = services?.itemWithUUID(ServiceUUID.DIS_SERVICE.cbUUID) else {
+            return nil
+        }
+
+        return service.characteristics?.itemWithUUID(DeviceInformationCharacteristicUUID.modelNumber.cbUUID)
+    }
+
+    func characteristic(for uuid: CharacteristicUUID) -> CBCharacteristic? {
+        switch uuid {
+        case .AUTHORIZATION_CHARACTERISTICS:
+            return getAuthorizationCharacteristic()
+        case .CONTROL_CHARACTERISTICS:
+            return getControlCharacteristic()
+        case .CONTROL_STREAM_CHARACTERISTICS:
+            return getControlStreamCharacteristic()
+        case .CURRENT_STATUS_CHARACTERISTICS:
+            return getCurrentStatusCharacteristic()
+        case .HISTORY_LOG_CHARACTERISTICS:
+            return getHistoryLogCharacteristic()
+        case .QUALIFYING_EVENTS_CHARACTERISTICS:
+            return getQualifyingEventsCharacteristic()
+        case .SERVICE_CHANGED:
+            return getServiceChangedCharacteristic()
+        }
+    }
 }
 
 

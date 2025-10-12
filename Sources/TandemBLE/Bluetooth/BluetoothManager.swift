@@ -43,6 +43,13 @@ public protocol BluetoothManagerDelegate: AnyObject {
     ///   - peripheralManager: The peripheral manager
     ///   - response: The data received on the authentication characteristic
     func bluetoothManager(_ manager: BluetoothManager, didCompleteConfiguration peripheralManager: PeripheralManager)
+
+    func bluetoothManager(_ manager: BluetoothManager, didIdentifyPump manufacturer: String, model: String)
+}
+
+
+public extension BluetoothManagerDelegate {
+    func bluetoothManager(_ manager: BluetoothManager, didIdentifyPump manufacturer: String, model: String) {}
 }
 
 
@@ -411,5 +418,9 @@ extension BluetoothManager: PeripheralManagerDelegate {
 
     func peripheralManager(_ manager: PeripheralManager, didUpdateValueFor characteristic: CBCharacteristic) {
 
+    }
+
+    func peripheralManager(_ manager: PeripheralManager, didIdentifyDevice manufacturer: String, model: String) {
+        delegate?.bluetoothManager(self, didIdentifyPump: manufacturer, model: model)
     }
 }

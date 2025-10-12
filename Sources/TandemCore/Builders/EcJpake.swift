@@ -32,9 +32,14 @@ final class EcJpake {
     let peerId: Data
     let rand: RandomBytesGenerator
 
-    // Use computed property instead of stored property to avoid potential SwiftECC internal state issues
+    private let domainInstance: Domain
+    private let domainGenerator: Point
+    private let domainOrder: BInt
+    private let domainOrderMinusOne: BInt
+
+    // Expose the cached domain for internal callers (e.g. tests)
     var domain: Domain {
-        Domain.instance(curve: .EC256r1)
+        domainInstance
     }
 
     init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
@@ -45,6 +50,13 @@ final class EcJpake {
         print("[EcJpake.init] rand set")
         self.s = BInt(magnitude: [UInt8](password))
         print("[EcJpake.init] s (password BInt) set")
+
+        let domain = Domain.instance(curve: .EC256r1)
+        self.domainInstance = domain
+        self.domainGenerator = domain.g
+        self.domainOrder = domain.order
+        self.domainOrderMinusOne = domain.order - 1
+
         if role == .client {
             self.myId = Data("client".utf8)
             self.peerId = Data("server".utf8)
@@ -75,7 +87,7 @@ final class EcJpake {
 
         print("[EcJpake.getRound1] Generating first key pair")
         fflush(stdout)
-        let kp1 = genKeyPair(domain.g)
+        let kp1 = genKeyPair(domainGenerator)
         xm1 = kp1.priv
         Xm1 = kp1.pub
         print("[EcJpake.getRound1] First key pair done")
@@ -89,13 +101,13 @@ final class EcJpake {
 
         print("[EcJpake.getRound1] Writing first ZKP")
         fflush(stdout)
-        writeZkp(&out, base: domain.g, x: xm1!, X: Xm1!, id: myId)
+        writeZkp(&out, base: domainGenerator, x: xm1!, X: Xm1!, id: myId)
         print("[EcJpake.getRound1] First ZKP done")
         fflush(stdout)
 
         print("[EcJpake.getRound1] Generating second key pair")
         fflush(stdout)
-        let kp2 = genKeyPair(domain.g)
+        let kp2 = genKeyPair(domainGenerator)
         xm2 = kp2.priv
         Xm2 = kp2.pub
         print("[EcJpake.getRound1] Second key pair done")
@@ -109,7 +121,7 @@ final class EcJpake {
 
         print("[EcJpake.getRound1] Writing second ZKP")
         fflush(stdout)
-        writeZkp(&out, base: domain.g, x: xm2!, X: Xm2!, id: myId)
+        writeZkp(&out, base: domainGenerator, x: xm2!, X: Xm2!, id: myId)
         print("[EcJpake.getRound1] Second ZKP done")
         fflush(stdout)
 
@@ -152,9 +164,9 @@ final class EcJpake {
         precondition(!hasPeerRound1, "Invalid protocol state")
         var r = DataReader(data)
         Xp1 = readPoint(&r)
-        readZkp(&r, base: domain.g, X: Xp1!, id: peerId)
+        readZkp(&r, base: domainGenerator, X: Xp1!, id: peerId)
         Xp2 = readPoint(&r)
-        readZkp(&r, base: domain.g, X: Xp2!, id: peerId)
+        readZkp(&r, base: domainGenerator, X: Xp2!, id: peerId)
         hasPeerRound1 = true
     }
 
@@ -204,7 +216,10 @@ final class EcJpake {
         let V = readPoint(&reader)
         let r = readNum(&reader)
         let h = zkpHash(base: base, V: V, X: X, id: id)
-        let lhs = try! domain.addPoints(try! domain.multiplyPoint(base, r), try! domain.multiplyPoint(X, h.mod(domain.order)))
+        let lhs = try! domain.addPoints(
+            try! domain.multiplyPoint(base, r),
+            try! domain.multiplyPoint(X, h.mod(domainOrder))
+        )
         precondition(lhs == V, "Validation failed")
     }
 
@@ -229,7 +244,7 @@ final class EcJpake {
 
         print("[writeZkp] Computing r with mod")
         fflush(stdout)
-        let r = (v - x * h).mod(domain.order)
+        let r = (v - x * h).mod(domainOrder)
         print("[writeZkp] Mod complete")
         fflush(stdout)
 
@@ -276,7 +291,7 @@ final class EcJpake {
         let h = SHA256.hash(out)
         print("[zkpHash] Computing mod")
         fflush(stdout)
-        let result = BInt(magnitude: [UInt8](h)).mod(domain.order)
+        let result = BInt(magnitude: [UInt8](h)).mod(domainOrder)
         print("[zkpHash] DONE")
         fflush(stdout)
         return result
@@ -338,16 +353,16 @@ final class EcJpake {
 
     private func randomScalar() -> BInt {
         var n = BInt(magnitude: [UInt8](rand(32)))
-        n = n % (domain.order - 1) + 1
+        n = n % domainOrderMinusOne + 1
         return n
     }
 
     private func mulSecret(_ X: BInt, _ S: BInt, negate: Bool) -> BInt {
         var b = BInt(magnitude: [UInt8](rand(16)))
-        b = b * domain.order + S
+        b = b * domainOrder + S
         var R = X * b
         if negate { R = -R }
-        return R.mod(domain.order)
+        return R.mod(domainOrder)
     }
 }
 

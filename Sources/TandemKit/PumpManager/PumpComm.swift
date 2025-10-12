@@ -93,11 +93,11 @@ public class PumpComm: CustomDebugStringConvertible {
     /// - Returns: The response message from the pump
     /// - Throws: PumpCommError if communication fails or response is invalid
     public func sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
-        log.debug("sendMessage: attempting to send %@", String(describing: type(of: message)))
+        log.debug("sendMessage: attempting to send %@", String(describing: message))
 
         do {
             let response = try transport.sendMessage(message)
-            log.debug("sendMessage: received response %@", String(describing: type(of: response)))
+            log.debug("sendMessage: received response %@", String(describing: response))
 
             // Check if the response indicates an error condition
             // Note: Different message types may have different error indicators
