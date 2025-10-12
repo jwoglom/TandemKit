@@ -78,9 +78,7 @@ public class TandemPumpManager: PumpManager {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
         let derivedSecret = pumpState?.derivedSecret
         let serverNonce = pumpState?.serverNonce
-        Task { @MainActor in
-            PumpStateSupplier.storePairingArtifacts(derivedSecret: derivedSecret, serverNonce: serverNonce)
-        }
+        PumpStateSupplier.storePairingArtifacts(derivedSecret: derivedSecret, serverNonce: serverNonce)
 #endif
     }
 

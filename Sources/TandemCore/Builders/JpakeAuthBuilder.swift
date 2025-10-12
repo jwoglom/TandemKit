@@ -266,16 +266,36 @@ private final class NonBlockingRandom {
             var remaining = count
 
             while remaining > 0 {
-                do {
-                    if let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty {
+                #if canImport(Darwin)
+                if #available(macOS 10.15.4, iOS 13.4, watchOS 6.2, tvOS 13.4, *) {
+                    do {
+                        guard let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty else {
+                            break
+                        }
                         buffer.append(chunk)
                         remaining -= chunk.count
-                    } else {
+                    } catch {
                         break
                     }
+                } else {
+                    let chunk = handle.readData(ofLength: remaining)
+                    guard !chunk.isEmpty else {
+                        break
+                    }
+                    buffer.append(chunk)
+                    remaining -= chunk.count
+                }
+                #else
+                do {
+                    guard let chunk = try handle.read(upToCount: remaining), !chunk.isEmpty else {
+                        break
+                    }
+                    buffer.append(chunk)
+                    remaining -= chunk.count
                 } catch {
                     break
                 }
+                #endif
             }
 
             if buffer.count == count {

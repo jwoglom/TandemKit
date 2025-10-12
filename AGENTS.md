@@ -623,6 +623,13 @@ Responses:
 
 This roadmap keeps the existing protocol/BLE groundwork intact while layering the missing pump-manager functionality required for a production Loop or Trio integration.
 
+### Recent Automation
+- [e] CentralChallengeRequestBuilder: generate 8-byte challenges, not 10
+- [e] HmacSha1/HmacSha256: switch to CryptoKit/CommonCrypto-backed implementations
+- [e] PumpCommSession: add DEBUG override to bypass JPake in tests
+- [t] PumpChallengeRequestBuilderTests/testCreateV2AdvancesJpakeFlow: use debug hook
+- [t] TandemPairingIntegrationTests/testJPAKEPairingFlowWithMockTransport: inject overrides, assert artifacts
+
 ---
 
 ## Summary: Unimplemented Behaviors (Running List)

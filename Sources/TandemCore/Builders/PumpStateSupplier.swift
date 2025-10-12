@@ -25,8 +25,14 @@ extension PumpPairingCodeValidationError: LocalizedError {
     }
 }
 
-@MainActor
 public struct PumpStateSupplier {
+    private static let lock = NSRecursiveLock()
+
+    private static func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
     static var pumpPairingCode: (() -> String)?
     static var jpakeDerivedSecretHex: (() -> String)?
     static var jpakeServerNonceHex: (() -> String)?
@@ -52,10 +58,14 @@ public struct PumpStateSupplier {
         determinePumpAuthKey()
     }
 
+    public static func currentPumpApiVersion() -> ApiVersion? {
+        withLock { pumpApiVersion?() }
+    }
+
     private static func determinePumpAuthKey() -> Data {
-        let derivedSecret = jpakeDerivedSecretHex?()
-        let serverNonce = jpakeServerNonceHex?()
-        let code = pumpPairingCode?()
+        let (derivedSecret, serverNonce, code) = withLock {
+            (jpakeDerivedSecretHex?(), jpakeServerNonceHex?(), pumpPairingCode?())
+        }
 
         if (derivedSecret == nil || derivedSecret!.isEmpty) && (code == nil || code!.isEmpty) {
             fatalError("no pump authenticationKey")
@@ -78,23 +88,25 @@ public struct PumpStateSupplier {
     // MARK: - Configuration helpers
 
     public static func enableActionsAffectingInsulinDelivery() {
-        actionsAffectingInsulinDeliveryEnabled = { true }
+        withLock {
+            actionsAffectingInsulinDeliveryEnabled = { true }
+        }
     }
 
     static func enableTconnectAppConnectionSharing() {
-        tconnectAppConnectionSharing = true
+        withLock { tconnectAppConnectionSharing = true }
     }
 
     static func enableSendSharedConnectionResponseMessages() {
-        sendSharedConnectionResponseMessages = true
+        withLock { sendSharedConnectionResponseMessages = true }
     }
 
     static func enableRelyOnConnectionSharingForAuthentication() {
-        relyOnConnectionSharingForAuthentication = true
+        withLock { relyOnConnectionSharingForAuthentication = true }
     }
 
     static func enableOnlySnoopBluetooth() {
-        onlySnoopBluetooth = true
+        withLock { onlySnoopBluetooth = true }
     }
 
     /// Normalizes and stores a pump pairing code so that future requests can fetch it.
@@ -109,15 +121,19 @@ public struct PumpStateSupplier {
 
         let shortCode = PairingCodeType.short6Char.filterCharacters(trimmed)
         if shortCode.count == 6 {
-            pumpPairingCode = { shortCode }
-            pairingCodeType = .short6Char
+            withLock {
+                pumpPairingCode = { shortCode }
+                pairingCodeType = .short6Char
+            }
             return shortCode
         }
 
         let longCode = PairingCodeType.long16Char.filterCharacters(trimmed).uppercased()
         if longCode.count == 16 {
-            pumpPairingCode = { longCode }
-            pairingCodeType = .long16Char
+            withLock {
+                pumpPairingCode = { longCode }
+                pairingCodeType = .long16Char
+            }
             return longCode
         }
 
@@ -125,18 +141,20 @@ public struct PumpStateSupplier {
     }
 
     public static func storePairingArtifacts(derivedSecret: Data?, serverNonce: Data?) {
-        if let derivedSecret = derivedSecret, !derivedSecret.isEmpty {
-            let derivedHex = derivedSecret.hexadecimalString
-            jpakeDerivedSecretHex = { derivedHex }
-        } else {
-            jpakeDerivedSecretHex = nil
-        }
+        withLock {
+            if let derivedSecret = derivedSecret, !derivedSecret.isEmpty {
+                let derivedHex = derivedSecret.hexadecimalString
+                jpakeDerivedSecretHex = { derivedHex }
+            } else {
+                jpakeDerivedSecretHex = nil
+            }
 
-        if let serverNonce = serverNonce, !serverNonce.isEmpty {
-            let serverNonceHex = serverNonce.hexadecimalString
-            jpakeServerNonceHex = { serverNonceHex }
-        } else {
-            jpakeServerNonceHex = nil
+            if let serverNonce = serverNonce, !serverNonce.isEmpty {
+                let serverNonceHex = serverNonce.hexadecimalString
+                jpakeServerNonceHex = { serverNonceHex }
+            } else {
+                jpakeServerNonceHex = nil
+            }
         }
     }
 }

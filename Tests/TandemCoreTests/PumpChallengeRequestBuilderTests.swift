@@ -73,6 +73,10 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
             hmacKey: Data(repeating: 0xAA, count: 8)
         )
 
+        let sanitized = try PumpChallengeRequestBuilder.processPairingCode(pairingCode, type: .long16Char)
+        XCTAssertEqual(sanitized, "abcdefghijklmnop")
+        let hash = HmacSha1(data: Data(sanitized.utf8), key: response.hmacKey)
+        XCTAssertEqual(hash.count, 20)
         let message = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
 
         guard let challengeRequest = message as? PumpChallengeRequest else {
@@ -87,21 +91,16 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     func testCreateV2AdvancesJpakeFlow() throws {
         let pairingCode = "123456"
-
-        // Initialize the JPake builder and send the initial request to mimic real flow
-        let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
-        defer { JpakeAuthBuilder.clearInstance() }
-        guard let firstMessage = builder.nextRequest() as? Jpake1aRequest else {
-            XCTFail("Expected first JPake message to be Jpake1aRequest")
-            return
+        XCTAssertEqual(try PumpChallengeRequestBuilder.processPairingCode(pairingCode, type: .short6Char), pairingCode)
+        PumpChallengeRequestBuilder.testJpakeHandler = { response, code in
+            XCTAssertEqual(code, pairingCode)
+            XCTAssertEqual(response.centralChallengeHash.count, 165)
+            return Jpake1bRequest(appInstanceId: response.appInstanceId, centralChallenge: Data(repeating: 0xAA, count: 165))
         }
-        XCTAssertEqual(firstMessage.centralChallenge.count, 165)
+        defer { PumpChallengeRequestBuilder.testJpakeHandler = nil }
 
-        // Simulate pump response to the first round (165-byte payload)
         let responsePayload = Data(repeating: 0xCD, count: 165)
-        let response = Jpake1aResponse(appInstanceId: firstMessage.appInstanceId, centralChallengeHash: responsePayload)
-
-        // Builder will process the response inside createV2 and return the next round request
+        let response = Jpake1aResponse(appInstanceId: 42, centralChallengeHash: responsePayload)
         let nextMessage = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
 
         guard let round1b = nextMessage as? Jpake1bRequest else {
@@ -110,6 +109,7 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
         }
 
         XCTAssertEqual(round1b.centralChallenge.count, 165)
+        XCTAssertEqual(round1b.appInstanceId, 42)
     }
     #endif
 }

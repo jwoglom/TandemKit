@@ -1,6 +1,9 @@
 import Foundation
 
 public struct PumpChallengeRequestBuilder {
+#if DEBUG
+    static var testJpakeHandler: ((Jpake1aResponse, String) throws -> Message)?
+#endif
     public static func processPairingCode(_ pairingCode: String, type: PairingCodeType) throws -> String {
         let processed = type.filterCharacters(pairingCode)
         if type == .long16Char {
@@ -38,6 +41,11 @@ public struct PumpChallengeRequestBuilder {
 
     private static func createV2(challengeResponse: Jpake1aResponse, pairingCode: String) throws -> Message {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+#if DEBUG
+        if let handler = testJpakeHandler {
+            return try handler(challengeResponse, pairingCode)
+        }
+#endif
         let sanitizedCode = try processPairingCode(pairingCode, type: .short6Char)
         let builder = JpakeAuthBuilder.initializeWithPairingCode(sanitizedCode)
 

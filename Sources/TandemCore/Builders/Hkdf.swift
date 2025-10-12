@@ -10,9 +10,7 @@ struct Hkdf {
         var previous = Data()
         var counter: UInt8 = 1
         while okm.count < 32 {
-            var input = Data()
-            input.append(previous)
-            input.append(counter)
+            let input = Bytes.combine(previous, Data([counter]))
             previous = HmacSha256.hmac(input, key: prk)
             okm.append(previous)
             counter &+= 1
@@ -20,4 +18,3 @@ struct Hkdf {
         return okm.prefix(32)
     }
 }
-
