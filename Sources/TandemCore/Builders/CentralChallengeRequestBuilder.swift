@@ -1,9 +1,9 @@
 import Foundation
 
 public struct CentralChallengeRequestBuilder {
-    @MainActor
     public static func create(appInstanceId: Int) -> CentralChallengeRequest? {
-        if let apiVersion = PumpStateSupplier.pumpApiVersion?(), apiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {
+        let apiVersion = PumpStateSupplier.currentPumpApiVersion()
+        if let apiVersion, apiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {
             return nil
         } else {
             return createV1(appInstanceId: appInstanceId)
@@ -11,7 +11,7 @@ public struct CentralChallengeRequestBuilder {
     }
 
     private static func createV1(appInstanceId: Int) -> CentralChallengeRequest {
-        let challenge = Bytes.getSecureRandom10Bytes()
+        let challenge = Bytes.getSecureRandom8Bytes()
         return CentralChallengeRequest(appInstanceId: appInstanceId, centralChallenge: challenge)
     }
 }

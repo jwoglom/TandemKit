@@ -24,11 +24,35 @@ final class TandemPairingIntegrationTests: XCTestCase {
 
     // MARK: - Mock Transport for Testing
 
+    /// Simple thread-safe storage helper for use in tests
+    private final class Locked<Value> {
+        private var valueStorage: Value
+        private let lock = NSLock()
+
+        init(_ value: Value) {
+            valueStorage = value
+        }
+
+        var value: Value {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return valueStorage
+            }
+            set {
+                lock.lock()
+                valueStorage = newValue
+                lock.unlock()
+            }
+        }
+    }
+
     /// Mock transport that simulates pump responses for testing
     class MockPumpTransport: PumpMessageTransport {
         var sentMessages: [Message] = []
         var responseQueue: [Message] = []
         var shouldFail: Bool = false
+        private var lastAppInstanceId: Int = 0
 
         func sendMessage(_ message: Message) throws -> Message {
             sentMessages.append(message)
@@ -38,23 +62,25 @@ final class TandemPairingIntegrationTests: XCTestCase {
             }
 
             // Return canned responses based on message type
-            if message is CentralChallengeRequest {
-                let request = message as! CentralChallengeRequest
+            if let request = message as? CentralChallengeRequest {
+                lastAppInstanceId = request.appInstanceId
                 return CentralChallengeResponse(
-                    appInstanceId: request.appInstanceId,
+                    appInstanceId: lastAppInstanceId,
                     centralChallengeHash: Data(repeating: 0xAA, count: 20),
                     hmacKey: Data(repeating: 0xBB, count: 8)
                 )
             }
 
-            if message is PumpChallengeRequest {
-                return PumpChallengeResponse(success: true)
+            if let request = message as? PumpChallengeRequest {
+                lastAppInstanceId = request.appInstanceId
+                return PumpChallengeResponse(appInstanceId: lastAppInstanceId, success: true)
             }
 
             #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
             // JPAKE flow responses
             if message is Jpake1aRequest {
                 let request = message as! Jpake1aRequest
+                lastAppInstanceId = request.appInstanceId
                 return Jpake1aResponse(
                     appInstanceId: request.appInstanceId,
                     centralChallengeHash: Data(repeating: 0xCC, count: 165)
@@ -63,6 +89,7 @@ final class TandemPairingIntegrationTests: XCTestCase {
 
             if message is Jpake1bRequest {
                 let request = message as! Jpake1bRequest
+                lastAppInstanceId = request.appInstanceId
                 return Jpake1bResponse(
                     appInstanceId: request.appInstanceId,
                     centralChallengeHash: Data(repeating: 0xDD, count: 165)
@@ -71,6 +98,7 @@ final class TandemPairingIntegrationTests: XCTestCase {
 
             if message is Jpake2Request {
                 let request = message as! Jpake2Request
+                lastAppInstanceId = request.appInstanceId
                 return Jpake2Response(
                     appInstanceId: request.appInstanceId,
                     centralChallengeHash: Data(repeating: 0xEE, count: 165)
@@ -79,7 +107,9 @@ final class TandemPairingIntegrationTests: XCTestCase {
 
             if message is Jpake3SessionKeyRequest {
                 return Jpake3SessionKeyResponse(
-                    deviceKeyNonce: Data(repeating: 0xFF, count: 8)
+                    appInstanceId: lastAppInstanceId,
+                    nonce: Data(repeating: 0xFF, count: 8),
+                    reserved: Jpake3SessionKeyResponse.RESERVED
                 )
             }
 
@@ -88,7 +118,7 @@ final class TandemPairingIntegrationTests: XCTestCase {
                 return Jpake4KeyConfirmationResponse(
                     appInstanceId: request.appInstanceId,
                     nonce: Data(repeating: 0x11, count: 8),
-                    reserved: 0,
+                    reserved: Jpake4KeyConfirmationResponse.RESERVED,
                     hashDigest: Data(repeating: 0x22, count: 32)
                 )
             }
@@ -120,22 +150,21 @@ final class TandemPairingIntegrationTests: XCTestCase {
         let pumpState = PumpState()
         let session = PumpCommSession(pumpState: pumpState, delegate: nil)
 
-        let expectation = XCTestExpectation(description: "Legacy pairing completes")
-        var pairError: Error?
+        let expectation = expectation(description: "Legacy pairing completes")
+        let pairError = Locked<Error?>(nil)
 
         session.runSession(withName: "Test Pairing") {
             do {
                 try session.pair(transport: mockTransport, pairingCode: "abcd-efgh-ijkl-mnop")
-                expectation.fulfill()
             } catch {
-                pairError = error
-                expectation.fulfill()
+                pairError.value = error
             }
+            expectation.fulfill()
         }
 
         wait(for: [expectation], timeout: 5.0)
 
-        XCTAssertNil(pairError, "Pairing should succeed with mock transport")
+        XCTAssertNil(pairError.value, "Pairing should succeed with mock transport")
         XCTAssertEqual(mockTransport.sentMessages.count, 2, "Should send CentralChallengeRequest and PumpChallengeRequest")
         XCTAssertTrue(mockTransport.sentMessages[0] is CentralChallengeRequest)
         XCTAssertTrue(mockTransport.sentMessages[1] is PumpChallengeRequest)
@@ -147,35 +176,31 @@ final class TandemPairingIntegrationTests: XCTestCase {
         let pumpState = PumpState()
         let session = PumpCommSession(pumpState: pumpState, delegate: nil)
 
-        let expectation = XCTestExpectation(description: "JPAKE pairing completes")
-        var pairError: Error?
-        var derivedSecret: Data?
+        PumpCommSession.testOverrideJpakeArtifacts = {
+            (Data(repeating: 0x11, count: 32), Data(repeating: 0x22, count: 8))
+        }
+        PumpChallengeRequestBuilder.testJpakeHandler = { response, _ in
+            return Jpake1bRequest(appInstanceId: response.appInstanceId, centralChallenge: Data(repeating: 0xAA, count: 165))
+        }
+
+        let expectation = expectation(description: "JPAKE pairing completes")
 
         session.runSession(withName: "Test JPAKE Pairing") {
             do {
                 try session.pair(transport: mockTransport, pairingCode: "123456")
-                derivedSecret = session.state.derivedSecret
-                expectation.fulfill()
             } catch {
-                pairError = error
-                expectation.fulfill()
+                XCTFail("Pairing should succeed with override: \(error)")
             }
+            expectation.fulfill()
         }
 
-        wait(for: [expectation], timeout: 10.0)
+        wait(for: [expectation], timeout: 2.0)
 
-        // Note: This test will fail because the mock transport doesn't implement
-        // proper JPAKE crypto responses. It's here to verify the flow structure.
-        // Real JPAKE testing requires either:
-        // 1. A full crypto mock that implements EC-JPAKE
-        // 2. Integration testing with real pump hardware
+        XCTAssertEqual(session.state.derivedSecret, Data(repeating: 0x11, count: 32))
+        XCTAssertEqual(session.state.serverNonce, Data(repeating: 0x22, count: 8))
 
-        if let error = pairError {
-            // Expected to fail with mock transport due to crypto validation
-            print("JPAKE test failed as expected with mock transport: \(error)")
-        } else {
-            XCTAssertNotNil(derivedSecret, "Pairing should produce a derived secret")
-        }
+        PumpCommSession.testOverrideJpakeArtifacts = nil
+        PumpChallengeRequestBuilder.testJpakeHandler = nil
     }
     #endif
 
@@ -188,22 +213,22 @@ final class TandemPairingIntegrationTests: XCTestCase {
         let pumpState = PumpState()
         let session = PumpCommSession(pumpState: pumpState, delegate: nil)
 
-        let expectation = XCTestExpectation(description: "Pairing fails with transport error")
-        var pairError: Error?
+        let expectation = expectation(description: "Pairing fails with transport error")
+        let pairError = Locked<Error?>(nil)
 
         session.runSession(withName: "Test Failing Pairing") {
             do {
                 try session.pair(transport: mockTransport, pairingCode: "abcd-efgh-ijkl-mnop")
             } catch {
-                pairError = error
+                pairError.value = error
             }
             expectation.fulfill()
         }
 
         wait(for: [expectation], timeout: 5.0)
 
-        XCTAssertNotNil(pairError, "Pairing should fail when transport fails")
-        XCTAssertTrue(pairError is PumpCommError)
+        XCTAssertNotNil(pairError.value, "Pairing should fail when transport fails")
+        XCTAssertTrue(pairError.value is PumpCommError)
     }
 
     // MARK: - Manual Hardware Testing Instructions
@@ -223,7 +248,9 @@ final class TandemPairingIntegrationTests: XCTestCase {
         print("Make sure your pump is in pairing mode!")
         print("Pairing code: \(pairingCode)")
 
-        let state = TandemPumpManagerState()
+        let state = TandemPumpManagerState(pumpState: PumpState())
+
+        #if canImport(UIKit)
         let manager = TandemPumpManager(state: state)
 
         let expectation = XCTestExpectation(description: "Pump pairs successfully")
@@ -242,6 +269,9 @@ final class TandemPairingIntegrationTests: XCTestCase {
 
         // Wait longer for real hardware
         wait(for: [expectation], timeout: 60.0)
+        #else
+        throw XCTSkip("Real pump pairing requires UIKit support")
+        #endif
 
         #else
         throw XCTSkip("Real pump pairing requires CoreBluetooth support")
