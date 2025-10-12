@@ -726,32 +726,33 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
             return
         }
 
-#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-        if pairingCode.count == 6 {
-            print("[PairingCoordinator] priming JPAKE handshake")
-            let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
-            if let initialRequest = builder.nextRequest() {
-                print("[PairingCoordinator] sending initial JPAKE request \(type(of: initialRequest))")
-                do {
-                    let initialResponse = try pumpComm.sendMessage(transport: transport, message: initialRequest)
-                    print("[PairingCoordinator] received initial response \(type(of: initialResponse))")
-                    builder.processResponse(initialResponse)
-                } catch {
-                    print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
-                    finish(.failure(error))
-                    return
-                }
-            } else {
-                print("[PairingCoordinator] initial JPAKE request unavailable")
-            }
-        }
-#endif
-
         print("Peripheral configured. Beginning pairing exchange...")
 
+        // Run JPAKE initialization and pairing on background queue to avoid blocking
         Task.detached { [weak self] in
             guard let self else { return }
             do {
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+                if self.pairingCode.count == 6 {
+                    print("[PairingCoordinator] priming JPAKE handshake (background)")
+                    let builder = JpakeAuthBuilder.initializeWithPairingCode(self.pairingCode)
+                    if let initialRequest = builder.nextRequest() {
+                        print("[PairingCoordinator] sending initial JPAKE request \(type(of: initialRequest))")
+                        do {
+                            let initialResponse = try self.pumpComm.sendMessage(transport: transport, message: initialRequest)
+                            print("[PairingCoordinator] received initial response \(type(of: initialResponse))")
+                            builder.processResponse(initialResponse)
+                        } catch {
+                            print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
+                            self.finish(.failure(error))
+                            return
+                        }
+                    } else {
+                        print("[PairingCoordinator] initial JPAKE request unavailable")
+                    }
+                }
+#endif
+
                 print("[PairingCoordinator] invoking PumpComm.pair")
                 try self.pumpComm.pair(transport: transport, pairingCode: self.pairingCode)
                 let state = self.stateQueue.sync { self.lastPumpState }
