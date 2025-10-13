@@ -19,9 +19,13 @@ public enum CharacteristicUUID: String, Sendable {
     // For signed messages
     case CONTROL_CHARACTERISTICS = "7B83FFFC-9F77-4E5C-8064-AAE2C24838B9"
     case CONTROL_STREAM_CHARACTERISTICS = "7B83FFFD-9F77-4E5C-8064-AAE2C24838B9"
-
+    
     // Generic Attribute service
     case SERVICE_CHANGED = "00002A05-0000-1000-8000-00805F9B34FB"
+    
+    // Device Information Service
+    case DIS_MANUFACTURER_NAME = "00002A29-0000-1000-8000-00805F9B34FB"
+    case DIS_MODEL_NUMBER = "00002A24-0000-1000-8000-00805F9B34FB"
 }
 
 public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
@@ -90,6 +94,8 @@ public extension CharacteristicUUID {
         case .CONTROL_CHARACTERISTICS: return "Control"
         case .CONTROL_STREAM_CHARACTERISTICS: return "ControlStream"
         case .SERVICE_CHANGED: return "ServiceChanged"
+        case .DIS_MANUFACTURER_NAME: return "ManufacturerName"
+        case .DIS_MODEL_NUMBER: return "ModelNumber"
         }
     }
 }

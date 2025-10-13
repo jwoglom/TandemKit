@@ -16,7 +16,7 @@ struct PacketArrayList {
     private var fullCargo: Data
     private var messageDataBuffer: Data
     private(set) var opCode: UInt8 = 0
-    private var firstByteMod15: UInt8 = 0
+    private var firstByteMod15: Int = 0
     private var empty = true
     private var expectedCrc = Data(repeating: 0, count: 2)
 
@@ -31,13 +31,15 @@ struct PacketArrayList {
         self.messageDataBuffer = Data(repeating: 0, count: 3)
     }
 
+    var debugFirstByteMod15: Int { firstByteMod15 }
+
     private mutating func parse(_ packet: Data) throws {
         let opCode = packet[2]
         var cargoSize = Int(Int8(bitPattern: packet[4]))
         if cargoSize < 0 { cargoSize += 256 }
 
         if opCode == expectedOpCode {
-            firstByteMod15 = packet[0] & 0x0f
+            firstByteMod15 = Int(packet[0] & 0x0f)
             let txId = packet[3]
             if txId != expectedTxId {
                 if PacketArrayList.ignoreInvalidTxId { return }
@@ -75,19 +77,19 @@ struct PacketArrayList {
             } else {
                 throw InvalidPacketSequenceError()
             }
-        } else if self.firstByteMod15 == (firstByte & 0x0f) {
+        } else if self.firstByteMod15 == Int(firstByte & 0x0f) {
             fullCargo.append(packet.dropFirst(2))
         } else {
             throw InvalidPacketSequenceError()
         }
 
         empty = false
-        self.firstByteMod15 = (firstByte & 0x0f) &- 1
+        self.firstByteMod15 = Int(firstByte & 0x0f) - 1
         self.opCode = opCode
     }
 
     func needsMorePacket() -> Bool {
-        return firstByteMod15 >= 0 && firstByteMod15 != 0
+        return firstByteMod15 >= 0
     }
 
     private mutating func createMessageData() {

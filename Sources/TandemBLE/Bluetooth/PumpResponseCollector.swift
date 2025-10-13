@@ -25,6 +25,30 @@ public final class PumpResponseCollector {
                                                     uuid: characteristic) else {
             throw PumpResponseCollectorError.invalidResponse
         }
+        if let message = response.message {
+            print("[PumpResponseCollector] message ready: \(message)")
+            return response
+        }
+
+        print("[PumpResponseCollector] no message yet (dataLen=\(data.count))")
+
+        let needsMore = packetArrayList.needsMorePacket()
+        print("[PumpResponseCollector] needsMore=\(needsMore)")
+        print("[PumpResponseCollector] firstByteMod15=\(packetArrayList.debugFirstByteMod15)")
+
+        let allData = packetArrayList.buildMessageData()
+        let payload = Data(allData.dropFirst(3))
+        if let fallback = BTResponseParser.decodeMessage(opCode: packetArrayList.opCode,
+                                                         characteristic: characteristic,
+                                                         payload: payload) {
+            print("[PumpResponseCollector] fallback decoded message: \(fallback)")
+            return PumpResponseMessage(data: response.data, message: fallback)
+        }
+
+        if !needsMore {
+            print("[PumpResponseCollector] no more packets expected but decode failed; returning raw")
+        }
+
         return response
     }
 }

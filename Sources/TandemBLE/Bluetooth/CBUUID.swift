@@ -121,6 +121,10 @@ extension CBPeripheral {
             return getQualifyingEventsCharacteristic()
         case .SERVICE_CHANGED:
             return getServiceChangedCharacteristic()
+        case .DIS_MANUFACTURER_NAME:
+            return getManufacturerNameCharacteristic()
+        case .DIS_MODEL_NUMBER:
+            return getModelNumberCharacteristic()
         }
     }
 }
