@@ -16,8 +16,9 @@ public struct MessageMetadata: Sendable {
     public let variableSize: Bool
     public let stream: Bool
     public let modifiesInsulinDelivery: Bool
+    public let associatedType: Message.Type?  // For Request: Response type, For Response: Request type
 
-    init?(type: Message.Type) {
+    init?(type: Message.Type, associatedType: Message.Type? = nil) {
         let props = type.props
         if props.opCode == 0 {
             return nil
@@ -32,6 +33,7 @@ public struct MessageMetadata: Sendable {
         self.variableSize = props.variableSize
         self.stream = props.stream
         self.modifiesInsulinDelivery = props.modifiesInsulinDelivery
+        self.associatedType = associatedType
     }
 
     public func matches(payloadLength: Int) -> Bool {
@@ -55,6 +57,34 @@ public struct MessageMetadata: Sendable {
 }
 
 public enum MessageRegistry {
+    // Helper to find associated type by naming convention
+    private static func findAssociatedType(for type: Message.Type, in allTypes: [Message.Type]) -> Message.Type? {
+        let typeName = String(describing: type)
+        let simpleName = typeName.split(separator: ".").last.map(String.init) ?? typeName
+
+        if simpleName.hasSuffix("Request") {
+            // For requests, find corresponding response
+            let base = simpleName.dropLast("Request".count)
+            let responseName = base + "Response"
+            return allTypes.first { candidate in
+                let candidateName = String(describing: candidate)
+                let candidateSimple = candidateName.split(separator: ".").last.map(String.init) ?? candidateName
+                return candidateSimple == responseName
+            }
+        } else if simpleName.hasSuffix("Response") {
+            // For responses, find corresponding request
+            let base = simpleName.dropLast("Response".count)
+            let requestName = base + "Request"
+            return allTypes.first { candidate in
+                let candidateName = String(describing: candidate)
+                let candidateSimple = candidateName.split(separator: ".").last.map(String.init) ?? candidateName
+                return candidateSimple == requestName
+            }
+        }
+
+        return nil
+    }
+
     private static let allTypes: [Message.Type] = [
         AlarmStatusRequest.self,
         AlarmStatusResponse.self,
@@ -92,6 +122,8 @@ public enum MessageRegistry {
         CGMStatusResponse.self,
         CancelBolusRequest.self,
         CancelBolusResponse.self,
+        CentralChallengeRequest.self,
+        CentralChallengeResponse.self,
         ChangeControlIQSettingsRequest.self,
         ChangeControlIQSettingsResponse.self,
         ChangeTimeDateRequest.self,
@@ -102,7 +134,9 @@ public enum MessageRegistry {
         ControlIQIOBResponse.self,
         ControlIQInfoAbstractResponse.self,
         ControlIQInfoV1Request.self,
+        ControlIQInfoV1Response.self,
         ControlIQInfoV2Request.self,
+        ControlIQInfoV2Response.self,
         ControlIQSleepScheduleRequest.self,
         ControlIQSleepScheduleResponse.self,
         CreateIDPRequest.self,
@@ -161,6 +195,8 @@ public enum MessageRegistry {
         InitiateBolusResponse.self,
         InsulinStatusRequest.self,
         InsulinStatusResponse.self,
+        Jpake1aRequest.self,
+        Jpake1aResponse.self,
         Jpake1bRequest.self,
         Jpake1bResponse.self,
         Jpake2Request.self,
@@ -274,7 +310,17 @@ public enum MessageRegistry {
         UnknownMobiOpcodeNeg70Response.self,
     ]
 
-    public static let all: [MessageMetadata] = allTypes.compactMap(MessageMetadata.init)
+    public static let all: [MessageMetadata] = {
+        // First pass: create metadata with associations
+        var metadata: [MessageMetadata] = []
+        for type in allTypes {
+            let associatedType = findAssociatedType(for: type, in: allTypes)
+            if let meta = MessageMetadata(type: type, associatedType: associatedType) {
+                metadata.append(meta)
+            }
+        }
+        return metadata
+    }()
 
     private static let metadataByName: [String: MessageMetadata] = {
         var dict: [String: MessageMetadata] = [:]
@@ -283,6 +329,29 @@ public enum MessageRegistry {
             if let simple = meta.name.split(separator: ".").last {
                 let key = String(simple).lowercased()
                 dict[key] = meta
+            }
+        }
+        return dict
+    }()
+
+    // Bidirectional lookup maps for request<->response associations
+    private static let requestToResponse: [ObjectIdentifier: MessageMetadata] = {
+        var dict: [ObjectIdentifier: MessageMetadata] = [:]
+        for meta in all where meta.messageType == .Request {
+            if let associatedType = meta.associatedType,
+               let responseMeta = all.first(where: { $0.type == associatedType }) {
+                dict[ObjectIdentifier(meta.type)] = responseMeta
+            }
+        }
+        return dict
+    }()
+
+    private static let responseToRequest: [ObjectIdentifier: MessageMetadata] = {
+        var dict: [ObjectIdentifier: MessageMetadata] = [:]
+        for meta in all where meta.messageType == .Response {
+            if let associatedType = meta.associatedType,
+               let requestMeta = all.first(where: { $0.type == associatedType }) {
+                dict[ObjectIdentifier(meta.type)] = requestMeta
             }
         }
         return dict
@@ -313,5 +382,85 @@ public enum MessageRegistry {
 
     public static func names() -> [String] {
         all.map { $0.name }.sorted()
+    }
+
+    // MARK: - Request/Response Association Lookups
+
+    /// Get response metadata for a request type
+    public static func responseMetadata(for requestType: Message.Type) -> MessageMetadata? {
+        requestToResponse[ObjectIdentifier(requestType)]
+    }
+
+    /// Get response metadata for a request message instance
+    public static func responseMetadata(for request: Message) -> MessageMetadata? {
+        requestToResponse[ObjectIdentifier(type(of: request))]
+    }
+
+    /// Get request metadata for a response type
+    public static func requestMetadata(for responseType: Message.Type) -> MessageMetadata? {
+        responseToRequest[ObjectIdentifier(responseType)]
+    }
+
+    /// Get request metadata for a response message instance
+    public static func requestMetadata(for response: Message) -> MessageMetadata? {
+        responseToRequest[ObjectIdentifier(type(of: response))]
+    }
+
+    /// Get the metadata for a specific message type
+    public static func metadata(for type: Message.Type) -> MessageMetadata? {
+        all.first { $0.type == type }
+    }
+
+    /// Get the metadata for a specific message instance
+    public static func metadata(for message: Message) -> MessageMetadata? {
+        all.first { $0.type == type(of: message) }
+    }
+
+    // MARK: - Validation
+
+    /// Validates all request-response associations and returns a list of warnings
+    /// - Returns: Array of warning messages for missing or problematic associations
+    public static func validateAssociations() -> [String] {
+        var warnings: [String] = []
+
+        // Check all requests for missing response associations
+        let requests = all.filter { $0.messageType == .Request }
+        for request in requests {
+            // Skip special "Nonexistent" request types (they don't have real responses)
+            if request.name.contains("Nonexistent") {
+                continue
+            }
+
+            if request.associatedType == nil {
+                warnings.append("Request '\(request.name)' has no associated response type")
+            }
+        }
+
+        // Check all responses for missing request associations
+        let responses = all.filter { $0.messageType == .Response }
+        for response in responses {
+            // Skip abstract responses
+            if response.name.contains("Abstract") {
+                continue
+            }
+
+            if response.associatedType == nil {
+                warnings.append("Response '\(response.name)' has no associated request type")
+            }
+        }
+
+        // Check for opcode conflicts within the same characteristic
+        var opcodeMap: [String: [MessageMetadata]] = [:]
+        for meta in all {
+            let key = "\(meta.characteristic.rawValue):\(meta.opCode)"
+            opcodeMap[key, default: []].append(meta)
+        }
+
+        for (key, metas) in opcodeMap where metas.count > 1 {
+            let names = metas.map { $0.name }.joined(separator: ", ")
+            warnings.append("Opcode conflict at \(key): \(names)")
+        }
+
+        return warnings
     }
 }

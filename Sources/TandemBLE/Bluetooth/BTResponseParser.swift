@@ -20,7 +20,17 @@ public struct BTResponseParser {
             return PumpResponseMessage(data: output)
         }
         let needsMore = packetArrayList.needsMorePacket()
-        print("[BTResponseParser] needsMorePacket=\(needsMore) opCode=\(packetArrayList.opCode)")
+
+        // Enhanced logging with request context
+        if let reqMeta = packetArrayList.requestMetadata {
+            print("[BTResponseParser] request=\(reqMeta.name) needsMore=\(needsMore) opCode=\(packetArrayList.opCode)")
+            if let respMeta = packetArrayList.responseMetadata {
+                print("[BTResponseParser]   expecting response=\(respMeta.name) opCode=\(respMeta.opCode)")
+            }
+        } else {
+            print("[BTResponseParser] needsMorePacket=\(needsMore) opCode=\(packetArrayList.opCode)")
+        }
+
         if needsMore {
             return PumpResponseMessage(data: output)
         }
@@ -37,7 +47,8 @@ public struct BTResponseParser {
 
         let isValid = packetArrayList.validate(authKey)
         if !isValid {
-            print("[BTResponseParser] Warning: validation failed for opCode=\(packetArrayList.opCode) length=\(payload.count)")
+            let reqContext = packetArrayList.requestMetadata?.name ?? "unknown"
+            print("[BTResponseParser] Warning: validation failed for request=\(reqContext) opCode=\(packetArrayList.opCode) length=\(payload.count)")
         }
 
         let decodedMessage = decodeMessage(opCode: packetArrayList.opCode,
@@ -46,10 +57,14 @@ public struct BTResponseParser {
 
         if let message = decodedMessage {
             print("[BTResponseParser] decoded \(message)")
+            if let reqMeta = packetArrayList.requestMetadata {
+                print("[BTResponseParser]   in response to request=\(reqMeta.name)")
+            }
             return PumpResponseMessage(data: output, message: message)
         }
 
-        print("[BTResponseParser] Unable to decode message for opCode=\(packetArrayList.opCode) payloadLength=\(payload.count)")
+        let reqContext = packetArrayList.requestMetadata?.name ?? "unknown"
+        print("[BTResponseParser] Unable to decode message for request=\(reqContext) opCode=\(packetArrayList.opCode) payloadLength=\(payload.count)")
 
         return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
     }

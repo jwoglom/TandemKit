@@ -11,6 +11,8 @@ struct PacketArrayList {
     private(set) var expectedCargoSize: UInt8
     let expectedTxId: UInt8
     let isSigned: Bool
+    let requestMetadata: MessageMetadata?  // Context: the request that initiated this
+    let responseMetadata: MessageMetadata?  // Context: the expected response
 
     private var actualExpectedCargoSize: Int
     private var fullCargo: Data
@@ -20,13 +22,16 @@ struct PacketArrayList {
     private var empty = true
     private var expectedCrc = Data(repeating: 0, count: 2)
 
-    init(expectedOpCode: UInt8, expectedCargoSize: UInt8, expectedTxId: UInt8, isSigned: Bool) {
+    init(expectedOpCode: UInt8, expectedCargoSize: UInt8, expectedTxId: UInt8, isSigned: Bool,
+         requestMetadata: MessageMetadata? = nil, responseMetadata: MessageMetadata? = nil) {
         self.expectedOpCode = expectedOpCode
         self.expectedCargoSize = expectedCargoSize
         let sizeInt = Int(Int8(bitPattern: expectedCargoSize))
         self.actualExpectedCargoSize = sizeInt >= 0 ? sizeInt : sizeInt + 256
         self.expectedTxId = expectedTxId
         self.isSigned = isSigned
+        self.requestMetadata = requestMetadata
+        self.responseMetadata = responseMetadata
         self.fullCargo = Data(repeating: 0, count: self.actualExpectedCargoSize + 2)
         self.messageDataBuffer = Data(repeating: 0, count: 3)
     }

@@ -10,11 +10,30 @@ public enum PumpResponseCollectorError: Error {
 /// so callers can stream pump responses until the full message is available.
 public final class PumpResponseCollector {
     private let message: Message
+    private let requestMetadata: MessageMetadata
+    private let expectedResponseMetadata: MessageMetadata?
     private var packetArrayList: PacketArrayList
 
     public init(wrapper: TronMessageWrapper) {
         self.message = wrapper.message
+        self.requestMetadata = wrapper.requestMetadata
+        self.expectedResponseMetadata = wrapper.responseMetadata
         self.packetArrayList = wrapper.buildPacketArrayList(.Response)
+    }
+
+    /// Get the request message that initiated this collection
+    public func getRequest() -> Message {
+        message
+    }
+
+    /// Get the request metadata
+    public func getRequestMetadata() -> MessageMetadata {
+        requestMetadata
+    }
+
+    /// Get the expected response metadata (if known)
+    public func getExpectedResponseMetadata() -> MessageMetadata? {
+        expectedResponseMetadata
     }
 
     @MainActor

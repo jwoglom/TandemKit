@@ -20,6 +20,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     private let peripheralManager: PeripheralManager
     private var currentTxId: UInt8 = 0
     private let log = OSLog(category: "PeripheralManagerTransport")
+    private var requestResponseHistory: [RequestResponsePair] = []
+    private let maxHistorySize = 100  // Keep last 100 exchanges
 
     public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
@@ -50,9 +52,22 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         let wrapper = try withMainActor {
             TronMessageWrapper(message: message, currentTxId: self.currentTxId)
         }
+        let txIdForRequest = currentTxId
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
-        log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), currentTxId - 1)
+        // Create initial history entry (no response yet)
+        let characteristic = type(of: message).props.characteristic
+        let historyEntry = RequestResponsePair(
+            request: message,
+            requestMetadata: wrapper.requestMetadata,
+            response: nil,
+            responseMetadata: wrapper.responseMetadata,
+            txId: txIdForRequest,
+            timestamp: Date(),
+            characteristic: characteristic
+        )
+
+        log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), txIdForRequest)
         if wrapper.packets.isEmpty {
             print("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
         } else {
@@ -63,7 +78,6 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             }
         }
 
-        let characteristic = type(of: message).props.characteristic
         let collector = PumpResponseCollector(wrapper: wrapper)
 
         // Send packets via PeripheralManager synchronously on its queue
@@ -129,6 +143,65 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         }
 
         log.debug("Parsed response message: %{public}@", String(describing: finalMessage))
+
+        // Add completed pair to history
+        let completedPair = historyEntry.withResponse(finalMessage)
+        requestResponseHistory.append(completedPair)
+
+        // Trim history if needed
+        if requestResponseHistory.count > maxHistorySize {
+            requestResponseHistory.removeFirst(requestResponseHistory.count - maxHistorySize)
+        }
+
         return finalMessage
+    }
+
+    // MARK: - History Query Methods
+
+    /// Get all request-response pairs in history
+    public func getHistory() -> [RequestResponsePair] {
+        requestResponseHistory
+    }
+
+    /// Get the request that corresponds to a specific response
+    public func getRequestForResponse(_ response: Message) -> Message? {
+        // First try to find by type association
+        if let requestType = MessageRegistry.requestMetadata(for: response)?.type {
+            // Find most recent matching request in history
+            for pair in requestResponseHistory.reversed() {
+                if type(of: pair.request) == requestType,
+                   let pairResponse = pair.response,
+                   type(of: pairResponse) == type(of: response) {
+                    return pair.request
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Get the response that corresponds to a specific request
+    public func getResponseForRequest(_ request: Message) -> Message? {
+        // Find in history by request instance or type
+        for pair in requestResponseHistory.reversed() {
+            if type(of: pair.request) == type(of: request) {
+                return pair.response
+            }
+        }
+        return nil
+    }
+
+    /// Get all pairs matching a specific request type
+    public func getPairsForRequestType(_ requestType: Message.Type) -> [RequestResponsePair] {
+        requestResponseHistory.filter { type(of: $0.request) == requestType }
+    }
+
+    /// Get all pairs matching a specific TxId
+    public func getPairForTxId(_ txId: UInt8) -> RequestResponsePair? {
+        requestResponseHistory.first { $0.txId == txId }
+    }
+
+    /// Clear the request-response history
+    public func clearHistory() {
+        requestResponseHistory.removeAll()
     }
 }
