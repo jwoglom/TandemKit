@@ -34,44 +34,44 @@ extension PeripheralManager {
     
     public func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
-        print("[PeripheralManager] enableNotifications begin")
+        logInfo("[PeripheralManager] enableNotifications begin")
 
         for uuid in TandemNotificationOrder {
             guard let characteristic = peripheral.characteristic(for: uuid) else {
                 if uuid == .SERVICE_CHANGED {
                     let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
-                    print("[PeripheralManager]   service-changed characteristic not exposed (services=\(services)); assuming availability per Tandem spec")
+                logWarning("[PeripheralManager]   service-changed characteristic not exposed (services=\(services)); assuming availability per Tandem spec")
                     subscribedCharacteristicUUIDs.insert(uuid)
                     continue
                 }
                 let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
-                print("[PeripheralManager]   missing characteristic=\(uuid.prettyName) during subscription discoveredServices=\(services)")
+                logWarning("[PeripheralManager]   missing characteristic=\(uuid.prettyName) during subscription discoveredServices=\(services)")
                 throw PeripheralManagerError.notReady
             }
 
             if subscribedCharacteristicUUIDs.contains(uuid) {
-                print("[PeripheralManager]   notifications already enabled for \(uuid.prettyName); skipping")
+                logDebug("[PeripheralManager]   notifications already enabled for \(uuid.prettyName); skipping")
                 continue
             }
 
-            print("[PeripheralManager]   enabling notifications for \(uuid.prettyName)")
+            logDebug("[PeripheralManager]   enabling notifications for \(uuid.prettyName)")
             try setNotifyValue(true, for: characteristic, timeout: .seconds(2))
             subscribedCharacteristicUUIDs.insert(uuid)
-            print("[PeripheralManager]   notifications enabled for \(uuid.prettyName)")
+            logDebug("[PeripheralManager]   notifications enabled for \(uuid.prettyName)")
         }
 
         let required = Set(TandemNotificationOrder.filter { $0 != .SERVICE_CHANGED })
         let missing = required.subtracting(subscribedCharacteristicUUIDs)
         if !missing.isEmpty {
-            print("[PeripheralManager]   notification subscription incomplete missing=\(missing.map { $0.prettyName })")
+            logWarning("[PeripheralManager]   notification subscription incomplete missing=\(missing.map { $0.prettyName })")
             throw PeripheralManagerError.notReady
         }
 
         if !subscribedCharacteristicUUIDs.contains(.SERVICE_CHANGED) {
-            print("[PeripheralManager]   service-changed notifications assumed active by spec")
+            logDebug("[PeripheralManager]   service-changed notifications assumed active by spec")
         }
 
-        print("[PeripheralManager] enableNotifications complete")
+        logInfo("[PeripheralManager] enableNotifications complete")
     }
     
     
@@ -88,7 +88,7 @@ extension PeripheralManager {
             let pretty = uuid.prettyName
             for packet in packets {
                 let hex = packet.build.map { String(format: "%02X", $0) }.joined()
-                print("[PeripheralManager] write packet len=\(packet.build.count) characteristic=\(pretty) hex=\(hex)")
+            logDebug("[PeripheralManager] write packet len=\(packet.build.count) characteristic=\(pretty) hex=\(hex)")
                 try sendData(packet.build, characteristic: characteristic, timeout: 5)
             }
             didSend = true
@@ -97,10 +97,10 @@ extension PeripheralManager {
         }
         catch {
             if didSend {
-                print("[PeripheralManager] sendMessagePackets error after send: \(error)")
+                logError("[PeripheralManager] sendMessagePackets error after send: \(error)")
                 return .sentWithError(error)
             } else {
-                print("[PeripheralManager] sendMessagePackets error before send: \(error)")
+                logError("[PeripheralManager] sendMessagePackets error before send: \(error)")
                 return .unsentWithError(error)
             }
         }
