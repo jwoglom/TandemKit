@@ -36,10 +36,14 @@ public final class PumpResponseCollector {
         print("[PumpResponseCollector] needsMore=\(needsMore)")
         print("[PumpResponseCollector] firstByteMod15=\(packetArrayList.debugFirstByteMod15)")
 
+        let requestProps = type(of: message).props
+        let opCode = packetArrayList.opCode != 0 ? packetArrayList.opCode : packetArrayList.expectedOpCodeValue
+        let characteristicUUID = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased()) ?? requestProps.characteristic
+
         let allData = packetArrayList.buildMessageData()
         let payload = Data(allData.dropFirst(3))
-        if let fallback = BTResponseParser.decodeMessage(opCode: packetArrayList.opCode,
-                                                         characteristic: characteristic,
+        if let fallback = BTResponseParser.decodeMessage(opCode: opCode,
+                                                         characteristic: characteristicUUID.cbUUID,
                                                          payload: payload) {
             print("[PumpResponseCollector] fallback decoded message: \(fallback)")
             return PumpResponseMessage(data: response.data, message: fallback)

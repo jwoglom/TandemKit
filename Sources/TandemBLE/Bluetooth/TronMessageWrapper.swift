@@ -10,6 +10,7 @@ public struct TronMessageWrapper {
     @MainActor
     public init(message: Message, currentTxId: UInt8) {
         self.message = message
+        print("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
         var authKey = Data()
         if type(of: message).props.signed {
             authKey = PumpStateSupplier.authenticationKey()
@@ -47,9 +48,12 @@ public struct TronMessageWrapper {
 
         if messageType == .Response {
             if let responseMeta = TronMessageWrapper.responseMetadata(for: message) {
+                print("[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)")
                 opCode = responseMeta.opCode
                 size = UInt8(truncatingIfNeeded: responseMeta.size)
                 isSigned = responseMeta.signed
+            } else {
+                print("[TronMessageWrapper] missing response metadata for \(type(of: message))")
             }
         } else if requestProps.signed {
             size &+= 24
@@ -81,15 +85,16 @@ public struct TronMessageWrapper {
             }
         }
 
-        if requestTypeName.hasSuffix("Request") {
-            let base = requestTypeName.dropLast("Request".count)
+        let simpleName = requestTypeName.split(separator: ".").last.map(String.init) ?? requestTypeName
+        if simpleName.hasSuffix("Request") {
+            let base = simpleName.dropLast("Request".count)
             let responseName = base + "Response"
             if let meta = MessageRegistry.metadata(forName: String(responseName)) {
                 return meta
             }
         }
 
-        let fallback = requestTypeName + "Response"
+        let fallback = simpleName + "Response"
         return MessageRegistry.metadata(forName: fallback)
     }
 }
