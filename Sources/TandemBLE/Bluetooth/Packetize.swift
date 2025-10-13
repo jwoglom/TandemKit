@@ -30,16 +30,23 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
 
 @MainActor
 public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, timeSinceReset: UInt32?, maxChunkSize: Int? = nil) throws -> [Packet] {
-    var props = type(of: message).props
-    var opCode = props.opCode
-    var length = message.cargo.count
+    let props = type(of: message).props
+    let opCode = props.opCode
     var chunkSize = maxChunkSize ?? determineMaxChunkSize(message)
+    let basePayloadLength = message.cargo.count
+    let payloadLength = basePayloadLength + (props.signed ? 24 : 0)
+    precondition(payloadLength < 256, "Payload too large for single packet header")
+    var packet = Data()
+    packet.append(opCode)
+    packet.append(txId)
+    packet.append(UInt8(payloadLength))
+    packet.append(message.cargo)
+
     if props.signed {
-        length += 24
+        packet.append(Data(repeating: 0, count: 24))
         chunkSize = max(chunkSize, CONTROL_MAX_CHUNK_SIZE)
     }
-    var packet: Data = Bytes.combine(Data([opCode]), Data([txId]), Data([UInt8(length - 3)]), message.cargo)
-    
+
     if props.modifiesInsulinDelivery && !PumpStateSupplier.actionsAffectingInsulinDeliveryEnabled() {
         throw ActionsAffectingInsulinDeliveryNotEnabled()
     }
@@ -51,14 +58,15 @@ public func Packetize(message: Message, authenticationKey: Data?, txId: UInt8, t
             throw PacketizeError.missingAuthenticationKey
         }
 
-        let i = length - 20
-        var messageData = Bytes.firstN(packet, i)
+        let hmacStartIndex = packet.count - 20
+        var messageData = Bytes.firstN(packet, hmacStartIndex)
         let tsrBytes = Bytes.toUint32(timeSinceReset)
-        messageData.replaceSubrange((length-24)..<(length-20), with: tsrBytes)
+        let tsrRange = (messageData.count - 4)..<messageData.count
+        messageData.replaceSubrange(tsrRange, with: tsrBytes)
 
         let hmacedOutput = HmacSha1(data: messageData, key: authenticationKey)
-        packet.replaceSubrange(0..<i, with: messageData)
-        packet.replaceSubrange(i..<i+hmacedOutput.count, with: hmacedOutput)
+        packet.replaceSubrange(0..<hmacStartIndex, with: messageData)
+        packet.replaceSubrange(hmacStartIndex..<hmacStartIndex + hmacedOutput.count, with: hmacedOutput)
     }
     
     var crc = CalculateCRC16(packet)
