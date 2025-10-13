@@ -15,6 +15,8 @@ import TandemBLE
 import os
 #endif
 
+private let transportLogger = PumpLogger(label: "TandemKit.PeripheralManagerTransport")
+
 /// Concrete implementation of PumpMessageTransport using PeripheralManager from TandemBLE
 public final class PeripheralManagerTransport: PumpMessageTransport {
     private let peripheralManager: PeripheralManager
@@ -69,12 +71,12 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), txIdForRequest)
         if wrapper.packets.isEmpty {
-            print("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
+            transportLogger.debug("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
         } else {
-            print("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)")
+            transportLogger.debug("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)")
             for (index, packet) in wrapper.packets.enumerated() {
                 let hex = packet.build.map { String(format: "%02X", $0) }.joined()
-                print("[PeripheralManagerTransport]   packet \(index) len=\(packet.build.count) hex=\(hex)")
+                transportLogger.debug("[PeripheralManagerTransport]   packet \(index) len=\(packet.build.count) hex=\(hex)")
             }
         }
 
@@ -89,15 +91,15 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         switch sendResult {
         case .unsentWithError(let error):
             log.error("Failed to send message: %{public}@", String(describing: error))
-            print("[PeripheralManagerTransport] sendResult=unsentWithError error=\(error)")
+            transportLogger.error("[PeripheralManagerTransport] sendResult=unsentWithError error=\(error)")
             throw error
         case .sentWithError(let error):
             log.error("Message sent but pump returned error: %{public}@", String(describing: error))
-            print("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
+            transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
             log.debug("Message sent successfully")
-            print("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
+            transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
         }
 
         var parsedMessage: Message?
@@ -117,7 +119,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
             log.debug("Received response: %{public}@ bytes", String(describing: data.count))
             let responseHex = data.map { String(format: "%02X", $0) }.joined()
-            print("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
+            transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
 
             let pumpResponse: PumpResponseMessage
             do {
@@ -130,10 +132,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             }
 
             if let responseMessage = pumpResponse.message {
-                print("[PeripheralManagerTransport] parsed response message=\(responseMessage)")
+                transportLogger.debug("[PeripheralManagerTransport] parsed response message=\(responseMessage)")
                 parsedMessage = responseMessage
             } else {
-                print("[PeripheralManagerTransport] awaiting additional packets for \(message)")
+                transportLogger.debug("[PeripheralManagerTransport] awaiting additional packets for \(message)")
             }
         }
 

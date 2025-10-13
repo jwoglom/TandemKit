@@ -18,6 +18,7 @@ import os
 public class PeripheralManager: NSObject, @unchecked Sendable {
 
     private let log = OSLog(category: "PeripheralManager")
+    private let logger = PumpLogger(label: "TandemBLE.PeripheralManager")
 
     ///
     /// This is mutable, because CBPeripheral instances can seemingly become invalid, and need to be periodically re-fetched from CBCentralManager
@@ -99,6 +100,30 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
         queue.setSpecific(key: queueSpecificKey, value: ())
         assertConfiguration()
     }
+
+    func logDebug(_ message: @autoclosure () -> String) {
+        let msg = message()
+        logger.debug(msg)
+        log.debug("%{public}@", msg)
+    }
+
+    func logInfo(_ message: @autoclosure () -> String) {
+        let msg = message()
+        logger.info(msg)
+        log.default("%{public}@", msg)
+    }
+
+    func logWarning(_ message: @autoclosure () -> String) {
+        let msg = message()
+        logger.warning(msg)
+        log.info("%{public}@", msg)
+    }
+
+    func logError(_ message: @autoclosure () -> String) {
+        let msg = message()
+        logger.error(msg)
+        log.error("%{public}@", msg)
+    }
 }
 
 
@@ -179,23 +204,23 @@ extension PeripheralManager {
     private func performInitialSetupIfNeeded() throws {
         guard !didPerformInitialSetup else { return }
 
-        print("[PeripheralManager] init step 1: verifying MTU >= 185 and requesting high priority")
+        logInfo("[PeripheralManager] init step 1: verifying MTU >= 185 and requesting high priority")
         try ensureConnectionParameters()
-        print("[PeripheralManager] init step 1 complete")
+        logInfo("[PeripheralManager] init step 1 complete")
 
-        print("[PeripheralManager] init step 2: reading Device Information Service manufacturer/model")
+        logInfo("[PeripheralManager] init step 2: reading Device Information Service manufacturer/model")
         let (manufacturer, model) = try readDeviceInformation()
         manufacturerName = manufacturer
         modelNumber = model
-        print("[PeripheralManager] init step 2 complete manufacturer=\(manufacturer) model=\(model)")
+        logInfo("[PeripheralManager] init step 2 complete manufacturer=\(manufacturer) model=\(model)")
         delegate?.peripheralManager(self, didIdentifyDevice: manufacturer, model: model)
 
-        print("[PeripheralManager] init step 3: enabling characteristic notifications")
+        logInfo("[PeripheralManager] init step 3: enabling characteristic notifications")
         try enableNotifications()
-        print("[PeripheralManager] init step 3 complete")
+        logInfo("[PeripheralManager] init step 3 complete")
 
         didPerformInitialSetup = true
-        print("[PeripheralManager] initialization steps complete")
+        logInfo("[PeripheralManager] initialization steps complete")
         markInitializationReady()
     }
 
@@ -206,27 +231,27 @@ extension PeripheralManager {
         let maxWithResponse = peripheral.maximumWriteValueLength(for: .withResponse)
         let maxWithoutResponse = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
-        print("[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)")
+        logDebug("[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)")
 
         if maxWithResponse < Int(targetMTU - 3) { // Approximate payload length after headers
-            print("[PeripheralManager]   MTU verification failed – pump likely not in pairing mode")
+            logWarning("[PeripheralManager]   MTU verification failed – pump likely not in pairing mode")
             throw PeripheralManagerError.notReady
         }
 
-        print("[PeripheralManager]   MTU verification succeeded")
+        logDebug("[PeripheralManager]   MTU verification succeeded")
 
         if let central = central {
             let selector = NSSelectorFromString("setDesiredConnectionLatency:forPeripheral:")
             if central.responds(to: selector) {
-                print("[PeripheralManager]   setting connection priority HIGH")
+                logDebug("[PeripheralManager]   setting connection priority HIGH")
                 let latencyValue = NSNumber(value: 0) // CBPeripheralConnectionLatency.low
                 central.perform(selector, with: latencyValue, with: peripheral)
-                print("[PeripheralManager]   connection priority set")
+                logDebug("[PeripheralManager]   connection priority set")
             } else {
-                print("[PeripheralManager]   central manager does not support connection latency adjustment")
+                logWarning("[PeripheralManager]   central manager does not support connection latency adjustment")
             }
         } else {
-            print("[PeripheralManager]   central manager unavailable; skipping priority change")
+            logWarning("[PeripheralManager]   central manager unavailable; skipping priority change")
         }
 
         connectionParametersVerified = true
@@ -235,29 +260,29 @@ extension PeripheralManager {
     private func markInitializationReady() {
         guard !initialConnectionReady else { return }
         initialConnectionReady = true
-        print("[PeripheralManager] initial pump connection established; authentication may proceed")
+        logInfo("[PeripheralManager] initial pump connection established; authentication may proceed")
     }
 
     private func readDeviceInformation() throws -> (String, String) {
         guard let manufacturerCharacteristic = peripheral.getManufacturerNameCharacteristic() else {
-            print("[PeripheralManager]   manufacturer characteristic unavailable")
+            logWarning("[PeripheralManager]   manufacturer characteristic unavailable")
             throw PeripheralManagerError.notReady
         }
 
         guard let manufacturerValue = try readValue(for: manufacturerCharacteristic, timeout: TimeInterval.seconds(5)),
               let manufacturer = string(from: manufacturerValue), !manufacturer.isEmpty else {
-            print("[PeripheralManager]   manufacturer value empty")
+            logWarning("[PeripheralManager]   manufacturer value empty")
             throw PeripheralManagerError.emptyValue
         }
 
         guard let modelCharacteristic = peripheral.getModelNumberCharacteristic() else {
-            print("[PeripheralManager]   model number characteristic unavailable")
+            logWarning("[PeripheralManager]   model number characteristic unavailable")
             throw PeripheralManagerError.notReady
         }
 
         guard let modelValue = try readValue(for: modelCharacteristic, timeout: TimeInterval.seconds(5)),
               let model = string(from: modelValue), !model.isEmpty else {
-            print("[PeripheralManager]   model number value empty")
+            logWarning("[PeripheralManager]   model number value empty")
             throw PeripheralManagerError.emptyValue
         }
 
@@ -663,9 +688,9 @@ extension PeripheralManager {
         queueLock.unlock()
         if let value = cmd?.value {
             let hex = value.prefix(32).map { String(format: "%02X", $0) }.joined()
-            print("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hex)…")
+            logDebug("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hex)…")
         } else {
-            print("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
+            logDebug("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
         }
         return cmd?.value
     }

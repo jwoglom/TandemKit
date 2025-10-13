@@ -1,6 +1,8 @@
 import Foundation
 import TandemCore
 
+private let tronLogger = PumpLogger(label: "TandemBLE.TronMessageWrapper")
+
 /// Wraps a pump `Message` and provides the packetized data for transmission.
 /// Mirrors the behavior of PumpX2 `TronMessageWrapper`.
 public struct TronMessageWrapper {
@@ -20,9 +22,9 @@ public struct TronMessageWrapper {
         self.requestMetadata = reqMeta
         self.responseMetadata = MessageRegistry.responseMetadata(for: message)
 
-        print("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
+        tronLogger.debug("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
         if let respMeta = responseMetadata {
-            print("[TronMessageWrapper]   expects response: \(respMeta.name)")
+            tronLogger.debug("[TronMessageWrapper]   expects response: \(respMeta.name)")
         }
 
         var authKey = Data()
@@ -70,12 +72,12 @@ public struct TronMessageWrapper {
 
         if messageType == .Response {
             if let responseMeta = responseMetadata {
-                print("[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)")
+                tronLogger.debug("[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)")
                 opCode = responseMeta.opCode
                 size = UInt8(truncatingIfNeeded: responseMeta.size)
                 isSigned = responseMeta.signed
             } else {
-                print("[TronMessageWrapper] missing response metadata for \(type(of: message))")
+                tronLogger.warning("[TronMessageWrapper] missing response metadata for \(type(of: message))")
             }
         } else if requestProps.signed {
             size &+= 24

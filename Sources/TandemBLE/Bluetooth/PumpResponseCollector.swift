@@ -2,6 +2,8 @@ import Foundation
 import CoreBluetooth
 import TandemCore
 
+private let pumpCollectorLogger = PumpLogger(label: "TandemBLE.PumpResponseCollector")
+
 public enum PumpResponseCollectorError: Error {
     case invalidResponse
 }
@@ -45,15 +47,15 @@ public final class PumpResponseCollector {
             throw PumpResponseCollectorError.invalidResponse
         }
         if let message = response.message {
-            print("[PumpResponseCollector] message ready: \(message)")
+            pumpCollectorLogger.debug("[PumpResponseCollector] message ready: \(message)")
             return response
         }
 
-        print("[PumpResponseCollector] no message yet (dataLen=\(data.count))")
+        pumpCollectorLogger.debug("[PumpResponseCollector] no message yet (dataLen=\(data.count))")
 
         let needsMore = packetArrayList.needsMorePacket()
-        print("[PumpResponseCollector] needsMore=\(needsMore)")
-        print("[PumpResponseCollector] firstByteMod15=\(packetArrayList.debugFirstByteMod15)")
+        pumpCollectorLogger.debug("[PumpResponseCollector] needsMore=\(needsMore)")
+        pumpCollectorLogger.debug("[PumpResponseCollector] firstByteMod15=\(packetArrayList.debugFirstByteMod15)")
 
         let requestProps = type(of: message).props
         let opCode = packetArrayList.opCode != 0 ? packetArrayList.opCode : packetArrayList.expectedOpCodeValue
@@ -64,12 +66,12 @@ public final class PumpResponseCollector {
         if let fallback = BTResponseParser.decodeMessage(opCode: opCode,
                                                          characteristic: characteristicUUID.cbUUID,
                                                          payload: payload) {
-            print("[PumpResponseCollector] fallback decoded message: \(fallback)")
+            pumpCollectorLogger.debug("[PumpResponseCollector] fallback decoded message: \(fallback)")
             return PumpResponseMessage(data: response.data, message: fallback)
         }
 
         if !needsMore {
-            print("[PumpResponseCollector] no more packets expected but decode failed; returning raw")
+            pumpCollectorLogger.warning("[PumpResponseCollector] no more packets expected but decode failed; returning raw")
         }
 
         return response

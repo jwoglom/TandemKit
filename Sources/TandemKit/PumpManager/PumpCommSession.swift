@@ -10,6 +10,7 @@ public class PumpCommSession {
     private let sessionQueue = DispatchQueue(label: "com.jwoglom.TandemKit.PumpCommSession.queue")
     private(set) var state: PumpState
     weak var delegate: PumpCommSessionDelegate?
+    private let logger = PumpLogger(label: "TandemKit.PumpCommSession")
 
 #if DEBUG
     static var testOverrideJpakeArtifacts: (() -> (derivedSecret: Data, serverNonce: Data))?
@@ -36,7 +37,7 @@ public class PumpCommSession {
 
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
         assertOnSessionQueue()
-        print("[PumpCommSession] Starting pair, shortCode=\(isShortPairingCode(pairingCode))")
+        logger.info("[PumpCommSession] Starting pair, shortCode=\(isShortPairingCode(pairingCode))")
         if isShortPairingCode(pairingCode) {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
             try pairUsingJpake(transport: transport, pairingCode: pairingCode)
@@ -59,12 +60,12 @@ public class PumpCommSession {
             throw PumpCommError.other
         }
 
-        print("[PumpCommSession] PumpChallenge centralChallengeRequest ready")
+        logger.debug("[PumpCommSession] PumpChallenge centralChallengeRequest ready")
 
         let responseMessage = try transport.sendMessage(challengeRequest)
-        print("[PumpCommSession] Received central challenge response: \(type(of: responseMessage))")
+        logger.debug("[PumpCommSession] Received central challenge response: \(type(of: responseMessage))")
         guard let centralResponse = responseMessage as? CentralChallengeResponse else {
-            print("[PumpCommSession] Unexpected central challenge response payload: \(String(describing: responseMessage))")
+            logger.error("[PumpCommSession] Unexpected central challenge response payload: \(String(describing: responseMessage))")
             throw PumpCommError.other
         }
 
@@ -73,23 +74,23 @@ public class PumpCommSession {
             throw PumpCommError.other
         }
 
-        print("[PumpCommSession] Sending PumpChallengeRequest")
+        logger.debug("[PumpCommSession] Sending PumpChallengeRequest")
 
         let pumpChallengeResponseMessage = try transport.sendMessage(pumpChallengeRequest)
-        print("[PumpCommSession] Received pump challenge response: \(type(of: pumpChallengeResponseMessage))")
+        logger.debug("[PumpCommSession] Received pump challenge response: \(type(of: pumpChallengeResponseMessage))")
         guard let pumpChallengeResponse = pumpChallengeResponseMessage as? PumpChallengeResponse, pumpChallengeResponse.success else {
-            print("[PumpCommSession] Pump challenge response invalid: \(String(describing: pumpChallengeResponseMessage))")
+            logger.error("[PumpCommSession] Pump challenge response invalid: \(String(describing: pumpChallengeResponseMessage))")
             throw PumpCommError.other
         }
 
         PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
 
-        print("[PumpCommSession] Legacy pairing succeeded; cleared artifacts")
+        logger.info("[PumpCommSession] Legacy pairing succeeded; cleared artifacts")
 
         state.derivedSecret = nil
         state.serverNonce = nil
         delegate?.pumpCommSession(self, didChange: state)
-        print("[PumpCommSession] delegate notified of PumpState change (legacy)")
+        logger.debug("[PumpCommSession] delegate notified of PumpState change (legacy)")
     }
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -101,7 +102,7 @@ public class PumpCommSession {
             state.derivedSecret = artifacts.derivedSecret
             state.serverNonce = artifacts.serverNonce
             delegate?.pumpCommSession(self, didChange: state)
-            print("[PumpCommSession] JPAKE pairing bypassed via test override")
+            logger.info("[PumpCommSession] JPAKE pairing bypassed via test override")
             return
         }
 #endif
@@ -110,30 +111,30 @@ public class PumpCommSession {
         }
 
         let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode)
-        print("[PumpCommSession] initial state: done=\(builder.done()) invalid=\(builder.invalid())")
+        logger.debug("[PumpCommSession] initial state: done=\(builder.done()) invalid=\(builder.invalid())")
         while !builder.done() && !builder.invalid() {
             let maybeRequest = builder.nextRequest()
-            print("[PumpCommSession] nextRequest -> \(String(describing: maybeRequest))")
+            logger.debug("[PumpCommSession] nextRequest -> \(String(describing: maybeRequest))")
             guard let request = maybeRequest else { break }
-            print("[PumpCommSession] Sending JPAKE request: \(request)")
+            logger.debug("[PumpCommSession] Sending JPAKE request: \(request)")
             let response = try transport.sendMessage(request)
-            print("[PumpCommSession] Received JPAKE response: \(response)")
+            logger.debug("[PumpCommSession] Received JPAKE response: \(response)")
             builder.processResponse(response)
-            print("[PumpCommSession] builder state: done=\(builder.done()) invalid=\(builder.invalid())")
+            logger.debug("[PumpCommSession] builder state: done=\(builder.done()) invalid=\(builder.invalid())")
         }
         guard builder.done(), let secret = builder.getDerivedSecret(), let serverNonce = builder.getServerNonce() else {
-            print("[PumpCommSession] JPAKE failed: done=\(builder.done()) invalid=\(builder.invalid()) derivedSecret=\(builder.getDerivedSecret() != nil) serverNonce=\(builder.getServerNonce() != nil)")
+            logger.error("[PumpCommSession] JPAKE failed: done=\(builder.done()) invalid=\(builder.invalid()) derivedSecret=\(builder.getDerivedSecret() != nil) serverNonce=\(builder.getServerNonce() != nil)")
             throw PumpCommError.missingAuthenticationKey
         }
 
         PumpStateSupplier.storePairingArtifacts(derivedSecret: secret, serverNonce: serverNonce)
 
-        print("[PumpCommSession] JPAKE pairing succeeded; stored artifacts")
+        logger.info("[PumpCommSession] JPAKE pairing succeeded; stored artifacts")
 
         state.derivedSecret = secret
         state.serverNonce = serverNonce
         delegate?.pumpCommSession(self, didChange: state)
-        print("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
+        logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
     }
 #endif
 }

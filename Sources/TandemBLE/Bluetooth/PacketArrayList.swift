@@ -1,6 +1,8 @@
 import Foundation
 import TandemCore
 
+private let packetArrayLogger = PumpLogger(label: "TandemBLE.PacketArrayList")
+
 /// Parses incoming packets from the pump and validates them.
 /// This mirrors the behaviour of PumpX2 `PacketArrayList`.
 struct PacketArrayList {
@@ -63,7 +65,7 @@ struct PacketArrayList {
         } else {
             throw UnexpectedOpCodeError(expected: expectedOpCode, actual: opCode)
         }
-        print("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
+        packetArrayLogger.debug("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
     }
 
     mutating func validatePacket(_ packet: Data) throws {
@@ -92,7 +94,7 @@ struct PacketArrayList {
 
         empty = false
         self.firstByteMod15 = Int(firstByte & 0x0f) - 1
-        print("[PacketArrayList] updated firstByteMod15=\(self.firstByteMod15) empty=\(empty)")
+        packetArrayLogger.debug("[PacketArrayList] updated firstByteMod15=\(self.firstByteMod15) empty=\(empty)")
         self.opCode = opCode
     }
 
@@ -123,7 +125,7 @@ struct PacketArrayList {
         let crc = CalculateCRC16(messageDataBuffer)
         var ok = crc == expectedCrc
         if !ok {
-            print("[PacketArrayList] CRC mismatch expected=\(expectedCrc.hexadecimalString) actual=\(crc.hexadecimalString) messageLen=\(messageDataBuffer.count) fullCargoLen=\(fullCargo.count)")
+            packetArrayLogger.error("[PacketArrayList] CRC mismatch expected=\(expectedCrc.hexadecimalString) actual=\(crc.hexadecimalString) messageLen=\(messageDataBuffer.count) fullCargoLen=\(fullCargo.count)")
             if shouldIgnoreInvalidHmac(authKey) { ok = true } else { return false }
         }
         if isSigned {
