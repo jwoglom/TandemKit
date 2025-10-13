@@ -32,25 +32,33 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest, CustomStringConver
     }
 
     public init(appInstanceId: Int, centralChallenge: Data) {
-        precondition(centralChallenge.count == 165)
-        self.cargo = Jpake1aRequest.buildCargo(appInstanceId: appInstanceId, centralChallenge: centralChallenge)
         self.appInstanceId = appInstanceId
-        self.centralChallenge = centralChallenge
+        self.centralChallenge = Jpake1aRequest.normalizeChallenge(centralChallenge)
+        self.cargo = Jpake1aRequest.buildCargo(appInstanceId: appInstanceId, centralChallenge: self.centralChallenge)
     }
 
     public static func buildCargo(appInstanceId: Int, centralChallenge: Data) -> Data {
         var cargo = Bytes.emptyBytes(167)
+        let challenge = normalizeChallenge(centralChallenge)
         let combined = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
-            centralChallenge
+            challenge
         )
         cargo.replaceSubrange(0..<167, with: combined)
         return cargo
     }
 
+    private static func normalizeChallenge(_ challenge: Data) -> Data {
+        if challenge.count == 165 { return challenge }
+        if challenge.count > 165 { return challenge.prefix(165) }
+        var padded = Data(challenge)
+        padded.append(Data(repeating: 0, count: 165 - challenge.count))
+        return padded
+    }
+
     public var description: String {
         let challengeHex = centralChallenge.map { String(format: "%02X", $0) }.joined()
-        return "Jpake1aRequest(appInstanceId=\(appInstanceId), centralChallenge=\(challengeHex))"
+        return "Jpake1aRequest(appInstanceId=\(appInstanceId), centralChallengeLength=\(centralChallenge.count), centralChallenge=\(challengeHex))"
     }
 }
 
