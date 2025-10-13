@@ -157,4 +157,13 @@ public struct PumpStateSupplier {
             }
         }
     }
+
+    public static func getDerivedSecret() -> Data? {
+        withLock {
+            guard let derivedHex = jpakeDerivedSecretHex?(), !derivedHex.isEmpty else {
+                return nil
+            }
+            return Data(hexadecimalString: derivedHex)
+        }
+    }
 }
