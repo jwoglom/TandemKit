@@ -5,12 +5,26 @@ import TandemCore
 /// Mirrors the behavior of PumpX2 `TronMessageWrapper`.
 public struct TronMessageWrapper {
     public let message: Message
+    public let requestMetadata: MessageMetadata
+    public let responseMetadata: MessageMetadata?
     public let packets: [Packet]
 
     @MainActor
     public init(message: Message, currentTxId: UInt8) {
         self.message = message
+
+        // Get metadata for the message
+        guard let reqMeta = MessageRegistry.metadata(for: message) else {
+            fatalError("No metadata found for message type: \(String(describing: type(of: message)))")
+        }
+        self.requestMetadata = reqMeta
+        self.responseMetadata = MessageRegistry.responseMetadata(for: message)
+
         print("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
+        if let respMeta = responseMetadata {
+            print("[TronMessageWrapper]   expects response: \(respMeta.name)")
+        }
+
         var authKey = Data()
         if type(of: message).props.signed {
             authKey = PumpStateSupplier.authenticationKey()
@@ -27,6 +41,14 @@ public struct TronMessageWrapper {
     @MainActor
     public init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
         self.message = message
+
+        // Get metadata for the message
+        guard let reqMeta = MessageRegistry.metadata(for: message) else {
+            fatalError("No metadata found for message type: \(String(describing: type(of: message)))")
+        }
+        self.requestMetadata = reqMeta
+        self.responseMetadata = MessageRegistry.responseMetadata(for: message)
+
         var authKey = Data()
         if type(of: message).props.signed {
             authKey = PumpStateSupplier.authenticationKey()
@@ -47,7 +69,7 @@ public struct TronMessageWrapper {
         var isSigned = requestProps.signed
 
         if messageType == .Response {
-            if let responseMeta = TronMessageWrapper.responseMetadata(for: message) {
+            if let responseMeta = responseMetadata {
                 print("[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)")
                 opCode = responseMeta.opCode
                 size = UInt8(truncatingIfNeeded: responseMeta.size)
@@ -62,7 +84,9 @@ public struct TronMessageWrapper {
         return PacketArrayList(expectedOpCode: opCode,
                                expectedCargoSize: size,
                                expectedTxId: packets.first?.txId ?? 0,
-                               isSigned: isSigned)
+                               isSigned: isSigned,
+                               requestMetadata: requestMetadata,
+                               responseMetadata: responseMetadata)
     }
 
     func mergeIntoSinglePacket() -> Packet? {
@@ -77,24 +101,20 @@ public struct TronMessageWrapper {
         return packet
     }
 
-    private static func responseMetadata(for message: Message) -> MessageMetadata? {
-        let requestTypeName = String(describing: type(of: message))
-        if let meta = MessageRegistry.metadata(forName: requestTypeName) {
-            if meta.messageType == .Response {
-                return meta
-            }
-        }
+    // MARK: - Convenience Methods
 
-        let simpleName = requestTypeName.split(separator: ".").last.map(String.init) ?? requestTypeName
-        if simpleName.hasSuffix("Request") {
-            let base = simpleName.dropLast("Request".count)
-            let responseName = base + "Response"
-            if let meta = MessageRegistry.metadata(forName: String(responseName)) {
-                return meta
-            }
-        }
+    /// Get the transaction ID for this wrapper
+    public var txId: UInt8 {
+        packets.first?.txId ?? 0
+    }
 
-        let fallback = simpleName + "Response"
-        return MessageRegistry.metadata(forName: fallback)
+    /// Get the response type expected for this request
+    public func getResponseType() -> Message.Type? {
+        responseMetadata?.type
+    }
+
+    /// Get the request message
+    public func getRequest() -> Message {
+        message
     }
 }

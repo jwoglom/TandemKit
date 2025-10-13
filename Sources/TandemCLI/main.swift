@@ -564,7 +564,6 @@ private extension TandemCLIMain {
         print("  Authentication key: \(authKeyHex)")
 
         print("")
-        print("You can persist these values for future sessions using TandemKit or Loop/Trio.")
         #else
         throw CLIError("Pairing command is only available on platforms with CoreBluetooth support.")
         #endif
