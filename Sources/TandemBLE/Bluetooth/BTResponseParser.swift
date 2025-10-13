@@ -19,9 +19,14 @@ public struct BTResponseParser {
         } catch {
             return PumpResponseMessage(data: output)
         }
-        if packetArrayList.needsMorePacket() {
+        let needsMore = packetArrayList.needsMorePacket()
+        print("[BTResponseParser] needsMorePacket=\(needsMore) opCode=\(packetArrayList.opCode)")
+        if needsMore {
             return PumpResponseMessage(data: output)
         }
+
+        let allData = packetArrayList.buildMessageData()
+        let payload = allData.dropFirst(3)
 
         var authKey = Data()
         if type(of: message).props.signed {
@@ -30,14 +35,38 @@ public struct BTResponseParser {
             authKey = PumpStateSupplier.authenticationKey()
         }
 
-        if packetArrayList.validate(authKey) {
-            let allData = packetArrayList.buildMessageData()
-            let payload = allData.dropFirst(3)
-            // At present TandemKit does not implement message decoding; return raw payload
-            return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
-        } else {
-            return PumpResponseMessage(data: output)
+        let isValid = packetArrayList.validate(authKey)
+        if !isValid {
+            print("[BTResponseParser] Warning: validation failed for opCode=\(packetArrayList.opCode) length=\(payload.count)")
         }
+
+        let decodedMessage = decodeMessage(opCode: packetArrayList.opCode,
+                                           characteristic: uuid,
+                                           payload: Data(payload))
+
+        if let message = decodedMessage {
+            print("[BTResponseParser] decoded \(message)")
+            return PumpResponseMessage(data: output, message: message)
+        }
+
+        print("[BTResponseParser] Unable to decode message for opCode=\(packetArrayList.opCode) payloadLength=\(payload.count)")
+
+        return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
+    }
+
+    static func decodeMessage(opCode: UInt8, characteristic: CBUUID, payload: Data) -> Message? {
+        let charEnum = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased())
+        let candidates = MessageRegistry.bestMatches(opCode: opCode,
+                                                     characteristic: charEnum,
+                                                     payloadLength: payload.count)
+        if candidates.isEmpty {
+            print("[BTResponseParser] No registry candidate for opCode=\(opCode) characteristic=\(characteristic.uuidString) payloadLength=\(payload.count)")
+        }
+        guard let meta = candidates.first else { return nil }
+        if payload.count != Int(meta.size) {
+            print("[BTResponseParser] Candidate \(meta.name) expects size=\(meta.size) but payload=\(payload.count)")
+        }
+        return meta.type.init(cargo: payload)
     }
 
     static func parseTxId(_ output: Data) -> UInt8 {

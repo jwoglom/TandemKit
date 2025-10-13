@@ -102,8 +102,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             }
 
             log.debug("Received response: %{public}@ bytes", String(describing: data.count))
-            let responsePreview = data.prefix(32).map { String(format: "%02X", $0) }.joined()
-            print("[PeripheralManagerTransport] received \(data.count) bytes preview=\(responsePreview)…")
+            let responseHex = data.map { String(format: "%02X", $0) }.joined()
+            print("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
 
             let pumpResponse: PumpResponseMessage
             do {
@@ -116,9 +116,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             }
 
             if let responseMessage = pumpResponse.message {
+                print("[PeripheralManagerTransport] parsed response message=\(responseMessage)")
                 parsedMessage = responseMessage
             } else {
-                print("[PeripheralManagerTransport] awaiting additional packets for \(type(of: message))")
+                print("[PeripheralManagerTransport] awaiting additional packets for \(message)")
             }
         }
 
