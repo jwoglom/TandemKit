@@ -80,6 +80,7 @@ public class TandemPumpManager: PumpManager {
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
+    private let log = OSLog(category: "TandemPumpManager")
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -258,6 +259,14 @@ public class TandemPumpManager: PumpManager {
         var state = lockedState.value
         state.lastReconciliation = date
         lockedState.value = state
+        notifyPumpManagerDelegateDidUpdateState()
+    }
+
+    private func notifyPumpManagerDelegateDidUpdateState() {
+        guard let delegate = pumpManagerDelegate else { return }
+        delegateQueue.async {
+            delegate.pumpManagerDidUpdateState(self)
+        }
     }
 
     private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerResult<DoseEntry>) -> Void) {
@@ -441,6 +450,9 @@ public class TandemPumpManager: PumpManager {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
+            var permissionBolusId: UInt32?
+            var shouldReleasePermissionOnFailure = false
+
             do {
                 let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
                     transport: transport,
@@ -451,6 +463,9 @@ public class TandemPumpManager: PumpManager {
                 guard permissionResponse.isPermissionGranted else {
                     throw PumpCommError.errorResponse(response: permissionResponse)
                 }
+
+                permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
+                shouldReleasePermissionOnFailure = true
 
                 let milliUnits = max(0, Int((units * 1000).rounded()))
                 let totalVolume = UInt32(clamping: milliUnits)
@@ -476,6 +491,8 @@ public class TandemPumpManager: PumpManager {
                     throw PumpCommError.errorResponse(response: initiateResponse)
                 }
 
+                shouldReleasePermissionOnFailure = false
+
                 self.activeBolus.value = ActiveBolus(
                     id: initiateResponse.bolusId,
                     dose: dose
@@ -489,6 +506,9 @@ public class TandemPumpManager: PumpManager {
                 self.completeBolus(.success(dose), completion: completion)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.other
+                if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
+                    self.releaseBolusPermission(transport: transport, bolusId: bolusId)
+                }
                 self.activeBolus.value = nil
                 self.updateStatus { status in
                     status.bolusState = .none
@@ -837,8 +857,28 @@ extension TandemPumpManager: PumpCommDelegate {
 
         updatePairingArtifacts(with: pumpState)
 
+        notifyPumpManagerDelegateDidUpdateState()
+
         // The state change will be automatically persisted by Loop/Trio
         // when it calls rawState during the next cycle
+    }
+}
+
+private extension TandemPumpManager {
+    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
+        do {
+            let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: BolusPermissionReleaseRequest(bolusId: bolusId),
+                expecting: BolusPermissionReleaseResponse.self
+            )
+
+            if response.status != 0 {
+                log.error("Failed to release bolus permission for id %{public}u with status %{public}d", bolusId, response.status)
+            }
+        } catch {
+            log.error("Error releasing bolus permission for id %{public}u: %{public}@", bolusId, String(describing: error))
+        }
     }
 }
 
