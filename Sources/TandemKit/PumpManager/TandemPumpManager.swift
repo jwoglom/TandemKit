@@ -69,10 +69,16 @@ public class TandemPumpManager: PumpManager {
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
+    private let telemetryScheduler = PumpTelemetryScheduler(label: "com.jwoglom.TandemKit.telemetry")
+    private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
     private let lockedStatus: Locked<PumpManagerStatus>
+    private let lockedBatteryChargeRemaining = Locked<Double?>(nil)
+    private let lockedReservoirValue = Locked<ReservoirValue?>(nil)
+    private let lockedCurrentBasalRate = Locked<Double?>(nil)
+    private var telemetryConfigured = false
 
     private func updatePairingArtifacts(with pumpState: PumpState?) {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -102,6 +108,12 @@ public class TandemPumpManager: PumpManager {
 
     public func updateTransport(_ transport: PumpMessageTransport?) {
         transportLock.value = transport
+        if transport != nil {
+            telemetryLogger.debug("Transport available – triggering telemetry refresh")
+            telemetryScheduler.triggerAll()
+        } else {
+            telemetryLogger.debug("Transport cleared – telemetry will pause until reconnect")
+        }
     }
 
     private static func makeDefaultStatus() -> PumpManagerStatus {
@@ -131,6 +143,7 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
         updatePairingArtifacts(with: state.pumpState)
+        setupTelemetry()
     }
 
     public required init?(rawState: RawStateValue) {
@@ -145,6 +158,11 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
         updatePairingArtifacts(with: state.pumpState)
+        setupTelemetry()
+    }
+
+    deinit {
+        telemetryScheduler.cancelAll()
     }
 
     public var rawState: RawStateValue {
@@ -189,6 +207,154 @@ public class TandemPumpManager: PumpManager {
 
     public var status: PumpManagerStatus {
         return lockedStatus.value
+    }
+
+    public var pumpStatus: PumpManagerStatus {
+        return lockedStatus.value
+    }
+
+    public var pumpBatteryChargeRemaining: Double? {
+        return lockedBatteryChargeRemaining.value
+    }
+
+    public var reservoirLevel: ReservoirValue? {
+        return lockedReservoirValue.value
+    }
+
+    private func setupTelemetry() {
+        guard !telemetryConfigured else { return }
+        telemetryConfigured = true
+
+        telemetryScheduler.schedule(kind: .basal, interval: 5 * 60) { [weak self] in
+            self?.fetchBasalStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .reservoir, interval: 5 * 60) { [weak self] in
+            self?.fetchReservoirStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .battery, interval: 30 * 60) { [weak self] in
+            self?.fetchBatteryStatus()
+        }
+    }
+
+    private func fetchBatteryStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping battery telemetry – no transport")
+            return
+        }
+
+        do {
+            let response = try pumpComm.sendMessage(
+                transport: transport,
+                message: CurrentBatteryV2Request(),
+                expecting: CurrentBatteryV2Response.self
+            )
+
+            let percent = Double(response.getBatteryPercent()) / 100.0
+            lockedBatteryChargeRemaining.value = percent
+
+            telemetryLogger.debug("Battery telemetry updated: \(percent * 100)% remaining")
+
+            updateStatus { status in
+                status.pumpBatteryChargeRemaining = percent
+            }
+
+            notifyDelegateStateUpdated()
+        } catch {
+            telemetryLogger.error("Battery telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchReservoirStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping reservoir telemetry – no transport")
+            return
+        }
+
+        do {
+            let response = try pumpComm.sendMessage(
+                transport: transport,
+                message: InsulinStatusRequest(),
+                expecting: InsulinStatusResponse.self
+            )
+
+            let units = Double(response.currentInsulinAmount) / 1000.0
+            let timestamp = Date()
+            let reservoirValue = ReservoirValue(startDate: timestamp, unitVolume: units)
+
+            lockedReservoirValue.value = reservoirValue
+
+            telemetryLogger.debug("Reservoir telemetry updated: \(String(format: "%.2f", units)) U remaining")
+
+            var managerState = lockedState.value
+            managerState.lastReconciliation = timestamp
+            lockedState.value = managerState
+
+            notifyDelegateOfReservoir(reservoirValue)
+            notifyDelegateStateUpdated()
+        } catch {
+            telemetryLogger.error("Reservoir telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchBasalStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping basal telemetry – no transport")
+            return
+        }
+
+        do {
+            let response = try pumpComm.sendMessage(
+                transport: transport,
+                message: CurrentBasalStatusRequest(),
+                expecting: CurrentBasalStatusResponse.self
+            )
+
+            let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
+            lockedCurrentBasalRate.value = rateUnitsPerHour
+
+            telemetryLogger.debug("Basal telemetry updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
+
+            let newBasalState: PumpManagerStatus.BasalDeliveryState
+            if rateUnitsPerHour <= 0 {
+                newBasalState = .suspended(Date())
+            } else {
+                newBasalState = .active(Date())
+            }
+
+            updateStatus { status in
+                status.basalDeliveryState = newBasalState
+            }
+
+            notifyDelegateStateUpdated()
+        } catch {
+            telemetryLogger.error("Basal telemetry request failed: \(error)")
+        }
+    }
+
+    private func notifyDelegateStateUpdated() {
+        guard let delegate = pumpManagerDelegate else { return }
+        pumpDelegate.queue.async { [weak self] in
+            guard let self = self else { return }
+            delegate.pumpManagerDidUpdateState(self)
+        }
+    }
+
+    private func notifyDelegateOfReservoir(_ value: ReservoirValue) {
+        guard let delegate = pumpManagerDelegate else { return }
+        pumpDelegate.queue.async { [weak self] in
+            guard let self = self else { return }
+            delegate.pumpManager(self, didReadReservoirValue: value.unitVolume, at: value.startDate) { [weak self] result in
+                guard let self = self else { return }
+                switch result {
+                case .success:
+                    self.telemetryLogger.debug("Delegate accepted reservoir update")
+                case .failure(let error):
+                    self.telemetryLogger.warning("Delegate failed to store reservoir update: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - Status Observers
