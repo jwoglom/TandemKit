@@ -9,6 +9,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
+    public var settings: TandemPumpManagerSettings
+    public var latestInsulinOnBoard: Double?
     public var lastReservoirReading: ReservoirValue?
     public var basalDeliveryState: PumpManagerStatus.BasalDeliveryState?
     public var bolusState: PumpManagerStatus.BolusState
@@ -17,6 +19,13 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public init(
         pumpState: PumpState?,
         lastReconciliation: Date? = nil,
+        settings: TandemPumpManagerSettings = .default,
+        latestInsulinOnBoard: Double? = nil
+    ) {
+        self.pumpState = pumpState
+        self.lastReconciliation = lastReconciliation
+        self.settings = settings
+        self.latestInsulinOnBoard = latestInsulinOnBoard
         lastReservoirReading: ReservoirValue? = nil,
         basalDeliveryState: PumpManagerStatus.BasalDeliveryState? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
@@ -48,6 +57,17 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             self.lastReconciliation = nil
         }
 
+        if let settingsRaw = rawValue["settings"] as? TandemPumpManagerSettings.RawValue,
+           let settings = TandemPumpManagerSettings(rawValue: settingsRaw) {
+            self.settings = settings
+        } else {
+            self.settings = .default
+        }
+
+        if let latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double {
+            self.latestInsulinOnBoard = latestInsulinOnBoard
+        } else {
+            self.latestInsulinOnBoard = nil
         if let reservoirRaw = rawValue["lastReservoirReading"] as? [String: Any] {
             self.lastReservoirReading = TandemPumpManagerState.decodeReservoirValue(from: reservoirRaw)
         } else {
@@ -85,6 +105,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
         if let lastReconciliation = lastReconciliation {
             raw["lastReconciliation"] = lastReconciliation.timeIntervalSinceReferenceDate
+        }
+
+        let settingsRaw = settings.rawValue
+        if !settingsRaw.isEmpty {
+            raw["settings"] = settingsRaw
+        }
+
+        if let latestInsulinOnBoard = latestInsulinOnBoard {
+            raw["latestInsulinOnBoard"] = latestInsulinOnBoard
         }
 
         if let lastReservoirReading = lastReservoirReading {

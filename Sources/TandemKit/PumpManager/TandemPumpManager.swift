@@ -617,6 +617,12 @@ public class TandemPumpManager: PumpManager {
     // MARK: - Dose Delivery Methods
 
     public func enactBolus(units: Double, at startDate: Date, willRequest: @escaping (_ dose: DoseEntry) -> Void, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
+        if let error = validateBolusRequest(units: units, activationType) {
+            delegateQueue.async {
+                completion(error)
+            }
+            return
+        }
         let dose = DoseEntry(
             type: .bolus,
             startDate: startDate,
@@ -804,6 +810,13 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ error: PumpManagerError?) -> Void) {
+        if let error = validateTempBasalRequest(unitsPerHour: unitsPerHour, duration: duration) {
+            delegateQueue.async {
+                completion(error)
+            }
+            return
+        }
+
         let startDate = Date()
         let previousStatus = lockedStatus.value
         let endDate = startDate.addingTimeInterval(duration)
@@ -940,6 +953,59 @@ public class TandemPumpManager: PumpManager {
         delegateQueue.async {
             completion(.communication(PumpCommError.notImplemented))
         }
+    }
+
+    private var currentSettings: TandemPumpManagerSettings {
+        return lockedState.value.settings
+    }
+
+    private var latestInsulinOnBoard: Double? {
+        return lockedState.value.latestInsulinOnBoard
+    }
+
+    private func validateBolusRequest(units: Double, _ activationType: BolusActivationType) -> PumpManagerError? {
+        guard units > 0 else {
+            return .deviceState(TandemPumpManagerValidationError.invalidBolusAmount(requested: units))
+        }
+
+        if let maxBolus = currentSettings.maxBolus, units > maxBolus {
+            return .deviceState(TandemPumpManagerValidationError.maximumBolusExceeded(requested: units, maximum: maxBolus))
+        }
+
+        if let maxIOB = currentSettings.maxInsulinOnBoard,
+           let currentIOB = latestInsulinOnBoard,
+           currentIOB + units > maxIOB {
+            return .deviceState(
+                TandemPumpManagerValidationError.insulinOnBoardLimitExceeded(
+                    currentIOB: currentIOB,
+                    requested: units,
+                    maximum: maxIOB
+                )
+            )
+        }
+
+        return nil
+    }
+
+    private func validateTempBasalRequest(unitsPerHour: Double, duration: TimeInterval) -> PumpManagerError? {
+        guard unitsPerHour >= 0 else {
+            return .deviceState(TandemPumpManagerValidationError.invalidTempBasalRate(requested: unitsPerHour))
+        }
+
+        if let maxRate = currentSettings.maxTempBasalRate, unitsPerHour > maxRate {
+            return .deviceState(
+                TandemPumpManagerValidationError.maximumTempBasalRateExceeded(
+                    requested: unitsPerHour,
+                    maximum: maxRate
+                )
+            )
+        }
+
+        if duration <= 0 {
+            return .deviceState(TandemPumpManagerValidationError.invalidTempBasalDuration(requested: duration))
+        }
+
+        return nil
     }
 
     // MARK: - Delivery Control Methods
