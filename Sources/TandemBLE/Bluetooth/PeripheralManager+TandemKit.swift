@@ -7,6 +7,7 @@
 
 import Foundation
 import Dispatch
+import CoreBluetooth
 import TandemCore
 
 public enum SendMessageResult {
@@ -18,6 +19,12 @@ public enum SendMessageResult {
 
     /// The packet could not be sent because of a bluetooth error.
     case unsentWithError(Error)
+}
+
+public protocol PeripheralManagerNotificationHandler: AnyObject {
+    func peripheralManager(_ manager: PeripheralManager,
+                           didReceiveNotification value: Data,
+                           for characteristic: CBCharacteristic)
 }
 
 extension PeripheralManager {

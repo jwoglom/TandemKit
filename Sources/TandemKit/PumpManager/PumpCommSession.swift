@@ -4,6 +4,11 @@ import TandemCore
 
 protocol PumpCommSessionDelegate: AnyObject {
     func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState)
+    func pumpCommSession(_ pumpCommSession: PumpCommSession,
+                         didReceive message: Message,
+                         metadata: MessageMetadata?,
+                         characteristic: CharacteristicUUID,
+                         txId: UInt8)
 }
 
 public class PumpCommSession {
@@ -33,6 +38,18 @@ public class PumpCommSession {
 
     public func assertOnSessionQueue() {
         dispatchPrecondition(condition: .onQueue(sessionQueue))
+    }
+
+    func handleIncoming(message: Message,
+                        metadata: MessageMetadata?,
+                        characteristic: CharacteristicUUID,
+                        txId: UInt8) {
+        assertOnSessionQueue()
+        delegate?.pumpCommSession(self,
+                                  didReceive: message,
+                                  metadata: metadata,
+                                  characteristic: characteristic,
+                                  txId: txId)
     }
 
     public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
