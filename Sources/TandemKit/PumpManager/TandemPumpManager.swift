@@ -16,8 +16,8 @@ import UIKit
 #endif
 
 // Simple delegate wrapper
-private class WeakSynchronizedDelegate<T> {
-    private var _value: T?
+private class WeakSynchronizedDelegate<T: AnyObject> {
+    private weak var _value: T?
     var _queue: DispatchQueue = DispatchQueue.main
 
     var value: T? {
@@ -80,7 +80,7 @@ public class TandemPumpManager: PumpManager {
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
     private let lockedStatus: Locked<PumpManagerStatus>
     private let lockedBatteryChargeRemaining = Locked<Double?>(nil)
-    private let lockedReservoirValue = Locked<ReservoirValue?>(nil)
+    private let lockedReservoirValue: Locked<ReservoirValue?>
     private let lockedCurrentBasalRate = Locked<Double?>(nil)
     private var telemetryConfigured = false
 
@@ -141,9 +141,18 @@ public class TandemPumpManager: PumpManager {
         )
     }
 
+    private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
+        var status = makeDefaultStatus()
+        status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
+        status.bolusState = state.bolusState
+        status.deliveryIsUncertain = state.deliveryIsUncertain
+        return status
+    }
+
     public init(state: TandemPumpManagerState) {
         self.lockedState = Locked(state)
-        self.lockedStatus = Locked(Self.makeDefaultStatus())
+        self.lockedStatus = Locked(Self.makeStatus(from: state))
+        self.lockedReservoirValue = Locked(state.lastReservoirReading)
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -158,7 +167,8 @@ public class TandemPumpManager: PumpManager {
         }
 
         self.lockedState = Locked(state)
-        self.lockedStatus = Locked(Self.makeDefaultStatus())
+        self.lockedStatus = Locked(Self.makeStatus(from: state))
+        self.lockedReservoirValue = Locked(state.lastReservoirReading)
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -295,7 +305,7 @@ public class TandemPumpManager: PumpManager {
 
             let units = Double(response.currentInsulinAmount) / 1000.0
             let timestamp = Date()
-            let reservoirValue = ReservoirValue(startDate: timestamp, unitVolume: units)
+            let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
             lockedReservoirValue.value = reservoirValue
 
@@ -303,6 +313,7 @@ public class TandemPumpManager: PumpManager {
 
             var managerState = lockedState.value
             managerState.lastReconciliation = timestamp
+            managerState.lastReservoirReading = reservoirValue
             lockedState.value = managerState
 
             notifyDelegateOfReservoir(reservoirValue)
@@ -340,6 +351,10 @@ public class TandemPumpManager: PumpManager {
             updateStatus { status in
                 status.basalDeliveryState = newBasalState
             }
+
+            var managerState = lockedState.value
+            managerState.basalDeliveryState = newBasalState
+            lockedState.value = managerState
 
             notifyDelegateStateUpdated()
         } catch {
@@ -406,6 +421,13 @@ public class TandemPumpManager: PumpManager {
         var newStatus = oldStatus
         update(&newStatus)
         lockedStatus.value = newStatus
+
+        var managerState = lockedState.value
+        managerState.basalDeliveryState = newStatus.basalDeliveryState
+        managerState.bolusState = newStatus.bolusState
+        managerState.deliveryIsUncertain = newStatus.deliveryIsUncertain
+        lockedState.value = managerState
+
         notifyStatusObservers(oldStatus: oldStatus, newStatus: newStatus)
     }
 
