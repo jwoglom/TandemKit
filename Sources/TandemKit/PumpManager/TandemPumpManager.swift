@@ -58,6 +58,16 @@ private class Locked<Value> {
     }
 }
 
+private struct ActiveBolus {
+    let id: Int
+    let dose: DoseEntry
+}
+
+private struct ActiveTempBasal {
+    let dose: DoseEntry
+    let scheduledRate: Double
+}
+
 @available(macOS 13.0, iOS 14.0, *)
 public class TandemPumpManager: PumpManager {
     public static var localizedTitle: String = "TandemPumpManager"
@@ -70,15 +80,20 @@ public class TandemPumpManager: PumpManager {
     public typealias RawStateValue = [String: Any]
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
+    private let dosingDelegate = WeakSynchronizedDelegate<PumpManagerDosingDecisionDelegate>()
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
+    private let log = OSLog(category: "TandemPumpManager")
     private let telemetryScheduler = PumpTelemetryScheduler(label: "com.jwoglom.TandemKit.telemetry")
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
     private let lockedStatus: Locked<PumpManagerStatus>
+    private let activeBolus = Locked<ActiveBolus?>(nil)
+    private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
+    private let lastScheduledBasalRate = Locked<Double?>(nil)
     private let lockedBatteryChargeRemaining = Locked<Double?>(nil)
     private let lockedReservoirValue: Locked<ReservoirValue?>
     private let lockedCurrentBasalRate = Locked<Double?>(nil)
@@ -431,6 +446,94 @@ public class TandemPumpManager: PumpManager {
         notifyStatusObservers(oldStatus: oldStatus, newStatus: newStatus)
     }
 
+    private func currentTransport() -> PumpMessageTransport? {
+        return transportLock.value
+    }
+
+    private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
+        guard let delegate = pumpManagerDelegate else { return }
+        delegateQueue.async {
+            delegate.pumpManager(self, didError: PumpManagerError.communication(error))
+        }
+    }
+
+    private func recordReconciliation(at date: Date) {
+        var state = lockedState.value
+        state.lastReconciliation = date
+        lockedState.value = state
+        notifyPumpManagerDelegateDidUpdateState()
+    }
+
+    private func notifyPumpManagerDelegateDidUpdateState() {
+        guard let delegate = pumpManagerDelegate else { return }
+        delegateQueue.async {
+            delegate.pumpManagerDidUpdateState(self)
+        }
+    }
+
+    private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerResult<DoseEntry>) -> Void) {
+        delegateQueue.async {
+            completion(result)
+            if let delegate = self.dosingDelegate.value {
+                delegate.pumpManager(self, didEnactBolus: result)
+            }
+        }
+    }
+
+    private func completeCancelBolus(_ result: PumpManagerResult<DoseEntry?>, completion: @escaping (PumpManagerResult<DoseEntry?>) -> Void) {
+        delegateQueue.async {
+            completion(result)
+            if let delegate = self.dosingDelegate.value {
+                delegate.pumpManager(self, didCancelBolus: result)
+            }
+        }
+    }
+
+    private func completeTempBasal(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerResult<DoseEntry>) -> Void) {
+        delegateQueue.async {
+            completion(result)
+            if let delegate = self.dosingDelegate.value {
+                delegate.pumpManager(self, didEnactTempBasal: result)
+            }
+        }
+    }
+
+    private func completeSuspend(_ error: Error?, completion: @escaping (Error?) -> Void) {
+        delegateQueue.async {
+            completion(error)
+            if let delegate = self.dosingDelegate.value {
+                delegate.pumpManager(self, didSuspendDeliveryWithError: error)
+            }
+        }
+    }
+
+    private func completeResume(_ error: Error?, completion: @escaping (Error?) -> Void) {
+        delegateQueue.async {
+            completion(error)
+            if let delegate = self.dosingDelegate.value {
+                delegate.pumpManager(self, didResumeDeliveryWithError: error)
+            }
+        }
+    }
+
+    private func scheduledBasalRateForTempBasal(requestedRate: Double) -> Double {
+        if let override = lastScheduledBasalRate.value, override > 0 {
+            return override
+        }
+
+        if let statusRate = lockedStatus.value.basalDeliveryState.scheduledBasalRateValue, statusRate > 0 {
+            return statusRate
+        }
+
+        return max(requestedRate, 0.05)
+    }
+
+    private func percentForTempBasal(requestedRate: Double, baseline: Double) -> Int {
+        guard baseline > 0 else { return 0 }
+        let percent = Int((requestedRate / baseline * 100.0).rounded())
+        return max(0, min(percent, 500))
+    }
+
     // MARK: - Basic Pump Manager Interface
 
     public var pumpManagerDelegate: PumpManagerDelegate? {
@@ -439,6 +542,15 @@ public class TandemPumpManager: PumpManager {
         }
         set {
             pumpDelegate.value = newValue
+        }
+    }
+
+    public var dosingDecisionDelegate: PumpManagerDosingDecisionDelegate? {
+        get {
+            return dosingDelegate.value
+        }
+        set {
+            dosingDelegate.value = newValue
         }
     }
 
@@ -504,12 +616,113 @@ public class TandemPumpManager: PumpManager {
 
     // MARK: - Dose Delivery Methods
 
-    public func enactBolus(units: Double, activationType: BolusActivationType, completion: @escaping (_ error: PumpManagerError?) -> Void) {
+    public func enactBolus(units: Double, at startDate: Date, willRequest: @escaping (_ dose: DoseEntry) -> Void, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
+        let dose = DoseEntry(
+            type: .bolus,
+            startDate: startDate,
+            endDate: nil,
+            value: units,
+            unit: .units,
+            deliveredUnits: nil,
+            syncIdentifier: UUID().uuidString
+        )
+
+        willRequest(dose)
+
         // Update status to show bolus is initiating
         updateStatus { status in
             status.bolusState = .initiating
         }
 
+        guard units > 0 else {
+            updateStatus { status in
+                status.bolusState = .none
+            }
+            let error = PumpCommError.other
+            notifyPumpManagerDelegateOfError(error)
+            completeBolus(.failure(error), completion: completion)
+            return
+        }
+
+        guard let transport = currentTransport() else {
+            updateStatus { status in
+                status.bolusState = .none
+            }
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            completeBolus(.failure(error), completion: completion)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            var permissionBolusId: UInt32?
+            var shouldReleasePermissionOnFailure = false
+
+            do {
+                let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: BolusPermissionRequest(),
+                    expecting: BolusPermissionResponse.self
+                )
+
+                guard permissionResponse.isPermissionGranted else {
+                    throw PumpCommError.errorResponse(response: permissionResponse)
+                }
+
+                permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
+                shouldReleasePermissionOnFailure = true
+
+                let milliUnits = max(0, Int((units * 1000).rounded()))
+                let totalVolume = UInt32(clamping: milliUnits)
+
+                let bolusRequest = InitiateBolusRequest(
+                    totalVolume: totalVolume,
+                    bolusID: permissionResponse.bolusId,
+                    bolusTypeBitmask: BolusType.toBitmask([.food2]),
+                    foodVolume: totalVolume,
+                    correctionVolume: 0,
+                    bolusCarbs: 0,
+                    bolusBG: 0,
+                    bolusIOB: 0
+                )
+
+                let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: bolusRequest,
+                    expecting: InitiateBolusResponse.self
+                )
+
+                guard initiateResponse.wasBolusInitiated else {
+                    throw PumpCommError.errorResponse(response: initiateResponse)
+                }
+
+                shouldReleasePermissionOnFailure = false
+
+                self.activeBolus.value = ActiveBolus(
+                    id: initiateResponse.bolusId,
+                    dose: dose
+                )
+
+                self.updateStatus { status in
+                    status.bolusState = .inProgress(dose)
+                }
+
+                self.recordReconciliation(at: Date())
+                self.completeBolus(.success(dose), completion: completion)
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
+                    self.releaseBolusPermission(transport: transport, bolusId: bolusId)
+                }
+                self.activeBolus.value = nil
+                self.updateStatus { status in
+                    status.bolusState = .none
+                }
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.completeBolus(.failure(pumpError), completion: completion)
+            }
         // TODO: Implement actual bolus delivery via pump messages
         delegateQueue.async {
             completion(.communication(PumpCommError.notImplemented))
@@ -517,11 +730,72 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
-        // Update status to show bolus is being canceled
         updateStatus { status in
             status.bolusState = .canceling
         }
 
+        guard let transport = currentTransport() else {
+            updateStatus { status in
+                status.bolusState = .none
+            }
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            completeCancelBolus(.failure(error), completion: completion)
+            return
+        }
+
+        guard let active = activeBolus.value else {
+            updateStatus { status in
+                status.bolusState = .none
+            }
+            let error = PumpCommError.other
+            notifyPumpManagerDelegateOfError(error)
+            completeCancelBolus(.failure(error), completion: completion)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let request = CancelBolusRequest(bolusId: active.id)
+                let response: CancelBolusResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: request,
+                    expecting: CancelBolusResponse.self
+                )
+
+                guard response.wasCancelled else {
+                    throw PumpCommError.errorResponse(response: response)
+                }
+
+                self.activeBolus.value = nil
+                let endDate = Date()
+                let canceledDose = DoseEntry(
+                    type: .bolus,
+                    startDate: active.dose.startDate,
+                    endDate: endDate,
+                    value: active.dose.value,
+                    unit: active.dose.unit,
+                    deliveredUnits: active.dose.deliveredUnits,
+                    syncIdentifier: active.dose.syncIdentifier,
+                    scheduledBasalRate: active.dose.scheduledBasalRate
+                )
+
+                self.updateStatus { status in
+                    status.bolusState = .none
+                }
+
+                self.recordReconciliation(at: endDate)
+                self.completeCancelBolus(.success(canceledDose), completion: completion)
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.updateStatus { status in
+                    status.bolusState = .inProgress(active.dose)
+                }
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.completeCancelBolus(.failure(pumpError), completion: completion)
+            }
         // TODO: Implement actual bolus cancellation via pump messages
         // For now, return an error indicating this is not yet implemented
         delegateQueue.async {
@@ -531,6 +805,7 @@ public class TandemPumpManager: PumpManager {
 
     public func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ error: PumpManagerError?) -> Void) {
         let startDate = Date()
+        let previousStatus = lockedStatus.value
         let endDate = startDate.addingTimeInterval(duration)
         _ = DoseEntry(
             type: .tempBasal,
@@ -542,11 +817,124 @@ public class TandemPumpManager: PumpManager {
             syncIdentifier: UUID().uuidString
         )
 
-        // Update status to show temp basal is initiating
-        updateStatus { status in
-            status.basalDeliveryState = .initiatingTempBasal
+        if duration <= 0 {
+            updateStatus { status in
+                status.basalDeliveryState = .cancelingTempBasal
+            }
+        } else {
+            updateStatus { status in
+                status.basalDeliveryState = .initiatingTempBasal
+            }
         }
 
+        guard let transport = currentTransport() else {
+            updateStatus { status in
+                status.basalDeliveryState = previousStatus.basalDeliveryState
+            }
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            completeTempBasal(.failure(error), completion: completion)
+            return
+        }
+
+        let baselineRate = scheduledBasalRateForTempBasal(requestedRate: unitsPerHour)
+        let scheduledQuantity = HKQuantity(unit: HKUnit.internationalUnitPerHour(), doubleValue: baselineRate)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                if duration <= 0 {
+                    let response: StopTempRateResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: StopTempRateRequest(),
+                        expecting: StopTempRateResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+
+                    let endDate = Date()
+                    let cancellationDose: DoseEntry
+                    if let active = self.activeTempBasal.value {
+                        cancellationDose = DoseEntry(
+                            type: .tempBasal,
+                            startDate: active.dose.startDate,
+                            endDate: endDate,
+                            value: active.dose.value,
+                            unit: active.dose.unit,
+                            deliveredUnits: active.dose.deliveredUnits,
+                            syncIdentifier: active.dose.syncIdentifier,
+                            scheduledBasalRate: active.dose.scheduledBasalRate
+                        )
+                    } else {
+                        cancellationDose = DoseEntry(
+                            type: .tempBasal,
+                            startDate: endDate,
+                            endDate: endDate,
+                            value: 0,
+                            unit: .unitsPerHour,
+                            deliveredUnits: nil,
+                            syncIdentifier: UUID().uuidString,
+                            scheduledBasalRate: scheduledQuantity
+                        )
+                    }
+
+                    self.activeTempBasal.value = nil
+                    self.lastScheduledBasalRate.value = nil
+
+                    self.updateStatus { status in
+                        status.basalDeliveryState = .active(Date())
+                    }
+
+                    self.recordReconciliation(at: endDate)
+                    self.completeTempBasal(.success(cancellationDose), completion: completion)
+                } else {
+                    let minutes = max(1, Int((duration / 60.0).rounded()))
+                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+
+                    let request = SetTempRateRequest(minutes: minutes, percent: percent)
+                    let response: SetTempRateResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: request,
+                        expecting: SetTempRateResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+
+                    let endDate = startDate.addingTimeInterval(duration)
+                    let dose = DoseEntry(
+                        type: .tempBasal,
+                        startDate: startDate,
+                        endDate: endDate,
+                        value: unitsPerHour,
+                        unit: .unitsPerHour,
+                        deliveredUnits: nil,
+                        syncIdentifier: UUID().uuidString,
+                        scheduledBasalRate: scheduledQuantity
+                    )
+
+                    self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
+                    self.lastScheduledBasalRate.value = baselineRate
+
+                    self.updateStatus { status in
+                        status.basalDeliveryState = .tempBasal(dose)
+                    }
+
+                    self.recordReconciliation(at: startDate)
+                    self.completeTempBasal(.success(dose), completion: completion)
+                }
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.updateStatus { status in
+                    status.basalDeliveryState = previousStatus.basalDeliveryState
+                }
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.completeTempBasal(.failure(pumpError), completion: completion)
+            }
         // TODO: Implement actual temp basal delivery via pump messages
         // For now, return an error indicating this is not yet implemented
         delegateQueue.async {
@@ -557,28 +945,104 @@ public class TandemPumpManager: PumpManager {
     // MARK: - Delivery Control Methods
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        // Update status to show suspension is in progress
+        let previousStatus = lockedStatus.value
         updateStatus { status in
             status.basalDeliveryState = .suspending
         }
 
-        // TODO: Implement actual delivery suspension via pump messages
-        // For now, return an error indicating this is not yet implemented
-        delegateQueue.async {
-            completion(PumpManagerError.communication(PumpCommError.notImplemented))
+        guard let transport = currentTransport() else {
+            updateStatus { status in
+                status.basalDeliveryState = previousStatus.basalDeliveryState
+            }
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            completeSuspend(error, completion: completion)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let response: SuspendPumpingResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: SuspendPumpingRequest(),
+                    expecting: SuspendPumpingResponse.self
+                )
+
+                guard response.status == 0 else {
+                    throw PumpCommError.errorResponse(response: response)
+                }
+
+                let suspendDate = Date()
+                self.activeTempBasal.value = nil
+                self.lastScheduledBasalRate.value = nil
+
+                self.updateStatus { status in
+                    status.basalDeliveryState = .suspended(suspendDate)
+                    status.bolusState = .none
+                }
+
+                self.recordReconciliation(at: suspendDate)
+                self.completeSuspend(nil, completion: completion)
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.updateStatus { status in
+                    status.basalDeliveryState = previousStatus.basalDeliveryState
+                }
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.completeSuspend(pumpError, completion: completion)
+            }
         }
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        // Update status to show resume is in progress
+        let previousStatus = lockedStatus.value
         updateStatus { status in
             status.basalDeliveryState = .resuming
         }
 
-        // TODO: Implement actual delivery resumption via pump messages
-        // For now, return an error indicating this is not yet implemented
-        delegateQueue.async {
-            completion(PumpManagerError.communication(PumpCommError.notImplemented))
+        guard let transport = currentTransport() else {
+            updateStatus { status in
+                status.basalDeliveryState = previousStatus.basalDeliveryState
+            }
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            completeResume(error, completion: completion)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let response: ResumePumpingResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: ResumePumpingRequest(),
+                    expecting: ResumePumpingResponse.self
+                )
+
+                guard response.status == 0 else {
+                    throw PumpCommError.errorResponse(response: response)
+                }
+
+                let resumeDate = Date()
+                self.activeTempBasal.value = nil
+                self.lastScheduledBasalRate.value = nil
+                self.updateStatus { status in
+                    status.basalDeliveryState = .active(resumeDate)
+                }
+
+                self.recordReconciliation(at: resumeDate)
+                self.completeResume(nil, completion: completion)
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.updateStatus { status in
+                    status.basalDeliveryState = previousStatus.basalDeliveryState
+                }
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.completeResume(pumpError, completion: completion)
+            }
         }
     }
 
@@ -641,7 +1105,41 @@ extension TandemPumpManager: PumpCommDelegate {
 
         updatePairingArtifacts(with: pumpState)
 
+        notifyPumpManagerDelegateDidUpdateState()
+
         // The state change will be automatically persisted by Loop/Trio
         // when it calls rawState during the next cycle
+    }
+}
+
+private extension TandemPumpManager {
+    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
+        do {
+            let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: BolusPermissionReleaseRequest(bolusId: bolusId),
+                expecting: BolusPermissionReleaseResponse.self
+            )
+
+            if response.status != 0 {
+                log.error("Failed to release bolus permission for id %{public}u with status %{public}d", bolusId, response.status)
+            }
+        } catch {
+            log.error("Error releasing bolus permission for id %{public}u: %{public}@", bolusId, String(describing: error))
+        }
+    }
+}
+
+private extension PumpManagerStatus.BasalDeliveryState {
+    var scheduledBasalRateValue: Double? {
+        switch self {
+        case .tempBasal(let dose):
+            if let quantity = dose.scheduledBasalRate {
+                return quantity.doubleValue(for: HKUnit.internationalUnitPerHour())
+            }
+            return dose.value
+        default:
+            return nil
+        }
     }
 }
