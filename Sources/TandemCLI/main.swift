@@ -1128,6 +1128,15 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
         print("Pump state updated (derivedSecret: \(derivedHex.prefix(8))…, serverNonce: \(nonceHex.prefix(8))…)")
     }
 
+    func pumpComm(_ pumpComms: PumpComm,
+                  didReceive message: Message,
+                  metadata: MessageMetadata?,
+                  characteristic: CharacteristicUUID,
+                  txId: UInt8) {
+        let name = metadata?.name ?? String(describing: type(of: message))
+        print("[PairingCoordinator] notification message=\(name) characteristic=\(characteristic.prettyName) txId=\(txId)")
+    }
+
     // MARK: - Helpers
 
     private func scheduleTimeout() {

@@ -87,6 +87,7 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
     private var needsConfiguration = true
 
     weak var delegate: PeripheralManagerDelegate?
+    weak var notificationHandler: PeripheralManagerNotificationHandler?
 
     init(peripheral: CBPeripheral, configuration: Configuration, centralManager: CBCentralManager) {
         self.peripheral = peripheral
@@ -543,7 +544,8 @@ extension PeripheralManager: CBPeripheralDelegate {
 
     public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
-        
+        var notificationValue: Data?
+
         if let macro = configuration.valueUpdateMacros[characteristic.uuid] {
             macro(self)
         }
@@ -563,7 +565,15 @@ extension PeripheralManager: CBPeripheralDelegate {
             }
         }
 
+        if error == nil {
+            notificationValue = characteristic.value
+        }
+
         commandLock.unlock()
+
+        if let handler = notificationHandler, let value = notificationValue {
+            handler.peripheralManager(self, didReceiveNotification: value, for: characteristic)
+        }
 
     }
 

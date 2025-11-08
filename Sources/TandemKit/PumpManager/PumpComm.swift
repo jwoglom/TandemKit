@@ -15,6 +15,11 @@ import os
 
 public protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
+    func pumpComm(_ pumpComms: PumpComm,
+                  didReceive message: Message,
+                  metadata: MessageMetadata?,
+                  characteristic: CharacteristicUUID,
+                  txId: UInt8)
 }
 
 
@@ -79,6 +84,10 @@ public class PumpComm: CustomDebugStringConvertible {
         self.session = newSession
         self.pumpState = state
         return newSession
+    }
+
+    func getSession() -> PumpCommSession {
+        return ensureSession()
     }
 
     /// Send a message to the pump and receive a response.
@@ -155,5 +164,18 @@ extension PumpComm: PumpCommSessionDelegate {
     public func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState) {
         pumpCommSession.assertOnSessionQueue()
         self.pumpState = state
+    }
+
+    public func pumpCommSession(_ pumpCommSession: PumpCommSession,
+                                didReceive message: Message,
+                                metadata: MessageMetadata?,
+                                characteristic: CharacteristicUUID,
+                                txId: UInt8) {
+        pumpCommSession.assertOnSessionQueue()
+        delegate?.pumpComm(self,
+                           didReceive: message,
+                           metadata: metadata,
+                           characteristic: characteristic,
+                           txId: txId)
     }
 }
