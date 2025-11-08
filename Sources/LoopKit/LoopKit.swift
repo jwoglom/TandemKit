@@ -189,6 +189,15 @@ public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObs
     var automaticDosingEnabled: Bool { get }
 }
 
+@available(macOS 13.0, iOS 14.0, *)
+public protocol PumpManagerDosingDecisionDelegate: AnyObject {
+    func pumpManager(_ pumpManager: PumpManager, didEnactBolus result: PumpManagerResult<DoseEntry>)
+    func pumpManager(_ pumpManager: PumpManager, didCancelBolus result: PumpManagerResult<DoseEntry?>)
+    func pumpManager(_ pumpManager: PumpManager, didEnactTempBasal result: PumpManagerResult<DoseEntry>)
+    func pumpManager(_ pumpManager: PumpManager, didSuspendDeliveryWithError error: Error?)
+    func pumpManager(_ pumpManager: PumpManager, didResumeDeliveryWithError error: Error?)
+}
+
 // MARK: - Pump Manager Protocol
 
 @available(macOS 13.0, iOS 14.0, *)
@@ -236,6 +245,8 @@ public protocol PumpManager: DeviceManager {
     var pumpReservoirCapacity: Double { get }
     var lastSync: Date? { get }
     var status: PumpManagerStatus { get }
+
+    var dosingDecisionDelegate: PumpManagerDosingDecisionDelegate? { get set }
 
     func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue)
     func removeStatusObserver(_ observer: PumpManagerStatusObserver)
