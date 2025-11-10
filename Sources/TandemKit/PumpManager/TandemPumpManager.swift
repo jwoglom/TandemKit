@@ -138,6 +138,11 @@ public class TandemPumpManager: PumpManager {
         }
     }
 
+    func setPumpCommForTesting(_ pumpComm: PumpComm) {
+        pumpComm.delegate = self
+        tandemPump.pumpComm = pumpComm
+    }
+
     private enum ResponseSource {
         case telemetry
         case notification
@@ -303,8 +308,8 @@ public class TandemPumpManager: PumpManager {
         }
     }
 
-    private func handleBatteryResponse(_ response: CurrentBatteryV2Response, source: ResponseSource) {
-        let percent = Double(response.getBatteryPercent()) / 100.0
+    private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
+        let percent = Double(response.batteryPercent) / 100.0
         lockedBatteryChargeRemaining.value = percent
 
         logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
@@ -400,6 +405,11 @@ public class TandemPumpManager: PumpManager {
         notifyDelegateStateUpdated()
     }
 
+    private func makeBatteryRequest() -> Message {
+        let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
+        return CurrentBatteryRequestBuilder.create(apiVersion: apiVersion)
+    }
+
     private func fetchBatteryStatus() {
         guard let transport = transportLock.value else {
             telemetryLogger.debug("Skipping battery telemetry – no transport")
@@ -407,13 +417,27 @@ public class TandemPumpManager: PumpManager {
         }
 
         do {
-            let response = try pumpComm.sendMessage(
-                transport: transport,
-                message: CurrentBatteryV2Request(),
-                expecting: CurrentBatteryV2Response.self
-            )
+            let request = makeBatteryRequest()
 
-            handleBatteryResponse(response, source: .telemetry)
+            if let v2Request = request as? CurrentBatteryV2Request {
+                let response: CurrentBatteryV2Response = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: v2Request,
+                    expecting: CurrentBatteryV2Response.self
+                )
+
+                handleBatteryResponse(response, source: .telemetry)
+            } else if let v1Request = request as? CurrentBatteryV1Request {
+                let response: CurrentBatteryV1Response = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: v1Request,
+                    expecting: CurrentBatteryV1Response.self
+                )
+
+                handleBatteryResponse(response, source: .telemetry)
+            } else {
+                telemetryLogger.error("Battery telemetry request builder returned unsupported type: \(String(describing: type(of: request)))")
+            }
         } catch {
             telemetryLogger.error("Battery telemetry request failed: \(error)")
         }
@@ -1308,7 +1332,7 @@ extension TandemPumpManager: PumpCommDelegate {
         notificationLogger.debug("[notification] Received \(String(describing: type(of: message))) opCode=\(metadata?.opCode ?? type(of: message).props.opCode) characteristic=\(characteristic.prettyName) txId=\(txId)")
 
         switch message {
-        case let battery as CurrentBatteryV2Response:
+        case let battery as CurrentBatteryAbstractResponse:
             handleBatteryResponse(battery, source: .notification)
         case let insulin as InsulinStatusResponse:
             handleReservoirResponse(insulin, source: .notification)
