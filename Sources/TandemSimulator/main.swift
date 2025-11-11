@@ -70,6 +70,8 @@ private extension TandemSimulatorMain {
                 config.serialNumber = args[index]
             case "--mock-transport":
                 config.useMockTransport = true
+            case "--bypass-auth":
+                config.authenticationMode = .bypass
             case "--help", "-h":
                 throw SimulatorError(startUsage(), exitCode: 0)
             default:
@@ -84,6 +86,7 @@ private extension TandemSimulatorMain {
     static func parseTestArguments(_ args: [String]) throws -> SimulatorConfig {
         var config = SimulatorConfig()
         config.useMockTransport = true
+        config.authenticationMode = .bypass // Default to bypass auth for testing
 
         var index = 0
         while index < args.count {
@@ -160,6 +163,7 @@ private extension TandemSimulatorMain {
             "  --pairing-code <code>   Set a pre-defined pairing code",
             "  --serial <number>       Set pump serial number",
             "  --mock-transport        Use mock transport (no BLE)",
+            "  --bypass-auth           Skip authentication (for testing)",
         ].joined(separator: "\n")
     }
 
@@ -168,7 +172,9 @@ private extension TandemSimulatorMain {
             "Usage: tandem-simulator test [options]",
             "",
             "Options:",
-            "  --pairing-code <code>   Set a pre-defined pairing code",
+            "  --pairing-code <code>   Set a pre-defined pairing code (bypass auth enabled by default)",
+            "",
+            "Note: Test mode automatically uses mock transport and bypass authentication.",
         ].joined(separator: "\n")
     }
 }

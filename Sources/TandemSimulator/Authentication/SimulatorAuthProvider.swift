@@ -8,6 +8,7 @@ class SimulatorAuthProvider: AuthenticationProvider {
 
     private let pairingCode: String?
     private let state: PumpStateProvider
+    private let authMode: AuthMode
 
     private var _derivedSecret: Data?
     private var _isAuthenticated = false
@@ -18,9 +19,21 @@ class SimulatorAuthProvider: AuthenticationProvider {
 
     private let lock = NSLock()
 
-    init(pairingCode: String?, state: PumpStateProvider) {
+    init(pairingCode: String?, state: PumpStateProvider, authMode: AuthMode) {
         self.pairingCode = pairingCode
         self.state = state
+        self.authMode = authMode
+
+        if authMode == .bypass {
+            // Bypass mode: auto-authenticate with stub derived secret
+            lock.lock()
+            _isAuthenticated = true
+            // Use a fixed derived secret for testing
+            _derivedSecret = Data(repeating: 0x42, count: 20) // 20-byte stub secret
+            lock.unlock()
+            logger.info("Initialized BYPASS authentication mode (auto-authenticated)")
+            return
+        }
 
         #if canImport(SwiftECC) && canImport(BigInt)
         if let code = pairingCode, code.count == 6 {
