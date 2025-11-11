@@ -611,9 +611,15 @@ public class TandemPumpManager: PumpManager {
         }
     }
 
-    private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerResult<DoseEntry>) -> Void) {
+    private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
         delegateQueue.async {
-            completion(result)
+            switch result {
+            case .success:
+                completion(nil)
+            case .failure(let error):
+                completion(error)
+            }
+
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didEnactBolus: result)
             }
@@ -629,9 +635,15 @@ public class TandemPumpManager: PumpManager {
         }
     }
 
-    private func completeTempBasal(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerResult<DoseEntry>) -> Void) {
+    private func completeTempBasal(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
         delegateQueue.async {
-            completion(result)
+            switch result {
+            case .success:
+                completion(nil)
+            case .failure(let error):
+                completion(error)
+            }
+
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didEnactTempBasal: result)
             }
@@ -761,13 +773,14 @@ public class TandemPumpManager: PumpManager {
 
     // MARK: - Dose Delivery Methods
 
-    public func enactBolus(units: Double, at startDate: Date, willRequest: @escaping (_ dose: DoseEntry) -> Void, completion: @escaping (_ result: PumpManagerResult<DoseEntry>) -> Void) {
+    public func enactBolus(units: Double, activationType: BolusActivationType, completion: @escaping (_ error: PumpManagerError?) -> Void) {
         if let error = validateBolusRequest(units: units, activationType) {
-            delegateQueue.async {
-                completion(error)
-            }
+            completeBolus(.failure(error), completion: completion)
             return
         }
+
+        let startDate = Date()
+        let syncIdentifier = UUID().uuidString
         let dose = DoseEntry(
             type: .bolus,
             startDate: startDate,
@@ -775,33 +788,27 @@ public class TandemPumpManager: PumpManager {
             value: units,
             unit: .units,
             deliveredUnits: nil,
-            syncIdentifier: UUID().uuidString
+            description: nil,
+            syncIdentifier: syncIdentifier,
+            scheduledBasalRate: nil,
+            insulinType: nil,
+            automatic: activationType.isAutomatic,
+            manuallyEntered: !activationType.isAutomatic,
+            isMutable: true,
+            wasProgrammedByPumpUI: false
         )
 
-        willRequest(dose)
-
-        // Update status to show bolus is initiating
         updateStatus { status in
             status.bolusState = .initiating
         }
 
-        guard units > 0 else {
-            updateStatus { status in
-                status.bolusState = .none
-            }
-            let error = PumpCommError.other
-            notifyPumpManagerDelegateOfError(error)
-            completeBolus(.failure(error), completion: completion)
-            return
-        }
-
         guard let transport = currentTransport() else {
             updateStatus { status in
-                status.bolusState = .none
+                status.bolusState = .noBolus
             }
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)
-            completeBolus(.failure(error), completion: completion)
+            completeBolus(.failure(.communication(error)), completion: completion)
             return
         }
 
@@ -869,14 +876,11 @@ public class TandemPumpManager: PumpManager {
                 }
                 self.activeBolus.value = nil
                 self.updateStatus { status in
-                    status.bolusState = .none
+                    status.bolusState = .noBolus
                 }
                 self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeBolus(.failure(pumpError), completion: completion)
+                self.completeBolus(.failure(.communication(pumpError)), completion: completion)
             }
-        // TODO: Implement actual bolus delivery via pump messages
-        delegateQueue.async {
-            completion(.communication(PumpCommError.notImplemented))
         }
     }
 
@@ -887,21 +891,21 @@ public class TandemPumpManager: PumpManager {
 
         guard let transport = currentTransport() else {
             updateStatus { status in
-                status.bolusState = .none
+                status.bolusState = .noBolus
             }
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(error), completion: completion)
+            completeCancelBolus(.failure(.communication(error)), completion: completion)
             return
         }
 
         guard let active = activeBolus.value else {
             updateStatus { status in
-                status.bolusState = .none
+                status.bolusState = .noBolus
             }
             let error = PumpCommError.other
             notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(error), completion: completion)
+            completeCancelBolus(.failure(.communication(error)), completion: completion)
             return
         }
 
@@ -934,7 +938,7 @@ public class TandemPumpManager: PumpManager {
                 )
 
                 self.updateStatus { status in
-                    status.bolusState = .none
+                    status.bolusState = .noBolus
                 }
 
                 self.recordReconciliation(at: endDate)
@@ -945,36 +949,19 @@ public class TandemPumpManager: PumpManager {
                     status.bolusState = .inProgress(active.dose)
                 }
                 self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeCancelBolus(.failure(pumpError), completion: completion)
+                self.completeCancelBolus(.failure(.communication(pumpError)), completion: completion)
             }
-        // TODO: Implement actual bolus cancellation via pump messages
-        // For now, return an error indicating this is not yet implemented
-        delegateQueue.async {
-            completion(.failure(.communication(PumpCommError.notImplemented)))
         }
     }
 
     public func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ error: PumpManagerError?) -> Void) {
         if let error = validateTempBasalRequest(unitsPerHour: unitsPerHour, duration: duration) {
-            delegateQueue.async {
-                completion(error)
-            }
+            completeTempBasal(.failure(error), completion: completion)
             return
         }
 
         let startDate = Date()
         let previousStatus = lockedStatus.value
-        let endDate = startDate.addingTimeInterval(duration)
-        _ = DoseEntry(
-            type: .tempBasal,
-            startDate: startDate,
-            endDate: endDate,
-            value: unitsPerHour,
-            unit: .unitsPerHour,
-            deliveredUnits: nil,
-            syncIdentifier: UUID().uuidString
-        )
-
         if duration <= 0 {
             updateStatus { status in
                 status.basalDeliveryState = .cancelingTempBasal
@@ -991,7 +978,7 @@ public class TandemPumpManager: PumpManager {
             }
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)
-            completeTempBasal(.failure(error), completion: completion)
+            completeTempBasal(.failure(.communication(error)), completion: completion)
             return
         }
 
@@ -1091,12 +1078,8 @@ public class TandemPumpManager: PumpManager {
                     status.basalDeliveryState = previousStatus.basalDeliveryState
                 }
                 self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeTempBasal(.failure(pumpError), completion: completion)
+                self.completeTempBasal(.failure(.communication(pumpError)), completion: completion)
             }
-        // TODO: Implement actual temp basal delivery via pump messages
-        // For now, return an error indicating this is not yet implemented
-        delegateQueue.async {
-            completion(.communication(PumpCommError.notImplemented))
         }
     }
 
@@ -1191,7 +1174,7 @@ public class TandemPumpManager: PumpManager {
 
                 self.updateStatus { status in
                     status.basalDeliveryState = .suspended(suspendDate)
-                    status.bolusState = .none
+                    status.bolusState = .noBolus
                 }
 
                 self.recordReconciliation(at: suspendDate)
