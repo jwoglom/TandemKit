@@ -76,4 +76,5 @@ enum PumpModel: String {
 enum AuthMode {
     case jpake      // 6-digit pairing code
     case legacy     // 16-character pairing code
+    case bypass     // Skip authentication for testing
 }

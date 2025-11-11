@@ -30,7 +30,8 @@ class SimulatedPump {
         // Create authentication provider
         self.authProvider = SimulatorAuthProvider(
             pairingCode: config.pairingCode,
-            state: state
+            state: state,
+            authMode: config.authenticationMode
         )
 
         // Create message router
@@ -84,6 +85,18 @@ class SimulatedPump {
         try await transport.stop()
 
         logger.info("Simulator stopped")
+    }
+
+    // MARK: - Testing Support
+
+    /// Get the mock transport for testing (only available if using mock transport)
+    func getMockTransport() -> MockTransport? {
+        return transport as? MockTransport
+    }
+
+    /// Get the pump state for inspection
+    func getPumpState() -> PumpStateProvider {
+        return state
     }
 
     // MARK: - Private Methods
