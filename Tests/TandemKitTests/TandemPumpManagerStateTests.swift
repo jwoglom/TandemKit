@@ -1,5 +1,6 @@
 import XCTest
 @testable import TandemKit
+@testable import TandemCore
 import LoopKit
 
 final class TandemPumpManagerStateTests: XCTestCase {
@@ -22,13 +23,25 @@ final class TandemPumpManagerStateTests: XCTestCase {
             unit: .units
         )
 
+        let battery = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: 0.65)
+        let schedule = BasalRateSchedule(
+            items: [
+                RepeatingScheduleValue(startTime: 0, value: 0.8),
+                RepeatingScheduleValue(startTime: 3_600, value: 1.1)
+            ],
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
         let state = TandemPumpManagerState(
             pumpState: pumpState,
             lastReconciliation: timestamp,
             lastReservoirReading: reservoirValue,
+            lastBatteryReading: battery,
             basalDeliveryState: .tempBasal(basalDose),
+            lastBasalStatusDate: timestamp,
             bolusState: .inProgress(bolusDose),
-            deliveryIsUncertain: true
+            deliveryIsUncertain: true,
+            basalRateSchedule: schedule
         )
 
         let rawValue = state.rawValue
@@ -37,6 +50,9 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(state, restoredState)
         XCTAssertEqual(restoredState.lastReservoirReading?.startDate, reservoirValue.startDate)
         XCTAssertEqual(restoredState.lastReservoirReading?.unitVolume, reservoirValue.unitVolume)
+        XCTAssertEqual(restoredState.lastBatteryReading?.date, battery.date)
+        XCTAssertEqual(restoredState.lastBatteryReading?.chargeRemaining, battery.chargeRemaining)
+        XCTAssertEqual(restoredState.lastBasalStatusDate, timestamp)
         switch restoredState.basalDeliveryState {
         case .tempBasal(let dose)?:
             XCTAssertEqual(dose, basalDose)
@@ -50,6 +66,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
             XCTFail("Expected bolus state to round-trip")
         }
         XCTAssertTrue(restoredState.deliveryIsUncertain)
+        XCTAssertEqual(restoredState.basalRateSchedule, schedule)
     }
 
     func testVersion1RawValueMigration() throws {
@@ -69,5 +86,63 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertNil(restoredState.basalDeliveryState)
         XCTAssertEqual(restoredState.bolusState, .noBolus)
         XCTAssertFalse(restoredState.deliveryIsUncertain)
+    }
+
+    func testManagerRestoresCachedStatusFromRawState() throws {
+        let timestamp = Date(timeIntervalSinceReferenceDate: 3_456_789)
+        let pumpState = PumpState(
+            address: 0xABCDEF12,
+            derivedSecret: Data([0x10, 0x11, 0x12, 0x13]),
+            serverNonce: Data([0x20, 0x21, 0x22, 0x23])
+        )
+        let reservoir = SimpleReservoirValue(startDate: timestamp, unitVolume: 142.0)
+        let battery = TandemPumpManagerState.BatteryReading(date: timestamp.addingTimeInterval(-120), chargeRemaining: 0.55)
+        let basalState: PumpManagerStatus.BasalDeliveryState = .suspended(timestamp)
+        let schedule = BasalRateSchedule(
+            items: [RepeatingScheduleValue(startTime: 0, value: 0.75)],
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        let settings = TandemPumpManagerSettings(
+            maxBolus: 9.5,
+            maxTempBasalRate: 4.2,
+            maxBasalScheduleEntry: 1.5,
+            maxInsulinOnBoard: nil
+        )
+
+        let state = TandemPumpManagerState(
+            pumpState: pumpState,
+            lastReconciliation: timestamp,
+            settings: settings,
+            lastReservoirReading: reservoir,
+            lastBatteryReading: battery,
+            basalDeliveryState: basalState,
+            lastBasalStatusDate: timestamp,
+            bolusState: .noBolus,
+            deliveryIsUncertain: true,
+            basalRateSchedule: schedule
+        )
+
+        PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
+        defer { PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil) }
+
+        let manager = try XCTUnwrap(TandemPumpManager(rawState: state.rawValue))
+
+        XCTAssertEqual(manager.pumpBatteryChargeRemaining, battery.chargeRemaining)
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining, battery.chargeRemaining)
+        XCTAssertEqual(manager.status.basalDeliveryState, basalState)
+        XCTAssertTrue(manager.status.deliveryIsUncertain)
+        XCTAssertEqual(manager.reservoirLevel?.startDate, reservoir.startDate)
+        XCTAssertEqual(manager.reservoirLevel?.unitVolume, reservoir.unitVolume)
+
+        let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
+        XCTAssertEqual(restoredState.settings.maxBolus, settings.maxBolus)
+        XCTAssertEqual(restoredState.settings.maxTempBasalRate, settings.maxTempBasalRate)
+        XCTAssertEqual(restoredState.basalRateSchedule, schedule)
+        XCTAssertEqual(restoredState.lastBatteryReading?.chargeRemaining, battery.chargeRemaining)
+        XCTAssertEqual(restoredState.lastReservoirReading?.unitVolume, reservoir.unitVolume)
+
+        let derivedSecret = PumpStateSupplier.getDerivedSecret()
+        XCTAssertEqual(derivedSecret, pumpState.derivedSecret)
     }
 }

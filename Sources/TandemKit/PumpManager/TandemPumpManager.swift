@@ -98,7 +98,7 @@ public class TandemPumpManager: PumpManager {
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
     private let lastScheduledBasalRate = Locked<Double?>(nil)
-    private let lockedBatteryChargeRemaining = Locked<Double?>(nil)
+    private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
     private let lockedCurrentBasalRate = Locked<Double?>(nil)
     private var telemetryConfigured = false
@@ -207,12 +207,14 @@ public class TandemPumpManager: PumpManager {
         status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
         status.bolusState = state.bolusState
         status.deliveryIsUncertain = state.deliveryIsUncertain
+        status.pumpBatteryChargeRemaining = state.lastBatteryReading?.chargeRemaining
         return status
     }
 
     public init(state: TandemPumpManagerState) {
         self.lockedState = Locked(state)
         self.lockedStatus = Locked(Self.makeStatus(from: state))
+        self.lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         self.lockedReservoirValue = Locked(state.lastReservoirReading)
         self.tandemPump = TandemPump(state.pumpState)
 
@@ -229,6 +231,7 @@ public class TandemPumpManager: PumpManager {
 
         self.lockedState = Locked(state)
         self.lockedStatus = Locked(Self.makeStatus(from: state))
+        self.lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         self.lockedReservoirValue = Locked(state.lastReservoirReading)
         self.tandemPump = TandemPump(state.pumpState)
 
@@ -329,6 +332,7 @@ public class TandemPumpManager: PumpManager {
 
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
         let percent = Double(response.batteryPercent) / 100.0
+        let timestamp = Date()
         lockedBatteryChargeRemaining.value = percent
 
         logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
@@ -337,13 +341,17 @@ public class TandemPumpManager: PumpManager {
             status.pumpBatteryChargeRemaining = percent
         }
 
+        var managerState = lockedState.value
+        managerState.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
+        lockedState.value = managerState
+
         notifyDelegateStateUpdated()
     }
 
     private func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
         let units = Double(response.currentInsulinAmount) / 1000.0
         let timestamp = Date()
-        let reservoirValue = ReservoirValue(startDate: timestamp, unitVolume: units)
+        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
         lockedReservoirValue.value = reservoirValue
 
@@ -351,6 +359,7 @@ public class TandemPumpManager: PumpManager {
 
         var managerState = lockedState.value
         managerState.lastReconciliation = timestamp
+        managerState.lastReservoirReading = reservoirValue
         lockedState.value = managerState
 
         notifyDelegateOfReservoir(reservoirValue)
@@ -360,19 +369,25 @@ public class TandemPumpManager: PumpManager {
     private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
         let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
         lockedCurrentBasalRate.value = rateUnitsPerHour
+        let timestamp = Date()
 
         logger(for: source).debug("[\(source.label)] Basal updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
 
         let newBasalState: PumpManagerStatus.BasalDeliveryState
         if rateUnitsPerHour <= 0 {
-            newBasalState = .suspended(Date())
+            newBasalState = .suspended(timestamp)
         } else {
-            newBasalState = .active(Date())
+            newBasalState = .active(timestamp)
         }
 
         updateStatus { status in
             status.basalDeliveryState = newBasalState
         }
+
+        var managerState = lockedState.value
+        managerState.basalDeliveryState = newBasalState
+        managerState.lastBasalStatusDate = timestamp
+        lockedState.value = managerState
 
         notifyDelegateStateUpdated()
     }
@@ -476,21 +491,6 @@ public class TandemPumpManager: PumpManager {
             )
 
             handleReservoirResponse(response, source: .telemetry)
-            let units = Double(response.currentInsulinAmount) / 1000.0
-            let timestamp = Date()
-            let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
-
-            lockedReservoirValue.value = reservoirValue
-
-            telemetryLogger.debug("Reservoir telemetry updated: \(String(format: "%.2f", units)) U remaining")
-
-            var managerState = lockedState.value
-            managerState.lastReconciliation = timestamp
-            managerState.lastReservoirReading = reservoirValue
-            lockedState.value = managerState
-
-            notifyDelegateOfReservoir(reservoirValue)
-            notifyDelegateStateUpdated()
         } catch {
             telemetryLogger.error("Reservoir telemetry request failed: \(error)")
         }
@@ -510,27 +510,6 @@ public class TandemPumpManager: PumpManager {
             )
 
             handleBasalResponse(response, source: .telemetry)
-            let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
-            lockedCurrentBasalRate.value = rateUnitsPerHour
-
-            telemetryLogger.debug("Basal telemetry updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
-
-            let newBasalState: PumpManagerStatus.BasalDeliveryState
-            if rateUnitsPerHour <= 0 {
-                newBasalState = .suspended(Date())
-            } else {
-                newBasalState = .active(Date())
-            }
-
-            updateStatus { status in
-                status.basalDeliveryState = newBasalState
-            }
-
-            var managerState = lockedState.value
-            managerState.basalDeliveryState = newBasalState
-            lockedState.value = managerState
-
-            notifyDelegateStateUpdated()
         } catch {
             telemetryLogger.error("Basal telemetry request failed: \(error)")
         }
@@ -1302,16 +1281,130 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func syncBasalRateSchedule(items scheduleItems: [RepeatingScheduleValue<Double>], completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void) {
-        // TODO: Implement basal schedule synchronization with the pump.
-        delegateQueue.async {
-            completion(.failure(PumpManagerError.communication(PumpCommError.notImplemented)))
+        guard !scheduleItems.isEmpty else {
+            delegateQueue.async {
+                completion(.failure(PumpManagerError.configuration(nil)))
+            }
+            return
+        }
+
+        guard let transport = currentTransport() else {
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            delegateQueue.async {
+                completion(.failure(PumpManagerError.communication(error)))
+            }
+            return
+        }
+
+        let sortedItems = scheduleItems.sorted { $0.startTime < $1.startTime }
+        let requests = makeBasalSegmentRequests(from: sortedItems)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                for request in requests {
+                    let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: request,
+                        expecting: SetIDPSegmentResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+                }
+
+                let schedule = BasalRateSchedule(items: sortedItems, timeZone: self.lockedStatus.value.timeZone)
+
+                var managerState = self.lockedState.value
+                managerState.basalRateSchedule = schedule
+                managerState.settings.maxBasalScheduleEntry = sortedItems.map { $0.value }.max()
+                self.lockedState.value = managerState
+
+                if let firstRate = sortedItems.first?.value {
+                    self.lastScheduledBasalRate.value = firstRate
+                }
+
+                self.notifyDelegateStateUpdated()
+
+                self.delegateQueue.async {
+                    completion(.success(schedule))
+                }
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.delegateQueue.async {
+                    completion(.failure(PumpManagerError.communication(pumpError)))
+                }
+            }
         }
     }
 
     public func syncDeliveryLimits(limits deliveryLimits: DeliveryLimits, completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void) {
-        // TODO: Implement delivery limit synchronization with the pump.
-        delegateQueue.async {
-            completion(.failure(PumpManagerError.communication(PumpCommError.notImplemented)))
+        guard let transport = currentTransport() else {
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            delegateQueue.async {
+                completion(.failure(PumpManagerError.communication(error)))
+            }
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                var appliedLimits = DeliveryLimits(maximumBasalRatePerHour: nil, maximumBolus: nil)
+
+                if let maxBasal = deliveryLimits.maximumBasalRatePerHour {
+                    let milliunits = Int((maxBasal * 1000.0).rounded())
+                    let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits),
+                        expecting: SetMaxBasalLimitResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+
+                    appliedLimits.maximumBasalRatePerHour = maxBasal
+                }
+
+                if let maxBolus = deliveryLimits.maximumBolus {
+                    let milliunits = Int((maxBolus * 1000.0).rounded())
+                    let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits),
+                        expecting: SetMaxBolusLimitResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+
+                    appliedLimits.maximumBolus = maxBolus
+                }
+
+                var managerState = self.lockedState.value
+                managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRatePerHour
+                managerState.settings.maxBolus = appliedLimits.maximumBolus
+                self.lockedState.value = managerState
+
+                self.notifyDelegateStateUpdated()
+
+                self.delegateQueue.async {
+                    completion(.success(appliedLimits))
+                }
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                self.notifyPumpManagerDelegateOfError(pumpError)
+                self.delegateQueue.async {
+                    completion(.failure(PumpManagerError.communication(pumpError)))
+                }
+            }
         }
     }
 
@@ -1396,6 +1489,34 @@ extension TandemPumpManager: PumpCommDelegate {
 }
 
 private extension TandemPumpManager {
+    func makeBasalSegmentRequests(from items: [RepeatingScheduleValue<Double>]) -> [SetIDPSegmentRequest] {
+        let idpId = 0
+        let unknownId = 1
+        let mask = idpStatusMask([.BASAL_RATE, .START_TIME])
+
+        return items.enumerated().map { index, entry in
+            let startMinutes = Int((entry.startTime / 60.0).rounded())
+            let basalMilliunits = Int((entry.value * 1000.0).rounded())
+
+            return SetIDPSegmentRequest(
+                idpId: idpId,
+                unknownId: unknownId,
+                segmentIndex: index,
+                operation: .modifySegmentId,
+                profileStartTime: startMinutes,
+                profileBasalRate: basalMilliunits,
+                profileCarbRatio: 0,
+                profileTargetBG: 0,
+                profileISF: 0,
+                idpStatusId: mask
+            )
+        }
+    }
+
+    func idpStatusMask(_ statuses: Set<IDPSegmentResponse.IDPSegmentStatus>) -> Int {
+        statuses.reduce(0) { $0 | $1.rawValue }
+    }
+
     func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
