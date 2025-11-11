@@ -11,13 +11,50 @@ class HomeScreenMirrorHandler: MessageHandler {
         state: PumpStateProvider,
         context: HandlerContext
     ) throws -> Message {
-        // Return current pump home screen state
-        var response = HomeScreenMirrorResponse(cargo: Data())
+        // Build response with simulated home screen state
+        // Icon IDs are placeholders - actual values would depend on pump state
 
-        // Populate with current state
-        // Note: Field mapping based on TandemCore message definitions
-        // This is a simplified version - actual implementation would need
-        // to map all fields correctly
+        // CGM trend icon (0=no data, 1=rapidDown, 2=down, 3=stable, 4=up, 5=rapidUp)
+        let cgmTrendIconId: Int
+        if state.cgmEnabled, let trend = state.glucoseTrend {
+            cgmTrendIconId = trend.rawValue
+        } else {
+            cgmTrendIconId = 0 // No data
+        }
+
+        // CGM alert icon (0=none, other values for various alerts)
+        let cgmAlertIconId = 0 // No alert
+
+        // Status icons (0=none, various values for different states)
+        let statusIcon0Id = 0 // No status
+        let statusIcon1Id = 0 // No status
+
+        // Bolus icon (0=none, 1=active, etc.)
+        let bolusStatusIconId = state.activeBolusAmount != nil ? 1 : 0
+
+        // Basal icon (0=none, 1=normal, 2=temp, 3=suspended, etc.)
+        let basalStatusIconId = 1 // Normal basal
+
+        // Automation/Control-IQ state (0=off, 1=on, etc.)
+        let apControlStateIconId = state.controlIQEnabled ? 1 : 0
+
+        // Remaining insulin indicator
+        let remainingInsulinPlusIcon = state.reservoirLevel > 300
+
+        // CGM display data available
+        let cgmDisplayData = state.cgmEnabled && state.currentGlucose != nil
+
+        let response = HomeScreenMirrorResponse(
+            cgmTrendIconId: cgmTrendIconId,
+            cgmAlertIconId: cgmAlertIconId,
+            statusIcon0Id: statusIcon0Id,
+            statusIcon1Id: statusIcon1Id,
+            bolusStatusIconId: bolusStatusIconId,
+            basalStatusIconId: basalStatusIconId,
+            apControlStateIconId: apControlStateIconId,
+            remainingInsulinPlusIcon: remainingInsulinPlusIcon,
+            cgmDisplayData: cgmDisplayData
+        )
 
         return response
     }
