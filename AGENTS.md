@@ -716,23 +716,22 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 - ⚠️ **PARTIALLY IMPLEMENTED**: Some functionality exists but incomplete
 - ❌ **STUB** or **NOT IMPLEMENTED**: Placeholder or missing entirely
 
-## Recent Session Notes (Jan 2025)
+## Recent Session Notes (Mar 2025 Audit)
 
-### Pairing CLI Status
-- Tandem CLI now scaffolds a full pairing attempt, including BLE notification enablement and `PumpComm` invocation.
-- Logging added across the stack (`PairingCoordinator`, `PeripheralManager(Transport)`, `PumpCommSession`, `JpakeAuthBuilder`, `EcJpake`) to trace handshake progress.
-- Current behavior: connection established, notifications enabled, JPAKE builder initialised, but `EcJpake.getRound1()` never returns (appears to hang inside SwiftECC when generating the first key pair).
-- No BLE packets are sent; the CLI times out after 30 s. Likely causes: blocking randomness source (SecureRandom on macOS), or the SwiftECC JPAKE implementation not seeded correctly outside iOS.
+### Pairing & BLE Status
+- The CLI pairing path now completes a full BLE exchange: once `PeripheralManager` finishes configuration, `PairingCoordinator` spins up a background `Task.detached` that primes `JpakeAuthBuilder`, sends the first JPAKE frame through `PeripheralManagerTransport`, and then hands control to `PumpComm.pair` to finish the session. Logs capture round-trip packets plus derived-secret/server-nonce updates for post-run analysis. 
+- SwiftECC still performs a heavy first-use warm-up (~10–15 s) before `builder.nextRequest()` returns, but the work happens off the main thread so BLE notifications stay live and the CLI no longer deadlocks while waiting.
+- Pump-side notifications are streamed back through the delegate hooks, giving visibility into manufacturer/model detection and any unsolicited pump messages during pairing.
 
-### Applied Changes This Session
-- CLI `pair` flow now primes JPAKE by sending the first request immediately after notifications are enabled.
-- Extensive debug prints added to: pairing coordinator, BLE transport, `PumpCommSession`, `JpakeAuthBuilder`, `EcJpake`, and `PeripheralManager` to surface packet contents and state transitions.
-- CLI now captures derived secret/server nonce on success (not yet reached) and reports detailed errors on failure.
-- `PumpComm` initialiser and `PeripheralManagerTransport` made public for CLI reuse.
-- `PeripheralManager` gains synchronous helper with queue awareness, avoids reentrant deadlock.
-- `TandemKitPlugin` marked as macOS 13+/iOS 14+ to satisfy availability constraints.
+### Applied Changes Since Prior Notes
+- JPAKE initialization moved to a detached task so the CLI remains responsive while the first round key material is generated, and the initial JPAKE request is pushed immediately after notifications come online.
+- Pairing completion now logs truncated derived-secret/server-nonce values alongside the stored `PumpState`, simplifying retrieval of credentials for follow-on commands.
 
 ### Outstanding Pairing Tasks
-- Diagnose why `EcJpake.getRound1()` blocks on macOS; compare with PumpX2’s Android implementation (uses `java.security.SecureRandom`) and SwiftECC expectations. Potential fixes: supply a deterministic/non-blocking RNG or move randomness generation off the main thread.
-- Once JPAKE round 1 is emitted, confirm packet flow by monitoring the new logs (`[PeripheralManagerTransport] send …`, `[PumpCommSession] nextRequest …`).
-- Validate the remainder of the pairing flow (rounds 2–4, legacy pump challenge) once `getRound1()` succeeds.
+- Trim SwiftECC start-up latency: first-round generation still takes >10 s, so we need either a pre-warm hook or an alternative ECC backend to keep the UX within expected pairing windows.
+- Exercise the full multi-round exchange (including the legacy challenge) under real hardware to ensure `PumpComm.pair` handles back-to-back responses and that background pairing does not race the timeout scheduler.
+- Add coverage for failure surfaces (e.g. invalid pairing codes, mid-handshake disconnects) so the CLI and manager surface actionable errors instead of generic timeouts.
+
+### LoopKit Compatibility Risks & Dependencies
+- Apple-platform builds now rely on the Carthage-sourced `LoopKit.xcframework` and `LoopKitUI.xcframework`; consumers must supply matching binaries or the SPM package will fail to resolve these binary targets. Document the required versions and distribution story alongside the package.
+- `LoopKitUI` re-exports `LoopKitUIBinary`, and `TandemKitPlugin` expects the full `PumpManagerUI` APIs. Verify the shipped binaries expose the same protocol surface as our Linux stubs to avoid compile-time drift when swapping in official LoopKit frameworks.
