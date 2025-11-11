@@ -7,7 +7,9 @@
 
 import Foundation
 import CoreBluetooth
+#if canImport(HealthKit)
 import HealthKit
+#endif
 import LoopKit
 import TandemCore
 import TandemBLE
