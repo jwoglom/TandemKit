@@ -321,6 +321,10 @@ public class TandemPumpManager: PumpManager {
         telemetryScheduler.schedule(kind: .battery, interval: 30 * 60) { [weak self] in
             self?.fetchBatteryStatus()
         }
+
+        telemetryScheduler.schedule(kind: .bolus, interval: 60) { [weak self] in
+            self?.fetchBolusStatus()
+        }
     }
 
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
@@ -529,6 +533,25 @@ public class TandemPumpManager: PumpManager {
             notifyDelegateStateUpdated()
         } catch {
             telemetryLogger.error("Basal telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchBolusStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping bolus telemetry – no transport")
+            return
+        }
+
+        do {
+            let response: CurrentBolusStatusResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: CurrentBolusStatusRequest(),
+                expecting: CurrentBolusStatusResponse.self
+            )
+
+            handleBolusResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Bolus telemetry request failed: \(error)")
         }
     }
 
