@@ -1,13 +1,74 @@
-// Compatibility stubs to allow building TandemKit on platforms without the full LoopKit framework.
-//
-// When building with Carthage on iOS/macOS, the real LoopKit framework from
-// Carthage/Checkouts/LoopKit is used instead of these stubs.
-//
-// These stubs mirror the essential LoopKit interfaces that TandemKit requires,
-// allowing standalone development, testing, and Linux builds.
+#if os(Linux)
 
 import Foundation
-import HealthKit
+
+// MARK: - Lightweight HealthKit shims
+
+public struct HKUnit: Codable, Equatable {
+    private let symbol: String
+
+    public init(symbol: String) {
+        self.symbol = symbol
+    }
+
+    public static func internationalUnit() -> HKUnit {
+        HKUnit(symbol: "IU")
+    }
+
+    public static func internationalUnitPerHour() -> HKUnit {
+        HKUnit(symbol: "IU/hr")
+    }
+
+    public func unitDivided(by unit: HKUnit) -> HKUnit {
+        HKUnit(symbol: "\(symbol)/\(unit.symbol)")
+    }
+}
+
+public struct HKQuantity: Codable, Equatable {
+    public let unit: HKUnit
+    public let value: Double
+
+    public init(unit: HKUnit, doubleValue: Double) {
+        self.unit = unit
+        self.value = doubleValue
+    }
+
+    public func doubleValue(for unit: HKUnit) -> Double {
+        value
+    }
+}
+
+public struct HKDevice: Equatable {
+    public var name: String?
+    public var manufacturer: String?
+    public var model: String?
+    public var hardwareVersion: String?
+    public var firmwareVersion: String?
+    public var softwareVersion: String?
+    public var localIdentifier: String?
+    public var udiDeviceIdentifier: String?
+
+    public init(
+        name: String?,
+        manufacturer: String?,
+        model: String?,
+        hardwareVersion: String?,
+        firmwareVersion: String?,
+        softwareVersion: String?,
+        localIdentifier: String?,
+        udiDeviceIdentifier: String?
+    ) {
+        self.name = name
+        self.manufacturer = manufacturer
+        self.model = model
+        self.hardwareVersion = hardwareVersion
+        self.firmwareVersion = firmwareVersion
+        self.softwareVersion = softwareVersion
+        self.localIdentifier = localIdentifier
+        self.udiDeviceIdentifier = udiDeviceIdentifier
+    }
+}
+
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -48,14 +109,22 @@ public enum DeviceLifecycleProgressState: String, Codable {
 // MARK: - Device Manager
 
 public protocol DeviceManagerDelegate {
-    #if canImport(UserNotifications)
-    func scheduleNotification(for manager: DeviceManager,
-                              identifier: String,
-                              content: UNNotificationContent,
-                              trigger: UNNotificationTrigger?)
+#if canImport(UserNotifications)
+    func scheduleNotification(
+        for manager: DeviceManager,
+        identifier: String,
+        content: UNNotificationContent,
+        trigger: UNNotificationTrigger?
+    )
     func clearNotification(for manager: DeviceManager, identifier: String)
-    #endif
-    func deviceManager(_ manager: DeviceManager, logEventForDeviceIdentifier deviceIdentifier: String?, type: DeviceLogEntryType, message: String, completion: ((Error?) -> Void)?)
+#endif
+    func deviceManager(
+        _ manager: DeviceManager,
+        logEventForDeviceIdentifier deviceIdentifier: String?,
+        type: DeviceLogEntryType,
+        message: String,
+        completion: ((Error?) -> Void)?
+    )
 }
 
 public enum DeviceLogEntryType: String {
@@ -80,7 +149,7 @@ public protocol DeviceManager: AnyObject, CustomDebugStringConvertible {
 
 public extension DeviceManager {
     var localizedTitle: String {
-        return type(of: self).localizedTitle
+        type(of: self).localizedTitle
     }
 }
 
@@ -176,13 +245,33 @@ public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObs
     func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) -> Bool
     func pumpManagerWillDeactivate(_ pumpManager: PumpManager)
     func pumpManagerPumpWasReplaced(_ pumpManager: PumpManager)
-    func pumpManager(_ pumpManager: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents pumpRecordsBasalProfileStartEvents: Bool)
+    func pumpManager(
+        _ pumpManager: PumpManager,
+        didUpdatePumpRecordsBasalProfileStartEvents pumpRecordsBasalProfileStartEvents: Bool
+    )
     func pumpManager(_ pumpManager: PumpManager, didError error: PumpManagerError)
-    func pumpManager(_ pumpManager: PumpManager, hasNewPumpEvents events: [NewPumpEvent], lastReconciliation: Date?, replacePendingEvents: Bool, completion: @escaping (_ error: Error?) -> Void)
-    func pumpManager(_ pumpManager: PumpManager, didReadReservoirValue units: Double, at date: Date, completion: @escaping (_ result: Result<(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool), Error>) -> Void)
+    func pumpManager(
+        _ pumpManager: PumpManager,
+        hasNewPumpEvents events: [NewPumpEvent],
+        lastReconciliation: Date?,
+        replacePendingEvents: Bool,
+        completion: @escaping (_ error: Error?) -> Void
+    )
+    func pumpManager(
+        _ pumpManager: PumpManager,
+        didReadReservoirValue units: Double,
+        at date: Date,
+        completion: @escaping (
+            _ result: Result<(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool), Error>
+        ) -> Void
+    )
     func pumpManager(_ pumpManager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval)
     func pumpManagerDidUpdateState(_ pumpManager: PumpManager)
-    func pumpManager(_ pumpManager: PumpManager, didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule, completion: @escaping (Error?) -> Void)
+    func pumpManager(
+        _ pumpManager: PumpManager,
+        didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule,
+        completion: @escaping (Error?) -> Void
+    )
     func pumpManagerRecommendsLoop(_ pumpManager: PumpManager)
     func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date
     var detectedSystemTimeOffset: TimeInterval { get }
@@ -256,25 +345,39 @@ public protocol PumpManager: DeviceManager {
     func createBolusProgressReporter(reportingOn dispatchQueue: DispatchQueue) -> DoseProgressReporter?
     func estimatedDuration(toBolus units: Double) -> TimeInterval
 
-    func enactBolus(units: Double, activationType: BolusActivationType, completion: @escaping (_ error: PumpManagerError?) -> Void)
+    func enactBolus(
+        units: Double,
+        activationType: BolusActivationType,
+        completion: @escaping (_ error: PumpManagerError?) -> Void
+    )
     func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void)
-    func enactTempBasal(unitsPerHour: Double, for duration: TimeInterval, completion: @escaping (_ error: PumpManagerError?) -> Void)
+    func enactTempBasal(
+        unitsPerHour: Double,
+        for duration: TimeInterval,
+        completion: @escaping (_ error: PumpManagerError?) -> Void
+    )
     func suspendDelivery(completion: @escaping (_ error: Error?) -> Void)
     func resumeDelivery(completion: @escaping (_ error: Error?) -> Void)
 
-    func syncBasalRateSchedule(items scheduleItems: [RepeatingScheduleValue<Double>], completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void)
-    func syncDeliveryLimits(limits deliveryLimits: DeliveryLimits, completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void)
+    func syncBasalRateSchedule(
+        items scheduleItems: [RepeatingScheduleValue<Double>],
+        completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void
+    )
+    func syncDeliveryLimits(
+        limits deliveryLimits: DeliveryLimits,
+        completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void
+    )
     func prepareForDeactivation(_ completion: @escaping (Error?) -> Void)
 }
 
 @available(macOS 13.0, iOS 14.0, *)
 public extension PumpManager {
     func roundToSupportedBasalRate(unitsPerHour: Double) -> Double {
-        return supportedBasalRates.filter({ $0 <= unitsPerHour }).max() ?? 0
+        supportedBasalRates.filter { $0 <= unitsPerHour }.max() ?? 0
     }
 
     func roundToSupportedBolusVolume(units: Double) -> Double {
-        return supportedBolusVolumes.filter({ $0 <= units }).max() ?? 0
+        supportedBolusVolumes.filter { $0 <= units }.max() ?? 0
     }
 
     func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
@@ -343,28 +446,69 @@ public struct DoseEntry: TimelineValue, Equatable, Codable {
     public let isMutable: Bool
     public let wasProgrammedByPumpUI: Bool
 
-    public init(suspendDate: Date, automatic: Bool? = nil, isMutable: Bool = false, wasProgrammedByPumpUI: Bool = false) {
-        self.init(type: .suspend, startDate: suspendDate, value: 0, unit: .units, deliveredUnits: nil, description: nil, syncIdentifier: nil, scheduledBasalRate: nil, insulinType: nil, automatic: automatic, manuallyEntered: false, isMutable: isMutable, wasProgrammedByPumpUI: wasProgrammedByPumpUI)
+    public init(
+        suspendDate: Date,
+        automatic: Bool? = nil,
+        isMutable: Bool = false,
+        wasProgrammedByPumpUI: Bool = false
+    ) {
+        self.init(
+            type: .suspend,
+            startDate: suspendDate,
+            value: 0,
+            unit: .units,
+            deliveredUnits: nil,
+            description: nil,
+            syncIdentifier: nil,
+            scheduledBasalRate: nil,
+            insulinType: nil,
+            automatic: automatic,
+            manuallyEntered: false,
+            isMutable: isMutable,
+            wasProgrammedByPumpUI: wasProgrammedByPumpUI
+        )
     }
 
-    public init(resumeDate: Date, insulinType: InsulinType? = nil, automatic: Bool? = nil, isMutable: Bool = false, wasProgrammedByPumpUI: Bool = false) {
-        self.init(type: .resume, startDate: resumeDate, value: 0, unit: .units, deliveredUnits: nil, description: nil, syncIdentifier: nil, scheduledBasalRate: nil, insulinType: insulinType, automatic: automatic, manuallyEntered: false, isMutable: isMutable, wasProgrammedByPumpUI: wasProgrammedByPumpUI)
+    public init(
+        resumeDate: Date,
+        insulinType: InsulinType? = nil,
+        automatic: Bool? = nil,
+        isMutable: Bool = false,
+        wasProgrammedByPumpUI: Bool = false
+    ) {
+        self.init(
+            type: .resume,
+            startDate: resumeDate,
+            value: 0,
+            unit: .units,
+            deliveredUnits: nil,
+            description: nil,
+            syncIdentifier: nil,
+            scheduledBasalRate: nil,
+            insulinType: insulinType,
+            automatic: automatic,
+            manuallyEntered: false,
+            isMutable: isMutable,
+            wasProgrammedByPumpUI: wasProgrammedByPumpUI
+        )
     }
 
-    public init(type: DoseType,
-                startDate: Date,
-                endDate: Date? = nil,
-                value: Double,
-                unit: DoseUnit,
-                deliveredUnits: Double? = nil,
-                description: String? = nil,
-                syncIdentifier: String? = nil,
-                scheduledBasalRate: HKQuantity? = nil,
-                insulinType: InsulinType? = nil,
-                automatic: Bool? = nil,
-                manuallyEntered: Bool = false,
-                isMutable: Bool = false,
-                wasProgrammedByPumpUI: Bool = false) {
+    public init(
+        type: DoseType,
+        startDate: Date,
+        endDate: Date? = nil,
+        value: Double,
+        unit: DoseUnit,
+        deliveredUnits: Double? = nil,
+        description: String? = nil,
+        syncIdentifier: String? = nil,
+        scheduledBasalRate: HKQuantity? = nil,
+        insulinType: InsulinType? = nil,
+        automatic: Bool? = nil,
+        manuallyEntered: Bool = false,
+        isMutable: Bool = false,
+        wasProgrammedByPumpUI: Bool = false
+    ) {
         self.type = type
         self.startDate = startDate
         self.endDate = endDate ?? startDate
@@ -495,10 +639,16 @@ public enum BolusActivationType: String, Codable {
     case none
 
     public var isAutomatic: Bool {
-        return self == .automatic
+        self == .automatic
     }
 }
 
 // MARK: - CGM Manager
 
 public protocol CGMManagerUI {}
+
+#else
+
+@_exported import LoopKitBinary
+
+#endif

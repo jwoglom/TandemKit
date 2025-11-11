@@ -8,12 +8,13 @@ This project relies on Carthage for several dependencies (LoopKit, LoopKitUI, Lo
 
 1. Install [Carthage](https://github.com/Carthage/Carthage).
 2. Run the following command from the repository root:
-   
+
    ```bash
-   ./carthage.sh update --platform iOS --use-xcframeworks
+   ./carthage.sh update --platform iOS,macOS --use-xcframeworks
    ```
 
    This script mirrors the one used by OmniBLE and ensures the correct build settings for modern Xcode versions.
-3. After Carthage finishes building, open `TandemKit.xcodeproj` and build the targets.
+3. After Carthage finishes building, verify that `Carthage/Build/LoopKit.xcframework` and `Carthage/Build/LoopKitUI.xcframework` are present. The Swift Package manifest consumes these binaries on Apple platforms, while Linux continues to compile against the lightweight stubs.
+4. Open `TandemKit.xcodeproj` and build the targets.
 
 The generated frameworks will appear under `Carthage/Build/` and are referenced by the project via a `carthage copy-frameworks` build phase.
