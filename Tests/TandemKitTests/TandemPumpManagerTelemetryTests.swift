@@ -25,6 +25,17 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
             for: CurrentBasalStatusRequest.self,
             response: CurrentBasalStatusResponse(profileBasalRate: 1_000, currentBasalRate: 1_000, basalModifiedBitmask: 0)
         )
+        mockPeripheralManager.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
+        )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
         let mockPumpComm = MockPumpComm(pumpState: nil)
@@ -50,6 +61,10 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         XCTAssertTrue(
             mockPeripheralManager.sentMessages.contains(where: { $0.message is CurrentBatteryV1Request }),
             "Legacy battery request should be sent via transport"
+        )
+        XCTAssertTrue(
+            mockPeripheralManager.sentMessages.contains(where: { $0.message is CurrentBolusStatusRequest }),
+            "Bolus status request should be sent via transport"
         )
         XCTAssertEqual(manager.pumpBatteryChargeRemaining, 0.8, accuracy: 0.01)
     }
@@ -77,6 +92,17 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         mockPeripheralManager.enqueueResponse(
             for: CurrentBasalStatusRequest.self,
             response: CurrentBasalStatusResponse(profileBasalRate: 900, currentBasalRate: 900, basalModifiedBitmask: 0)
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
         )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
@@ -119,6 +145,17 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         mockPeripheralManager.enqueueResponse(
             for: CurrentBasalStatusRequest.self,
             response: CurrentBasalStatusResponse(profileBasalRate: 1_200, currentBasalRate: 1_200, basalModifiedBitmask: 0)
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
         )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
