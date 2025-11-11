@@ -132,11 +132,24 @@ public class TandemPumpManager: PumpManager {
 
     public func updateTransport(_ transport: PumpMessageTransport?) {
         transportLock.value = transport
+
+        if let peripheralManager = activePeripheralManager, transport != nil {
+            pumpComm.manager = peripheralManager
+        } else if transport == nil {
+            pumpComm.manager = nil
+        }
+
         if transport != nil {
             telemetryLogger.debug("Transport available – triggering telemetry refresh")
+            updateStatus { status in
+                status.deliveryIsUncertain = false
+            }
             telemetryScheduler.triggerAll()
         } else {
             telemetryLogger.debug("Transport cleared – telemetry will pause until reconnect")
+            updateStatus { status in
+                status.deliveryIsUncertain = true
+            }
         }
     }
 
@@ -709,6 +722,28 @@ public class TandemPumpManager: PumpManager {
     }
 
     public func connect() {
+        tandemPump.delegate = self
+        pumpComm.delegate = self
+
+        if currentTransport() != nil {
+            telemetryLogger.debug("connect() called while transport already available – refreshing telemetry")
+            updateStatus { status in
+                status.deliveryIsUncertain = false
+            }
+            telemetryScheduler.triggerAll()
+            return
+        }
+
+        guard isOnboarded else {
+            log.error("connect() requested before pump is paired")
+            notifyPumpManagerDelegateOfError(.missingAuthenticationKey)
+            return
+        }
+
+        updateStatus { status in
+            status.deliveryIsUncertain = true
+        }
+
         tandemPump.startScanning()
     }
 
@@ -717,6 +752,7 @@ public class TandemPumpManager: PumpManager {
             notificationRouter.stop(with: manager)
             activePeripheralManager = nil
         }
+        pumpComm.manager = nil
         updateTransport(nil)
         tandemPump.disconnect()
     }
@@ -1287,6 +1323,7 @@ extension TandemPumpManager: TandemPumpDelegate {
         // Create and store the transport
         let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
         activePeripheralManager = peripheralManager
+        pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
         updateTransport(transport)
     }
