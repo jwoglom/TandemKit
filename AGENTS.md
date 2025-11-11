@@ -75,25 +75,25 @@ Requests:
 - [x] RemoteBgEntryRequest
    - [x] Tests for RemoteBgEntryRequest
 - [x] RemoteCarbEntryRequest
-   - [ ] Tests for RemoteCarbEntryRequest
+   - [x] Tests for RemoteCarbEntryRequest
 - [x] RenameIDPRequest
-   - [ ] Tests for RenameIDPRequest
+   - [x] Tests for RenameIDPRequest
 - [x] ResumePumpingRequest
-   - [ ] Tests for ResumePumpingRequest
+   - [x] Tests for ResumePumpingRequest
 - [x] SetActiveIDPRequest
-   - [ ] Tests for SetActiveIDPRequest
+   - [x] Tests for SetActiveIDPRequest
 - [x] SetDexcomG7PairingCodeRequest
    - [ ] Tests for SetDexcomG7PairingCodeRequest
 - [x] SetG6TransmitterIdRequest
    - [ ] Tests for SetG6TransmitterIdRequest
 - [x] SetIDPSegmentRequest
-   - [ ] Tests for SetIDPSegmentRequest
+   - [x] Tests for SetIDPSegmentRequest
 - [x] SetIDPSettingsRequest
    - [ ] Tests for SetIDPSettingsRequest
 - [x] SetMaxBasalLimitRequest
-   - [ ] Tests for SetMaxBasalLimitRequest
+   - [x] Tests for SetMaxBasalLimitRequest
 - [x] SetMaxBolusLimitRequest
-   - [ ] Tests for SetMaxBolusLimitRequest
+   - [x] Tests for SetMaxBolusLimitRequest
 - [x] SetModesRequest
    - [ ] Tests for SetModesRequest
 - [x] SetQuickBolusSettingsRequest
@@ -101,15 +101,15 @@ Requests:
 - [x] SetSleepScheduleRequest
    - [ ] Tests for SetSleepScheduleRequest
 - [x] SetTempRateRequest
-   - [ ] Tests for SetTempRateRequest
+   - [x] Tests for SetTempRateRequest
 - [x] StartDexcomG6SensorSessionRequest
    - [ ] Tests for StartDexcomG6SensorSessionRequest
 - [x] StopDexcomCGMSensorSessionRequest
    - [ ] Tests for StopDexcomCGMSensorSessionRequest
 - [x] StopTempRateRequest
-   - [ ] Tests for StopTempRateRequest
+   - [x] Tests for StopTempRateRequest
 - [x] SuspendPumpingRequest
-   - [ ] Tests for SuspendPumpingRequest
+   - [x] Tests for SuspendPumpingRequest
 
 Responses:
 - [x] BolusPermissionReleaseResponse
@@ -558,18 +558,14 @@ Responses:
   - Still lacks storage for therapy settings, pump status snapshots, and LoopKit-facing metadata
 
 #### 2. Pump Session Orchestration (INCOMPLETE)
-* **`TandemPump`** (`Sources/TandemKit/PumpManager/TandemPump.swift`) – ❌ **MOSTLY STUB**:
-  - Redefines placeholder types `PeripheralManager` and `BluetoothManager` instead of using the **fully implemented** real ones from `Sources/TandemBLE` (lines 13-31)
-  - `BluetoothManager.scanForPeripheral()` is just a print statement (line 28-30)
-  - `sendDefaultStartupRequests()` is a TODO (lines 98-101)
-  - `send()` method for message transmission is a TODO (lines 107-110)
-  - All configuration methods (`enableActionsAffectingInsulinDelivery`, etc.) are just print statements (lines 63-86)
-  - **Critical Issue**: TandemPump doesn't actually connect to the real, functional BLE transport layer
+* **`TandemPump`** (`Sources/TandemKit/PumpManager/TandemPump.swift`) – ⚠️ **PARTIALLY IMPLEMENTED**:
+  - Uses the production `BluetoothManager`/`PeripheralManager` from `TandemBLE` for scanning, connection management, and startup message dispatch (`startScanning`, `disconnect`, `sendDefaultStartupRequests`).
+  - Still exposes configuration helpers (`enableActionsAffectingInsulinDelivery`, etc.) that only print diagnostics and do not yet toggle any real pump state.
 * **`PumpComm`** (`Sources/TandemKit/PumpManager/PumpComm.swift`) – ⚠️ **PARTIALLY IMPLEMENTED**:
-  - `pair()` is implemented (lines 59-78)
-  - `sendMessage()` has extensive commented-out code for response handling (lines 81-104)
-  - No fault handling or response parsing integrated
-* **`PumpMessageTransport`** (`Sources/TandemKit/PumpManager/PumpMessageTransport.swift`) – ❌ **STUB**: Just a protocol definition with no concrete implementation that bridges to the real `PeripheralManager`
+  - Delegates to `PumpCommSession` for pairing and state updates and relays typed notifications back to the manager.
+  - Core send/receive flows work through the transport, but higher-level fault/retry logic is still minimal.
+* **`PumpMessageTransport`** (`Sources/TandemKit/PumpManager/PumpMessageTransport.swift`) – ✅ **IMPLEMENTED**:
+  - `PeripheralManagerTransport` now bridges `TronMessageWrapper` packets onto `PeripheralManager`, streams responses through `PumpResponseCollector`, and retains request/response history for introspection.
 
 #### 3. Authentication Gaps
 * **V2 pairing (6-digit PIN)** – ✅ **IMPLEMENTED**: `PumpChallengeRequestBuilder.createV2()` advances the JPakeAuthBuilder and `PumpCommSession` now branches between JPAKE and legacy pump-challenge flows.
@@ -577,49 +573,49 @@ Responses:
 * **Dependency management** – ⚠️ All JPake functionality requires SwiftECC/BigInt/CryptoKit dependencies which may not be available on all platforms
 
 #### 4. Response Decoding and Device Targeting
-* **BLE notification handling** – ⚠️ BLE notifications arrive but there's no bridge from `PeripheralManager` to `PumpComm` for typed message decoding
-* **Message response parsing** – ❌ `PumpComm.sendMessage()` doesn't instantiate concrete response types from the `MessageRegistry`
-* **Device targeting** – ❌ No logic to identify pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses
-* **Status updates** – ❌ No dispatchers for status requests (basal, bolus, history streams) to feed LoopKit delegates
+* **BLE notification handling** – ✅ `PumpNotificationRouter` attaches to the active `PeripheralManager`, validates packets, and forwards typed messages into `PumpCommSession` for handling.
+* **Message response parsing** – ✅ `PeripheralManagerTransport` + `PumpResponseCollector` decode responses via `BTResponseParser`, returning concrete message types back to callers.
+* **Device targeting** – ❌ No logic yet to infer pump model (t:slim X2, Mobi, Trio) from advertisements or `PumpVersionResponse` values.
+* **Status updates** – ⚠️ Basal/bolus/battery/reservoir polling and notification handling feed LoopKit delegates, but history streaming and alert/CGM pipelines remain unimplemented.
 
 #### 5. Safety and Gating
-* **Insulin delivery toggles** – ⚠️ `PumpStateSupplier.actionsAffectingInsulinDeliveryEnabled` exists but no UI or persistence for user consent
-* **Therapy command safeguards** – ❌ No validation or safety checks when Loop/Trio initiates bolus/temp basal/suspend commands
-* **Error handling** – ❌ No comprehensive error handling for pump faults, communication failures, or authentication errors
+* **Insulin delivery toggles** – ⚠️ `PumpStateSupplier` exposes enablement flags, but the TandemPump configuration helpers remain stubs and there is no UI/persistence yet.
+* **Therapy command safeguards** – ⚠️ `TandemPumpManager` validates bolus amounts, max temp basal rates, and IOB limits before issuing commands, but additional safety interlocks (e.g. user acknowledgements) are still pending.
+* **Error handling** – ⚠️ Transport/pump communication errors bubble back through delegate callbacks with state resets, yet pump fault classification and retry strategies remain to be built.
 
 ### Proposed Roadmap
-1. **Phase 0 – Environment & dependency alignment**
-   * Ensure Carthage frameworks (LoopKit, etc.) build locally; replace the `LoopKit` stub with the actual dependency surfaces or modular shims required for Linux testing.
-   * Document and script any additional SwiftECC/BigInt/CryptoKit requirements so the JPake path builds in CI.
+1. **Phase 0 – Environment & dependency alignment** – ❌ *Not yet started*
+   * Ensure Carthage frameworks (LoopKit, etc.) build locally; replace the `LoopKit` stub with the actual dependency surfaces or modular shims required for Linux testing (still pending; Linux builds rely on the stub).
+   * Document and script any additional SwiftECC/BigInt/CryptoKit requirements so the JPake path builds in CI (no automation or documentation present).
 
-2. **Phase 1 – Transport consolidation**
-   * Refactor `TandemPump` to reuse the real `BluetoothManager`/`PeripheralManager` from `TandemBLE` instead of placeholder types, wiring delegate callbacks for connection readiness and configuration completion.
-   * Implement a concrete `PumpMessageTransport` backed by `PeripheralManager.sendMessagePackets`, including creation of `TronMessageWrapper`s and routing responses through `BTResponseParser`.
-   * Finish `PumpComm.sendMessage` so it handles pump faults, retries, and message-type dispatch using the `MessageRegistry` metadata.
+2. **Phase 1 – Transport consolidation** – ⚠️ *Partially completed*
+   * `TandemPump` now uses the real `BluetoothManager`/`PeripheralManager` and wires delegate callbacks for connection readiness and configuration completion.
+   * `PeripheralManagerTransport` provides the concrete `PumpMessageTransport` bridge with packet assembly and typed response parsing.
+   * Pump fault/retry handling inside `PumpComm.sendMessage` is still minimal compared to the desired design.
 
-3. **Phase 2 – Authentication and pairing**
+3. **Phase 2 – Authentication and pairing** – ✅ *Completed*
    * Complete `PumpChallengeRequestBuilder.createV2` to cover the JPake/short-PIN handshake used by newer firmware and Trio hardware, and persist resulting derived secrets/nonces into `PumpState`. ✅ *Done*
    * Extend `PumpCommSession.pair` to store authentication artifacts via `PumpStateSupplier` and surface errors meaningfully to the manager delegate. ✅ *Done*
    * Add persistence for pairing details inside `TandemPumpManagerState.rawValue` so Loop/Trio can survive restarts without re-pairing. ✅ *Done*
 
-4. **Phase 3 – Pump session lifecycle**
-   * Flesh out `TandemPump` connection workflows (scanning filters, auto-reconnect, startup message sequence) and bridge received notifications back into `PumpComm`.
-   * Implement message dispatchers for key status/control requests (basal status, bolus initiation, history streams) using the generated message types, and enrich `BTResponseParser` to instantiate concrete response models instead of raw payloads.
-   * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly.
+4. **Phase 3 – Pump session lifecycle** – ⚠️ *Partially completed*
+   * `TandemPump` initiates startup status polls and bridges notifications through `PumpNotificationRouter`, but auto-reconnect logic and configuration helpers still need work.
+   * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`, yet history streaming and device-model detection are still outstanding.
+   * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
 
-5. **Phase 4 – LoopKit/Trio integration**
-   * Replace the placeholder protocols with real LoopKit imports and conform `TandemPumpManager` to the pump manager APIs expected by Loop and Trio (state machine, status reporting, delivery limits, dosing delegates).
-   * Implement `TandemPumpManagerState` serialization/deserialization, ensuring pairing info, therapy settings, and pump status persist across launches.
-   * Surface pump data (reservoir, battery, IOB, alerts) through LoopKit data structures and implement command pathways (bolus, suspend/resume, temp basal) gated by the existing message set.
+5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
+   * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.
+   * `TandemPumpManagerState` persists pairing artifacts, battery/reservoir readings, basal state, and uncertainty flags, yet additional therapy settings storage is limited.
+   * Pump data surfaces for battery, reservoir, basal, and bolus are wired; CGM data, alerts, and alarm propagation remain to be implemented.
 
-6. **Phase 5 – Trio-specific validation**
-   * Confirm message compatibility with Trio hardware/firmware, updating opcodes or parsers where Trio deviates (e.g., Control-IQ variants, CGM sessions).
-   * Add targeted tests/fixtures for Trio logs and status responses, ensuring the driver negotiates the correct API version and pairing code path.
+6. **Phase 5 – Trio-specific validation** – ❌ *Not yet started*
+   * Confirm message compatibility with Trio hardware/firmware, updating opcodes or parsers where Trio deviates (e.g., Control-IQ variants, CGM sessions) — no Trio-specific coverage available.
+   * Add targeted tests/fixtures for Trio logs and status responses, ensuring the driver negotiates the correct API version and pairing code path — tests not written.
 
-7. **Phase 6 – Safety, tooling, and QA**
-   * Provide user-facing controls or configuration surfaces for insulin-affecting toggles managed by `PumpStateSupplier`, including persistence and audit logging.
-   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands; automate end-to-end smoke tests via `tandemkit-cli` where possible.
-   * Document manual validation steps for hardware testing (pairing, bolus, suspend/resume), and capture known limitations or required pump firmware versions before releasing to Loop/Trio users.
+7. **Phase 6 – Safety, tooling, and QA** – ❌ *Not yet started*
+   * Provide user-facing controls or configuration surfaces for insulin-affecting toggles managed by `PumpStateSupplier`, including persistence and audit logging — no UI or persistence implemented.
+   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands; automate end-to-end smoke tests via `tandemkit-cli` where possible — coverage still absent.
+   * Document manual validation steps for hardware testing (pairing, bolus, suspend/resume), and capture known limitations or required pump firmware versions before releasing to Loop/Trio users — documentation not written.
 
 This roadmap keeps the existing protocol/BLE groundwork intact while layering the missing pump-manager functionality required for a production Loop or Trio integration.
 
@@ -634,108 +630,68 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 
 ## Summary: Unimplemented Behaviors (Running List)
 
-> **📋 See [docs/plans/wire_bt_transport.md](docs/plans/wire_bt_transport.md) for detailed step-by-step instructions to wire TandemPump to the real BLE transport layer.**
-
 ### Critical Path Items (Blocking Basic Functionality)
-1. **Wire TandemPump to real BLE transport** (`TandemPump.swift`) - **See IMPLEMENTATION_PLAN.md**
-   - Remove placeholder `BluetoothManager` and `PeripheralManager` types (lines 13-31)
-   - Import and use real implementations from `Sources/TandemBLE`
+1. **Finalize TandemPump configuration toggles** (`TandemPump.swift:63-86`)
+   - Replace diagnostic printouts with real `PumpStateSupplier` wiring for insulin-delivery gating and connection sharing.
    - Location: `Sources/TandemKit/PumpManager/TandemPump.swift`
 
-2. **Implement concrete PumpMessageTransport**
-   - Create implementation that bridges `PeripheralManager.sendMessagePacket()` and `readMessagePacket()`
-   - Handle `TronMessageWrapper` creation for outgoing messages
-   - Parse incoming messages using `BTResponseParser` and `MessageRegistry`
-   - Location: `Sources/TandemKit/PumpManager/PumpMessageTransport.swift` (currently just a protocol)
+2. **Harden PumpComm fault handling** (`PumpComm.swift`)
+   - Add retry/backoff logic and detailed fault decoding when `sendMessage` receives pump error responses.
+   - Surface categorized errors back through `PumpManager` delegates for UI/LoopKit consumption.
 
-3. **Implement TandemPump message sending** (`TandemPump.swift:107-110`)
-   - Complete `send()` method to create `TronMessageWrapper`s
-   - Route responses through `BTResponseParser`
-   - Location: `Sources/TandemKit/PumpManager/TandemPump.swift:107-110`
+3. **Extend telemetry surfaces** (`TandemPumpManager.swift`)
+   - Implement CGM, alert, and alarm pipelines using `CurrentEGVGuiDataRequest`, `AlarmStatusRequest`, and `AlertStatusRequest`.
 
-4. **Implement TandemPump.sendDefaultStartupRequests()** (`TandemPump.swift:98-101`)
-   - Send `ApiVersionRequest`, `PumpVersionRequest`, etc. on connection
-   - Location: `Sources/TandemKit/PumpManager/TandemPump.swift:98-101`
+4. **Implement pump model detection**
+   - Parse advertisements or `PumpVersionResponse` values to populate `SupportedDevices` with t:slim X2 vs. Mobi/Trio identifiers.
+   - Persist the detected model inside `TandemPumpManagerState` for LoopKit UI.
 
-5. **Implement PumpComm.sendMessage() response handling** (`PumpComm.swift:81-104`)
-   - Uncomment and complete fault handling code
-   - Instantiate concrete response types from `MessageRegistry`
-   - Handle typed responses instead of raw payloads
-   - Location: `Sources/TandemKit/PumpManager/PumpComm.swift:81-104`
+5. **Add history/log streaming** (`TandemPumpManager.swift`)
+   - Provide message dispatchers for pump history packets and expose results via LoopKit-style callbacks or storage.
 
 6. **Implement TandemPumpManagerState persistence** (`TandemPumpManagerState.swift`) ✅ *Done*
    - Raw state now stores derived secret + server nonce so pairing survives restarts.
-   - Location: `Sources/TandemKit/PumpManager/TandemPumpManagerState.swift`
 
-7. **Implement TandemPumpManager.connect() and disconnect()** (`TandemPumpManager.swift:133-140`)
-   - Replace print statements with actual BLE connection logic
-   - Wire through to `TandemPump.startScanning()` and BluetoothManager
-   - Location: `Sources/TandemKit/PumpManager/TandemPumpManager.swift:133-140`
+7. **Implement TandemPumpManager.connect() and disconnect()** (`TandemPumpManager.swift:133-140`) ✅ *Done*
+   - Connection logic now routes through `TandemPump.startScanning()` and `PeripheralManagerTransport` instead of print stubs.
 
 ### LoopKit Integration (Required for Loop/Trio)
-8. **Replace LoopKit stub with real framework** (`Sources/LoopKit/LoopKit.swift`)
-   - Import actual LoopKit framework or create proper shims
-   - Location: `Sources/LoopKit/LoopKit.swift` (currently just minimal protocols)
+8. **Replace LoopKit stub with real framework** (`Sources/LoopKit/LoopKit.swift`) ❌ *Not done*
+   - Import actual LoopKit framework or provide a Linux shim that mirrors production APIs instead of the reduced stub.
 
-9. **Implement LoopKit PumpManager conformance** (`TandemPumpManager.swift`)
-   - Add dosing interfaces: `enactBolus()`, `enactTempBasal()`, `suspendDelivery()`, `resumeDelivery()`
-   - Add status reporting: `pumpStatus`, `pumpBatteryChargeRemaining`, `reservoirLevel`
-   - Wire delegate callbacks for status updates
-   - Enable commented-out delegate assignments (lines 96-97, 109-110)
-   - Location: `Sources/TandemKit/PumpManager/TandemPumpManager.swift`
+9. **Implement LoopKit PumpManager conformance** (`TandemPumpManager.swift`) ✅ *Done*
+   - Dosing interfaces (`enactBolus`, `enactTempBasal`, `suspendDelivery`, `resumeDelivery`) and delegate wiring are live.
+   - Status accessors (`pumpStatus`, `pumpBatteryChargeRemaining`, `reservoirLevel`) proxy persisted manager state.
 
-10. **Implement pump data surfaces for LoopKit**
-    - Surface reservoir level (via `InsulinStatusRequest/Response`)
-    - Surface battery status (via `CurrentBatteryV1/V2Request/Response`)
-    - Surface basal status (via `CurrentBasalStatusRequest/Response`)
-    - Surface bolus status (via `CurrentBolusStatusRequest/Response`)
-    - Surface CGM data (via `CurrentEGVGuiDataRequest/Response`)
-    - Surface alerts/alarms (via `AlarmStatusRequest/Response`, `AlertStatusRequest/Response`)
+10. **Implement pump data surfaces for LoopKit** – ⚠️ *Partially completed*
+    - Reservoir, battery, basal, and bolus status flows are implemented; CGM data plus alert/alarm propagation still need wiring.
 
 ### Authentication and Pairing
 11. **Implement V2 pairing (6-digit PIN)** (`PumpChallengeRequestBuilder.swift:39-44`) ✅ *Done*
     - `createV2()` now advances the JPake auth builder after a `Jpake1aResponse` and returns the next message in the flow.
-    - Location: `Sources/TandemCore/Builders/PumpChallengeRequestBuilder.swift`
 
-12. **Implement TandemPump configuration methods** (`TandemPump.swift:63-86`)
-    - Replace print statements with actual calls to `PumpStateSupplier`
-    - `enableActionsAffectingInsulinDelivery()`, `enableTconnectAppConnectionSharing()`, etc.
-    - Location: `Sources/TandemKit/PumpManager/TandemPump.swift:63-86`
+12. **Implement TandemPump configuration methods** (`TandemPump.swift:63-86`) ❌ *Not done*
+    - Replace print statements with actual calls to `PumpStateSupplier` for connection sharing and insulin gating.
 
 ### Response Handling and Device Support
-13. **Implement device model detection**
-    - Parse pump model from BLE advertisement data or `PumpVersionResponse`
-    - Update `SupportedDevices` to include Mobi and Trio hardware
-    - Store detected model in `TandemPumpManagerState`
+13. **Implement device model detection** ❌ *Not done*
+    - Parse pump model from BLE advertisement data or `PumpVersionResponse` and persist the result.
 
-14. **Implement message dispatchers for key operations**
-    - Basal status requests
-    - Bolus initiation and monitoring
-    - History log streaming
-    - Temp basal set/stop
-    - Suspend/resume pumping
+14. **Implement message dispatchers for key operations** – ⚠️ *Partially completed*
+    - Basal/bolus/temp basal/suspend dispatchers exist; history streaming is still absent.
 
-15. **Implement BLE notification → PumpComm bridge**
-    - Route incoming BLE notifications from `PeripheralManager` to typed message handlers
-    - Use `BTResponseParser` and `MessageRegistry` for decoding
-    - Dispatch to appropriate handlers based on message type
+15. **Implement BLE notification → PumpComm bridge** ✅ *Done*
+    - `PumpNotificationRouter` validates packets and forwards typed messages into `PumpCommSession`.
 
 ### Safety and Error Handling
-16. **Implement insulin delivery safety toggles**
-    - UI for user consent to enable insulin-affecting actions
-    - Persistent storage of safety settings
-    - Validation before executing therapy commands
+16. **Implement insulin delivery safety toggles** ❌ *Not done*
+    - UI and persisted consent for insulin-affecting actions remain outstanding.
 
-17. **Implement comprehensive error handling**
-    - Pump fault detection and reporting (uncomment fault handling in `PumpComm.sendMessage()`)
-    - Communication failure recovery
-    - Authentication error handling
-    - Timeout and retry logic
+17. **Implement comprehensive error handling** – ⚠️ *Partially completed*
+    - Basic communication errors surface today, but pump-fault decoding and retry logic are still missing.
 
-18. **Implement therapy command validation**
-    - Bolus amount limits and validation
-    - Temp basal rate limits
-    - IOB checks before bolus
+18. **Implement therapy command validation** ✅ *Done*
+    - `TandemPumpManager` enforces bolus limits, max temp basal rates, and IOB ceilings before sending commands.
 
 ### Testing and Validation
 19. **Add missing message tests**
