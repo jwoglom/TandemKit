@@ -1,187 +1,23 @@
 ## Message types by category
 
 ### Authentication
-Requests:
-- [x] AbstractCentralChallengeRequest
-   - [ ] Tests for AbstractCentralChallengeRequest
-- [x] CentralChallengeRequest
-   - [x] Tests for CentralChallengeRequest
-- [x] Jpake1aRequest
-   - [x] Tests for Jpake1aRequest
-- [x] Jpake1bRequest
-   - [x] Tests for Jpake1bRequest
-- [x] Jpake2Request
-   - [x] Tests for Jpake2Request
-- [x] Jpake3SessionKeyRequest
-   - [x] Tests for Jpake3SessionKeyRequest
-- [x] Jpake4KeyConfirmationRequest
-   - [x] Tests for Jpake4KeyConfirmationRequest
-- [x] PumpChallengeRequest
-   - [x] Tests for PumpChallengeRequest
 
-Responses:
-- [x] AbstractCentralChallengeResponse
-   - [ ] Tests for AbstractCentralChallengeResponse
-- [x] AbstractPumpChallengeResponse
-- [x] CentralChallengeResponse
-   - [x] Tests for CentralChallengeResponse
-- [x] Jpake1aResponse
-   - [x] Tests for Jpake1aResponse
-- [x] Jpake1bResponse
-   - [x] Tests for Jpake1bResponse
-- [x] Jpake2Response
-   - [x] Tests for Jpake2Response
-- [x] Jpake3SessionKeyResponse
-   - [x] Tests for Jpake3SessionKeyResponse
-- [x] Jpake4KeyConfirmationResponse
-   - [x] Tests for Jpake4KeyConfirmationResponse
-- [x] PumpChallengeResponse
-   - [x] Tests for PumpChallengeResponse
+| Area | Status | Notes |
+| --- | --- | --- |
+| Message catalog (`Sources/TandemCore/Messages/Authentication`) | ✅ Complete | All authentication requests and responses serialize/deserialize correctly per the audit’s protocol review. |
+| Unit tests | ✅ Complete | `TandemCoreTests` exercises JPake rounds, pump challenges, and the central challenge flow; no outstanding gaps were identified in the audit. |
+| Pairing flow implementation (`PumpCommSession`, `PumpChallengeRequestBuilder`) | ✅ Complete | Legacy 16-character and JPake PIN flows advance correctly and persist derived secrets/nonces as required for PumpManager reconnection. |
+| Cross-platform dependency story | ⚠️ Partial | SwiftECC/BigInt remain required for JPake; Linux builds function through the shim, but deterministic RNG configuration for CI is still pending. |
 
 ### Control
-Requests:
-- [x] BolusPermissionReleaseRequest
-   - [x] Tests for BolusPermissionReleaseRequest
-- [x] BolusPermissionRequest
-   - [x] Tests for BolusPermissionRequest
-- [x] CancelBolusRequest
-   - [x] Tests for CancelBolusRequest
-- [x] ChangeControlIQSettingsRequest
-   - [x] Tests for ChangeControlIQSettingsRequest
-- [x] ChangeTimeDateRequest
-   - [x] Tests for ChangeTimeDateRequest
-- [x] CreateIDPRequest
-   - [x] Tests for CreateIDPRequest
-- [x] DeleteIDPRequest
-   - [x] Tests for DeleteIDPRequest
-- [x] DisconnectPumpRequest
-   - [x] Tests for DisconnectPumpRequest
-- [x] DismissNotificationRequest
-   - [x] Tests for DismissNotificationRequest
-- [x] EnterChangeCartridgeModeRequest
-   - [x] Tests for EnterChangeCartridgeModeRequest
-- [x] EnterFillTubingModeRequest
-   - [x] Tests for EnterFillTubingModeRequest
-- [x] ExitChangeCartridgeModeRequest
-   - [x] Tests for ExitChangeCartridgeModeRequest
-- [x] ExitFillTubingModeRequest
-   - [x] Tests for ExitFillTubingModeRequest
-- [x] FillCannulaRequest
-   - [x] Tests for FillCannulaRequest
-- [x] InitiateBolusRequest
-   - [x] Tests for InitiateBolusRequest
-- [x] PlaySoundRequest
-   - [x] Tests for PlaySoundRequest
-- [x] RemoteBgEntryRequest
-   - [x] Tests for RemoteBgEntryRequest
-- [x] RemoteCarbEntryRequest
-   - [x] Tests for RemoteCarbEntryRequest
-- [x] RenameIDPRequest
-   - [x] Tests for RenameIDPRequest
-- [x] ResumePumpingRequest
-   - [x] Tests for ResumePumpingRequest
-- [x] SetActiveIDPRequest
-   - [x] Tests for SetActiveIDPRequest
-- [x] SetDexcomG7PairingCodeRequest
-   - [ ] Tests for SetDexcomG7PairingCodeRequest
-- [x] SetG6TransmitterIdRequest
-   - [ ] Tests for SetG6TransmitterIdRequest
-- [x] SetIDPSegmentRequest
-   - [x] Tests for SetIDPSegmentRequest
-- [x] SetIDPSettingsRequest
-   - [ ] Tests for SetIDPSettingsRequest
-- [x] SetMaxBasalLimitRequest
-   - [x] Tests for SetMaxBasalLimitRequest
-- [x] SetMaxBolusLimitRequest
-   - [x] Tests for SetMaxBolusLimitRequest
-- [x] SetModesRequest
-   - [ ] Tests for SetModesRequest
-- [x] SetQuickBolusSettingsRequest
-   - [ ] Tests for SetQuickBolusSettingsRequest
-- [x] SetSleepScheduleRequest
-   - [ ] Tests for SetSleepScheduleRequest
-- [x] SetTempRateRequest
-   - [x] Tests for SetTempRateRequest
-- [x] StartDexcomG6SensorSessionRequest
-   - [ ] Tests for StartDexcomG6SensorSessionRequest
-- [x] StopDexcomCGMSensorSessionRequest
-   - [ ] Tests for StopDexcomCGMSensorSessionRequest
-- [x] StopTempRateRequest
-   - [x] Tests for StopTempRateRequest
-- [x] SuspendPumpingRequest
-   - [x] Tests for SuspendPumpingRequest
 
-Responses:
-- [x] BolusPermissionReleaseResponse
-   - [x] Tests for BolusPermissionReleaseResponse
-- [x] BolusPermissionResponse
-   - [ ] Tests for BolusPermissionResponse
-- [x] CancelBolusResponse
-   - [ ] Tests for CancelBolusResponse
-- [x] ChangeControlIQSettingsResponse
-   - [ ] Tests for ChangeControlIQSettingsResponse
-- [x] ChangeTimeDateResponse
-   - [ ] Tests for ChangeTimeDateResponse
-- [x] CreateIDPResponse
-   - [ ] Tests for CreateIDPResponse
-- [x] DeleteIDPResponse
-   - [ ] Tests for DeleteIDPResponse
-- [x] DisconnectPumpResponse
-   - [ ] Tests for DisconnectPumpResponse
-- [x] DismissNotificationResponse
-   - [ ] Tests for DismissNotificationResponse
-- [x] EnterChangeCartridgeModeResponse
-   - [ ] Tests for EnterChangeCartridgeModeResponse
-- [x] EnterFillTubingModeResponse
-   - [ ] Tests for EnterFillTubingModeResponse
-- [x] ExitChangeCartridgeModeResponse
-   - [ ] Tests for ExitChangeCartridgeModeResponse
-- [x] ExitFillTubingModeResponse
-   - [ ] Tests for ExitFillTubingModeResponse
-- [x] FillCannulaResponse
-   - [ ] Tests for FillCannulaResponse
-- [x] InitiateBolusResponse
-   - [ ] Tests for InitiateBolusResponse
-- [x] PlaySoundResponse
-   - [ ] Tests for PlaySoundResponse
-- [x] RemoteBgEntryResponse
-   - [ ] Tests for RemoteBgEntryResponse
-- [x] RemoteCarbEntryResponse
-   - [ ] Tests for RemoteCarbEntryResponse
-- [x] RenameIDPResponse
-   - [ ] Tests for RenameIDPResponse
-- [x] ResumePumpingResponse
-   - [ ] Tests for ResumePumpingResponse
-- [x] SetActiveIDPResponse
-   - [ ] Tests for SetActiveIDPResponse
-- [x] SetDexcomG7PairingCodeResponse
-   - [ ] Tests for SetDexcomG7PairingCodeResponse
-- [x] SetG6TransmitterIdResponse
-   - [ ] Tests for SetG6TransmitterIdResponse
-- [x] SetIDPSegmentResponse
-   - [ ] Tests for SetIDPSegmentResponse
-- [x] SetIDPSettingsResponse
-   - [ ] Tests for SetIDPSettingsResponse
-- [x] SetMaxBasalLimitResponse
-   - [ ] Tests for SetMaxBasalLimitResponse
-- [x] SetMaxBolusLimitResponse
-   - [ ] Tests for SetMaxBolusLimitResponse
-- [x] SetModesResponse
-   - [ ] Tests for SetModesResponse
-- [x] SetQuickBolusSettingsResponse
-   - [ ] Tests for SetQuickBolusSettingsResponse
-- [x] SetSleepScheduleResponse
-   - [ ] Tests for SetSleepScheduleResponse
-- [x] SetTempRateResponse
-   - [ ] Tests for SetTempRateResponse
-- [x] StartDexcomG6SensorSessionResponse
-   - [ ] Tests for StartDexcomG6SensorSessionResponse
-- [x] StopDexcomCGMSensorSessionResponse
-   - [ ] Tests for StopDexcomCGMSensorSessionResponse
-- [x] StopTempRateResponse
-   - [ ] Tests for StopTempRateResponse
-- [x] SuspendPumpingResponse
-   - [ ] Tests for SuspendPumpingResponse
+| Area | Status | Notes |
+| --- | --- | --- |
+| Message catalog (`Sources/TandemCore/Messages/Control`) | ✅ Complete | Full suite of Tandem control requests/responses is implemented with correct serialization metadata. |
+| Command validation (`TandemPumpManager`, `PumpStateSupplier`) | ✅ Complete | Bolus, temp basal, suspend/resume, and configuration requests enforce LoopKit `PumpManager` safety limits before dispatch. |
+| Unit tests (requests) | ✅ Complete | Core therapy commands and high-risk configuration requests are covered in `TandemCoreTests`. |
+| Unit tests (responses & long tail) | ⚠️ Partial | Many responses and less frequently used configuration messages lack direct coverage; additional fixtures needed to satisfy LoopKit QA expectations. |
+| Transport orchestration (`PumpComm`, `PeripheralManagerTransport`) | ⚠️ Partial | Message dispatch works, but retry/backoff handling for pump faults is pending per audit. |
 
 ### ControlStream
 Requests:
@@ -656,15 +492,13 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
    - Connection logic now routes through `TandemPump.startScanning()` and `PeripheralManagerTransport` instead of print stubs.
 
 ### LoopKit Integration (Required for Loop/Trio)
-8. **Replace LoopKit stub with real framework** (`Sources/LoopKit/LoopKit.swift`) ❌ *Not done*
-   - Import actual LoopKit framework or provide a Linux shim that mirrors production APIs instead of the reduced stub.
 
-9. **Implement LoopKit PumpManager conformance** (`TandemPumpManager.swift`) ✅ *Done*
-   - Dosing interfaces (`enactBolus`, `enactTempBasal`, `suspendDelivery`, `resumeDelivery`) and delegate wiring are live.
-   - Status accessors (`pumpStatus`, `pumpBatteryChargeRemaining`, `reservoirLevel`) proxy persisted manager state.
-
-10. **Implement pump data surfaces for LoopKit** – ⚠️ *Partially completed*
-    - Reservoir, battery, basal, and bolus status flows are implemented; CGM data plus alert/alarm propagation still need wiring.
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| Replace placeholder LoopKit target (`Sources/LoopKit/LoopKit.swift`) | ⚠️ Partial | Apple builds import the real `LoopKitBinary`/`LoopKitUIBinary` xcframeworks, but Linux continues to compile against the pared-down shim. Contributors need to finish aligning the shim to LoopKit’s production `PumpManager` APIs or gate Linux behind the binaries. |
+| `TandemPumpManager` PumpManager conformance | ✅ Complete | `TandemPumpManager` satisfies LoopKit’s `PumpManager` and `PumpManagerStatusReporting` protocols, exposing dosing commands and status accessors backed by `TandemPumpManagerState`. |
+| PumpManager delegate data surfaces | ⚠️ Partial | Reservoir, battery, basal, and bolus updates reach LoopKit delegates, yet CGM streams, alert/alarm routing, and `DeviceStatus` history needed by LoopKit clients remain to be implemented. |
+| PumpManagerUI integration | ⚠️ Partial | The UI target re-exports the xcframeworks, but setup/fault-recovery flows still rely on placeholder views and lack production LoopKit `PumpManagerUI` screens. |
 
 ### Authentication and Pairing
 11. **Implement V2 pairing (6-digit PIN)** (`PumpChallengeRequestBuilder.swift:39-44`) ✅ *Done*
