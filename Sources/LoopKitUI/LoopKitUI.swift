@@ -9,8 +9,4 @@ public protocol PumpManagerUIPlugin {
     var pumpManagerType: (any PumpManagerUI.Type)? { get }
     var cgmManagerType: (any CGMManagerUI.Type)? { get }
 }
-#else
-
-@_exported import LoopKitUIBinary
-
 #endif

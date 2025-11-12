@@ -140,27 +140,12 @@ let package = Package(
         #else
         targets.append(contentsOf: [
             .binaryTarget(
-                name: "LoopKitBinary",
+                name: "LoopKit",
                 path: "Carthage/Build/LoopKit.xcframework"
             ),
             .binaryTarget(
-                name: "LoopKitUIBinary",
-                path: "Carthage/Build/LoopKitUI.xcframework"
-            ),
-            .target(
-                name: "LoopKit",
-                dependencies: [
-                    .target(name: "LoopKitBinary")
-                ],
-                path: "Sources/LoopKit"
-            ),
-            .target(
                 name: "LoopKitUI",
-                dependencies: [
-                    "LoopKit",
-                    .target(name: "LoopKitUIBinary")
-                ],
-                path: "Sources/LoopKitUI"
+                path: "Carthage/Build/LoopKitUI.xcframework"
             )
         ])
         #endif
