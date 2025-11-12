@@ -19,8 +19,10 @@ TandemSimulator provides a software implementation of a Tandem insulin pump that
 - ✅ **Message Router**: OpCode-based routing to appropriate handlers
 - ✅ **Configurable State**: Customize pump model, serial number, insulin levels, etc.
 - ✅ **Status Message Handlers**: Responds to common status requests
-- ⏳ **JPAKE Authentication**: Server-side JPAKE protocol (stub implementation)
-- ⏳ **BLE Peripheral Mode**: Act as a real BLE peripheral (planned)
+- ✅ **JPAKE Authentication**: Full server-side JPAKE protocol implementation
+- ✅ **Legacy Authentication**: 16-character pairing code support
+- ✅ **BLE Peripheral Mode**: Act as a real BLE peripheral device
+- ✅ **Integration Tests**: Comprehensive test suite for message handling
 
 ## Architecture
 
@@ -128,10 +130,13 @@ The `SimulatorConfig` struct allows customization of the simulated pump:
 - `serialNumber`: Serial number (default: "SIM12345")
 - `firmwareVersion`: Firmware version string (default: "7.7.0")
 
-### Pairing
+### Pairing & Authentication
 
 - `pairingCode`: Pre-set pairing code (6-digit or 16-character)
-- `authenticationMode`: .jpake or .legacy
+- `authenticationMode`: Authentication mode
+  - `.jpake` - 6-digit pairing code with full JPAKE protocol
+  - `.legacy` - 16-character pairing code with HMAC-SHA1 challenge
+  - `.bypass` - Skip authentication for testing (auto-authenticated)
 
 ### Initial State
 
@@ -166,72 +171,118 @@ The simulator currently handles these message types:
 
 ### Authentication Messages (AUTHORIZATION_CHARACTERISTICS)
 
-- ⏳ `Jpake1Request` → `Jpake1Response` (stub)
-- ⏳ `Jpake2Request` → `Jpake2Response` (stub)
-- ⏳ `Jpake3Request` → `Jpake3Response` (stub)
-- ⏳ `Jpake4Request` → `Jpake4Response` (stub)
-- ⏳ `ChallengeRequest` → `ChallengeResponse` (stub)
-- ⏳ `PumpChallengeRequest` → `PumpChallengeResponse` (not implemented)
+#### JPAKE Protocol (6-digit pairing code)
+- ✅ `Jpake1aRequest` → `Jpake1aResponse` (Round 1 part A)
+- ✅ `Jpake1bRequest` → `Jpake1bResponse` (Round 1 part B)
+- ✅ `Jpake2Request` → `Jpake2Response` (Round 2)
+- ✅ `Jpake3SessionKeyRequest` → `Jpake3SessionKeyResponse` (Session key derivation)
+- ✅ `Jpake4KeyConfirmationRequest` → `Jpake4KeyConfirmationResponse` (Key confirmation)
+
+#### Legacy Protocol (16-character pairing code)
+- ✅ `CentralChallengeRequest` → `CentralChallengeResponse` (Challenge with HMAC key)
+- ✅ `PumpChallengeRequest` → `PumpChallengeResponse` (HMAC-SHA1 validation)
+
+#### Final Authentication Step
+- ✅ `ChallengeRequest` → `ChallengeResponse` (Server nonce and time)
+
+## Authentication Implementation
+
+The simulator provides **full server-side authentication** for all Tandem pump protocols:
+
+### JPAKE (Password Authenticated Key Exchange by Juggling)
+
+Implements the complete EC-JPAKE protocol using elliptic curve cryptography:
+
+- **Round 1** (Jpake1a/1b): Exchange of ephemeral public keys with zero-knowledge proofs
+- **Round 2** (Jpake2): Combined key generation and verification
+- **Round 3** (Jpake3): Shared secret derivation via HKDF
+- **Round 4** (Jpake4): HMAC-SHA256 key confirmation
+
+**Implementation**: `JpakeServerHandler` class in `SimulatorAuthProvider.swift`
+- Uses SwiftECC library for elliptic curve operations
+- Supports NIST P-256 curve
+- Generates cryptographically secure random challenges
+- Derives 20-byte shared secret for message signing
+
+### Legacy Authentication (16-character pairing code)
+
+Implements challenge-response authentication with HMAC-SHA1:
+
+1. **Central Challenge**: Client sends 8-byte random challenge
+2. **Pump Response**: Server responds with HMAC key and challenge hash
+3. **Pump Challenge**: Client proves knowledge of pairing code via HMAC-SHA1
+4. **Validation**: Server validates HMAC and marks session as authenticated
+
+**Implementation**: `handleCentralChallenge()` and `handlePumpChallenge()` in `SimulatorAuthProvider.swift`
+
+### Bypass Mode
+
+For testing and development, bypass mode:
+- Automatically marks session as authenticated on startup
+- Uses fixed derived secret: `Data(repeating: 0x42, count: 20)`
+- Skips all cryptographic operations
+- Ideal for integration tests and rapid development
 
 ## Current Limitations
 
 ### Not Yet Implemented
 
-1. **JPAKE Server Protocol**: Authentication handlers are stubs
-   - Full JPAKE cryptographic operations needed
-   - Shared secret derivation required
-   - Zero-knowledge proof generation/verification
+1. **Complete Message Handlers**: Many message types return minimal responses
+   - Most handlers exist but return basic cargo data
+   - Some advanced fields not yet populated
+   - Requires deeper understanding of message cargo formats
 
-2. **Legacy Pump Challenge**: 16-character code authentication not implemented
-
-3. **BLE Peripheral Mode**: CoreBluetooth peripheral implementation pending
-   - Can only use mock transport currently
-   - Need to advertise as Tandem pump
-   - Handle BLE service/characteristic setup
-
-4. **Complete Message Handlers**: Many message types return empty responses
-   - Handlers exist but don't populate cargo data
-   - Need to implement proper field mapping
-   - Requires understanding of message cargo formats
-
-5. **History Log Streaming**: Not implemented
-   - Need to generate history entries
+2. **History Log Streaming**: Not implemented
+   - Need to generate realistic history entries
    - Support multi-packet streaming responses
+   - Handle log pagination and filtering
 
-6. **Qualifying Events**: Async notifications not implemented
+3. **Qualifying Events**: Async notifications not implemented
    - No periodic events sent
-   - No event-based notifications
+   - No event-based notifications (e.g., alerts, alarms)
+   - Need background event generation
 
-7. **Control Messages**: Bolus, basal, settings changes not implemented
+4. **Control Messages**: Bolus, basal, settings changes partially implemented
+   - Some control messages update state, others are stubs
+   - Need to implement full validation logic
+   - State changes should be persistent
+
+5. **Advanced Error Handling**: Limited error responses
+   - Basic error logging in place
+   - Full error response construction needs completion
+   - Need comprehensive validation of message parameters
 
 ### Known Issues
 
-- Message response cargo is mostly empty (returns valid structure but no data)
-- No actual state changes from control messages
-- No validation of message parameters
-- No error responses for invalid requests
+- Some message response cargo fields contain placeholder data
+- Control messages don't always trigger appropriate state changes
+- Limited validation of message parameters
+- Error responses are logged but not always sent to client
 
 ## Development Roadmap
 
-### Phase 1: MVP (Current)
+### Phase 1: MVP ✅ COMPLETE
 
 - [x] Project structure
 - [x] Mock transport
 - [x] Packet assembly/building
 - [x] Message router
-- [x] Basic status handlers (stubs)
+- [x] Basic status handlers
 - [x] Configuration system
-- [ ] Complete JPAKE authentication
-- [ ] Integration tests
+- [x] Complete JPAKE authentication
+- [x] Legacy pump challenge authentication
+- [x] BLE peripheral transport
+- [x] Integration tests
 
-### Phase 2: Full Simulator
+### Phase 2: Full Simulator (In Progress)
 
-- [ ] Complete all status message handlers
-- [ ] Implement control message handlers
-- [ ] BLE peripheral transport
-- [ ] History log generation
+- [x] Core status message handlers (10+ messages)
+- [ ] Complete all status message handlers (remaining edge cases)
+- [ ] Implement control message handlers (bolus, basal, etc.)
+- [ ] History log generation and streaming
 - [ ] Qualifying event notifications
 - [ ] State persistence
+- [ ] Command-line interface improvements
 
 ### Phase 3: Advanced Features
 
@@ -243,17 +294,40 @@ The simulator currently handles these message types:
 
 ## Testing with TandemCLI
 
-Once JPAKE authentication is fully implemented, you can test the simulator with TandemCLI:
+You can test the simulator with TandemCLI:
 
 ```bash
-# Terminal 1: Start simulator
+# Terminal 1: Start simulator in test mode (mock transport)
 .build/debug/tandem-simulator test --pairing-code 123456
 
-# Terminal 2: Use TandemCLI (mock mode)
-# Note: This requires TandemCLI to support connecting to mock transport
-.build/debug/tandemkit-cli pair 123456
-.build/debug/tandemkit-cli send TimeSinceResetRequest
+# Terminal 2: Start simulator as BLE peripheral (requires real BLE)
+.build/debug/tandem-simulator start --pairing-code 123456
+
+# Using bypass authentication for development
+.build/debug/tandem-simulator test --bypass-auth
+
+# Test with integration tests
+swift test --filter TandemSimulatorTests
 ```
+
+### Authentication Modes
+
+The simulator supports three authentication modes:
+
+1. **JPAKE** (6-digit code): Full zero-knowledge proof protocol
+   ```bash
+   tandem-simulator test --pairing-code 123456
+   ```
+
+2. **Legacy** (16-character code): HMAC-SHA1 challenge-response
+   ```bash
+   tandem-simulator test --pairing-code "abcd-efgh-ijkl-mnop"
+   ```
+
+3. **Bypass** (testing): Auto-authenticated, no pairing required
+   ```bash
+   tandem-simulator test --bypass-auth
+   ```
 
 ## Contributing
 
