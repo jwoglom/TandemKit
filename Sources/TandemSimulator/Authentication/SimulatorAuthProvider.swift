@@ -2,6 +2,15 @@ import Foundation
 import TandemCore
 import Logging
 
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
+
+#if canImport(SwiftECC) && canImport(BigInt)
+import SwiftECC
+import BigInt
+#endif
+
 /// Handles authentication (JPAKE and legacy pump challenge)
 class SimulatorAuthProvider: AuthenticationProvider {
     private let logger = Logger(label: "TandemSimulator.AuthProvider")
@@ -69,13 +78,15 @@ class SimulatorAuthProvider: AuthenticationProvider {
         // Determine message type and route appropriately
         #if canImport(SwiftECC) && canImport(BigInt)
         switch message {
-        case let req as Jpake1Request:
-            return try handleJpake1(req, context: context)
+        case let req as Jpake1aRequest:
+            return try handleJpake1a(req, context: context)
+        case let req as Jpake1bRequest:
+            return try handleJpake1b(req, context: context)
         case let req as Jpake2Request:
             return try handleJpake2(req, context: context)
-        case let req as Jpake3Request:
+        case let req as Jpake3SessionKeyRequest:
             return try handleJpake3(req, context: context)
-        case let req as Jpake4Request:
+        case let req as Jpake4KeyConfirmationRequest:
             return try handleJpake4(req, context: context)
         default:
             break
@@ -99,16 +110,29 @@ class SimulatorAuthProvider: AuthenticationProvider {
     // MARK: - JPAKE Handlers
 
     #if canImport(SwiftECC) && canImport(BigInt)
-    private func handleJpake1(_ request: Jpake1Request, context: HandlerContext) throws -> Message {
+    private func handleJpake1a(_ request: Jpake1aRequest, context: HandlerContext) throws -> Message {
         guard let handler = jpakeHandler else {
             throw AuthProviderError.jpakeNotInitialized
         }
 
-        logger.debug("Handling Jpake1Request")
+        logger.debug("Handling Jpake1aRequest")
 
-        let response = try handler.processJpake1(request)
+        let response = try handler.processJpake1a(request)
 
-        logger.debug("Sending Jpake1Response")
+        logger.debug("Sending Jpake1aResponse")
+        return response
+    }
+
+    private func handleJpake1b(_ request: Jpake1bRequest, context: HandlerContext) throws -> Message {
+        guard let handler = jpakeHandler else {
+            throw AuthProviderError.jpakeNotInitialized
+        }
+
+        logger.debug("Handling Jpake1bRequest")
+
+        let response = try handler.processJpake1b(request)
+
+        logger.debug("Sending Jpake1bResponse")
         return response
     }
 
@@ -125,25 +149,25 @@ class SimulatorAuthProvider: AuthenticationProvider {
         return response
     }
 
-    private func handleJpake3(_ request: Jpake3Request, context: HandlerContext) throws -> Message {
+    private func handleJpake3(_ request: Jpake3SessionKeyRequest, context: HandlerContext) throws -> Message {
         guard let handler = jpakeHandler else {
             throw AuthProviderError.jpakeNotInitialized
         }
 
-        logger.debug("Handling Jpake3Request")
+        logger.debug("Handling Jpake3SessionKeyRequest")
 
         let response = try handler.processJpake3(request)
 
-        logger.debug("Sending Jpake3Response")
+        logger.debug("Sending Jpake3SessionKeyResponse")
         return response
     }
 
-    private func handleJpake4(_ request: Jpake4Request, context: HandlerContext) throws -> Message {
+    private func handleJpake4(_ request: Jpake4KeyConfirmationRequest, context: HandlerContext) throws -> Message {
         guard let handler = jpakeHandler else {
             throw AuthProviderError.jpakeNotInitialized
         }
 
-        logger.debug("Handling Jpake4Request")
+        logger.debug("Handling Jpake4KeyConfirmationRequest")
 
         let response = try handler.processJpake4(request)
 
@@ -155,7 +179,7 @@ class SimulatorAuthProvider: AuthenticationProvider {
             logger.info("JPAKE derived secret established: \(secret.hexadecimalString.prefix(16))...")
         }
 
-        logger.debug("Sending Jpake4Response")
+        logger.debug("Sending Jpake4KeyConfirmationResponse")
         return response
     }
     #endif
@@ -204,56 +228,195 @@ class SimulatorAuthProvider: AuthenticationProvider {
 // MARK: - JPAKE Server Handler
 
 #if canImport(SwiftECC) && canImport(BigInt)
-import SwiftECC
-import BigInt
-
 /// Handles server-side JPAKE protocol
 class JpakeServerHandler {
     private let pairingCode: String
     private let logger = Logger(label: "TandemSimulator.JpakeServer")
 
+    private var ecJpake: EcJpake
+    private var serverRound1: Data?
+    private var clientRound1: Data?
+    private var serverRound2: Data?
+    private var serverNonce3: Data?
     private var _derivedSecret: Data?
 
-    // JPAKE state would go here
-    // This is a stub - full implementation would require:
-    // - EC curve setup
-    // - ZKP (Zero-Knowledge Proof) generation and verification
-    // - Shared secret derivation
+    private let appInstanceId: Int = 0
+    private let rand: EcJpake.RandomBytesGenerator
 
     init(pairingCode: String) {
         self.pairingCode = pairingCode
+        self.rand = JpakeServerHandler.defaultRandom
+
+        // Initialize EC-JPAKE with server role
+        let passwordBytes = JpakeServerHandler.pairingCodeToBytes(pairingCode)
+        self.ecJpake = EcJpake(role: .server, password: passwordBytes, random: rand)
+
+        logger.info("JPAKE server initialized with pairing code")
     }
 
     var derivedSecret: Data? {
         return _derivedSecret
     }
 
-    func processJpake1(_ request: Jpake1Request) throws -> Jpake1Response {
-        logger.debug("Processing Jpake1 (server round 1)")
+    func processJpake1a(_ request: Jpake1aRequest) throws -> Jpake1aResponse {
+        logger.debug("Processing Jpake1a (server receives first half of client round 1)")
 
-        // TODO: Implement full JPAKE server-side protocol
-        // For now, return empty response
-        throw AuthProviderError.notImplemented("JPAKE server not fully implemented")
+        // Store first half of client round 1
+        clientRound1 = request.centralChallenge
+
+        // Generate server's round 1 data if not already done
+        if serverRound1 == nil {
+            serverRound1 = ecJpake.getRound1()
+            logger.debug("Generated server round 1: \(serverRound1!.count) bytes")
+        }
+
+        // Send first half of server round 1 (165 bytes)
+        let serverChallenge1a = serverRound1!.subdata(in: 0..<165)
+        let response = Jpake1aResponse(appInstanceId: appInstanceId, centralChallengeHash: serverChallenge1a)
+
+        logger.debug("Sending Jpake1aResponse with first 165 bytes")
+        return response
+    }
+
+    func processJpake1b(_ request: Jpake1bRequest) throws -> Jpake1bResponse {
+        logger.debug("Processing Jpake1b (server receives second half of client round 1)")
+
+        guard let round1a = clientRound1, let serverRound = serverRound1 else {
+            throw AuthProviderError.invalidState("Jpake1b received before Jpake1a")
+        }
+
+        // Combine both halves of client round 1
+        let fullClientRound1 = round1a + request.centralChallenge
+        logger.debug("Full client round 1: \(fullClientRound1.count) bytes")
+
+        // Process client's round 1
+        ecJpake.readRound1(fullClientRound1)
+        logger.debug("Client round 1 processed successfully")
+
+        // Send second half of server round 1 (165 bytes)
+        let serverChallenge1b = serverRound.subdata(in: 165..<330)
+        let response = Jpake1bResponse(appInstanceId: appInstanceId, centralChallengeHash: serverChallenge1b)
+
+        logger.debug("Sending Jpake1bResponse with second 165 bytes")
+        return response
     }
 
     func processJpake2(_ request: Jpake2Request) throws -> Jpake2Response {
-        logger.debug("Processing Jpake2 (server round 2)")
-        throw AuthProviderError.notImplemented("JPAKE server not fully implemented")
+        logger.debug("Processing Jpake2 (server receives client round 2)")
+
+        // Process client's round 2
+        let clientRound2 = request.centralChallenge
+        ecJpake.readRound2(clientRound2)
+        logger.debug("Client round 2 processed successfully")
+
+        // Generate server's round 2
+        serverRound2 = ecJpake.getRound2()
+        logger.debug("Generated server round 2: \(serverRound2!.count) bytes")
+
+        // Server round 2 is 168 bytes (3-byte curve ID + 165-byte data)
+        // Send full 168 bytes
+        let response = Jpake2Response(appInstanceId: appInstanceId, centralChallengeHash: serverRound2!)
+
+        logger.debug("Sending Jpake2Response with 168 bytes")
+        return response
     }
 
-    func processJpake3(_ request: Jpake3Request) throws -> Jpake3Response {
-        logger.debug("Processing Jpake3 (client confirmation)")
-        throw AuthProviderError.notImplemented("JPAKE server not fully implemented")
+    func processJpake3(_ request: Jpake3SessionKeyRequest) throws -> Jpake3SessionKeyResponse {
+        logger.debug("Processing Jpake3 (server derives shared secret and sends nonce)")
+
+        // Derive the shared secret
+        _derivedSecret = ecJpake.deriveSecret()
+        logger.info("Derived shared secret: \((_derivedSecret?.hexadecimalString.prefix(16) ?? "nil"))...")
+
+        // Generate server nonce (8 bytes)
+        serverNonce3 = generateNonce(8)
+        logger.debug("Generated server nonce3: \(serverNonce3!.hexadecimalString)")
+
+        // Send nonce and reserved bytes
+        let response = Jpake3SessionKeyResponse(
+            appInstanceId: appInstanceId,
+            nonce: serverNonce3!,
+            reserved: Jpake3SessionKeyResponse.RESERVED
+        )
+
+        logger.debug("Sending Jpake3SessionKeyResponse")
+        return response
     }
 
-    func processJpake4(_ request: Jpake4Request) throws -> Jpake4Response {
-        logger.debug("Processing Jpake4 (server confirmation)")
+    func processJpake4(_ request: Jpake4KeyConfirmationRequest) throws -> Jpake4KeyConfirmationResponse {
+        logger.debug("Processing Jpake4 (server validates client confirmation and sends own)")
 
-        // This is where we'd derive the shared secret
-        // For now, use a stub secret for testing
-        // TODO: Implement actual JPAKE key derivation
+        guard let derivedSecret = _derivedSecret, let serverNonce3 = serverNonce3 else {
+            throw AuthProviderError.invalidState("Jpake4 received before Jpake3")
+        }
 
-        throw AuthProviderError.notImplemented("JPAKE server not fully implemented")
+        // Validate client's hash digest
+        let clientNonce4 = request.nonce
+        let clientHashDigest = request.hashDigest
+
+        let expectedClientHash = HmacSha256.hmac(clientNonce4, key: Hkdf.build(nonce: serverNonce3, keyMaterial: derivedSecret))
+
+        guard clientHashDigest == expectedClientHash else {
+            logger.error("Client hash digest validation failed")
+            logger.error("Expected: \(expectedClientHash.hexadecimalString)")
+            logger.error("Received: \(clientHashDigest.hexadecimalString)")
+            throw AuthProviderError.authenticationFailed
+        }
+
+        logger.debug("Client hash digest validated successfully")
+
+        // Generate server's nonce and hash digest
+        let serverNonce4 = generateNonce(8)
+        let serverHashDigest = HmacSha256.hmac(serverNonce4, key: Hkdf.build(nonce: serverNonce3, keyMaterial: derivedSecret))
+
+        let response = Jpake4KeyConfirmationResponse(
+            appInstanceId: appInstanceId,
+            nonce: serverNonce4,
+            reserved: Jpake4KeyConfirmationResponse.RESERVED,
+            hashDigest: serverHashDigest
+        )
+
+        logger.info("JPAKE authentication completed successfully")
+        return response
+    }
+
+    // MARK: - Helper Methods
+
+    private func generateNonce(_ count: Int) -> Data {
+        return rand(count)
+    }
+
+    static func pairingCodeToBytes(_ pairingCode: String) -> Data {
+        var ret = Data(count: pairingCode.count)
+        for (idx, char) in pairingCode.enumerated() {
+            ret[idx] = charCode(char)
+        }
+        return ret
+    }
+
+    static func charCode(_ c: Character) -> UInt8 {
+        switch c {
+        case "0": return 48
+        case "1": return 49
+        case "2": return 50
+        case "3": return 51
+        case "4": return 52
+        case "5": return 53
+        case "6": return 54
+        case "7": return 55
+        case "8": return 56
+        case "9": return 57
+        default: return 0xFF
+        }
+    }
+
+    static func defaultRandom(_ count: Int) -> Data {
+        guard count > 0 else { return Data() }
+        var data = Data(count: count)
+        for index in 0..<count {
+            data[index] = UInt8.random(in: 0...255)
+        }
+        return data
     }
 }
 #endif
@@ -265,6 +428,8 @@ enum AuthProviderError: Error, LocalizedError {
     case jpakeNotInitialized
     case pumpChallengeNotConfigured
     case notImplemented(String)
+    case invalidState(String)
+    case authenticationFailed
 
     var errorDescription: String? {
         switch self {
@@ -276,6 +441,10 @@ enum AuthProviderError: Error, LocalizedError {
             return "Pump challenge authentication not configured"
         case .notImplemented(let feature):
             return "Not yet implemented: \(feature)"
+        case .invalidState(let details):
+            return "Invalid authentication state: \(details)"
+        case .authenticationFailed:
+            return "Authentication validation failed"
         }
     }
 }

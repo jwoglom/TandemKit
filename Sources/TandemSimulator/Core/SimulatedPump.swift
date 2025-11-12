@@ -23,8 +23,9 @@ class SimulatedPump {
         if config.useMockTransport {
             self.transport = MockTransport()
         } else {
-            // TODO: Implement BLE peripheral transport
-            fatalError("BLE peripheral transport not yet implemented. Use --mock-transport for now.")
+            // Create BLE peripheral transport
+            let deviceName = "\(config.pumpModel.rawValue) \(config.serialNumber)"
+            self.transport = BLEPeripheralTransport(deviceName: deviceName)
         }
 
         // Create authentication provider

@@ -100,7 +100,8 @@ let package = Package(
                     "TandemBLE",
                     .product(name: "SwiftECC", package: "SwiftECC"),
                     .product(name: "BigInt", package: "BigInt"),
-                    .product(name: "Logging", package: "swift-log")
+                    .product(name: "Logging", package: "swift-log"),
+                    .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
                 ],
                 path: "Sources/TandemSimulator",
                 swiftSettings: [
