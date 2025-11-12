@@ -109,3 +109,198 @@ public class CBCentralManager {
     public func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral] { return [] }
 }
 
+// MARK: - Peripheral Manager (Server/Peripheral Mode)
+
+public struct CBAdvertisementData {
+    public static let LocalNameKey = "kCBAdvDataLocalName"
+    public static let ServiceUUIDsKey = "kCBAdvDataServiceUUIDs"
+}
+
+public struct CBCharacteristicProperties: OptionSet {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let broadcast = CBCharacteristicProperties(rawValue: 0x01)
+    public static let read = CBCharacteristicProperties(rawValue: 0x02)
+    public static let writeWithoutResponse = CBCharacteristicProperties(rawValue: 0x04)
+    public static let write = CBCharacteristicProperties(rawValue: 0x08)
+    public static let notify = CBCharacteristicProperties(rawValue: 0x10)
+    public static let indicate = CBCharacteristicProperties(rawValue: 0x20)
+    public static let authenticatedSignedWrites = CBCharacteristicProperties(rawValue: 0x40)
+    public static let extendedProperties = CBCharacteristicProperties(rawValue: 0x80)
+    public static let notifyEncryptionRequired = CBCharacteristicProperties(rawValue: 0x100)
+    public static let indicateEncryptionRequired = CBCharacteristicProperties(rawValue: 0x200)
+}
+
+public struct CBAttributePermissions: OptionSet {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let readable = CBAttributePermissions(rawValue: 0x01)
+    public static let writeable = CBAttributePermissions(rawValue: 0x02)
+    public static let readEncryptionRequired = CBAttributePermissions(rawValue: 0x04)
+    public static let writeEncryptionRequired = CBAttributePermissions(rawValue: 0x08)
+}
+
+public protocol CBPeripheralManagerDelegate: AnyObject {
+    func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?)
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?)
+    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic)
+    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest)
+    func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest])
+    func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
+}
+
+public class CBCentral {
+    public let identifier: UUID
+    public var maximumUpdateValueLength: Int { return 512 }
+
+    public init(identifier: UUID = UUID()) {
+        self.identifier = identifier
+    }
+}
+
+public class CBATTRequest {
+    public let central: CBCentral
+    public let characteristic: CBCharacteristic
+    public var value: Data?
+    public var offset: Int = 0
+
+    public init(central: CBCentral, characteristic: CBCharacteristic, value: Data? = nil, offset: Int = 0) {
+        self.central = central
+        self.characteristic = characteristic
+        self.value = value
+        self.offset = offset
+    }
+}
+
+public enum CBATTError: Int, Error {
+    case success = 0x00
+    case invalidHandle = 0x01
+    case readNotPermitted = 0x02
+    case writeNotPermitted = 0x03
+    case invalidPdu = 0x04
+    case insufficientAuthentication = 0x05
+    case requestNotSupported = 0x06
+    case invalidOffset = 0x07
+    case insufficientAuthorization = 0x08
+    case prepareQueueFull = 0x09
+    case attributeNotFound = 0x0A
+    case attributeNotLong = 0x0B
+    case insufficientEncryptionKeySize = 0x0C
+    case invalidAttributeValueLength = 0x0D
+    case unlikelyError = 0x0E
+    case insufficientEncryption = 0x0F
+    case unsupportedGroupType = 0x10
+    case insufficientResources = 0x11
+}
+
+public class CBMutableCharacteristic: CBCharacteristic {
+    public var properties: CBCharacteristicProperties
+    public var permissions: CBAttributePermissions
+    public var subscribedCentrals: [CBCentral]?
+
+    public init(type uuid: CBUUID, properties: CBCharacteristicProperties, value: Data?, permissions: CBAttributePermissions) {
+        self.properties = properties
+        self.permissions = permissions
+        super.init(uuid: uuid, value: value)
+    }
+}
+
+public class CBMutableService: CBService {
+    public init(type uuid: CBUUID, primary: Bool) {
+        super.init(uuid: uuid, characteristics: nil)
+    }
+}
+
+public class CBPeripheralManager {
+    public weak var delegate: CBPeripheralManagerDelegate?
+    public var state: CBManagerState = .unknown
+    public private(set) var isAdvertising: Bool = false
+
+    private var services: [CBMutableService] = []
+    private var connectedCentrals: [CBCentral] = []
+    private let queue: DispatchQueue?
+
+    public init(delegate: CBPeripheralManagerDelegate?, queue: DispatchQueue?, options: [String: Any]? = nil) {
+        self.delegate = delegate
+        self.queue = queue
+
+        // Simulate state becoming powered on
+        DispatchQueue.main.async {
+            self.state = .poweredOn
+            delegate?.peripheralManagerDidUpdateState(self)
+        }
+    }
+
+    public func add(_ service: CBMutableService) {
+        services.append(service)
+
+        DispatchQueue.main.async {
+            self.delegate?.peripheralManager(self, didAdd: service, error: nil)
+        }
+    }
+
+    public func remove(_ service: CBMutableService) {
+        services.removeAll { $0.uuid == service.uuid }
+    }
+
+    public func removeAllServices() {
+        services.removeAll()
+    }
+
+    public func startAdvertising(_ advertisementData: [String: Any]?) {
+        isAdvertising = true
+
+        DispatchQueue.main.async {
+            self.delegate?.peripheralManagerDidStartAdvertising(self, error: nil)
+        }
+    }
+
+    public func stopAdvertising() {
+        isAdvertising = false
+    }
+
+    public func respond(to request: CBATTRequest, withResult result: CBATTError) {
+        // In a real implementation, this would send the response back to the central
+        // For the shim, this is a no-op
+    }
+
+    public func updateValue(_ value: Data, for characteristic: CBMutableCharacteristic, onSubscribedCentrals centrals: [CBCentral]?) -> Bool {
+        // In a real implementation, this would send a notification to subscribed centrals
+        // For the shim, we'll simulate success
+        return true
+    }
+
+    // Helper methods for simulator to inject events
+    func simulateSubscription(central: CBCentral, to characteristic: CBCharacteristic) {
+        if !connectedCentrals.contains(where: { $0.identifier == central.identifier }) {
+            connectedCentrals.append(central)
+        }
+
+        delegate?.peripheralManager(self, central: central, didSubscribeTo: characteristic)
+    }
+
+    func simulateUnsubscription(central: CBCentral, from characteristic: CBCharacteristic) {
+        delegate?.peripheralManager(self, central: central, didUnsubscribeFrom: characteristic)
+    }
+
+    func simulateWriteRequest(central: CBCentral, characteristic: CBCharacteristic, value: Data) {
+        let request = CBATTRequest(central: central, characteristic: characteristic, value: value)
+        delegate?.peripheralManager(self, didReceiveWrite: [request])
+    }
+
+    func simulateReadRequest(central: CBCentral, characteristic: CBCharacteristic) {
+        let request = CBATTRequest(central: central, characteristic: characteristic)
+        delegate?.peripheralManager(self, didReceiveRead: request)
+    }
+}
+
