@@ -647,8 +647,4 @@ public enum BolusActivationType: String, Codable {
 
 public protocol CGMManagerUI {}
 
-#else
-
-@_exported import LoopKitBinary
-
 #endif
