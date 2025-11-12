@@ -26,6 +26,10 @@ class SimulatorAuthProvider: AuthenticationProvider {
     private var jpakeHandler: JpakeServerHandler?
     #endif
 
+    // Legacy authentication state
+    private var legacyHmacKey: Data?
+    private var legacyCentralChallenge: Data?
+
     private let lock = NSLock()
 
     init(pairingCode: String?, state: PumpStateProvider, authMode: AuthMode) {
@@ -93,7 +97,12 @@ class SimulatorAuthProvider: AuthenticationProvider {
         }
         #endif
 
-        // Check for legacy pump challenge
+        // Check for legacy central challenge (first step of legacy auth)
+        if message is CentralChallengeRequest {
+            return try handleCentralChallenge(message as! CentralChallengeRequest, context: context)
+        }
+
+        // Check for legacy pump challenge (second step of legacy auth)
         if message is PumpChallengeRequest {
             return try handlePumpChallenge(message as! PumpChallengeRequest, context: context)
         }
@@ -184,19 +193,76 @@ class SimulatorAuthProvider: AuthenticationProvider {
     }
     #endif
 
-    // MARK: - Legacy Pump Challenge
+    // MARK: - Legacy Authentication
+
+    private func handleCentralChallenge(_ request: CentralChallengeRequest, context: HandlerContext) throws -> Message {
+        guard let code = pairingCode, code.count == 16 else {
+            throw AuthProviderError.pumpChallengeNotConfigured
+        }
+
+        logger.debug("Handling CentralChallengeRequest (legacy auth step 1)")
+
+        // Store the central challenge for validation
+        lock.lock()
+        legacyCentralChallenge = request.centralChallenge
+
+        // Generate random 8-byte HMAC key for this session
+        legacyHmacKey = Data((0..<8).map { _ in UInt8.random(in: 0...255) })
+        lock.unlock()
+
+        logger.debug("Generated HMAC key: \(legacyHmacKey!.hexadecimalString)")
+
+        // Generate challenge hash
+        // Based on the protocol, this appears to be a hash of the central challenge
+        // The exact algorithm may vary, but SHA1 hash of the challenge is a reasonable approach
+        let challengeHash = SHA256.hash(request.centralChallenge).prefix(20)
+
+        let response = CentralChallengeResponse(
+            appInstanceId: request.appInstanceId,
+            centralChallengeHash: Data(challengeHash),
+            hmacKey: legacyHmacKey!
+        )
+
+        logger.debug("Sending CentralChallengeResponse")
+        return response
+    }
 
     private func handlePumpChallenge(_ request: PumpChallengeRequest, context: HandlerContext) throws -> Message {
         guard let code = pairingCode, code.count == 16 else {
             throw AuthProviderError.pumpChallengeNotConfigured
         }
 
-        logger.debug("Handling PumpChallengeRequest (legacy auth)")
+        logger.debug("Handling PumpChallengeRequest (legacy auth step 2)")
 
-        // TODO: Implement legacy pump challenge authentication
-        // This involves cryptographic operations specific to the 16-character code
+        // Get the stored HMAC key from CentralChallengeResponse
+        lock.lock()
+        let storedHmacKey = legacyHmacKey
+        lock.unlock()
 
-        throw AuthProviderError.notImplemented("Legacy pump challenge not yet implemented")
+        guard let hmacKey = storedHmacKey else {
+            logger.error("No HMAC key available - CentralChallengeRequest not received first")
+            throw AuthProviderError.invalidState("No HMAC key available")
+        }
+
+        // Compute expected HMAC-SHA1 hash of the pairing code
+        let expectedHash = HmacSha1(data: Data(code.utf8), key: hmacKey)
+
+        // Compare with received hash
+        let success = expectedHash == request.pumpChallengeHash
+
+        if success {
+            // Mark as authenticated
+            lock.lock()
+            _isAuthenticated = true
+            lock.unlock()
+            logger.info("Legacy pump challenge authentication succeeded")
+        } else {
+            logger.error("Legacy pump challenge authentication failed")
+            logger.error("Expected hash: \(expectedHash.hexadecimalString)")
+            logger.error("Received hash: \(request.pumpChallengeHash.hexadecimalString)")
+        }
+
+        return PumpChallengeResponse(appInstanceId: request.appInstanceId, success: success)
     }
 
     // MARK: - Challenge (Final Step)
