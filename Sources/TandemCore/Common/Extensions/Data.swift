@@ -87,3 +87,16 @@ public extension Data {
         return map { String(format: "%02hhx", $0) }.joined()
     }
 }
+
+// MARK: - Cryptographic Convenience Methods
+public extension Data {
+    /// Compute CRC16 checksum of this data
+    func crc16() -> Data {
+        return CalculateCRC16(self)
+    }
+
+    /// Compute HMAC-SHA1 of this data using the given key
+    func hmacSHA1(key: Data) -> Data {
+        return HmacSha1(data: self, key: key)
+    }
+}
