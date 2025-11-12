@@ -28,6 +28,10 @@ let package = Package(
             name: "tandemkit-cli",
             targets: ["TandemCLI"]
         ),
+        .executable(
+            name: "tandem-simulator",
+            targets: ["TandemSimulator"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/leif-ibsen/SwiftECC", from: "3.0.0"),
@@ -89,6 +93,20 @@ let package = Package(
                     .unsafeFlags(["-parse-as-library"])
                 ]
             ),
+            .executableTarget(
+                name: "TandemSimulator",
+                dependencies: [
+                    "TandemCore",
+                    "TandemBLE",
+                    .product(name: "SwiftECC", package: "SwiftECC"),
+                    .product(name: "BigInt", package: "BigInt"),
+                    .product(name: "Logging", package: "swift-log")
+                ],
+                path: "Sources/TandemSimulator",
+                swiftSettings: [
+                    .unsafeFlags(["-parse-as-library"])
+                ]
+            ),
             .testTarget(
                 name: "TandemCoreTests",
                 dependencies: ["TandemCore"],
@@ -98,6 +116,11 @@ let package = Package(
                 name: "TandemKitTests",
                 dependencies: ["TandemKit", "TandemCore", "TandemBLE"],
                 path: "Tests/TandemKitTests"
+            ),
+            .testTarget(
+                name: "TandemSimulatorTests",
+                dependencies: ["TandemSimulator", "TandemCore", "TandemBLE"],
+                path: "Tests/TandemSimulatorTests"
             ),
         ]
 
