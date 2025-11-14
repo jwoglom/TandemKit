@@ -206,25 +206,19 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         guard manager.state == .poweredOn else {
-            log.debug("managerQueue_scanForPeripheral: manager.state != .poweredOn (state = %d)", manager.state.rawValue)
             return
         }
 
         let currentState = peripheral?.state ?? .disconnected
         guard currentState != .connected else {
-            log.debug("managerQueue_scanForPeripheral: peripheral already connected")
             return
         }
 
         guard currentState != .connecting else {
-            log.debug("managerQueue_scanForPeripheral: peripheral already connecting")
             return
         }
 
-        let connectedPeripherals = manager.retrieveConnectedPeripherals(withServices: AllPumpCharacteristicUUIDs.map { $0.cbUUID })
-        log.debug("managerQueue_scanForPeripheral: found %d already-connected peripherals", connectedPeripherals.count)
-
-        if let peripheral = connectedPeripherals.first,
+        if let peripheral = manager.retrieveConnectedPeripherals(withServices: AllPumpCharacteristicUUIDs.map { $0.cbUUID }).first,
         delegate == nil || delegate!.bluetoothManager(self, shouldConnectPeripheral: peripheral, advertisementData: nil)
         {
             log.debug("Found system-connected peripheral: %{public}@", peripheral.identifier.uuidString)
@@ -239,21 +233,11 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
                 self.peripheral = peripheral
                 self.manager.connect(peripheral)
             } else {
-                log.default("Starting scan for peripherals with service UUID: %{public}@", ServiceUUID.PUMP_SERVICE.rawValue)
-                // On macOS, peripheral mode has limitations - try scanning for all peripherals first
-                #if os(macOS)
-                log.default("macOS detected - scanning for ALL peripherals to work around CBPeripheralManager limitations")
-                manager.scanForPeripherals(
-                    withServices: nil,  // nil = discover all peripherals
-                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
-                )
-                #else
+                log.debug("Scanning for peripherals")
                 manager.scanForPeripherals(
                     withServices: [ServiceUUID.PUMP_SERVICE.cbUUID],
                     options: nil
                 )
-                #endif
-                log.default("Scan started, isScanning = %{public}@", manager.isScanning ? "true" : "false")
             }
         }
     }
@@ -336,25 +320,19 @@ extension BluetoothManager: CBCentralManagerDelegate {
     public func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.default("DISCOVERED PERIPHERAL: %{public}@ (name: %{public}@, rssi: %{public}@)", peripheral.identifier.uuidString, peripheral.name ?? "nil", String(describing: RSSI))
-        log.default("  Advertisement data: %{public}@", String(describing: advertisementData))
-
+        log.info("%{public}@: %{public}@", #function, String(describing: peripheral))
         var shouldConnect = false
         if let delegate = delegate {
             shouldConnect = delegate.bluetoothManager(self, shouldConnectPeripheral: peripheral, advertisementData: advertisementData)
-            log.default("  Delegate returned shouldConnect = %{public}@", shouldConnect ? "true" : "false")
         } else {
             shouldConnect = isTandemPeripheral(peripheral, advertisementData: advertisementData)
-            log.default("  isTandemPeripheral returned %{public}@", shouldConnect ? "true" : "false")
         }
 
         if shouldConnect {
             self.peripheral = peripheral
 
-            log.default("Connecting to peripheral %{public}@", String(describing: peripheral))
+            log.debug("connecting to peripheral %{public}@", String(describing: peripheral))
             central.connect(peripheral, options: nil)
-        } else {
-            log.default("NOT connecting to peripheral (shouldConnect = false)")
         }
     }
 
