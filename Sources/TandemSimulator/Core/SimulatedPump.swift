@@ -141,7 +141,13 @@ class SimulatedPump {
                 if Task.isCancelled || !isRunning {
                     break
                 }
-                logger.error("Error reading packet on \(characteristic.rawValue): \(error)")
+                // Suppress notConnected errors - they're expected when no client is connected
+                if let bleError = error as? BLEPeripheralTransportError,
+                   case .notConnected = bleError {
+                    // Silently ignore - this is expected when no client is connected
+                } else {
+                    logger.error("Error reading packet on \(characteristic.rawValue): \(error)")
+                }
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
         }

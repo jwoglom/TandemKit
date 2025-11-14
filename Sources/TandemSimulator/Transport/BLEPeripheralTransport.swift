@@ -13,7 +13,9 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
 
     // GATT service and characteristics
     private var tandemService: CBMutableService?
+    private var disService: CBMutableService?
     private var characteristics: [CharacteristicUUID: CBMutableCharacteristic] = [:]
+    private var disCharacteristics: [CBUUID: CBMutableCharacteristic] = [:]
 
     // Packet queues for incoming data (from central to peripheral)
     private var receiveQueues: [CharacteristicUUID: PacketQueue] = [:]
@@ -35,8 +37,8 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
 
     init(deviceName: String = "Tandem t:slim X2") {
         self.deviceName = deviceName
-        // Tandem pump service UUID
-        self.serviceUUID = CBUUID(string: "7B83FFF0-9F77-4E5C-8064-AAE2C24838B9")
+        // Tandem pump service UUID - must match ServiceUUID.PUMP_SERVICE
+        self.serviceUUID = CBUUID(string: "0000fdfb-0000-1000-8000-00805f9b34fb")
 
         super.init()
 
@@ -115,6 +117,54 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
 
         // Add service to peripheral manager
         peripheralManager.add(tandemService!)
+
+        // Set up Device Information Service (DIS)
+        setupDISService()
+    }
+
+    private func setupDISService() {
+        guard let peripheralManager = peripheralManager else {
+            logger.error("Peripheral manager not initialized")
+            return
+        }
+
+        logger.info("Setting up Device Information Service (DIS)")
+
+        // DIS service UUID
+        let disServiceUUID = CBUUID(string: "0000180A-0000-1000-8000-00805f9b34fb")
+
+        // DIS characteristic UUIDs
+        let manufacturerUUID = CBUUID(string: "00002A29-0000-1000-8000-00805f9b34fb")
+        let modelNumberUUID = CBUUID(string: "00002A24-0000-1000-8000-00805f9b34fb")
+
+        // Create manufacturer characteristic with static value "Tandem"
+        let manufacturerData = "Tandem".data(using: .utf8)!
+        let manufacturerChar = CBMutableCharacteristic(
+            type: manufacturerUUID,
+            properties: [.read],
+            value: manufacturerData,
+            permissions: [.readable]
+        )
+        disCharacteristics[manufacturerUUID] = manufacturerChar
+
+        // Create model number characteristic with static value "t:slim X2"
+        let modelData = "t:slim X2".data(using: .utf8)!
+        let modelChar = CBMutableCharacteristic(
+            type: modelNumberUUID,
+            properties: [.read],
+            value: modelData,
+            permissions: [.readable]
+        )
+        disCharacteristics[modelNumberUUID] = modelChar
+
+        // Create DIS service
+        disService = CBMutableService(type: disServiceUUID, primary: true)
+        disService?.characteristics = [manufacturerChar, modelChar]
+
+        // Add DIS service to peripheral manager
+        peripheralManager.add(disService!)
+
+        logger.debug("Created DIS service with manufacturer and model characteristics")
     }
 
     private func startAdvertising() {
@@ -124,6 +174,9 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
         }
 
         logger.info("Starting BLE advertising as '\(deviceName)'")
+        logger.info("Service UUID: \(serviceUUID.uuidString)")
+        logger.info("Peripheral manager state: \(peripheralManager.state.rawValue)")
+        logger.info("Is advertising: \(peripheralManager.isAdvertising)")
 
         let advertisementData: [String: Any] = [
             CBAdvertisementDataLocalNameKey: deviceName,
@@ -131,6 +184,12 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
         ]
 
         peripheralManager.startAdvertising(advertisementData)
+
+        // Log again after starting
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self, let pm = self.peripheralManager else { return }
+            self.logger.info("After start - Is advertising: \(pm.isAdvertising)")
+        }
     }
 
     func stop() async throws {
@@ -144,8 +203,11 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
         // Stop advertising
         peripheralManager?.stopAdvertising()
 
-        // Remove service
+        // Remove services
         if let service = tandemService {
+            peripheralManager?.remove(service)
+        }
+        if let service = disService {
             peripheralManager?.remove(service)
         }
 
@@ -260,6 +322,7 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
     func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
         if let error = error {
             logger.error("Failed to start advertising: \(error.localizedDescription)")
+            logger.error("Error details: \(String(describing: error))")
             if let continuation = startContinuation {
                 startContinuation = nil
                 continuation.resume(throwing: error)
@@ -268,6 +331,11 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
         }
 
         logger.info("BLE peripheral is now advertising and ready for connections")
+        logger.info("Advertising state: isAdvertising=\(peripheral.isAdvertising)")
+
+        // Log what we're advertising
+        logger.info("Advertised service UUID: \(serviceUUID.uuidString)")
+        logger.info("Advertised device name: \(deviceName)")
 
         if let continuation = startContinuation {
             startContinuation = nil

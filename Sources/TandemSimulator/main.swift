@@ -121,8 +121,13 @@ private extension TandemSimulatorMain {
         let simulator = SimulatedPump(config: config)
         try await simulator.start()
 
+        print("Simulator started successfully - running indefinitely (press Ctrl-C to stop)")
+
         // Keep running until interrupted
-        try await Task.sleep(nanoseconds: UInt64.max)
+        // Use a more reliable infinite loop with periodic checks
+        while true {
+            try await Task.sleep(nanoseconds: 1_000_000_000) // Sleep 1 second at a time
+        }
     }
 
     static func runTest(config: SimulatorConfig) async throws {
@@ -140,7 +145,9 @@ private extension TandemSimulatorMain {
         print("Use Ctrl-C to stop")
 
         // Keep running until interrupted
-        try await Task.sleep(nanoseconds: UInt64.max)
+        while true {
+            try await Task.sleep(nanoseconds: 1_000_000_000) // Sleep 1 second at a time
+        }
     }
 
     static func usage() -> String {
