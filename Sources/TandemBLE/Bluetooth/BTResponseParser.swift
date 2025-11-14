@@ -71,7 +71,7 @@ public struct BTResponseParser {
         return PumpResponseMessage(data: output, message: RawMessage(opCode: packetArrayList.opCode, cargo: Data(payload)))
     }
 
-    static func decodeMessage(opCode: UInt8, characteristic: CBUUID, payload: Data) -> Message? {
+    public static func decodeMessage(opCode: UInt8, characteristic: CBUUID, payload: Data) -> Message? {
         let charEnum = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased())
         let candidates = MessageRegistry.bestMatches(opCode: opCode,
                                                      characteristic: charEnum,

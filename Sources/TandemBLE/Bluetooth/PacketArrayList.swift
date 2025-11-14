@@ -19,12 +19,12 @@ public struct PacketArrayList {
     private var actualExpectedCargoSize: Int
     private var fullCargo: Data
     private var messageDataBuffer: Data
-    private(set) var opCode: UInt8 = 0
+    public private(set) var opCode: UInt8 = 0
     private var firstByteMod15: Int = 0
     private var empty = true
     private var expectedCrc = Data(repeating: 0, count: 2)
 
-    init(expectedOpCode: UInt8, expectedCargoSize: UInt8, expectedTxId: UInt8, isSigned: Bool,
+    public init(expectedOpCode: UInt8, expectedCargoSize: UInt8, expectedTxId: UInt8, isSigned: Bool,
          requestMetadata: MessageMetadata? = nil, responseMetadata: MessageMetadata? = nil) {
         self.expectedOpCode = expectedOpCode
         self.expectedCargoSize = expectedCargoSize
@@ -68,7 +68,7 @@ public struct PacketArrayList {
         packetArrayLogger.debug("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
     }
 
-    mutating func validatePacket(_ packet: Data) throws {
+    public mutating func validatePacket(_ packet: Data) throws {
         guard packet.count >= 3 else { throw InvalidDataSizeError() }
         let firstByte = packet[0]
         let txId = packet[1]
@@ -98,7 +98,7 @@ public struct PacketArrayList {
         self.opCode = opCode
     }
 
-    func needsMorePacket() -> Bool {
+    public func needsMorePacket() -> Bool {
         return firstByteMod15 >= 0
     }
 
@@ -113,12 +113,12 @@ public struct PacketArrayList {
         }
     }
 
-    mutating func buildMessageData() -> Data {
+    public mutating func buildMessageData() -> Data {
         createMessageData()
         return messageDataBuffer
     }
 
-    mutating func validate(_ authKey: Data) -> Bool {
+    public mutating func validate(_ authKey: Data) -> Bool {
         if needsMorePacket() { return false }
         createMessageData()
         createExpectedCrc()

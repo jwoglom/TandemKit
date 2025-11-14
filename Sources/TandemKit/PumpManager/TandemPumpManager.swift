@@ -6,9 +6,13 @@
 //
 
 import Foundation
+import Dispatch
 import CoreBluetooth
 #if canImport(HealthKit)
 import HealthKit
+#endif
+#if canImport(os)
+import os.log
 #endif
 import LoopKit
 import TandemCore
@@ -18,16 +22,16 @@ import UIKit
 #endif
 
 // Simple delegate wrapper
-private class WeakSynchronizedDelegate<T: AnyObject> {
-    private weak var _value: T?
+private class WeakSynchronizedDelegate<T> {
+    private weak var _value: AnyObject?
     var _queue: DispatchQueue = DispatchQueue.main
 
     var value: T? {
         get {
-            return _queue.sync { _value }
+            return _queue.sync { _value as? T }
         }
         set {
-            _queue.sync { _value = newValue }
+            _queue.sync { _value = newValue as AnyObject? }
         }
     }
 
@@ -608,8 +612,8 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
-        guard let delegate = pumpManagerDelegate else { return }
-        delegateQueue.async {
+        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
+        queue.async {
             delegate.pumpManager(self, didError: PumpManagerError.communication(error))
         }
     }
@@ -622,14 +626,15 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func notifyPumpManagerDelegateDidUpdateState() {
-        guard let delegate = pumpManagerDelegate else { return }
-        delegateQueue.async {
+        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
+        queue.async {
             delegate.pumpManagerDidUpdateState(self)
         }
     }
 
     private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
-        delegateQueue.async {
+        guard let queue = delegateQueue else { return }
+        queue.async {
             switch result {
             case .success:
                 completion(nil)
@@ -644,7 +649,8 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeCancelBolus(_ result: PumpManagerResult<DoseEntry?>, completion: @escaping (PumpManagerResult<DoseEntry?>) -> Void) {
-        delegateQueue?.async {
+        guard let queue = delegateQueue else { return }
+        queue.async {
             completion(result)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didCancelBolus: result)
@@ -653,7 +659,8 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeTempBasal(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
-        delegateQueue?.async {
+        guard let queue = delegateQueue else { return }
+        queue.async {
             switch result {
             case .success:
                 completion(nil)
@@ -668,7 +675,8 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeSuspend(_ error: Error?, completion: @escaping (Error?) -> Void) {
-        delegateQueue?.async {
+        guard let queue = delegateQueue else { return }
+        queue.async {
             completion(error)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didSuspendDeliveryWithError: error)
@@ -677,7 +685,8 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeResume(_ error: Error?, completion: @escaping (Error?) -> Void) {
-        delegateQueue?.async {
+        guard let queue = delegateQueue else { return }
+        queue.async {
             completion(error)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didResumeDeliveryWithError: error)
