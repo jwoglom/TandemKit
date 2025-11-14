@@ -112,7 +112,8 @@ class SimulatedPump {
 
         for characteristic in characteristics {
             let task = Task { [weak self] in
-                await self?.listenOnCharacteristic(characteristic)
+                guard let self = self else { return }
+                await self.listenOnCharacteristic(characteristic)
             }
             listenerTasks.append(task)
         }
@@ -205,7 +206,7 @@ class SimulatedPump {
             return
         }
 
-        guard let responseMetadata = MessageRegistry.responseMetadata(for: metadata.messageType) else {
+        guard let responseMetadata = MessageRegistry.responseMetadata(for: metadata.type) else {
             logger.debug("Cannot send error response - no response type for \(metadata.name)")
             return
         }
@@ -217,7 +218,7 @@ class SimulatedPump {
 
         do {
             // Build error response packet
-            let errorMessage = responseMetadata.messageType.init(cargo: errorCargo)
+            let errorMessage = responseMetadata.type.init(cargo: errorCargo)
 
             // Use message router to build the packet properly
             // Note: This will fail if message requires authentication we don't have

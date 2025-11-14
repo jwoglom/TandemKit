@@ -86,7 +86,7 @@ class PacketAssembler {
             // Verify packetsRemaining is decreasing
             let packetsRemaining = packet[0]
             let expectedRemaining = UInt8(header.packetsRemaining) - UInt8(index + 1)
-            guard packetsRemaining == expectedRemaining else {
+            if packetsRemaining != expectedRemaining {
                 logger.warning("Packet \(index + 1) has unexpected packetsRemaining: \(packetsRemaining) (expected \(expectedRemaining))")
             }
 
