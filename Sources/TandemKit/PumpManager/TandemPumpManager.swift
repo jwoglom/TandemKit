@@ -644,7 +644,7 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeCancelBolus(_ result: PumpManagerResult<DoseEntry?>, completion: @escaping (PumpManagerResult<DoseEntry?>) -> Void) {
-        delegateQueue.async {
+        delegateQueue?.async {
             completion(result)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didCancelBolus: result)
@@ -653,7 +653,7 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeTempBasal(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
-        delegateQueue.async {
+        delegateQueue?.async {
             switch result {
             case .success:
                 completion(nil)
@@ -668,7 +668,7 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeSuspend(_ error: Error?, completion: @escaping (Error?) -> Void) {
-        delegateQueue.async {
+        delegateQueue?.async {
             completion(error)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didSuspendDeliveryWithError: error)
@@ -677,7 +677,7 @@ public class TandemPumpManager: PumpManager {
     }
 
     private func completeResume(_ error: Error?, completion: @escaping (Error?) -> Void) {
-        delegateQueue.async {
+        delegateQueue?.async {
             completion(error)
             if let delegate = self.dosingDelegate.value {
                 delegate.pumpManager(self, didResumeDeliveryWithError: error)
@@ -690,7 +690,7 @@ public class TandemPumpManager: PumpManager {
             return override
         }
 
-        if let statusRate = lockedStatus.value.basalDeliveryState.scheduledBasalRateValue, statusRate > 0 {
+        if let statusRate = lockedStatus.value.basalDeliveryState?.scheduledBasalRateValue, statusRate > 0 {
             return statusRate
         }
 

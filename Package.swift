@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "TandemKit",
     platforms: [
-        .macOS(.v10_15),
+        .macOS(.v13),
         .iOS(.v14)
     ],
     products: [
@@ -104,6 +104,9 @@ let package = Package(
                     .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
                 ],
                 path: "Sources/TandemSimulator",
+                resources: [
+                    .copy("README.md")
+                ],
                 swiftSettings: [
                     .unsafeFlags(["-parse-as-library"])
                 ]
@@ -125,7 +128,7 @@ let package = Package(
             ),
         ]
 
-        #if os(Linux)
+        // Always use source-based shims since the binary frameworks don't support macOS
         targets.append(contentsOf: [
             .target(
                 name: "LoopKit",
@@ -137,33 +140,6 @@ let package = Package(
                 path: "Sources/LoopKitUI"
             )
         ])
-        #else
-        targets.append(contentsOf: [
-            .binaryTarget(
-                name: "LoopKitBinary",
-                path: "Carthage/Build/LoopKit.xcframework"
-            ),
-            .binaryTarget(
-                name: "LoopKitUIBinary",
-                path: "Carthage/Build/LoopKitUI.xcframework"
-            ),
-            .target(
-                name: "LoopKit",
-                dependencies: [
-                    .target(name: "LoopKitBinary")
-                ],
-                path: "Sources/LoopKit"
-            ),
-            .target(
-                name: "LoopKitUI",
-                dependencies: [
-                    "LoopKit",
-                    .target(name: "LoopKitUIBinary")
-                ],
-                path: "Sources/LoopKitUI"
-            )
-        ])
-        #endif
 
         return targets
     }()

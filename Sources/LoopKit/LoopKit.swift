@@ -1,5 +1,3 @@
-#if os(Linux)
-
 import Foundation
 
 // MARK: - Lightweight HealthKit shims
@@ -240,7 +238,7 @@ public protocol PumpManagerStatusObserver: AnyObject {
 }
 
 @available(macOS 13.0, iOS 14.0, *)
-public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObserver {
+public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObserver, AnyObject {
     func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager)
     func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) -> Bool
     func pumpManagerWillDeactivate(_ pumpManager: PumpManager)
@@ -529,7 +527,7 @@ public struct DoseEntry: TimelineValue, Equatable, Codable {
 // MARK: - Scheduling & Limits
 
 @available(macOS 13.0, iOS 14.0, *)
-public struct RepeatingScheduleValue<T>: Codable where T: Codable {
+public struct RepeatingScheduleValue<T>: Codable, Equatable where T: Codable & Equatable {
     public var startTime: TimeInterval
     public var value: T
 
@@ -646,9 +644,3 @@ public enum BolusActivationType: String, Codable {
 // MARK: - CGM Manager
 
 public protocol CGMManagerUI {}
-
-#else
-
-@_exported import LoopKitBinary
-
-#endif
