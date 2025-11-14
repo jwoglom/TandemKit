@@ -13,7 +13,7 @@
 
 import Foundation
 
-let crcLookupTable: [UInt32] = [
+private let crcLookupTable: [UInt32] = [
     0, 4129, 8258, 12387, 16516, 20645, 24774, 28903, 33032, 37161, 41290,
     45419, 49548, 53677, 57806, 61935, 4657, 528, 12915, 8786, 21173, 17044,
     29431, 25302, 37689, 33560, 45947, 41818, 54205, 50076, 62463, 58334,
@@ -41,7 +41,7 @@ let crcLookupTable: [UInt32] = [
     16050, 3793, 7920
 ]
 
-func CalculateCRC16(_ bArr: Data) -> Data {
+public func CalculateCRC16(_ bArr: Data) -> Data {
     var i: UInt32 = 0x0000FFFF
     for b in bArr {
         let index = (UInt32(b) ^ (i >> 8)) & 0xFF
