@@ -11,8 +11,8 @@
 #if canImport(os)
 import os.log
 
-extension OSLog {
-    public convenience init(category: String) {
+public extension OSLog {
+    convenience init(category: String) {
         self.init(subsystem: "com.jwoglom.TandemKit", category: category)
     }
 

@@ -38,7 +38,7 @@ public enum KnownApiVersion: Sendable {
     case apiFuture
 
     /// Returns the `ApiVersion` corresponding to each case.
-    var value: ApiVersion {
+    public var value: ApiVersion {
         switch self {
         case .apiV2_1:
             return ApiVersion(major: 2, minor: 1)

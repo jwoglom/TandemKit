@@ -106,7 +106,7 @@ public enum DeviceLifecycleProgressState: String, Codable {
 
 // MARK: - Device Manager
 
-public protocol DeviceManagerDelegate {
+public protocol DeviceManagerDelegate: AnyObject {
 #if canImport(UserNotifications)
     func scheduleNotification(
         for manager: DeviceManager,
