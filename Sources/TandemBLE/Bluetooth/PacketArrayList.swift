@@ -5,7 +5,7 @@ private let packetArrayLogger = PumpLogger(label: "TandemBLE.PacketArrayList")
 
 /// Parses incoming packets from the pump and validates them.
 /// This mirrors the behaviour of PumpX2 `PacketArrayList`.
-struct PacketArrayList {
+public struct PacketArrayList {
     static let IGNORE_INVALID_HMAC = "IGNORE_HMAC_SIGNATURE_EXCEPTION"
     static let ignoreInvalidTxId = false
 

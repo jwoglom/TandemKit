@@ -87,7 +87,7 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
     private var needsConfiguration = true
 
     weak var delegate: PeripheralManagerDelegate?
-    weak var notificationHandler: PeripheralManagerNotificationHandler?
+    public weak var notificationHandler: PeripheralManagerNotificationHandler?
 
     init(peripheral: CBPeripheral, configuration: Configuration, centralManager: CBCentralManager) {
         self.peripheral = peripheral
