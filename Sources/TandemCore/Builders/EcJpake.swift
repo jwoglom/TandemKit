@@ -4,13 +4,13 @@ import Foundation
 import SwiftECC
 import BigInt
 
-final class EcJpake {
-    enum Role {
+public final class EcJpake {
+    public enum Role {
         case client
         case server
     }
 
-    typealias RandomBytesGenerator = (Int) -> Data
+    public typealias RandomBytesGenerator = (Int) -> Data
 
     private var xm1: BInt?
     private var Xm1: Point?
@@ -42,7 +42,7 @@ final class EcJpake {
         domainInstance
     }
 
-    init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
+    public init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
         print("[EcJpake.init] START")
         self.role = role
         print("[EcJpake.init] role set")
@@ -70,7 +70,7 @@ final class EcJpake {
         print("[EcJpake.init] COMPLETE")
     }
 
-    func getRound1() -> Data {
+    public func getRound1() -> Data {
         print("[EcJpake.getRound1] ENTERED FUNCTION")
         fflush(stdout)
 
@@ -160,7 +160,7 @@ final class EcJpake {
         return out
     }
 
-    func readRound1(_ data: Data) {
+    public func readRound1(_ data: Data) {
         precondition(!hasPeerRound1, "Invalid protocol state")
         var r = DataReader(data)
         Xp1 = readPoint(&r)
@@ -170,7 +170,7 @@ final class EcJpake {
         hasPeerRound1 = true
     }
 
-    func getRound2() -> Data {
+    public func getRound2() -> Data {
         if let data = myRound2 { return data }
         precondition(hasPeerRound1 && myRound1 != nil, "Invalid protocol state")
         var out = Data()
@@ -186,7 +186,7 @@ final class EcJpake {
         return out
     }
 
-    func readRound2(_ data: Data) {
+    public func readRound2(_ data: Data) {
         precondition(!hasPeerRound2 && hasPeerRound1 && myRound1 != nil, "Invalid protocol state")
         var r = DataReader(data)
         if role == .client {
@@ -198,7 +198,7 @@ final class EcJpake {
         hasPeerRound2 = true
     }
 
-    func deriveSecret() -> Data {
+    public func deriveSecret() -> Data {
         if let d = derivedSecret { return d }
         precondition(hasPeerRound2, "Invalid protocol state")
         let xm2s = mulSecret(xm2!, s, negate: true)

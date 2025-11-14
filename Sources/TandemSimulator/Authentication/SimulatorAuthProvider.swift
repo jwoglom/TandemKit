@@ -107,10 +107,8 @@ class SimulatorAuthProvider: AuthenticationProvider {
             return try handlePumpChallenge(message as! PumpChallengeRequest, context: context)
         }
 
-        // Check for challenge request (final step)
-        if message is ChallengeRequest {
-            return try handleChallenge(message as! ChallengeRequest, context: context)
-        }
+        // Note: Generic ChallengeRequest/Response not yet implemented
+        // Would be the final step in authentication flow
 
         logger.error("Unknown authentication message type: \(type(of: message))")
         throw AuthProviderError.unknownAuthMessage
@@ -215,7 +213,7 @@ class SimulatorAuthProvider: AuthenticationProvider {
         // Generate challenge hash
         // Based on the protocol, this appears to be a hash of the central challenge
         // The exact algorithm may vary, but SHA1 hash of the challenge is a reasonable approach
-        let challengeHash = SHA256.hash(request.centralChallenge).prefix(20)
+        let challengeHash = SHA256.hash(data: request.centralChallenge).prefix(20)
 
         let response = CentralChallengeResponse(
             appInstanceId: request.appInstanceId,
@@ -266,7 +264,10 @@ class SimulatorAuthProvider: AuthenticationProvider {
     }
 
     // MARK: - Challenge (Final Step)
+    // Note: Generic ChallengeRequest/Response types not yet implemented
+    // This would handle the final authentication step
 
+    /*
     private func handleChallenge(_ request: ChallengeRequest, context: HandlerContext) throws -> Message {
         logger.debug("Handling ChallengeRequest (final auth step)")
 
@@ -289,6 +290,7 @@ class SimulatorAuthProvider: AuthenticationProvider {
 
         return ChallengeResponse(cargo: cargo)
     }
+    */
 }
 
 // MARK: - JPAKE Server Handler

@@ -126,8 +126,8 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
         logger.info("Starting BLE advertising as '\(deviceName)'")
 
         let advertisementData: [String: Any] = [
-            CBAdvertisementData.LocalNameKey: deviceName,
-            CBAdvertisementData.ServiceUUIDsKey: [serviceUUID]
+            CBAdvertisementDataLocalNameKey: deviceName,
+            CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
         ]
 
         peripheralManager.startAdvertising(advertisementData)

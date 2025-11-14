@@ -208,7 +208,9 @@ class BasalIQStatusHandler: MessageHandler {
 }
 
 // MARK: - Control IQ Status Handler
+// Note: ControlIQStatusRequest/Response types not yet implemented
 
+/*
 class ControlIQStatusHandler: MessageHandler {
     var messageType: Message.Type { ControlIQStatusRequest.self }
 
@@ -228,6 +230,7 @@ class ControlIQStatusHandler: MessageHandler {
         return response
     }
 }
+*/
 
 // MARK: - IDP Segment Handler
 

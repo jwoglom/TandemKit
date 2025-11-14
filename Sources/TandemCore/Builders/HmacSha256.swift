@@ -6,8 +6,8 @@ import CryptoKit
 import CommonCrypto
 #endif
 
-struct HmacSha256 {
-    static func hmac(_ data: Data, key: Data) -> Data {
+public struct HmacSha256 {
+    public static func hmac(_ data: Data, key: Data) -> Data {
 #if canImport(CryptoKit)
         let symmetricKey = SymmetricKey(data: key)
         let auth = HMAC<CryptoKit.SHA256>.authenticationCode(for: data, using: symmetricKey)
