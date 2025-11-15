@@ -15,7 +15,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 3
+    public static let version = 4
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -28,6 +28,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var bolusState: PumpManagerStatus.BolusState
     public var deliveryIsUncertain: Bool
     public var basalRateSchedule: BasalRateSchedule?
+    public var insulinDeliveryActionsEnabled: Bool
+    public var connectionSharingEnabled: Bool
 
     public init(
         pumpState: PumpState?,
@@ -40,7 +42,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastBasalStatusDate: Date? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
         deliveryIsUncertain: Bool = false,
-        basalRateSchedule: BasalRateSchedule? = nil
+        basalRateSchedule: BasalRateSchedule? = nil,
+        insulinDeliveryActionsEnabled: Bool = false,
+        connectionSharingEnabled: Bool = false
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -53,6 +57,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.bolusState = bolusState
         self.deliveryIsUncertain = deliveryIsUncertain
         self.basalRateSchedule = basalRateSchedule
+        self.insulinDeliveryActionsEnabled = insulinDeliveryActionsEnabled
+        self.connectionSharingEnabled = connectionSharingEnabled
     }
 
     public init?(rawValue: RawValue) {
@@ -128,6 +134,18 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.basalRateSchedule = nil
         }
+
+        if let insulinActionsEnabled = rawValue["insulinDeliveryActionsEnabled"] as? Bool {
+            self.insulinDeliveryActionsEnabled = insulinActionsEnabled
+        } else {
+            self.insulinDeliveryActionsEnabled = false
+        }
+
+        if let connectionSharingEnabled = rawValue["connectionSharingEnabled"] as? Bool {
+            self.connectionSharingEnabled = connectionSharingEnabled
+        } else {
+            self.connectionSharingEnabled = false
+        }
     }
 
     public var rawValue: RawValue {
@@ -180,6 +198,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
+        raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
+        raw["connectionSharingEnabled"] = connectionSharingEnabled
+
         return raw
     }
 }
@@ -196,7 +217,9 @@ public extension TandemPumpManagerState {
             lhs.lastBasalStatusDate == rhs.lastBasalStatusDate &&
             lhs.bolusState == rhs.bolusState &&
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
-            lhs.basalRateSchedule == rhs.basalRateSchedule
+            lhs.basalRateSchedule == rhs.basalRateSchedule &&
+            lhs.insulinDeliveryActionsEnabled == rhs.insulinDeliveryActionsEnabled &&
+            lhs.connectionSharingEnabled == rhs.connectionSharingEnabled
     }
 }
 

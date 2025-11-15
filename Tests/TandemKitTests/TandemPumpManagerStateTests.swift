@@ -41,7 +41,9 @@ final class TandemPumpManagerStateTests: XCTestCase {
             lastBasalStatusDate: timestamp,
             bolusState: .inProgress(bolusDose),
             deliveryIsUncertain: true,
-            basalRateSchedule: schedule
+            basalRateSchedule: schedule,
+            insulinDeliveryActionsEnabled: true,
+            connectionSharingEnabled: true
         )
 
         let rawValue = state.rawValue
@@ -67,6 +69,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
         }
         XCTAssertTrue(restoredState.deliveryIsUncertain)
         XCTAssertEqual(restoredState.basalRateSchedule, schedule)
+        XCTAssertTrue(restoredState.insulinDeliveryActionsEnabled)
+        XCTAssertTrue(restoredState.connectionSharingEnabled)
     }
 
     func testVersion1RawValueMigration() throws {
@@ -86,6 +90,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertNil(restoredState.basalDeliveryState)
         XCTAssertEqual(restoredState.bolusState, .noBolus)
         XCTAssertFalse(restoredState.deliveryIsUncertain)
+        XCTAssertFalse(restoredState.insulinDeliveryActionsEnabled)
+        XCTAssertFalse(restoredState.connectionSharingEnabled)
     }
 
     func testManagerRestoresCachedStatusFromRawState() throws {
@@ -144,5 +150,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
 
         let derivedSecret = PumpStateSupplier.getDerivedSecret()
         XCTAssertEqual(derivedSecret, pumpState.derivedSecret)
+        XCTAssertFalse(restoredState.insulinDeliveryActionsEnabled)
+        XCTAssertFalse(restoredState.connectionSharingEnabled)
     }
 }

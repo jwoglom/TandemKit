@@ -225,6 +225,8 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
         updatePairingArtifacts(with: state.pumpState)
+        tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
+        tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         setupTelemetry()
     }
 
@@ -242,6 +244,8 @@ public class TandemPumpManager: PumpManager {
         self.tandemPump.delegate = self
         self.pumpComm.delegate = self
         updatePairingArtifacts(with: state.pumpState)
+        tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
+        tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         setupTelemetry()
     }
 
@@ -311,6 +315,14 @@ public class TandemPumpManager: PumpManager {
 
     public var reservoirLevel: ReservoirValue? {
         return lockedReservoirValue.value
+    }
+
+    public var insulinDeliveryActionsEnabled: Bool {
+        return lockedState.value.insulinDeliveryActionsEnabled
+    }
+
+    public var connectionSharingEnabled: Bool {
+        return lockedState.value.connectionSharingEnabled
     }
 
     private func setupTelemetry() {
@@ -766,6 +778,28 @@ public class TandemPumpManager: PumpManager {
         pumpComm.manager = nil
         updateTransport(nil)
         tandemPump.disconnect()
+    }
+
+    public func configureDeliveryActions(_ enabled: Bool) {
+        tandemPump.configureDeliveryActions(enabled: enabled)
+
+        var state = lockedState.value
+        guard state.insulinDeliveryActionsEnabled != enabled else { return }
+        state.insulinDeliveryActionsEnabled = enabled
+        lockedState.value = state
+
+        notifyDelegateStateUpdated()
+    }
+
+    public func configureConnectionSharing(_ enabled: Bool) {
+        tandemPump.configureConnectionSharing(enabled: enabled)
+
+        var state = lockedState.value
+        guard state.connectionSharingEnabled != enabled else { return }
+        state.connectionSharingEnabled = enabled
+        lockedState.value = state
+
+        notifyDelegateStateUpdated()
     }
 
     // MARK: - PumpManager Additional Methods
