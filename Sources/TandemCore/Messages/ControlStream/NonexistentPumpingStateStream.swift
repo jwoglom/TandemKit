@@ -28,7 +28,7 @@ public class NonexistentPumpingStateStreamRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -50,12 +50,12 @@ public class PumpingStateStreamResponse: Message {
     public required init(cargo: Data) {
         let raw = Bytes.dropLastN(cargo, 24)
         self.cargo = raw
-        self.isPumpingStateSetAfterStartUp = raw[0] != 0
-        self.stateBitmask = Bytes.readUint32(raw, 1)
+        isPumpingStateSetAfterStartUp = raw[0] != 0
+        stateBitmask = Bytes.readUint32(raw, 1)
     }
 
     public init(isPumpingStateSetAfterStartUp: Bool, stateBitmask: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([isPumpingStateSetAfterStartUp ? 1 : 0]),
             Bytes.toUint32(stateBitmask)
         )
@@ -92,4 +92,3 @@ public class PumpingStateStreamResponse: Message {
         case canSnooze = 32768
     }
 }
-

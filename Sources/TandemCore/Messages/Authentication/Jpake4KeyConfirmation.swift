@@ -1,14 +1,3 @@
-//
-//  Jpake4KeyConfirmation.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Swift representations of Jpake4KeyConfirmationRequest and Jpake4KeyConfirmationResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/authentication/Jpake4KeyConfirmationRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/authentication/Jpake4KeyConfirmationResponse.java
-//
-
 import Foundation
 
 /// Final JPAKE message confirming key derivation.
@@ -31,17 +20,22 @@ public class Jpake4KeyConfirmationRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appInstanceId = Bytes.readShort(cargo, 0)
-        self.nonce = cargo.subdata(in: 2..<10)
-        self.reserved = cargo.subdata(in: 10..<18)
-        self.hashDigest = cargo.subdata(in: 18..<50)
+        appInstanceId = Bytes.readShort(cargo, 0)
+        nonce = cargo.subdata(in: 2 ..< 10)
+        reserved = cargo.subdata(in: 10 ..< 18)
+        hashDigest = cargo.subdata(in: 18 ..< 50)
     }
 
     public init(appInstanceId: Int, nonce: Data, reserved: Data, hashDigest: Data) {
         precondition(nonce.count == 8)
         precondition(reserved.count == 8)
         precondition(hashDigest.count == 32)
-        self.cargo = Jpake4KeyConfirmationRequest.buildCargo(appInstanceId: appInstanceId, nonce: nonce, reserved: reserved, hashDigest: hashDigest)
+        cargo = Jpake4KeyConfirmationRequest.buildCargo(
+            appInstanceId: appInstanceId,
+            nonce: nonce,
+            reserved: reserved,
+            hashDigest: hashDigest
+        )
         self.appInstanceId = appInstanceId
         self.nonce = nonce
         self.reserved = reserved
@@ -49,7 +43,7 @@ public class Jpake4KeyConfirmationRequest: Message {
     }
 
     public static func buildCargo(appInstanceId: Int, nonce: Data, reserved: Data, hashDigest: Data) -> Data {
-        return Bytes.combine(
+        Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             nonce,
             reserved,
@@ -78,17 +72,22 @@ public class Jpake4KeyConfirmationResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appInstanceId = Bytes.readShort(cargo, 0)
-        self.nonce = cargo.subdata(in: 2..<10)
-        self.reserved = cargo.subdata(in: 10..<18)
-        self.hashDigest = cargo.subdata(in: 18..<50)
+        appInstanceId = Bytes.readShort(cargo, 0)
+        nonce = cargo.subdata(in: 2 ..< 10)
+        reserved = cargo.subdata(in: 10 ..< 18)
+        hashDigest = cargo.subdata(in: 18 ..< 50)
     }
 
     public init(appInstanceId: Int, nonce: Data, reserved: Data, hashDigest: Data) {
         precondition(nonce.count == 8)
         precondition(reserved.count == 8)
         precondition(hashDigest.count == 32)
-        self.cargo = Jpake4KeyConfirmationResponse.buildCargo(appInstanceId: appInstanceId, nonce: nonce, reserved: reserved, hashDigest: hashDigest)
+        cargo = Jpake4KeyConfirmationResponse.buildCargo(
+            appInstanceId: appInstanceId,
+            nonce: nonce,
+            reserved: reserved,
+            hashDigest: hashDigest
+        )
         self.appInstanceId = appInstanceId
         self.nonce = nonce
         self.reserved = reserved
@@ -96,7 +95,7 @@ public class Jpake4KeyConfirmationResponse: Message {
     }
 
     public static func buildCargo(appInstanceId: Int, nonce: Data, reserved: Data, hashDigest: Data) -> Data {
-        return Bytes.combine(
+        Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             nonce,
             reserved,
@@ -104,4 +103,3 @@ public class Jpake4KeyConfirmationResponse: Message {
         )
     }
 }
-

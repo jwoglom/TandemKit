@@ -7,8 +7,7 @@ public enum PumpLogging {
     private static let lock = NSLock()
     private static var handler: Handler?
 
-    @discardableResult
-    public static func setHandler(_ newHandler: Handler?) -> Handler? {
+    @discardableResult  public static func setHandler(_ newHandler: Handler?) -> Handler? {
         lock.lock()
         let previous = handler
         handler = newHandler
@@ -65,7 +64,7 @@ public struct PumpLogger {
 
     public init(label: String) {
         self.label = label
-        self.logger = OSLog(category: label)
+        logger = OSLog(category: label)
     }
 
     public func log(_ level: Level, _ message: @autoclosure () -> String) {

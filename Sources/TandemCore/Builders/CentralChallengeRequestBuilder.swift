@@ -1,6 +1,6 @@
 import Foundation
 
-public struct CentralChallengeRequestBuilder {
+public enum CentralChallengeRequestBuilder {
     public static func create(appInstanceId: Int) -> CentralChallengeRequest? {
         let apiVersion = PumpStateSupplier.currentPumpApiVersion()
         if let apiVersion, apiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {

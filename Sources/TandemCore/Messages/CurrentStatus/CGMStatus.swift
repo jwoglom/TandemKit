@@ -1,14 +1,3 @@
-//
-//  CGMStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMStatusRequest and CGMStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMStatusResponse.java
-//
-
 import Foundation
 
 /// Request Dexcom CGM session status from the pump.
@@ -27,7 +16,7 @@ public class CGMStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -48,14 +37,19 @@ public class CGMStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.sessionStateId = Int(cargo[0])
-        self.lastCalibrationTimestamp = Bytes.readUint32(cargo, 1)
-        self.sensorStartedTimestamp = Bytes.readUint32(cargo, 5)
-        self.transmitterBatteryStatusId = Int(cargo[9])
+        sessionStateId = Int(cargo[0])
+        lastCalibrationTimestamp = Bytes.readUint32(cargo, 1)
+        sensorStartedTimestamp = Bytes.readUint32(cargo, 5)
+        transmitterBatteryStatusId = Int(cargo[9])
     }
 
-    public init(sessionStateId: Int, lastCalibrationTimestamp: UInt32, sensorStartedTimestamp: UInt32, transmitterBatteryStatusId: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        sessionStateId: Int,
+        lastCalibrationTimestamp: UInt32,
+        sensorStartedTimestamp: UInt32,
+        transmitterBatteryStatusId: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(sessionStateId),
             Bytes.toUint32(lastCalibrationTimestamp),
             Bytes.toUint32(sensorStartedTimestamp),
@@ -68,19 +62,19 @@ public class CGMStatusResponse: Message {
     }
 
     public var sessionState: SessionState? {
-        return SessionState(rawValue: sessionStateId)
+        SessionState(rawValue: sessionStateId)
     }
 
     public var transmitterBatteryStatus: TransmitterBatteryStatus? {
-        return TransmitterBatteryStatus(rawValue: transmitterBatteryStatusId)
+        TransmitterBatteryStatus(rawValue: transmitterBatteryStatusId)
     }
 
     public var lastCalibrationDate: Date {
-        return Dates.fromJan12008EpochSecondsToDate(TimeInterval(lastCalibrationTimestamp))
+        Dates.fromJan12008EpochSecondsToDate(TimeInterval(lastCalibrationTimestamp))
     }
 
     public var sensorStartedDate: Date {
-        return Dates.fromJan12008EpochSecondsToDate(TimeInterval(sensorStartedTimestamp))
+        Dates.fromJan12008EpochSecondsToDate(TimeInterval(sensorStartedTimestamp))
     }
 
     public enum SessionState: Int {
@@ -98,5 +92,3 @@ public class CGMStatusResponse: Message {
         case outOfRange = 4
     }
 }
-
-

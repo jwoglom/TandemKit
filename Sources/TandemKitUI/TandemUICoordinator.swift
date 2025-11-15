@@ -23,7 +23,9 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     )
     {
         if pumpManager == nil, pumpManagerSettings == nil {
-            self.pumpManager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]) ?? TandemPumpManagerState(pumpState: nil))
+            self
+                .pumpManager =
+                TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]) ?? TandemPumpManagerState(pumpState: nil))
         } else {
             self.pumpManager = pumpManager
         }
@@ -36,8 +38,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
         super.init(navigationBarClass: UINavigationBar.self, toolbarClass: UIToolbar.self)
     }
-    
-    required init?(coder aDecoder: NSCoder) {
+
+    @available(*, unavailable)  required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 }

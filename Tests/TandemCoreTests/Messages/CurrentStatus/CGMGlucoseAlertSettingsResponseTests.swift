@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class CGMGlucoseAlertSettingsResponseTests: XCTestCase {
     func testCGMGlucoseAlertSettingsResponseHigh200Low80Hourly() {

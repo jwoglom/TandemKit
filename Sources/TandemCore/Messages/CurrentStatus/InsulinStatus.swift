@@ -1,14 +1,3 @@
-//
-//  InsulinStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of InsulinStatusRequest and InsulinStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/InsulinStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/InsulinStatusResponse.java
-//
-
 import Foundation
 
 /// Request the current amount of insulin remaining in the pump.
@@ -27,7 +16,7 @@ public class InsulinStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,13 +36,13 @@ public class InsulinStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.currentInsulinAmount = Bytes.readShort(cargo, 0)
-        self.isEstimate = Int(cargo[2])
-        self.insulinLowAmount = Int(cargo[3])
+        currentInsulinAmount = Bytes.readShort(cargo, 0)
+        isEstimate = Int(cargo[2])
+        insulinLowAmount = Int(cargo[3])
     }
 
     public init(currentInsulinAmount: Int, isEstimate: Int, insulinLowAmount: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(currentInsulinAmount),
             Bytes.firstByteLittleEndian(isEstimate),
             Bytes.firstByteLittleEndian(insulinLowAmount)
@@ -63,4 +52,3 @@ public class InsulinStatusResponse: Message {
         self.insulinLowAmount = insulinLowAmount
     }
 }
-

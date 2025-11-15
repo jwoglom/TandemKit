@@ -1,19 +1,19 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class BolusCalcDataSnapshotResponseTests: XCTestCase {
     func testBolusCalcDataSnapshotResponseWithBolusConstraints() {
         let expected = BolusCalcDataSnapshotResponse(
             isUnacked: false,
             correctionFactor: 209,
-            iob: 2_937,
+            iob: 2937,
             cartridgeRemainingInsulin: 120,
             targetBg: 110,
             isf: 30,
             carbEntryEnabled: true,
-            carbRatio: 6_000,
-            maxBolusAmount: 25_000,
-            maxBolusHourlyTotal: 2_810,
+            carbRatio: 6000,
+            maxBolusAmount: 25000,
+            maxBolusHourlyTotal: 2810,
             maxBolusEventsExceeded: false,
             maxIobEventsExceeded: false,
             isAutopopAllowed: true,
@@ -31,14 +31,14 @@ final class BolusCalcDataSnapshotResponseTests: XCTestCase {
 
         XCTAssertFalse(parsed.isUnacked)
         XCTAssertEqual(209, parsed.correctionFactor)
-        XCTAssertEqual(2_937, parsed.iob)
+        XCTAssertEqual(2937, parsed.iob)
         XCTAssertEqual(120, parsed.cartridgeRemainingInsulin)
         XCTAssertEqual(110, parsed.targetBg)
         XCTAssertEqual(30, parsed.isf)
         XCTAssertTrue(parsed.carbEntryEnabled)
-        XCTAssertEqual(6_000, parsed.carbRatio)
-        XCTAssertEqual(25_000, parsed.maxBolusAmount)
-        XCTAssertEqual(2_810, parsed.maxBolusHourlyTotal)
+        XCTAssertEqual(6000, parsed.carbRatio)
+        XCTAssertEqual(25000, parsed.maxBolusAmount)
+        XCTAssertEqual(2810, parsed.maxBolusHourlyTotal)
         XCTAssertTrue(parsed.isAutopopAllowed)
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
@@ -47,13 +47,13 @@ final class BolusCalcDataSnapshotResponseTests: XCTestCase {
         let expected = BolusCalcDataSnapshotResponse(
             isUnacked: false,
             correctionFactor: 174,
-            iob: 2_302,
+            iob: 2302,
             cartridgeRemainingInsulin: 120,
             targetBg: 110,
             isf: 30,
             carbEntryEnabled: true,
-            carbRatio: 6_000,
-            maxBolusAmount: 25_000,
+            carbRatio: 6000,
+            maxBolusAmount: 25000,
             maxBolusHourlyTotal: 0,
             maxBolusEventsExceeded: false,
             maxIobEventsExceeded: false,

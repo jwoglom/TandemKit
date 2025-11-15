@@ -8,7 +8,7 @@ public struct BluetoothUUID: Hashable, Sendable {
     }
 
     public init(uuidString: String) {
-        self.uuid = UUID(uuidString: uuidString)!
+        uuid = UUID(uuidString: uuidString)!
     }
 
     public var uuidString: String { uuid.uuidString }

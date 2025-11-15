@@ -1,10 +1,16 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class RemoteBgEntryRequestTests: XCTestCase {
     func testRemoteBgEntryRequest_ID10676() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
-        let expected = RemoteBgEntryRequest(bg: 180, useForCgmCalibration: false, isAutopopBg: true, pumpTime: 1200173, bolusId: 10676)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
+        let expected = RemoteBgEntryRequest(
+            bg: 180,
+            useForCgmCalibration: false,
+            isAutopopBg: true,
+            pumpTime: 1_200_173,
+            bolusId: 10676
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "023bb63b23b4000000012d501200b4290023851b",
@@ -20,8 +26,14 @@ final class RemoteBgEntryRequestTests: XCTestCase {
     }
 
     func testRemoteBgEntryRequest_ID10677() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
-        let expected = RemoteBgEntryRequest(bg: 185, useForCgmCalibration: false, isAutopopBg: true, pumpTime: 1200239, bolusId: 10677)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
+        let expected = RemoteBgEntryRequest(
+            bg: 185,
+            useForCgmCalibration: false,
+            isAutopopBg: true,
+            pumpTime: 1_200_239,
+            bolusId: 10677
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "02a9b6a923b9000000016f501200b5294123851b",
@@ -37,8 +49,14 @@ final class RemoteBgEntryRequestTests: XCTestCase {
     }
 
     func testRemoteBgEntryRequest_ID10678() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710202)
-        let expected = RemoteBgEntryRequest(bg: 186, useForCgmCalibration: false, isAutopopBg: true, pumpTime: 1200239, bolusId: 10678)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_202)
+        let expected = RemoteBgEntryRequest(
+            bg: 186,
+            useForCgmCalibration: false,
+            isAutopopBg: true,
+            pumpTime: 1_200_239,
+            bolusId: 10678
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "02ceb6ce23ba000000016f501200b6297a23851b",
@@ -54,8 +72,14 @@ final class RemoteBgEntryRequestTests: XCTestCase {
     }
 
     func testRemoteBgEntryRequest_ID10652() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461589158)
-        let expected = RemoteBgEntryRequest(bg: 142, useForCgmCalibration: false, isAutopopBg: true, pumpTime: 1079274, bolusId: 10652)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_589_158)
+        let expected = RemoteBgEntryRequest(
+            bg: 142,
+            useForCgmCalibration: false,
+            isAutopopBg: true,
+            pumpTime: 1_079_274,
+            bolusId: 10652
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "023cb63c238e00000001ea7710009c29bc4a831b",
@@ -72,7 +96,13 @@ final class RemoteBgEntryRequestTests: XCTestCase {
 
     func testRemoteBgEntryRequest_G7Calibrate_169mgdl() {
         MessageTester.initPumpState("", 0)
-        let expected = RemoteBgEntryRequest(bg: 169, useForCgmCalibration: true, isAutopopBg: true, pumpTime: 2887044, bolusId: 0)
+        let expected = RemoteBgEntryRequest(
+            bg: 169,
+            useForCgmCalibration: true,
+            isAutopopBg: true,
+            pumpTime: 2_887_044,
+            bolusId: 0
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "02d6b6d623a900010001840d2c00000052cf5a20",
@@ -89,7 +119,13 @@ final class RemoteBgEntryRequestTests: XCTestCase {
 
     func testRemoteBgEntryRequest_G7Calibrate_170mgdl() {
         MessageTester.initPumpState("", 0)
-        let expected = RemoteBgEntryRequest(bg: 170, useForCgmCalibration: true, isAutopopBg: true, pumpTime: 2887044, bolusId: 0)
+        let expected = RemoteBgEntryRequest(
+            bg: 170,
+            useForCgmCalibration: true,
+            isAutopopBg: true,
+            pumpTime: 2_887_044,
+            bolusId: 0
+        )
 
         let parsed: RemoteBgEntryRequest = MessageTester.test(
             "02e1b6e123aa00010001840d2c00000082cf5a20",

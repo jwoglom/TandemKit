@@ -15,7 +15,7 @@ public class AlertActivatedHistoryLog: HistoryLog {
     public let alertId: UInt32
 
     public required init(cargo: Data) {
-        self.alertId = Bytes.readUint32(cargo, 10)
+        alertId = Bytes.readUint32(cargo, 10)
         super.init(cargo: cargo)
     }
 
@@ -26,7 +26,7 @@ public class AlertActivatedHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, alertId: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -40,4 +40,3 @@ public class AlertActivatedHistoryLog: HistoryLog {
         AlertStatusResponse.AlertResponseType(rawValue: Int(alertId))
     }
 }
-

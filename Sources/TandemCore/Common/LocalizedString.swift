@@ -1,11 +1,4 @@
 //
-//  LocalizedString.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
-//
 //  Basis: OmniBLE LocalizedString.swift
 //
 //  Created by Kathryn DiSimone on 8/15/18.

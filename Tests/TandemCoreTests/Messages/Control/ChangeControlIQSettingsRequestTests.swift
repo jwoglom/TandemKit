@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class ChangeControlIQSettingsRequestTests: XCTestCase {
     func testChangeControlIQSettingsRequest_turnOn_150lbs_75tdu() {

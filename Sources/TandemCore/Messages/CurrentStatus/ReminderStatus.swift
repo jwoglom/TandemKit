@@ -1,14 +1,3 @@
-//
-//  ReminderStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ReminderStatusRequest and ReminderStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ReminderStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ReminderStatusResponse.java
-//
-
 import Foundation
 
 /// Request the bitmask of active reminders.
@@ -27,7 +16,7 @@ public class ReminderStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -45,16 +34,16 @@ public class ReminderStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.intMap = Bytes.readUint64(cargo, 0)
+        intMap = Bytes.readUint64(cargo, 0)
     }
 
     public init(intMap: UInt64) {
-        self.cargo = Bytes.toUint64(intMap)
+        cargo = Bytes.toUint64(intMap)
         self.intMap = intMap
     }
 
     /// Decode the set of reminder types from the bitmask.
-    public var reminders: Set<ReminderType> { return ReminderType.fromBitmask(intMap) }
+    public var reminders: Set<ReminderType> { ReminderType.fromBitmask(intMap) }
 
     /// Reminder type bit positions.
     public enum ReminderType: Int, CaseIterable {
@@ -132,4 +121,3 @@ public class ReminderStatusResponse: Message {
         }
     }
 }
-

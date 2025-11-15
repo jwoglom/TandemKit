@@ -18,20 +18,25 @@ public class ControlIQUserModeChangeHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.currentUserMode = Int(raw[10])
-        self.previousUserMode = Int(raw[11])
+        currentUserMode = Int(raw[10])
+        previousUserMode = Int(raw[11])
         super.init(cargo: raw)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, currentUserMode: Int, previousUserMode: Int) {
-        let payload = ControlIQUserModeChangeHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, currentUserMode: currentUserMode, previousUserMode: previousUserMode)
+        let payload = ControlIQUserModeChangeHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            currentUserMode: currentUserMode,
+            previousUserMode: previousUserMode
+        )
         self.currentUserMode = currentUserMode
         self.previousUserMode = previousUserMode
         super.init(cargo: payload)
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, currentUserMode: Int, previousUserMode: Int) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(bitPattern: Int8(-27)), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -42,4 +47,3 @@ public class ControlIQUserModeChangeHistoryLog: HistoryLog {
         )
     }
 }
-

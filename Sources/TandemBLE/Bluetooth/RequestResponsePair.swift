@@ -11,13 +11,15 @@ public struct RequestResponsePair {
     public let timestamp: Date
     public let characteristic: CharacteristicUUID
 
-    public init(request: Message,
-                requestMetadata: MessageMetadata,
-                response: Message? = nil,
-                responseMetadata: MessageMetadata? = nil,
-                txId: UInt8,
-                timestamp: Date = Date(),
-                characteristic: CharacteristicUUID) {
+    public init(
+        request: Message,
+        requestMetadata: MessageMetadata,
+        response: Message? = nil,
+        responseMetadata: MessageMetadata? = nil,
+        txId: UInt8,
+        timestamp: Date = Date(),
+        characteristic: CharacteristicUUID
+    ) {
         self.request = request
         self.requestMetadata = requestMetadata
         self.response = response

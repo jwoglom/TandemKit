@@ -1,14 +1,3 @@
-//
-//  CGMAlertStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMAlertStatusRequest and CGMAlertStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMAlertStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMAlertStatusResponse.java
-//
-
 import Foundation
 
 /// Request current CGM alerts from the pump.
@@ -27,7 +16,7 @@ public class CGMAlertStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,14 +35,14 @@ public class CGMAlertStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.intMap = Bytes.readUint64(cargo, 0)
-        self.alerts = CGMAlert.fromBitmask(intMap)
+        intMap = Bytes.readUint64(cargo, 0)
+        alerts = CGMAlert.fromBitmask(intMap)
     }
 
     public init(intMap: UInt64) {
-        self.cargo = Bytes.toUint64(intMap)
+        cargo = Bytes.toUint64(intMap)
         self.intMap = intMap
-        self.alerts = CGMAlert.fromBitmask(intMap)
+        alerts = CGMAlert.fromBitmask(intMap)
     }
 
     /// CGM alert bit positions.
@@ -123,7 +112,7 @@ public class CGMAlertStatusResponse: Message {
         case DEFAULT_CGM_ALERT_63 = 63
 
         public static func < (lhs: CGMAlert, rhs: CGMAlert) -> Bool {
-            return lhs.rawValue < rhs.rawValue
+            lhs.rawValue < rhs.rawValue
         }
 
         /// Decode a set of alerts from the provided bitmask.
@@ -138,4 +127,3 @@ public class CGMAlertStatusResponse: Message {
         }
     }
 }
-

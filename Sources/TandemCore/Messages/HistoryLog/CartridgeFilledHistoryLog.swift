@@ -1,13 +1,3 @@
-//
-//  CartridgeFilledHistoryLog.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  History log entry indicating the cartridge was filled.
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/historyLog/CartridgeFilledHistoryLog.java
-//
-
 import Foundation
 
 public class CartridgeFilledHistoryLog: HistoryLog {
@@ -19,20 +9,30 @@ public class CartridgeFilledHistoryLog: HistoryLog {
     public let insulinActual: Float
 
     public required init(cargo: Data) {
-        self.insulinDisplay = Bytes.readUint32(cargo, 10)
-        self.insulinActual = Bytes.readFloat(cargo, 14)
+        insulinDisplay = Bytes.readUint32(cargo, 10)
+        insulinActual = Bytes.readFloat(cargo, 14)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinDisplay: UInt32, insulinActual: Float) {
-        let payload = CartridgeFilledHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, insulinDisplay: insulinDisplay, insulinActual: insulinActual)
+        let payload = CartridgeFilledHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            insulinDisplay: insulinDisplay,
+            insulinActual: insulinActual
+        )
         self.insulinDisplay = insulinDisplay
         self.insulinActual = insulinActual
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinDisplay: UInt32, insulinActual: Float) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        insulinDisplay: UInt32,
+        insulinActual: Float
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -43,4 +43,3 @@ public class CartridgeFilledHistoryLog: HistoryLog {
         )
     }
 }
-

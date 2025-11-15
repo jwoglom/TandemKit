@@ -1,14 +1,3 @@
-//
-//  RemoteBgEntry.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of RemoteBgEntryRequest and RemoteBgEntryResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/RemoteBgEntryRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/RemoteBgEntryResponse.java
-//
-
 import Foundation
 
 /// Request to add a blood glucose entry on the pump during bolusing.
@@ -31,15 +20,15 @@ public class RemoteBgEntryRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bg = Bytes.readShort(cargo, 0)
-        self.useForCgmCalibration = cargo[2] == 1
-        self.isAutopopBg = cargo[4] == 1
-        self.pumpTime = Bytes.readUint32(cargo, 5)
-        self.bolusId = Bytes.readShort(cargo, 9)
+        bg = Bytes.readShort(cargo, 0)
+        useForCgmCalibration = cargo[2] == 1
+        isAutopopBg = cargo[4] == 1
+        pumpTime = Bytes.readUint32(cargo, 5)
+        bolusId = Bytes.readShort(cargo, 9)
     }
 
     public init(bg: Int, useForCgmCalibration: Bool, isAutopopBg: Bool, pumpTime: UInt32, bolusId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(bg),
             Data([useForCgmCalibration ? 1 : 0]),
             Data([0]),
@@ -71,12 +60,11 @@ public class RemoteBgEntryResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

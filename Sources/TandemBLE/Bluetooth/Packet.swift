@@ -1,11 +1,3 @@
-//
-//  Packet.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-// see messages/src/main/java/com/jwoglom/pumpx2/pump/messages/bluetooth/models/Packet.java
-
 import Foundation
 import TandemCore
 
@@ -19,12 +11,16 @@ public struct Packet {
     public let packetsRemaining: UInt8
     public let txId: UInt8
     public let internalCargo: Data
-    
+
     public var build: Data {
-        return Bytes.combine(Data([packetsRemaining]), Data([txId]), internalCargo)
+        Bytes.combine(Data([packetsRemaining]), Data([txId]), internalCargo)
     }
 
     public func merge(newPacket: Packet) -> Packet {
-        return Packet(packetsRemaining: 1 + max(packetsRemaining, newPacket.packetsRemaining), txId: txId, internalCargo: Bytes.combine(internalCargo, newPacket.internalCargo))
+        Packet(
+            packetsRemaining: 1 + max(packetsRemaining, newPacket.packetsRemaining),
+            txId: txId,
+            internalCargo: Bytes.combine(internalCargo, newPacket.internalCargo)
+        )
     }
 }

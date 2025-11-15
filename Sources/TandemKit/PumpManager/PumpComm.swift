@@ -1,31 +1,23 @@
-//
-//  PumpComm.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/5/25.
-//
-//  Basis: OmniBLE PumpComms.swift
-
 import Foundation
 import LoopKit
 import TandemCore
 #if canImport(os)
-import os
+    import os
 #endif
 
 public protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
-    func pumpComm(_ pumpComms: PumpComm,
-                  didReceive message: Message,
-                  metadata: MessageMetadata?,
-                  characteristic: CharacteristicUUID,
-                  txId: UInt8)
+    func pumpComm(
+        _ pumpComms: PumpComm,
+        didReceive message: Message,
+        metadata: MessageMetadata?,
+        characteristic: CharacteristicUUID,
+        txId: UInt8
+    )
     func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent)
 }
 
-
 public class PumpComm: CustomDebugStringConvertible {
-
     var manager: Any? // TODO: Replace with actual PeripheralManager type when available
 
     public weak var delegate: PumpCommDelegate?
@@ -45,30 +37,28 @@ public class PumpComm: CustomDebugStringConvertible {
             }
         }
     }
-    
+
     public var isDevicePaired: Bool {
-        get {
-            return self.pumpState?.derivedSecret != nil
-        }
+        pumpState?.derivedSecret != nil
     }
 
     public var isAuthenticated: Bool {
-        get {
-            return self.pumpState?.derivedSecret != nil
-        }
+        pumpState?.derivedSecret != nil
     }
-    
+
     // TODO(jwoglom): device name or PIN?
-    public init(pumpState: PumpState?,
-                retryPolicy: PumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
-                delayHandler: ((TimeInterval) -> Void)? = nil) {
-        self.delegate = nil
+    public init(
+        pumpState: PumpState?,
+        retryPolicy: PumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
+        delayHandler: ((TimeInterval) -> Void)? = nil
+    ) {
+        delegate = nil
         self.retryPolicy = retryPolicy
         self.delayHandler = delayHandler ?? PumpComm.defaultDelayHandler
 
         let initialState = pumpState ?? PumpState()
         self.pumpState = pumpState ?? initialState
-        self.session = PumpCommSession(pumpState: initialState, delegate: self)
+        session = PumpCommSession(pumpState: initialState, delegate: self)
     }
 
     private static func defaultDelayHandler(_ interval: TimeInterval) {
@@ -76,16 +66,16 @@ public class PumpComm: CustomDebugStringConvertible {
         Thread.sleep(forTimeInterval: interval)
     }
 
-#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-    public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
-        let session = ensureSession()
-        log.debug("PumpComm pair started")
-        try session.runSynchronously(withName: "Pairing") {
-            try session.pair(transport: transport, pairingCode: pairingCode)
+    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+        public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
+            let session = ensureSession()
+            log.debug("PumpComm pair started")
+            try session.runSynchronously(withName: "Pairing") {
+                try session.pair(transport: transport, pairingCode: pairingCode)
+            }
+            log.debug("PumpComm pair finished")
         }
-        log.debug("PumpComm pair finished")
-    }
-#endif
+    #endif
 
     private func ensureSession() -> PumpCommSession {
         if let session = self.session {
@@ -94,13 +84,13 @@ public class PumpComm: CustomDebugStringConvertible {
 
         let state = pumpState ?? PumpState()
         let newSession = PumpCommSession(pumpState: state, delegate: self)
-        self.session = newSession
-        self.pumpState = state
+        session = newSession
+        pumpState = state
         return newSession
     }
 
     func getSession() -> PumpCommSession {
-        return ensureSession()
+        ensureSession()
     }
 
     /// Send a message to the pump and receive a response.
@@ -126,11 +116,15 @@ public class PumpComm: CustomDebugStringConvertible {
                 log.debug("sendMessage: received response %@", String(describing: response))
 
                 if let errorResponse = response as? ErrorResponse {
-                    log.error("sendMessage: pump returned error response (code=%{public}d) on attempt %{public}d", errorResponse.errorCodeId, attempt)
+                    log.error(
+                        "sendMessage: pump returned error response (code=%{public}d) on attempt %{public}d",
+                        errorResponse.errorCodeId,
+                        attempt
+                    )
                     switch handleFault(for: message, response: errorResponse, attempt: attempt) {
                     case .retry:
                         continue
-                    case .fail(let event):
+                    case let .fail(event):
                         throw PumpCommError.pumpFault(event: event)
                     }
                 }
@@ -153,16 +147,18 @@ public class PumpComm: CustomDebugStringConvertible {
 
     private func handleFault(for message: Message, response: ErrorResponse, attempt: Int) -> FaultHandlingResult {
         let decision = retryPolicy.decision(for: response.errorCode, attempt: attempt)
-        let event = PumpCommFaultEvent(request: message,
-                                       response: response,
-                                       code: response.errorCode,
-                                       attempt: attempt,
-                                       decision: decision)
+        let event = PumpCommFaultEvent(
+            request: message,
+            response: response,
+            code: response.errorCode,
+            attempt: attempt,
+            decision: decision
+        )
 
         delegate?.pumpComm(self, didEncounterFault: event)
 
         switch decision {
-        case .retry(let delay):
+        case let .retry(delay):
             log.debug("sendMessage: scheduling retry for fault code %{public}d after %{public}.2f s", response.errorCodeId, delay)
             delayHandler(delay)
             return .retry
@@ -183,49 +179,57 @@ public class PumpComm: CustomDebugStringConvertible {
     ///   - expectedType: The expected response type
     /// - Returns: The response message cast to the expected type
     /// - Throws: PumpCommError if communication fails or response type doesn't match
-    public func sendMessage<T: Message>(transport: PumpMessageTransport, message: Message, expecting expectedType: T.Type) throws -> T {
+    public func sendMessage<T: Message>(
+        transport: PumpMessageTransport,
+        message: Message,
+        expecting expectedType: T.Type
+    ) throws -> T {
         let response = try sendMessage(transport: transport, message: message)
 
         guard let typedResponse = response as? T else {
-            log.error("sendMessage unexpected response type: expected %@, got %@",
-                     String(describing: expectedType),
-                     String(describing: type(of: response)))
+            log.error(
+                "sendMessage unexpected response type: expected %@, got %@",
+                String(describing: expectedType),
+                String(describing: type(of: response))
+            )
             throw PumpCommError.errorResponse(response: response)
         }
 
         return typedResponse
     }
 
-
     // MARK: - CustomDebugStringConvertible
-    
+
     public var debugDescription: String {
-        return [
+        [
             "## PumpComm",
             "pumpState: \(String(reflecting: pumpState))",
             "delegate: \(String(describing: delegate != nil))",
             ""
         ].joined(separator: "\n")
     }
-
 }
 
 extension PumpComm: PumpCommSessionDelegate {
     public func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState) {
         pumpCommSession.assertOnSessionQueue()
-        self.pumpState = state
+        pumpState = state
     }
 
-    public func pumpCommSession(_ pumpCommSession: PumpCommSession,
-                                didReceive message: Message,
-                                metadata: MessageMetadata?,
-                                characteristic: CharacteristicUUID,
-                                txId: UInt8) {
+    public func pumpCommSession(
+        _ pumpCommSession: PumpCommSession,
+        didReceive message: Message,
+        metadata: MessageMetadata?,
+        characteristic: CharacteristicUUID,
+        txId: UInt8
+    ) {
         pumpCommSession.assertOnSessionQueue()
-        delegate?.pumpComm(self,
-                           didReceive: message,
-                           metadata: metadata,
-                           characteristic: characteristic,
-                           txId: txId)
+        delegate?.pumpComm(
+            self,
+            didReceive: message,
+            metadata: metadata,
+            characteristic: characteristic,
+            txId: txId
+        )
     }
 }

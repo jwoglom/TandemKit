@@ -1,9 +1,9 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class BolusPermissionReleaseResponseTests: XCTestCase {
     func testBolusPermissionReleaseResponse_ID10676() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710079)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_079)
 
         let expected = BolusPermissionReleaseResponse(status: 0)
 
@@ -20,7 +20,7 @@ final class BolusPermissionReleaseResponseTests: XCTestCase {
     }
 
     func testBolusPermissionReleaseResponse_ID10737_initial() {
-        MessageTester.initPumpState("Ns7vSuFYcfTLAXmb", 461710079)
+        MessageTester.initPumpState("Ns7vSuFYcfTLAXmb", 461_710_079)
 
         let expected = BolusPermissionReleaseResponse(status: 0)
 
@@ -37,7 +37,7 @@ final class BolusPermissionReleaseResponseTests: XCTestCase {
     }
 
     func testBolusPermissionReleaseResponse_ID10737_second_time() {
-        MessageTester.initPumpState("Ns7vSuFYcfTLAXmb", 461710079)
+        MessageTester.initPumpState("Ns7vSuFYcfTLAXmb", 461_710_079)
 
         let expected = BolusPermissionReleaseResponse(status: 1)
 

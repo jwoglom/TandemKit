@@ -1,10 +1,3 @@
-//
-//  PumpCommRetryPolicy.swift
-//  TandemKit
-//
-//  Created by ChatGPT on 3/15/25.
-//
-
 import Foundation
 import TandemCore
 
@@ -15,7 +8,7 @@ public enum PumpCommRetryDecision: Equatable {
 
     public var retryDelay: TimeInterval? {
         switch self {
-        case .retry(let delay): return delay
+        case let .retry(delay): return delay
         case .doNotRetry: return nil
         }
     }

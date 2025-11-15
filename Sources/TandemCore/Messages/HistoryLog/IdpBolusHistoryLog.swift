@@ -20,17 +20,35 @@ public class IdpBolusHistoryLog: HistoryLog {
     public let bolusEntryType: Int
 
     public required init(cargo: Data) {
-        self.idp = Int(cargo[10])
-        self.modification = Int(cargo[11])
-        self.bolusStatus = Int(cargo[12])
-        self.insulinDuration = Bytes.readShort(cargo, 14)
-        self.maxBolusSize = Bytes.readShort(cargo, 16)
-        self.bolusEntryType = Int(cargo[18])
+        idp = Int(cargo[10])
+        modification = Int(cargo[11])
+        bolusStatus = Int(cargo[12])
+        insulinDuration = Bytes.readShort(cargo, 14)
+        maxBolusSize = Bytes.readShort(cargo, 16)
+        bolusEntryType = Int(cargo[18])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, modification: Int, bolusStatus: Int, insulinDuration: Int, maxBolusSize: Int, bolusEntryType: Int) {
-        let payload = IdpBolusHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, idp: idp, modification: modification, bolusStatus: bolusStatus, insulinDuration: insulinDuration, maxBolusSize: maxBolusSize, bolusEntryType: bolusEntryType)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        idp: Int,
+        modification: Int,
+        bolusStatus: Int,
+        insulinDuration: Int,
+        maxBolusSize: Int,
+        bolusEntryType: Int
+    ) {
+        let payload = IdpBolusHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            idp: idp,
+            modification: modification,
+            bolusStatus: bolusStatus,
+            insulinDuration: insulinDuration,
+            maxBolusSize: maxBolusSize,
+            bolusEntryType: bolusEntryType
+        )
         self.idp = idp
         self.modification = modification
         self.bolusStatus = bolusStatus
@@ -40,8 +58,17 @@ public class IdpBolusHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, modification: Int, bolusStatus: Int, insulinDuration: Int, maxBolusSize: Int, bolusEntryType: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        idp: Int,
+        modification: Int,
+        bolusStatus: Int,
+        insulinDuration: Int,
+        maxBolusSize: Int,
+        bolusEntryType: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -56,4 +83,3 @@ public class IdpBolusHistoryLog: HistoryLog {
         )
     }
 }
-

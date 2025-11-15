@@ -1,14 +1,3 @@
-//
-//  PumpGlobals.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of PumpGlobalsRequest and PumpGlobalsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/PumpGlobalsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/PumpGlobalsResponse.java
-//
-
 import Foundation
 
 /// Request global pump settings such as quick bolus configuration.
@@ -27,7 +16,7 @@ public class PumpGlobalsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -56,22 +45,35 @@ public class PumpGlobalsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.quickBolusEnabledRaw = Int(cargo[0])
-        self.quickBolusIncrementUnits = Bytes.readShort(cargo, 1)
-        self.quickBolusIncrementCarbs = Bytes.readShort(cargo, 3)
-        self.quickBolusEntryType = Int(cargo[5])
-        self.quickBolusStatus = Int(cargo[6])
-        self.buttonAnnun = Int(cargo[7])
-        self.quickBolusAnnun = Int(cargo[8])
-        self.bolusAnnun = Int(cargo[9])
-        self.reminderAnnun = Int(cargo[10])
-        self.alertAnnun = Int(cargo[11])
-        self.alarmAnnun = Int(cargo[12])
-        self.fillTubingAnnun = Int(cargo[13])
+        quickBolusEnabledRaw = Int(cargo[0])
+        quickBolusIncrementUnits = Bytes.readShort(cargo, 1)
+        quickBolusIncrementCarbs = Bytes.readShort(cargo, 3)
+        quickBolusEntryType = Int(cargo[5])
+        quickBolusStatus = Int(cargo[6])
+        buttonAnnun = Int(cargo[7])
+        quickBolusAnnun = Int(cargo[8])
+        bolusAnnun = Int(cargo[9])
+        reminderAnnun = Int(cargo[10])
+        alertAnnun = Int(cargo[11])
+        alarmAnnun = Int(cargo[12])
+        fillTubingAnnun = Int(cargo[13])
     }
 
-    public init(quickBolusEnabledRaw: Int, quickBolusIncrementUnits: Int, quickBolusIncrementCarbs: Int, quickBolusEntryType: Int, quickBolusStatus: Int, buttonAnnun: Int, quickBolusAnnun: Int, bolusAnnun: Int, reminderAnnun: Int, alertAnnun: Int, alarmAnnun: Int, fillTubingAnnun: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        quickBolusEnabledRaw: Int,
+        quickBolusIncrementUnits: Int,
+        quickBolusIncrementCarbs: Int,
+        quickBolusEntryType: Int,
+        quickBolusStatus: Int,
+        buttonAnnun: Int,
+        quickBolusAnnun: Int,
+        bolusAnnun: Int,
+        reminderAnnun: Int,
+        alertAnnun: Int,
+        alarmAnnun: Int,
+        fillTubingAnnun: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(quickBolusEnabledRaw),
             Bytes.firstTwoBytesLittleEndian(quickBolusIncrementUnits),
             Bytes.firstTwoBytesLittleEndian(quickBolusIncrementCarbs),
@@ -101,7 +103,7 @@ public class PumpGlobalsResponse: Message {
 
     /// Convenience accessor to check if quick bolus is enabled.
     public func isQuickBolusEnabled() -> Bool {
-        return quickBolusEnabledRaw == 1
+        quickBolusEnabledRaw == 1
     }
 
     /// Annunciation types for pump feedback.
@@ -112,4 +114,3 @@ public class PumpGlobalsResponse: Message {
         case vibrate = 3
     }
 }
-

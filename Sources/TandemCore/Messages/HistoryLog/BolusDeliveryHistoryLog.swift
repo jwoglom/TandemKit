@@ -26,21 +26,47 @@ public class BolusDeliveryHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.bolusID = Bytes.readShort(raw, 10)
-        self.bolusDeliveryStatus = Int(raw[12])
-        self.bolusTypeBitmask = Int(raw[13])
-        self.bolusSource = Int(raw[14])
-        self.reserved = Int(raw[15])
-        self.requestedNow = Bytes.readShort(raw, 16)
-        self.requestedLater = Bytes.readShort(raw, 18)
-        self.correction = Bytes.readShort(raw, 20)
-        self.extendedDurationRequested = Bytes.readShort(raw, 22)
-        self.deliveredTotal = Bytes.readShort(raw, 24)
+        bolusID = Bytes.readShort(raw, 10)
+        bolusDeliveryStatus = Int(raw[12])
+        bolusTypeBitmask = Int(raw[13])
+        bolusSource = Int(raw[14])
+        reserved = Int(raw[15])
+        requestedNow = Bytes.readShort(raw, 16)
+        requestedLater = Bytes.readShort(raw, 18)
+        correction = Bytes.readShort(raw, 20)
+        extendedDurationRequested = Bytes.readShort(raw, 22)
+        deliveredTotal = Bytes.readShort(raw, 24)
         super.init(cargo: raw)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusID: Int, bolusDeliveryStatus: Int, bolusTypeBitmask: Int, bolusSource: Int, reserved: Int, requestedNow: Int, requestedLater: Int, correction: Int, extendedDurationRequested: Int, deliveredTotal: Int) {
-        let payload = BolusDeliveryHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusID: bolusID, bolusDeliveryStatus: bolusDeliveryStatus, bolusTypeBitmask: bolusTypeBitmask, bolusSource: bolusSource, reserved: reserved, requestedNow: requestedNow, requestedLater: requestedLater, correction: correction, extendedDurationRequested: extendedDurationRequested, deliveredTotal: deliveredTotal)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusID: Int,
+        bolusDeliveryStatus: Int,
+        bolusTypeBitmask: Int,
+        bolusSource: Int,
+        reserved: Int,
+        requestedNow: Int,
+        requestedLater: Int,
+        correction: Int,
+        extendedDurationRequested: Int,
+        deliveredTotal: Int
+    ) {
+        let payload = BolusDeliveryHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusID: bolusID,
+            bolusDeliveryStatus: bolusDeliveryStatus,
+            bolusTypeBitmask: bolusTypeBitmask,
+            bolusSource: bolusSource,
+            reserved: reserved,
+            requestedNow: requestedNow,
+            requestedLater: requestedLater,
+            correction: correction,
+            extendedDurationRequested: extendedDurationRequested,
+            deliveredTotal: deliveredTotal
+        )
         self.bolusID = bolusID
         self.bolusDeliveryStatus = bolusDeliveryStatus
         self.bolusTypeBitmask = bolusTypeBitmask
@@ -54,8 +80,21 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusID: Int, bolusDeliveryStatus: Int, bolusTypeBitmask: Int, bolusSource: Int, reserved: Int, requestedNow: Int, requestedLater: Int, correction: Int, extendedDurationRequested: Int, deliveredTotal: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusID: Int,
+        bolusDeliveryStatus: Int,
+        bolusTypeBitmask: Int,
+        bolusSource: Int,
+        reserved: Int,
+        requestedNow: Int,
+        requestedLater: Int,
+        correction: Int,
+        extendedDurationRequested: Int,
+        deliveredTotal: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([24, 1]),
                 Bytes.toUint32(pumpTimeSec),
@@ -104,8 +143,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         }
 
         public static func toBitmask(_ types: [BolusType]) -> Int {
-            return types.reduce(0) { $0 | $1.rawValue }
+            types.reduce(0) { $0 | $1.rawValue }
         }
     }
 }
-

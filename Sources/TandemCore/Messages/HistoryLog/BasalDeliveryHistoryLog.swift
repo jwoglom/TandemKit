@@ -21,16 +21,32 @@ public class BasalDeliveryHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.commandedRateSource = Bytes.readShort(raw, 10)
-        self.commandedRate = Bytes.readShort(raw, 14)
-        self.profileBasalRate = Bytes.readShort(raw, 16)
-        self.algorithmRate = Bytes.readShort(raw, 18)
-        self.tempRate = Bytes.readShort(raw, 20)
+        commandedRateSource = Bytes.readShort(raw, 10)
+        commandedRate = Bytes.readShort(raw, 14)
+        profileBasalRate = Bytes.readShort(raw, 16)
+        algorithmRate = Bytes.readShort(raw, 18)
+        tempRate = Bytes.readShort(raw, 20)
         super.init(cargo: raw)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, commandedRateSource: Int, commandedRate: Int, profileBasalRate: Int, algorithmRate: Int, tempRate: Int) {
-        let payload = BasalDeliveryHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, commandedRateSource: commandedRateSource, commandedRate: commandedRate, profileBasalRate: profileBasalRate, algorithmRate: algorithmRate, tempRate: tempRate)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        commandedRateSource: Int,
+        commandedRate: Int,
+        profileBasalRate: Int,
+        algorithmRate: Int,
+        tempRate: Int
+    ) {
+        let payload = BasalDeliveryHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            commandedRateSource: commandedRateSource,
+            commandedRate: commandedRate,
+            profileBasalRate: profileBasalRate,
+            algorithmRate: algorithmRate,
+            tempRate: tempRate
+        )
         self.commandedRateSource = commandedRateSource
         self.commandedRate = commandedRate
         self.profileBasalRate = profileBasalRate
@@ -39,8 +55,16 @@ public class BasalDeliveryHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, commandedRateSource: Int, commandedRate: Int, profileBasalRate: Int, algorithmRate: Int, tempRate: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        commandedRateSource: Int,
+        commandedRate: Int,
+        profileBasalRate: Int,
+        algorithmRate: Int,
+        tempRate: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([23, 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -54,4 +78,3 @@ public class BasalDeliveryHistoryLog: HistoryLog {
         )
     }
 }
-

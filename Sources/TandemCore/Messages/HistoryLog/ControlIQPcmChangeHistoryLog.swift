@@ -18,20 +18,25 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.currentPcm = Int(raw[10])
-        self.previousPcm = Int(raw[11])
+        currentPcm = Int(raw[10])
+        previousPcm = Int(raw[11])
         super.init(cargo: raw)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, currentPcm: Int, previousPcm: Int) {
-        let payload = ControlIQPcmChangeHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, currentPcm: currentPcm, previousPcm: previousPcm)
+        let payload = ControlIQPcmChangeHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            currentPcm: currentPcm,
+            previousPcm: previousPcm
+        )
         self.currentPcm = currentPcm
         self.previousPcm = previousPcm
         super.init(cargo: payload)
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, currentPcm: Int, previousPcm: Int) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(bitPattern: Int8(-26)), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -42,4 +47,3 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
         )
     }
 }
-

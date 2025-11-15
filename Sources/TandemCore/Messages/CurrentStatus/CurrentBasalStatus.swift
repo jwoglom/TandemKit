@@ -1,14 +1,3 @@
-//
-//  CurrentBasalStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CurrentBasalStatusRequest and CurrentBasalStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CurrentBasalStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CurrentBasalStatusResponse.java
-//
-
 import Foundation
 
 /// Request information about the current basal delivery rate.
@@ -27,7 +16,7 @@ public class CurrentBasalStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,13 +36,13 @@ public class CurrentBasalStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.profileBasalRate = Bytes.readUint32(cargo, 0)
-        self.currentBasalRate = Bytes.readUint32(cargo, 4)
-        self.basalModifiedBitmask = Int(cargo[8])
+        profileBasalRate = Bytes.readUint32(cargo, 0)
+        currentBasalRate = Bytes.readUint32(cargo, 4)
+        basalModifiedBitmask = Int(cargo[8])
     }
 
     public init(profileBasalRate: UInt32, currentBasalRate: UInt32, basalModifiedBitmask: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(profileBasalRate),
             Bytes.toUint32(currentBasalRate),
             Bytes.firstByteLittleEndian(basalModifiedBitmask)
@@ -63,4 +52,3 @@ public class CurrentBasalStatusResponse: Message {
         self.basalModifiedBitmask = basalModifiedBitmask
     }
 }
-

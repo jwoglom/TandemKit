@@ -15,18 +15,22 @@ public class PumpingResumedHistoryLog: HistoryLog {
     public let insulinAmount: Int
 
     public required init(cargo: Data) {
-        self.insulinAmount = Bytes.readShort(cargo, 14)
+        insulinAmount = Bytes.readShort(cargo, 14)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinAmount: Int) {
-        let payload = PumpingResumedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, insulinAmount: insulinAmount)
+        let payload = PumpingResumedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            insulinAmount: insulinAmount
+        )
         self.insulinAmount = insulinAmount
         super.init(cargo: payload)
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinAmount: Int) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -37,4 +41,3 @@ public class PumpingResumedHistoryLog: HistoryLog {
         )
     }
 }
-

@@ -1,14 +1,3 @@
-//
-//  SetPumpSounds.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetPumpSoundsRequest and SetPumpSoundsResponse based on
-//  https://jwoglom.github.io/pumpX2/javadoc/messages/com/jwoglom/pumpx2/pump/messages/request/control/SetPumpSoundsRequest.html
-//  https://jwoglom.github.io/pumpX2/javadoc/messages/com/jwoglom/pumpx2/pump/messages/response/control/SetPumpSoundsResponse.html
-//
-
 import Foundation
 
 /// Request to update pump annunciation (audio/vibrate) settings.
@@ -33,18 +22,36 @@ public class SetPumpSoundsRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.quickBolusAnnunRaw = Int(cargo[1])
-        self.generalAnnunRaw = Int(cargo[2])
-        self.reminderAnnunRaw = Int(cargo[3])
-        self.alertAnnunRaw = Int(cargo[4])
-        self.alarmAnnunRaw = Int(cargo[5])
-        self.cgmAlertAnnunA = Int(cargo[6])
-        self.cgmAlertAnnunB = Int(cargo[7])
-        self.changeBitmask = Int(cargo[8])
+        quickBolusAnnunRaw = Int(cargo[1])
+        generalAnnunRaw = Int(cargo[2])
+        reminderAnnunRaw = Int(cargo[3])
+        alertAnnunRaw = Int(cargo[4])
+        alarmAnnunRaw = Int(cargo[5])
+        cgmAlertAnnunA = Int(cargo[6])
+        cgmAlertAnnunB = Int(cargo[7])
+        changeBitmask = Int(cargo[8])
     }
 
-    public init(quickBolusAnnunRaw: Int, generalAnnunRaw: Int, reminderAnnunRaw: Int, alertAnnunRaw: Int, alarmAnnunRaw: Int, cgmAlertAnnunA: Int, cgmAlertAnnunB: Int, changeBitmask: Int) {
-        self.cargo = SetPumpSoundsRequest.buildCargo(quickBolusAnnunRaw: quickBolusAnnunRaw, generalAnnunRaw: generalAnnunRaw, reminderAnnunRaw: reminderAnnunRaw, alertAnnunRaw: alertAnnunRaw, alarmAnnunRaw: alarmAnnunRaw, cgmAlertAnnunA: cgmAlertAnnunA, cgmAlertAnnunB: cgmAlertAnnunB, changeBitmask: changeBitmask)
+    public init(
+        quickBolusAnnunRaw: Int,
+        generalAnnunRaw: Int,
+        reminderAnnunRaw: Int,
+        alertAnnunRaw: Int,
+        alarmAnnunRaw: Int,
+        cgmAlertAnnunA: Int,
+        cgmAlertAnnunB: Int,
+        changeBitmask: Int
+    ) {
+        cargo = SetPumpSoundsRequest.buildCargo(
+            quickBolusAnnunRaw: quickBolusAnnunRaw,
+            generalAnnunRaw: generalAnnunRaw,
+            reminderAnnunRaw: reminderAnnunRaw,
+            alertAnnunRaw: alertAnnunRaw,
+            alarmAnnunRaw: alarmAnnunRaw,
+            cgmAlertAnnunA: cgmAlertAnnunA,
+            cgmAlertAnnunB: cgmAlertAnnunB,
+            changeBitmask: changeBitmask
+        )
         self.quickBolusAnnunRaw = quickBolusAnnunRaw
         self.generalAnnunRaw = generalAnnunRaw
         self.reminderAnnunRaw = reminderAnnunRaw
@@ -55,8 +62,17 @@ public class SetPumpSoundsRequest: Message {
         self.changeBitmask = changeBitmask
     }
 
-    public static func buildCargo(quickBolusAnnunRaw: Int, generalAnnunRaw: Int, reminderAnnunRaw: Int, alertAnnunRaw: Int, alarmAnnunRaw: Int, cgmAlertAnnunA: Int, cgmAlertAnnunB: Int, changeBitmask: Int) -> Data {
-        return Bytes.combine(
+    public static func buildCargo(
+        quickBolusAnnunRaw: Int,
+        generalAnnunRaw: Int,
+        reminderAnnunRaw: Int,
+        alertAnnunRaw: Int,
+        alarmAnnunRaw: Int,
+        cgmAlertAnnunA: Int,
+        cgmAlertAnnunB: Int,
+        changeBitmask: Int
+    ) -> Data {
+        Bytes.combine(
             Data([0]),
             Data([UInt8(quickBolusAnnunRaw & 0xFF)]),
             Data([UInt8(generalAnnunRaw & 0xFF)]),
@@ -69,9 +85,12 @@ public class SetPumpSoundsRequest: Message {
         )
     }
 
-    public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnunRaw) }
-    public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnunRaw) }
-    public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnunRaw) }
+    public var quickBolusAnnun: PumpGlobalsResponse
+        .AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnunRaw) }
+    public var generalAnnun: PumpGlobalsResponse
+        .AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnunRaw) }
+    public var reminderAnnun: PumpGlobalsResponse
+        .AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnunRaw) }
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnunRaw) }
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw) }
 }
@@ -91,11 +110,11 @@ public class SetPumpSoundsResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
@@ -109,4 +128,3 @@ public enum PumpSoundChangeBitmask: Int {
     case alarm = 16
     case cgmAlert = 32
 }
-

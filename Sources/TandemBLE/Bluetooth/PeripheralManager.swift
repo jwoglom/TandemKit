@@ -1,22 +1,11 @@
-//
-//  PeripheralManager.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/8/25.
-//
-//  RileyLinkBLEKit:
-//  Copyright © 2017 LoopKit Authors. All rights reserved.
-
-
 import CoreBluetooth
 import Foundation
 import TandemCore
 #if canImport(os)
-import os
+    import os
 #endif
 
 public class PeripheralManager: NSObject, @unchecked Sendable {
-
     private let log = OSLog(category: "PeripheralManager")
     private let logger = PumpLogger(label: "TandemBLE.PeripheralManager")
 
@@ -28,7 +17,11 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
                 return
             }
 
-            log.error("Replacing peripheral reference %{public}@ -> %{public}@", String(describing: oldValue), String(describing: peripheral))
+            log.error(
+                "Replacing peripheral reference %{public}@ -> %{public}@",
+                String(describing: oldValue),
+                String(describing: peripheral)
+            )
 
             oldValue.delegate = nil
             peripheral.delegate = self
@@ -38,11 +31,11 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
             }
         }
     }
-    
+
     var cmdQueue: [BluetoothCmd] = []
     let queueLock = NSCondition()
 
-    var idleStart: Date? = nil
+    var idleStart: Date?
 
     private var connectionParametersVerified = false
     private var didPerformInitialSetup = false
@@ -56,7 +49,6 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
 
         return Date().timeIntervalSince(start) > .minutes(2.9)
     }
-
 
     /// The dispatch queue used to serialize operations on the peripheral
     let queue = DispatchQueue(label: "com.jwoglom.TandemKit.PeripheralManager.queue", qos: .unspecified)
@@ -91,7 +83,7 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
 
     init(peripheral: CBPeripheral, configuration: Configuration, centralManager: CBCentralManager) {
         self.peripheral = peripheral
-        self.central = centralManager
+        central = centralManager
         self.configuration = configuration
 
         super.init()
@@ -127,8 +119,8 @@ public class PeripheralManager: NSObject, @unchecked Sendable {
     }
 }
 
-
 // MARK: - Nested types
+
 extension PeripheralManager {
     struct Configuration {
         var serviceCharacteristics: [CBUUID: [CBUUID]] = [:]
@@ -153,48 +145,45 @@ protocol PeripheralManagerDelegate: AnyObject {
 }
 
 extension PeripheralManagerDelegate {
-    func peripheralManager(_ manager: PeripheralManager, didIdentifyDevice manufacturer: String, model: String) {}
+    func peripheralManager(_: PeripheralManager, didIdentifyDevice _: String, model _: String) {}
 }
 
-
 // MARK: - Operation sequence management
+
 extension PeripheralManager {
-
-
-    @discardableResult
-    func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
+    @discardableResult  func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
         dispatchPrecondition(condition: .onQueue(queue))
 
-        if self.needsReconnection {
-            self.log.default("Triggering forceful reconnect")
+        if needsReconnection {
+            log.default("Triggering forceful reconnect")
             do {
-                try self.reconnect(timeout: 5)
-            } catch let error {
-                self.log.error("Error while forcing reconnection: %{public}@", String(describing: error))
+                try reconnect(timeout: 5)
+            } catch {
+                log.error("Error while forcing reconnection: %{public}@", String(describing: error))
             }
         }
 
-        if !self.needsConfiguration && self.peripheral.services == nil {
-            self.log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: self.peripheral))
+        if !needsConfiguration && peripheral.services == nil {
+            log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: peripheral))
         }
 
-        if self.needsConfiguration || self.peripheral.services == nil {
+        if needsConfiguration || peripheral.services == nil {
             do {
-                self.log.default("Applying configuration")
-                try self.applyConfiguration()
-                try self.performInitialSetupIfNeeded()
+                log.default("Applying configuration")
+                try applyConfiguration()
+                try performInitialSetupIfNeeded()
 
-                self.needsConfiguration = false
+                needsConfiguration = false
 
                 if let delegate = self.delegate {
                     try delegate.completeConfiguration(for: self)
 
-                    self.log.default("Delegate configuration notified")
+                    log.default("Delegate configuration notified")
                 }
 
-                self.log.default("Peripheral configuration completed")
-            } catch let error {
-                self.log.error("Error applying peripheral configuration: %{public}@", String(describing: error))
+                log.default("Peripheral configuration completed")
+            } catch {
+                log.error("Error applying peripheral configuration: %{public}@", String(describing: error))
                 // Will retry
             }
         }
@@ -232,7 +221,9 @@ extension PeripheralManager {
         let maxWithResponse = peripheral.maximumWriteValueLength(for: .withResponse)
         let maxWithoutResponse = peripheral.maximumWriteValueLength(for: .withoutResponse)
 
-        logDebug("[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)")
+        logDebug(
+            "[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)"
+        )
 
         if maxWithResponse < Int(targetMTU - 3) { // Approximate payload length after headers
             logWarning("[PeripheralManager]   MTU verification failed – pump likely not in pairing mode")
@@ -271,7 +262,8 @@ extension PeripheralManager {
         }
 
         guard let manufacturerValue = try readValue(for: manufacturerCharacteristic, timeout: TimeInterval.seconds(5)),
-              let manufacturer = string(from: manufacturerValue), !manufacturer.isEmpty else {
+              let manufacturer = string(from: manufacturerValue), !manufacturer.isEmpty
+        else {
             logWarning("[PeripheralManager]   manufacturer value empty")
             throw PeripheralManagerError.emptyValue
         }
@@ -282,7 +274,8 @@ extension PeripheralManager {
         }
 
         guard let modelValue = try readValue(for: modelCharacteristic, timeout: TimeInterval.seconds(5)),
-              let model = string(from: modelValue), !model.isEmpty else {
+              let model = string(from: modelValue), !model.isEmpty
+        else {
             logWarning("[PeripheralManager]   model number value empty")
             throw PeripheralManagerError.emptyValue
         }
@@ -298,19 +291,19 @@ extension PeripheralManager {
         return nil
     }
 
-    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
-        return { self.runConfigured(block) }
+    func configureAndRun(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) -> @Sendable() -> Void {
+        { self.runConfigured(block) }
     }
 
-    public func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
+    public func perform(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) {
         queue.async {
             self.runConfigured(block)
         }
     }
 
     func assertConfiguration() {
-        if peripheral.state == .connected && central?.state == .poweredOn {
-            perform { (_) in
+        if peripheral.state == .connected, central?.state == .poweredOn {
+            perform { _ in
                 // Intentionally empty to trigger configuration if necessary
             }
         }
@@ -327,19 +320,21 @@ extension PeripheralManager {
             }
             try discoverCharacteristics(characteristics, for: service, timeout: discoveryTimeout)
         }
-
     }
 }
 
-
 // MARK: - Synchronous Commands
+
 extension PeripheralManager {
     /// - Throws: PeripheralManagerError
     func runCommand(timeout: TimeInterval, command: () -> Void) throws {
         // Prelude
         dispatchPrecondition(condition: .onQueue(queue))
-        guard central?.state == .poweredOn && peripheral.state == .connected else {
-            self.log.info("runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@", String(describing: peripheral))
+        guard central?.state == .poweredOn, peripheral.state == .connected else {
+            self.log.info(
+                "runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@",
+                String(describing: peripheral)
+            )
             throw PeripheralManagerError.notReady
         }
 
@@ -390,13 +385,13 @@ extension PeripheralManager {
     func discoverServices(_ serviceUUIDs: [CBUUID], timeout: TimeInterval) throws {
         let servicesToDiscover = peripheral.servicesToDiscover(from: serviceUUIDs)
 
-        guard servicesToDiscover.count > 0 else {
+        guard !servicesToDiscover.isEmpty else {
             return
         }
 
         try runCommand(timeout: timeout) {
             addCondition(.discoverServices)
-            
+
             peripheral.discoverServices(serviceUUIDs)
         }
     }
@@ -404,7 +399,7 @@ extension PeripheralManager {
     func discoverCharacteristics(_ characteristicUUIDs: [CBUUID], for service: CBService, timeout: TimeInterval) throws {
         let characteristicsToDiscover = peripheral.characteristicsToDiscover(from: characteristicUUIDs, for: service)
 
-        guard characteristicsToDiscover.count > 0 else {
+        guard !characteristicsToDiscover.isEmpty else {
             return
         }
 
@@ -443,7 +438,12 @@ extension PeripheralManager {
     }
 
     /// - Throws: PeripheralManagerError
-    func writeValue(_ value: Data, for characteristic: CBCharacteristic, type: CBCharacteristicWriteType, timeout: TimeInterval) throws {
+    func writeValue(
+        _ value: Data,
+        for characteristic: CBCharacteristic,
+        type: CBCharacteristicWriteType,
+        timeout: TimeInterval
+    ) throws {
         try runCommand(timeout: timeout) {
             if case .withResponse = type {
                 addCondition(.write(characteristic: characteristic))
@@ -455,9 +455,9 @@ extension PeripheralManager {
 }
 
 // MARK: - Delegate methods executed on the central's queue
-extension PeripheralManager: CBPeripheralDelegate {
 
-    public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+extension PeripheralManager: CBPeripheralDelegate {
+    public func peripheral(_: CBPeripheral, didDiscoverServices error: Error?) {
         log.default("didDiscoverServices")
         commandLock.lock()
 
@@ -479,7 +479,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    public func peripheral(_: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
@@ -500,11 +500,14 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
-            if case .notificationStateUpdate(characteristicUUID: characteristic.uuid, enabled: characteristic.isNotifying) = condition {
+            if case .notificationStateUpdate(
+                characteristicUUID: characteristic.uuid,
+                enabled: characteristic.isNotifying
+            ) = condition {
                 return true
             } else {
                 return false
@@ -521,7 +524,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { condition in
@@ -542,7 +545,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         commandLock.unlock()
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    public func peripheral(_: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
         var notificationValue: Data?
 
@@ -574,36 +577,32 @@ extension PeripheralManager: CBPeripheralDelegate {
         if let handler = notificationHandler, let value = notificationValue {
             handler.peripheralManager(self, didReceiveNotification: value, for: characteristic)
         }
-
     }
 
-    public func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+    public func peripheral(_: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard error == nil else {
             self.log.error("Error reading rssi: %{public}@", String(describing: RSSI))
             return
         }
         self.log.default("didReadRSSI: %{public}@", String(describing: RSSI))
     }
-
 }
 
-
 extension PeripheralManager {
-
     func clearCommsQueues() {
         queueLock.lock()
-        if cmdQueue.count > 0 {
+        if !cmdQueue.isEmpty {
             self.log.default("Removing %{public}d leftover elements from command queue", cmdQueue.count)
             cmdQueue.removeAll()
         }
         queueLock.unlock()
     }
 
-    func centralManager(_ central: CBCentralManager, didDisconnect peripheral: CBPeripheral, error: Error?) {
+    func centralManager(_: CBCentralManager, didDisconnect _: CBPeripheral, error _: Error?) {
         self.idleStart = nil
     }
 
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+    func centralManager(_: CBCentralManager, didConnect peripheral: CBPeripheral) {
         self.log.debug("PeripheralManager - didConnect: %@", String(describing: peripheral))
         switch peripheral.state {
         case .connected:
@@ -633,15 +632,16 @@ extension PeripheralManager {
     }
 }
 
-
 // MARK: - Command session management
-extension PeripheralManager {
-    public func runSession(withName name: String, _ block: @escaping @Sendable () -> Void) {
+
+public extension PeripheralManager {
+    func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
         perform { _ in block() }
     }
 }
 
 // MARK: - Tandem Bluetooth Helpers
+
 extension PeripheralManager {
     /// Sends raw data to the pump using the control characteristic.
     /// - Parameters:

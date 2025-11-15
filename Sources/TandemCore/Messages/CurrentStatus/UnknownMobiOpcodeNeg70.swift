@@ -1,14 +1,3 @@
-//
-//  UnknownMobiOpcodeNeg70.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of UnknownMobiOpcodeNeg70Request and UnknownMobiOpcodeNeg70Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/UnknownMobiOpcodeNeg70Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/UnknownMobiOpcodeNeg70Response.java
-//
-
 import Foundation
 
 public class UnknownMobiOpcodeNeg70Request: Message {
@@ -28,7 +17,7 @@ public class UnknownMobiOpcodeNeg70Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,7 +38,6 @@ public class UnknownMobiOpcodeNeg70Response: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
-

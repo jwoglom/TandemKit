@@ -1,14 +1,3 @@
-//
-//  CurrentEGVGuiData.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CurrentEGVGuiDataRequest and CurrentEGVGuiDataResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CurrentEGVGuiDataRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CurrentEGVGuiDataResponse.java
-//
-
 import Foundation
 
 /// Request the current CGM reading.
@@ -27,7 +16,7 @@ public class CurrentEGVGuiDataRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -48,14 +37,14 @@ public class CurrentEGVGuiDataResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bgReadingTimestampSeconds = Bytes.readUint32(cargo, 0)
-        self.cgmReading = Bytes.readShort(cargo, 4)
-        self.egvStatusId = Int(cargo[6])
-        self.trendRate = Int(cargo[7])
+        bgReadingTimestampSeconds = Bytes.readUint32(cargo, 0)
+        cgmReading = Bytes.readShort(cargo, 4)
+        egvStatusId = Int(cargo[6])
+        trendRate = Int(cargo[7])
     }
 
     public init(bgReadingTimestampSeconds: UInt32, cgmReading: Int, egvStatusId: Int, trendRate: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(bgReadingTimestampSeconds),
             Bytes.firstTwoBytesLittleEndian(cgmReading),
             Bytes.firstByteLittleEndian(egvStatusId),
@@ -68,7 +57,7 @@ public class CurrentEGVGuiDataResponse: Message {
     }
 
     public var egvStatus: EGVStatus? {
-        return EGVStatus(rawValue: egvStatusId)
+        EGVStatus(rawValue: egvStatusId)
     }
 
     public enum EGVStatus: Int {
@@ -79,4 +68,3 @@ public class CurrentEGVGuiDataResponse: Message {
         case UNAVAILABLE = 4
     }
 }
-

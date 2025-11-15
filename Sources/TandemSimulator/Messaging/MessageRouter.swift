@@ -1,6 +1,6 @@
 import Foundation
-import TandemCore
 import Logging
+import TandemCore
 
 /// Routes incoming messages to appropriate handlers and builds responses
 class MessageRouter {
@@ -21,7 +21,7 @@ class MessageRouter {
         var packets: [Data] = []
         var expectedOpCode: UInt8?
         var expectedTxId: UInt8?
-        var lastPacketTime: Date = Date()
+        var lastPacketTime = Date()
     }
 
     init(state: PumpStateProvider, authProvider: AuthenticationProvider) {
@@ -205,7 +205,7 @@ class MessageRouter {
 extension MessageRegistry {
     /// Find metadata by opCode and characteristic
     static func metadata(forOpCode opCode: UInt8, characteristic: CharacteristicUUID) -> MessageMetadata? {
-        return all.first { meta in
+        all.first { meta in
             meta.opCode == opCode && meta.characteristic == characteristic
         }
     }
@@ -220,11 +220,11 @@ enum MessageRouterError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unknownOpCode(let opCode):
+        case let .unknownOpCode(opCode):
             return "Unknown message opCode: \(opCode)"
         case .noMetadataForResponse:
             return "No metadata found for response message"
-        case .noHandler(let opCode, let name):
+        case let .noHandler(opCode, name):
             return "No handler registered for opCode \(opCode) (\(name))"
         }
     }

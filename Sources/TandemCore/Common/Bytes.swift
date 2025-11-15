@@ -1,35 +1,27 @@
-//
-//  Bytes.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/7/25.
-//
-
 import Foundation
 
-public struct Bytes {
-
+public enum Bytes {
     /// Drops the first `n` bytes from the data and returns the remainder.
     public static func dropFirstN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
-        return data.subdata(in: n..<data.count)
+        return data.subdata(in: n ..< data.count)
     }
 
     /// Drops the last `n` bytes from the data and returns the remainder.
     public static func dropLastN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
-        return data.subdata(in: 0..<(data.count - n))
+        return data.subdata(in: 0 ..< (data.count - n))
     }
 
     /// Gets the first `n` bytes from the data.
     public static func firstN(_ data: Data, _ n: Int) -> Data {
         guard n <= data.count else { return Data() }
-        return data.subdata(in: 0..<n)
+        return data.subdata(in: 0 ..< n)
     }
 
     /// Returns a reversed copy of the given data.
     public static func reverse(_ data: Data) -> Data {
-        return Data(data.reversed())
+        Data(data.reversed())
     }
 
     /// Concatenates any number of `Data` objects into a single `Data`.
@@ -44,7 +36,7 @@ public struct Bytes {
 
     /// Returns a `Data` instance of the specified size, initialized to all 0s.
     public static func emptyBytes(_ size: Int) -> Data {
-        return Data(repeating: 0, count: size)
+        Data(repeating: 0, count: size)
     }
 
     /// Reads a 16-bit little-endian integer from `data` at index `i`.
@@ -64,7 +56,7 @@ public struct Bytes {
     public static func readFloat(_ data: Data, _ i: Int) -> Float {
         let start = data.startIndex
         precondition(i >= 0 && start + i + 3 < data.endIndex, "Index out of bounds")
-        let sub = data.subdata(in: (start + i)..<(start + i + 4))
+        let sub = data.subdata(in: (start + i) ..< (start + i + 4))
         // We'll interpret these 4 bytes as a Float in little-endian order.
         return sub.withUnsafeBytes { ptr -> Float in
             // Load raw bits from memory:
@@ -102,8 +94,8 @@ public struct Bytes {
         precondition(i >= 0 && start + i + 7 < data.endIndex, "Index out of bounds")
         // The Java code reversed the bytes before creating the BigInteger
         // to interpret them in big-endian. We replicate that logic for a UInt64:
-        let sub = data.subdata(in: (start + i)..<(start + i + 8)).reversed()
-        return sub.reduce(UInt64(0)) { (acc, byte) in
+        let sub = data.subdata(in: (start + i) ..< (start + i + 8)).reversed()
+        return sub.reduce(UInt64(0)) { acc, byte in
             (acc << 8) | UInt64(byte)
         }
     }
@@ -145,7 +137,7 @@ public struct Bytes {
         var idx = start + i
         var strData = Data()
         // Read bytes until null or until we reach `length`
-        while idx < data.endIndex && data[idx] != 0 {
+        while idx < data.endIndex, data[idx] != 0 {
             strData.append(data[idx])
             if strData.count >= length {
                 break
@@ -169,29 +161,29 @@ public struct Bytes {
     /// Returns 8 bytes of cryptographically secure random data.
     /// (Equivalent to `getSecureRandom8Bytes` in Java.)
     static func getSecureRandom8Bytes() -> Data {
-        return getSecureRandomBytes(count: 8)
+        getSecureRandomBytes(count: 8)
     }
 
     /// Returns 10 bytes of cryptographically secure random data.
     /// (Equivalent to `getSecureRandom10Bytes` in Java.)
     static func getSecureRandom10Bytes() -> Data {
-        return getSecureRandomBytes(count: 10)
+        getSecureRandomBytes(count: 10)
     }
 
     /// Helper which generates `count` bytes of secure random data.
     private static func getSecureRandomBytes(count: Int) -> Data {
         var bytes = Data(count: count)
-#if canImport(Security)
-        let result = bytes.withUnsafeMutableBytes {
-            SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!)
-        }
-        precondition(result == errSecSuccess, "Failed to generate random bytes")
-        return bytes
-#else
-        for i in 0..<count {
-            bytes[i] = UInt8.random(in: UInt8.min...UInt8.max)
-        }
-        return bytes
-#endif
+        #if canImport(Security)
+            let result = bytes.withUnsafeMutableBytes {
+                SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!)
+            }
+            precondition(result == errSecSuccess, "Failed to generate random bytes")
+            return bytes
+        #else
+            for i in 0 ..< count {
+                bytes[i] = UInt8.random(in: UInt8.min ... UInt8.max)
+            }
+            return bytes
+        #endif
     }
 }

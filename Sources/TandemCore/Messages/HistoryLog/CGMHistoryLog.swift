@@ -23,20 +23,44 @@ public class CGMHistoryLog: HistoryLog {
     public let interval: Int
 
     public required init(cargo: Data) {
-        self.glucoseValueStatus = Bytes.readShort(cargo, 10)
-        self.cgmDataType = Int(cargo[12])
-        self.rate = Int(cargo[13])
-        self.algorithmState = Int(cargo[14])
-        self.rssi = Int(cargo[15])
-        self.currentGlucoseDisplayValue = Bytes.readShort(cargo, 16)
-        self.timeStampSeconds = Bytes.readUint32(cargo, 18)
-        self.egvInfoBitmask = Bytes.readShort(cargo, 22)
-        self.interval = Int(cargo[24])
+        glucoseValueStatus = Bytes.readShort(cargo, 10)
+        cgmDataType = Int(cargo[12])
+        rate = Int(cargo[13])
+        algorithmState = Int(cargo[14])
+        rssi = Int(cargo[15])
+        currentGlucoseDisplayValue = Bytes.readShort(cargo, 16)
+        timeStampSeconds = Bytes.readUint32(cargo, 18)
+        egvInfoBitmask = Bytes.readShort(cargo, 22)
+        interval = Int(cargo[24])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, glucoseValueStatus: Int, cgmDataType: Int, rate: Int, algorithmState: Int, rssi: Int, currentGlucoseDisplayValue: Int, timeStampSeconds: UInt32, egvInfoBitmask: Int, interval: Int) {
-        let payload = CGMHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, glucoseValueStatus: glucoseValueStatus, cgmDataType: cgmDataType, rate: rate, algorithmState: algorithmState, rssi: rssi, currentGlucoseDisplayValue: currentGlucoseDisplayValue, timeStampSeconds: timeStampSeconds, egvInfoBitmask: egvInfoBitmask, interval: interval)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        glucoseValueStatus: Int,
+        cgmDataType: Int,
+        rate: Int,
+        algorithmState: Int,
+        rssi: Int,
+        currentGlucoseDisplayValue: Int,
+        timeStampSeconds: UInt32,
+        egvInfoBitmask: Int,
+        interval: Int
+    ) {
+        let payload = CGMHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            glucoseValueStatus: glucoseValueStatus,
+            cgmDataType: cgmDataType,
+            rate: rate,
+            algorithmState: algorithmState,
+            rssi: rssi,
+            currentGlucoseDisplayValue: currentGlucoseDisplayValue,
+            timeStampSeconds: timeStampSeconds,
+            egvInfoBitmask: egvInfoBitmask,
+            interval: interval
+        )
         self.glucoseValueStatus = glucoseValueStatus
         self.cgmDataType = cgmDataType
         self.rate = rate
@@ -49,8 +73,20 @@ public class CGMHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, glucoseValueStatus: Int, cgmDataType: Int, rate: Int, algorithmState: Int, rssi: Int, currentGlucoseDisplayValue: Int, timeStampSeconds: UInt32, egvInfoBitmask: Int, interval: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        glucoseValueStatus: Int,
+        cgmDataType: Int,
+        rate: Int,
+        algorithmState: Int,
+        rssi: Int,
+        currentGlucoseDisplayValue: Int,
+        timeStampSeconds: UInt32,
+        egvInfoBitmask: Int,
+        interval: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([0, 1]),
                 Bytes.toUint32(pumpTimeSec),
@@ -69,4 +105,3 @@ public class CGMHistoryLog: HistoryLog {
         )
     }
 }
-

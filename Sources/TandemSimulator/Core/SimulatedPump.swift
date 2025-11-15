@@ -1,7 +1,7 @@
 import Foundation
-import TandemCore
-import TandemBLE
 import Logging
+import TandemBLE
+import TandemCore
 
 /// Main coordinator for the simulated pump
 class SimulatedPump {
@@ -17,26 +17,26 @@ class SimulatedPump {
 
     init(config: SimulatorConfig) {
         self.config = config
-        self.state = SimulatedPumpState(config: config)
+        state = SimulatedPumpState(config: config)
 
         // Create transport based on config
         if config.useMockTransport {
-            self.transport = MockTransport()
+            transport = MockTransport()
         } else {
             // Create BLE peripheral transport
             let deviceName = "\(config.pumpModel.rawValue) \(config.serialNumber)"
-            self.transport = BLEPeripheralTransport(deviceName: deviceName)
+            transport = BLEPeripheralTransport(deviceName: deviceName)
         }
 
         // Create authentication provider
-        self.authProvider = SimulatorAuthProvider(
+        authProvider = SimulatorAuthProvider(
             pairingCode: config.pairingCode,
             state: state,
             authMode: config.authenticationMode
         )
 
         // Create message router
-        self.messageRouter = MessageRouter(
+        messageRouter = MessageRouter(
             state: state,
             authProvider: authProvider
         )
@@ -92,12 +92,12 @@ class SimulatedPump {
 
     /// Get the mock transport for testing (only available if using mock transport)
     func getMockTransport() -> MockTransport? {
-        return transport as? MockTransport
+        transport as? MockTransport
     }
 
     /// Get the pump state for inspection
     func getPumpState() -> PumpStateProvider {
-        return state
+        state
     }
 
     // MARK: - Private Methods
@@ -122,7 +122,7 @@ class SimulatedPump {
     private func listenOnCharacteristic(_ characteristic: CharacteristicUUID) async {
         logger.debug("Started listener for \(characteristic.rawValue)")
 
-        while isRunning && !Task.isCancelled {
+        while isRunning, !Task.isCancelled {
             do {
                 // Read packet from transport
                 guard let packetData = try await transport.readPacket(
@@ -143,7 +143,8 @@ class SimulatedPump {
                 }
                 // Suppress notConnected errors - they're expected when no client is connected
                 if let bleError = error as? BLEPeripheralTransportError,
-                   case .notConnected = bleError {
+                   case .notConnected = bleError
+                {
                     // Silently ignore - this is expected when no client is connected
                 } else {
                     logger.error("Error reading packet on \(characteristic.rawValue): \(error)")
@@ -243,7 +244,7 @@ class SimulatedPump {
 
     private func startStateUpdateTimer() {
         let task = Task { [weak self] in
-            while self?.isRunning == true && !Task.isCancelled {
+            while self?.isRunning == true, !Task.isCancelled {
                 // Update state every second
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
 

@@ -1,14 +1,3 @@
-//
-//  HistoryLog.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of HistoryLogRequest and HistoryLogResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/HistoryLogRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/HistoryLogResponse.java
-//
-
 import Foundation
 
 /// Request a set of history log entries starting from a sequence number.
@@ -26,12 +15,12 @@ public class HistoryLogRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.startLog = Bytes.readUint32(cargo, 0)
-        self.numberOfLogs = Int(cargo[4])
+        startLog = Bytes.readUint32(cargo, 0)
+        numberOfLogs = Int(cargo[4])
     }
 
     public init(startLog: UInt32, numberOfLogs: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(startLog),
             Bytes.firstByteLittleEndian(numberOfLogs)
         )
@@ -55,12 +44,12 @@ public class HistoryLogResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.streamId = Int(cargo[1])
+        status = Int(cargo[0])
+        streamId = Int(cargo[1])
     }
 
     public init(status: Int, streamId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(status),
             Bytes.firstByteLittleEndian(streamId)
         )
@@ -68,4 +57,3 @@ public class HistoryLogResponse: Message {
         self.streamId = streamId
     }
 }
-
