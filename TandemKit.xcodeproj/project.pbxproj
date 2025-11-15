@@ -27,6 +27,7 @@
 		1A2FA9702EC8FD0800DF080F /* PumpCommRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9502EC8FD0800DF080F /* PumpCommRetryPolicy.swift */; };
 		1A2FA9712EC8FD0800DF080F /* PumpProtocolError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9542EC8FD0800DF080F /* PumpProtocolError.swift */; };
 		1A2FA9722EC8FD0800DF080F /* PumpComm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA94D2EC8FD0800DF080F /* PumpComm.swift */; };
+		1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */; };
 		1AAA18792D2B1E060061C043 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
 		3EE344242EC91286008A07F6 /* BluetoothCmd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3440F2EC91286008A07F6 /* BluetoothCmd.swift */; };
 		3EE344252EC91286008A07F6 /* Locked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344162EC91286008A07F6 /* Locked.swift */; };
@@ -375,6 +376,7 @@
 		1A2FA95A2EC8FD0800DF080F /* TandemPumpPairingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpPairingViewController.swift; sourceTree = "<group>"; };
 		1A2FA95C2EC8FD0800DF080F /* TandemKit.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = TandemKit.docc; sourceTree = "<group>"; };
 		1A2FA95D2EC8FD0800DF080F /* TandemKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKit.swift; sourceTree = "<group>"; };
+		1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitScanViewModel.swift; sourceTree = "<group>"; };
 		1A693F462D2B2B9100A65351 /* LoopKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKit.xcframework; path = Carthage/Build/LoopKit.xcframework; sourceTree = "<group>"; };
 		1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKitUI.xcframework; path = Carthage/Build/LoopKitUI.xcframework; sourceTree = "<group>"; };
 		1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopTestingKit.xcframework; path = Carthage/Build/LoopTestingKit.xcframework; sourceTree = "<group>"; };
@@ -728,6 +730,14 @@
 			);
 			name = TandemKit;
 			path = Sources/TandemKit;
+			sourceTree = "<group>";
+		};
+		1A55E0E62EC92914006E651D /* ViewModels */ = {
+			isa = PBXGroup;
+			children = (
+				1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */,
+			);
+			path = ViewModels;
 			sourceTree = "<group>";
 		};
 		1A693F452D2B2B9100A65351 /* Frameworks */ = {
@@ -1136,6 +1146,7 @@
 		3EEECBC52EC9008E0063D7BC /* TandemKitUI */ = {
 			isa = PBXGroup;
 			children = (
+				1A55E0E62EC92914006E651D /* ViewModels */,
 				3EE346162EC9274E008A07F6 /* Bundle.swift */,
 				3EE346132EC92709008A07F6 /* Views */,
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
@@ -1400,6 +1411,7 @@
 				1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */,
 				1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */,
 				1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */,
+				1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */,
 				1A2FA96E2EC8FD0800DF080F /* PeripheralManagerTransport.swift in Sources */,
 				1A2FA96F2EC8FD0800DF080F /* PumpCommsError.swift in Sources */,
 				1A2FA9702EC8FD0800DF080F /* PumpCommRetryPolicy.swift in Sources */,

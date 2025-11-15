@@ -1,10 +1,3 @@
-//
-//  TandemOnboardingView.swift
-//  TandemKit
-//
-//  Created by Bastiaan Verhaar on 15/11/2025.
-//
-
 import SwiftUI
 
 struct TandemOnboardingView: View {

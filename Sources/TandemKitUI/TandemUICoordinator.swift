@@ -1,6 +1,6 @@
 import LoopKit
-import SwiftUI
 import LoopKitUI
+import SwiftUI
 
 enum TandemScreen {
     case onboarding
@@ -10,7 +10,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     var pumpManagerOnboardingDelegate: PumpManagerOnboardingDelegate?
 
     var completionDelegate: CompletionDelegate?
-    
+
     var screenStack = [TandemScreen]()
     var currentScreen: TandemScreen {
         screenStack.last!
@@ -52,7 +52,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     @available(*, unavailable) required init?(coder _: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
@@ -69,7 +69,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             .environment(\.appName, Bundle.main.bundleDisplayName)
         return DismissibleHostingController(content: rootView, colorPalette: colorPalette)
     }
-    
+
     private func viewControllerForScreen(_ screen: TandemScreen) -> UIViewController {
         switch screen {
         case .onboarding:
