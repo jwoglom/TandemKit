@@ -16,6 +16,46 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         let transport = MockPumpMessageTransport(peripheralManager: peripheral)
         let mockComm = MockPumpComm(pumpState: pumpState)
         manager.setPumpCommForTesting(mockComm)
+        peripheral.enqueueResponse(
+            for: CurrentBatteryV1Request.self,
+            response: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
+        )
+        peripheral.enqueueResponse(
+            for: InsulinStatusRequest.self,
+            response: InsulinStatusResponse(currentInsulinAmount: 120_000, isEstimate: 0, insulinLowAmount: 0)
+        )
+        peripheral.enqueueResponse(
+            for: CurrentBasalStatusRequest.self,
+            response: CurrentBasalStatusResponse(profileBasalRate: 1_000, currentBasalRate: 1_000, basalModifiedBitmask: 0)
+        )
+        peripheral.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
+        )
+        peripheral.enqueueResponse(
+            for: CurrentEGVGuiDataRequest.self,
+            response: CurrentEGVGuiDataResponse(
+                bgReadingTimestampSeconds: 0,
+                cgmReading: 120,
+                egvStatusId: CurrentEGVGuiDataResponse.EGVStatus.VALID.rawValue,
+                trendRate: 3
+            )
+        )
+        peripheral.enqueueResponse(
+            for: AlertStatusRequest.self,
+            response: AlertStatusResponse(intMap: 0)
+        )
+        peripheral.enqueueResponse(
+            for: AlarmStatusRequest.self,
+            response: AlarmStatusResponse(intMap: 0)
+        )
         manager.updateTransport(transport)
 
         let items = [
@@ -66,6 +106,46 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         let transport = MockPumpMessageTransport(peripheralManager: peripheral)
         let mockComm = MockPumpComm(pumpState: pumpState)
         manager.setPumpCommForTesting(mockComm)
+        peripheral.enqueueResponse(
+            for: CurrentBatteryV1Request.self,
+            response: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
+        )
+        peripheral.enqueueResponse(
+            for: InsulinStatusRequest.self,
+            response: InsulinStatusResponse(currentInsulinAmount: 120_000, isEstimate: 0, insulinLowAmount: 0)
+        )
+        peripheral.enqueueResponse(
+            for: CurrentBasalStatusRequest.self,
+            response: CurrentBasalStatusResponse(profileBasalRate: 1_000, currentBasalRate: 1_000, basalModifiedBitmask: 0)
+        )
+        peripheral.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
+        )
+        peripheral.enqueueResponse(
+            for: CurrentEGVGuiDataRequest.self,
+            response: CurrentEGVGuiDataResponse(
+                bgReadingTimestampSeconds: 0,
+                cgmReading: 120,
+                egvStatusId: CurrentEGVGuiDataResponse.EGVStatus.VALID.rawValue,
+                trendRate: 3
+            )
+        )
+        peripheral.enqueueResponse(
+            for: AlertStatusRequest.self,
+            response: AlertStatusResponse(intMap: 0)
+        )
+        peripheral.enqueueResponse(
+            for: AlarmStatusRequest.self,
+            response: AlarmStatusResponse(intMap: 0)
+        )
         manager.updateTransport(transport)
 
         peripheral.enqueueResponse(

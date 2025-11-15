@@ -17,6 +17,10 @@ public struct HKUnit: Codable, Equatable {
         HKUnit(symbol: "IU/hr")
     }
 
+    public static func milligramsPerDeciliter() -> HKUnit {
+        HKUnit(symbol: "mg/dL")
+    }
+
     public func unitDivided(by unit: HKUnit) -> HKUnit {
         HKUnit(symbol: "\(symbol)/\(unit.symbol)")
     }
@@ -102,6 +106,32 @@ public enum DeviceLifecycleProgressState: String, Codable {
     case none
     case inProgress
     case completed
+}
+
+// MARK: - Glucose Support
+
+public enum GlucoseTrend: Int, Codable {
+    case doubleDown
+    case singleDown
+    case fortyFiveDown
+    case flat
+    case fortyFiveUp
+    case singleUp
+    case doubleUp
+    case none
+}
+
+public protocol GlucoseDisplayable {
+    var isStateValid: Bool { get }
+    var startDate: Date { get }
+    var quantity: HKQuantity? { get }
+    var trendType: GlucoseTrend? { get }
+    var trendRateUnit: HKUnit? { get }
+    var trendRateValue: Double? { get }
+    var isLocal: Bool { get }
+    var wasUserEntered: Bool { get }
+    var value: Double? { get }
+    var unitString: String? { get }
 }
 
 // MARK: - Device Manager
@@ -210,6 +240,9 @@ public struct PumpManagerStatus: Equatable {
     public var bolusState: BolusState
     public var insulinType: InsulinType?
     public var deliveryIsUncertain: Bool
+    public var pumpStatusHighlight: PumpStatusHighlight?
+    public var pumpLifecycleProgress: PumpLifecycleProgress?
+    public var glucoseDisplay: GlucoseDisplay?
 
     public init(
         timeZone: TimeZone,
@@ -218,7 +251,10 @@ public struct PumpManagerStatus: Equatable {
         basalDeliveryState: BasalDeliveryState?,
         bolusState: BolusState,
         insulinType: InsulinType?,
-        deliveryIsUncertain: Bool = false
+        deliveryIsUncertain: Bool = false,
+        pumpStatusHighlight: PumpStatusHighlight? = nil,
+        pumpLifecycleProgress: PumpLifecycleProgress? = nil,
+        glucoseDisplay: GlucoseDisplay? = nil
     ) {
         self.timeZone = timeZone
         self.device = device
@@ -227,6 +263,46 @@ public struct PumpManagerStatus: Equatable {
         self.bolusState = bolusState
         self.insulinType = insulinType
         self.deliveryIsUncertain = deliveryIsUncertain
+        self.pumpStatusHighlight = pumpStatusHighlight
+        self.pumpLifecycleProgress = pumpLifecycleProgress
+        self.glucoseDisplay = glucoseDisplay
+    }
+
+    public struct GlucoseDisplay: GlucoseDisplayable, Equatable {
+        public var isStateValid: Bool
+        public var startDate: Date
+        public var quantity: HKQuantity?
+        public var trendType: GlucoseTrend?
+        public var trendRateUnit: HKUnit?
+        public var trendRateValue: Double?
+        public var isLocal: Bool
+        public var wasUserEntered: Bool
+        public var value: Double?
+        public var unitString: String?
+
+        public init(
+            isStateValid: Bool,
+            startDate: Date,
+            quantity: HKQuantity?,
+            trendType: GlucoseTrend?,
+            trendRateUnit: HKUnit?,
+            trendRateValue: Double?,
+            isLocal: Bool,
+            wasUserEntered: Bool,
+            value: Double?,
+            unitString: String?
+        ) {
+            self.isStateValid = isStateValid
+            self.startDate = startDate
+            self.quantity = quantity
+            self.trendType = trendType
+            self.trendRateUnit = trendRateUnit
+            self.trendRateValue = trendRateValue
+            self.isLocal = isLocal
+            self.wasUserEntered = wasUserEntered
+            self.value = value
+            self.unitString = unitString
+        }
     }
 }
 

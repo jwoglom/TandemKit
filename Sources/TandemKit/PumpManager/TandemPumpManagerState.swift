@@ -15,7 +15,66 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 3
+    public struct CGMReading: Equatable {
+        public let date: Date
+        public let value: Double?
+        public let egvStatusId: Int
+        public let trendRate: Int
+
+        public init(date: Date, value: Double?, egvStatusId: Int, trendRate: Int) {
+            self.date = date
+            self.value = value
+            self.egvStatusId = egvStatusId
+            self.trendRate = trendRate
+        }
+
+        public var egvStatus: CurrentEGVGuiDataResponse.EGVStatus? {
+            CurrentEGVGuiDataResponse.EGVStatus(rawValue: egvStatusId)
+        }
+
+        public func makeDisplay() -> PumpManagerStatus.GlucoseDisplay {
+            let unit = HKUnit.milligramsPerDeciliter()
+            let quantity = value.map { HKQuantity(unit: unit, doubleValue: $0) }
+            let isValidStatus = egvStatus != .INVALID && egvStatus != .UNAVAILABLE
+            let isValid = isValidStatus && value != nil
+
+            return PumpManagerStatus.GlucoseDisplay(
+                isStateValid: isValid,
+                startDate: date,
+                quantity: quantity,
+                trendType: Self.mapTrend(trendRate),
+                trendRateUnit: nil,
+                trendRateValue: nil,
+                isLocal: true,
+                wasUserEntered: false,
+                value: value,
+                unitString: "mg/dL"
+            )
+        }
+
+        private static func mapTrend(_ rate: Int) -> GlucoseTrend? {
+            switch rate {
+            case 0:
+                return .doubleDown
+            case 1:
+                return .singleDown
+            case 2:
+                return .fortyFiveDown
+            case 3:
+                return .flat
+            case 4:
+                return .fortyFiveUp
+            case 5:
+                return .singleUp
+            case 6:
+                return .doubleUp
+            default:
+                return nil
+            }
+        }
+    }
+
+    public static let version = 4
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -28,6 +87,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var bolusState: PumpManagerStatus.BolusState
     public var deliveryIsUncertain: Bool
     public var basalRateSchedule: BasalRateSchedule?
+    public var lastCGMReading: CGMReading?
+    public var activeAlertIDs: Set<Int>
+    public var activeAlarmIDs: Set<Int>
 
     public init(
         pumpState: PumpState?,
@@ -40,7 +102,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastBasalStatusDate: Date? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
         deliveryIsUncertain: Bool = false,
-        basalRateSchedule: BasalRateSchedule? = nil
+        basalRateSchedule: BasalRateSchedule? = nil,
+        lastCGMReading: CGMReading? = nil,
+        activeAlertIDs: Set<Int> = [],
+        activeAlarmIDs: Set<Int> = []
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -53,6 +118,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.bolusState = bolusState
         self.deliveryIsUncertain = deliveryIsUncertain
         self.basalRateSchedule = basalRateSchedule
+        self.lastCGMReading = lastCGMReading
+        self.activeAlertIDs = activeAlertIDs
+        self.activeAlarmIDs = activeAlarmIDs
     }
 
     public init?(rawValue: RawValue) {
@@ -128,6 +196,24 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.basalRateSchedule = nil
         }
+
+        if let cgmRaw = rawValue["lastCGMReading"] as? [String: Any] {
+            self.lastCGMReading = TandemPumpManagerState.decodeCGMReading(from: cgmRaw)
+        } else {
+            self.lastCGMReading = nil
+        }
+
+        if let alertArray = rawValue["activeAlertIDs"] as? [Int] {
+            self.activeAlertIDs = Set(alertArray)
+        } else {
+            self.activeAlertIDs = []
+        }
+
+        if let alarmArray = rawValue["activeAlarmIDs"] as? [Int] {
+            self.activeAlarmIDs = Set(alarmArray)
+        } else {
+            self.activeAlarmIDs = []
+        }
     }
 
     public var rawValue: RawValue {
@@ -180,6 +266,18 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
+        if let lastCGMReading = lastCGMReading {
+            raw["lastCGMReading"] = TandemPumpManagerState.encodeCGMReading(lastCGMReading)
+        }
+
+        if !activeAlertIDs.isEmpty {
+            raw["activeAlertIDs"] = Array(activeAlertIDs).sorted()
+        }
+
+        if !activeAlarmIDs.isEmpty {
+            raw["activeAlarmIDs"] = Array(activeAlarmIDs).sorted()
+        }
+
         return raw
     }
 }
@@ -196,7 +294,44 @@ public extension TandemPumpManagerState {
             lhs.lastBasalStatusDate == rhs.lastBasalStatusDate &&
             lhs.bolusState == rhs.bolusState &&
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
-            lhs.basalRateSchedule == rhs.basalRateSchedule
+            lhs.basalRateSchedule == rhs.basalRateSchedule &&
+            lhs.lastCGMReading == rhs.lastCGMReading &&
+            lhs.activeAlertIDs == rhs.activeAlertIDs &&
+            lhs.activeAlarmIDs == rhs.activeAlarmIDs
+    }
+}
+
+extension TandemPumpManagerState {
+    static func encodeCGMReading(_ reading: CGMReading) -> [String: Any] {
+        var raw: [String: Any] = [
+            "date": reading.date.timeIntervalSinceReferenceDate,
+            "egvStatusId": reading.egvStatusId,
+            "trendRate": reading.trendRate
+        ]
+
+        if let value = reading.value {
+            raw["value"] = value
+        }
+
+        return raw
+    }
+
+    static func decodeCGMReading(from raw: [String: Any]) -> CGMReading? {
+        guard let dateInterval = raw["date"] as? TimeInterval,
+              let egvStatusId = raw["egvStatusId"] as? Int,
+              let trendRate = raw["trendRate"] as? Int else {
+            return nil
+        }
+
+        let value = raw["value"] as? Double
+        let date = Date(timeIntervalSinceReferenceDate: dateInterval)
+        return CGMReading(date: date, value: value, egvStatusId: egvStatusId, trendRate: trendRate)
+    }
+}
+
+public extension TandemPumpManagerState {
+    var glucoseDisplay: PumpManagerStatus.GlucoseDisplay? {
+        lastCGMReading?.makeDisplay()
     }
 }
 

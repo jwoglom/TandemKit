@@ -212,7 +212,69 @@ public class TandemPumpManager: PumpManager {
         status.bolusState = state.bolusState
         status.deliveryIsUncertain = state.deliveryIsUncertain
         status.pumpBatteryChargeRemaining = state.lastBatteryReading?.chargeRemaining
+        status.glucoseDisplay = state.glucoseDisplay
+        status.pumpStatusHighlight = computeStatusHighlight(from: state)
         return status
+    }
+
+    private static func computeStatusHighlight(from state: TandemPumpManagerState) -> PumpStatusHighlight? {
+        let alarmTypes = state.activeAlarmIDs
+            .compactMap { AlarmStatusResponse.AlarmResponseType(rawValue: $0) }
+            .sorted(by: { $0.rawValue < $1.rawValue })
+
+        if !alarmTypes.isEmpty {
+            let names = alarmTypes.map { friendlyName(for: $0) }
+            let message = highlightMessage(prefix: LocalizedString("Pump alarm", comment: "Pump alarm highlight prefix"), names: names)
+            return PumpStatusHighlight(localizedMessage: message, imageName: "exclamationmark.triangle", state: .critical)
+        }
+
+        let alertTypes = state.activeAlertIDs
+            .compactMap { AlertStatusResponse.AlertResponseType(rawValue: $0) }
+            .sorted(by: { $0.rawValue < $1.rawValue })
+
+        if !alertTypes.isEmpty {
+            let names = alertTypes.map { friendlyName(for: $0) }
+            let message = highlightMessage(prefix: LocalizedString("Pump alert", comment: "Pump alert highlight prefix"), names: names)
+            return PumpStatusHighlight(localizedMessage: message, imageName: "exclamationmark.circle", state: .warning)
+        }
+
+        if let reading = state.lastCGMReading,
+           let status = reading.egvStatus,
+           let value = reading.value {
+            switch status {
+            case .LOW:
+                let message = String(format: LocalizedString("Glucose low (%d)", comment: "Low glucose highlight"), Int(value.rounded()))
+                return PumpStatusHighlight(localizedMessage: message, imageName: "arrow.down.circle", state: .critical)
+            case .HIGH:
+                let message = String(format: LocalizedString("Glucose high (%d)", comment: "High glucose highlight"), Int(value.rounded()))
+                return PumpStatusHighlight(localizedMessage: message, imageName: "arrow.up.circle", state: .warning)
+            default:
+                break
+            }
+        }
+
+        return nil
+    }
+
+    private static func friendlyName(for alarm: AlarmStatusResponse.AlarmResponseType) -> String {
+        friendlyName(from: String(describing: alarm))
+    }
+
+    private static func friendlyName(for alert: AlertStatusResponse.AlertResponseType) -> String {
+        friendlyName(from: String(describing: alert))
+    }
+
+    private static func friendlyName(from raw: String) -> String {
+        raw.replacingOccurrences(of: "_", with: " ").lowercased().capitalized
+    }
+
+    private static func highlightMessage(prefix: String, names: [String]) -> String {
+        guard let first = names.first else { return prefix }
+        if names.count == 1 {
+            return "\(prefix): \(first)"
+        } else {
+            return "\(prefix): \(first) (+\(names.count - 1) more)"
+        }
     }
 
     public init(state: TandemPumpManagerState) {
@@ -332,6 +394,18 @@ public class TandemPumpManager: PumpManager {
         telemetryScheduler.schedule(kind: .bolus, interval: 60) { [weak self] in
             self?.fetchBolusStatus()
         }
+
+        telemetryScheduler.schedule(kind: .glucose, interval: 5 * 60) { [weak self] in
+            self?.fetchGlucoseStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .alerts, interval: 2 * 60) { [weak self] in
+            self?.fetchAlertStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .alarms, interval: 2 * 60) { [weak self] in
+            self?.fetchAlarmStatus()
+        }
     }
 
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
@@ -443,6 +517,91 @@ public class TandemPumpManager: PumpManager {
         notifyDelegateStateUpdated()
     }
 
+    private func handleGlucoseResponse(_ response: CurrentEGVGuiDataResponse, source: ResponseSource) {
+        let readingDate = Dates.fromJan12008EpochSecondsToDate(TimeInterval(response.bgReadingTimestampSeconds))
+        let status = response.egvStatus
+        let value: Double?
+        if status == .INVALID || status == .UNAVAILABLE {
+            value = nil
+        } else {
+            value = Double(response.cgmReading)
+        }
+
+        var managerState = lockedState.value
+        managerState.lastCGMReading = TandemPumpManagerState.CGMReading(
+            date: readingDate,
+            value: value,
+            egvStatusId: response.egvStatusId,
+            trendRate: response.trendRate
+        )
+        lockedState.value = managerState
+
+        let statusLabel: String
+        if let status = status {
+            statusLabel = String(describing: status)
+        } else {
+            statusLabel = "unknown"
+        }
+
+        if let value = value {
+            logger(for: source).debug("[\(source.label)] CGM updated: value=\(value) status=\(statusLabel) trend=\(response.trendRate)")
+        } else {
+            logger(for: source).debug("[\(source.label)] CGM updated: status=\(statusLabel) trend=\(response.trendRate)")
+        }
+
+        let highlight = Self.computeStatusHighlight(from: managerState)
+        let display = managerState.glucoseDisplay
+
+        updateStatus { status in
+            status.glucoseDisplay = display
+            status.pumpStatusHighlight = highlight
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
+    private func handleAlertStatusResponse(_ response: AlertStatusResponse, source: ResponseSource) {
+        var managerState = lockedState.value
+        managerState.activeAlertIDs = Set(response.alerts.map { $0.rawValue })
+        lockedState.value = managerState
+
+        let names = response.alerts.map { Self.friendlyName(from: String(describing: $0)) }.sorted()
+        if names.isEmpty {
+            logger(for: source).debug("[\(source.label)] Alert status cleared")
+        } else {
+            logger(for: source).debug("[\(source.label)] Active alerts: \(names.joined(separator: ", "))")
+        }
+
+        let highlight = Self.computeStatusHighlight(from: managerState)
+
+        updateStatus { status in
+            status.pumpStatusHighlight = highlight
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
+    private func handleAlarmStatusResponse(_ response: AlarmStatusResponse, source: ResponseSource) {
+        var managerState = lockedState.value
+        managerState.activeAlarmIDs = Set(response.alarms.map { $0.rawValue })
+        lockedState.value = managerState
+
+        let names = response.alarms.map { Self.friendlyName(from: String(describing: $0)) }.sorted()
+        if names.isEmpty {
+            logger(for: source).debug("[\(source.label)] Alarm status cleared")
+        } else {
+            logger(for: source).warning("[\(source.label)] Active alarms: \(names.joined(separator: ", "))")
+        }
+
+        let highlight = Self.computeStatusHighlight(from: managerState)
+
+        updateStatus { status in
+            status.pumpStatusHighlight = highlight
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
     private func makeBatteryRequest() -> Message {
         let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
         return CurrentBatteryRequestBuilder.create(apiVersion: apiVersion)
@@ -535,6 +694,63 @@ public class TandemPumpManager: PumpManager {
             handleBolusResponse(response, source: .telemetry)
         } catch {
             telemetryLogger.error("Bolus telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchGlucoseStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping CGM telemetry – no transport")
+            return
+        }
+
+        do {
+            let response: CurrentEGVGuiDataResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: CurrentEGVGuiDataRequest(),
+                expecting: CurrentEGVGuiDataResponse.self
+            )
+
+            handleGlucoseResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("CGM telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchAlertStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping alert telemetry – no transport")
+            return
+        }
+
+        do {
+            let response: AlertStatusResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: AlertStatusRequest(),
+                expecting: AlertStatusResponse.self
+            )
+
+            handleAlertStatusResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Alert telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchAlarmStatus() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.debug("Skipping alarm telemetry – no transport")
+            return
+        }
+
+        do {
+            let response: AlarmStatusResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: AlarmStatusRequest(),
+                expecting: AlarmStatusResponse.self
+            )
+
+            handleAlarmStatusResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Alarm telemetry request failed: \(error)")
         }
     }
 
@@ -1487,6 +1703,12 @@ extension TandemPumpManager: PumpCommDelegate {
             handleBasalResponse(basal, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
+        case let glucose as CurrentEGVGuiDataResponse:
+            handleGlucoseResponse(glucose, source: .notification)
+        case let alerts as AlertStatusResponse:
+            handleAlertStatusResponse(alerts, source: .notification)
+        case let alarms as AlarmStatusResponse:
+            handleAlarmStatusResponse(alarms, source: .notification)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
