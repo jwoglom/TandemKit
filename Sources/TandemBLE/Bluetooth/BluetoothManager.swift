@@ -39,10 +39,30 @@ public protocol BluetoothManagerDelegate: AnyObject {
     func bluetoothManager(_ manager: BluetoothManager, didCompleteConfiguration peripheralManager: PeripheralManager)
 
     func bluetoothManager(_ manager: BluetoothManager, didIdentifyPump manufacturer: String, model: String)
+
+    /// Informs the delegate that a device was discovered during scanning
+    ///
+    /// - Parameters:
+    ///   - manager: The bluetooth manager
+    ///   - peripheral: The discovered peripheral
+    ///   - advertisementData: The advertisement data
+    ///   - rssi: The signal strength
+    func bluetoothManager(
+        _ manager: BluetoothManager,
+        didDiscoverDevice peripheral: CBPeripheral,
+        advertisementData: [String: Any]?,
+        rssi: NSNumber
+    )
 }
 
 public extension BluetoothManagerDelegate {
     func bluetoothManager(_: BluetoothManager, didIdentifyPump _: String, model _: String) {}
+    func bluetoothManager(
+        _: BluetoothManager,
+        didDiscoverDevice _: CBPeripheral,
+        advertisementData _: [String: Any]?,
+        rssi _: NSNumber
+    ) {}
 }
 
 public class BluetoothManager: NSObject, @unchecked Sendable {
@@ -256,10 +276,18 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         }
     }
 
-    /// Determines if the discovered peripheral appears to be a Tandem pump.
-    /// This mirrors the logic from pumpx2's `BluetoothConstants.isTandemBluetoothDevice`.
-    private func isTandemPeripheral(_: CBPeripheral, advertisementData _: [String: Any]?) -> Bool {
-        true
+    /// Determines if the discovered peripheral appears to be a Tandem pump by looking at the available bluetooth service UUIDs.
+    private func isTandemPeripheral(_ cbPeripheral: CBPeripheral, advertisementData _: [String: Any]?) -> Bool {
+        log.info("isTandemPeripheral? cbPeripheral.name: %s", cbPeripheral.name ?? "")
+        return cbPeripheral.services?.contains { btService in
+
+            if btService.uuid == ServiceUUID.PUMP_SERVICE.cbUUID {
+                log.info("isTandemPeripheral? cbPeripheral.name: %s btService.uuid: %s", cbPeripheral.name ?? "", btService.uuid)
+                return true
+            }
+
+            return false
+        } == true
     }
 
     // MARK: - Accessors
@@ -327,11 +355,15 @@ extension BluetoothManager: CBCentralManagerDelegate {
         _ central: CBCentralManager,
         didDiscover peripheral: CBPeripheral,
         advertisementData: [String: Any],
-        rssi _: NSNumber
+        rssi: NSNumber
     ) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         log.info("%{public}@: %{public}@", #function, String(describing: peripheral))
+
+        // Notify delegate about discovered device
+        delegate?.bluetoothManager(self, didDiscoverDevice: peripheral, advertisementData: advertisementData, rssi: rssi)
+
         var shouldConnect = false
         if let delegate = delegate {
             shouldConnect = delegate.bluetoothManager(

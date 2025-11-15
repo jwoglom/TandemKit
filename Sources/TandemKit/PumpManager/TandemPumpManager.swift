@@ -14,6 +14,20 @@ import TandemCore
     import UIKit
 #endif
 
+// MARK: - Scan Device Observer Protocol
+
+public struct TandemPumpScan {
+    public let bleIdentifier: String
+    public let name: String
+    public let peripheral: CBPeripheral
+    public let advertisementData: [String: Any]?
+    public let rssi: NSNumber
+}
+
+public protocol StateObserver: AnyObject {
+    func deviceScanDidUpdate(_ device: TandemPumpScan)
+}
+
 // Simple delegate wrapper
 private class WeakSynchronizedDelegate<T> {
     private weak var _value: AnyObject?
@@ -83,7 +97,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
-    private let tandemPump: TandemPump
+    public let tandemPump: TandemPump
     private let log = OSLog(category: "TandemPumpManager")
     private let telemetryScheduler = PumpTelemetryScheduler(label: "com.jwoglom.TandemKit.telemetry")
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
@@ -92,6 +106,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
+    private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
     private let lockedStatus: Locked<PumpManagerStatus>
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
@@ -101,6 +116,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let lockedCurrentBasalRate = Locked<Double?>(nil)
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
+    private var targetPeripheralIdentifier: UUID?
 
     private func updatePairingArtifacts(with pumpState: PumpState?) {
         #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -606,6 +622,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    // MARK: - Scan Device Observers
+
+    public func addScanDeviceObserver(_ observer: StateObserver, queue: DispatchQueue) {
+        scanDeviceObservers.insert(observer, queue: queue)
+    }
+
+    public func removeScanDeviceObserver(_ observer: StateObserver) {
+        scanDeviceObservers.removeElement(observer)
+    }
+
+    internal func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
+        DispatchQueue.main.async {
+            self.scanDeviceObservers.forEach { observer in
+                observer.deviceScanDidUpdate(device)
+            }
+        }
+    }
+
     private func updateStatus(_ update: (inout PumpManagerStatus) -> Void) {
         let oldStatus = lockedStatus.value
         var newStatus = oldStatus
@@ -802,6 +836,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // Tandem pumps typically deliver at up to 1 unit every 5 seconds.
         // Use a conservative estimate of 30 seconds per unit for now.
         max(units, 0) * 30.0
+    }
+
+    public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {
+        targetPeripheralIdentifier = peripheralIdentifier
     }
 
     #if canImport(UIKit)
@@ -1465,11 +1503,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
 extension TandemPumpManager: TandemPumpDelegate {
     public func tandemPump(
         _: TandemPump,
-        shouldConnect _: CBPeripheral,
+        shouldConnect peripheral: CBPeripheral,
         advertisementData _: [String: Any]?
     ) -> Bool {
-        // TODO: Add filtering logic if needed (e.g., check peripheral name)
-        true
+        // If a target peripheral is set, only connect to that specific device
+        if let targetIdentifier = targetPeripheralIdentifier {
+            return peripheral.identifier == targetIdentifier
+        }
+        // Otherwise, connect to any Tandem pump
+        return true
     }
 
     public func tandemPump(
@@ -1482,6 +1524,22 @@ extension TandemPumpManager: TandemPumpDelegate {
         pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
         updateTransport(transport)
+    }
+
+    public func tandemPump(
+        _: TandemPump,
+        didDiscoverDevice peripheral: CBPeripheral,
+        advertisementData: [String: Any]?,
+        rssi: NSNumber
+    ) {
+        let device = TandemPumpScan(
+            bleIdentifier: peripheral.identifier.uuidString,
+            name: peripheral.name ?? "Unknown",
+            peripheral: peripheral,
+            advertisementData: advertisementData,
+            rssi: rssi
+        )
+        notifyScanDeviceDidChange(device)
     }
 }
 
