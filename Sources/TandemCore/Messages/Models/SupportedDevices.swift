@@ -7,9 +7,20 @@
 // https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/models/SupportedDevices.java
 
 
-public enum KnownDeviceModel: Sendable {
-    case tslimX2
-    case mobi
+public enum KnownDeviceModel: String, Codable, Sendable {
+    case tslimX2 = "t_slim_x2"
+    case mobi = "mobi"
+}
+
+public extension KnownDeviceModel {
+    var displayName: String {
+        switch self {
+        case .tslimX2:
+            return "t:slim X2"
+        case .mobi:
+            return "t:Mobi"
+        }
+    }
 }
 
 public enum SupportedDevices: Sendable {

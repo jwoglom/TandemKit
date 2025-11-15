@@ -16,6 +16,11 @@ import os
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
     func tandemPump(_ pump: TandemPump, didCompleteConfiguration peripheralManager: PeripheralManager)
+    func tandemPump(_ pump: TandemPump, didIdentifyPump manufacturer: String, model: String)
+}
+
+public extension TandemPumpDelegate {
+    func tandemPump(_ pump: TandemPump, didIdentifyPump manufacturer: String, model: String) {}
 }
 
 public class TandemPump {
@@ -150,5 +155,11 @@ extension TandemPump: BluetoothManagerDelegate {
     public func bluetoothManager(_ manager: BluetoothManager,
                                   didCompleteConfiguration peripheralManager: PeripheralManager) {
         delegate?.tandemPump(self, didCompleteConfiguration: peripheralManager)
+    }
+
+    public func bluetoothManager(_ manager: BluetoothManager,
+                                  didIdentifyPump manufacturer: String,
+                                  model: String) {
+        delegate?.tandemPump(self, didIdentifyPump: manufacturer, model: model)
     }
 }
