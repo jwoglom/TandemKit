@@ -271,6 +271,8 @@
 		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */; };
 		3EE346102EC91B3D008A07F6 /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
+		3EE346152EC92712008A07F6 /* TandemOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346142EC92712008A07F6 /* TandemOnboardingView.swift */; };
+		3EE346172EC92751008A07F6 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346162EC9274E008A07F6 /* Bundle.swift */; };
 		3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */; };
 		3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */; };
 		3EEECBCA2EC9023C0063D7BC /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
@@ -617,6 +619,8 @@
 		3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPlugin.swift; sourceTree = "<group>"; };
 		3EE345F02EC912F9008A07F6 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/HealthKit.framework; sourceTree = DEVELOPER_DIR; };
 		3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
+		3EE346142EC92712008A07F6 /* TandemOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemOnboardingView.swift; sourceTree = "<group>"; };
+		3EE346162EC9274E008A07F6 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TandemPumpManager+UI.swift"; sourceTree = "<group>"; };
 		3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemUICoordinator.swift; sourceTree = "<group>"; };
 		3EEECBC92EC9023C0063D7BC /* LoopKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LoopKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1121,9 +1125,19 @@
 			path = Sources/TandemKitPlugin;
 			sourceTree = "<group>";
 		};
+		3EE346132EC92709008A07F6 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				3EE346142EC92712008A07F6 /* TandemOnboardingView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
 		3EEECBC52EC9008E0063D7BC /* TandemKitUI */ = {
 			isa = PBXGroup;
 			children = (
+				3EE346162EC9274E008A07F6 /* Bundle.swift */,
+				3EE346132EC92709008A07F6 /* Views */,
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
 				3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */,
 			);
@@ -1368,12 +1382,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2FA95F2EC8FD0800DF080F /* PumpState.swift in Sources */,
+				3EE346172EC92751008A07F6 /* Bundle.swift in Sources */,
 				1A2FA9602EC8FD0800DF080F /* MessageTransport.swift in Sources */,
 				1A2FA9612EC8FD0800DF080F /* TandemPumpPairingViewController.swift in Sources */,
 				1A2FA9622EC8FD0800DF080F /* PumpTelemetryScheduler.swift in Sources */,
 				1A2FA9632EC8FD0800DF080F /* TandemKit.swift in Sources */,
 				1A2FA9642EC8FD0800DF080F /* PumpCommSession.swift in Sources */,
 				1A2FA9652EC8FD0800DF080F /* PumpNotificationRouter.swift in Sources */,
+				3EE346152EC92712008A07F6 /* TandemOnboardingView.swift in Sources */,
 				1A2FA9662EC8FD0800DF080F /* PumpMessageTransport.swift in Sources */,
 				3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */,
 				3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */,
