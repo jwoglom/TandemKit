@@ -242,7 +242,23 @@ public struct PumpManagerStatus: Equatable {
     public var deliveryIsUncertain: Bool
     public var pumpStatusHighlight: PumpStatusHighlight?
     public var pumpLifecycleProgress: PumpLifecycleProgress?
-    public var glucoseDisplay: GlucoseDisplay?
+    private var glucoseDisplayStorage: GlucoseDisplay?
+
+    public var glucoseDisplay: GlucoseDisplayable? {
+        get { glucoseDisplayStorage }
+        set {
+            guard let display = newValue else {
+                glucoseDisplayStorage = nil
+                return
+            }
+
+            if let typedDisplay = display as? GlucoseDisplay {
+                glucoseDisplayStorage = typedDisplay
+            } else {
+                glucoseDisplayStorage = GlucoseDisplay(displayable: display)
+            }
+        }
+    }
 
     public init(
         timeZone: TimeZone,
@@ -254,7 +270,7 @@ public struct PumpManagerStatus: Equatable {
         deliveryIsUncertain: Bool = false,
         pumpStatusHighlight: PumpStatusHighlight? = nil,
         pumpLifecycleProgress: PumpLifecycleProgress? = nil,
-        glucoseDisplay: GlucoseDisplay? = nil
+        glucoseDisplay: GlucoseDisplayable? = nil
     ) {
         self.timeZone = timeZone
         self.device = device
@@ -265,6 +281,7 @@ public struct PumpManagerStatus: Equatable {
         self.deliveryIsUncertain = deliveryIsUncertain
         self.pumpStatusHighlight = pumpStatusHighlight
         self.pumpLifecycleProgress = pumpLifecycleProgress
+        self.glucoseDisplayStorage = nil
         self.glucoseDisplay = glucoseDisplay
     }
 
@@ -302,6 +319,21 @@ public struct PumpManagerStatus: Equatable {
             self.wasUserEntered = wasUserEntered
             self.value = value
             self.unitString = unitString
+        }
+
+        public init(displayable: GlucoseDisplayable) {
+            self.init(
+                isStateValid: displayable.isStateValid,
+                startDate: displayable.startDate,
+                quantity: displayable.quantity,
+                trendType: displayable.trendType,
+                trendRateUnit: displayable.trendRateUnit,
+                trendRateValue: displayable.trendRateValue,
+                isLocal: displayable.isLocal,
+                wasUserEntered: displayable.wasUserEntered,
+                value: displayable.value,
+                unitString: displayable.unitString
+            )
         }
     }
 }
