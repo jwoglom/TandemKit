@@ -86,7 +86,6 @@ public class TandemPumpManager: PumpManager {
     public typealias RawStateValue = [String: Any]
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
-    private let dosingDelegate = WeakSynchronizedDelegate<PumpManagerDosingDecisionDelegate>()
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     private let tandemPump: TandemPump
@@ -653,10 +652,6 @@ public class TandemPumpManager: PumpManager {
             case .failure(let error):
                 completion(error)
             }
-
-            if let delegate = self.dosingDelegate.value {
-                delegate.pumpManager(self, didEnactBolus: result)
-            }
         }
     }
 
@@ -664,9 +659,6 @@ public class TandemPumpManager: PumpManager {
         guard let queue = delegateQueue else { return }
         queue.async {
             completion(result)
-            if let delegate = self.dosingDelegate.value {
-                delegate.pumpManager(self, didCancelBolus: result)
-            }
         }
     }
 
@@ -679,10 +671,6 @@ public class TandemPumpManager: PumpManager {
             case .failure(let error):
                 completion(error)
             }
-
-            if let delegate = self.dosingDelegate.value {
-                delegate.pumpManager(self, didEnactTempBasal: result)
-            }
         }
     }
 
@@ -690,9 +678,6 @@ public class TandemPumpManager: PumpManager {
         guard let queue = delegateQueue else { return }
         queue.async {
             completion(error)
-            if let delegate = self.dosingDelegate.value {
-                delegate.pumpManager(self, didSuspendDeliveryWithError: error)
-            }
         }
     }
 
@@ -700,9 +685,6 @@ public class TandemPumpManager: PumpManager {
         guard let queue = delegateQueue else { return }
         queue.async {
             completion(error)
-            if let delegate = self.dosingDelegate.value {
-                delegate.pumpManager(self, didResumeDeliveryWithError: error)
-            }
         }
     }
 
@@ -732,15 +714,6 @@ public class TandemPumpManager: PumpManager {
         }
         set {
             pumpDelegate.value = newValue
-        }
-    }
-
-    public var dosingDecisionDelegate: PumpManagerDosingDecisionDelegate? {
-        get {
-            return dosingDelegate.value
-        }
-        set {
-            dosingDelegate.value = newValue
         }
     }
 
@@ -1013,7 +986,7 @@ public class TandemPumpManager: PumpManager {
                     type: .bolus,
                     startDate: active.dose.startDate,
                     endDate: endDate,
-                    value: active.dose.value,
+                    value: active.dose.programmedUnits,
                     unit: active.dose.unit,
                     deliveredUnits: active.dose.deliveredUnits,
                     syncIdentifier: active.dose.syncIdentifier,
@@ -1090,7 +1063,7 @@ public class TandemPumpManager: PumpManager {
                             type: .tempBasal,
                             startDate: active.dose.startDate,
                             endDate: endDate,
-                            value: active.dose.value,
+                            value: active.dose.programmedUnits,
                             unit: active.dose.unit,
                             deliveredUnits: active.dose.deliveredUnits,
                             syncIdentifier: active.dose.syncIdentifier,
@@ -1359,7 +1332,7 @@ public class TandemPumpManager: PumpManager {
                     }
                 }
 
-                let schedule = BasalRateSchedule(items: sortedItems, timeZone: self.lockedStatus.value.timeZone)
+                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
 
                 var managerState = self.lockedState.value
                 managerState.basalRateSchedule = schedule
@@ -1399,9 +1372,9 @@ public class TandemPumpManager: PumpManager {
             guard let self = self else { return }
 
             do {
-                var appliedLimits = DeliveryLimits(maximumBasalRatePerHour: nil, maximumBolus: nil)
+                var appliedLimits = DeliveryLimits(maximumBasalRate: nil, maximumBolus: nil)
 
-                if let maxBasal = deliveryLimits.maximumBasalRatePerHour {
+                if let maxBasal = deliveryLimits.maximumBasalRate {
                     let milliunits = Int((maxBasal * 1000.0).rounded())
                     let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -1456,15 +1429,6 @@ public class TandemPumpManager: PumpManager {
             completion(nil)
         }
     }
-}
-
-@available(macOS 13.0, iOS 14.0, *)
-extension TandemPumpManager: PumpManagerUI {
-#if canImport(UIKit)
-    public func pairingViewController(onFinished: @escaping (Result<Void, Error>) -> Void) -> UIViewController {
-        return TandemPumpPairingViewController(pumpManager: self, completion: onFinished)
-    }
-#endif
 }
 
 // MARK: - TandemPumpDelegate Conformance
@@ -1592,7 +1556,7 @@ private extension PumpManagerStatus.BasalDeliveryState {
             if let quantity = dose.scheduledBasalRate {
                 return quantity.doubleValue(for: HKUnit.internationalUnitPerHour())
             }
-            return dose.value
+            return dose.programmedUnits
         default:
             return nil
         }

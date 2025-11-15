@@ -61,10 +61,10 @@ public class PumpComm: CustomDebugStringConvertible {
     // TODO(jwoglom): device name or PIN?
     public init(pumpState: PumpState?,
                 retryPolicy: PumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
-                delayHandler: @escaping (TimeInterval) -> Void = PumpComm.defaultDelayHandler) {
+                delayHandler: ((TimeInterval) -> Void)? = nil) {
         self.delegate = nil
         self.retryPolicy = retryPolicy
-        self.delayHandler = delayHandler
+        self.delayHandler = delayHandler ?? PumpComm.defaultDelayHandler
 
         let initialState = pumpState ?? PumpState()
         self.pumpState = pumpState ?? initialState
