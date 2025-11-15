@@ -122,6 +122,11 @@ let package = Package(
                 path: "Tests/TandemKitTests"
             ),
             .testTarget(
+                name: "TandemCommTests",
+                dependencies: ["TandemKit", "TandemCore"],
+                path: "Tests/TandemCommTests"
+            ),
+            .testTarget(
                 name: "TandemSimulatorTests",
                 dependencies: ["TandemSimulator", "TandemCore", "TandemBLE"],
                 path: "Tests/TandemSimulatorTests"

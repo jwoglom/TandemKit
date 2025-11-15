@@ -20,6 +20,7 @@ public protocol PumpCommDelegate: AnyObject {
                   metadata: MessageMetadata?,
                   characteristic: CharacteristicUUID,
                   txId: UInt8)
+    func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent)
 }
 
 
@@ -30,6 +31,9 @@ public class PumpComm: CustomDebugStringConvertible {
     public weak var delegate: PumpCommDelegate?
 
     public let log = OSLog(category: "PumpComm")
+
+    public var retryPolicy: PumpCommRetryPolicy
+    private let delayHandler: (TimeInterval) -> Void
 
     private var session: PumpCommSession?
 
@@ -55,12 +59,21 @@ public class PumpComm: CustomDebugStringConvertible {
     }
     
     // TODO(jwoglom): device name or PIN?
-    public init(pumpState: PumpState?) {
+    public init(pumpState: PumpState?,
+                retryPolicy: PumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
+                delayHandler: @escaping (TimeInterval) -> Void = PumpComm.defaultDelayHandler) {
         self.delegate = nil
+        self.retryPolicy = retryPolicy
+        self.delayHandler = delayHandler
 
         let initialState = pumpState ?? PumpState()
         self.pumpState = pumpState ?? initialState
         self.session = PumpCommSession(pumpState: initialState, delegate: self)
+    }
+
+    private static func defaultDelayHandler(_ interval: TimeInterval) {
+        guard interval > 0 else { return }
+        Thread.sleep(forTimeInterval: interval)
     }
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -104,21 +117,58 @@ public class PumpComm: CustomDebugStringConvertible {
     public func sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
         log.debug("sendMessage: attempting to send %@", String(describing: message))
 
-        do {
-            let response = try transport.sendMessage(message)
-            log.debug("sendMessage: received response %@", String(describing: response))
+        var attempt = 0
 
-            // Check if the response indicates an error condition
-            // Note: Different message types may have different error indicators
-            // For now, we just return the response and let the caller handle it
+        while true {
+            attempt += 1
+            do {
+                let response = try transport.sendMessage(message)
+                log.debug("sendMessage: received response %@", String(describing: response))
 
-            return response
-        } catch let error as PumpCommError {
-            log.error("sendMessage pump communication error: %{public}@", String(describing: error))
-            throw error
-        } catch {
-            log.error("sendMessage unexpected error: %{public}@", String(describing: error))
-            throw PumpCommError.other
+                if let errorResponse = response as? ErrorResponse {
+                    log.error("sendMessage: pump returned error response (code=%{public}d) on attempt %{public}d", errorResponse.errorCodeId, attempt)
+                    switch handleFault(for: message, response: errorResponse, attempt: attempt) {
+                    case .retry:
+                        continue
+                    case .fail(let event):
+                        throw PumpCommError.pumpFault(event: event)
+                    }
+                }
+
+                return response
+            } catch let error as PumpCommError {
+                log.error("sendMessage pump communication error: %{public}@", String(describing: error))
+                throw error
+            } catch {
+                log.error("sendMessage unexpected error: %{public}@", String(describing: error))
+                throw PumpCommError.other
+            }
+        }
+    }
+
+    private enum FaultHandlingResult {
+        case retry
+        case fail(PumpCommFaultEvent)
+    }
+
+    private func handleFault(for message: Message, response: ErrorResponse, attempt: Int) -> FaultHandlingResult {
+        let decision = retryPolicy.decision(for: response.errorCode, attempt: attempt)
+        let event = PumpCommFaultEvent(request: message,
+                                       response: response,
+                                       code: response.errorCode,
+                                       attempt: attempt,
+                                       decision: decision)
+
+        delegate?.pumpComm(self, didEncounterFault: event)
+
+        switch decision {
+        case .retry(let delay):
+            log.debug("sendMessage: scheduling retry for fault code %{public}d after %{public}.2f s", response.errorCodeId, delay)
+            delayHandler(delay)
+            return .retry
+        case .doNotRetry:
+            log.error("sendMessage: not retrying fault code %{public}d", response.errorCodeId)
+            return .fail(event)
         }
     }
 
