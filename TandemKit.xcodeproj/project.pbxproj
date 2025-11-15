@@ -268,9 +268,8 @@
 		1A693F542D2B2B9D00A65351 /* MockKitUI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */; };
 		1A693F552D2B2B9D00A65351 /* MockKitUI.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F532D2B2B9D00A65351 /* MockKitUI.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		1AAA18792D2B1E060061C043 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
-		1AD16BAB2EC8FE2B0016B536 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 1AD16BA72EC8FE2B0016B536 /* Info.plist */; };
-		1AD16BAC2EC8FE2B0016B536 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AD16BA92EC8FE2B0016B536 /* TandemKitPlugin.swift */; };
-		1AD16BAD2EC8FE2B0016B536 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 1AD16BA82EC8FE2B0016B536 /* TandemKitPlugin.h */; };
+               1AD16BAC2EC8FE2B0016B536 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AD16BA92EC8FE2B0016B536 /* TandemKitPlugin.swift */; };
+               1AD16BAD2EC8FE2B0016B536 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 1AD16BA82EC8FE2B0016B536 /* TandemKitPlugin.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1159,9 +1158,8 @@
 		1AAA186C2D2B1E060061C043 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				1AD16BAB2EC8FE2B0016B536 /* Info.plist in Resources */,
-			);
+                       files = (
+                       );
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		1AAA18762D2B1E060061C043 /* Resources */ = {
