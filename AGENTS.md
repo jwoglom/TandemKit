@@ -48,11 +48,12 @@ Responses:
 - [x] PumpingStateStreamResponse
 
 ### CurrentStatus
+_Remaining unchecked CurrentStatus tests: 95_
 Requests:
 - [x] AlarmStatusRequest
-   - [ ] Tests for AlarmStatusRequest
+   - [x] Tests for AlarmStatusRequest
 - [x] AlertStatusRequest
-   - [ ] Tests for AlertStatusRequest
+   - [x] Tests for AlertStatusRequest
 - [x] ApiVersionRequest
    - [x] Tests for ApiVersionRequest
 - [x] BasalIQAlertInfoRequest
@@ -62,23 +63,23 @@ Requests:
 - [x] BasalIQStatusRequest
    - [ ] Tests for BasalIQStatusRequest
 - [x] BasalLimitSettingsRequest
-   - [ ] Tests for BasalLimitSettingsRequest
+   - [x] Tests for BasalLimitSettingsRequest
 - [x] BolusCalcDataSnapshotRequest
-   - [ ] Tests for BolusCalcDataSnapshotRequest
+   - [x] Tests for BolusCalcDataSnapshotRequest
 - [x] BolusPermissionChangeReasonRequest
    - [ ] Tests for BolusPermissionChangeReasonRequest
 - [x] CGMAlertStatusRequest
-   - [ ] Tests for CGMAlertStatusRequest
+   - [x] Tests for CGMAlertStatusRequest
 - [x] CGMGlucoseAlertSettingsRequest
-   - [ ] Tests for CGMGlucoseAlertSettingsRequest
+   - [x] Tests for CGMGlucoseAlertSettingsRequest
 - [x] CGMHardwareInfoRequest
-   - [ ] Tests for CGMHardwareInfoRequest
+   - [x] Tests for CGMHardwareInfoRequest
 - [x] CGMOORAlertSettingsRequest
-   - [ ] Tests for CGMOORAlertSettingsRequest
+   - [x] Tests for CGMOORAlertSettingsRequest
 - [x] CGMRateAlertSettingsRequest
-   - [ ] Tests for CGMRateAlertSettingsRequest
+   - [x] Tests for CGMRateAlertSettingsRequest
 - [x] CGMStatusRequest
-   - [ ] Tests for CGMStatusRequest
+   - [x] Tests for CGMStatusRequest
 - [x] CommonSoftwareInfoRequest
    - [ ] Tests for CommonSoftwareInfoRequest
 - [x] ControlIQIOBRequest
@@ -92,7 +93,7 @@ Requests:
 - [x] CurrentBasalStatusRequest
    - [ ] Tests for CurrentBasalStatusRequest
 - [x] CurrentBatteryV1Request
-   - [ ] Tests for CurrentBatteryV1Request
+   - [x] Tests for CurrentBatteryV1Request
 - [x] CurrentBatteryV2Request
    - [ ] Tests for CurrentBatteryV2Request
 - [x] CurrentBolusStatusRequest
@@ -106,7 +107,7 @@ Requests:
 - [x] GetSavedG7PairingCodeRequest
    - [ ] Tests for GetSavedG7PairingCodeRequest
 - [x] GlobalMaxBolusSettingsRequest
-   - [ ] Tests for GlobalMaxBolusSettingsRequest
+   - [x] Tests for GlobalMaxBolusSettingsRequest
 - [x] HistoryLogRequest
    - [ ] Tests for HistoryLogRequest
 - [x] HistoryLogStatusRequest
@@ -170,9 +171,9 @@ Requests:
 
 Responses:
 - [x] AlarmStatusResponse
-   - [ ] Tests for AlarmStatusResponse
+   - [x] Tests for AlarmStatusResponse
 - [x] AlertStatusResponse
-   - [ ] Tests for AlertStatusResponse
+   - [x] Tests for AlertStatusResponse
 - [x] ApiVersionResponse
    - [ ] Tests for ApiVersionResponse
 - [x] BasalIQAlertInfoResponse
@@ -182,23 +183,23 @@ Responses:
 - [x] BasalIQStatusResponse
    - [ ] Tests for BasalIQStatusResponse
 - [x] BasalLimitSettingsResponse
-   - [ ] Tests for BasalLimitSettingsResponse
+   - [x] Tests for BasalLimitSettingsResponse
 - [x] BolusCalcDataSnapshotResponse
-   - [ ] Tests for BolusCalcDataSnapshotResponse
+   - [x] Tests for BolusCalcDataSnapshotResponse
 - [x] BolusPermissionChangeReasonResponse
    - [ ] Tests for BolusPermissionChangeReasonResponse
 - [x] CGMAlertStatusResponse
-   - [ ] Tests for CGMAlertStatusResponse
+   - [x] Tests for CGMAlertStatusResponse
 - [x] CGMGlucoseAlertSettingsResponse
-   - [ ] Tests for CGMGlucoseAlertSettingsResponse
+   - [x] Tests for CGMGlucoseAlertSettingsResponse
 - [x] CGMHardwareInfoResponse
-   - [ ] Tests for CGMHardwareInfoResponse
+   - [x] Tests for CGMHardwareInfoResponse
 - [x] CGMOORAlertSettingsResponse
-   - [ ] Tests for CGMOORAlertSettingsResponse
+   - [x] Tests for CGMOORAlertSettingsResponse
 - [x] CGMRateAlertSettingsResponse
-   - [ ] Tests for CGMRateAlertSettingsResponse
+   - [x] Tests for CGMRateAlertSettingsResponse
 - [x] CGMStatusResponse
-   - [ ] Tests for CGMStatusResponse
+   - [x] Tests for CGMStatusResponse
 - [x] CommonSoftwareInfoResponse
    - [ ] Tests for CommonSoftwareInfoResponse
 - [x] ControlIQIOBResponse
@@ -215,7 +216,7 @@ Responses:
    - [ ] Tests for CurrentBasalStatusResponse
 - [x] CurrentBatteryAbstractResponse
 - [x] CurrentBatteryV1Response
-   - [ ] Tests for CurrentBatteryV1Response
+   - [x] Tests for CurrentBatteryV1Response
 - [x] CurrentBatteryV2Response
    - [ ] Tests for CurrentBatteryV2Response
 - [x] CurrentBolusStatusResponse
@@ -229,7 +230,7 @@ Responses:
 - [x] GetSavedG7PairingCodeResponse
    - [ ] Tests for GetSavedG7PairingCodeResponse
 - [x] GlobalMaxBolusSettingsResponse
-   - [ ] Tests for GlobalMaxBolusSettingsResponse
+   - [x] Tests for GlobalMaxBolusSettingsResponse
 - [x] HistoryLogResponse
    - [ ] Tests for HistoryLogResponse
 - [x] HistoryLogStatusResponse
