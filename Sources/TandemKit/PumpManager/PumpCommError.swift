@@ -8,6 +8,7 @@ public enum PumpCommError: Error {
     case errorResponse(response: any Message)
     case pumpFault(event: PumpCommFaultEvent)
     case notImplemented
+    case pumpChallengeError
     case other
 }
 

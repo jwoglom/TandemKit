@@ -71,6 +71,7 @@ public class PumpCommSession {
             #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
                 try pairUsingJpake(transport: transport, pairingCode: pairingCode)
             #else
+            logger.error("[PumpCommSession] Pairing cannot be performed, no JPAKE import")
                 throw PumpCommError.other
             #endif
         } else {
@@ -104,7 +105,7 @@ public class PumpCommSession {
             pairingCode: pairingCode
         )
         guard let pumpChallengeRequest = challengeMessage as? PumpChallengeRequest else {
-            throw PumpCommError.other
+            throw PumpCommError.pumpChallengeError
         }
 
         logger.debug("[PumpCommSession] Sending PumpChallengeRequest")
