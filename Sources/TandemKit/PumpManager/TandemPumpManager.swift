@@ -1529,6 +1529,14 @@ extension TandemPumpManager: PumpCommDelegate {
             }
         }
     }
+
+    public func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
+        telemetryLogger.error("Pump fault code=\(event.rawCode) category=\(event.category) attempt=\(event.attempt) willRetry=\(event.willRetry)")
+
+        if !event.willRetry {
+            notifyPumpManagerDelegateOfError(.pumpFault(event: event))
+        }
+    }
 }
 
 private extension TandemPumpManager {
