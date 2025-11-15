@@ -31,6 +31,11 @@ final class TandemPumpManagerStateTests: XCTestCase {
             ],
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
+        let detectedInfo = TandemPumpManagerState.DetectedPumpInfo(
+            manufacturer: "Tandem Diabetes Care",
+            model: "t:Mobi",
+            identifier: .mobi
+        )
 
         let state = TandemPumpManagerState(
             pumpState: pumpState,
@@ -41,7 +46,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
             lastBasalStatusDate: timestamp,
             bolusState: .inProgress(bolusDose),
             deliveryIsUncertain: true,
-            basalRateSchedule: schedule
+            basalRateSchedule: schedule,
+            detectedPumpInfo: detectedInfo
         )
 
         let rawValue = state.rawValue
@@ -67,6 +73,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         }
         XCTAssertTrue(restoredState.deliveryIsUncertain)
         XCTAssertEqual(restoredState.basalRateSchedule, schedule)
+        XCTAssertEqual(restoredState.detectedPumpInfo, detectedInfo)
     }
 
     func testVersion1RawValueMigration() throws {
@@ -120,7 +127,12 @@ final class TandemPumpManagerStateTests: XCTestCase {
             lastBasalStatusDate: timestamp,
             bolusState: .noBolus,
             deliveryIsUncertain: true,
-            basalRateSchedule: schedule
+            basalRateSchedule: schedule,
+            detectedPumpInfo: TandemPumpManagerState.DetectedPumpInfo(
+                manufacturer: "Tandem Diabetes Care",
+                model: "t:slim X2",
+                identifier: .tslimX2
+            )
         )
 
         PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
@@ -141,6 +153,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restoredState.basalRateSchedule, schedule)
         XCTAssertEqual(restoredState.lastBatteryReading?.chargeRemaining, battery.chargeRemaining)
         XCTAssertEqual(restoredState.lastReservoirReading?.unitVolume, reservoir.unitVolume)
+        XCTAssertEqual(restoredState.detectedPumpInfo?.identifier, .tslimX2)
 
         let derivedSecret = PumpStateSupplier.getDerivedSecret()
         XCTAssertEqual(derivedSecret, pumpState.derivedSecret)

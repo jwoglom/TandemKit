@@ -83,6 +83,10 @@ public class TandemPumpManager: PumpManager {
     public static let onboardingSupportedBolusVolumes: [Double] = [0.1, 0.2, 0.3, 0.5, 1.0, 2.0, 3.0, 5.0]
     public static let onboardingSupportedMaximumBolusVolumes: [Double] = onboardingSupportedBolusVolumes
 
+    private static let defaultDeviceName = "TandemPump"
+    private static let fallbackManufacturerName = "Tandem Diabetes Care"
+    private static let fallbackModelName = KnownDeviceModel.tslimX2.displayName
+
     public typealias RawStateValue = [String: Any]
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
@@ -189,9 +193,9 @@ public class TandemPumpManager: PumpManager {
         return PumpManagerStatus(
             timeZone: TimeZone.current,
             device: HKDevice(
-                name: "TandemPump",
-                manufacturer: "Tandem",
-                model: "t:slim X2",
+                name: defaultDeviceName,
+                manufacturer: fallbackManufacturerName,
+                model: fallbackModelName,
                 hardwareVersion: nil as String?,
                 firmwareVersion: nil as String?,
                 softwareVersion: nil as String?,
@@ -208,11 +212,45 @@ public class TandemPumpManager: PumpManager {
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         var status = makeDefaultStatus()
+        status.device = makeDevice(from: state)
         status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
         status.bolusState = state.bolusState
         status.deliveryIsUncertain = state.deliveryIsUncertain
         status.pumpBatteryChargeRemaining = state.lastBatteryReading?.chargeRemaining
         return status
+    }
+
+    private static func makeDevice(from state: TandemPumpManagerState) -> HKDevice {
+        let info = state.detectedPumpInfo
+        let manufacturer = sanitizedString(info?.manufacturer) ?? fallbackManufacturerName
+
+        let model: String
+        if let explicitModel = sanitizedString(info?.model) {
+            model = explicitModel
+        } else if let identifier = info?.identifier {
+            model = identifier.displayName
+        } else {
+            model = fallbackModelName
+        }
+
+        return HKDevice(
+            name: defaultDeviceName,
+            manufacturer: manufacturer,
+            model: model,
+            hardwareVersion: nil as String?,
+            firmwareVersion: nil as String?,
+            softwareVersion: nil as String?,
+            localIdentifier: nil as String?,
+            udiDeviceIdentifier: nil as String?
+        )
+    }
+
+    private static func sanitizedString(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+
+        return trimmed
     }
 
     public init(state: TandemPumpManagerState) {
@@ -1452,6 +1490,12 @@ extension TandemPumpManager: TandemPumpDelegate {
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
         updateTransport(transport)
     }
+
+    public func tandemPump(_ pump: TandemPump,
+                          didIdentifyPump manufacturer: String,
+                          model: String) {
+        updateDetectedPumpInfo(manufacturer: manufacturer, model: model, identifier: nil)
+    }
 }
 
 // MARK: - PumpCommDelegate Conformance
@@ -1487,6 +1531,8 @@ extension TandemPumpManager: PumpCommDelegate {
             handleBasalResponse(basal, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
+        case let version as PumpVersionResponse:
+            handlePumpVersionResponse(version, source: .notification)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
@@ -1498,6 +1544,82 @@ extension TandemPumpManager: PumpCommDelegate {
 }
 
 private extension TandemPumpManager {
+    func updateDetectedPumpInfo(manufacturer: String?, model: String?, identifier: KnownDeviceModel?) {
+        let trimmedManufacturer = Self.sanitizedString(manufacturer)
+        let trimmedModel = Self.sanitizedString(model)
+        let resolvedIdentifier = identifier ?? inferDeviceModel(manufacturer: trimmedManufacturer, model: trimmedModel)
+        let resolvedModelName = trimmedModel ?? resolvedIdentifier?.displayName
+
+        var state = lockedState.value
+        var info = state.detectedPumpInfo ?? TandemPumpManagerState.DetectedPumpInfo()
+        var didChange = false
+
+        if let trimmedManufacturer = trimmedManufacturer, info.manufacturer != trimmedManufacturer {
+            info.manufacturer = trimmedManufacturer
+            didChange = true
+        }
+
+        if let resolvedModelName = resolvedModelName, info.model != resolvedModelName {
+            info.model = resolvedModelName
+            didChange = true
+        }
+
+        if let resolvedIdentifier = resolvedIdentifier, info.identifier != resolvedIdentifier {
+            info.identifier = resolvedIdentifier
+            didChange = true
+        }
+
+        guard didChange else { return }
+
+        state.detectedPumpInfo = info
+        lockedState.value = state
+
+        log.default("Updated detected pump info manufacturer=%{public}@ model=%{public}@ identifier=%{public}@", info.manufacturer ?? "nil", info.model ?? "nil", info.identifier?.rawValue ?? "nil")
+
+        updateStatus { status in
+            status.device = Self.makeDevice(from: state)
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
+    func inferDeviceModel(manufacturer: String?, model: String?) -> KnownDeviceModel? {
+        guard let model = model?.lowercased() else {
+            return nil
+        }
+
+        if model.contains("mobi") {
+            return .mobi
+        }
+
+        if model.contains("slim") || model.contains("x2") {
+            return .tslimX2
+        }
+
+        return nil
+    }
+
+    func inferDeviceModel(from response: PumpVersionResponse) -> KnownDeviceModel? {
+        switch response.modelNum {
+        case 1, 2:
+            return .tslimX2
+        case 3:
+            return .mobi
+        default:
+            return nil
+        }
+    }
+
+    func handlePumpVersionResponse(_ response: PumpVersionResponse, source: ResponseSource) {
+        logger(for: source).debug("[\(source.label)] PumpVersion modelNum=\(response.modelNum)")
+
+        guard let identifier = inferDeviceModel(from: response) else {
+            return
+        }
+
+        updateDetectedPumpInfo(manufacturer: nil, model: nil, identifier: identifier)
+    }
+
     func makeBasalSegmentRequests(from items: [RepeatingScheduleValue<Double>]) -> [SetIDPSegmentRequest] {
         let idpId = 0
         let unknownId = 1

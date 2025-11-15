@@ -15,7 +15,19 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 3
+    public struct DetectedPumpInfo: Equatable, Codable {
+        public var manufacturer: String?
+        public var model: String?
+        public var identifier: KnownDeviceModel?
+
+        public init(manufacturer: String? = nil, model: String? = nil, identifier: KnownDeviceModel? = nil) {
+            self.manufacturer = manufacturer
+            self.model = model
+            self.identifier = identifier
+        }
+    }
+
+    public static let version = 4
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -28,6 +40,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var bolusState: PumpManagerStatus.BolusState
     public var deliveryIsUncertain: Bool
     public var basalRateSchedule: BasalRateSchedule?
+    public var detectedPumpInfo: DetectedPumpInfo?
 
     public init(
         pumpState: PumpState?,
@@ -40,7 +53,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastBasalStatusDate: Date? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
         deliveryIsUncertain: Bool = false,
-        basalRateSchedule: BasalRateSchedule? = nil
+        basalRateSchedule: BasalRateSchedule? = nil,
+        detectedPumpInfo: DetectedPumpInfo? = nil
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -53,6 +67,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.bolusState = bolusState
         self.deliveryIsUncertain = deliveryIsUncertain
         self.basalRateSchedule = basalRateSchedule
+        self.detectedPumpInfo = detectedPumpInfo
     }
 
     public init?(rawValue: RawValue) {
@@ -128,6 +143,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.basalRateSchedule = nil
         }
+
+        if let detectedRaw = rawValue["detectedPumpInfo"] as? [String: Any] {
+            self.detectedPumpInfo = TandemPumpManagerState.decodeDetectedPumpInfo(from: detectedRaw)
+        } else {
+            self.detectedPumpInfo = nil
+        }
     }
 
     public var rawValue: RawValue {
@@ -180,6 +201,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
+        if let detectedPumpInfo = detectedPumpInfo,
+           let encodedDetected = TandemPumpManagerState.encodeDetectedPumpInfo(detectedPumpInfo) {
+            raw["detectedPumpInfo"] = encodedDetected
+        }
+
         return raw
     }
 }
@@ -196,7 +222,8 @@ public extension TandemPumpManagerState {
             lhs.lastBasalStatusDate == rhs.lastBasalStatusDate &&
             lhs.bolusState == rhs.bolusState &&
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
-            lhs.basalRateSchedule == rhs.basalRateSchedule
+            lhs.basalRateSchedule == rhs.basalRateSchedule &&
+            lhs.detectedPumpInfo == rhs.detectedPumpInfo
     }
 }
 
@@ -380,6 +407,40 @@ private extension TandemPumpManagerState {
 
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
         return BasalRateSchedule(items: items, timeZone: timeZone)
+    }
+
+    static func encodeDetectedPumpInfo(_ info: DetectedPumpInfo) -> [String: Any]? {
+        var raw: [String: Any] = [:]
+
+        if let manufacturer = info.manufacturer, !manufacturer.isEmpty {
+            raw["manufacturer"] = manufacturer
+        }
+
+        if let model = info.model, !model.isEmpty {
+            raw["model"] = model
+        }
+
+        if let identifier = info.identifier {
+            raw["identifier"] = identifier.rawValue
+        }
+
+        return raw.isEmpty ? nil : raw
+    }
+
+    static func decodeDetectedPumpInfo(from raw: [String: Any]) -> DetectedPumpInfo? {
+        let manufacturer = raw["manufacturer"] as? String
+        let model = raw["model"] as? String
+        var identifier: KnownDeviceModel? = nil
+
+        if let identifierRaw = raw["identifier"] as? String {
+            identifier = KnownDeviceModel(rawValue: identifierRaw)
+        }
+
+        if manufacturer == nil && model == nil && identifier == nil {
+            return nil
+        }
+
+        return DetectedPumpInfo(manufacturer: manufacturer, model: model, identifier: identifier)
     }
 
     static func reservoirValuesEqual(_ lhs: ReservoirValue?, _ rhs: ReservoirValue?) -> Bool {
