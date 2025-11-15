@@ -52,7 +52,7 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func stopScan() {
-        pumpManager?.tandemPump.disconnect()
+        pumpManager?.tandemPump.stopScanning()
         isScanning = false
     }
 

@@ -154,11 +154,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if transport != nil {
-            telemetryLogger.debug("Transport available – triggering telemetry refresh")
+            telemetryLogger.debug("Transport available – checking authentication before telemetry")
             updateStatus { status in
                 status.deliveryIsUncertain = false
             }
-            telemetryScheduler.triggerAll()
+
+            // Only trigger telemetry if we're already authenticated
+            if let pumpState = lockedState.value.pumpState,
+               pumpState.derivedSecret != nil,
+               pumpState.serverNonce != nil
+            {
+                telemetryLogger.debug("Authenticated – triggering telemetry refresh")
+                telemetryScheduler.triggerAll()
+            } else {
+                telemetryLogger.debug("Not authenticated yet – skipping telemetry until pairing completes")
+            }
         } else {
             telemetryLogger.debug("Transport cleared – telemetry will pause until reconnect")
             updateStatus { status in
@@ -854,9 +864,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                    DispatchQueue.global(qos: .userInitiated).async { [pumpComm] in
+                    DispatchQueue.global(qos: .userInitiated).async { [pumpComm, weak self, telemetryScheduler] in
                         do {
                             try pumpComm.pair(transport: transport, pairingCode: sanitizedCode)
+
+                            // After successful pairing, trigger initial telemetry refresh
+                            DispatchQueue.main.async {
+                                guard let self = self else { return }
+                                self.telemetryLogger.debug("Pairing successful – triggering initial telemetry refresh")
+                                telemetryScheduler.triggerAll()
+                            }
+
                             completion(.success(()))
                         } catch {
                             completion(.failure(error))

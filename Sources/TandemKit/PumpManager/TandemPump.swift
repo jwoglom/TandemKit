@@ -44,6 +44,11 @@ public class TandemPump {
         bluetoothManager.scanForPeripheral()
     }
 
+    /// Start scanning for a Tandem pump peripheral.
+    public func stopScanning() {
+        bluetoothManager.stopScan()
+    }
+
     /// Permanently disconnect from the pump.
     public func disconnect() {
         bluetoothManager.permanentDisconnect()
@@ -89,8 +94,24 @@ public class TandemPump {
 
     // MARK: - Bluetooth events
 
+    // when we have connected via bluetooth LE transport to the pump but we are not necessarily paired
     @MainActor func onPumpConnected(_ manager: PeripheralManager) {
+        // Check if we have authentication artifacts
+        guard let pumpState = state,
+              pumpState.derivedSecret != nil,
+              pumpState.serverNonce != nil
+        else {
+            // Not authenticated yet - this happens during initial pairing
+            // The pairing flow will handle authentication via pairPump()
+            log.info("Pump connected but not authenticated yet - waiting for pairing flow")
+            delegate?.tandemPump(self, didCompleteConfiguration: manager)
+            return
+        }
+
+        // Already authenticated - proceed with startup requests
+        log.info("Pump connected and authenticated - sending startup requests")
         sendDefaultStartupRequests(manager)
+        delegate?.tandemPump(self, didCompleteConfiguration: manager)
     }
 
     @MainActor private func sendDefaultStartupRequests(_ manager: PeripheralManager) {

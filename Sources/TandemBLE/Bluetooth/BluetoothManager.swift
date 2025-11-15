@@ -154,6 +154,14 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         }
     }
 
+    public func stopScan() {
+        dispatchPrecondition(condition: .notOnQueue(managerQueue))
+
+        managerQueue.sync {
+            self.managerQueue_stopScan()
+        }
+    }
+
     // This is a actually `permanentDisconnect` - we do not plan on connecting to this device anymore
     public func permanentDisconnect() {
         dispatchPrecondition(condition: .notOnQueue(managerQueue))
@@ -259,6 +267,17 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
                 )
             }
         }
+    }
+
+    private func managerQueue_stopScan() {
+        dispatchPrecondition(condition: .onQueue(managerQueue))
+
+        guard manager.isScanning else {
+            return
+        }
+
+        log.debug("Stopping scan")
+        manager.stopScan()
     }
 
     /**

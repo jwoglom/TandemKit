@@ -73,7 +73,13 @@ let package = Package(
             ),
             .target(
                 name: "TandemKit",
-                dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
+                dependencies: [
+                    "TandemCore",
+                    "TandemBLE",
+                    "LoopKit",
+                    .product(name: "SwiftECC", package: "SwiftECC"),
+                    .product(name: "BigInt", package: "BigInt")
+                ],
                 path: "Sources/TandemKit"
             ),
             .target(
