@@ -36,6 +36,10 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
                 bolusTypeBitmask: 0
             )
         )
+        mockPeripheralManager.enqueueResponse(
+            for: HistoryLogStatusRequest.self,
+            response: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0)
+        )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
         let mockPumpComm = MockPumpComm(pumpState: nil)
@@ -104,6 +108,10 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
                 bolusTypeBitmask: 0
             )
         )
+        mockPeripheralManager.enqueueResponse(
+            for: HistoryLogStatusRequest.self,
+            response: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0)
+        )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
         let mockPumpComm = MockPumpComm(pumpState: nil)
@@ -156,6 +164,10 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
                 bolusSourceId: 0,
                 bolusTypeBitmask: 0
             )
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: HistoryLogStatusRequest.self,
+            response: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0)
         )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)

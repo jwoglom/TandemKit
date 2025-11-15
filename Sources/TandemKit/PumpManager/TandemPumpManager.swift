@@ -74,6 +74,26 @@ private struct ActiveTempBasal {
     let scheduledRate: Double
 }
 
+private struct PendingHistoryRequest {
+    let streamId: Int
+    let startSequence: UInt32
+    let count: Int
+}
+
+private struct HistorySyncState {
+    var nextSequence: UInt32?
+    var targetSequence: UInt32?
+    var pendingRequests: [Int: PendingHistoryRequest]
+    var isRequestInFlight: Bool
+
+    init(nextSequence: UInt32? = nil) {
+        self.nextSequence = nextSequence
+        self.targetSequence = nil
+        self.pendingRequests = [:]
+        self.isRequestInFlight = false
+    }
+}
+
 @available(macOS 13.0, iOS 14.0, *)
 public class TandemPumpManager: PumpManager {
     public static var localizedTitle: String = "TandemPumpManager"
@@ -107,6 +127,9 @@ public class TandemPumpManager: PumpManager {
     private let lockedCurrentBasalRate = Locked<Double?>(nil)
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
+    private let historySyncQueue = DispatchQueue(label: "com.jwoglom.TandemKit.historySync")
+    private let historySyncState: Locked<HistorySyncState>
+    private static let historyPageSize: Int = 16
 
     private func updatePairingArtifacts(with pumpState: PumpState?) {
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -161,6 +184,12 @@ public class TandemPumpManager: PumpManager {
         pumpComm.delegate = self
         tandemPump.pumpComm = pumpComm
     }
+
+#if DEBUG
+    func triggerHistorySyncForTesting() {
+        performHistorySync()
+    }
+#endif
 
     private enum ResponseSource {
         case telemetry
@@ -220,6 +249,7 @@ public class TandemPumpManager: PumpManager {
         self.lockedStatus = Locked(Self.makeStatus(from: state))
         self.lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         self.lockedReservoirValue = Locked(state.lastReservoirReading)
+        self.historySyncState = Locked(HistorySyncState(nextSequence: state.nextHistorySequence))
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -237,6 +267,7 @@ public class TandemPumpManager: PumpManager {
         self.lockedStatus = Locked(Self.makeStatus(from: state))
         self.lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         self.lockedReservoirValue = Locked(state.lastReservoirReading)
+        self.historySyncState = Locked(HistorySyncState(nextSequence: state.nextHistorySequence))
         self.tandemPump = TandemPump(state.pumpState)
 
         self.tandemPump.delegate = self
@@ -331,6 +362,10 @@ public class TandemPumpManager: PumpManager {
 
         telemetryScheduler.schedule(kind: .bolus, interval: 60) { [weak self] in
             self?.fetchBolusStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .history, interval: 5 * 60) { [weak self] in
+            self?.performHistorySync()
         }
     }
 
@@ -536,6 +571,277 @@ public class TandemPumpManager: PumpManager {
         } catch {
             telemetryLogger.error("Bolus telemetry request failed: \(error)")
         }
+    }
+
+    private func performHistorySync() {
+        historySyncQueue.async { [weak self] in
+            guard let self else { return }
+
+            guard let transport = self.transportLock.value else {
+                self.telemetryLogger.debug("Skipping history sync – no transport")
+                return
+            }
+
+            do {
+                let status: HistoryLogStatusResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: HistoryLogStatusRequest(),
+                    expecting: HistoryLogStatusResponse.self
+                )
+
+                self.processHistoryStatusResponse(status, source: .telemetry, transport: transport)
+            } catch {
+                self.telemetryLogger.error("History status request failed: \(error)")
+            }
+        }
+    }
+
+    private func processHistoryStatusResponse(_ response: HistoryLogStatusResponse,
+                                               source: ResponseSource,
+                                               transport: PumpMessageTransport?) {
+        telemetryLogger.debug("[\(source.label)] History status entries=\(response.numEntries) first=\(response.firstSequenceNum) last=\(response.lastSequenceNum)")
+
+        var state = historySyncState.value
+        let previousNext = state.nextSequence
+
+        var resetTarget = false
+
+        if state.nextSequence == nil {
+            state.nextSequence = initialHistoryStartSequence(from: response)
+        } else if response.numEntries == 0 {
+            if let currentNext = state.nextSequence, response.lastSequenceNum < currentNext {
+                resetTarget = true
+            }
+            state.nextSequence = incrementSequence(response.lastSequenceNum)
+        } else if let currentNext = state.nextSequence, response.lastSequenceNum < currentNext {
+            state.nextSequence = initialHistoryStartSequence(from: response)
+            resetTarget = true
+        } else if let currentNext = state.nextSequence, currentNext < response.firstSequenceNum {
+            state.nextSequence = response.firstSequenceNum
+        }
+
+        if resetTarget {
+            state.targetSequence = response.lastSequenceNum
+        } else if let target = state.targetSequence {
+            state.targetSequence = max(target, response.lastSequenceNum)
+        } else {
+            state.targetSequence = response.lastSequenceNum
+        }
+
+        historySyncState.value = state
+
+        if previousNext != state.nextSequence {
+            updateStoredHistorySequence(state.nextSequence)
+        }
+
+        requestNextHistoryPageIfNeeded(using: transport)
+    }
+
+    private func requestNextHistoryPageIfNeeded(using transport: PumpMessageTransport?) {
+        historySyncQueue.async { [weak self] in
+            guard let self else { return }
+
+            guard let transport else {
+                self.telemetryLogger.debug("History page pending but no transport available")
+                return
+            }
+
+            var state = self.historySyncState.value
+            defer { self.historySyncState.value = state }
+
+            guard !state.isRequestInFlight else { return }
+            guard let nextSequence = state.nextSequence else { return }
+            guard let targetSequence = state.targetSequence, targetSequence >= nextSequence else { return }
+
+            let remaining = Int(targetSequence) - Int(nextSequence) + 1
+            guard remaining > 0 else { return }
+
+            let count = min(TandemPumpManager.historyPageSize, remaining)
+
+            do {
+                let response: HistoryLogResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: HistoryLogRequest(startLog: nextSequence, numberOfLogs: count),
+                    expecting: HistoryLogResponse.self
+                )
+
+                guard response.status == 0 else {
+                    self.telemetryLogger.warning("History request rejected with status \(response.status)")
+                    state.isRequestInFlight = false
+                    return
+                }
+
+                state.isRequestInFlight = true
+                state.pendingRequests[response.streamId] = PendingHistoryRequest(streamId: response.streamId,
+                                                                                 startSequence: nextSequence,
+                                                                                 count: count)
+            } catch {
+                self.telemetryLogger.error("History request failed: \(error)")
+                state.isRequestInFlight = false
+            }
+        }
+    }
+
+    private func processHistoryStreamResponse(_ response: HistoryLogStreamResponse,
+                                               source: ResponseSource) {
+        telemetryLogger.debug("[\(source.label)] History stream id=\(response.streamId) count=\(response.numberOfHistoryLogs)")
+
+        var state = historySyncState.value
+        guard let pending = state.pendingRequests.removeValue(forKey: response.streamId) else {
+            telemetryLogger.warning("History stream received for unknown stream id \(response.streamId)")
+            historySyncState.value = state
+            return
+        }
+
+        state.isRequestInFlight = false
+        let minimumSequence = state.nextSequence ?? pending.startSequence
+        let (events, maxSequence) = translateHistoryLogs(response.historyLogs, minimumSequence: minimumSequence)
+
+        if let maxSequence {
+            state.nextSequence = incrementSequence(maxSequence)
+            updateStoredHistorySequence(state.nextSequence)
+        }
+
+        historySyncState.value = state
+
+        if !events.isEmpty {
+            let reconciliationDate = events.map { $0.date }.max()
+            updateLastReconciliation(reconciliationDate)
+            deliverPumpEvents(events, lastReconciliation: reconciliationDate, replacePending: false)
+        }
+
+        requestNextHistoryPageIfNeeded(using: transportLock.value)
+    }
+
+    private func translateHistoryLogs(_ logs: [HistoryLog], minimumSequence: UInt32) -> ([NewPumpEvent], UInt32?) {
+        guard !logs.isEmpty else { return ([], nil) }
+
+        let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
+        var events: [NewPumpEvent] = []
+        var maxSequence: UInt32?
+
+        for log in sortedLogs where log.sequenceNum >= minimumSequence {
+            if let event = makePumpEvent(from: log) {
+                events.append(event)
+            }
+
+            if let existing = maxSequence {
+                if log.sequenceNum > existing {
+                    maxSequence = log.sequenceNum
+                }
+            } else {
+                maxSequence = log.sequenceNum
+            }
+        }
+
+        return (events, maxSequence)
+    }
+
+    private func makePumpEvent(from log: HistoryLog) -> NewPumpEvent? {
+        let eventDate = pumpEventDate(from: log)
+        let raw = log.cargo
+
+        switch log {
+        case let bolus as BolusDeliveryHistoryLog:
+            let units = Double(bolus.deliveredTotal) / 100.0
+            let automatic = bolus.bolusSourceEnum == .controlIQAutoBolus
+            let wasProgrammedByPumpUI = bolus.bolusSourceEnum == .gui
+            let description = String(format: "Bolus %.2f U", units)
+
+            let dose = DoseEntry(
+                type: .bolus,
+                startDate: eventDate,
+                value: units,
+                unit: .units,
+                deliveredUnits: units,
+                description: description,
+                insulinType: nil,
+                automatic: automatic,
+                manuallyEntered: false,
+                isMutable: false,
+                wasProgrammedByPumpUI: wasProgrammedByPumpUI
+            )
+
+            return NewPumpEvent(date: eventDate, dose: dose, raw: raw, title: "Bolus Delivery", type: .bolus)
+        case let suspend as PumpingSuspendedHistoryLog:
+            let dose = DoseEntry(suspendDate: eventDate, automatic: suspend.reason == .autoSuspendPredictiveLowGlucose)
+            return NewPumpEvent(date: eventDate, dose: dose, raw: raw, title: "Pump Suspended", type: .suspend)
+        case _ as PumpingResumedHistoryLog:
+            let dose = DoseEntry(resumeDate: eventDate, automatic: false)
+            return NewPumpEvent(date: eventDate, dose: dose, raw: raw, title: "Pump Resumed", type: .resume)
+        case _ as TempRateActivatedHistoryLog:
+            return NewPumpEvent(date: eventDate, dose: nil, raw: raw, title: "Temp Basal Activated", type: .tempBasal)
+        case _ as TempRateCompletedHistoryLog:
+            return NewPumpEvent(date: eventDate, dose: nil, raw: raw, title: "Temp Basal Completed", type: .tempBasal)
+        default:
+            return NewPumpEvent(date: eventDate, dose: nil, raw: raw, title: String(describing: type(of: log)), type: nil)
+        }
+    }
+
+    private func pumpEventDate(from log: HistoryLog) -> Date {
+        let offset = pumpManagerDelegate?.detectedSystemTimeOffset ?? 0
+        return Date(timeIntervalSince1970: TimeInterval(log.pumpTimeSec) + offset)
+    }
+
+    private func updateStoredHistorySequence(_ nextSequence: UInt32?) {
+        var managerState = lockedState.value
+        if managerState.nextHistorySequence != nextSequence {
+            managerState.nextHistorySequence = nextSequence
+            lockedState.value = managerState
+        }
+    }
+
+    private func updateLastReconciliation(_ date: Date?) {
+        guard let date else { return }
+
+        var managerState = lockedState.value
+        if let current = managerState.lastReconciliation, current >= date {
+            return
+        }
+
+        managerState.lastReconciliation = date
+        lockedState.value = managerState
+    }
+
+    private func deliverPumpEvents(_ events: [NewPumpEvent],
+                                   lastReconciliation: Date?,
+                                   replacePending: Bool) {
+        guard let delegate = pumpManagerDelegate else { return }
+
+        pumpDelegate.queue.async { [weak self] in
+            guard let self else { return }
+            delegate.pumpManager(self,
+                                 hasNewPumpEvents: events,
+                                 lastReconciliation: lastReconciliation,
+                                 replacePendingEvents: replacePending) { [weak self] error in
+                if let error {
+                    self?.telemetryLogger.warning("Delegate failed to persist history events: \(error)")
+                }
+            }
+        }
+    }
+
+    private func initialHistoryStartSequence(from status: HistoryLogStatusResponse) -> UInt32 {
+        guard status.numEntries > 0 else {
+            return incrementSequence(status.lastSequenceNum)
+        }
+
+        let span = min(UInt32(TandemPumpManager.historyPageSize), status.numEntries)
+        let last = status.lastSequenceNum
+        if span <= 1 {
+            return max(status.firstSequenceNum, last)
+        }
+
+        if last < span - 1 {
+            return status.firstSequenceNum
+        }
+
+        let start = last - (span - 1)
+        return max(status.firstSequenceNum, start)
+    }
+
+    private func incrementSequence(_ value: UInt32) -> UInt32 {
+        value == UInt32.max ? UInt32.max : value + 1
     }
 
     private func notifyDelegateStateUpdated() {
@@ -1487,6 +1793,17 @@ extension TandemPumpManager: PumpCommDelegate {
             handleBasalResponse(basal, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
+        case let historyStatus as HistoryLogStatusResponse:
+            historySyncQueue.async { [weak self] in
+                guard let self else { return }
+                self.processHistoryStatusResponse(historyStatus, source: .notification, transport: self.transportLock.value)
+            }
+        case let historyStream as HistoryLogStreamResponse:
+            historySyncQueue.async { [weak self] in
+                self?.processHistoryStreamResponse(historyStream, source: .notification)
+            }
+        case is HistoryLogResponse:
+            notificationLogger.debug("[notification] Ignoring HistoryLogResponse acknowledgement")
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")

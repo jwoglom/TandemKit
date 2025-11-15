@@ -15,7 +15,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 3
+    public static let version = 4
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -28,6 +28,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var bolusState: PumpManagerStatus.BolusState
     public var deliveryIsUncertain: Bool
     public var basalRateSchedule: BasalRateSchedule?
+    public var nextHistorySequence: UInt32?
 
     public init(
         pumpState: PumpState?,
@@ -40,7 +41,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastBasalStatusDate: Date? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
         deliveryIsUncertain: Bool = false,
-        basalRateSchedule: BasalRateSchedule? = nil
+        basalRateSchedule: BasalRateSchedule? = nil,
+        nextHistorySequence: UInt32? = nil
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -53,6 +55,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.bolusState = bolusState
         self.deliveryIsUncertain = deliveryIsUncertain
         self.basalRateSchedule = basalRateSchedule
+        self.nextHistorySequence = nextHistorySequence
     }
 
     public init?(rawValue: RawValue) {
@@ -128,6 +131,16 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.basalRateSchedule = nil
         }
+
+        if let nextHistorySequence = rawValue["nextHistorySequence"] as? UInt32 {
+            self.nextHistorySequence = nextHistorySequence
+        } else if let nextHistorySequenceInt = rawValue["nextHistorySequence"] as? Int {
+            self.nextHistorySequence = UInt32(nextHistorySequenceInt)
+        } else if let nextHistorySequenceDouble = rawValue["nextHistorySequence"] as? Double {
+            self.nextHistorySequence = UInt32(nextHistorySequenceDouble)
+        } else {
+            self.nextHistorySequence = nil
+        }
     }
 
     public var rawValue: RawValue {
@@ -180,6 +193,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
+        if let nextHistorySequence = nextHistorySequence {
+            raw["nextHistorySequence"] = nextHistorySequence
+        }
+
         return raw
     }
 }
@@ -196,7 +213,8 @@ public extension TandemPumpManagerState {
             lhs.lastBasalStatusDate == rhs.lastBasalStatusDate &&
             lhs.bolusState == rhs.bolusState &&
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
-            lhs.basalRateSchedule == rhs.basalRateSchedule
+            lhs.basalRateSchedule == rhs.basalRateSchedule &&
+            lhs.nextHistorySequence == rhs.nextHistorySequence
     }
 }
 

@@ -54,6 +54,10 @@ final class TandemPumpManagerConnectionTests: XCTestCase {
                 basalModifiedBitmask: 0
             )
         )
+        mockPeripheralManager.enqueueResponse(
+            for: HistoryLogStatusRequest.self,
+            response: HistoryLogStatusResponse(numEntries: 0, firstSequenceNum: 0, lastSequenceNum: 0)
+        )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
         let mockPumpComm = MockPumpComm(pumpState: pumpState)
@@ -114,9 +118,12 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private(set) var statusUpdates: [StatusUpdate] = []
     private(set) var recordedErrors: [PumpManagerError] = []
     private(set) var didUpdateStateCallCount: Int = 0
+    private(set) var pumpEventBatches: [[NewPumpEvent]] = []
+    private(set) var pumpEventReplaceFlags: [Bool] = []
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
+    var onPumpEvents: (([NewPumpEvent]) -> Void)?
 
     func deviceManager(
         _ manager: DeviceManager,
@@ -163,6 +170,9 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         replacePendingEvents: Bool,
         completion: @escaping (Error?) -> Void
     ) {
+        pumpEventBatches.append(events)
+        pumpEventReplaceFlags.append(replacePendingEvents)
+        onPumpEvents?(events)
         completion(nil)
     }
 
