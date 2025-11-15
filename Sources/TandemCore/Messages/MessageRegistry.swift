@@ -86,6 +86,8 @@ public enum MessageRegistry {
     }
 
     private static let allTypes: [Message.Type] = [
+        ErrorResponse.self,
+        NonexistentErrorRequest.self,
         AlarmStatusRequest.self,
         AlarmStatusResponse.self,
         AlertStatusRequest.self,
@@ -364,8 +366,10 @@ public enum MessageRegistry {
     public static func matches(opCode: UInt8, characteristic: CharacteristicUUID? = nil) -> [MessageMetadata] {
         all.filter { meta in
             guard meta.opCode == opCode else { return false }
-            if let characteristic = characteristic {
-                return meta.characteristic == characteristic
+            if let characteristic = characteristic,
+               meta.characteristic != characteristic,
+               meta.type != ErrorResponse.self {
+                return false
             }
             return true
         }
