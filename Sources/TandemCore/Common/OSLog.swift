@@ -32,7 +32,7 @@ public extension OSLog {
         log(message, type: .error, args)
     }
 
-    private func log(_ message: StaticString, type: OSLogType, _ args: [CVarArg]) {
+    func log(_ message: StaticString, type: OSLogType, _ args: [CVarArg]) {
         switch args.count {
         case 0:
             os_log(message, log: self, type: type)
