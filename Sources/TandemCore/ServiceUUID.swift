@@ -1,10 +1,3 @@
-//
-//  ServiceUUID.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
 import CoreBluetooth
 
 public enum ServiceUUID: String, Sendable {
@@ -30,10 +23,10 @@ public let AllServiceUUIDs: [ServiceUUID] = [
 
 public extension ServiceUUID {
     var cbUUID: CBUUID {
-#if os(Linux)
-        return CBUUID(uuidString: rawValue)
-#else
-        return CBUUID(string: rawValue)
-#endif
+        #if os(Linux)
+            return CBUUID(uuidString: rawValue)
+        #else
+            return CBUUID(string: rawValue)
+        #endif
     }
 }

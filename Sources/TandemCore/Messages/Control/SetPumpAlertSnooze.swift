@@ -1,14 +1,3 @@
-//
-//  SetPumpAlertSnooze.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetPumpAlertSnoozeRequest and SetPumpAlertSnoozeResponse based on
-//  https://jwoglom.github.io/pumpX2/javadoc/messages/com/jwoglom/pumpx2/pump/messages/request/control/SetPumpAlertSnoozeRequest.html
-//  https://jwoglom.github.io/pumpX2/javadoc/messages/com/jwoglom/pumpx2/pump/messages/response/control/SetPumpAlertSnoozeResponse.html
-//
-
 import Foundation
 
 /// Request to enable or disable pump alert snooze timers.
@@ -27,18 +16,18 @@ public class SetPumpAlertSnoozeRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.snoozeEnabled = cargo[0] == 1
-        self.snoozeDurationMins = Int(cargo[1])
+        snoozeEnabled = cargo[0] == 1
+        snoozeDurationMins = Int(cargo[1])
     }
 
     public init(snoozeEnabled: Bool, snoozeDurationMins: Int) {
-        self.cargo = SetPumpAlertSnoozeRequest.buildCargo(snoozeEnabled: snoozeEnabled, snoozeDurationMins: snoozeDurationMins)
+        cargo = SetPumpAlertSnoozeRequest.buildCargo(snoozeEnabled: snoozeEnabled, snoozeDurationMins: snoozeDurationMins)
         self.snoozeEnabled = snoozeEnabled
         self.snoozeDurationMins = snoozeDurationMins
     }
 
     public static func buildCargo(snoozeEnabled: Bool, snoozeDurationMins: Int) -> Data {
-        return Data([
+        Data([
             UInt8(snoozeEnabled ? 1 : 0),
             UInt8(snoozeDurationMins & 0xFF)
         ])
@@ -60,12 +49,11 @@ public class SetPumpAlertSnoozeResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

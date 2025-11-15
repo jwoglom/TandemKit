@@ -1,23 +1,14 @@
-//
-//  PumpCommIntegrationTests.swift
-//  TandemKit
-//
-//  Integration tests for pump communication covering control commands,
-//  status queries, and response handling with various error scenarios.
-//
-
-import XCTest
-@testable import TandemKit
-@testable import TandemCore
-@testable import TandemBLE
 import Foundation
+@testable import TandemBLE
+@testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 /// Integration tests for PumpComm message handling
 ///
 /// These tests verify end-to-end message sending and response parsing
 /// using a mock transport that simulates various pump behaviors.
 final class PumpCommIntegrationTests: XCTestCase {
-
     // MARK: - Enhanced Mock Transport
 
     /// Enhanced mock transport that simulates pump responses for control and status messages
@@ -39,7 +30,7 @@ final class PumpCommIntegrationTests: XCTestCase {
         var currentTempRateId: Int = 0
         var currentBasalRate: UInt32 = 1000 // 1.0 U/hr in pump units
         var batteryPercent: Int = 75
-        var reservoirUnits: UInt32 = 150000 // 150 U in pump units
+        var reservoirUnits: UInt32 = 150_000 // 150 U in pump units
 
         func reset() {
             sentMessages.removeAll()
@@ -489,7 +480,7 @@ final class PumpCommIntegrationTests: XCTestCase {
     func testQueryInsulinStatus() throws {
         let pumpComm = createPumpComm()
         let transport = EnhancedMockPumpTransport()
-        transport.reservoirUnits = 125000 // 125 U
+        transport.reservoirUnits = 125_000 // 125 U
 
         let request = InsulinStatusRequest()
         let response = try pumpComm.sendMessage(
@@ -498,7 +489,7 @@ final class PumpCommIntegrationTests: XCTestCase {
             expecting: InsulinStatusResponse.self
         )
 
-        XCTAssertEqual(response.currentInsulinAmount, 125000)
+        XCTAssertEqual(response.currentInsulinAmount, 125_000)
     }
 
     func testStatusQueryPollingCycle() throws {
@@ -529,7 +520,7 @@ final class PumpCommIntegrationTests: XCTestCase {
             message: InsulinStatusRequest(),
             expecting: InsulinStatusResponse.self
         )
-        XCTAssertEqual(insulinResponse.currentInsulinAmount, 150000)
+        XCTAssertEqual(insulinResponse.currentInsulinAmount, 150_000)
 
         // 4. Check API version
         let apiResponse = try pumpComm.sendMessage(

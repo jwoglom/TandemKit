@@ -1,14 +1,3 @@
-//
-//  CancelBolus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CancelBolusRequest and CancelBolusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/CancelBolusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/CancelBolusResponse.java
-//
-
 import Foundation
 
 /// Request to cancel an in-progress bolus.
@@ -27,11 +16,11 @@ public class CancelBolusRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bolusId = Bytes.readShort(cargo, 0)
+        bolusId = Bytes.readShort(cargo, 0)
     }
 
     public init(bolusId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(bolusId),
             Data([0, 0])
         )
@@ -57,13 +46,13 @@ public class CancelBolusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.statusId = Int(cargo[0])
-        self.bolusId = Bytes.readShort(cargo, 1)
-        self.reasonId = Bytes.readShort(cargo, 3)
+        statusId = Int(cargo[0])
+        bolusId = Bytes.readShort(cargo, 1)
+        reasonId = Bytes.readShort(cargo, 3)
     }
 
     public init(statusId: Int, bolusId: Int, reasonId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(statusId & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(bolusId),
             Bytes.firstTwoBytesLittleEndian(reasonId)
@@ -91,4 +80,3 @@ public class CancelBolusResponse: Message {
         status == .success && reason == .noError
     }
 }
-

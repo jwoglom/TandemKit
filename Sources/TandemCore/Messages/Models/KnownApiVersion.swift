@@ -1,11 +1,3 @@
-//
-//  KnownApiVersion.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/7/25.
-//
-// https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/models/KnownApiVersion.java
-
 /// Represents an API version with major and minor components.
 public struct ApiVersion: Sendable {
     public let major: Int
@@ -56,25 +48,26 @@ public enum KnownApiVersion: Sendable {
     }
 }
 
-extension ApiVersion {
-    public func greaterThan(_ other: ApiVersion) -> Bool {
-        return major > other.major || (major == other.major && minor > other.minor)
+public extension ApiVersion {
+    func greaterThan(_ other: ApiVersion) -> Bool {
+        major > other.major || (major == other.major && minor > other.minor)
     }
 
-    public func greaterThan(_ other: KnownApiVersion) -> Bool {
-        return greaterThan(other.value)
+    func greaterThan(_ other: KnownApiVersion) -> Bool {
+        greaterThan(other.value)
     }
 
-    public func serialize() -> String {
-        return "\(major),\(minor)"
+    func serialize() -> String {
+        "\(major),\(minor)"
     }
 
-    public static func deserialize(_ s: String?) -> ApiVersion? {
+    static func deserialize(_ s: String?) -> ApiVersion? {
         guard let s = s, !s.isEmpty else { return nil }
         let parts = s.split(separator: ",")
         guard parts.count == 2,
               let major = Int(parts[0]),
-              let minor = Int(parts[1]) else {
+              let minor = Int(parts[1])
+        else {
             return nil
         }
         return ApiVersion(major: major, minor: minor)

@@ -1,14 +1,3 @@
-//
-//  BasalIQStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BasalIQStatusRequest and BasalIQStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/BasalIQStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/BasalIQStatusResponse.java
-//
-
 import Foundation
 
 /// Request the current Basal-IQ status from the pump.
@@ -27,7 +16,7 @@ public class BasalIQStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class BasalIQStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.basalIQStatusStateId = Int(cargo[0])
-        self.deliveringTherapy = cargo[1] != 0
+        basalIQStatusStateId = Int(cargo[0])
+        deliveringTherapy = cargo[1] != 0
     }
 
     public init(basalIQStatusStateId: Int, deliveringTherapy: Bool) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(basalIQStatusStateId),
             Bytes.firstByteLittleEndian(deliveringTherapy ? 1 : 0)
         )
@@ -60,7 +49,7 @@ public class BasalIQStatusResponse: Message {
     }
 
     public var basalIQStatusState: BasalIQStatusState? {
-        return BasalIQStatusState.fromId(basalIQStatusStateId)
+        BasalIQStatusState.fromId(basalIQStatusStateId)
     }
 
     public enum BasalIQStatusState: Int {
@@ -70,9 +59,7 @@ public class BasalIQStatusResponse: Message {
         case unavailable = 3
 
         static func fromId(_ id: Int) -> BasalIQStatusState? {
-            return BasalIQStatusState(rawValue: id)
+            BasalIQStatusState(rawValue: id)
         }
     }
 }
-
-

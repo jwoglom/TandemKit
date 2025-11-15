@@ -1,16 +1,3 @@
-//
-//  CRC16.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
-//
-//  Basis: OmniKit/MessageTransport/CRC16.swift
-//  Created by Pete Schwamb on 10/14/17.
-//  Copyright © 2017 Pete Schwamb. All rights reserved.
-//
-
 import Foundation
 
 private let crcLookupTable: [UInt32] = [
@@ -42,7 +29,7 @@ private let crcLookupTable: [UInt32] = [
 ]
 
 public func CalculateCRC16(_ bArr: Data) -> Data {
-    var i: UInt32 = 0x0000FFFF
+    var i: UInt32 = 0x0000_FFFF
     for b in bArr {
         let index = (UInt32(b) ^ (i >> 8)) & 0xFF
         i = (i << 8) ^ crcLookupTable[Int(index)]

@@ -1,11 +1,11 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class BasalLimitSettingsResponseTests: XCTestCase {
     func testBasalLimitSettingsResponse() {
         let expected = BasalLimitSettingsResponse(
-            basalLimit: 5_000,
-            basalLimitDefault: 3_000
+            basalLimit: 5000,
+            basalLimitDefault: 3000
         )
 
         let parsed: BasalLimitSettingsResponse = MessageTester.test(
@@ -16,8 +16,8 @@ final class BasalLimitSettingsResponseTests: XCTestCase {
             expected
         )
 
-        XCTAssertEqual(5_000, parsed.basalLimit)
-        XCTAssertEqual(3_000, parsed.basalLimitDefault)
+        XCTAssertEqual(5000, parsed.basalLimit)
+        XCTAssertEqual(3000, parsed.basalLimitDefault)
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
 }

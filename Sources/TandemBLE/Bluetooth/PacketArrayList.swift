@@ -13,8 +13,8 @@ public struct PacketArrayList {
     private(set) var expectedCargoSize: UInt8
     let expectedTxId: UInt8
     let isSigned: Bool
-    let requestMetadata: MessageMetadata?  // Context: the request that initiated this
-    let responseMetadata: MessageMetadata?  // Context: the expected response
+    let requestMetadata: MessageMetadata? // Context: the request that initiated this
+    let responseMetadata: MessageMetadata? // Context: the expected response
 
     private var actualExpectedCargoSize: Int
     private var fullCargo: Data
@@ -24,18 +24,24 @@ public struct PacketArrayList {
     private var empty = true
     private var expectedCrc = Data(repeating: 0, count: 2)
 
-    public init(expectedOpCode: UInt8, expectedCargoSize: UInt8, expectedTxId: UInt8, isSigned: Bool,
-         requestMetadata: MessageMetadata? = nil, responseMetadata: MessageMetadata? = nil) {
+    public init(
+        expectedOpCode: UInt8,
+        expectedCargoSize: UInt8,
+        expectedTxId: UInt8,
+        isSigned: Bool,
+        requestMetadata: MessageMetadata? = nil,
+        responseMetadata: MessageMetadata? = nil
+    ) {
         self.expectedOpCode = expectedOpCode
         self.expectedCargoSize = expectedCargoSize
         let sizeInt = Int(Int8(bitPattern: expectedCargoSize))
-        self.actualExpectedCargoSize = sizeInt >= 0 ? sizeInt : sizeInt + 256
+        actualExpectedCargoSize = sizeInt >= 0 ? sizeInt : sizeInt + 256
         self.expectedTxId = expectedTxId
         self.isSigned = isSigned
         self.requestMetadata = requestMetadata
         self.responseMetadata = responseMetadata
-        self.fullCargo = Data(repeating: 0, count: self.actualExpectedCargoSize + 2)
-        self.messageDataBuffer = Data(repeating: 0, count: 3)
+        fullCargo = Data(repeating: 0, count: actualExpectedCargoSize + 2)
+        messageDataBuffer = Data(repeating: 0, count: 3)
     }
 
     var debugFirstByteMod15: Int { firstByteMod15 }
@@ -47,14 +53,14 @@ public struct PacketArrayList {
         if cargoSize < 0 { cargoSize += 256 }
 
         if opCode == expectedOpCode {
-            firstByteMod15 = Int(packet[0] & 0x0f)
+            firstByteMod15 = Int(packet[0] & 0x0F)
             let txId = packet[3]
             if txId != expectedTxId {
                 if PacketArrayList.ignoreInvalidTxId { return }
                 throw UnexpectedTransactionIdError(expected: expectedTxId, actual: txId)
             }
             if cargoSize != actualExpectedCargoSize {
-                if cargoSize == actualExpectedCargoSize + 24 && isSigned {
+                if cargoSize == actualExpectedCargoSize + 24, isSigned {
                     expectedCargoSize &+= 24
                     actualExpectedCargoSize += 24
                 } else {
@@ -65,7 +71,8 @@ public struct PacketArrayList {
         } else {
             throw UnexpectedOpCodeError(expected: expectedOpCode, actual: opCode)
         }
-        packetArrayLogger.debug("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
+        packetArrayLogger
+            .debug("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
     }
 
     public mutating func validatePacket(_ packet: Data) throws {
@@ -80,26 +87,26 @@ public struct PacketArrayList {
 
         if empty {
             try parse(packet)
-        } else if (firstByte & 0x0f) == 0 {
-            if self.firstByteMod15 == 0 {
+        } else if (firstByte & 0x0F) == 0 {
+            if firstByteMod15 == 0 {
                 fullCargo.append(packet.dropFirst(2))
             } else {
                 throw InvalidPacketSequenceError()
             }
-        } else if self.firstByteMod15 == Int(firstByte & 0x0f) {
+        } else if firstByteMod15 == Int(firstByte & 0x0F) {
             fullCargo.append(packet.dropFirst(2))
         } else {
             throw InvalidPacketSequenceError()
         }
 
         empty = false
-        self.firstByteMod15 = Int(firstByte & 0x0f) - 1
-        packetArrayLogger.debug("[PacketArrayList] updated firstByteMod15=\(self.firstByteMod15) empty=\(empty)")
+        firstByteMod15 = Int(firstByte & 0x0F) - 1
+        packetArrayLogger.debug("[PacketArrayList] updated firstByteMod15=\(firstByteMod15) empty=\(empty)")
         self.opCode = opCode
     }
 
     public func needsMorePacket() -> Bool {
-        return firstByteMod15 >= 0
+        firstByteMod15 >= 0
     }
 
     private mutating func createMessageData() {
@@ -125,7 +132,10 @@ public struct PacketArrayList {
         let crc = CalculateCRC16(messageDataBuffer)
         var ok = crc == expectedCrc
         if !ok {
-            packetArrayLogger.error("[PacketArrayList] CRC mismatch expected=\(expectedCrc.hexadecimalString) actual=\(crc.hexadecimalString) messageLen=\(messageDataBuffer.count) fullCargoLen=\(fullCargo.count)")
+            packetArrayLogger
+                .error(
+                    "[PacketArrayList] CRC mismatch expected=\(expectedCrc.hexadecimalString) actual=\(crc.hexadecimalString) messageLen=\(messageDataBuffer.count) fullCargoLen=\(fullCargo.count)"
+                )
             if shouldIgnoreInvalidHmac(authKey) { ok = true } else { return false }
         }
         if isSigned {
@@ -150,9 +160,14 @@ public struct PacketArrayList {
         return authKey.prefix(prefix.count) == prefix
     }
 
-    struct UnexpectedOpCodeError: Error { let expected: UInt8; let actual: UInt8 }
-    struct UnexpectedTransactionIdError: Error { let expected: UInt8; let actual: UInt8 }
+    struct UnexpectedOpCodeError: Error { let expected: UInt8
+        let actual: UInt8 }
+
+    struct UnexpectedTransactionIdError: Error { let expected: UInt8
+        let actual: UInt8 }
+
     struct InvalidDataSizeError: Error {}
     struct InvalidPacketSequenceError: Error {}
-    struct InvalidCargoSizeError: Error { let expected: Int; let actual: Int }
+    struct InvalidCargoSizeError: Error { let expected: Int
+        let actual: Int }
 }

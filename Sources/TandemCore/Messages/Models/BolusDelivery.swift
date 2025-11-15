@@ -1,13 +1,3 @@
-//
-//  BolusDelivery.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representation of enums from BolusDeliveryHistoryLog
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/historyLog/BolusDeliveryHistoryLog.java
-//
-
 import Foundation
 
 public enum BolusSource: Int {
@@ -17,7 +7,7 @@ public enum BolusSource: Int {
     case bluetoothRemoteBolus = 8
 
     public static func fromId(_ id: Int) -> BolusSource? {
-        return BolusSource(rawValue: id)
+        BolusSource(rawValue: id)
     }
 }
 

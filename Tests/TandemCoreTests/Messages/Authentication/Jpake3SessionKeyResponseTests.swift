@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class Jpake3SessionKeyResponseTests: XCTestCase {
     // ./android-2024-02-29-6char2.csv

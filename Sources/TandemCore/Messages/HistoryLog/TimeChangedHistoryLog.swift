@@ -17,22 +17,34 @@ public class TimeChangedHistoryLog: HistoryLog {
     public let rawRTC: UInt32
 
     public required init(cargo: Data) {
-        self.timePrior = Bytes.readUint32(cargo, 10)
-        self.timeAfter = Bytes.readUint32(cargo, 14)
-        self.rawRTC = Bytes.readUint32(cargo, 18)
+        timePrior = Bytes.readUint32(cargo, 10)
+        timeAfter = Bytes.readUint32(cargo, 14)
+        rawRTC = Bytes.readUint32(cargo, 18)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, timePrior: UInt32, timeAfter: UInt32, rawRTC: UInt32) {
-        let payload = TimeChangedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, timePrior: timePrior, timeAfter: timeAfter, rawRTC: rawRTC)
+        let payload = TimeChangedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            timePrior: timePrior,
+            timeAfter: timeAfter,
+            rawRTC: rawRTC
+        )
         self.timePrior = timePrior
         self.timeAfter = timeAfter
         self.rawRTC = rawRTC
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, timePrior: UInt32, timeAfter: UInt32, rawRTC: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        timePrior: UInt32,
+        timeAfter: UInt32,
+        rawRTC: UInt32
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -44,4 +56,3 @@ public class TimeChangedHistoryLog: HistoryLog {
         )
     }
 }
-

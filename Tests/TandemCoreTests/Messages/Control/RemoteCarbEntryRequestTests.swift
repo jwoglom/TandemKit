@@ -1,10 +1,10 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class RemoteCarbEntryRequestTests: XCTestCase {
     func testOpcodeNegative14Request_ID10677() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
-        let expected = RemoteCarbEntryRequest(carbs: 5, pumpTime: 1200239, bolusId: 10677)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
+        let expected = RemoteCarbEntryRequest(carbs: 5, pumpTime: 1_200_239, bolusId: 10677)
 
         let parsed: RemoteCarbEntryRequest = MessageTester.test(
             "02aaf2aa210500016f501200b5294123851bf324",
@@ -20,8 +20,8 @@ final class RemoteCarbEntryRequestTests: XCTestCase {
     }
 
     func testOpcodeNegative14Request_ID10678() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710202)
-        let expected = RemoteCarbEntryRequest(carbs: 3, pumpTime: 1200239, bolusId: 10678)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_202)
+        let expected = RemoteCarbEntryRequest(carbs: 3, pumpTime: 1_200_239, bolusId: 10678)
 
         let parsed: RemoteCarbEntryRequest = MessageTester.test(
             "02cff2cf210300016f501200b6297a23851bc88f",
@@ -37,8 +37,8 @@ final class RemoteCarbEntryRequestTests: XCTestCase {
     }
 
     func testRemoteCarbEntryRequest_ID10653_011u_11g_carbs_161mgdl_013u_iob() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461589420)
-        let expected = RemoteCarbEntryRequest(carbs: 11, pumpTime: 1079469, bolusId: 10653)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_589_420)
+        let expected = RemoteCarbEntryRequest(carbs: 11, pumpTime: 1_079_469, bolusId: 10653)
 
         let parsed: RemoteCarbEntryRequest = MessageTester.test(
             "0238f238210b0001ad7810009d29ac4b831b5e16",

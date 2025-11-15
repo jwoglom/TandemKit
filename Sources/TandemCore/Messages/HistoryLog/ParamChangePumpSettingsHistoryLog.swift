@@ -22,19 +22,41 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
     public let autoShutdownDuration: Int
 
     public required init(cargo: Data) {
-        self.modification = Int(cargo[10])
-        self.status = Bytes.readShort(cargo, 12)
-        self.lowInsulinThreshold = Int(cargo[14])
-        self.cannulaPrimeSize = Int(cargo[15])
-        self.isFeatureLocked = Int(cargo[16])
-        self.autoShutdownEnabled = Int(cargo[17])
-        self.oledTimeout = Int(cargo[19])
-        self.autoShutdownDuration = Bytes.readShort(cargo, 20)
+        modification = Int(cargo[10])
+        status = Bytes.readShort(cargo, 12)
+        lowInsulinThreshold = Int(cargo[14])
+        cannulaPrimeSize = Int(cargo[15])
+        isFeatureLocked = Int(cargo[16])
+        autoShutdownEnabled = Int(cargo[17])
+        oledTimeout = Int(cargo[19])
+        autoShutdownDuration = Bytes.readShort(cargo, 20)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, modification: Int, status: Int, lowInsulinThreshold: Int, cannulaPrimeSize: Int, isFeatureLocked: Int, autoShutdownEnabled: Int, oledTimeout: Int, autoShutdownDuration: Int) {
-        let payload = ParamChangePumpSettingsHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, modification: modification, status: status, lowInsulinThreshold: lowInsulinThreshold, cannulaPrimeSize: cannulaPrimeSize, isFeatureLocked: isFeatureLocked, autoShutdownEnabled: autoShutdownEnabled, oledTimeout: oledTimeout, autoShutdownDuration: autoShutdownDuration)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modification: Int,
+        status: Int,
+        lowInsulinThreshold: Int,
+        cannulaPrimeSize: Int,
+        isFeatureLocked: Int,
+        autoShutdownEnabled: Int,
+        oledTimeout: Int,
+        autoShutdownDuration: Int
+    ) {
+        let payload = ParamChangePumpSettingsHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            modification: modification,
+            status: status,
+            lowInsulinThreshold: lowInsulinThreshold,
+            cannulaPrimeSize: cannulaPrimeSize,
+            isFeatureLocked: isFeatureLocked,
+            autoShutdownEnabled: autoShutdownEnabled,
+            oledTimeout: oledTimeout,
+            autoShutdownDuration: autoShutdownDuration
+        )
         self.modification = modification
         self.status = status
         self.lowInsulinThreshold = lowInsulinThreshold
@@ -46,8 +68,19 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, modification: Int, status: Int, lowInsulinThreshold: Int, cannulaPrimeSize: Int, isFeatureLocked: Int, autoShutdownEnabled: Int, oledTimeout: Int, autoShutdownDuration: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modification: Int,
+        status: Int,
+        lowInsulinThreshold: Int,
+        cannulaPrimeSize: Int,
+        isFeatureLocked: Int,
+        autoShutdownEnabled: Int,
+        oledTimeout: Int,
+        autoShutdownDuration: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -64,4 +97,3 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
         )
     }
 }
-

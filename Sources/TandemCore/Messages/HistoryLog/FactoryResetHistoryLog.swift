@@ -22,7 +22,7 @@ public class FactoryResetHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -31,4 +31,3 @@ public class FactoryResetHistoryLog: HistoryLog {
         )
     }
 }
-

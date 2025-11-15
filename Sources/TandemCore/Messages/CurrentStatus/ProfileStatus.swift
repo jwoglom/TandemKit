@@ -1,14 +1,3 @@
-//
-//  ProfileStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ProfileStatusRequest and ProfileStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ProfileStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ProfileStatusResponse.java
-//
-
 import Foundation
 
 /// Request general information on insulin delivery profiles.
@@ -27,7 +16,7 @@ public class ProfileStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -52,18 +41,27 @@ public class ProfileStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.numberOfProfiles = Int(cargo[0])
-        self.idpSlot0Id = Int(cargo[1])
-        self.idpSlot1Id = Int(cargo[2])
-        self.idpSlot2Id = Int(cargo[3])
-        self.idpSlot3Id = Int(cargo[4])
-        self.idpSlot4Id = Int(cargo[5])
-        self.idpSlot5Id = Int(cargo[6])
-        self.activeSegmentIndex = Int(cargo[7])
+        numberOfProfiles = Int(cargo[0])
+        idpSlot0Id = Int(cargo[1])
+        idpSlot1Id = Int(cargo[2])
+        idpSlot2Id = Int(cargo[3])
+        idpSlot3Id = Int(cargo[4])
+        idpSlot4Id = Int(cargo[5])
+        idpSlot5Id = Int(cargo[6])
+        activeSegmentIndex = Int(cargo[7])
     }
 
-    public init(numberOfProfiles: Int, idpSlot0Id: Int, idpSlot1Id: Int, idpSlot2Id: Int, idpSlot3Id: Int, idpSlot4Id: Int, idpSlot5Id: Int, activeSegmentIndex: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        numberOfProfiles: Int,
+        idpSlot0Id: Int,
+        idpSlot1Id: Int,
+        idpSlot2Id: Int,
+        idpSlot3Id: Int,
+        idpSlot4Id: Int,
+        idpSlot5Id: Int,
+        activeSegmentIndex: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(numberOfProfiles),
             Bytes.firstByteLittleEndian(idpSlot0Id),
             Bytes.firstByteLittleEndian(idpSlot1Id),
@@ -84,11 +82,10 @@ public class ProfileStatusResponse: Message {
     }
 
     /// Returns the active insulin delivery profile ID.
-    public var activeIdpSlotId: Int { return idpSlot0Id }
+    public var activeIdpSlotId: Int { idpSlot0Id }
 
     /// All IDP slot IDs in order, limited to `numberOfProfiles`.
     public var idpSlotIds: [Int] {
-        return [idpSlot0Id, idpSlot1Id, idpSlot2Id, idpSlot3Id, idpSlot4Id, idpSlot5Id].prefix(numberOfProfiles).map { $0 }
+        [idpSlot0Id, idpSlot1Id, idpSlot2Id, idpSlot3Id, idpSlot4Id, idpSlot5Id].prefix(numberOfProfiles).map { $0 }
     }
 }
-

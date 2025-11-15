@@ -1,14 +1,3 @@
-//
-//  BolusCalcDataSnapshot.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BolusCalcDataSnapshotRequest and BolusCalcDataSnapshotResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/BolusCalcDataSnapshotRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/BolusCalcDataSnapshotResponse.java
-//
-
 import Foundation
 
 /// Request a snapshot of bolus calculator data from the pump.
@@ -28,7 +17,7 @@ public class BolusCalcDataSnapshotRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -61,25 +50,41 @@ public class BolusCalcDataSnapshotResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.isUnacked = cargo[0] != 0
-        self.correctionFactor = Bytes.readShort(cargo, 1)
-        self.iob = Bytes.readUint32(cargo, 3)
-        self.cartridgeRemainingInsulin = Bytes.readShort(cargo, 7)
-        self.targetBg = Bytes.readShort(cargo, 9)
-        self.isf = Bytes.readShort(cargo, 11)
-        self.carbEntryEnabled = cargo[13] != 0
-        self.carbRatio = Bytes.readUint32(cargo, 14)
-        self.maxBolusAmount = Bytes.readShort(cargo, 18)
-        self.maxBolusHourlyTotal = Bytes.readUint32(cargo, 20)
-        self.maxBolusEventsExceeded = cargo[24] != 0
-        self.maxIobEventsExceeded = cargo[25] != 0
-        self.unknown11bytes = cargo.subdata(in: 26..<37)
-        self.isAutopopAllowed = cargo[37] != 0
-        self.unknown8bytes = cargo.subdata(in: 38..<46)
+        isUnacked = cargo[0] != 0
+        correctionFactor = Bytes.readShort(cargo, 1)
+        iob = Bytes.readUint32(cargo, 3)
+        cartridgeRemainingInsulin = Bytes.readShort(cargo, 7)
+        targetBg = Bytes.readShort(cargo, 9)
+        isf = Bytes.readShort(cargo, 11)
+        carbEntryEnabled = cargo[13] != 0
+        carbRatio = Bytes.readUint32(cargo, 14)
+        maxBolusAmount = Bytes.readShort(cargo, 18)
+        maxBolusHourlyTotal = Bytes.readUint32(cargo, 20)
+        maxBolusEventsExceeded = cargo[24] != 0
+        maxIobEventsExceeded = cargo[25] != 0
+        unknown11bytes = cargo.subdata(in: 26 ..< 37)
+        isAutopopAllowed = cargo[37] != 0
+        unknown8bytes = cargo.subdata(in: 38 ..< 46)
     }
 
-    public init(isUnacked: Bool, correctionFactor: Int, iob: UInt32, cartridgeRemainingInsulin: Int, targetBg: Int, isf: Int, carbEntryEnabled: Bool, carbRatio: UInt32, maxBolusAmount: Int, maxBolusHourlyTotal: UInt32, maxBolusEventsExceeded: Bool, maxIobEventsExceeded: Bool, isAutopopAllowed: Bool, unknown11bytes: Data = Bytes.emptyBytes(11), unknown8bytes: Data = Bytes.emptyBytes(8)) {
-        self.cargo = Bytes.combine(
+    public init(
+        isUnacked: Bool,
+        correctionFactor: Int,
+        iob: UInt32,
+        cartridgeRemainingInsulin: Int,
+        targetBg: Int,
+        isf: Int,
+        carbEntryEnabled: Bool,
+        carbRatio: UInt32,
+        maxBolusAmount: Int,
+        maxBolusHourlyTotal: UInt32,
+        maxBolusEventsExceeded: Bool,
+        maxIobEventsExceeded: Bool,
+        isAutopopAllowed: Bool,
+        unknown11bytes: Data = Bytes.emptyBytes(11),
+        unknown8bytes: Data = Bytes.emptyBytes(8)
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(isUnacked ? 1 : 0),
             Bytes.firstTwoBytesLittleEndian(correctionFactor),
             Bytes.toUint32(iob),
@@ -113,4 +118,3 @@ public class BolusCalcDataSnapshotResponse: Message {
         self.unknown8bytes = unknown8bytes
     }
 }
-

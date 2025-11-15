@@ -1,9 +1,8 @@
-import XCTest
-@testable import TandemKit
 @testable import TandemCore
+@testable import TandemKit
+import XCTest
 
-@available(macOS 13.0, iOS 14.0, *)
-final class TandemPumpManagerTelemetryTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerTelemetryTests: XCTestCase {
     override func tearDown() {
         super.tearDown()
         PumpStateSupplier.pumpApiVersion = nil
@@ -23,7 +22,7 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         )
         mockPeripheralManager.enqueueResponse(
             for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(profileBasalRate: 1_000, currentBasalRate: 1_000, basalModifiedBitmask: 0)
+            response: CurrentBasalStatusResponse(profileBasalRate: 1000, currentBasalRate: 1000, basalModifiedBitmask: 0)
         )
         mockPeripheralManager.enqueueResponse(
             for: CurrentBolusStatusRequest.self,
@@ -55,7 +54,9 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
         XCTAssertNotNil(
-            mockPumpComm.calls.first(where: { $0.requestType == CurrentBatteryV1Request.self && $0.expectedResponseType == CurrentBatteryV1Response.self }),
+            mockPumpComm.calls
+                .first(where: {
+                    $0.requestType == CurrentBatteryV1Request.self && $0.expectedResponseType == CurrentBatteryV1Response.self }),
             "Expected PumpComm to request CurrentBatteryV1Response for legacy API"
         )
         XCTAssertTrue(
@@ -123,7 +124,9 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
 
         XCTAssertNotNil(
-            mockPumpComm.calls.first(where: { $0.requestType == CurrentBatteryV2Request.self && $0.expectedResponseType == CurrentBatteryV2Response.self }),
+            mockPumpComm.calls
+                .first(where: {
+                    $0.requestType == CurrentBatteryV2Request.self && $0.expectedResponseType == CurrentBatteryV2Response.self }),
             "Expected PumpComm to request CurrentBatteryV2Response for newer API"
         )
         XCTAssertTrue(
@@ -144,7 +147,7 @@ final class TandemPumpManagerTelemetryTests: XCTestCase {
         )
         mockPeripheralManager.enqueueResponse(
             for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(profileBasalRate: 1_200, currentBasalRate: 1_200, basalModifiedBitmask: 0)
+            response: CurrentBasalStatusResponse(profileBasalRate: 1200, currentBasalRate: 1200, basalModifiedBitmask: 0)
         )
         mockPeripheralManager.enqueueResponse(
             for: CurrentBolusStatusRequest.self,

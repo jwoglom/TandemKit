@@ -18,7 +18,7 @@ public class LogErasedHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.numErased = Bytes.readUint32(raw, 10)
+        numErased = Bytes.readUint32(raw, 10)
         super.init(cargo: raw)
     }
 
@@ -29,7 +29,7 @@ public class LogErasedHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, numErased: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([0, 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -39,4 +39,3 @@ public class LogErasedHistoryLog: HistoryLog {
         )
     }
 }
-

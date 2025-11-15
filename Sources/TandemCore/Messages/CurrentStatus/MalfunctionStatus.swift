@@ -1,14 +1,3 @@
-//
-//  MalfunctionStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of MalfunctionStatusRequest and MalfunctionStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/MalfunctionStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/MalfunctionStatusResponse.java
-//
-
 import Foundation
 
 /// Request any malfunction codes from the pump.
@@ -27,7 +16,7 @@ public class MalfunctionStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,13 +36,13 @@ public class MalfunctionStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.codeA = Bytes.readUint32(cargo, 0)
-        self.codeB = Bytes.readUint32(cargo, 4)
-        self.remaining = cargo.subdata(in: 8..<11)
+        codeA = Bytes.readUint32(cargo, 0)
+        codeB = Bytes.readUint32(cargo, 4)
+        remaining = cargo.subdata(in: 8 ..< 11)
     }
 
-    public init(codeA: UInt32, codeB: UInt32, remaining: Data = Data([0,0,0])) {
-        self.cargo = Bytes.combine(
+    public init(codeA: UInt32, codeB: UInt32, remaining: Data = Data([0, 0, 0])) {
+        cargo = Bytes.combine(
             Bytes.toUint32(codeA),
             Bytes.toUint32(codeB),
             remaining
@@ -71,9 +60,8 @@ public class MalfunctionStatusResponse: Message {
 
     /// Whether the pump reports a malfunction.
     public var hasMalfunction: Bool {
-        if codeA == 0 && codeB == 0 { return false }
-        if codeA == 3 && codeB == 0x2026 { return false }
+        if codeA == 0, codeB == 0 { return false }
+        if codeA == 3, codeB == 0x2026 { return false }
         return true
     }
 }
-

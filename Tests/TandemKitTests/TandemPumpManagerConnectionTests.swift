@@ -1,6 +1,6 @@
-import XCTest
-@testable import TandemKit
 @testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 @available(macOS 13.0, iOS 14.0, *)
 final class TandemPumpManagerConnectionTests: XCTestCase {
@@ -65,7 +65,8 @@ final class TandemPumpManagerConnectionTests: XCTestCase {
         mockPumpComm.onSend = { message in
             if message is CurrentBatteryV2Request ||
                 message is InsulinStatusRequest ||
-                message is CurrentBasalStatusRequest {
+                message is CurrentBasalStatusRequest
+            {
                 telemetryExpectation.fulfill()
             }
         }
@@ -100,12 +101,15 @@ final class TandemPumpManagerConnectionTests: XCTestCase {
 
         let telemetryCountAfterDisconnect = mockPumpComm.calls.count
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        XCTAssertEqual(telemetryCountAfterDisconnect, telemetryCountAfterConnect, "Telemetry should pause once transport is cleared")
+        XCTAssertEqual(
+            telemetryCountAfterDisconnect,
+            telemetryCountAfterConnect,
+            "Telemetry should pause once transport is cleared"
+        )
     }
 }
 
-@available(macOS 13.0, iOS 14.0, *)
-final class MockPumpManagerDelegate: PumpManagerDelegate {
+@available(macOS 13.0, iOS 14.0, *) final class MockPumpManagerDelegate: PumpManagerDelegate {
     struct StatusUpdate {
         let newStatus: PumpManagerStatus
         let oldStatus: PumpManagerStatus
@@ -120,84 +124,87 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var automaticDosingEnabled: Bool = false
 
     func deviceManager(
-        _ manager: DeviceManager,
-        logEventForDeviceIdentifier deviceIdentifier: String?,
-        type: DeviceLogEntryType,
-        message: String,
+        _: DeviceManager,
+        logEventForDeviceIdentifier _: String?,
+        type _: DeviceLogEntryType,
+        message _: String,
         completion: ((Error?) -> Void)?
     ) {
         completion?(nil)
     }
 
     func pumpManager(
-        _ pumpManager: PumpManager,
+        _: PumpManager,
         didUpdate status: PumpManagerStatus,
         oldStatus: PumpManagerStatus
     ) {
         statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus))
     }
 
-    func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager) {}
+    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {}
 
-    func pumpManagerMustProvideBLEHeartbeat(_ pumpManager: PumpManager) -> Bool { false }
+    func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool { false }
 
-    func pumpManagerWillDeactivate(_ pumpManager: PumpManager) {}
+    func pumpManagerWillDeactivate(_: PumpManager) {}
 
-    func pumpManagerPumpWasReplaced(_ pumpManager: PumpManager) {}
+    func pumpManagerPumpWasReplaced(_: PumpManager) {}
 
     func pumpManager(
-        _ pumpManager: PumpManager,
-        didUpdatePumpRecordsBasalProfileStartEvents pumpRecordsBasalProfileStartEvents: Bool
+        _: PumpManager,
+        didUpdatePumpRecordsBasalProfileStartEvents _: Bool
     ) {}
 
     func pumpManager(
-        _ pumpManager: PumpManager,
+        _: PumpManager,
         didError error: PumpManagerError
     ) {
         recordedErrors.append(error)
     }
 
     func pumpManager(
-        _ pumpManager: PumpManager,
-        hasNewPumpEvents events: [NewPumpEvent],
-        lastReconciliation: Date?,
-        replacePendingEvents: Bool,
+        _: PumpManager,
+        hasNewPumpEvents _: [NewPumpEvent],
+        lastReconciliation _: Date?,
+        replacePendingEvents _: Bool,
         completion: @escaping (Error?) -> Void
     ) {
         completion(nil)
     }
 
     func pumpManager(
-        _ pumpManager: PumpManager,
+        _: PumpManager,
         didReadReservoirValue units: Double,
         at date: Date,
-        completion: @escaping (Result<(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool), Error>) -> Void
+        completion: @escaping (Result<
+            (newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool),
+            Error
+        >) -> Void
     ) {
         completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
     }
 
     func pumpManager(
-        _ pumpManager: PumpManager,
-        didAdjustPumpClockBy adjustment: TimeInterval
+        _: PumpManager,
+        didAdjustPumpClockBy _: TimeInterval
     ) {}
 
-    func pumpManagerDidUpdateState(_ pumpManager: PumpManager) {
+    func pumpManagerDidUpdateState(_: PumpManager) {
         didUpdateStateCallCount += 1
         didUpdateStateExpectation?.fulfill()
         didUpdateStateExpectation = nil
     }
 
     func pumpManager(
-        _ pumpManager: PumpManager,
-        didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule,
+        _: PumpManager,
+        didRequestBasalRateScheduleChange _: BasalRateSchedule,
         completion: @escaping (Error?) -> Void
     ) {
         completion(nil)
     }
 
-    func pumpManagerRecommendsLoop(_ pumpManager: PumpManager) {}
+    func pumpManagerRecommendsLoop(_: PumpManager) {}
 
-    func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date {
+    func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
         Date.distantPast
     }
 }

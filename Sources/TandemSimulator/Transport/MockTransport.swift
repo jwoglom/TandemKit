@@ -1,6 +1,6 @@
 import Foundation
-import TandemCore
 import Logging
+import TandemCore
 
 /// Mock in-memory transport for testing without BLE
 class MockTransport: SimulatorTransport {
@@ -120,12 +120,12 @@ class MockTransport: SimulatorTransport {
 
     /// Get access to send queue for testing
     func getSendQueue(for characteristic: CharacteristicUUID) -> PacketQueue? {
-        return sendQueues[characteristic]
+        sendQueues[characteristic]
     }
 
     /// Get access to receive queue for testing
     func getReceiveQueue(for characteristic: CharacteristicUUID) -> PacketQueue? {
-        return receiveQueues[characteristic]
+        receiveQueues[characteristic]
     }
 }
 
@@ -184,7 +184,7 @@ class PacketQueue {
                 defer { self.lock.unlock() }
 
                 // Find and remove the continuation if still waiting
-                if let index = self.waitingContinuations.firstIndex(where: { cont in
+                if let index = self.waitingContinuations.firstIndex(where: { _ in
                     // Can't compare continuations directly, so we just take the first one
                     // This works because we process in FIFO order
                     true
@@ -226,7 +226,7 @@ enum MockTransportError: Error, LocalizedError {
         switch self {
         case .notConnected:
             return "Mock transport is not connected"
-        case .unknownCharacteristic(let char):
+        case let .unknownCharacteristic(char):
             return "Unknown characteristic: \(char.rawValue)"
         }
     }

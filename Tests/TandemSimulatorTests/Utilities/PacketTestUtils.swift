@@ -3,7 +3,6 @@ import TandemCore
 
 /// Utilities for building and parsing packets in tests
 struct PacketTestUtils {
-
     // MARK: - Packet Building
 
     /// Build a simple request packet (single packet, no HMAC)
@@ -141,7 +140,7 @@ struct PacketTestUtils {
 
     /// Parse a single response packet (convenience method)
     static func parseResponsePacket(_ packet: Data) throws -> ParsedResponse {
-        return try parseResponsePackets([packet])
+        try parseResponsePackets([packet])
     }
 }
 
@@ -167,7 +166,7 @@ enum PacketTestError: Error, LocalizedError {
             return "No packets provided"
         case .packetTooShort:
             return "Packet too short"
-        case .packetCountMismatch(let expected, let actual):
+        case let .packetCountMismatch(expected, actual):
             return "Packet count mismatch: expected \(expected), got \(actual)"
         case .payloadTooShort:
             return "Payload too short"

@@ -1,14 +1,3 @@
-//
-//  GetG6TransmitterHardwareInfo.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of GetG6TransmitterHardwareInfoRequest and GetG6TransmitterHardwareInfoResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/GetG6TransmitterHardwareInfoRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/GetG6TransmitterHardwareInfoResponse.java
-//
-
 import Foundation
 
 /// Request Dexcom G6 transmitter hardware info.
@@ -27,7 +16,7 @@ public class GetG6TransmitterHardwareInfoRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,15 +38,20 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.transmitterFirmwareVersion = Bytes.readString(cargo, 0, 16)
-        self.transmitterHardwareRevision = Bytes.readString(cargo, 16, 16)
-        self.transmitterBleHardwareId = Bytes.readString(cargo, 32, 16)
-        self.transmitterSoftwareNumber = Bytes.readString(cargo, 48, 16)
-        self.unusedRemaining = Bytes.dropFirstN(cargo, 64)
+        transmitterFirmwareVersion = Bytes.readString(cargo, 0, 16)
+        transmitterHardwareRevision = Bytes.readString(cargo, 16, 16)
+        transmitterBleHardwareId = Bytes.readString(cargo, 32, 16)
+        transmitterSoftwareNumber = Bytes.readString(cargo, 48, 16)
+        unusedRemaining = Bytes.dropFirstN(cargo, 64)
     }
 
-    public init(transmitterFirmwareVersion: String, transmitterHardwareRevision: String, transmitterBleHardwareId: String, transmitterSoftwareNumber: String) {
-        self.cargo = Bytes.combine(
+    public init(
+        transmitterFirmwareVersion: String,
+        transmitterHardwareRevision: String,
+        transmitterBleHardwareId: String,
+        transmitterSoftwareNumber: String
+    ) {
+        cargo = Bytes.combine(
             Bytes.writeString(transmitterFirmwareVersion, 16),
             Bytes.writeString(transmitterHardwareRevision, 16),
             Bytes.writeString(transmitterBleHardwareId, 16),
@@ -68,7 +62,6 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         self.transmitterHardwareRevision = transmitterHardwareRevision
         self.transmitterBleHardwareId = transmitterBleHardwareId
         self.transmitterSoftwareNumber = transmitterSoftwareNumber
-        self.unusedRemaining = Bytes.emptyBytes(32)
+        unusedRemaining = Bytes.emptyBytes(32)
     }
 }
-

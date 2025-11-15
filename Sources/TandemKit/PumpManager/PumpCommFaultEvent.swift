@@ -1,10 +1,3 @@
-//
-//  PumpCommFaultEvent.swift
-//  TandemKit
-//
-//  Created by ChatGPT on 3/15/25.
-//
-
 import Foundation
 import TandemCore
 
@@ -16,11 +9,13 @@ public struct PumpCommFaultEvent {
     public let attempt: Int
     public let decision: PumpCommRetryDecision
 
-    public init(request: Message,
-                response: ErrorResponse,
-                code: PumpFaultCode,
-                attempt: Int,
-                decision: PumpCommRetryDecision) {
+    public init(
+        request: Message,
+        response: ErrorResponse,
+        code: PumpFaultCode,
+        attempt: Int,
+        decision: PumpCommRetryDecision
+    ) {
         self.request = request
         self.response = response
         self.code = code

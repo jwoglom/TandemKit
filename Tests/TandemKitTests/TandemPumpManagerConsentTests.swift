@@ -1,10 +1,9 @@
-import XCTest
-@testable import TandemKit
-@testable import TandemCore
 import LoopKit
+@testable import TandemCore
+@testable import TandemKit
+import XCTest
 
-@available(macOS 13.0, iOS 14.0, *)
-final class TandemPumpManagerConsentTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerConsentTests: XCTestCase {
     override func tearDown() {
         PumpStateSupplier.disableActionsAffectingInsulinDelivery()
         PumpStateSupplier.disableConnectionSharing()

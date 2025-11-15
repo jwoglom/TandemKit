@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemKit
+import XCTest
 
 final class PumpTelemetrySchedulerTests: XCTestCase {
     func testTriggerAllExecutesHandlersImmediately() {

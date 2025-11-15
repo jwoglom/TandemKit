@@ -1,14 +1,3 @@
-//
-//  CGMHardwareInfo.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMHardwareInfoRequest and CGMHardwareInfoResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMHardwareInfoRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMHardwareInfoResponse.java
-//
-
 import Foundation
 
 /// Request CGM hardware information from the pump.
@@ -27,7 +16,7 @@ public class CGMHardwareInfoRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class CGMHardwareInfoResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.hardwareInfoString = Bytes.readString(cargo, 0, 16)
-        self.lastByte = Int(cargo[16])
+        hardwareInfoString = Bytes.readString(cargo, 0, 16)
+        lastByte = Int(cargo[16])
     }
 
     public init(hardwareInfoString: String, lastByte: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.writeString(hardwareInfoString, 16),
             Bytes.firstByteLittleEndian(lastByte)
         )
@@ -59,4 +48,3 @@ public class CGMHardwareInfoResponse: Message {
         self.lastByte = lastByte
     }
 }
-

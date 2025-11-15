@@ -1,14 +1,3 @@
-//
-//  BolusPermissionChangeReason.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BolusPermissionChangeReasonRequest and BolusPermissionChangeReasonResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/BolusPermissionChangeReasonRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/BolusPermissionChangeReasonResponse.java
-//
-
 import Foundation
 
 /// Request information on why bolus permission changed for a given bolus.
@@ -26,11 +15,11 @@ public class BolusPermissionChangeReasonRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bolusId = Bytes.readShort(cargo, 0)
+        bolusId = Bytes.readShort(cargo, 0)
     }
 
     public init(bolusId: Int) {
-        self.cargo = Bytes.firstTwoBytesLittleEndian(bolusId)
+        cargo = Bytes.firstTwoBytesLittleEndian(bolusId)
         self.bolusId = bolusId
     }
 }
@@ -53,14 +42,14 @@ public class BolusPermissionChangeReasonResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bolusId = Bytes.readShort(cargo, 0)
-        self.isAcked = cargo[2] != 0
-        self.lastChangeReasonId = Int(cargo[3])
-        self.currentPermissionHolder = cargo[4] != 0
+        bolusId = Bytes.readShort(cargo, 0)
+        isAcked = cargo[2] != 0
+        lastChangeReasonId = Int(cargo[3])
+        currentPermissionHolder = cargo[4] != 0
     }
 
     public init(bolusId: Int, isAcked: Bool, lastChangeReasonId: Int, currentPermissionHolder: Bool) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(bolusId),
             Bytes.firstByteLittleEndian(isAcked ? 1 : 0),
             Bytes.firstByteLittleEndian(lastChangeReasonId),
@@ -74,7 +63,7 @@ public class BolusPermissionChangeReasonResponse: Message {
 
     /// Convenience accessor mapping `lastChangeReasonId` to `ChangeReason`.
     public var lastChangeReason: ChangeReason? {
-        return ChangeReason(rawValue: lastChangeReasonId)
+        ChangeReason(rawValue: lastChangeReasonId)
     }
 
     /// Reasons a bolus permission may change.
@@ -89,4 +78,3 @@ public class BolusPermissionChangeReasonResponse: Message {
         case UNKNOWN = 7
     }
 }
-

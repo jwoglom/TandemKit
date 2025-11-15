@@ -1,13 +1,3 @@
-//
-//  HistoryLogRecord.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Base class for pump history log records.
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/historyLog/HistoryLog.java
-//
-
 import Foundation
 
 /// Base class representing a single 26-byte history log entry.
@@ -22,9 +12,9 @@ open class HistoryLog {
     public required init(cargo: Data) {
         let filled = HistoryLog.fillCargo(cargo)
         self.cargo = filled
-        self.typeId = Int(Bytes.readShort(filled, 0) & 0x0FFF)
-        self.pumpTimeSec = Bytes.readUint32(filled, 2)
-        self.sequenceNum = Bytes.readUint32(filled, 6)
+        typeId = Int(Bytes.readShort(filled, 0) & 0x0FFF)
+        pumpTimeSec = Bytes.readUint32(filled, 2)
+        sequenceNum = Bytes.readUint32(filled, 6)
     }
 
     /// Pads or truncates cargo to the standard 26-byte length.
@@ -33,8 +23,7 @@ open class HistoryLog {
             return cargo
         }
         var ret = Data(count: length)
-        ret.replaceSubrange(0..<min(cargo.count, length), with: cargo.prefix(length))
+        ret.replaceSubrange(0 ..< min(cargo.count, length), with: cargo.prefix(length))
         return ret
     }
 }
-

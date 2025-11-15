@@ -16,20 +16,25 @@ public class TempRateCompletedHistoryLog: HistoryLog {
     public let timeLeft: UInt32
 
     public required init(cargo: Data) {
-        self.tempRateId = Bytes.readShort(cargo, 12)
-        self.timeLeft = Bytes.readUint32(cargo, 14)
+        tempRateId = Bytes.readShort(cargo, 12)
+        timeLeft = Bytes.readUint32(cargo, 14)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, tempRateId: Int, timeLeft: UInt32) {
-        let payload = TempRateCompletedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, tempRateId: tempRateId, timeLeft: timeLeft)
+        let payload = TempRateCompletedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            tempRateId: tempRateId,
+            timeLeft: timeLeft
+        )
         self.tempRateId = tempRateId
         self.timeLeft = timeLeft
         super.init(cargo: payload)
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, tempRateId: Int, timeLeft: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -40,4 +45,3 @@ public class TempRateCompletedHistoryLog: HistoryLog {
         )
     }
 }
-

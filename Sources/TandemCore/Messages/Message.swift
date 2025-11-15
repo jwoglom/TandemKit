@@ -1,10 +1,3 @@
-//
-//  Message.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/7/25.
-//
-
 import Foundation
 
 // https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/Message.java
@@ -15,9 +8,9 @@ public protocol Message: CustomStringConvertible {
     init(cargo: Data)
 }
 
-extension Message {
-    public var description: String {
-        return "Message(opCode=\(cargo.hexadecimalString))"
+public extension Message {
+    var description: String {
+        "Message(opCode=\(cargo.hexadecimalString))"
     }
 }
 
@@ -39,16 +32,18 @@ public struct MessageProps: Sendable {
     public let supportedDevices: SupportedDevices
     public let modifiesInsulinDelivery: Bool
 
-    public init(opCode: UInt8,
-                size: UInt8,
-                type: MessageType,
-                characteristic: CharacteristicUUID,
-                variableSize: Bool = false,
-                stream: Bool = false,
-                signed: Bool = false,
-                modifiesInsulinDelivery: Bool = false,
-                minApi: KnownApiVersion = .apiV2_1,
-                supportedDevices: SupportedDevices = .all) {
+    public init(
+        opCode: UInt8,
+        size: UInt8,
+        type: MessageType,
+        characteristic: CharacteristicUUID,
+        variableSize: Bool = false,
+        stream: Bool = false,
+        signed: Bool = false,
+        modifiesInsulinDelivery: Bool = false,
+        minApi: KnownApiVersion = .apiV2_1,
+        supportedDevices: SupportedDevices = .all
+    ) {
         self.opCode = opCode
         self.size = size
         self.type = type

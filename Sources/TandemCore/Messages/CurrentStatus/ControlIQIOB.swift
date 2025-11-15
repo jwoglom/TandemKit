@@ -1,14 +1,3 @@
-//
-//  ControlIQIOB.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ControlIQIOBRequest and ControlIQIOBResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ControlIQIOBRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ControlIQIOBResponse.java
-//
-
 import Foundation
 
 /// Request Control-IQ insulin on board information.
@@ -27,7 +16,7 @@ public class ControlIQIOBRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,15 +38,15 @@ public class ControlIQIOBResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.mudaliarIOB = Bytes.readUint32(cargo, 0)
-        self.timeRemainingSeconds = Bytes.readUint32(cargo, 4)
-        self.mudaliarTotalIOB = Bytes.readUint32(cargo, 8)
-        self.swan6hrIOB = Bytes.readUint32(cargo, 12)
-        self.iobType = Int(cargo[16])
+        mudaliarIOB = Bytes.readUint32(cargo, 0)
+        timeRemainingSeconds = Bytes.readUint32(cargo, 4)
+        mudaliarTotalIOB = Bytes.readUint32(cargo, 8)
+        swan6hrIOB = Bytes.readUint32(cargo, 12)
+        iobType = Int(cargo[16])
     }
 
     public init(mudaliarIOB: UInt32, timeRemainingSeconds: UInt32, mudaliarTotalIOB: UInt32, swan6hrIOB: UInt32, iobType: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(mudaliarIOB),
             Bytes.toUint32(timeRemainingSeconds),
             Bytes.toUint32(mudaliarTotalIOB),
@@ -73,7 +62,7 @@ public class ControlIQIOBResponse: Message {
 
     /// The method of IOB calculation used.
     public var type: IOBType? {
-        return IOBType(rawValue: iobType)
+        IOBType(rawValue: iobType)
     }
 
     public enum IOBType: Int {
@@ -93,4 +82,3 @@ public class ControlIQIOBResponse: Message {
         }
     }
 }
-

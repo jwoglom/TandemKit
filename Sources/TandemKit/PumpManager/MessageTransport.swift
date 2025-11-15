@@ -14,9 +14,9 @@ public struct MessageTransportState: Equatable, RawRepresentable {
     }
 
     public init?(rawValue: RawValue) {
-        self.txId = rawValue["txId"] as? UInt8 ?? 0
-        self.authenticationKey = rawValue["authenticationKey"] as? Data
-        self.timeSinceReset = rawValue["timeSinceReset"] as? UInt32
+        txId = rawValue["txId"] as? UInt8 ?? 0
+        authenticationKey = rawValue["authenticationKey"] as? Data
+        timeSinceReset = rawValue["timeSinceReset"] as? UInt32
     }
 
     public var rawValue: RawValue {

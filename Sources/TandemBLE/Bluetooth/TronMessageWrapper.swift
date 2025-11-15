@@ -11,16 +11,15 @@ public struct TronMessageWrapper {
     public let responseMetadata: MessageMetadata?
     public let packets: [Packet]
 
-    @MainActor
-    public init(message: Message, currentTxId: UInt8) {
+    @MainActor public init(message: Message, currentTxId: UInt8) {
         self.message = message
 
         // Get metadata for the message
         guard let reqMeta = MessageRegistry.metadata(for: message) else {
             fatalError("No metadata found for message type: \(String(describing: type(of: message)))")
         }
-        self.requestMetadata = reqMeta
-        self.responseMetadata = MessageRegistry.responseMetadata(for: message)
+        requestMetadata = reqMeta
+        responseMetadata = MessageRegistry.responseMetadata(for: message)
 
         tronLogger.debug("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
         if let respMeta = responseMetadata {
@@ -34,22 +33,23 @@ public struct TronMessageWrapper {
             // Attempt to fetch a key if available
             authKey = PumpStateSupplier.authenticationKey()
         }
-        self.packets = try! Packetize(message: message,
-                                      authenticationKey: authKey,
-                                      txId: currentTxId,
-                                      timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?())
+        packets = try! Packetize(
+            message: message,
+            authenticationKey: authKey,
+            txId: currentTxId,
+            timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?()
+        )
     }
 
-    @MainActor
-    public init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
+    @MainActor public init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
         self.message = message
 
         // Get metadata for the message
         guard let reqMeta = MessageRegistry.metadata(for: message) else {
             fatalError("No metadata found for message type: \(String(describing: type(of: message)))")
         }
-        self.requestMetadata = reqMeta
-        self.responseMetadata = MessageRegistry.responseMetadata(for: message)
+        requestMetadata = reqMeta
+        responseMetadata = MessageRegistry.responseMetadata(for: message)
 
         var authKey = Data()
         if type(of: message).props.signed {
@@ -57,11 +57,13 @@ public struct TronMessageWrapper {
         } else {
             authKey = PumpStateSupplier.authenticationKey()
         }
-        self.packets = try! Packetize(message: message,
-                                      authenticationKey: authKey,
-                                      txId: currentTxId,
-                                      timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?(),
-                                      maxChunkSize: maxChunkSize)
+        packets = try! Packetize(
+            message: message,
+            authenticationKey: authKey,
+            txId: currentTxId,
+            timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?(),
+            maxChunkSize: maxChunkSize
+        )
     }
 
     func buildPacketArrayList(_ messageType: MessageType) -> PacketArrayList {
@@ -72,7 +74,10 @@ public struct TronMessageWrapper {
 
         if messageType == .Response {
             if let responseMeta = responseMetadata {
-                tronLogger.debug("[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)")
+                tronLogger
+                    .debug(
+                        "[TronMessageWrapper] response metadata for \(type(of: message)) -> opCode=\(responseMeta.opCode) size=\(responseMeta.size)"
+                    )
                 opCode = responseMeta.opCode
                 size = UInt8(truncatingIfNeeded: responseMeta.size)
                 isSigned = responseMeta.signed
@@ -83,12 +88,14 @@ public struct TronMessageWrapper {
             size &+= 24
         }
 
-        return PacketArrayList(expectedOpCode: opCode,
-                               expectedCargoSize: size,
-                               expectedTxId: packets.first?.txId ?? 0,
-                               isSigned: isSigned,
-                               requestMetadata: requestMetadata,
-                               responseMetadata: responseMetadata)
+        return PacketArrayList(
+            expectedOpCode: opCode,
+            expectedCargoSize: size,
+            expectedTxId: packets.first?.txId ?? 0,
+            isSigned: isSigned,
+            requestMetadata: requestMetadata,
+            responseMetadata: responseMetadata
+        )
     }
 
     func mergeIntoSinglePacket() -> Packet? {

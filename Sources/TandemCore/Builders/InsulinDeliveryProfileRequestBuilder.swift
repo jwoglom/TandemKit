@@ -4,7 +4,7 @@ struct InsulinDeliveryProfileRequestBuilder {
     private var queue: [Message] = [ProfileStatusRequest()]
 
     mutating func nextRequest() -> Message? {
-        return queue.isEmpty ? nil : queue.removeFirst()
+        queue.isEmpty ? nil : queue.removeFirst()
     }
 
     mutating func processResponse(_ response: Message) {
@@ -13,7 +13,7 @@ struct InsulinDeliveryProfileRequestBuilder {
                 queue.append(IDPSettingsRequest(idpId: id))
             }
         } else if let settings = response as? IDPSettingsResponse {
-            for i in 1...settings.numberOfProfileSegments {
+            for i in 1 ... settings.numberOfProfileSegments {
                 queue.append(IDPSegmentRequest(idpId: settings.idpId, segmentIndex: i))
             }
         }

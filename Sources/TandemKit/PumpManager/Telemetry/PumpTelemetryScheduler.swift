@@ -1,12 +1,3 @@
-//
-//  PumpTelemetryScheduler.swift
-//  TandemKit
-//
-//  Created by ChatGPT on 2/18/25.
-//
-//  A lightweight helper that manages periodic telemetry fetches from the pump.
-//
-
 import Foundation
 
 /// Identifiers for the core telemetry streams we care about.
@@ -28,24 +19,28 @@ final class PumpTelemetryScheduler {
     private var tasks: [PumpTelemetryKind: Task] = [:]
 
     init(label: String) {
-        self.queue = DispatchQueue(label: label)
+        queue = DispatchQueue(label: label)
     }
 
     /// Schedule a repeating telemetry task.
-    func schedule(kind: PumpTelemetryKind,
-                  interval: TimeInterval,
-                  leeway: TimeInterval = 5.0,
-                  handler: @escaping () -> Void) {
+    func schedule(
+        kind: PumpTelemetryKind,
+        interval: TimeInterval,
+        leeway: TimeInterval = 5.0,
+        handler: @escaping () -> Void
+    ) {
         queue.sync {
             if let existing = tasks[kind] {
                 existing.timer.cancel()
             }
 
             let timer = DispatchSource.makeTimerSource(queue: queue)
-            let leewayNanoseconds = DispatchTimeInterval.milliseconds(Int(leeway * 1_000))
-            timer.schedule(deadline: .now() + interval,
-                           repeating: interval,
-                           leeway: leewayNanoseconds)
+            let leewayNanoseconds = DispatchTimeInterval.milliseconds(Int(leeway * 1000))
+            timer.schedule(
+                deadline: .now() + interval,
+                repeating: interval,
+                leeway: leewayNanoseconds
+            )
             timer.setEventHandler(handler: handler)
             timer.resume()
 

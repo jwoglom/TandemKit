@@ -18,15 +18,22 @@ public class IdpActionHistoryLog: HistoryLog {
     public let name: String
 
     public required init(cargo: Data) {
-        self.idp = Int(cargo[10])
-        self.status = Int(cargo[11])
-        self.sourceIdp = Int(cargo[12])
-        self.name = Bytes.readString(cargo, 18, 8)
+        idp = Int(cargo[10])
+        status = Int(cargo[11])
+        sourceIdp = Int(cargo[12])
+        name = Bytes.readString(cargo, 18, 8)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, status: Int, sourceIdp: Int, name: String) {
-        let payload = IdpActionHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, idp: idp, status: status, sourceIdp: sourceIdp, name: name)
+        let payload = IdpActionHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            idp: idp,
+            status: status,
+            sourceIdp: sourceIdp,
+            name: name
+        )
         self.idp = idp
         self.status = status
         self.sourceIdp = sourceIdp
@@ -34,8 +41,15 @@ public class IdpActionHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, status: Int, sourceIdp: Int, name: String) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        idp: Int,
+        status: Int,
+        sourceIdp: Int,
+        name: String
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -48,4 +62,3 @@ public class IdpActionHistoryLog: HistoryLog {
         )
     }
 }
-

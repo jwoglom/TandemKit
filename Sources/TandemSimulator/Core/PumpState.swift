@@ -60,20 +60,20 @@ class SimulatedPumpState: PumpStateProvider {
     // MARK: - Initialization
 
     init(config: SimulatorConfig) {
-        self.serialNumber = config.serialNumber
-        self.modelNumber = config.pumpModel.modelNumber
-        self.firmwareVersion = config.firmwareVersion
-        self.currentBasalRate = config.currentBasalRate
-        self.activeProfile = config.activeProfile
-        self.reservoirLevel = config.reservoirLevel
-        self.cgmEnabled = config.cgmEnabled
-        self.currentGlucose = config.cgmEnabled ? config.currentGlucose : nil
-        self.batteryPercent = config.batteryPercent
-        self.pumpStartTime = Date()
+        serialNumber = config.serialNumber
+        modelNumber = config.pumpModel.modelNumber
+        firmwareVersion = config.firmwareVersion
+        currentBasalRate = config.currentBasalRate
+        activeProfile = config.activeProfile
+        reservoirLevel = config.reservoirLevel
+        cgmEnabled = config.cgmEnabled
+        currentGlucose = config.cgmEnabled ? config.currentGlucose : nil
+        batteryPercent = config.batteryPercent
+        pumpStartTime = Date()
 
         // Set default glucose trend if CGM is enabled
         if cgmEnabled {
-            self.glucoseTrend = .stable
+            glucoseTrend = .stable
         }
     }
 
@@ -104,7 +104,8 @@ class SimulatedPumpState: PumpStateProvider {
     /// Simulate IOB decay over time (simplified model)
     func updateInsulinOnBoard() {
         guard let bolusStart = activeBolusStartTime,
-              let bolusAmount = activeBolusAmount else {
+              let bolusAmount = activeBolusAmount
+        else {
             insulinOnBoard = max(0, insulinOnBoard - 0.01) // Slow decay
             return
         }
@@ -127,9 +128,9 @@ class SimulatedPumpState: PumpStateProvider {
 
     /// Update battery level (simulate slow drain)
     func updateBattery() {
-        if !isCharging && batteryPercent > 0 {
+        if !isCharging, batteryPercent > 0 {
             // Drain very slowly
-            if Int.random(in: 0..<1000) == 0 {
+            if Int.random(in: 0 ..< 1000) == 0 {
                 batteryPercent = max(0, batteryPercent - 1)
             }
         }
@@ -140,7 +141,7 @@ class SimulatedPumpState: PumpStateProvider {
         guard cgmEnabled, let current = currentGlucose else { return }
 
         // Small random variation (-5 to +5 mg/dL)
-        let variation = Int.random(in: -5...5)
+        let variation = Int.random(in: -5 ... 5)
         let newValue = max(40, min(400, current + variation))
 
         currentGlucose = newValue

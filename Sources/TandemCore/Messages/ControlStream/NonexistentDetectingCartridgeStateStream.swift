@@ -28,7 +28,7 @@ public class NonexistentDetectingCartridgeStateStreamRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,14 +49,13 @@ public class DetectingCartridgeStateStreamResponse: Message {
     public required init(cargo: Data) {
         let raw = Bytes.dropLastN(cargo, 0)
         self.cargo = raw
-        self.percentComplete = Bytes.readShort(raw, 0)
+        percentComplete = Bytes.readShort(raw, 0)
     }
 
     public init(percentComplete: Int) {
-        self.cargo = Bytes.firstTwoBytesLittleEndian(percentComplete)
+        cargo = Bytes.firstTwoBytesLittleEndian(percentComplete)
         self.percentComplete = percentComplete
     }
 
     public var isComplete: Bool { percentComplete == 100 }
 }
-

@@ -22,19 +22,41 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
     public let activeDays: Int
 
     public required init(cargo: Data) {
-        self.modification = Int(cargo[10])
-        self.reminderId = Int(cargo[11])
-        self.status = Int(cargo[12])
-        self.enable = Int(cargo[13])
-        self.frequencyMinutes = Bytes.readUint32(cargo, 14)
-        self.startTime = Bytes.readShort(cargo, 18)
-        self.endTime = Bytes.readShort(cargo, 20)
-        self.activeDays = Int(cargo[22])
+        modification = Int(cargo[10])
+        reminderId = Int(cargo[11])
+        status = Int(cargo[12])
+        enable = Int(cargo[13])
+        frequencyMinutes = Bytes.readUint32(cargo, 14)
+        startTime = Bytes.readShort(cargo, 18)
+        endTime = Bytes.readShort(cargo, 20)
+        activeDays = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, modification: Int, reminderId: Int, status: Int, enable: Int, frequencyMinutes: UInt32, startTime: Int, endTime: Int, activeDays: Int) {
-        let payload = ParamChangeReminderHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, modification: modification, reminderId: reminderId, status: status, enable: enable, frequencyMinutes: frequencyMinutes, startTime: startTime, endTime: endTime, activeDays: activeDays)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modification: Int,
+        reminderId: Int,
+        status: Int,
+        enable: Int,
+        frequencyMinutes: UInt32,
+        startTime: Int,
+        endTime: Int,
+        activeDays: Int
+    ) {
+        let payload = ParamChangeReminderHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            modification: modification,
+            reminderId: reminderId,
+            status: status,
+            enable: enable,
+            frequencyMinutes: frequencyMinutes,
+            startTime: startTime,
+            endTime: endTime,
+            activeDays: activeDays
+        )
         self.modification = modification
         self.reminderId = reminderId
         self.status = status
@@ -46,8 +68,19 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, modification: Int, reminderId: Int, status: Int, enable: Int, frequencyMinutes: UInt32, startTime: Int, endTime: Int, activeDays: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modification: Int,
+        reminderId: Int,
+        status: Int,
+        enable: Int,
+        frequencyMinutes: UInt32,
+        startTime: Int,
+        endTime: Int,
+        activeDays: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -64,4 +97,3 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
         )
     }
 }
-

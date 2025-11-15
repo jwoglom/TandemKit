@@ -1,14 +1,3 @@
-//
-//  CGMRateAlertSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMRateAlertSettingsRequest and CGMRateAlertSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMRateAlertSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMRateAlertSettingsResponse.java
-//
-
 import Foundation
 
 /// Request CGM rate-of-change alert settings from the pump.
@@ -27,7 +16,7 @@ public class CGMRateAlertSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -50,16 +39,23 @@ public class CGMRateAlertSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.riseRateThreshold = Int(cargo[0])
-        self.riseRateEnabled = Int(cargo[1])
-        self.riseRateDefaultBitmask = Int(cargo[2])
-        self.fallRateThreshold = Int(cargo[3])
-        self.fallRateEnabled = Int(cargo[4])
-        self.fallRateDefaultBitmask = Int(cargo[5])
+        riseRateThreshold = Int(cargo[0])
+        riseRateEnabled = Int(cargo[1])
+        riseRateDefaultBitmask = Int(cargo[2])
+        fallRateThreshold = Int(cargo[3])
+        fallRateEnabled = Int(cargo[4])
+        fallRateDefaultBitmask = Int(cargo[5])
     }
 
-    public init(riseRateThreshold: Int, riseRateEnabled: Int, riseRateDefaultBitmask: Int, fallRateThreshold: Int, fallRateEnabled: Int, fallRateDefaultBitmask: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        riseRateThreshold: Int,
+        riseRateEnabled: Int,
+        riseRateDefaultBitmask: Int,
+        fallRateThreshold: Int,
+        fallRateEnabled: Int,
+        fallRateDefaultBitmask: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(riseRateThreshold),
             Bytes.firstByteLittleEndian(riseRateEnabled),
             Bytes.firstByteLittleEndian(riseRateDefaultBitmask),
@@ -75,4 +71,3 @@ public class CGMRateAlertSettingsResponse: Message {
         self.fallRateDefaultBitmask = fallRateDefaultBitmask
     }
 }
-

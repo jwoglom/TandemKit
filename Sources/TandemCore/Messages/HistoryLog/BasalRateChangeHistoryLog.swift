@@ -19,16 +19,32 @@ public class BasalRateChangeHistoryLog: HistoryLog {
     public let changeTypeId: Int
 
     public required init(cargo: Data) {
-        self.commandBasalRate = Bytes.readFloat(cargo, 10)
-        self.baseBasalRate = Bytes.readFloat(cargo, 14)
-        self.maxBasalRate = Bytes.readFloat(cargo, 18)
-        self.insulinDeliveryProfile = Bytes.readShort(cargo, 22)
-        self.changeTypeId = Int(cargo[24])
+        commandBasalRate = Bytes.readFloat(cargo, 10)
+        baseBasalRate = Bytes.readFloat(cargo, 14)
+        maxBasalRate = Bytes.readFloat(cargo, 18)
+        insulinDeliveryProfile = Bytes.readShort(cargo, 22)
+        changeTypeId = Int(cargo[24])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, commandBasalRate: Float, baseBasalRate: Float, maxBasalRate: Float, insulinDeliveryProfile: Int, changeTypeId: Int) {
-        let payload = BasalRateChangeHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, commandBasalRate: commandBasalRate, baseBasalRate: baseBasalRate, maxBasalRate: maxBasalRate, insulinDeliveryProfile: insulinDeliveryProfile, changeTypeId: changeTypeId)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        commandBasalRate: Float,
+        baseBasalRate: Float,
+        maxBasalRate: Float,
+        insulinDeliveryProfile: Int,
+        changeTypeId: Int
+    ) {
+        let payload = BasalRateChangeHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            commandBasalRate: commandBasalRate,
+            baseBasalRate: baseBasalRate,
+            maxBasalRate: maxBasalRate,
+            insulinDeliveryProfile: insulinDeliveryProfile,
+            changeTypeId: changeTypeId
+        )
         self.commandBasalRate = commandBasalRate
         self.baseBasalRate = baseBasalRate
         self.maxBasalRate = maxBasalRate
@@ -37,8 +53,16 @@ public class BasalRateChangeHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, commandBasalRate: Float, baseBasalRate: Float, maxBasalRate: Float, insulinDeliveryProfile: Int, changeTypeId: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        commandBasalRate: Float,
+        baseBasalRate: Float,
+        maxBasalRate: Float,
+        insulinDeliveryProfile: Int,
+        changeTypeId: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -66,4 +90,3 @@ public class BasalRateChangeHistoryLog: HistoryLog {
         ChangeType(rawValue: changeTypeId)
     }
 }
-

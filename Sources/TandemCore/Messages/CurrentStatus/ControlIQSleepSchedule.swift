@@ -1,14 +1,3 @@
-//
-//  ControlIQSleepSchedule.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ControlIQSleepScheduleRequest and ControlIQSleepScheduleResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ControlIQSleepScheduleRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ControlIQSleepScheduleResponse.java
-//
-
 import Foundation
 
 /// Request the Control-IQ sleep schedule settings.
@@ -27,7 +16,7 @@ public class ControlIQSleepScheduleRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -48,14 +37,14 @@ public class ControlIQSleepScheduleResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.schedule0 = SleepSchedule(data: cargo, index: 0)
-        self.schedule1 = SleepSchedule(data: cargo, index: 6)
-        self.schedule2 = SleepSchedule(data: cargo, index: 12)
-        self.schedule3 = SleepSchedule(data: cargo, index: 18)
+        schedule0 = SleepSchedule(data: cargo, index: 0)
+        schedule1 = SleepSchedule(data: cargo, index: 6)
+        schedule2 = SleepSchedule(data: cargo, index: 12)
+        schedule3 = SleepSchedule(data: cargo, index: 18)
     }
 
     public init(schedule0: SleepSchedule, schedule1: SleepSchedule, schedule2: SleepSchedule, schedule3: SleepSchedule) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             schedule0.build(),
             schedule1.build(),
             schedule2.build(),
@@ -75,10 +64,10 @@ public class ControlIQSleepScheduleResponse: Message {
         public var endTime: Int
 
         public init(data: Data, index: Int) {
-            self.enabled = Int(data[index])
-            self.activeDays = Int(data[index + 1])
-            self.startTime = Bytes.readShort(data, index + 2)
-            self.endTime = Bytes.readShort(data, index + 4)
+            enabled = Int(data[index])
+            activeDays = Int(data[index + 1])
+            startTime = Bytes.readShort(data, index + 2)
+            endTime = Bytes.readShort(data, index + 4)
         }
 
         public init(enabled: Int, activeDays: Int, startTime: Int, endTime: Int) {
@@ -89,7 +78,7 @@ public class ControlIQSleepScheduleResponse: Message {
         }
 
         public func build() -> Data {
-            return Bytes.combine(
+            Bytes.combine(
                 Bytes.firstByteLittleEndian(enabled),
                 Bytes.firstByteLittleEndian(activeDays),
                 Bytes.firstTwoBytesLittleEndian(startTime),
@@ -98,4 +87,3 @@ public class ControlIQSleepScheduleResponse: Message {
         }
     }
 }
-

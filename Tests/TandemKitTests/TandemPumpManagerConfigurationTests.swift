@@ -1,7 +1,7 @@
-import XCTest
-@testable import TandemKit
-@testable import TandemCore
 import LoopKit
+@testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 final class TandemPumpManagerConfigurationTests: XCTestCase {
     private func makeManager(pumpState: PumpState) -> TandemPumpManager {
@@ -10,7 +10,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
     }
 
     func testSyncBasalRateScheduleSendsSegmentUpdates() throws {
-        let pumpState = PumpState(address: 0x01020304)
+        let pumpState = PumpState(address: 0x0102_0304)
         let manager = makeManager(pumpState: pumpState)
         let peripheral = MockPeripheralManager()
         let transport = MockPumpMessageTransport(peripheralManager: peripheral)
@@ -20,7 +20,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
 
         let items = [
             RepeatingScheduleValue(startTime: 0, value: 0.8),
-            RepeatingScheduleValue(startTime: 3_600, value: 1.2)
+            RepeatingScheduleValue(startTime: 3600, value: 1.2)
         ]
 
         for _ in items {
@@ -56,11 +56,11 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
 
         let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
         XCTAssertEqual(restoredState.basalRateSchedule?.items, items.sorted { $0.startTime < $1.startTime })
-        XCTAssertEqual(restoredState.settings.maxBasalScheduleEntry, items.map { $0.value }.max())
+        XCTAssertEqual(restoredState.settings.maxBasalScheduleEntry, items.map(\.value).max())
     }
 
     func testSyncDeliveryLimitsUpdatesSettings() throws {
-        let pumpState = PumpState(address: 0x0A0B0C0D)
+        let pumpState = PumpState(address: 0x0A0B_0C0D)
         let manager = makeManager(pumpState: pumpState)
         let peripheral = MockPeripheralManager()
         let transport = MockPumpMessageTransport(peripheralManager: peripheral)
@@ -94,10 +94,16 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         XCTAssertEqual(appliedLimits.maximumBolus, limits.maximumBolus)
 
         XCTAssertEqual(peripheral.sentMessages.count, 2)
-        let basalRequest = try XCTUnwrap(peripheral.sentMessages.first { $0.message is SetMaxBasalLimitRequest }?.message as? SetMaxBasalLimitRequest)
+        let basalRequest = try XCTUnwrap(
+            peripheral.sentMessages.first { $0.message is SetMaxBasalLimitRequest }?
+                .message as? SetMaxBasalLimitRequest
+        )
         XCTAssertEqual(basalRequest.maxHourlyBasalMilliunits, Int((limits.maximumBasalRatePerHour! * 1000.0).rounded()))
 
-        let bolusRequest = try XCTUnwrap(peripheral.sentMessages.first { $0.message is SetMaxBolusLimitRequest }?.message as? SetMaxBolusLimitRequest)
+        let bolusRequest = try XCTUnwrap(
+            peripheral.sentMessages.first { $0.message is SetMaxBolusLimitRequest }?
+                .message as? SetMaxBolusLimitRequest
+        )
         XCTAssertEqual(bolusRequest.maxBolusMilliunits, Int((limits.maximumBolus! * 1000.0).rounded()))
 
         let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))

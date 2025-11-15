@@ -1,14 +1,3 @@
-//
-//  SetDexcomG7PairingCode.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetDexcomG7PairingCodeRequest and SetDexcomG7PairingCodeResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetDexcomG7PairingCodeRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetDexcomG7PairingCodeResponse.java
-//
-
 import Foundation
 
 /// Request to set a Dexcom G7 pairing code.
@@ -26,11 +15,11 @@ public class SetDexcomG7PairingCodeRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.pairingCode = Bytes.readShort(cargo, 0)
+        pairingCode = Bytes.readShort(cargo, 0)
     }
 
     public init(pairingCode: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(pairingCode),
             Data(repeating: 0, count: 6)
         )
@@ -53,15 +42,14 @@ public class SetDexcomG7PairingCodeResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
             Data([0])
         )
         self.status = status
     }
 }
-
