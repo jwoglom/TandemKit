@@ -38,7 +38,7 @@ public final class PumpResponseCollector {
         expectedResponseMetadata
     }
 
-    @MainActor  public func ingest(_ data: Data, characteristic: CBUUID) throws -> PumpResponseMessage {
+    @MainActor public func ingest(_ data: Data, characteristic: CBUUID) throws -> PumpResponseMessage {
         guard let response = BTResponseParser.parse(
             message: message,
             packetArrayList: &packetArrayList,

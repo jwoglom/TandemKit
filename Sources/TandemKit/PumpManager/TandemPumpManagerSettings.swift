@@ -65,7 +65,7 @@ public extension TandemPumpManagerSettings {
     static let `default` = TandemPumpManagerSettings()
 }
 
-public enum TandemPumpManagerValidationError: Error, Equatable {
+public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case invalidBolusAmount(requested: Double)
     case maximumBolusExceeded(requested: Double, maximum: Double)
     case insulinOnBoardLimitExceeded(currentIOB: Double, requested: Double, maximum: Double)

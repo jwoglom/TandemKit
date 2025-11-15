@@ -5,7 +5,7 @@ import TandemCore
     import os
 #endif
 
-public class PeripheralManager: NSObject, @unchecked Sendable {
+public class PeripheralManager: NSObject {
     private let log = OSLog(category: "PeripheralManager")
     private let logger = PumpLogger(label: "TandemBLE.PeripheralManager")
 
@@ -151,7 +151,7 @@ extension PeripheralManagerDelegate {
 // MARK: - Operation sequence management
 
 extension PeripheralManager {
-    @discardableResult  func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
+    @discardableResult func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
         dispatchPrecondition(condition: .onQueue(queue))
 
         if needsReconnection {

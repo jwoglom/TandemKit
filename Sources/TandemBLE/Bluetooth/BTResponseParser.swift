@@ -7,7 +7,7 @@ private let responseParserLogger = PumpLogger(label: "TandemBLE.BTResponseParser
 /// Parses raw Bluetooth notification packets into pump messages.
 /// This is a minimal Swift port of PumpX2 `BTResponseParser` used for unit testing.
 public enum BTResponseParser {
-    @MainActor  public static func parse(
+    @MainActor public static func parse(
         wrapper: TronMessageWrapper,
         output: Data,
         characteristic: CBUUID
@@ -16,7 +16,7 @@ public enum BTResponseParser {
         return parse(message: wrapper.message, packetArrayList: &packetArray, output: output, uuid: characteristic)
     }
 
-    @MainActor  static func parse(
+    @MainActor static func parse(
         message: Message,
         packetArrayList: inout PacketArrayList,
         output: Data,

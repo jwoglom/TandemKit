@@ -78,7 +78,7 @@ public enum QualifyingEvent: CaseIterable {
     ///
     /// The factories return concrete `Message` types which may be dispatched
     /// to the pump to retrieve those details.
-    @MainActor  public var suggestedHandlers: [MessageFactory] {
+    @MainActor public var suggestedHandlers: [MessageFactory] {
         switch self {
         case .alert:
             return [{ AlertStatusRequest() }]
@@ -197,7 +197,7 @@ public enum QualifyingEvent: CaseIterable {
     }
 
     /// Return suggested request messages for a set of events.
-    @MainActor  public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
+    @MainActor public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
         var messages: [Message] = []
         for e in events {
             for factory in e.suggestedHandlers {

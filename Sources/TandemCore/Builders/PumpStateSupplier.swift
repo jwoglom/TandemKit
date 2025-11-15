@@ -176,7 +176,7 @@ public enum PumpStateSupplier {
     /// - Parameter rawCode: The user entered pairing code which may include separators or lowercase letters.
     /// - Returns: The sanitized pairing code that will be used for authentication.
     /// - Throws: ``PumpPairingCodeValidationError`` when the supplied code is empty or has an unexpected length.
-    @discardableResult  public static func sanitizeAndStorePairingCode(_ rawCode: String) throws -> String {
+    @discardableResult public static func sanitizeAndStorePairingCode(_ rawCode: String) throws -> String {
         let trimmed = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw PumpPairingCodeValidationError.empty }
 

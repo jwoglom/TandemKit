@@ -3,7 +3,7 @@ import Foundation
 #if os(Linux)
     import LoopKit
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManagerUIPlugin {
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerUIPlugin {
         init()
 
         var pumpManagerType: (any PumpManagerUI.Type)? { get }

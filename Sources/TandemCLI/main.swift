@@ -526,7 +526,7 @@ private extension TandemCLIMain {
         }
     }
 
-    @MainActor  static func runEncode(options: EncodeOptions) throws {
+    @MainActor static func runEncode(options: EncodeOptions) throws {
         guard let metadata = MessageRegistry.metadata(forName: options.messageName) else {
             throw CLIError(
                 "Unknown message type " + options
@@ -1873,7 +1873,7 @@ private extension TandemCLIMain {
             }
         }
 
-        @MainActor  private func reportQualifyingEvents(mask: UInt32, events: Set<QualifyingEvent>) {
+        @MainActor private func reportQualifyingEvents(mask: UInt32, events: Set<QualifyingEvent>) {
             let maskHex = String(format: "0x%08X", mask)
             let eventNames = events.sorted(by: { displayName(for: $0) < displayName(for: $1) }).map { displayName(for: $0) }
 

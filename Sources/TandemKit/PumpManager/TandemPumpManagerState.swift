@@ -413,7 +413,7 @@ private extension TandemPumpManagerState {
         }
 
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
-        return BasalRateSchedule(items: items, timeZone: timeZone)
+        return BasalRateSchedule(dailyItems: items, timeZone: timeZone)
     }
 
     static func reservoirValuesEqual(_ lhs: ReservoirValue?, _ rhs: ReservoirValue?) -> Bool {

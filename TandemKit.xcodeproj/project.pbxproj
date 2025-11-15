@@ -261,8 +261,6 @@
 		3EE345ED2EC912AE008A07F6 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */; };
 		3EE345EE2EC912AE008A07F6 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3EE345E92EC912AE008A07F6 /* Info.plist */; };
 		3EE345EF2EC912AE008A07F6 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */; };
-		3EE345F22EC912FC008A07F6 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE345F02EC912F9008A07F6 /* HealthKit.framework */; };
-		3EE345F32EC912FC008A07F6 /* HealthKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE345F02EC912F9008A07F6 /* HealthKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; platformFilter = ios; };
 		3EE345F62EC9130B008A07F6 /* TandemKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE345FA2EC91326008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
@@ -271,6 +269,7 @@
 		3EE346002EC9132D008A07F6 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE346042EC91332008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
 		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */; };
 		3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */; };
 		3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */; };
 		3EEECBCA2EC9023C0063D7BC /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
@@ -316,17 +315,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		3EE345F42EC912FC008A07F6 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				3EE345F32EC912FC008A07F6 /* HealthKit.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		3EE345F92EC9130B008A07F6 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -627,6 +615,7 @@
 		3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TandemKitPlugin.h; sourceTree = "<group>"; };
 		3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPlugin.swift; sourceTree = "<group>"; };
 		3EE345F02EC912F9008A07F6 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/HealthKit.framework; sourceTree = DEVELOPER_DIR; };
+		3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
 		3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TandemPumpManager+UI.swift"; sourceTree = "<group>"; };
 		3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemUICoordinator.swift; sourceTree = "<group>"; };
 		3EEECBC92EC9023C0063D7BC /* LoopKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LoopKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -660,7 +649,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3EE345F22EC912FC008A07F6 /* HealthKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -847,6 +835,7 @@
 		3EE344542EC91299008A07F6 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */,
 				3EE3444A2EC91299008A07F6 /* Extensions */,
 				3EE3444B2EC91299008A07F6 /* Bytes.swift */,
 				3EE3444C2EC91299008A07F6 /* CRC16.swift */,
@@ -1226,7 +1215,6 @@
 				3EE344042EC9125A008A07F6 /* Sources */,
 				3EE344052EC9125A008A07F6 /* Frameworks */,
 				3EE344062EC9125A008A07F6 /* Resources */,
-				3EE345F42EC912FC008A07F6 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1554,6 +1542,7 @@
 				3EE345A02EC91299008A07F6 /* CannulaFilledHistoryLog.swift in Sources */,
 				3EE345A12EC91299008A07F6 /* BasalIQAlertInfo.swift in Sources */,
 				3EE345A22EC91299008A07F6 /* BasalDeliveryHistoryLog.swift in Sources */,
+				3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */,
 				3EE345A32EC91299008A07F6 /* DismissNotification.swift in Sources */,
 				3EE345A42EC91299008A07F6 /* CRC16.swift in Sources */,
 				3EE345A52EC91299008A07F6 /* CGMOORAlertSettings.swift in Sources */,

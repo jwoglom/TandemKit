@@ -1,9 +1,3 @@
-//
-//  Basis: OmniBLE
-//  Created by Nathan Racklyeft on 1/9/16.
-//  Copyright © 2016 Nathan Racklyeft. All rights reserved.
-//
-
 import Foundation
 
 public extension TimeInterval {
