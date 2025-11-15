@@ -1,6 +1,7 @@
 import XCTest
 @testable import TandemKit
 @testable import TandemCore
+import LoopKit
 
 @available(macOS 13.0, iOS 14.0, *)
 final class TandemPumpManagerConnectionTests: XCTestCase {
@@ -114,6 +115,13 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private(set) var statusUpdates: [StatusUpdate] = []
     private(set) var recordedErrors: [PumpManagerError] = []
     private(set) var didUpdateStateCallCount: Int = 0
+    private(set) var pumpEvents: [[NewPumpEvent]] = []
+    private(set) var pumpEventReconciliations: [Date?] = []
+    private(set) var pumpEventReplaceFlags: [Bool] = []
+    private(set) var reservoirUpdates: [(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool)] = []
+
+    var pumpEventsExpectation: XCTestExpectation?
+    var reservoirExpectation: XCTestExpectation?
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
@@ -163,6 +171,10 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         replacePendingEvents: Bool,
         completion: @escaping (Error?) -> Void
     ) {
+        pumpEvents.append(events)
+        pumpEventReconciliations.append(lastReconciliation)
+        pumpEventReplaceFlags.append(replacePendingEvents)
+        pumpEventsExpectation?.fulfill()
         completion(nil)
     }
 
@@ -172,7 +184,10 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         at date: Date,
         completion: @escaping (Result<(newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool), Error>) -> Void
     ) {
-        completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
+        let value = SimpleReservoirValue(startDate: date, unitVolume: units)
+        reservoirUpdates.append((value, nil, true))
+        reservoirExpectation?.fulfill()
+        completion(.success((value, nil, true)))
     }
 
     func pumpManager(

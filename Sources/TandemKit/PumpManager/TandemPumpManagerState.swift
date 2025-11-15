@@ -15,7 +15,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 3
+    public static let version = 4
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -28,6 +28,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var bolusState: PumpManagerStatus.BolusState
     public var deliveryIsUncertain: Bool
     public var basalRateSchedule: BasalRateSchedule?
+    public var recentHistorySequenceNumbers: [UInt32]
 
     public init(
         pumpState: PumpState?,
@@ -40,7 +41,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         lastBasalStatusDate: Date? = nil,
         bolusState: PumpManagerStatus.BolusState = .noBolus,
         deliveryIsUncertain: Bool = false,
-        basalRateSchedule: BasalRateSchedule? = nil
+        basalRateSchedule: BasalRateSchedule? = nil,
+        recentHistorySequenceNumbers: [UInt32] = []
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -53,6 +55,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.bolusState = bolusState
         self.deliveryIsUncertain = deliveryIsUncertain
         self.basalRateSchedule = basalRateSchedule
+        self.recentHistorySequenceNumbers = recentHistorySequenceNumbers
     }
 
     public init?(rawValue: RawValue) {
@@ -128,6 +131,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             self.basalRateSchedule = nil
         }
+
+        if let historyRaw = rawValue["recentHistorySequenceNumbers"] as? [UInt32] {
+            self.recentHistorySequenceNumbers = historyRaw
+        } else if let historyNumbers = rawValue["recentHistorySequenceNumbers"] as? [NSNumber] {
+            self.recentHistorySequenceNumbers = historyNumbers.map { $0.uint32Value }
+        } else {
+            self.recentHistorySequenceNumbers = []
+        }
     }
 
     public var rawValue: RawValue {
@@ -180,6 +191,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
+        if !recentHistorySequenceNumbers.isEmpty {
+            raw["recentHistorySequenceNumbers"] = recentHistorySequenceNumbers
+        }
+
         return raw
     }
 }
@@ -196,7 +211,8 @@ public extension TandemPumpManagerState {
             lhs.lastBasalStatusDate == rhs.lastBasalStatusDate &&
             lhs.bolusState == rhs.bolusState &&
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
-            lhs.basalRateSchedule == rhs.basalRateSchedule
+            lhs.basalRateSchedule == rhs.basalRateSchedule &&
+            lhs.recentHistorySequenceNumbers == rhs.recentHistorySequenceNumbers
     }
 }
 
