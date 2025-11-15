@@ -19,16 +19,32 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
     public let totalBolusSize: Float
 
     public required init(cargo: Data) {
-        self.bolusId = Bytes.readShort(cargo, 10)
-        self.spare = Bytes.readShort(cargo, 12)
-        self.foodBolusSize = Bytes.readFloat(cargo, 14)
-        self.correctionBolusSize = Bytes.readFloat(cargo, 18)
-        self.totalBolusSize = Bytes.readFloat(cargo, 22)
+        bolusId = Bytes.readShort(cargo, 10)
+        spare = Bytes.readShort(cargo, 12)
+        foodBolusSize = Bytes.readFloat(cargo, 14)
+        correctionBolusSize = Bytes.readFloat(cargo, 18)
+        totalBolusSize = Bytes.readFloat(cargo, 22)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, spare: Int, foodBolusSize: Float, correctionBolusSize: Float, totalBolusSize: Float) {
-        let payload = BolusRequestedMsg3HistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusId: bolusId, spare: spare, foodBolusSize: foodBolusSize, correctionBolusSize: correctionBolusSize, totalBolusSize: totalBolusSize)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        spare: Int,
+        foodBolusSize: Float,
+        correctionBolusSize: Float,
+        totalBolusSize: Float
+    ) {
+        let payload = BolusRequestedMsg3HistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusId: bolusId,
+            spare: spare,
+            foodBolusSize: foodBolusSize,
+            correctionBolusSize: correctionBolusSize,
+            totalBolusSize: totalBolusSize
+        )
         self.bolusId = bolusId
         self.spare = spare
         self.foodBolusSize = foodBolusSize
@@ -37,8 +53,16 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, spare: Int, foodBolusSize: Float, correctionBolusSize: Float, totalBolusSize: Float) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        spare: Int,
+        foodBolusSize: Float,
+        correctionBolusSize: Float,
+        totalBolusSize: Float
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -52,4 +76,3 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
         )
     }
 }
-

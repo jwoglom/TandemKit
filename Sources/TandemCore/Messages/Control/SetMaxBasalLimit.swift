@@ -1,14 +1,3 @@
-//
-//  SetMaxBasalLimit.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetMaxBasalLimitRequest and SetMaxBasalLimitResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetMaxBasalLimitRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetMaxBasalLimitResponse.java
-//
-
 import Foundation
 
 /// Request to set the maximum hourly basal rate.
@@ -26,11 +15,11 @@ public class SetMaxBasalLimitRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.maxHourlyBasalMilliunits = Bytes.readShort(cargo, 0)
+        maxHourlyBasalMilliunits = Bytes.readShort(cargo, 0)
     }
 
     public init(maxHourlyBasalMilliunits: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(maxHourlyBasalMilliunits),
             Data([0, 0])
         )
@@ -53,12 +42,11 @@ public class SetMaxBasalLimitResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

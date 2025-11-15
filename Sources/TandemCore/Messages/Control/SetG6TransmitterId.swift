@@ -1,14 +1,3 @@
-//
-//  SetG6TransmitterId.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetG6TransmitterIdRequest and SetG6TransmitterIdResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetG6TransmitterIdRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetG6TransmitterIdResponse.java
-//
-
 import Foundation
 
 /// Request to configure the G6 transmitter ID on Mobi.
@@ -30,11 +19,11 @@ public class SetG6TransmitterIdRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.txId = Bytes.readString(cargo, 0, Self.txIdLength)
+        txId = Bytes.readString(cargo, 0, Self.txIdLength)
     }
 
     public init(txId: String) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.writeString(txId, Self.txIdLength),
             Data(repeating: 0, count: 10)
         )
@@ -59,12 +48,11 @@ public class SetG6TransmitterIdResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

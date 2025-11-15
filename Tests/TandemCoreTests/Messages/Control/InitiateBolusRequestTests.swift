@@ -1,9 +1,9 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class InitiateBolusRequestTests: XCTestCase {
     func testInitiateBolusRequest_ID10650_1u() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461510642)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_510_642)
         let expected = InitiateBolusRequest(
             totalVolume: 1000,
             bolusID: 10650,
@@ -39,7 +39,7 @@ final class InitiateBolusRequestTests: XCTestCase {
     }
 
     func testInitiateBolusRequest_ID10652_013u_13g_carbs_142mgdl() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461589180)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_589_180)
         let expected = InitiateBolusRequest(
             totalVolume: 130,
             bolusID: 10652,
@@ -75,7 +75,7 @@ final class InitiateBolusRequestTests: XCTestCase {
     }
 
     func testInitiateBolusRequest_ID10653_011u_11g_carbs_161mgdl_013u_iob() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461589420)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_589_420)
         let expected = InitiateBolusRequest(
             totalVolume: 110,
             bolusID: 10653,
@@ -111,7 +111,7 @@ final class InitiateBolusRequestTests: XCTestCase {
     }
 
     func testInitiateBolusRequest_ID10677() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
         let expected = InitiateBolusRequest(
             totalVolume: 770,
             bolusID: 10677,
@@ -138,7 +138,7 @@ final class InitiateBolusRequestTests: XCTestCase {
     }
 
     func testInitiateBolusRequest_ID10678() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710202)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_202)
         let expected = InitiateBolusRequest(
             totalVolume: 760,
             bolusID: 10678,
@@ -165,7 +165,7 @@ final class InitiateBolusRequestTests: XCTestCase {
     }
 
     func testInitiateBolusRequest_Mobi_Extended() {
-        MessageTester.initPumpState("", 1905413)
+        MessageTester.initPumpState("", 1_905_413)
         let expected = InitiateBolusRequest(
             totalVolume: 250,
             bolusID: 501,

@@ -1,5 +1,5 @@
-import Foundation
 import CoreBluetooth
+import Foundation
 import TandemCore
 
 private let pumpCollectorLogger = PumpLogger(label: "TandemBLE.PumpResponseCollector")
@@ -17,10 +17,10 @@ public final class PumpResponseCollector {
     private var packetArrayList: PacketArrayList
 
     public init(wrapper: TronMessageWrapper) {
-        self.message = wrapper.message
-        self.requestMetadata = wrapper.requestMetadata
-        self.expectedResponseMetadata = wrapper.responseMetadata
-        self.packetArrayList = wrapper.buildPacketArrayList(.Response)
+        message = wrapper.message
+        requestMetadata = wrapper.requestMetadata
+        expectedResponseMetadata = wrapper.responseMetadata
+        packetArrayList = wrapper.buildPacketArrayList(.Response)
     }
 
     /// Get the request message that initiated this collection
@@ -38,12 +38,13 @@ public final class PumpResponseCollector {
         expectedResponseMetadata
     }
 
-    @MainActor
-    public func ingest(_ data: Data, characteristic: CBUUID) throws -> PumpResponseMessage {
-        guard let response = BTResponseParser.parse(message: message,
-                                                    packetArrayList: &packetArrayList,
-                                                    output: data,
-                                                    uuid: characteristic) else {
+    @MainActor public func ingest(_ data: Data, characteristic: CBUUID) throws -> PumpResponseMessage {
+        guard let response = BTResponseParser.parse(
+            message: message,
+            packetArrayList: &packetArrayList,
+            output: data,
+            uuid: characteristic
+        ) else {
             throw PumpResponseCollectorError.invalidResponse
         }
         if let message = response.message {
@@ -59,13 +60,16 @@ public final class PumpResponseCollector {
 
         let requestProps = type(of: message).props
         let opCode = packetArrayList.opCode != 0 ? packetArrayList.opCode : packetArrayList.expectedOpCodeValue
-        let characteristicUUID = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased()) ?? requestProps.characteristic
+        let characteristicUUID = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased()) ?? requestProps
+            .characteristic
 
         let allData = packetArrayList.buildMessageData()
         let payload = Data(allData.dropFirst(3))
-        if let fallback = BTResponseParser.decodeMessage(opCode: opCode,
-                                                         characteristic: characteristicUUID.cbUUID,
-                                                         payload: payload) {
+        if let fallback = BTResponseParser.decodeMessage(
+            opCode: opCode,
+            characteristic: characteristicUUID.cbUUID,
+            payload: payload
+        ) {
             pumpCollectorLogger.debug("[PumpResponseCollector] fallback decoded message: \(fallback)")
             return PumpResponseMessage(data: response.data, message: fallback)
         }

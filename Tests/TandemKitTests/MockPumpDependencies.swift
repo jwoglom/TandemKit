@@ -1,7 +1,7 @@
 import Foundation
-import XCTest
-@testable import TandemKit
 @testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 final class MockPeripheralManager {
     struct Entry {
@@ -37,9 +37,9 @@ final class MockPeripheralManager {
         lock.unlock()
 
         switch result {
-        case .success(let response):
+        case let .success(response):
             return response
-        case .failure(let error):
+        case let .failure(error):
             throw error
         }
     }
@@ -53,11 +53,11 @@ final class MockPumpMessageTransport: PumpMessageTransport {
     }
 
     func sendMessage(_ message: Message) throws -> Message {
-        return try peripheralManager.send(message: message)
+        try peripheralManager.send(message: message)
     }
 
     var sentMessages: [Message] {
-        peripheralManager.sentMessages.map { $0.message }
+        peripheralManager.sentMessages.map(\.message)
     }
 }
 
@@ -70,7 +70,9 @@ final class MockPumpComm: PumpComm {
     private(set) var calls: [Call] = []
     var onSend: ((Message) -> Void)?
 
-    override func sendMessage<T>(transport: PumpMessageTransport, message: Message, expecting expectedType: T.Type) throws -> T where T : Message {
+    override func sendMessage<T>(transport: PumpMessageTransport, message: Message, expecting expectedType: T.Type) throws -> T
+        where T: Message
+    {
         calls.append(Call(requestType: type(of: message), expectedResponseType: expectedType))
         onSend?(message)
         return try super.sendMessage(transport: transport, message: message, expecting: expectedType)

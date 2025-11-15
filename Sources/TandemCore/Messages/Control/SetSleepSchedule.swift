@@ -1,14 +1,3 @@
-//
-//  SetSleepSchedule.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetSleepScheduleRequest and SetSleepScheduleResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetSleepScheduleRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetSleepScheduleResponse.java
-//
-
 import Foundation
 
 /// Request to configure a Control-IQ sleep schedule slot.
@@ -30,13 +19,13 @@ public class SetSleepScheduleRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.slot = Int(cargo[0])
-        self.rawSchedule = Bytes.dropLastN(Bytes.dropFirstN(cargo, 1), 1)
-        self.flag = Int(cargo[7])
+        slot = Int(cargo[0])
+        rawSchedule = Bytes.dropLastN(Bytes.dropFirstN(cargo, 1), 1)
+        flag = Int(cargo[7])
     }
 
     public init(slot: Int, rawSchedule: Data, flag: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(slot & 0xFF)]),
             rawSchedule,
             Data([UInt8(flag & 0xFF)])
@@ -72,12 +61,11 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

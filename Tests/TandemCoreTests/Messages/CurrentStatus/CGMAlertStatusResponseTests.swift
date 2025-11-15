@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class CGMAlertStatusResponseTests: XCTestCase {
     func testCGMAlertStatusResponseEmpty() {
@@ -33,7 +33,7 @@ final class CGMAlertStatusResponseTests: XCTestCase {
     }
 
     private func bitmask(for alerts: [CGMAlertStatusResponse.CGMAlert]) -> UInt64 {
-        return alerts.reduce(0) { partialResult, alert in
+        alerts.reduce(0) { partialResult, alert in
             partialResult | (UInt64(1) << UInt64(alert.rawValue))
         }
     }

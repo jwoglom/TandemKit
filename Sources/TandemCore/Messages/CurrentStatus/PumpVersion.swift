@@ -1,14 +1,3 @@
-//
-//  PumpVersion.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of PumpVersionRequest and PumpVersionResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/PumpVersionRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/PumpVersionResponse.java
-//
-
 import Foundation
 
 /// Request the pump software and hardware version information.
@@ -27,7 +16,7 @@ public class PumpVersionRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -54,20 +43,31 @@ public class PumpVersionResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.armSwVer = Bytes.readUint32(cargo, 0)
-        self.mspSwVer = Bytes.readUint32(cargo, 4)
-        self.configABits = Bytes.readUint32(cargo, 8)
-        self.configBBits = Bytes.readUint32(cargo, 12)
-        self.serialNum = Bytes.readUint32(cargo, 16)
-        self.partNum = Bytes.readUint32(cargo, 20)
-        self.pumpRev = Bytes.readString(cargo, 24, 8)
-        self.pcbaSN = Bytes.readUint32(cargo, 32)
-        self.pcbaRev = Bytes.readString(cargo, 36, 8)
-        self.modelNum = Bytes.readUint32(cargo, 44)
+        armSwVer = Bytes.readUint32(cargo, 0)
+        mspSwVer = Bytes.readUint32(cargo, 4)
+        configABits = Bytes.readUint32(cargo, 8)
+        configBBits = Bytes.readUint32(cargo, 12)
+        serialNum = Bytes.readUint32(cargo, 16)
+        partNum = Bytes.readUint32(cargo, 20)
+        pumpRev = Bytes.readString(cargo, 24, 8)
+        pcbaSN = Bytes.readUint32(cargo, 32)
+        pcbaRev = Bytes.readString(cargo, 36, 8)
+        modelNum = Bytes.readUint32(cargo, 44)
     }
 
-    public init(armSwVer: UInt32, mspSwVer: UInt32, configABits: UInt32, configBBits: UInt32, serialNum: UInt32, partNum: UInt32, pumpRev: String, pcbaSN: UInt32, pcbaRev: String, modelNum: UInt32) {
-        self.cargo = Bytes.combine(
+    public init(
+        armSwVer: UInt32,
+        mspSwVer: UInt32,
+        configABits: UInt32,
+        configBBits: UInt32,
+        serialNum: UInt32,
+        partNum: UInt32,
+        pumpRev: String,
+        pcbaSN: UInt32,
+        pcbaRev: String,
+        modelNum: UInt32
+    ) {
+        cargo = Bytes.combine(
             Bytes.toUint32(armSwVer),
             Bytes.toUint32(mspSwVer),
             Bytes.toUint32(configABits),

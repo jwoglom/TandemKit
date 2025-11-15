@@ -32,10 +32,10 @@ public struct TandemPumpManagerSettings: RawRepresentable, Equatable {
             }
         }
 
-        self.maxBolus = double(from: rawValue["maxBolus"])
-        self.maxTempBasalRate = double(from: rawValue["maxTempBasalRate"])
-        self.maxBasalScheduleEntry = double(from: rawValue["maxBasalScheduleEntry"])
-        self.maxInsulinOnBoard = double(from: rawValue["maxInsulinOnBoard"])
+        maxBolus = double(from: rawValue["maxBolus"])
+        maxTempBasalRate = double(from: rawValue["maxTempBasalRate"])
+        maxBasalScheduleEntry = double(from: rawValue["maxBasalScheduleEntry"])
+        maxInsulinOnBoard = double(from: rawValue["maxInsulinOnBoard"])
     }
 
     public var rawValue: RawValue {
@@ -65,7 +65,7 @@ public extension TandemPumpManagerSettings {
     static let `default` = TandemPumpManagerSettings()
 }
 
-public enum TandemPumpManagerValidationError: Error, Equatable {
+public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case invalidBolusAmount(requested: Double)
     case maximumBolusExceeded(requested: Double, maximum: Double)
     case insulinOnBoardLimitExceeded(currentIOB: Double, requested: Double, maximum: Double)

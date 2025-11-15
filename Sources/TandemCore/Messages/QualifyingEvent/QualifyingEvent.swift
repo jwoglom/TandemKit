@@ -61,14 +61,14 @@ public enum QualifyingEvent: CaseIterable {
         case .bg: return 16384
         case .cgmChange: return 32768
         case .battery: return 65536
-        case .basalIQ: return 131072
-        case .remainingInsulin: return 262144
-        case .suspendComm: return 524288
-        case .activeSegmentChange: return 1048576
-        case .basalIQStatus: return 2097152
-        case .controlIQInfo: return 4194304
-        case .controlIQSleep: return 8388608
-        case .bolusPermissionRevoked: return 2147483648
+        case .basalIQ: return 131_072
+        case .remainingInsulin: return 262_144
+        case .suspendComm: return 524_288
+        case .activeSegmentChange: return 1_048_576
+        case .basalIQStatus: return 2_097_152
+        case .controlIQInfo: return 4_194_304
+        case .controlIQSleep: return 8_388_608
+        case .bolusPermissionRevoked: return 2_147_483_648
         }
     }
 
@@ -78,8 +78,7 @@ public enum QualifyingEvent: CaseIterable {
     ///
     /// The factories return concrete `Message` types which may be dispatched
     /// to the pump to retrieve those details.
-    @MainActor
-    public var suggestedHandlers: [MessageFactory] {
+    @MainActor public var suggestedHandlers: [MessageFactory] {
         switch self {
         case .alert:
             return [{ AlertStatusRequest() }]
@@ -96,7 +95,9 @@ public enum QualifyingEvent: CaseIterable {
                 { CurrentBasalStatusRequest() },
                 { CurrentEGVGuiDataRequest() },
                 { HomeScreenMirrorRequest() },
-                { ControlIQInfoRequestBuilder.create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                {
+                    ControlIQInfoRequestBuilder
+                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
             ]
         case .pumpSuspend:
             return [
@@ -127,14 +128,18 @@ public enum QualifyingEvent: CaseIterable {
             return [
                 { CurrentBolusStatusRequest() },
                 { ExtendedBolusStatusRequest() },
-                { LastBolusStatusRequestBuilder.create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                {
+                    LastBolusStatusRequestBuilder
+                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
             ]
         case .iobChange:
             return [{ IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) }]
         case .extendedBolusChange:
             return [
                 { ExtendedBolusStatusRequest() },
-                { LastBolusStatusRequestBuilder.create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                {
+                    LastBolusStatusRequestBuilder
+                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
             ]
         case .profileChange:
             return [{ ProfileStatusRequest() }]
@@ -147,7 +152,9 @@ public enum QualifyingEvent: CaseIterable {
                 { HomeScreenMirrorRequest() }
             ]
         case .battery:
-            return [{ CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }]
+            return [{
+                CurrentBatteryRequestBuilder
+                    .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }]
         case .basalIQ:
             return [{ BasalIQSettingsRequest() }]
         case .remainingInsulin:
@@ -161,7 +168,9 @@ public enum QualifyingEvent: CaseIterable {
         case .controlIQInfo:
             return [
                 { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
-                { ControlIQInfoRequestBuilder.create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) },
+                {
+                    ControlIQInfoRequestBuilder
+                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) },
                 { ControlIQSleepScheduleRequest() }
             ]
         case .controlIQSleep:
@@ -184,12 +193,11 @@ public enum QualifyingEvent: CaseIterable {
 
     /// Parse a 4-byte little-endian bitmask from raw Bluetooth data.
     public static func fromRawBytes(_ raw: Data) -> Set<QualifyingEvent> {
-        return fromBitmask(Bytes.readUint32(raw, 0))
+        fromBitmask(Bytes.readUint32(raw, 0))
     }
 
     /// Return suggested request messages for a set of events.
-    @MainActor
-    public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
+    @MainActor public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
         var messages: [Message] = []
         for e in events {
             for factory in e.suggestedHandlers {
@@ -209,6 +217,6 @@ public enum QualifyingEvent: CaseIterable {
 
     /// Construct a bitmask from multiple events.
     public static func toBitmask(_ events: [QualifyingEvent]) -> UInt32 {
-        return events.reduce(0) { $0 | $1.id }
+        events.reduce(0) { $0 | $1.id }
     }
 }

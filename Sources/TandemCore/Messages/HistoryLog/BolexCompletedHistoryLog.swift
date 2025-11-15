@@ -19,16 +19,32 @@ public class BolexCompletedHistoryLog: HistoryLog {
     public let insulinRequested: Float
 
     public required init(cargo: Data) {
-        self.completionStatus = Bytes.readShort(cargo, 10)
-        self.bolusId = Bytes.readShort(cargo, 12)
-        self.iob = Bytes.readFloat(cargo, 14)
-        self.insulinDelivered = Bytes.readFloat(cargo, 18)
-        self.insulinRequested = Bytes.readFloat(cargo, 22)
+        completionStatus = Bytes.readShort(cargo, 10)
+        bolusId = Bytes.readShort(cargo, 12)
+        iob = Bytes.readFloat(cargo, 14)
+        insulinDelivered = Bytes.readFloat(cargo, 18)
+        insulinRequested = Bytes.readFloat(cargo, 22)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, completionStatus: Int, bolusId: Int, iob: Float, insulinDelivered: Float, insulinRequested: Float) {
-        let payload = BolexCompletedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, completionStatus: completionStatus, bolusId: bolusId, iob: iob, insulinDelivered: insulinDelivered, insulinRequested: insulinRequested)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        completionStatus: Int,
+        bolusId: Int,
+        iob: Float,
+        insulinDelivered: Float,
+        insulinRequested: Float
+    ) {
+        let payload = BolexCompletedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            completionStatus: completionStatus,
+            bolusId: bolusId,
+            iob: iob,
+            insulinDelivered: insulinDelivered,
+            insulinRequested: insulinRequested
+        )
         self.completionStatus = completionStatus
         self.bolusId = bolusId
         self.iob = iob
@@ -37,8 +53,16 @@ public class BolexCompletedHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, completionStatus: Int, bolusId: Int, iob: Float, insulinDelivered: Float, insulinRequested: Float) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        completionStatus: Int,
+        bolusId: Int,
+        iob: Float,
+        insulinDelivered: Float,
+        insulinRequested: Float
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -52,4 +76,3 @@ public class BolexCompletedHistoryLog: HistoryLog {
         )
     }
 }
-

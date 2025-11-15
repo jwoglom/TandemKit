@@ -1,6 +1,6 @@
-import XCTest
-@testable import TandemKit
 import LoopKit
+@testable import TandemKit
+import XCTest
 
 @available(macOS 13.0, iOS 14.0, *)
 final class TandemPumpManagerValidationTests: XCTestCase {
@@ -15,7 +15,8 @@ final class TandemPumpManagerValidationTests: XCTestCase {
         let expectation = expectation(description: "Bolus completion")
         manager.enactBolus(units: 6.0, activationType: .manualNoRecommendation) { error in
             guard case let .deviceState(underlyingError?) = error,
-                  let validationError = underlyingError as? TandemPumpManagerValidationError else {
+                  let validationError = underlyingError as? TandemPumpManagerValidationError
+            else {
                 XCTFail("Expected deviceState validation error, received: \(String(describing: error))")
                 expectation.fulfill()
                 return
@@ -43,7 +44,8 @@ final class TandemPumpManagerValidationTests: XCTestCase {
         let expectation = expectation(description: "IOB validation")
         manager.enactBolus(units: 2.0, activationType: .manualNoRecommendation) { error in
             guard case let .deviceState(underlyingError?) = error,
-                  let validationError = underlyingError as? TandemPumpManagerValidationError else {
+                  let validationError = underlyingError as? TandemPumpManagerValidationError
+            else {
                 XCTFail("Expected deviceState validation error, received: \(String(describing: error))")
                 expectation.fulfill()
                 return
@@ -70,7 +72,8 @@ final class TandemPumpManagerValidationTests: XCTestCase {
         let expectation = expectation(description: "Temp basal validation")
         manager.enactTempBasal(unitsPerHour: 3.5, for: TimeInterval(hours: 1.0)) { error in
             guard case let .deviceState(underlyingError?) = error,
-                  let validationError = underlyingError as? TandemPumpManagerValidationError else {
+                  let validationError = underlyingError as? TandemPumpManagerValidationError
+            else {
                 XCTFail("Expected deviceState validation error, received: \(String(describing: error))")
                 expectation.fulfill()
                 return

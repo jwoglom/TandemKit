@@ -1,9 +1,9 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class BolusPermissionReleaseRequestTests: XCTestCase {
     func testBolusPermissionReleaseRequest_ID10676() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710079)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_079)
 
         let expected = BolusPermissionReleaseRequest(bolusId: 10676)
 

@@ -1,14 +1,3 @@
-//
-//  UnknownMobiOpcode20.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of UnknownMobiOpcode20Request and UnknownMobiOpcode20Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/UnknownMobiOpcode20Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/UnknownMobiOpcode20Response.java
-//
-
 import Foundation
 
 /// Possibly related to Face ID authentication.
@@ -27,7 +16,7 @@ public class UnknownMobiOpcode20Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class UnknownMobiOpcode20Response: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.unknown = Bytes.readShort(cargo, 1)
+        status = Int(cargo[0])
+        unknown = Bytes.readShort(cargo, 1)
     }
 
     public init(status: Int, unknown: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(status),
             Bytes.firstTwoBytesLittleEndian(unknown)
         )
@@ -59,4 +48,3 @@ public class UnknownMobiOpcode20Response: Message {
         self.unknown = unknown
     }
 }
-

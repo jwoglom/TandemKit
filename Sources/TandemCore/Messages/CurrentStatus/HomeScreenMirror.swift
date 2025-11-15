@@ -1,14 +1,3 @@
-//
-//  HomeScreenMirror.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of HomeScreenMirrorRequest and HomeScreenMirrorResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/HomeScreenMirrorRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/HomeScreenMirrorResponse.java
-//
-
 import Foundation
 
 /// Request basic home screen status info.
@@ -27,7 +16,7 @@ public class HomeScreenMirrorRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -53,19 +42,29 @@ public class HomeScreenMirrorResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.cgmTrendIconId = Int(cargo[0])
-        self.cgmAlertIconId = Int(cargo[1])
-        self.statusIcon0Id = Int(cargo[2])
-        self.statusIcon1Id = Int(cargo[3])
-        self.bolusStatusIconId = Int(cargo[4])
-        self.basalStatusIconId = Int(cargo[5])
-        self.apControlStateIconId = Int(cargo[6])
-        self.remainingInsulinPlusIcon = cargo[7] != 0
-        self.cgmDisplayData = cargo[8] != 0
+        cgmTrendIconId = Int(cargo[0])
+        cgmAlertIconId = Int(cargo[1])
+        statusIcon0Id = Int(cargo[2])
+        statusIcon1Id = Int(cargo[3])
+        bolusStatusIconId = Int(cargo[4])
+        basalStatusIconId = Int(cargo[5])
+        apControlStateIconId = Int(cargo[6])
+        remainingInsulinPlusIcon = cargo[7] != 0
+        cgmDisplayData = cargo[8] != 0
     }
 
-    public init(cgmTrendIconId: Int, cgmAlertIconId: Int, statusIcon0Id: Int, statusIcon1Id: Int, bolusStatusIconId: Int, basalStatusIconId: Int, apControlStateIconId: Int, remainingInsulinPlusIcon: Bool, cgmDisplayData: Bool) {
-        self.cargo = Bytes.combine(
+    public init(
+        cgmTrendIconId: Int,
+        cgmAlertIconId: Int,
+        statusIcon0Id: Int,
+        statusIcon1Id: Int,
+        bolusStatusIconId: Int,
+        basalStatusIconId: Int,
+        apControlStateIconId: Int,
+        remainingInsulinPlusIcon: Bool,
+        cgmDisplayData: Bool
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(cgmTrendIconId),
             Bytes.firstByteLittleEndian(cgmAlertIconId),
             Bytes.firstByteLittleEndian(statusIcon0Id),
@@ -87,4 +86,3 @@ public class HomeScreenMirrorResponse: Message {
         self.cgmDisplayData = cgmDisplayData
     }
 }
-

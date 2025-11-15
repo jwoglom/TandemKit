@@ -1,10 +1,3 @@
-//
-//  PumpFaultCode.swift
-//  TandemCore
-//
-//  Created by ChatGPT on 3/15/25.
-//
-
 import Foundation
 
 /// Categories describing how the pump expects callers to react to a fault.
@@ -57,20 +50,25 @@ public enum PumpFaultCode: Equatable, CustomStringConvertible {
         case .invalidRequiredParameter: return 7
         case .messageBufferFull: return 8
         case .invalidAuthenticationError: return 9
-        case .unknown(let value): return value
+        case let .unknown(value): return value
         }
     }
 
     /// High-level categorization used to drive retry strategy and UI.
     public var category: PumpFaultCategory {
         switch self {
-        case .crcMismatch, .transactionIdMismatch, .messageBufferFull:
+        case .crcMismatch,
+             .messageBufferFull,
+             .transactionIdMismatch:
             return .transient
         case .invalidAuthenticationError:
             return .authentication
-        case .badCargoLength, .badOpcode, .invalidRequiredParameter:
+        case .badCargoLength,
+             .badOpcode,
+             .invalidRequiredParameter:
             return .permanent
-        case .undefinedError, .unknown:
+        case .undefinedError,
+             .unknown:
             return .unknown
         }
     }
@@ -99,8 +97,11 @@ public enum PumpFaultCode: Equatable, CustomStringConvertible {
             return LocalizedString("Pump is busy", comment: "Pump fault code description for message buffer full")
         case .invalidAuthenticationError:
             return LocalizedString("Authentication required", comment: "Pump fault code description for invalid authentication")
-        case .unknown(let value):
-            return String(format: LocalizedString("Unknown pump error (%d)", comment: "Pump fault code description for unknown code"), value)
+        case let .unknown(value):
+            return String(
+                format: LocalizedString("Unknown pump error (%d)", comment: "Pump fault code description for unknown code"),
+                value
+            )
         }
     }
 

@@ -20,17 +20,35 @@ public class DailyBasalHistoryLog: HistoryLog {
     public let lipoMv: Int
 
     public required init(cargo: Data) {
-        self.dailyTotalBasal = Bytes.readFloat(cargo, 10)
-        self.lastBasalRate = Bytes.readFloat(cargo, 14)
-        self.iob = Bytes.readFloat(cargo, 18)
-        self.finalEventForDay = cargo[22] == 1
-        self.batteryChargeRaw = Int(cargo[23])
-        self.lipoMv = Bytes.readShort(cargo, 24)
+        dailyTotalBasal = Bytes.readFloat(cargo, 10)
+        lastBasalRate = Bytes.readFloat(cargo, 14)
+        iob = Bytes.readFloat(cargo, 18)
+        finalEventForDay = cargo[22] == 1
+        batteryChargeRaw = Int(cargo[23])
+        lipoMv = Bytes.readShort(cargo, 24)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, dailyTotalBasal: Float, lastBasalRate: Float, iob: Float, finalEventForDay: Bool, batteryChargeRaw: Int, lipoMv: Int) {
-        let payload = DailyBasalHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, dailyTotalBasal: dailyTotalBasal, lastBasalRate: lastBasalRate, iob: iob, finalEventForDay: finalEventForDay, batteryChargeRaw: batteryChargeRaw, lipoMv: lipoMv)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        dailyTotalBasal: Float,
+        lastBasalRate: Float,
+        iob: Float,
+        finalEventForDay: Bool,
+        batteryChargeRaw: Int,
+        lipoMv: Int
+    ) {
+        let payload = DailyBasalHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            dailyTotalBasal: dailyTotalBasal,
+            lastBasalRate: lastBasalRate,
+            iob: iob,
+            finalEventForDay: finalEventForDay,
+            batteryChargeRaw: batteryChargeRaw,
+            lipoMv: lipoMv
+        )
         self.dailyTotalBasal = dailyTotalBasal
         self.lastBasalRate = lastBasalRate
         self.iob = iob
@@ -40,8 +58,17 @@ public class DailyBasalHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, dailyTotalBasal: Float, lastBasalRate: Float, iob: Float, finalEventForDay: Bool, batteryChargeRaw: Int, lipoMv: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        dailyTotalBasal: Float,
+        lastBasalRate: Float,
+        iob: Float,
+        finalEventForDay: Bool,
+        batteryChargeRaw: Int,
+        lipoMv: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -56,4 +83,3 @@ public class DailyBasalHistoryLog: HistoryLog {
         )
     }
 }
-

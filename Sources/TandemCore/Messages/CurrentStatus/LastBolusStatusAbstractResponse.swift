@@ -1,14 +1,3 @@
-//
-//  LastBolusStatusAbstractResponse.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Shared fields for last bolus status responses.
-//  Based on PumpX2's LastBolusStatusAbstractResponse.
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/LastBolusStatusAbstractResponse.java
-//
-
 import Foundation
 
 /// Protocol capturing fields common to last bolus status responses.
@@ -35,4 +24,3 @@ public extension LastBolusStatusAbstractResponse {
     var bolusStatus: BolusStatus? { BolusStatus(rawValue: bolusStatusId) }
     var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }
-

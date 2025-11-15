@@ -1,14 +1,3 @@
-//
-//  AlertStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of AlertStatusRequest and AlertStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/AlertStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/AlertStatusResponse.java
-//
-
 import Foundation
 
 /// Request current alert status from the pump.
@@ -27,7 +16,7 @@ public class AlertStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,14 +35,14 @@ public class AlertStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.intMap = Bytes.readUint64(cargo, 0)
-        self.alerts = AlertResponseType.fromBitmask(intMap)
+        intMap = Bytes.readUint64(cargo, 0)
+        alerts = AlertResponseType.fromBitmask(intMap)
     }
 
     public init(intMap: UInt64) {
-        self.cargo = Bytes.toUint64(intMap)
+        cargo = Bytes.toUint64(intMap)
         self.intMap = intMap
-        self.alerts = AlertResponseType.fromBitmask(intMap)
+        alerts = AlertResponseType.fromBitmask(intMap)
     }
 
     /// Alert types encoded in the response bitmask.
@@ -123,7 +112,7 @@ public class AlertStatusResponse: Message {
         case DEFAULT_ALERT_63 = 63
 
         public static func < (lhs: AlertResponseType, rhs: AlertResponseType) -> Bool {
-            return lhs.rawValue < rhs.rawValue
+            lhs.rawValue < rhs.rawValue
         }
 
         /// Returns a set of alerts encoded in the provided bitmask.
@@ -138,5 +127,3 @@ public class AlertStatusResponse: Message {
         }
     }
 }
-
-

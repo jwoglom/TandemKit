@@ -1,14 +1,3 @@
-//
-//  EnterFillTubingMode.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of EnterFillTubingModeRequest and EnterFillTubingModeResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/EnterFillTubingModeRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/EnterFillTubingModeResponse.java
-//
-
 import Foundation
 
 /// Request to start fill tubing mode. Pump must be suspended.
@@ -29,7 +18,7 @@ public class EnterFillTubingModeRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,12 +38,11 @@ public class EnterFillTubingModeResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class AlertStatusResponseTests: XCTestCase {
     func testAlertStatusEmpty() {
@@ -76,7 +76,7 @@ final class AlertStatusResponseTests: XCTestCase {
     }
 
     private func bitmask(for types: [AlertStatusResponse.AlertResponseType]) -> UInt64 {
-        return types.reduce(0) { partialResult, type in
+        types.reduce(0) { partialResult, type in
             partialResult | (UInt64(1) << UInt64(type.rawValue))
         }
     }

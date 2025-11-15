@@ -1,14 +1,3 @@
-//
-//  BasalLimitSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representation of BasalLimitSettingsRequest and BasalLimitSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/BasalLimitSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/BasalLimitSettingsResponse.java
-//
-
 import Foundation
 
 /// Request basal limit settings from the pump.
@@ -27,7 +16,7 @@ public class BasalLimitSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class BasalLimitSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.basalLimit = Bytes.readUint32(cargo, 0)
-        self.basalLimitDefault = Bytes.readUint32(cargo, 4)
+        basalLimit = Bytes.readUint32(cargo, 0)
+        basalLimitDefault = Bytes.readUint32(cargo, 4)
     }
 
     public init(basalLimit: UInt32, basalLimitDefault: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(basalLimit),
             Bytes.toUint32(basalLimitDefault)
         )

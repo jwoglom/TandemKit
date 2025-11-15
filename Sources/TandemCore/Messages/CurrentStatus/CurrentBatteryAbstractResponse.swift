@@ -17,8 +17,7 @@ public protocol CurrentBatteryAbstractResponse: Message {
     var currentBatteryIbc: Int { get }
 }
 
-extension CurrentBatteryAbstractResponse {
+public extension CurrentBatteryAbstractResponse {
     /// Convenience accessor mapping to battery percent used by the pump UI.
-    public var batteryPercent: Int { currentBatteryIbc }
+    var batteryPercent: Int { currentBatteryIbc }
 }
-

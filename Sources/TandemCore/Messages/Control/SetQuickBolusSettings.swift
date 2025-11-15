@@ -1,14 +1,3 @@
-//
-//  SetQuickBolusSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetQuickBolusSettingsRequest and SetQuickBolusSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetQuickBolusSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetQuickBolusSettingsResponse.java
-//
-
 import Foundation
 
 /// Request to configure quick bolus button behavior.
@@ -28,13 +17,13 @@ public class SetQuickBolusSettingsRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.enabled = cargo[0] == 1
-        self.modeRaw = Int(cargo[1])
-        self.magic = Bytes.dropFirstN(cargo, 2)
+        enabled = cargo[0] == 1
+        modeRaw = Int(cargo[1])
+        magic = Bytes.dropFirstN(cargo, 2)
     }
 
     public init(enabled: Bool, modeRaw: Int, magic: Data) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(enabled ? 1 : 0)]),
             Data([UInt8(modeRaw & 0xFF)]),
             magic
@@ -79,22 +68,25 @@ public enum QuickBolusIncrement: CaseIterable {
 
     var mode: QuickBolusMode {
         switch self {
-        case .carbs2g, .carbs5g, .carbs10g, .carbs15g: return .carbs
+        case .carbs2g,
+             .carbs5g,
+             .carbs10g,
+             .carbs15g: return .carbs
         default: return .units
         }
     }
 
     var magic: Data {
         switch self {
-        case .disabled: return Data([0xF4,0x01,0xD0,0x07,0x01])
-        case .units0_5: return Data([0xF4,0x01,0xD0,0x07,0x01])
-        case .units1_0: return Data([0xE8,0x03,0xD0,0x07,0x04])
-        case .units2_0: return Data([0xD0,0x07,0xD0,0x07,0x04])
-        case .units5_0: return Data([0x88,0x13,0xD0,0x07,0x04])
-        case .carbs2g: return Data([0x88,0x13,0xD0,0x07,0x08])
-        case .carbs5g: return Data([0x88,0x13,0x88,0x13,0x08])
-        case .carbs10g: return Data([0x88,0x13,0x10,0x27,0x08])
-        case .carbs15g: return Data([0x88,0x13,0x98,0x3A,0x08])
+        case .disabled: return Data([0xF4, 0x01, 0xD0, 0x07, 0x01])
+        case .units0_5: return Data([0xF4, 0x01, 0xD0, 0x07, 0x01])
+        case .units1_0: return Data([0xE8, 0x03, 0xD0, 0x07, 0x04])
+        case .units2_0: return Data([0xD0, 0x07, 0xD0, 0x07, 0x04])
+        case .units5_0: return Data([0x88, 0x13, 0xD0, 0x07, 0x04])
+        case .carbs2g: return Data([0x88, 0x13, 0xD0, 0x07, 0x08])
+        case .carbs5g: return Data([0x88, 0x13, 0x88, 0x13, 0x08])
+        case .carbs10g: return Data([0x88, 0x13, 0x10, 0x27, 0x08])
+        case .carbs15g: return Data([0x88, 0x13, 0x98, 0x3A, 0x08])
         }
     }
 
@@ -121,12 +113,11 @@ public class SetQuickBolusSettingsResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

@@ -1,12 +1,3 @@
-//
-//  HistoryLogParser.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Simplified parser converting raw history log bytes into known types.
-//
-
 import Foundation
 
 /// Parses raw history log bytes into concrete HistoryLog types.
@@ -85,4 +76,3 @@ public enum HistoryLogParser {
         }
     }
 }
-

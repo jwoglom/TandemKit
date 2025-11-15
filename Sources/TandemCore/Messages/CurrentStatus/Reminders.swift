@@ -1,14 +1,3 @@
-//
-//  Reminders.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of RemindersRequest and RemindersResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/RemindersRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/RemindersResponse.java
-//
-
 import Foundation
 
 /// Request configured reminders from the pump.
@@ -27,7 +16,7 @@ public class RemindersRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -57,23 +46,37 @@ public class RemindersResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.lowBGReminder = Reminder(data: cargo, index: 0)
-        self.highBGReminder = Reminder(data: cargo, index: 11)
-        self.siteChangeReminder = Reminder(data: cargo, index: 22)
-        self.missedBolusReminder0 = Reminder(data: cargo, index: 33)
-        self.missedBolusReminder1 = Reminder(data: cargo, index: 44)
-        self.missedBolusReminder2 = Reminder(data: cargo, index: 55)
-        self.missedBolusReminder3 = Reminder(data: cargo, index: 66)
-        self.afterBolusReminder = Reminder(data: cargo, index: 77)
-        self.additionalBolusReminder = Reminder(data: cargo, index: 88)
-        self.lowBGThreshold = Bytes.readShort(cargo, 99)
-        self.highBGThreshold = Bytes.readShort(cargo, 101)
-        self.siteChangeDays = Int(cargo[103])
-        self.status = Int(cargo[104])
+        lowBGReminder = Reminder(data: cargo, index: 0)
+        highBGReminder = Reminder(data: cargo, index: 11)
+        siteChangeReminder = Reminder(data: cargo, index: 22)
+        missedBolusReminder0 = Reminder(data: cargo, index: 33)
+        missedBolusReminder1 = Reminder(data: cargo, index: 44)
+        missedBolusReminder2 = Reminder(data: cargo, index: 55)
+        missedBolusReminder3 = Reminder(data: cargo, index: 66)
+        afterBolusReminder = Reminder(data: cargo, index: 77)
+        additionalBolusReminder = Reminder(data: cargo, index: 88)
+        lowBGThreshold = Bytes.readShort(cargo, 99)
+        highBGThreshold = Bytes.readShort(cargo, 101)
+        siteChangeDays = Int(cargo[103])
+        status = Int(cargo[104])
     }
 
-    public init(lowBGReminder: Reminder, highBGReminder: Reminder, siteChangeReminder: Reminder, missedBolusReminder0: Reminder, missedBolusReminder1: Reminder, missedBolusReminder2: Reminder, missedBolusReminder3: Reminder, afterBolusReminder: Reminder, additionalBolusReminder: Reminder, lowBGThreshold: Int, highBGThreshold: Int, siteChangeDays: Int, status: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        lowBGReminder: Reminder,
+        highBGReminder: Reminder,
+        siteChangeReminder: Reminder,
+        missedBolusReminder0: Reminder,
+        missedBolusReminder1: Reminder,
+        missedBolusReminder2: Reminder,
+        missedBolusReminder3: Reminder,
+        afterBolusReminder: Reminder,
+        additionalBolusReminder: Reminder,
+        lowBGThreshold: Int,
+        highBGThreshold: Int,
+        siteChangeDays: Int,
+        status: Int
+    ) {
+        cargo = Bytes.combine(
             lowBGReminder.buildCargo(),
             highBGReminder.buildCargo(),
             siteChangeReminder.buildCargo(),
@@ -112,7 +115,14 @@ public class RemindersResponse: Message {
         public var enabled: UInt8
         public var validityStatus: UInt8
 
-        public init(frequency: UInt32, startTime: UInt16, endTime: UInt16, activeDays: UInt8, enabled: UInt8, validityStatus: UInt8) {
+        public init(
+            frequency: UInt32,
+            startTime: UInt16,
+            endTime: UInt16,
+            activeDays: UInt8,
+            enabled: UInt8,
+            validityStatus: UInt8
+        ) {
             self.frequency = frequency
             self.startTime = startTime
             self.endTime = endTime
@@ -122,16 +132,16 @@ public class RemindersResponse: Message {
         }
 
         public init(data: Data, index: Int) {
-            self.frequency = Bytes.readUint32(data, index)
-            self.startTime = UInt16(Bytes.readShort(data, index + 4))
-            self.endTime = UInt16(Bytes.readShort(data, index + 6))
-            self.activeDays = data[index + 8]
-            self.enabled = data[index + 9]
-            self.validityStatus = data[index + 10]
+            frequency = Bytes.readUint32(data, index)
+            startTime = UInt16(Bytes.readShort(data, index + 4))
+            endTime = UInt16(Bytes.readShort(data, index + 6))
+            activeDays = data[index + 8]
+            enabled = data[index + 9]
+            validityStatus = data[index + 10]
         }
 
         public func buildCargo() -> Data {
-            return Bytes.combine(
+            Bytes.combine(
                 Bytes.toUint32(frequency),
                 Bytes.firstTwoBytesLittleEndian(Int(startTime)),
                 Bytes.firstTwoBytesLittleEndian(Int(endTime)),
@@ -143,7 +153,7 @@ public class RemindersResponse: Message {
 
         /// Days of the week this reminder is active.
         public var activeDaysSet: Set<MultiDay> {
-            return MultiDay.fromBitmask(Int(activeDays))
+            MultiDay.fromBitmask(Int(activeDays))
         }
     }
 }
@@ -154,8 +164,8 @@ public struct MinsTime: Equatable, CustomStringConvertible {
     public var min: Int
 
     public init(_ totalMins: Int) {
-        self.hour = totalMins / 60
-        self.min = totalMins % 60
+        hour = totalMins / 60
+        min = totalMins % 60
     }
 
     public init(hour: Int, min: Int) {
@@ -163,7 +173,7 @@ public struct MinsTime: Equatable, CustomStringConvertible {
         self.min = min
     }
 
-    public var encode: Int { return hour * 60 + min }
+    public var encode: Int { hour * 60 + min }
     public var description: String { String(format: "%02d:%02d", hour, min) }
 }
 
@@ -193,4 +203,3 @@ public enum MultiDay: Int, CaseIterable, Sendable {
 
     public static let allDays: Set<MultiDay> = Set(MultiDay.allCases)
 }
-

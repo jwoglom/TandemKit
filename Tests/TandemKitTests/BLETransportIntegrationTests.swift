@@ -1,17 +1,9 @@
-//
-//  BLETransportIntegrationTests.swift
-//  TandemKit
-//
-//  Integration tests for BLE transport layer including PeripheralManagerTransport,
-//  TandemPump message sending, and BluetoothManager connection lifecycle.
-//
-
-import XCTest
-@testable import TandemKit
-@testable import TandemCore
-@testable import TandemBLE
-import Foundation
 import CoreBluetooth
+import Foundation
+@testable import TandemBLE
+@testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 /// Integration tests for the BLE transport layer
 ///
@@ -21,7 +13,6 @@ import CoreBluetooth
 /// - Receives and parses responses
 /// - Handles errors appropriately
 final class BLETransportIntegrationTests: XCTestCase {
-
     // MARK: - Mock PeripheralManager
 
     /// Mock PeripheralManager that simulates BLE operations without real hardware
@@ -119,7 +110,7 @@ final class BLETransportIntegrationTests: XCTestCase {
                 enqueueRawResponse(response)
             } else if message is InsulinStatusRequest {
                 let response = InsulinStatusResponse(
-                    currentInsulinAmount: 150000,
+                    currentInsulinAmount: 150_000,
                     isEstimate: 0,
                     insulinLowAmount: 10
                 )

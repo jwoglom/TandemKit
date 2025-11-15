@@ -1,14 +1,3 @@
-//
-//  LastBolusStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of LastBolusStatusRequest and LastBolusStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/LastBolusStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/LastBolusStatusResponse.java
-//
-
 import Foundation
 
 /// Request details about the last delivered bolus.
@@ -28,7 +17,7 @@ public class LastBolusStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -54,19 +43,29 @@ public class LastBolusStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.bolusId = Bytes.readShort(cargo, 1)
-        self.unknown = cargo.subdata(in: 3..<5)
-        self.timestamp = Bytes.readUint32(cargo, 5)
-        self.deliveredVolume = Bytes.readUint32(cargo, 9)
-        self.bolusStatusId = Int(cargo[13])
-        self.bolusSourceId = Int(cargo[14])
-        self.bolusTypeBitmask = Int(cargo[15])
-        self.extendedBolusDuration = Bytes.readUint32(cargo, 16)
+        status = Int(cargo[0])
+        bolusId = Bytes.readShort(cargo, 1)
+        unknown = cargo.subdata(in: 3 ..< 5)
+        timestamp = Bytes.readUint32(cargo, 5)
+        deliveredVolume = Bytes.readUint32(cargo, 9)
+        bolusStatusId = Int(cargo[13])
+        bolusSourceId = Int(cargo[14])
+        bolusTypeBitmask = Int(cargo[15])
+        extendedBolusDuration = Bytes.readUint32(cargo, 16)
     }
 
-    public init(status: Int, bolusId: Int, timestamp: UInt32, deliveredVolume: UInt32, bolusStatusId: Int, bolusSourceId: Int, bolusTypeBitmask: Int, extendedBolusDuration: UInt32, unknown: Data = Data([0,0])) {
-        self.cargo = Bytes.combine(
+    public init(
+        status: Int,
+        bolusId: Int,
+        timestamp: UInt32,
+        deliveredVolume: UInt32,
+        bolusStatusId: Int,
+        bolusSourceId: Int,
+        bolusTypeBitmask: Int,
+        extendedBolusDuration: UInt32,
+        unknown: Data = Data([0, 0])
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(status),
             Bytes.firstTwoBytesLittleEndian(bolusId),
             unknown,
@@ -88,8 +87,7 @@ public class LastBolusStatusResponse: Message {
         self.extendedBolusDuration = extendedBolusDuration
     }
 
-    public var bolusSource: BolusSource? { return BolusSource.fromId(bolusSourceId) }
-    public var bolusTypes: Set<BolusType> { return BolusType.fromBitmask(bolusTypeBitmask) }
-    public var timestampDate: Date { return Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
+    public var bolusSource: BolusSource? { BolusSource.fromId(bolusSourceId) }
+    public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
+    public var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }
-

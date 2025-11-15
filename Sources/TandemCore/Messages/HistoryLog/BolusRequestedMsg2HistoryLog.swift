@@ -25,22 +25,50 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
     public let spare2: Int
 
     public required init(cargo: Data) {
-        self.bolusId = Bytes.readShort(cargo, 10)
-        self.options = Int(cargo[12])
-        self.standardPercent = Int(cargo[13])
-        self.duration = Bytes.readShort(cargo, 14)
-        self.spare1 = Bytes.readShort(cargo, 16)
-        self.isf = Bytes.readShort(cargo, 18)
-        self.targetBG = Bytes.readShort(cargo, 20)
-        self.userOverride = cargo[22] != 0
-        self.declinedCorrection = cargo[23] != 0
-        self.selectedIOB = Int(cargo[24])
-        self.spare2 = Int(cargo.count > 25 ? cargo[25] : 0)
+        bolusId = Bytes.readShort(cargo, 10)
+        options = Int(cargo[12])
+        standardPercent = Int(cargo[13])
+        duration = Bytes.readShort(cargo, 14)
+        spare1 = Bytes.readShort(cargo, 16)
+        isf = Bytes.readShort(cargo, 18)
+        targetBG = Bytes.readShort(cargo, 20)
+        userOverride = cargo[22] != 0
+        declinedCorrection = cargo[23] != 0
+        selectedIOB = Int(cargo[24])
+        spare2 = Int(cargo.count > 25 ? cargo[25] : 0)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, options: Int, standardPercent: Int, duration: Int, spare1: Int, isf: Int, targetBG: Int, userOverride: Bool, declinedCorrection: Bool, selectedIOB: Int, spare2: Int) {
-        let payload = BolusRequestedMsg2HistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusId: bolusId, options: options, standardPercent: standardPercent, duration: duration, spare1: spare1, isf: isf, targetBG: targetBG, userOverride: userOverride, declinedCorrection: declinedCorrection, selectedIOB: selectedIOB, spare2: spare2)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        options: Int,
+        standardPercent: Int,
+        duration: Int,
+        spare1: Int,
+        isf: Int,
+        targetBG: Int,
+        userOverride: Bool,
+        declinedCorrection: Bool,
+        selectedIOB: Int,
+        spare2: Int
+    ) {
+        let payload = BolusRequestedMsg2HistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusId: bolusId,
+            options: options,
+            standardPercent: standardPercent,
+            duration: duration,
+            spare1: spare1,
+            isf: isf,
+            targetBG: targetBG,
+            userOverride: userOverride,
+            declinedCorrection: declinedCorrection,
+            selectedIOB: selectedIOB,
+            spare2: spare2
+        )
         self.bolusId = bolusId
         self.options = options
         self.standardPercent = standardPercent
@@ -55,8 +83,22 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, options: Int, standardPercent: Int, duration: Int, spare1: Int, isf: Int, targetBG: Int, userOverride: Bool, declinedCorrection: Bool, selectedIOB: Int, spare2: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        options: Int,
+        standardPercent: Int,
+        duration: Int,
+        spare1: Int,
+        isf: Int,
+        targetBG: Int,
+        userOverride: Bool,
+        declinedCorrection: Bool,
+        selectedIOB: Int,
+        spare2: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -76,4 +118,3 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
         )
     }
 }
-

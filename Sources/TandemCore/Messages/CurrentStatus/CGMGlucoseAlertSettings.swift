@@ -1,14 +1,3 @@
-//
-//  CGMGlucoseAlertSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMGlucoseAlertSettingsRequest and CGMGlucoseAlertSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMGlucoseAlertSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMGlucoseAlertSettingsResponse.java
-//
-
 import Foundation
 
 /// Request CGM glucose alert settings from the pump.
@@ -27,7 +16,7 @@ public class CGMGlucoseAlertSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -52,18 +41,27 @@ public class CGMGlucoseAlertSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.highGlucoseAlertThreshold = Bytes.readShort(cargo, 0)
-        self.highGlucoseAlertEnabled = Int(cargo[2])
-        self.highGlucoseRepeatDuration = Bytes.readShort(cargo, 3)
-        self.highGlucoseAlertDefaultBitmask = Int(cargo[5])
-        self.lowGlucoseAlertThreshold = Bytes.readShort(cargo, 6)
-        self.lowGlucoseAlertEnabled = Int(cargo[8])
-        self.lowGlucoseRepeatDuration = Bytes.readShort(cargo, 9)
-        self.lowGlucoseAlertDefaultBitmask = Int(cargo[11])
+        highGlucoseAlertThreshold = Bytes.readShort(cargo, 0)
+        highGlucoseAlertEnabled = Int(cargo[2])
+        highGlucoseRepeatDuration = Bytes.readShort(cargo, 3)
+        highGlucoseAlertDefaultBitmask = Int(cargo[5])
+        lowGlucoseAlertThreshold = Bytes.readShort(cargo, 6)
+        lowGlucoseAlertEnabled = Int(cargo[8])
+        lowGlucoseRepeatDuration = Bytes.readShort(cargo, 9)
+        lowGlucoseAlertDefaultBitmask = Int(cargo[11])
     }
 
-    public init(highGlucoseAlertThreshold: Int, highGlucoseAlertEnabled: Int, highGlucoseRepeatDuration: Int, highGlucoseAlertDefaultBitmask: Int, lowGlucoseAlertThreshold: Int, lowGlucoseAlertEnabled: Int, lowGlucoseRepeatDuration: Int, lowGlucoseAlertDefaultBitmask: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        highGlucoseAlertThreshold: Int,
+        highGlucoseAlertEnabled: Int,
+        highGlucoseRepeatDuration: Int,
+        highGlucoseAlertDefaultBitmask: Int,
+        lowGlucoseAlertThreshold: Int,
+        lowGlucoseAlertEnabled: Int,
+        lowGlucoseRepeatDuration: Int,
+        lowGlucoseAlertDefaultBitmask: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(highGlucoseAlertThreshold),
             Bytes.firstByteLittleEndian(highGlucoseAlertEnabled),
             Bytes.firstTwoBytesLittleEndian(highGlucoseRepeatDuration),
@@ -83,4 +81,3 @@ public class CGMGlucoseAlertSettingsResponse: Message {
         self.lowGlucoseAlertDefaultBitmask = lowGlucoseAlertDefaultBitmask
     }
 }
-

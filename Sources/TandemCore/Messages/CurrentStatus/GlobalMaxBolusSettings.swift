@@ -1,14 +1,3 @@
-//
-//  GlobalMaxBolusSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of GlobalMaxBolusSettingsRequest and GlobalMaxBolusSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/GlobalMaxBolusSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/GlobalMaxBolusSettingsResponse.java
-//
-
 import Foundation
 
 /// Request the global maximum bolus settings.
@@ -27,7 +16,7 @@ public class GlobalMaxBolusSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class GlobalMaxBolusSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.maxBolus = Bytes.readShort(cargo, 0)
-        self.maxBolusDefault = Bytes.readShort(cargo, 2)
+        maxBolus = Bytes.readShort(cargo, 0)
+        maxBolusDefault = Bytes.readShort(cargo, 2)
     }
 
     public init(maxBolus: Int, maxBolusDefault: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(maxBolus),
             Bytes.firstTwoBytesLittleEndian(maxBolusDefault)
         )
@@ -59,4 +48,3 @@ public class GlobalMaxBolusSettingsResponse: Message {
         self.maxBolusDefault = maxBolusDefault
     }
 }
-

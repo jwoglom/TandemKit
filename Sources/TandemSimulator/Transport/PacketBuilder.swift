@@ -1,6 +1,6 @@
 import Foundation
-import TandemCore
 import Logging
+import TandemCore
 
 /// Builds BLE packets from response messages
 class PacketBuilder {
@@ -64,7 +64,7 @@ class PacketBuilder {
         while offset < payload.count {
             packetsRemaining -= 1
             let chunkEnd = min(offset + maxChunkSize, payload.count)
-            let chunk = payload[offset..<chunkEnd]
+            let chunk = payload[offset ..< chunkEnd]
 
             var packet = Data()
 
@@ -95,7 +95,8 @@ class PacketBuilder {
     /// Get the chunk size for a characteristic
     private func chunkSize(for characteristic: CharacteristicUUID) -> Int {
         switch characteristic {
-        case .CONTROL_CHARACTERISTICS, .CONTROL_STREAM_CHARACTERISTICS:
+        case .CONTROL_CHARACTERISTICS,
+             .CONTROL_STREAM_CHARACTERISTICS:
             return 40 // Control characteristics use larger chunks
         default:
             return 18 // Data characteristics use smaller chunks

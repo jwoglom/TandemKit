@@ -1,14 +1,3 @@
-//
-//  DeleteIDP.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of DeleteIDPRequest and DeleteIDPResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/DeleteIDPRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/DeleteIDPResponse.java
-//
-
 import Foundation
 
 /// Request to remove an insulin delivery profile.
@@ -28,11 +17,11 @@ public class DeleteIDPRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
+        idpId = Int(cargo[0])
     }
 
     public init(idpId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(idpId & 0xFF)]),
             Data([1])
         )
@@ -58,12 +47,12 @@ public class DeleteIDPResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.deletedIdpId = Int(cargo[1])
+        status = Int(cargo[0])
+        deletedIdpId = Int(cargo[1])
     }
 
     public init(status: Int, deletedIdpId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
             Data([UInt8(deletedIdpId & 0xFF)])
         )
@@ -71,4 +60,3 @@ public class DeleteIDPResponse: Message, StatusMessage {
         self.deletedIdpId = deletedIdpId
     }
 }
-

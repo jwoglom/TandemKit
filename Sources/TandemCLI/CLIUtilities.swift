@@ -29,11 +29,13 @@ func parseHeader(from data: Data) throws -> PacketHeader {
     let opCode = data[2]
     let messageTxId = data[3]
     let declaredLength = Int(data[4])
-    return PacketHeader(packetsRemaining: packetsRemaining,
-                        packetTxId: packetTxId,
-                        opCode: opCode,
-                        messageTxId: messageTxId,
-                        declaredPayloadLength: declaredLength)
+    return PacketHeader(
+        packetsRemaining: packetsRemaining,
+        packetTxId: packetTxId,
+        opCode: opCode,
+        messageTxId: messageTxId,
+        declaredPayloadLength: declaredLength
+    )
 }
 
 func sanitizeHexInput(_ input: String) -> String {
@@ -56,7 +58,7 @@ enum OutputFormat: String {
     case text
 }
 
-struct CharacteristicParser {
+enum CharacteristicParser {
     static func parse(_ value: String) throws -> CharacteristicUUID {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let known = aliasMap[normalized] {
@@ -69,7 +71,7 @@ struct CharacteristicParser {
             formatted = stride(from: 0, to: stripped.count, by: 4).map { idx -> String in
                 let start = stripped.index(stripped.startIndex, offsetBy: idx)
                 let end = stripped.index(stripped.startIndex, offsetBy: min(idx + 4, stripped.count))
-                return String(stripped[start..<end])
+                return String(stripped[start ..< end])
             }.joined(separator: "-")
         } else {
             formatted = value
@@ -79,7 +81,9 @@ struct CharacteristicParser {
             return uuid
         }
 
-        if let match = AllPumpCharacteristicUUIDs.first(where: { $0.rawValue.compare(formatted, options: .caseInsensitive) == .orderedSame }) {
+        if let match = AllPumpCharacteristicUUIDs
+            .first(where: { $0.rawValue.compare(formatted, options: .caseInsensitive) == .orderedSame })
+        {
             return match
         }
 

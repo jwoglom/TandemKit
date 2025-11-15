@@ -1,14 +1,3 @@
-//
-//  UnknownMobiOpcode30.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of UnknownMobiOpcode30Request and UnknownMobiOpcode30Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/UnknownMobiOpcode30Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/UnknownMobiOpcode30Response.java
-//
-
 import Foundation
 
 public class UnknownMobiOpcode30Request: Message {
@@ -26,7 +15,7 @@ public class UnknownMobiOpcode30Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,14 +35,14 @@ public class UnknownMobiOpcode30Response: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.unknown1 = Bytes.readUint32(cargo, 0)
-        self.unknown2 = Bytes.readUint32(cargo, 4)
-        self.unknown3 = Bytes.readUint32(cargo, 8)
-        self.unknown4 = Bytes.readUint32(cargo, 12)
+        unknown1 = Bytes.readUint32(cargo, 0)
+        unknown2 = Bytes.readUint32(cargo, 4)
+        unknown3 = Bytes.readUint32(cargo, 8)
+        unknown4 = Bytes.readUint32(cargo, 12)
     }
 
     public init(unknown1: UInt32, unknown2: UInt32, unknown3: UInt32, unknown4: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(unknown1),
             Bytes.toUint32(unknown2),
             Bytes.toUint32(unknown3),
@@ -65,4 +54,3 @@ public class UnknownMobiOpcode30Response: Message {
         self.unknown4 = unknown4
     }
 }
-

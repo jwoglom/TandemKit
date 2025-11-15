@@ -1,14 +1,3 @@
-//
-//  ControlIQInfoV1.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ControlIQInfoV1Request and ControlIQInfoV1Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ControlIQInfoV1Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ControlIQInfoV1Response.java
-//
-
 import Foundation
 
 /// Request Control-IQ V1 information.
@@ -27,13 +16,13 @@ public class ControlIQInfoV1Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
 /// Response with Control-IQ V1 information.
 public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
-    public override class var props: MessageProps {
+    override public class var props: MessageProps {
         MessageProps(
             opCode: 105,
             size: 10,
@@ -53,19 +42,29 @@ public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
     public var controlStateType: Int
 
     public required init(cargo: Data) {
-        self.closedLoopEnabled = cargo[0] != 0
-        self.weight = Bytes.readShort(cargo, 1)
-        self.weightUnitRaw = Int(cargo[3])
-        self.totalDailyInsulin = Int(cargo[4])
-        self.currentUserModeTypeRaw = Int(cargo[5])
-        self.byte6 = Int(cargo[6])
-        self.byte7 = Int(cargo[7])
-        self.byte8 = Int(cargo[8])
-        self.controlStateType = Int(cargo[9])
+        closedLoopEnabled = cargo[0] != 0
+        weight = Bytes.readShort(cargo, 1)
+        weightUnitRaw = Int(cargo[3])
+        totalDailyInsulin = Int(cargo[4])
+        currentUserModeTypeRaw = Int(cargo[5])
+        byte6 = Int(cargo[6])
+        byte7 = Int(cargo[7])
+        byte8 = Int(cargo[8])
+        controlStateType = Int(cargo[9])
         super.init(cargo: cargo)
     }
 
-    public init(closedLoopEnabled: Bool, weight: Int, weightUnit: Int, totalDailyInsulin: Int, currentUserModeType: Int, byte6: Int, byte7: Int, byte8: Int, controlStateType: Int) {
+    public init(
+        closedLoopEnabled: Bool,
+        weight: Int,
+        weightUnit: Int,
+        totalDailyInsulin: Int,
+        currentUserModeType: Int,
+        byte6: Int,
+        byte7: Int,
+        byte8: Int,
+        controlStateType: Int
+    ) {
         let data = Bytes.combine(
             Bytes.firstByteLittleEndian(closedLoopEnabled ? 1 : 0),
             Bytes.firstTwoBytesLittleEndian(weight),
@@ -79,9 +78,9 @@ public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
         )
         self.closedLoopEnabled = closedLoopEnabled
         self.weight = weight
-        self.weightUnitRaw = weightUnit
+        weightUnitRaw = weightUnit
         self.totalDailyInsulin = totalDailyInsulin
-        self.currentUserModeTypeRaw = currentUserModeType
+        currentUserModeTypeRaw = currentUserModeType
         self.byte6 = byte6
         self.byte7 = byte7
         self.byte8 = byte8
@@ -89,15 +88,13 @@ public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
         super.init(cargo: data)
     }
 
-    public override func getClosedLoopEnabled() -> Bool { closedLoopEnabled }
-    public override func getWeight() -> Int { weight }
-    public override func getWeightUnitId() -> Int { weightUnitRaw }
-    public override func getTotalDailyInsulin() -> Int { totalDailyInsulin }
-    public override func getCurrentUserModeTypeId() -> Int { currentUserModeTypeRaw }
-    public override func getByte6() -> Int { byte6 }
-    public override func getByte7() -> Int { byte7 }
-    public override func getByte8() -> Int { byte8 }
-    public override func getControlStateType() -> Int { controlStateType }
+    override public func getClosedLoopEnabled() -> Bool { closedLoopEnabled }
+    override public func getWeight() -> Int { weight }
+    override public func getWeightUnitId() -> Int { weightUnitRaw }
+    override public func getTotalDailyInsulin() -> Int { totalDailyInsulin }
+    override public func getCurrentUserModeTypeId() -> Int { currentUserModeTypeRaw }
+    override public func getByte6() -> Int { byte6 }
+    override public func getByte7() -> Int { byte7 }
+    override public func getByte8() -> Int { byte8 }
+    override public func getControlStateType() -> Int { controlStateType }
 }
-
-

@@ -1,14 +1,3 @@
-//
-//  NonControlIQIOB.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of NonControlIQIOBRequest and NonControlIQIOBResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/NonControlIQIOBRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/NonControlIQIOBResponse.java
-//
-
 import Foundation
 
 /// Request insulin on board information when Control-IQ is not supported.
@@ -27,7 +16,7 @@ public class NonControlIQIOBRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,13 +36,13 @@ public class NonControlIQIOBResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.iob = Bytes.readUint32(cargo, 0)
-        self.timeRemaining = Bytes.readUint32(cargo, 4)
-        self.totalIOB = Bytes.readUint32(cargo, 8)
+        iob = Bytes.readUint32(cargo, 0)
+        timeRemaining = Bytes.readUint32(cargo, 4)
+        totalIOB = Bytes.readUint32(cargo, 8)
     }
 
     public init(iob: UInt32, timeRemaining: UInt32, totalIOB: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(iob),
             Bytes.toUint32(timeRemaining),
             Bytes.toUint32(totalIOB)
@@ -63,4 +52,3 @@ public class NonControlIQIOBResponse: Message {
         self.totalIOB = totalIOB
     }
 }
-

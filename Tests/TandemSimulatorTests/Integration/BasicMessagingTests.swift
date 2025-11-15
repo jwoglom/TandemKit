@@ -1,7 +1,7 @@
-import XCTest
-@testable import TandemSimulator
-import TandemCore
 import TandemBLE
+import TandemCore
+@testable import TandemSimulator
+import XCTest
 
 /// Integration tests for basic simulator messaging
 class BasicMessagingTests: XCTestCase {

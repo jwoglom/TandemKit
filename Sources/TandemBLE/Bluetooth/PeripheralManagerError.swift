@@ -1,16 +1,6 @@
-//
-//  PeripheralManagerError.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/8/25.
-//
-//  RileyLinkBLEKit:
-//  Copyright © 2017 Pete Schwamb. All rights reserved.
-
 import CoreBluetooth
 
-
-enum PeripheralManagerError: Error, @unchecked Sendable {
+enum PeripheralManagerError: Error {
     case cbPeripheralError(Error)
     case notReady
     case busy
@@ -20,11 +10,10 @@ enum PeripheralManagerError: Error, @unchecked Sendable {
     case unknownService(CBUUID)
 }
 
-
 extension PeripheralManagerError {
     public var errorDescription: String? {
         switch self {
-        case .cbPeripheralError(let error):
+        case let .cbPeripheralError(error):
             return error.localizedDescription
         case .notReady:
             return "Not connected"
@@ -34,9 +23,9 @@ extension PeripheralManagerError {
             return "Timeout"
         case .emptyValue:
             return "Characteristic value was empty"
-        case .unknownCharacteristic(let cbuuid):
+        case let .unknownCharacteristic(cbuuid):
             return String(format: "Unknown characteristic: %@", cbuuid.uuidString)
-        case .unknownService(let cbuuid):
+        case let .unknownService(cbuuid):
             return String(format: "Unknown service: %@", cbuuid.uuidString)
         }
     }

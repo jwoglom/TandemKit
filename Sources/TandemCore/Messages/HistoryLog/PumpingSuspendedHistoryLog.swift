@@ -16,20 +16,25 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
     public let reasonId: Int
 
     public required init(cargo: Data) {
-        self.insulinAmount = Bytes.readShort(cargo, 14)
-        self.reasonId = Int(cargo[16])
+        insulinAmount = Bytes.readShort(cargo, 14)
+        reasonId = Int(cargo[16])
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinAmount: Int, reasonId: Int) {
-        let payload = PumpingSuspendedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, insulinAmount: insulinAmount, reasonId: reasonId)
+        let payload = PumpingSuspendedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            insulinAmount: insulinAmount,
+            reasonId: reasonId
+        )
         self.insulinAmount = insulinAmount
         self.reasonId = reasonId
         super.init(cargo: payload)
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, insulinAmount: Int, reasonId: Int) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -52,4 +57,3 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
         SuspendReason(rawValue: reasonId)
     }
 }
-

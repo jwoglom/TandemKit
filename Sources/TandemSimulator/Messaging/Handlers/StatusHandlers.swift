@@ -7,9 +7,9 @@ class HomeScreenMirrorHandler: MessageHandler {
     var messageType: Message.Type { HomeScreenMirrorRequest.self }
 
     func handleRequest(
-        _ request: Message,
+        _: Message,
         state: PumpStateProvider,
-        context: HandlerContext
+        context _: HandlerContext
     ) throws -> Message {
         // Build response with simulated home screen state
         // Icon IDs are placeholders - actual values would depend on pump state
@@ -66,9 +66,9 @@ class BasalStatusHandler: MessageHandler {
     var messageType: Message.Type { CurrentBasalStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         // Return current basal delivery status
         var response = CurrentBasalStatusResponse(cargo: Data())
@@ -89,9 +89,9 @@ class BolusStatusHandler: MessageHandler {
     var messageType: Message.Type { CurrentBolusStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = CurrentBolusStatusResponse(cargo: Data())
 
@@ -110,9 +110,9 @@ class TimeSinceResetHandler: MessageHandler {
     var messageType: Message.Type { TimeSinceResetRequest.self }
 
     func handleRequest(
-        _ request: Message,
+        _: Message,
         state: PumpStateProvider,
-        context: HandlerContext
+        context _: HandlerContext
     ) throws -> Message {
         // Create response with current time since reset
         let timeSinceReset = state.timeSinceReset
@@ -131,9 +131,9 @@ class CGMStatusHandler: MessageHandler {
     var messageType: Message.Type { CGMStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = CGMStatusResponse(cargo: Data())
 
@@ -153,9 +153,9 @@ class InsulinStatusHandler: MessageHandler {
     var messageType: Message.Type { InsulinStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = InsulinStatusResponse(cargo: Data())
 
@@ -174,9 +174,9 @@ class ReminderStatusHandler: MessageHandler {
     var messageType: Message.Type { ReminderStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = ReminderStatusResponse(cargo: Data())
 
@@ -192,9 +192,9 @@ class BasalIQStatusHandler: MessageHandler {
     var messageType: Message.Type { BasalIQStatusRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = BasalIQStatusResponse(cargo: Data())
 
@@ -208,29 +208,30 @@ class BasalIQStatusHandler: MessageHandler {
 }
 
 // MARK: - Control IQ Status Handler
+
 // Note: ControlIQStatusRequest/Response types not yet implemented
 
 /*
-class ControlIQStatusHandler: MessageHandler {
-    var messageType: Message.Type { ControlIQStatusRequest.self }
+ class ControlIQStatusHandler: MessageHandler {
+     var messageType: Message.Type { ControlIQStatusRequest.self }
 
-    func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
-    ) throws -> Message {
-        var response = ControlIQStatusResponse(cargo: Data())
+     func handleRequest(
+         _ request: Message,
+         state: PumpStateProvider,
+         context: HandlerContext
+     ) throws -> Message {
+         var response = ControlIQStatusResponse(cargo: Data())
 
-        // Populate with Control-IQ state
-        // - Enabled/disabled
-        // - Sleep mode
-        // - Target range
-        // - Current activity
+         // Populate with Control-IQ state
+         // - Enabled/disabled
+         // - Sleep mode
+         // - Target range
+         // - Current activity
 
-        return response
-    }
-}
-*/
+         return response
+     }
+ }
+ */
 
 // MARK: - IDP Segment Handler
 
@@ -238,9 +239,9 @@ class IDPSegmentHandler: MessageHandler {
     var messageType: Message.Type { IDPSegmentRequest.self }
 
     func handleRequest(
-        _ request: Message,
-        state: PumpStateProvider,
-        context: HandlerContext
+        _: Message,
+        state _: PumpStateProvider,
+        context _: HandlerContext
     ) throws -> Message {
         var response = IDPSegmentResponse(cargo: Data())
 

@@ -1,7 +1,5 @@
 import Foundation
-#if canImport(Logging)
-import Logging
-#endif
+import OSLog
 
 public enum PumpLogging {
     public typealias Handler = (_ level: PumpLogger.Level, _ label: String, _ message: String) -> Bool
@@ -9,8 +7,7 @@ public enum PumpLogging {
     private static let lock = NSLock()
     private static var handler: Handler?
 
-    @discardableResult
-    public static func setHandler(_ newHandler: Handler?) -> Handler? {
+    @discardableResult public static func setHandler(_ newHandler: Handler?) -> Handler? {
         lock.lock()
         let previous = handler
         handler = newHandler
@@ -49,31 +46,25 @@ public struct PumpLogger {
             }
         }
 
-        #if canImport(Logging)
-        var loggerLevel: Logger.Level {
+        var loggerLevel: OSLogType {
             switch self {
-            case .trace: return .trace
+            case .trace: return .default
             case .debug: return .debug
             case .info: return .info
-            case .notice: return .notice
-            case .warning: return .warning
+            case .notice: return .default
+            case .warning: return .default
             case .error: return .error
-            case .critical: return .critical
+            case .critical: return .error
             }
         }
-        #endif
     }
 
     private let label: String
-    #if canImport(Logging)
-    private let logger: Logger
-    #endif
+    private let logger: OSLog
 
     public init(label: String) {
         self.label = label
-        #if canImport(Logging)
-        self.logger = Logger(label: label)
-        #endif
+        logger = OSLog(category: label)
     }
 
     public func log(_ level: Level, _ message: @autoclosure () -> String) {
@@ -82,11 +73,7 @@ public struct PumpLogger {
             return
         }
 
-        #if canImport(Logging)
-        logger.log(level: level.loggerLevel, "\(text)")
-        #else
-        Swift.print("[\(label)] [\(level.description)] \(text)")
-        #endif
+        logger.log("%@", type: level.loggerLevel, [text])
     }
 
     public func trace(_ message: @autoclosure () -> String) { log(.trace, message()) }

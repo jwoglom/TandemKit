@@ -1,14 +1,3 @@
-//
-//  ExitChangeCartridgeMode.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ExitChangeCartridgeModeRequest and ExitChangeCartridgeModeResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/ExitChangeCartridgeModeRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/ExitChangeCartridgeModeResponse.java
-//
-
 import Foundation
 
 /// Request to exit change cartridge mode after new cartridge inserted.
@@ -28,7 +17,7 @@ public class ExitChangeCartridgeModeRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,12 +36,11 @@ public class ExitChangeCartridgeModeResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

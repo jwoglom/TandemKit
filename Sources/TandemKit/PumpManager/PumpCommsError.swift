@@ -18,16 +18,17 @@ extension PumpCommsError: LocalizedError {
             return LocalizedString("No response from pump", comment: "Error when no response received")
         case .pumpNotConnected:
             return LocalizedString("Pump not connected", comment: "Error when pump not connected")
-        case .commsError(let error):
+        case let .commsError(error):
             return error.localizedDescription
-        case .unacknowledgedMessage(_, let error):
+        case let .unacknowledgedMessage(_, error):
             return error.localizedDescription
         }
     }
 
     public var recoverySuggestion: String? {
         switch self {
-        case .noResponse, .pumpNotConnected:
+        case .noResponse,
+             .pumpNotConnected:
             return LocalizedString("Make sure your pump is nearby", comment: "Recovery when pump not nearby")
         default:
             return nil

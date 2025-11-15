@@ -1,14 +1,3 @@
-//
-//  StartDexcomG6SensorSession.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of StartDexcomG6SensorSessionRequest and StartDexcomG6SensorSessionResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/StartDexcomG6SensorSessionRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/StartDexcomG6SensorSessionResponse.java
-//
-
 import Foundation
 
 /// Request to start a Dexcom G6 sensor session.
@@ -26,11 +15,11 @@ public class StartDexcomG6SensorSessionRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.sensorCode = Bytes.readShort(cargo, 0)
+        sensorCode = Bytes.readShort(cargo, 0)
     }
 
     public init(sensorCode: Int = 0) {
-        self.cargo = Bytes.firstTwoBytesLittleEndian(sensorCode)
+        cargo = Bytes.firstTwoBytesLittleEndian(sensorCode)
         self.sensorCode = sensorCode
     }
 }
@@ -50,12 +39,11 @@ public class StartDexcomG6SensorSessionResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

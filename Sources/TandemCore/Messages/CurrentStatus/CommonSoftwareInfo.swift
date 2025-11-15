@@ -1,14 +1,3 @@
-//
-//  CommonSoftwareInfo.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CommonSoftwareInfoRequest and CommonSoftwareInfoResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CommonSoftwareInfoRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CommonSoftwareInfoResponse.java
-//
-
 import Foundation
 
 /// Request common software information from the pump.
@@ -28,7 +17,7 @@ public class CommonSoftwareInfoRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -54,22 +43,31 @@ public class CommonSoftwareInfoResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appSoftwareVersion = Bytes.readString(cargo, 0, 18)
-        self.appSoftwarePartNumber = Bytes.readUint32(cargo, 18)
-        self.appSoftwarePartDashNumber = Bytes.readUint32(cargo, 22)
-        self.appSoftwarePartRevisionNumber = Bytes.readUint32(cargo, 26)
-        self.bootloaderVersion = Bytes.readString(cargo, 30, 17)
-        self.bootloaderPartNumber = Bytes.readUint32(cargo, 47)
+        appSoftwareVersion = Bytes.readString(cargo, 0, 18)
+        appSoftwarePartNumber = Bytes.readUint32(cargo, 18)
+        appSoftwarePartDashNumber = Bytes.readUint32(cargo, 22)
+        appSoftwarePartRevisionNumber = Bytes.readUint32(cargo, 26)
+        bootloaderVersion = Bytes.readString(cargo, 30, 17)
+        bootloaderPartNumber = Bytes.readUint32(cargo, 47)
         if cargo.count >= 60 {
-            self.bootloaderPartDashNumber = Bytes.readUint32(cargo, 51)
-            self.bootloaderPartRevisionNumber = Bytes.readUint32(cargo, 55)
+            bootloaderPartDashNumber = Bytes.readUint32(cargo, 51)
+            bootloaderPartRevisionNumber = Bytes.readUint32(cargo, 55)
         } else {
-            self.bootloaderPartDashNumber = nil
-            self.bootloaderPartRevisionNumber = nil
+            bootloaderPartDashNumber = nil
+            bootloaderPartRevisionNumber = nil
         }
     }
 
-    public init(appSoftwareVersion: String, appSoftwarePartNumber: UInt32, appSoftwarePartDashNumber: UInt32, appSoftwarePartRevisionNumber: UInt32, bootloaderVersion: String, bootloaderPartNumber: UInt32, bootloaderPartDashNumber: UInt32? = nil, bootloaderPartRevisionNumber: UInt32? = nil) {
+    public init(
+        appSoftwareVersion: String,
+        appSoftwarePartNumber: UInt32,
+        appSoftwarePartDashNumber: UInt32,
+        appSoftwarePartRevisionNumber: UInt32,
+        bootloaderVersion: String,
+        bootloaderPartNumber: UInt32,
+        bootloaderPartDashNumber: UInt32? = nil,
+        bootloaderPartRevisionNumber: UInt32? = nil
+    ) {
         var data = Bytes.combine(
             Bytes.writeString(appSoftwareVersion, 18),
             Bytes.toUint32(appSoftwarePartNumber),
@@ -85,7 +83,7 @@ public class CommonSoftwareInfoResponse: Message {
                 Bytes.toUint32(rev)
             )
         }
-        self.cargo = data
+        cargo = data
         self.appSoftwareVersion = appSoftwareVersion
         self.appSoftwarePartNumber = appSoftwarePartNumber
         self.appSoftwarePartDashNumber = appSoftwarePartDashNumber
@@ -96,4 +94,3 @@ public class CommonSoftwareInfoResponse: Message {
         self.bootloaderPartRevisionNumber = bootloaderPartRevisionNumber
     }
 }
-

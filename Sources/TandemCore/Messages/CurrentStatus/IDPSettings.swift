@@ -1,14 +1,3 @@
-//
-//  IDPSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of IDPSettingsRequest and IDPSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/IDPSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpX2/pump/messages/response/currentStatus/IDPSettingsResponse.java
-//
-
 import Foundation
 
 /// Request the settings for a specific insulin delivery profile ID.
@@ -25,11 +14,11 @@ public class IDPSettingsRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
+        idpId = Int(cargo[0])
     }
 
     public init(idpId: Int) {
-        self.cargo = Bytes.firstByteLittleEndian(idpId)
+        cargo = Bytes.firstByteLittleEndian(idpId)
         self.idpId = idpId
     }
 }
@@ -53,16 +42,16 @@ public class IDPSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
-        self.name = Bytes.readString(cargo, 1, 16)
-        self.numberOfProfileSegments = Int(cargo[17])
-        self.insulinDuration = Bytes.readShort(cargo, 18)
-        self.maxBolus = Bytes.readShort(cargo, 20)
-        self.carbEntry = cargo[22] != 0
+        idpId = Int(cargo[0])
+        name = Bytes.readString(cargo, 1, 16)
+        numberOfProfileSegments = Int(cargo[17])
+        insulinDuration = Bytes.readShort(cargo, 18)
+        maxBolus = Bytes.readShort(cargo, 20)
+        carbEntry = cargo[22] != 0
     }
 
     public init(idpId: Int, name: String, numberOfProfileSegments: Int, insulinDuration: Int, maxBolus: Int, carbEntry: Bool) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(idpId),
             Bytes.writeString(name, 16),
             Bytes.firstByteLittleEndian(numberOfProfileSegments),
@@ -78,4 +67,3 @@ public class IDPSettingsResponse: Message {
         self.carbEntry = carbEntry
     }
 }
-

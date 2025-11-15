@@ -1,14 +1,3 @@
-//
-//  Jpake3SessionKey.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Swift representations of Jpake3SessionKeyRequest and Jpake3SessionKeyResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/authentication/Jpake3SessionKeyRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/authentication/Jpake3SessionKeyResponse.java
-//
-
 import Foundation
 
 /// Third JPAKE message triggering session key validation.
@@ -26,16 +15,16 @@ public class Jpake3SessionKeyRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.challengeParam = Bytes.readShort(cargo, 0)
+        challengeParam = Bytes.readShort(cargo, 0)
     }
 
     public init(challengeParam: Int) {
-        self.cargo = Jpake3SessionKeyRequest.buildCargo(challengeParam: challengeParam)
+        cargo = Jpake3SessionKeyRequest.buildCargo(challengeParam: challengeParam)
         self.challengeParam = challengeParam
     }
 
     public static func buildCargo(challengeParam: Int) -> Data {
-        return Bytes.firstTwoBytesLittleEndian(challengeParam)
+        Bytes.firstTwoBytesLittleEndian(challengeParam)
     }
 }
 
@@ -58,26 +47,25 @@ public class Jpake3SessionKeyResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appInstanceId = Bytes.readShort(cargo, 0)
-        self.deviceKeyNonce = cargo.subdata(in: 2..<10)
-        self.deviceKeyReserved = cargo.subdata(in: 10..<18)
+        appInstanceId = Bytes.readShort(cargo, 0)
+        deviceKeyNonce = cargo.subdata(in: 2 ..< 10)
+        deviceKeyReserved = cargo.subdata(in: 10 ..< 18)
     }
 
     public init(appInstanceId: Int, nonce: Data, reserved: Data) {
         precondition(nonce.count == 8)
         precondition(reserved.count == 8)
-        self.cargo = Jpake3SessionKeyResponse.buildCargo(appInstanceId: appInstanceId, nonce: nonce, reserved: reserved)
+        cargo = Jpake3SessionKeyResponse.buildCargo(appInstanceId: appInstanceId, nonce: nonce, reserved: reserved)
         self.appInstanceId = appInstanceId
-        self.deviceKeyNonce = nonce
-        self.deviceKeyReserved = reserved
+        deviceKeyNonce = nonce
+        deviceKeyReserved = reserved
     }
 
     public static func buildCargo(appInstanceId: Int, nonce: Data, reserved: Data) -> Data {
-        return Bytes.combine(
+        Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             nonce,
             reserved
         )
     }
 }
-

@@ -9,7 +9,7 @@ public struct PumpResponseMessage {
 
     public init(data: Data) {
         self.data = data
-        self.message = nil
+        message = nil
     }
 
     public init(data: Data, message: Message) {

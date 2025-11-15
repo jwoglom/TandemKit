@@ -1,14 +1,3 @@
-//
-//  IDPSegment.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of IDPSegmentRequest and IDPSegmentResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/IDPSegmentRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/IDPSegmentResponse.java
-//
-
 import Foundation
 
 /// Request a specific insulin delivery profile segment.
@@ -26,12 +15,12 @@ public class IDPSegmentRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
-        self.segmentIndex = Int(cargo[1])
+        idpId = Int(cargo[0])
+        segmentIndex = Int(cargo[1])
     }
 
     public init(idpId: Int, segmentIndex: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(idpId),
             Bytes.firstByteLittleEndian(segmentIndex)
         )
@@ -61,18 +50,27 @@ public class IDPSegmentResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
-        self.segmentIndex = Int(cargo[1])
-        self.profileStartTime = Bytes.readShort(cargo, 2)
-        self.profileBasalRate = Bytes.readShort(cargo, 4)
-        self.profileCarbRatio = Bytes.readUint32(cargo, 6)
-        self.profileTargetBG = Bytes.readShort(cargo, 10)
-        self.profileISF = Bytes.readShort(cargo, 12)
-        self.idpStatusId = Int(cargo[14])
+        idpId = Int(cargo[0])
+        segmentIndex = Int(cargo[1])
+        profileStartTime = Bytes.readShort(cargo, 2)
+        profileBasalRate = Bytes.readShort(cargo, 4)
+        profileCarbRatio = Bytes.readUint32(cargo, 6)
+        profileTargetBG = Bytes.readShort(cargo, 10)
+        profileISF = Bytes.readShort(cargo, 12)
+        idpStatusId = Int(cargo[14])
     }
 
-    public init(idpId: Int, segmentIndex: Int, profileStartTime: Int, profileBasalRate: Int, profileCarbRatio: UInt32, profileTargetBG: Int, profileISF: Int, idpStatusId: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        idpId: Int,
+        segmentIndex: Int,
+        profileStartTime: Int,
+        profileBasalRate: Int,
+        profileCarbRatio: UInt32,
+        profileTargetBG: Int,
+        profileISF: Int,
+        idpStatusId: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(idpId),
             Bytes.firstByteLittleEndian(segmentIndex),
             Bytes.firstTwoBytesLittleEndian(profileStartTime),
@@ -94,7 +92,7 @@ public class IDPSegmentResponse: Message {
 
     /// Which fields in the segment are populated.
     public var idpStatus: Set<IDPSegmentStatus> {
-        return IDPSegmentStatus.fromBitmask(idpStatusId)
+        IDPSegmentStatus.fromBitmask(idpStatusId)
     }
 
     public enum IDPSegmentStatus: Int, CaseIterable {
@@ -115,4 +113,3 @@ public class IDPSegmentResponse: Message {
         }
     }
 }
-

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Hkdf {
+public enum Hkdf {
     public static func build(nonce: Data, keyMaterial: Data) -> Data {
         // HKDF-Extract
         let prk = HmacSha256.hmac(keyMaterial, key: nonce)

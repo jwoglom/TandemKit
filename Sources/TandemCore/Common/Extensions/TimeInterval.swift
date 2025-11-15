@@ -1,87 +1,71 @@
-//
-//  TimeInterval.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
-//
-//  Basis: OmniBLE
-//  Created by Nathan Racklyeft on 1/9/16.
-//  Copyright © 2016 Nathan Racklyeft. All rights reserved.
-//
-
 import Foundation
 
-
 public extension TimeInterval {
-
-    public static func days(_ days: Double) -> TimeInterval {
-        return self.init(days: days)
+    static func days(_ days: Double) -> TimeInterval {
+        self.init(days: days)
     }
 
-    public static func hours(_ hours: Double) -> TimeInterval {
-        return self.init(hours: hours)
+    static func hours(_ hours: Double) -> TimeInterval {
+        self.init(hours: hours)
     }
 
-    public static func minutes(_ minutes: Int) -> TimeInterval {
-        return self.init(minutes: Double(minutes))
+    static func minutes(_ minutes: Int) -> TimeInterval {
+        self.init(minutes: Double(minutes))
     }
 
-    public static func minutes(_ minutes: Double) -> TimeInterval {
-        return self.init(minutes: minutes)
+    static func minutes(_ minutes: Double) -> TimeInterval {
+        self.init(minutes: minutes)
     }
 
-    public static func seconds(_ seconds: Double) -> TimeInterval {
-        return self.init(seconds)
-    }
-
-    public static func milliseconds(_ milliseconds: Double) -> TimeInterval {
-        return self.init(milliseconds / 1000)
-    }
-
-    public init(days: Double) {
-        self.init(hours: days * 24)
-    }
-
-    public init(hours: Double) {
-        self.init(minutes: hours * 60)
-    }
-
-    public init(minutes: Double) {
-        self.init(minutes * 60)
-    }
-
-    public init(seconds: Double) {
+    static func seconds(_ seconds: Double) -> TimeInterval {
         self.init(seconds)
     }
 
-    public init(milliseconds: Double) {
+    static func milliseconds(_ milliseconds: Double) -> TimeInterval {
         self.init(milliseconds / 1000)
     }
 
-    public var milliseconds: Double {
-        return self * 1000
+    init(days: Double) {
+        self.init(hours: days * 24)
     }
 
-    public init(hundredthsOfMilliseconds: Double) {
-        self.init(hundredthsOfMilliseconds / 100000)
+    init(hours: Double) {
+        self.init(minutes: hours * 60)
     }
 
-    public var hundredthsOfMilliseconds: Double {
-        return self * 100000
+    init(minutes: Double) {
+        self.init(minutes * 60)
     }
 
-    public var minutes: Double {
-        return self / 60.0
+    init(seconds: Double) {
+        self.init(seconds)
     }
 
-    public var hours: Double {
-        return minutes / 60.0
+    init(milliseconds: Double) {
+        self.init(milliseconds / 1000)
     }
 
-    public var days: Double {
-        return hours / 24.0
+    var milliseconds: Double {
+        self * 1000
     }
 
+    init(hundredthsOfMilliseconds: Double) {
+        self.init(hundredthsOfMilliseconds / 100_000)
+    }
+
+    var hundredthsOfMilliseconds: Double {
+        self * 100_000
+    }
+
+    var minutes: Double {
+        self / 60.0
+    }
+
+    var hours: Double {
+        minutes / 60.0
+    }
+
+    var days: Double {
+        hours / 24.0
+    }
 }

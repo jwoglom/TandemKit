@@ -1,6 +1,6 @@
 import Foundation
-import TandemCore
 import Logging
+import TandemCore
 
 /// Assembles multi-packet messages from individual packet data
 class PacketAssembler {
@@ -50,7 +50,7 @@ class PacketAssembler {
     ///   - packets: Array of packet data (in order)
     ///   - characteristic: The characteristic the message was received on
     /// - Returns: Assembled message with cargo extracted
-    func assemble(packets: [Data], characteristic: CharacteristicUUID) throws -> AssembledMessage {
+    func assemble(packets: [Data], characteristic _: CharacteristicUUID) throws -> AssembledMessage {
         guard let firstPacket = packets.first else {
             throw PacketAssemblerError.noPackets
         }
@@ -87,7 +87,10 @@ class PacketAssembler {
             let packetsRemaining = packet[0]
             let expectedRemaining = UInt8(header.packetsRemaining) - UInt8(index + 1)
             if packetsRemaining != expectedRemaining {
-                logger.warning("Packet \(index + 1) has unexpected packetsRemaining: \(packetsRemaining) (expected \(expectedRemaining))")
+                logger
+                    .warning(
+                        "Packet \(index + 1) has unexpected packetsRemaining: \(packetsRemaining) (expected \(expectedRemaining))"
+                    )
             }
 
             payload.append(packet.dropFirst(2))
@@ -104,7 +107,7 @@ class PacketAssembler {
         var hmacSignature: Data?
         var cargoAndCrc = payload
 
-        if isSigned && payload.count >= 22 {
+        if isSigned, payload.count >= 22 {
             // Last 20 bytes might be HMAC
             let possibleHmac = payload.suffix(20)
             let possibleCargoAndCrc = Data(payload.dropLast(20))
@@ -195,13 +198,13 @@ enum PacketAssemblerError: Error, LocalizedError {
         switch self {
         case .noPackets:
             return "No packets provided for assembly"
-        case .packetTooShort(let expected, let actual):
+        case let .packetTooShort(expected, actual):
             return "Packet too short: expected at least \(expected) bytes, got \(actual)"
-        case .packetCountMismatch(let expected, let actual):
+        case let .packetCountMismatch(expected, actual):
             return "Packet count mismatch: expected \(expected), got \(actual)"
-        case .payloadTooShort(let actual):
+        case let .payloadTooShort(actual):
             return "Payload too short: got \(actual) bytes"
-        case .crcMismatch(let expected, let actual):
+        case let .crcMismatch(expected, actual):
             return "CRC mismatch: expected \(expected.hexadecimalString), got \(actual.hexadecimalString)"
         case .hmacMismatch:
             return "HMAC validation failed"

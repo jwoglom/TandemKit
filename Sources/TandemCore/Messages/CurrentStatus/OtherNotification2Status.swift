@@ -1,14 +1,3 @@
-//
-//  OtherNotification2Status.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of OtherNotification2StatusRequest and OtherNotification2StatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/OtherNotification2StatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/OtherNotification2StatusResponse.java
-//
-
 import Foundation
 
 /// Request additional notification status codes.
@@ -27,7 +16,7 @@ public class OtherNotification2StatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class OtherNotification2StatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.codeA = Bytes.readUint32(cargo, 0)
-        self.codeB = Bytes.readUint32(cargo, 4)
+        codeA = Bytes.readUint32(cargo, 0)
+        codeB = Bytes.readUint32(cargo, 4)
     }
 
     public init(codeA: UInt32, codeB: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(codeA),
             Bytes.toUint32(codeB)
         )
@@ -59,4 +48,3 @@ public class OtherNotification2StatusResponse: Message {
         self.codeB = codeB
     }
 }
-

@@ -1,13 +1,6 @@
-//
-//  PeripheralManager+TandemKit.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
-import Foundation
-import Dispatch
 import CoreBluetooth
+import Dispatch
+import Foundation
 import TandemCore
 
 public enum SendMessageResult {
@@ -22,13 +15,15 @@ public enum SendMessageResult {
 }
 
 public protocol PeripheralManagerNotificationHandler: AnyObject {
-    func peripheralManager(_ manager: PeripheralManager,
-                           didReceiveNotification value: Data,
-                           for characteristic: CBCharacteristic)
+    func peripheralManager(
+        _ manager: PeripheralManager,
+        didReceiveNotification value: Data,
+        for characteristic: CBCharacteristic
+    )
 }
 
-extension PeripheralManager {
-    public func performSync<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
+public extension PeripheralManager {
+    func performSync<T>(_ block: (_ manager: PeripheralManager) throws -> T) rethrows -> T {
         if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
             return try runConfigured(block)
         } else {
@@ -38,21 +33,24 @@ extension PeripheralManager {
         }
     }
 
-    
-    public func enableNotifications() throws {
+    func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
         logInfo("[PeripheralManager] enableNotifications begin")
 
         for uuid in TandemNotificationOrder {
             guard let characteristic = peripheral.characteristic(for: uuid) else {
                 if uuid == .SERVICE_CHANGED {
-                    let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
-                logWarning("[PeripheralManager]   service-changed characteristic not exposed (services=\(services)); assuming availability per Tandem spec")
+                    let services = peripheral.services?.map(\.uuid.uuidString) ?? []
+                    logWarning(
+                        "[PeripheralManager]   service-changed characteristic not exposed (services=\(services)); assuming availability per Tandem spec"
+                    )
                     subscribedCharacteristicUUIDs.insert(uuid)
                     continue
                 }
-                let services = peripheral.services?.map { $0.uuid.uuidString } ?? []
-                logWarning("[PeripheralManager]   missing characteristic=\(uuid.prettyName) during subscription discoveredServices=\(services)")
+                let services = peripheral.services?.map(\.uuid.uuidString) ?? []
+                logWarning(
+                    "[PeripheralManager]   missing characteristic=\(uuid.prettyName) during subscription discoveredServices=\(services)"
+                )
                 throw PeripheralManagerError.notReady
             }
 
@@ -70,7 +68,7 @@ extension PeripheralManager {
         let required = Set(TandemNotificationOrder.filter { $0 != .SERVICE_CHANGED })
         let missing = required.subtracting(subscribedCharacteristicUUIDs)
         if !missing.isEmpty {
-            logWarning("[PeripheralManager]   notification subscription incomplete missing=\(missing.map { $0.prettyName })")
+            logWarning("[PeripheralManager]   notification subscription incomplete missing=\(missing.map(\.prettyName))")
             throw PeripheralManagerError.notReady
         }
 
@@ -80,11 +78,10 @@ extension PeripheralManager {
 
         logInfo("[PeripheralManager] enableNotifications complete")
     }
-    
-    
-    public func sendMessagePackets(_ packets: [Packet], characteristic uuid: CharacteristicUUID) -> SendMessageResult {
+
+    func sendMessagePackets(_ packets: [Packet], characteristic uuid: CharacteristicUUID) -> SendMessageResult {
         dispatchPrecondition(condition: .onQueue(queue))
-        
+
         var didSend = false
 
         guard let characteristic = peripheral.characteristic(for: uuid) else {
@@ -95,14 +92,13 @@ extension PeripheralManager {
             let pretty = uuid.prettyName
             for packet in packets {
                 let hex = packet.build.map { String(format: "%02X", $0) }.joined()
-            logDebug("[PeripheralManager] write packet len=\(packet.build.count) characteristic=\(pretty) hex=\(hex)")
+                logDebug("[PeripheralManager] write packet len=\(packet.build.count) characteristic=\(pretty) hex=\(hex)")
                 try sendData(packet.build, characteristic: characteristic, timeout: 5)
             }
             didSend = true
 
             try waitForResponse(timeout: 15, matching: uuid.cbUUID)
-        }
-        catch {
+        } catch {
             if didSend {
                 logError("[PeripheralManager] sendMessagePackets error after send: \(error)")
                 return .sentWithError(error)

@@ -1,23 +1,17 @@
-//
-//  BluetoothServices.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/13/25.
-//
-
-
+import CoreBluetooth
+import Foundation
 import TandemCore
 
 extension PeripheralManager.Configuration {
     static var tandemPeripheral: PeripheralManager.Configuration {
-        return PeripheralManager.Configuration(
+        PeripheralManager.Configuration(
             serviceCharacteristics: [
-                ServiceUUID.PUMP_SERVICE.cbUUID: AllPumpCharacteristicUUIDs.map { $0.cbUUID },
-                ServiceUUID.DIS_SERVICE.cbUUID: DeviceInformationCharacteristics.map { $0.cbUUID },
+                ServiceUUID.PUMP_SERVICE.cbUUID: AllPumpCharacteristicUUIDs.map(\.cbUUID),
+                ServiceUUID.DIS_SERVICE.cbUUID: DeviceInformationCharacteristics.map(\.cbUUID),
                 ServiceUUID.GENERIC_ATTRIBUTE_SERVICE.cbUUID: [CharacteristicUUID.SERVICE_CHANGED.cbUUID]
             ],
             notifyingCharacteristics: [
-                ServiceUUID.PUMP_SERVICE.cbUUID: AllPumpCharacteristicUUIDs.map { $0.cbUUID },
+                ServiceUUID.PUMP_SERVICE.cbUUID: AllPumpCharacteristicUUIDs.map(\.cbUUID),
                 ServiceUUID.GENERIC_ATTRIBUTE_SERVICE.cbUUID: [CharacteristicUUID.SERVICE_CHANGED.cbUUID]
             ],
             valueUpdateMacros: [
@@ -105,4 +99,4 @@ extension PeripheralManager.Configuration {
             ]
         )
     }
-  }
+}

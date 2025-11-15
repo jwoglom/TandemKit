@@ -1,14 +1,3 @@
-//
-//  StopTempRate.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of StopTempRateRequest and StopTempRateResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/StopTempRateRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/StopTempRateResponse.java
-//
-
 import Foundation
 
 /// Request to stop a running temp basal rate.
@@ -31,7 +20,7 @@ public class StopTempRateRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -53,12 +42,12 @@ public class StopTempRateResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.tempRateId = Bytes.readShort(cargo, 1)
+        status = Int(cargo[0])
+        tempRateId = Bytes.readShort(cargo, 1)
     }
 
     public init(status: Int, tempRateId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(tempRateId)
         )
@@ -66,4 +55,3 @@ public class StopTempRateResponse: Message, StatusMessage {
         self.tempRateId = tempRateId
     }
 }
-

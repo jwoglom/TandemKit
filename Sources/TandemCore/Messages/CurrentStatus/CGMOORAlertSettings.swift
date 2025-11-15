@@ -1,14 +1,3 @@
-//
-//  CGMOORAlertSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CGMOORAlertSettingsRequest and CGMOORAlertSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CGMOORAlertSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CGMOORAlertSettingsResponse.java
-//
-
 import Foundation
 
 /// Request out-of-range CGM alert settings from the pump.
@@ -27,7 +16,7 @@ public class CGMOORAlertSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -47,13 +36,13 @@ public class CGMOORAlertSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.sensorTimeoutAlertThreshold = Int(cargo[0])
-        self.sensorTimeoutAlertEnabled = Int(cargo[1])
-        self.sensorTimeoutDefaultBitmask = Int(cargo[2])
+        sensorTimeoutAlertThreshold = Int(cargo[0])
+        sensorTimeoutAlertEnabled = Int(cargo[1])
+        sensorTimeoutDefaultBitmask = Int(cargo[2])
     }
 
     public init(sensorTimeoutAlertThreshold: Int, sensorTimeoutAlertEnabled: Int, sensorTimeoutDefaultBitmask: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(sensorTimeoutAlertThreshold),
             Bytes.firstByteLittleEndian(sensorTimeoutAlertEnabled),
             Bytes.firstByteLittleEndian(sensorTimeoutDefaultBitmask)
@@ -63,4 +52,3 @@ public class CGMOORAlertSettingsResponse: Message {
         self.sensorTimeoutDefaultBitmask = sensorTimeoutDefaultBitmask
     }
 }
-

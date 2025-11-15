@@ -28,7 +28,7 @@ public class NonexistentEnterChangeCartridgeModeStateStreamRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,11 +49,11 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
     public required init(cargo: Data) {
         let raw = Bytes.dropLastN(cargo, 0)
         self.cargo = raw
-        self.stateId = Int(raw[0])
+        stateId = Int(raw[0])
     }
 
     public init(stateId: Int) {
-        self.cargo = Data([UInt8(stateId & 0xFF)])
+        cargo = Data([UInt8(stateId & 0xFF)])
         self.stateId = stateId
     }
 
@@ -63,4 +63,3 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
         case readyToChange = 2
     }
 }
-

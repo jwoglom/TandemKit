@@ -1,14 +1,3 @@
-//
-//  Localization.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of LocalizationRequest and LocalizationResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/LocalizationRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/LocalizationResponse.java
-//
-
 import Foundation
 
 /// Request pump localization settings.
@@ -27,7 +16,7 @@ public class LocalizationRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -48,14 +37,14 @@ public class LocalizationResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.glucoseOUM = Int(cargo[0])
-        self.regionSetting = Int(cargo[1])
-        self.languageSelected = Int(cargo[2])
-        self.languagesAvailableBitmask = Bytes.readUint32(cargo, 3)
+        glucoseOUM = Int(cargo[0])
+        regionSetting = Int(cargo[1])
+        languageSelected = Int(cargo[2])
+        languagesAvailableBitmask = Bytes.readUint32(cargo, 3)
     }
 
     public init(glucoseOUM: Int, regionSetting: Int, languageSelected: Int, languagesAvailableBitmask: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(glucoseOUM),
             Bytes.firstByteLittleEndian(regionSetting),
             Bytes.firstByteLittleEndian(languageSelected),
@@ -67,4 +56,3 @@ public class LocalizationResponse: Message {
         self.languagesAvailableBitmask = languagesAvailableBitmask
     }
 }
-

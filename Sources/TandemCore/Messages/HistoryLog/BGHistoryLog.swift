@@ -23,18 +23,38 @@ public class BGHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
-        self.bg = Bytes.readShort(raw, 10)
-        self.cgmCalibration = Int(raw[12])
-        self.bgSourceId = Int(raw[13])
-        self.iob = Bytes.readFloat(raw, 14)
-        self.targetBG = Bytes.readShort(raw, 18)
-        self.isf = Bytes.readShort(raw, 20)
-        self.spare = Bytes.readUint32(raw, 22)
+        bg = Bytes.readShort(raw, 10)
+        cgmCalibration = Int(raw[12])
+        bgSourceId = Int(raw[13])
+        iob = Bytes.readFloat(raw, 14)
+        targetBG = Bytes.readShort(raw, 18)
+        isf = Bytes.readShort(raw, 20)
+        spare = Bytes.readUint32(raw, 22)
         super.init(cargo: raw)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bg: Int, cgmCalibration: Int, bgSourceId: Int, iob: Float, targetBG: Int, isf: Int, spare: UInt32) {
-        let payload = BGHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bg: bg, cgmCalibration: cgmCalibration, bgSourceId: bgSourceId, iob: iob, targetBG: targetBG, isf: isf, spare: spare)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bg: Int,
+        cgmCalibration: Int,
+        bgSourceId: Int,
+        iob: Float,
+        targetBG: Int,
+        isf: Int,
+        spare: UInt32
+    ) {
+        let payload = BGHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bg: bg,
+            cgmCalibration: cgmCalibration,
+            bgSourceId: bgSourceId,
+            iob: iob,
+            targetBG: targetBG,
+            isf: isf,
+            spare: spare
+        )
         self.bg = bg
         self.cgmCalibration = cgmCalibration
         self.bgSourceId = bgSourceId
@@ -45,8 +65,18 @@ public class BGHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bg: Int, cgmCalibration: Int, bgSourceId: Int, iob: Float, targetBG: Int, isf: Int, spare: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bg: Int,
+        cgmCalibration: Int,
+        bgSourceId: Int,
+        iob: Float,
+        targetBG: Int,
+        isf: Int,
+        spare: UInt32
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -64,7 +94,6 @@ public class BGHistoryLog: HistoryLog {
 
     /// Source of the BG entry (CGM or manual).
     public var bgSource: LastBGResponse.BgSource? {
-        return LastBGResponse.BgSource(rawValue: bgSourceId)
+        LastBGResponse.BgSource(rawValue: bgSourceId)
     }
 }
-

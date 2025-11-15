@@ -1,6 +1,6 @@
-import XCTest
-@testable import TandemKit
 import TandemCore
+@testable import TandemKit
+import XCTest
 
 final class PumpCommFaultHandlingTests: XCTestCase {
     func testTransientFaultRetriesAndSucceeds() throws {
@@ -14,7 +14,11 @@ final class PumpCommFaultHandlingTests: XCTestCase {
         pumpComm.delegate = delegate
 
         let request = ApiVersionRequest()
-        let response: ApiVersionResponse = try pumpComm.sendMessage(transport: transport, message: request, expecting: ApiVersionResponse.self)
+        let response: ApiVersionResponse = try pumpComm.sendMessage(
+            transport: transport,
+            message: request,
+            expecting: ApiVersionResponse.self
+        )
 
         XCTAssertEqual(response.majorVersion, 1)
         XCTAssertEqual(transport.sentMessages.count, 2)
@@ -75,15 +79,17 @@ final class PumpCommFaultHandlingTests: XCTestCase {
 private final class MockDelegate: PumpCommDelegate {
     var faultEvents: [PumpCommFaultEvent] = []
 
-    func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState) {}
+    func pumpComm(_: PumpComm, didChange _: PumpState) {}
 
-    func pumpComm(_ pumpComms: PumpComm,
-                  didReceive message: Message,
-                  metadata: MessageMetadata?,
-                  characteristic: CharacteristicUUID,
-                  txId: UInt8) {}
+    func pumpComm(
+        _: PumpComm,
+        didReceive _: Message,
+        metadata _: MessageMetadata?,
+        characteristic _: CharacteristicUUID,
+        txId _: UInt8
+    ) {}
 
-    func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
+    func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
         faultEvents.append(event)
     }
 }
@@ -108,9 +114,9 @@ private final class MockTransport: PumpMessageTransport {
         }
         let result = results.removeFirst()
         switch result {
-        case .message(let message):
+        case let .message(message):
             return message
-        case .error(let error):
+        case let .error(error):
             throw error
         }
     }
@@ -123,7 +129,7 @@ private final class MockRetryPolicy: PumpCommRetryPolicy {
         self.decisions = decisions
     }
 
-    func decision(for fault: PumpFaultCode, attempt: Int) -> PumpCommRetryDecision {
+    func decision(for _: PumpFaultCode, attempt: Int) -> PumpCommRetryDecision {
         if attempt - 1 < decisions.count {
             return decisions[attempt - 1]
         }

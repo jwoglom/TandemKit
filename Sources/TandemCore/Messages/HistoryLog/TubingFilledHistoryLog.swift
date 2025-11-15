@@ -15,7 +15,7 @@ public class TubingFilledHistoryLog: HistoryLog {
     public let primeSize: Float
 
     public required init(cargo: Data) {
-        self.primeSize = Bytes.readFloat(cargo, 10)
+        primeSize = Bytes.readFloat(cargo, 10)
         super.init(cargo: cargo)
     }
 
@@ -26,7 +26,7 @@ public class TubingFilledHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, primeSize: Float) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -36,4 +36,3 @@ public class TubingFilledHistoryLog: HistoryLog {
         )
     }
 }
-

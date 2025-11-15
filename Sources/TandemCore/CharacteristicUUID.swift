@@ -1,10 +1,3 @@
-//
-//  CharacteristicUUID.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/5/25.
-//
-
 import CoreBluetooth
 
 public enum CharacteristicUUID: String, Sendable {
@@ -19,10 +12,10 @@ public enum CharacteristicUUID: String, Sendable {
     // For signed messages
     case CONTROL_CHARACTERISTICS = "7B83FFFC-9F77-4E5C-8064-AAE2C24838B9"
     case CONTROL_STREAM_CHARACTERISTICS = "7B83FFFD-9F77-4E5C-8064-AAE2C24838B9"
-    
+
     // Generic Attribute service
     case SERVICE_CHANGED = "00002A05-0000-1000-8000-00805F9B34FB"
-    
+
     // Device Information Service
     case DIS_MANUFACTURER_NAME = "00002A29-0000-1000-8000-00805F9B34FB"
     case DIS_MODEL_NUMBER = "00002A24-0000-1000-8000-00805F9B34FB"
@@ -61,11 +54,11 @@ public let DeviceInformationCharacteristics: [DeviceInformationCharacteristicUUI
 
 public extension DeviceInformationCharacteristicUUID {
     var cbUUID: CBUUID {
-#if os(Linux)
-        return CBUUID(uuidString: rawValue)
-#else
-        return CBUUID(string: rawValue)
-#endif
+        #if os(Linux)
+            return CBUUID(uuidString: rawValue)
+        #else
+            return CBUUID(string: rawValue)
+        #endif
     }
 
     var prettyName: String {
@@ -78,11 +71,11 @@ public extension DeviceInformationCharacteristicUUID {
 
 public extension CharacteristicUUID {
     var cbUUID: CBUUID {
-#if os(Linux)
-        return CBUUID(uuidString: rawValue)
-#else
-        return CBUUID(string: rawValue)
-#endif
+        #if os(Linux)
+            return CBUUID(uuidString: rawValue)
+        #else
+            return CBUUID(string: rawValue)
+        #endif
     }
 
     var prettyName: String {

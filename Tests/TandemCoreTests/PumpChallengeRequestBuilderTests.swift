@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class PumpChallengeRequestBuilderTests: XCTestCase {
     func testValidLongCode() {
@@ -60,7 +60,10 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
     }
 
     func testInvalidShortCodeIsLongCode() {
-        XCTAssertThrowsError(try PumpChallengeRequestBuilder.processPairingCode("abcd-efgh-ijkl-mnop", type: .short6Char)) { error in
+        XCTAssertThrowsError(
+            try PumpChallengeRequestBuilder
+                .processPairingCode("abcd-efgh-ijkl-mnop", type: .short6Char)
+        ) { error in
             XCTAssertTrue(error is PumpChallengeRequestBuilder.InvalidShortPairingCodeFormat)
         }
     }
@@ -89,27 +92,27 @@ final class PumpChallengeRequestBuilderTests: XCTestCase {
     }
 
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-    func testCreateV2AdvancesJpakeFlow() throws {
-        let pairingCode = "123456"
-        XCTAssertEqual(try PumpChallengeRequestBuilder.processPairingCode(pairingCode, type: .short6Char), pairingCode)
-        PumpChallengeRequestBuilder.testJpakeHandler = { response, code in
-            XCTAssertEqual(code, pairingCode)
-            XCTAssertEqual(response.centralChallengeHash.count, 165)
-            return Jpake1bRequest(appInstanceId: response.appInstanceId, centralChallenge: Data(repeating: 0xAA, count: 165))
+        func testCreateV2AdvancesJpakeFlow() throws {
+            let pairingCode = "123456"
+            XCTAssertEqual(try PumpChallengeRequestBuilder.processPairingCode(pairingCode, type: .short6Char), pairingCode)
+            PumpChallengeRequestBuilder.testJpakeHandler = { response, code in
+                XCTAssertEqual(code, pairingCode)
+                XCTAssertEqual(response.centralChallengeHash.count, 165)
+                return Jpake1bRequest(appInstanceId: response.appInstanceId, centralChallenge: Data(repeating: 0xAA, count: 165))
+            }
+            defer { PumpChallengeRequestBuilder.testJpakeHandler = nil }
+
+            let responsePayload = Data(repeating: 0xCD, count: 165)
+            let response = Jpake1aResponse(appInstanceId: 42, centralChallengeHash: responsePayload)
+            let nextMessage = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
+
+            guard let round1b = nextMessage as? Jpake1bRequest else {
+                XCTFail("Expected next JPake message to be Jpake1bRequest, got \(type(of: nextMessage))")
+                return
+            }
+
+            XCTAssertEqual(round1b.centralChallenge.count, 165)
+            XCTAssertEqual(round1b.appInstanceId, 42)
         }
-        defer { PumpChallengeRequestBuilder.testJpakeHandler = nil }
-
-        let responsePayload = Data(repeating: 0xCD, count: 165)
-        let response = Jpake1aResponse(appInstanceId: 42, centralChallengeHash: responsePayload)
-        let nextMessage = try PumpChallengeRequestBuilder.create(challengeResponse: response, pairingCode: pairingCode)
-
-        guard let round1b = nextMessage as? Jpake1bRequest else {
-            XCTFail("Expected next JPake message to be Jpake1bRequest, got \(type(of: nextMessage))")
-            return
-        }
-
-        XCTAssertEqual(round1b.centralChallenge.count, 165)
-        XCTAssertEqual(round1b.appInstanceId, 42)
-    }
     #endif
 }
