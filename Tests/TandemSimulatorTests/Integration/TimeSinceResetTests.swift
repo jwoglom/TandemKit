@@ -1,6 +1,6 @@
-import XCTest
-@testable import TandemSimulator
 import TandemCore
+@testable import TandemSimulator
+import XCTest
 
 /// Integration tests for TimeSinceReset message
 class TimeSinceResetTests: XCTestCase {
@@ -51,7 +51,8 @@ class TimeSinceResetTests: XCTestCase {
 
         // Verify response opCode
         guard let requestMetadata = MessageRegistry.metadata(forName: "TimeSinceResetRequest"),
-              let responseMetadata = MessageRegistry.metadata(forName: "TimeSinceResetResponse") else {
+              let responseMetadata = MessageRegistry.metadata(forName: "TimeSinceResetResponse")
+        else {
             XCTFail("Message metadata not found")
             return
         }
@@ -75,7 +76,7 @@ class TimeSinceResetTests: XCTestCase {
 
     /// Test multiple requests with different txIds
     func testMultipleTimeSinceResetRequests() async throws {
-        for txId in UInt8(1)...UInt8(5) {
+        for txId in UInt8(1) ... UInt8(5) {
             // Build and send request
             let requestPacket = PacketTestUtils.buildTimeSinceResetRequest(txId: txId)
             transport.injectPacket(requestPacket, on: .CURRENT_STATUS_CHARACTERISTICS)

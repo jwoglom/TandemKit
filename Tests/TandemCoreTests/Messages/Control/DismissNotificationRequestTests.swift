@@ -1,10 +1,10 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class DismissNotificationRequestTests: XCTestCase {
     func testDismissNotificationRequest_SiteChangeNotification() {
         MessageTester.initPumpState("", 0)
-        let expected = DismissNotificationRequest(cargo: Data([2,0,0,0,0,0]))
+        let expected = DismissNotificationRequest(cargo: Data([2, 0, 0, 0, 0, 0]))
         let parsed: DismissNotificationRequest = MessageTester.test(
             "011eb81e1e02000000000091eef21fb2f51e9b10",
             30,
@@ -20,7 +20,7 @@ final class DismissNotificationRequestTests: XCTestCase {
 
     func testDismissNotificationRequest_alert_CGM_GRAPH_REMOVED() {
         MessageTester.initPumpState("", 0)
-        let expected = DismissNotificationRequest(cargo: Data([25,0,0,0,1,0]))
+        let expected = DismissNotificationRequest(cargo: Data([25, 0, 0, 0, 1, 0]))
         let parsed: DismissNotificationRequest = MessageTester.test(
             "01ddb8dd1e1900000001001b92f41f4ebdd42d94",
             -35,
@@ -36,7 +36,7 @@ final class DismissNotificationRequestTests: XCTestCase {
 
     func testDismissNotificationRequest_alert_INVALID_TRANSMITTER_ID() {
         MessageTester.initPumpState("", 0)
-        let expected = DismissNotificationRequest(cargo: Data([29,0,0,0,1,0]))
+        let expected = DismissNotificationRequest(cargo: Data([29, 0, 0, 0, 1, 0]))
         let parsed: DismissNotificationRequest = MessageTester.test(
             "0112b8121e1d00000001008190fd1fd4f0eef6a2",
             18,
@@ -52,7 +52,7 @@ final class DismissNotificationRequestTests: XCTestCase {
 
     func testDismissNotificationRequest_g6CgmSensorFailed() {
         MessageTester.initPumpState("", 0)
-        let expected = DismissNotificationRequest(cargo: Data([11,0,0,0,3,0]))
+        let expected = DismissNotificationRequest(cargo: Data([11, 0, 0, 0, 3, 0]))
         let parsed: DismissNotificationRequest = MessageTester.test(
             "01e9b8e91e0b0000000300de6e392075306d24bb",
             -23,
@@ -68,7 +68,7 @@ final class DismissNotificationRequestTests: XCTestCase {
 
     func testDismissNotificationRequest_pumpResetAlarm() {
         MessageTester.initPumpState("", 0)
-        let expected = DismissNotificationRequest(cargo: Data([3,0,0,0,2,0]))
+        let expected = DismissNotificationRequest(cargo: Data([3, 0, 0, 0, 2, 0]))
         let parsed: DismissNotificationRequest = MessageTester.test(
             "01a6b8a61e03000000020058e93920faf75ae477",
             -90,

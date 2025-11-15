@@ -1,18 +1,9 @@
-//
-//  PeripheralManagerTransport.swift
-//  TandemKit
-//
-//  Created by Claude Code on 1/11/25.
-//
-//  Concrete implementation of PumpMessageTransport that bridges PeripheralManager
-//  from TandemBLE to PumpComm for actual pump communication.
-
-import Foundation
 import Dispatch
-import TandemCore
+import Foundation
 import TandemBLE
+import TandemCore
 #if canImport(os)
-import os
+    import os
 #endif
 
 private let transportLogger = PumpLogger(label: "TandemKit.PeripheralManagerTransport")
@@ -23,7 +14,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     private var currentTxId: UInt8 = 0
     private let log = OSLog(category: "PeripheralManagerTransport")
     private var requestResponseHistory: [RequestResponsePair] = []
-    private let maxHistorySize = 100  // Keep last 100 exchanges
+    private let maxHistorySize = 100 // Keep last 100 exchanges
 
     public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
@@ -73,7 +64,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         if wrapper.packets.isEmpty {
             transportLogger.debug("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
         } else {
-            transportLogger.debug("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)")
+            transportLogger
+                .debug(
+                    "[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)"
+                )
             for (index, packet) in wrapper.packets.enumerated() {
                 let hex = packet.build.map { String(format: "%02X", $0) }.joined()
                 transportLogger.debug("[PeripheralManagerTransport]   packet \(index) len=\(packet.build.count) hex=\(hex)")
@@ -89,11 +83,11 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         // Handle send errors
         switch sendResult {
-        case .unsentWithError(let error):
+        case let .unsentWithError(error):
             log.error("Failed to send message: %{public}@", String(describing: error))
             transportLogger.error("[PeripheralManagerTransport] sendResult=unsentWithError error=\(error)")
             throw error
-        case .sentWithError(let error):
+        case let .sentWithError(error):
             log.error("Message sent but pump returned error: %{public}@", String(describing: error))
             transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
@@ -173,7 +167,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             for pair in requestResponseHistory.reversed() {
                 if type(of: pair.request) == requestType,
                    let pairResponse = pair.response,
-                   type(of: pairResponse) == type(of: response) {
+                   type(of: pairResponse) == type(of: response)
+                {
                     return pair.request
                 }
             }

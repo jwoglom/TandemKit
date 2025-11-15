@@ -18,6 +18,6 @@ public enum PairingCodeType: String {
     }
 
     public static func fromLabel(_ label: String) -> PairingCodeType? {
-        return PairingCodeType(rawValue: label)
+        PairingCodeType(rawValue: label)
     }
 }

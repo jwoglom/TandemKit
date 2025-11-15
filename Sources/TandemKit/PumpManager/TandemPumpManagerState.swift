@@ -63,88 +63,91 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
     public init?(rawValue: RawValue) {
         guard let version = rawValue["version"] as? Int,
-              (1...TandemPumpManagerState.version).contains(version) else {
+              (1 ... TandemPumpManagerState.version).contains(version)
+        else {
             return nil
         }
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
-            self.pumpState = PumpState(rawValue: pumpStateRaw)
+            pumpState = PumpState(rawValue: pumpStateRaw)
         } else {
-            self.pumpState = nil
+            pumpState = nil
         }
 
         if let lastReconciliationInterval = rawValue["lastReconciliation"] as? TimeInterval {
-            self.lastReconciliation = Date(timeIntervalSinceReferenceDate: lastReconciliationInterval)
+            lastReconciliation = Date(timeIntervalSinceReferenceDate: lastReconciliationInterval)
         } else {
-            self.lastReconciliation = nil
+            lastReconciliation = nil
         }
 
         if let settingsRaw = rawValue["settings"] as? TandemPumpManagerSettings.RawValue,
-           let decodedSettings = TandemPumpManagerSettings(rawValue: settingsRaw) {
-            self.settings = decodedSettings
+           let decodedSettings = TandemPumpManagerSettings(rawValue: settingsRaw)
+        {
+            settings = decodedSettings
         } else {
-            self.settings = .default
+            settings = .default
         }
 
         if let latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double {
             self.latestInsulinOnBoard = latestInsulinOnBoard
         } else {
-            self.latestInsulinOnBoard = nil
+            latestInsulinOnBoard = nil
         }
 
         if let reservoirRaw = rawValue["lastReservoirReading"] as? [String: Any] {
-            self.lastReservoirReading = TandemPumpManagerState.decodeReservoirValue(from: reservoirRaw)
+            lastReservoirReading = TandemPumpManagerState.decodeReservoirValue(from: reservoirRaw)
         } else {
-            self.lastReservoirReading = nil
+            lastReservoirReading = nil
         }
 
         if let batteryRaw = rawValue["lastBatteryReading"] as? [String: Any] {
-            self.lastBatteryReading = TandemPumpManagerState.decodeBatteryReading(from: batteryRaw)
+            lastBatteryReading = TandemPumpManagerState.decodeBatteryReading(from: batteryRaw)
         } else {
-            self.lastBatteryReading = nil
+            lastBatteryReading = nil
         }
 
         if let basalRaw = rawValue["basalDeliveryState"] as? [String: Any] {
-            self.basalDeliveryState = TandemPumpManagerState.decodeBasalState(from: basalRaw)
+            basalDeliveryState = TandemPumpManagerState.decodeBasalState(from: basalRaw)
         } else {
-            self.basalDeliveryState = nil
+            basalDeliveryState = nil
         }
 
         if let lastBasalDateInterval = rawValue["lastBasalStatusDate"] as? TimeInterval {
-            self.lastBasalStatusDate = Date(timeIntervalSinceReferenceDate: lastBasalDateInterval)
+            lastBasalStatusDate = Date(timeIntervalSinceReferenceDate: lastBasalDateInterval)
         } else {
-            self.lastBasalStatusDate = nil
+            lastBasalStatusDate = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
-           let decodedBolusState = TandemPumpManagerState.decodeBolusState(from: bolusRaw) {
-            self.bolusState = decodedBolusState
+           let decodedBolusState = TandemPumpManagerState.decodeBolusState(from: bolusRaw)
+        {
+            bolusState = decodedBolusState
         } else {
-            self.bolusState = .noBolus
+            bolusState = .noBolus
         }
 
         if let deliveryIsUncertain = rawValue["deliveryIsUncertain"] as? Bool {
             self.deliveryIsUncertain = deliveryIsUncertain
         } else {
-            self.deliveryIsUncertain = false
+            deliveryIsUncertain = false
         }
 
         if let scheduleRaw = rawValue["basalRateSchedule"] as? [String: Any] {
-            self.basalRateSchedule = TandemPumpManagerState.decodeBasalSchedule(from: scheduleRaw)
+            basalRateSchedule = TandemPumpManagerState.decodeBasalSchedule(from: scheduleRaw)
         } else {
-            self.basalRateSchedule = nil
+            basalRateSchedule = nil
         }
 
         if let insulinActionsEnabled = rawValue["insulinDeliveryActionsEnabled"] as? Bool {
-            self.insulinDeliveryActionsEnabled = insulinActionsEnabled
+            insulinDeliveryActionsEnabled = insulinActionsEnabled
         } else {
-            self.insulinDeliveryActionsEnabled = false
+            insulinDeliveryActionsEnabled = false
         }
 
         if let connectionSharingEnabled = rawValue["connectionSharingEnabled"] as? Bool {
             self.connectionSharingEnabled = connectionSharingEnabled
         } else {
-            self.connectionSharingEnabled = false
+            connectionSharingEnabled = false
         }
     }
 
@@ -179,7 +182,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
 
         if let basalDeliveryState = basalDeliveryState,
-           let encodedBasalState = TandemPumpManagerState.encodeBasalState(basalDeliveryState) {
+           let encodedBasalState = TandemPumpManagerState.encodeBasalState(basalDeliveryState)
+        {
             raw["basalDeliveryState"] = encodedBasalState
         }
 
@@ -194,7 +198,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["deliveryIsUncertain"] = deliveryIsUncertain
 
         if let basalRateSchedule = basalRateSchedule,
-           let encodedSchedule = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule) {
+           let encodedSchedule = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
+        {
             raw["basalRateSchedule"] = encodedSchedule
         }
 
@@ -207,7 +212,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
 public extension TandemPumpManagerState {
     static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
-        return lhs.pumpState == rhs.pumpState &&
+        lhs.pumpState == rhs.pumpState &&
             lhs.lastReconciliation == rhs.lastReconciliation &&
             lhs.settings == rhs.settings &&
             lhs.latestInsulinOnBoard == rhs.latestInsulinOnBoard &&
@@ -225,7 +230,7 @@ public extension TandemPumpManagerState {
 
 private extension TandemPumpManagerState {
     static func encodeReservoirValue(_ value: ReservoirValue) -> [String: Any] {
-        return [
+        [
             "startDate": value.startDate.timeIntervalSinceReferenceDate,
             "unitVolume": value.unitVolume
         ]
@@ -233,7 +238,8 @@ private extension TandemPumpManagerState {
 
     static func decodeReservoirValue(from raw: [String: Any]) -> ReservoirValue? {
         guard let startInterval = raw["startDate"] as? TimeInterval,
-              let unitVolume = raw["unitVolume"] as? Double else {
+              let unitVolume = raw["unitVolume"] as? Double
+        else {
             return nil
         }
 
@@ -244,7 +250,7 @@ private extension TandemPumpManagerState {
     }
 
     static func encodeBatteryReading(_ reading: BatteryReading) -> [String: Any] {
-        return [
+        [
             "date": reading.date.timeIntervalSinceReferenceDate,
             "chargeRemaining": reading.chargeRemaining
         ]
@@ -252,7 +258,8 @@ private extension TandemPumpManagerState {
 
     static func decodeBatteryReading(from raw: [String: Any]) -> BatteryReading? {
         guard let timestamp = raw["date"] as? TimeInterval,
-              let chargeRemaining = raw["chargeRemaining"] as? Double else {
+              let chargeRemaining = raw["chargeRemaining"] as? Double
+        else {
             return nil
         }
 
@@ -266,12 +273,12 @@ private extension TandemPumpManagerState {
         var raw: [String: Any] = [:]
 
         switch state {
-        case .active(let date):
+        case let .active(date):
             raw["case"] = "active"
             raw["date"] = date.timeIntervalSinceReferenceDate
         case .initiatingTempBasal:
             raw["case"] = "initiatingTempBasal"
-        case .tempBasal(let dose):
+        case let .tempBasal(dose):
             raw["case"] = "tempBasal"
             if let data = try? PropertyListEncoder().encode(dose) {
                 raw["dose"] = data
@@ -280,7 +287,7 @@ private extension TandemPumpManagerState {
             raw["case"] = "cancelingTempBasal"
         case .suspending:
             raw["case"] = "suspending"
-        case .suspended(let date):
+        case let .suspended(date):
             raw["case"] = "suspended"
             raw["date"] = date.timeIntervalSinceReferenceDate
         case .resuming:
@@ -304,7 +311,8 @@ private extension TandemPumpManagerState {
             return .initiatingTempBasal
         case "tempBasal":
             if let data = raw["dose"] as? Data,
-               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data) {
+               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data)
+            {
                 return .tempBasal(dose)
             }
         case "cancelingTempBasal":
@@ -332,7 +340,7 @@ private extension TandemPumpManagerState {
             raw["case"] = "noBolus"
         case .initiating:
             raw["case"] = "initiating"
-        case .inProgress(let dose):
+        case let .inProgress(dose):
             raw["case"] = "inProgress"
             if let data = try? PropertyListEncoder().encode(dose) {
                 raw["dose"] = data
@@ -356,7 +364,8 @@ private extension TandemPumpManagerState {
             return .initiating
         case "inProgress":
             if let data = raw["dose"] as? Data,
-               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data) {
+               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data)
+            {
                 return .inProgress(dose)
             }
         case "canceling":
@@ -384,13 +393,15 @@ private extension TandemPumpManagerState {
 
     static func decodeBasalSchedule(from raw: [String: Any]) -> BasalRateSchedule? {
         guard let itemDictionaries = raw["items"] as? [[String: Any]],
-              let timeZoneIdentifier = raw["timeZoneIdentifier"] as? String else {
+              let timeZoneIdentifier = raw["timeZoneIdentifier"] as? String
+        else {
             return nil
         }
 
         let items: [RepeatingScheduleValue<Double>] = itemDictionaries.compactMap { entry in
             guard let startTime = entry["startTime"] as? TimeInterval,
-                  let value = entry["value"] as? Double else {
+                  let value = entry["value"] as? Double
+            else {
                 return nil
             }
 
@@ -409,7 +420,7 @@ private extension TandemPumpManagerState {
         switch (lhs, rhs) {
         case (nil, nil):
             return true
-        case (let left?, let right?):
+        case let (left?, right?):
             return left.startDate == right.startDate && left.unitVolume == right.unitVolume
         default:
             return false

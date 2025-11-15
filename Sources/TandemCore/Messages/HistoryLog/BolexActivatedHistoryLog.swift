@@ -17,14 +17,20 @@ public class BolexActivatedHistoryLog: HistoryLog {
     public let bolexSize: Float
 
     public required init(cargo: Data) {
-        self.bolusId = Bytes.readShort(cargo, 10)
-        self.iob = Bytes.readFloat(cargo, 14)
-        self.bolexSize = Bytes.readFloat(cargo, 18)
+        bolusId = Bytes.readShort(cargo, 10)
+        iob = Bytes.readFloat(cargo, 14)
+        bolexSize = Bytes.readFloat(cargo, 18)
         super.init(cargo: cargo)
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, iob: Float, bolexSize: Float) {
-        let payload = BolexActivatedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusId: bolusId, iob: iob, bolexSize: bolexSize)
+        let payload = BolexActivatedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusId: bolusId,
+            iob: iob,
+            bolexSize: bolexSize
+        )
         self.bolusId = bolusId
         self.iob = iob
         self.bolexSize = bolexSize
@@ -32,7 +38,7 @@ public class BolexActivatedHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, iob: Float, bolexSize: Float) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -44,4 +50,3 @@ public class BolexActivatedHistoryLog: HistoryLog {
         )
     }
 }
-

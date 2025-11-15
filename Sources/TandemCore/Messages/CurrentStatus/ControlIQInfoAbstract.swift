@@ -1,13 +1,3 @@
-//
-//  ControlIQInfoAbstract.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift translation of ControlIQInfoAbstractResponse
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ControlIQInfoAbstractResponse.java
-//
-
 import Foundation
 
 /// Base response shared by ControlIQInfoV1 and ControlIQInfoV2.
@@ -54,4 +44,3 @@ public class ControlIQInfoAbstractResponse: Message {
         case pounds = 1
     }
 }
-

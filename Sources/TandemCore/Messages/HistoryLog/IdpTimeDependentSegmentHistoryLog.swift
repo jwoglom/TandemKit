@@ -23,20 +23,44 @@ public class IdpTimeDependentSegmentHistoryLog: HistoryLog {
     public let carbRatio: Int
 
     public required init(cargo: Data) {
-        self.idp = Int(cargo[10])
-        self.status = Int(cargo[11])
-        self.segmentIndex = Int(cargo[12])
-        self.modificationType = Int(cargo[13])
-        self.startTime = Bytes.readShort(cargo, 14)
-        self.basalRate = Bytes.readShort(cargo, 16)
-        self.isf = Bytes.readShort(cargo, 18)
-        self.targetBg = Bytes.readUint32(cargo, 20)
-        self.carbRatio = Int(cargo[24])
+        idp = Int(cargo[10])
+        status = Int(cargo[11])
+        segmentIndex = Int(cargo[12])
+        modificationType = Int(cargo[13])
+        startTime = Bytes.readShort(cargo, 14)
+        basalRate = Bytes.readShort(cargo, 16)
+        isf = Bytes.readShort(cargo, 18)
+        targetBg = Bytes.readUint32(cargo, 20)
+        carbRatio = Int(cargo[24])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, status: Int, segmentIndex: Int, modificationType: Int, startTime: Int, basalRate: Int, isf: Int, targetBg: UInt32, carbRatio: Int) {
-        let payload = IdpTimeDependentSegmentHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, idp: idp, status: status, segmentIndex: segmentIndex, modificationType: modificationType, startTime: startTime, basalRate: basalRate, isf: isf, targetBg: targetBg, carbRatio: carbRatio)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        idp: Int,
+        status: Int,
+        segmentIndex: Int,
+        modificationType: Int,
+        startTime: Int,
+        basalRate: Int,
+        isf: Int,
+        targetBg: UInt32,
+        carbRatio: Int
+    ) {
+        let payload = IdpTimeDependentSegmentHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            idp: idp,
+            status: status,
+            segmentIndex: segmentIndex,
+            modificationType: modificationType,
+            startTime: startTime,
+            basalRate: basalRate,
+            isf: isf,
+            targetBg: targetBg,
+            carbRatio: carbRatio
+        )
         self.idp = idp
         self.status = status
         self.segmentIndex = segmentIndex
@@ -49,8 +73,20 @@ public class IdpTimeDependentSegmentHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, status: Int, segmentIndex: Int, modificationType: Int, startTime: Int, basalRate: Int, isf: Int, targetBg: UInt32, carbRatio: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        idp: Int,
+        status: Int,
+        segmentIndex: Int,
+        modificationType: Int,
+        startTime: Int,
+        basalRate: Int,
+        isf: Int,
+        targetBg: UInt32,
+        carbRatio: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -68,4 +104,3 @@ public class IdpTimeDependentSegmentHistoryLog: HistoryLog {
         )
     }
 }
-

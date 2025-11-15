@@ -1,13 +1,3 @@
-//
-//  PumpFeaturesAbstract.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift translation of PumpFeaturesAbstractResponse
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/PumpFeaturesAbstractResponse.java
-//
-
 import Foundation
 
 /// Base response for pump feature messages.
@@ -27,4 +17,3 @@ public class PumpFeaturesAbstractResponse: Message {
 
     public func getPrimaryFeatures() -> Set<PumpFeaturesV1Response.PumpFeatureType> { fatalError("abstract") }
 }
-

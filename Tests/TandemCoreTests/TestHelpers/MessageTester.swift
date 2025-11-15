@@ -1,16 +1,16 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 enum MessageTester {
-    static func initPumpState(_ pumpAuthenticationKey: String, _ timeSinceReset: UInt32) {
+    static func initPumpState(_: String, _: UInt32) {
         // Pump state not currently modeled; included for API parity with PumpX2 tests
     }
 
     static func test<T: Message>(
         _ rawHex: String,
-        _ txId: Int,
-        _ expectedPackets: Int,
-        _ characteristic: CharacteristicUUID,
+        _: Int,
+        _: Int,
+        _: CharacteristicUUID,
         _ expected: T,
         _ extraHexPackets: String...
     ) -> T {

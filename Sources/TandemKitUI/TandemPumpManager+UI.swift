@@ -42,14 +42,14 @@ extension TandemPumpManager: PumpManagerUI {
     }
 
     public func hudProvider(
-        bluetoothProvider: BluetoothProvider,
-        colorPalette: LoopUIColorPalette,
-        allowedInsulinTypes: [InsulinType]
+        bluetoothProvider _: BluetoothProvider,
+        colorPalette _: LoopUIColorPalette,
+        allowedInsulinTypes _: [InsulinType]
     ) -> HUDProvider? {
         nil
     }
 
-    public static func createHUDView(rawValue: [String: Any]) -> BaseHUDView? {
+    public static func createHUDView(rawValue _: [String: Any]) -> BaseHUDView? {
         nil
     }
 
@@ -77,6 +77,6 @@ extension TandemPumpManager: PumpManagerUI {
 
 extension TandemPumpManager {
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
-        return nil
+        nil
     }
 }

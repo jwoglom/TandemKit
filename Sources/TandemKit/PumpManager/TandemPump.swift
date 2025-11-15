@@ -1,16 +1,9 @@
-//
-//  TandemPump.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/5/25.
-//
-
-import Foundation
 import CoreBluetooth
-import TandemCore
+import Foundation
 import TandemBLE
+import TandemCore
 #if canImport(os)
-import os
+    import os
 #endif
 
 public protocol TandemPumpDelegate: AnyObject {
@@ -32,8 +25,8 @@ public class TandemPump {
 
     init(_ state: PumpState?) {
         self.state = state
-        self.pumpComm = PumpComm(pumpState: state)
-        self.bluetoothManager.delegate = self
+        pumpComm = PumpComm(pumpState: state)
+        bluetoothManager.delegate = self
     }
 
     /// Start scanning for a Tandem pump peripheral.
@@ -81,18 +74,16 @@ public class TandemPump {
     }
 
     func setAppInstanceId(_ id: Int) {
-        self.appInstanceId = id
+        appInstanceId = id
     }
 
     // MARK: - Bluetooth events
 
-    @MainActor
-    func onPumpConnected(_ manager: PeripheralManager) {
+    @MainActor  func onPumpConnected(_ manager: PeripheralManager) {
         sendDefaultStartupRequests(manager)
     }
 
-    @MainActor
-    private func sendDefaultStartupRequests(_ manager: PeripheralManager) {
+    @MainActor  private func sendDefaultStartupRequests(_ manager: PeripheralManager) {
         log.default("Sending default startup requests")
 
         // Send initial status requests that Loop/Trio need
@@ -110,13 +101,11 @@ public class TandemPump {
         }
     }
 
-    @MainActor
-    public func sendCommand(_ message: Message, using manager: PeripheralManager) {
+    @MainActor  public func sendCommand(_ message: Message, using manager: PeripheralManager) {
         send(message, via: manager)
     }
 
-    @MainActor
-    private func send(_ message: Message, via manager: PeripheralManager) {
+    @MainActor  private func send(_ message: Message, via manager: PeripheralManager) {
         let wrapper = TronMessageWrapper(message: message, currentTxId: currentTxId)
         currentTxId = currentTxId &+ 1
         let targetCharacteristic = type(of: message).props.characteristic
@@ -126,9 +115,9 @@ public class TandemPump {
             switch result {
             case .sentWithAcknowledgment:
                 self.log.default("Message sent successfully: %{public}@", String(describing: message))
-            case .sentWithError(let error):
+            case let .sentWithError(error):
                 self.log.error("Message sent with error: %{public}@", String(describing: error))
-            case .unsentWithError(let error):
+            case let .unsentWithError(error):
                 self.log.error("Message failed to send: %{public}@", String(describing: error))
             }
         }
@@ -136,26 +125,32 @@ public class TandemPump {
 }
 
 extension TandemPump: BluetoothManagerDelegate {
-    public func bluetoothManager(_ manager: BluetoothManager,
-                                  peripheralManager: PeripheralManager,
-                                  isReadyWithError error: Error?) {
+    public func bluetoothManager(
+        _: BluetoothManager,
+        peripheralManager: PeripheralManager,
+        isReadyWithError error: Error?
+    ) {
         guard error == nil else { return }
         DispatchQueue.main.async {
             self.onPumpConnected(peripheralManager)
         }
     }
 
-    public func bluetoothManager(_ manager: BluetoothManager,
-                                  shouldConnectPeripheral peripheral: CBPeripheral,
-                                  advertisementData: [String : Any]?) -> Bool {
+    public func bluetoothManager(
+        _: BluetoothManager,
+        shouldConnectPeripheral peripheral: CBPeripheral,
+        advertisementData: [String: Any]?
+    ) -> Bool {
         if let delegate = delegate {
             return delegate.tandemPump(self, shouldConnect: peripheral, advertisementData: advertisementData)
         }
         return true
     }
 
-    public func bluetoothManager(_ manager: BluetoothManager,
-                                  didCompleteConfiguration peripheralManager: PeripheralManager) {
+    public func bluetoothManager(
+        _: BluetoothManager,
+        didCompleteConfiguration peripheralManager: PeripheralManager
+    ) {
         delegate?.tandemPump(self, didCompleteConfiguration: peripheralManager)
     }
 }

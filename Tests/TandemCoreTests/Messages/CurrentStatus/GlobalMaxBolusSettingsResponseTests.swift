@@ -1,11 +1,11 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class GlobalMaxBolusSettingsResponseTests: XCTestCase {
     func testGlobalMaxBolusSettingsResponse() {
         let expected = GlobalMaxBolusSettingsResponse(
-            maxBolus: 25_000,
-            maxBolusDefault: 10_000
+            maxBolus: 25000,
+            maxBolusDefault: 10000
         )
 
         let parsed: GlobalMaxBolusSettingsResponse = MessageTester.test(
@@ -16,8 +16,8 @@ final class GlobalMaxBolusSettingsResponseTests: XCTestCase {
             expected
         )
 
-        XCTAssertEqual(25_000, parsed.maxBolus)
-        XCTAssertEqual(10_000, parsed.maxBolusDefault)
+        XCTAssertEqual(25000, parsed.maxBolus)
+        XCTAssertEqual(10000, parsed.maxBolusDefault)
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
 }

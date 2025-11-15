@@ -1,14 +1,3 @@
-//
-//  CurrentBatteryV1.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CurrentBatteryV1Request and CurrentBatteryV1Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CurrentBatteryV1Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CurrentBatteryV1Response.java
-//
-
 import Foundation
 
 /// Request the current battery information (legacy API).
@@ -27,7 +16,7 @@ public class CurrentBatteryV1Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -46,12 +35,12 @@ public class CurrentBatteryV1Response: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.currentBatteryAbc = Int(cargo[0])
-        self.currentBatteryIbc = Int(cargo[1])
+        currentBatteryAbc = Int(cargo[0])
+        currentBatteryIbc = Int(cargo[1])
     }
 
     public init(currentBatteryAbc: Int, currentBatteryIbc: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(currentBatteryAbc),
             Bytes.firstByteLittleEndian(currentBatteryIbc)
         )
@@ -61,9 +50,8 @@ public class CurrentBatteryV1Response: Message {
 
     /// Convenience accessor mapping to battery percent used by the pump UI.
     public func getBatteryPercent() -> Int {
-        return currentBatteryIbc
+        currentBatteryIbc
     }
 }
-
 
 extension CurrentBatteryV1Response: CurrentBatteryAbstractResponse {}

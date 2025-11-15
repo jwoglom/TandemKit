@@ -1,6 +1,6 @@
-import XCTest
-@testable import TandemSimulator
 import TandemCore
+@testable import TandemSimulator
+import XCTest
 
 /// Integration tests for HomeScreenMirror message
 class HomeScreenMirrorTests: XCTestCase {

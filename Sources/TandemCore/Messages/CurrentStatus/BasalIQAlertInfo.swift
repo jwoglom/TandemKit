@@ -1,14 +1,3 @@
-//
-//  BasalIQAlertInfo.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BasalIQAlertInfoRequest and BasalIQAlertInfoResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/BasalIQAlertInfoRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/BasalIQAlertInfoResponse.java
-//
-
 import Foundation
 
 /// Request the most recent Basal-IQ alert info from the pump.
@@ -27,7 +16,7 @@ public class BasalIQAlertInfoRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -45,17 +34,17 @@ public class BasalIQAlertInfoResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.alertId = Bytes.readUint32(cargo, 0)
+        alertId = Bytes.readUint32(cargo, 0)
     }
 
     public init(alertId: UInt32) {
-        self.cargo = Bytes.toUint32(alertId)
+        cargo = Bytes.toUint32(alertId)
         self.alertId = alertId
     }
 
     /// The enum alert associated with the alertId, if known.
     public var alert: BasalIQAlert? {
-        return BasalIQAlert(rawValue: alertId)
+        BasalIQAlert(rawValue: alertId)
     }
 
     /// Basal-IQ alert types.
@@ -66,4 +55,3 @@ public class BasalIQAlertInfoResponse: Message {
         case INSULIN_RESUMED_TIMEOUT = 24578
     }
 }
-

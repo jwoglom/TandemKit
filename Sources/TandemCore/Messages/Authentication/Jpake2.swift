@@ -1,14 +1,3 @@
-//
-//  Jpake2.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Swift representations of Jpake2Request and Jpake2Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/authentication/Jpake2Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/authentication/Jpake2Response.java
-//
-
 import Foundation
 
 /// Second JPAKE round message.
@@ -27,13 +16,13 @@ public class Jpake2Request: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appInstanceId = Bytes.readShort(cargo, 0)
-        self.centralChallenge = cargo.subdata(in: 2..<167)
+        appInstanceId = Bytes.readShort(cargo, 0)
+        centralChallenge = cargo.subdata(in: 2 ..< 167)
     }
 
     public init(appInstanceId: Int, centralChallenge: Data) {
         precondition(centralChallenge.count == 165)
-        self.cargo = Jpake2Request.buildCargo(appInstanceId: appInstanceId, centralChallenge: centralChallenge)
+        cargo = Jpake2Request.buildCargo(appInstanceId: appInstanceId, centralChallenge: centralChallenge)
         self.appInstanceId = appInstanceId
         self.centralChallenge = centralChallenge
     }
@@ -44,7 +33,7 @@ public class Jpake2Request: Message {
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             centralChallenge
         )
-        cargo.replaceSubrange(0..<167, with: combined)
+        cargo.replaceSubrange(0 ..< 167, with: combined)
         return cargo
     }
 }
@@ -65,22 +54,21 @@ public class Jpake2Response: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.appInstanceId = Bytes.readShort(cargo, 0)
-        self.centralChallengeHash = cargo.subdata(in: 2..<170)
+        appInstanceId = Bytes.readShort(cargo, 0)
+        centralChallengeHash = cargo.subdata(in: 2 ..< 170)
     }
 
     public init(appInstanceId: Int, centralChallengeHash: Data) {
         precondition(centralChallengeHash.count == 168)
-        self.cargo = Jpake2Response.buildCargo(appInstanceId: appInstanceId, centralChallengeHash: centralChallengeHash)
+        cargo = Jpake2Response.buildCargo(appInstanceId: appInstanceId, centralChallengeHash: centralChallengeHash)
         self.appInstanceId = appInstanceId
         self.centralChallengeHash = centralChallengeHash
     }
 
     public static func buildCargo(appInstanceId: Int, centralChallengeHash: Data) -> Data {
-        return Bytes.combine(
+        Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             centralChallengeHash
         )
     }
 }
-

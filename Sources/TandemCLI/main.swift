@@ -1,16 +1,15 @@
 import Foundation
-import TandemCore
 import TandemBLE
+import TandemCore
 import TandemKit
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #endif
 #if canImport(CoreBluetooth)
-import CoreBluetooth
+    import CoreBluetooth
 #endif
 
-@main
-struct TandemCLIMain {
+@main enum TandemCLIMain {
     struct DecodeOptions {
         var characteristic: String?
         var format: OutputFormat = .json
@@ -50,12 +49,12 @@ struct TandemCLIMain {
         var messageName: String = ""
         var timeout: TimeInterval = 30.0
         var format: OutputFormat = .text
-        var credentials: CredentialOptions = CredentialOptions()
+        var credentials = CredentialOptions()
     }
 
     struct ConsoleOptions {
         var timeout: TimeInterval = 30.0
-        var credentials: CredentialOptions = CredentialOptions()
+        var credentials = CredentialOptions()
     }
 
     enum ListKind: String {
@@ -123,7 +122,9 @@ private extension TandemCLIMain {
         case "console":
             let options = try parseConsoleArguments(remainder)
             try await runConsole(options: options)
-        case "help", "-h", "--help":
+        case "--help",
+             "-h",
+             "help":
             print(usage())
         default:
             throw CLIError("Unknown command: \(command)\n\(usage())", exitCode: 1)
@@ -136,13 +137,15 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--characteristic", "-c":
+            case "--characteristic",
+                 "-c":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --characteristic.")
                 }
                 options.characteristic = args[index]
-            case "--format", "-f":
+            case "--format",
+                 "-f":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --format.")
@@ -151,7 +154,8 @@ private extension TandemCLIMain {
                     throw CLIError("Unsupported format: " + args[index] + ". Use json or text.")
                 }
                 options.format = format
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(decodeUsage(), exitCode: 0)
             default:
                 if arg.hasPrefix("-") {
@@ -174,7 +178,8 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--txid", "-t":
+            case "--txid",
+                 "-t":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --txid.")
@@ -207,7 +212,8 @@ private extension TandemCLIMain {
                     throw CLIError("--max-chunk-size expects a positive integer.")
                 }
                 options.maxChunkSize = value
-            case "--format", "-f":
+            case "--format",
+                 "-f":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --format.")
@@ -224,7 +230,8 @@ private extension TandemCLIMain {
                 options.cargo = args[index]
             case "--allow-insulin-actions":
                 options.allowInsulinActions = true
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(encodeUsage(), exitCode: 0)
             default:
                 if arg.hasPrefix("-") {
@@ -252,7 +259,8 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--timeout", "-t":
+            case "--timeout",
+                 "-t":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --timeout.")
@@ -261,7 +269,8 @@ private extension TandemCLIMain {
                     throw CLIError("--timeout expects a positive number (seconds).")
                 }
                 options.timeout = timeout
-            case "--format", "-f":
+            case "--format",
+                 "-f":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --format.")
@@ -294,7 +303,8 @@ private extension TandemCLIMain {
                     throw CLIError("Missing value for --auth-key.")
                 }
                 options.credentials.authKey = args[index]
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(sendUsage(), exitCode: 0)
             default:
                 if arg.hasPrefix("-") {
@@ -321,13 +331,15 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--characteristic", "-c":
+            case "--characteristic",
+                 "-c":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --characteristic.")
                 }
                 options.characteristic = args[index]
-            case "--type", "-t":
+            case "--type",
+                 "-t":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --type.")
@@ -336,7 +348,8 @@ private extension TandemCLIMain {
                     throw CLIError("--type expects 'request' or 'response'.")
                 }
                 options.type = kind
-            case "--format", "-f":
+            case "--format",
+                 "-f":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --format.")
@@ -345,7 +358,8 @@ private extension TandemCLIMain {
                     throw CLIError("--format expects json or text.")
                 }
                 options.format = format
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(listUsage(), exitCode: 0)
             default:
                 throw CLIError("Unknown option: \(arg)\n\(listUsage())")
@@ -362,7 +376,8 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--timeout", "-t":
+            case "--timeout",
+                 "-t":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --timeout.")
@@ -371,7 +386,8 @@ private extension TandemCLIMain {
                     throw CLIError("--timeout expects a positive number (seconds).")
                 }
                 options.timeout = timeout
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(pairUsage(), exitCode: 0)
             default:
                 if arg.hasPrefix("-") {
@@ -398,7 +414,8 @@ private extension TandemCLIMain {
         while index < args.count {
             let arg = args[index]
             switch arg {
-            case "--timeout", "-t":
+            case "--timeout",
+                 "-t":
                 index += 1
                 if index >= args.count {
                     throw CLIError("Missing value for --timeout.")
@@ -431,7 +448,8 @@ private extension TandemCLIMain {
                     throw CLIError("Missing value for --auth-key.")
                 }
                 options.credentials.authKey = args[index]
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw CLIError(consoleUsage(), exitCode: 0)
             default:
                 throw CLIError("Unknown option: \(arg)\n\(consoleUsage())")
@@ -462,9 +480,11 @@ private extension TandemCLIMain {
         let cargo = Data(payload.dropLast(2))
 
         let specifiedCharacteristic = try options.characteristic.map { try CharacteristicParser.parse($0) }
-        var matches = MessageRegistry.bestMatches(opCode: header.opCode,
-                                                  characteristic: specifiedCharacteristic,
-                                                  payloadLength: cargo.count)
+        var matches = MessageRegistry.bestMatches(
+            opCode: header.opCode,
+            characteristic: specifiedCharacteristic,
+            payloadLength: cargo.count
+        )
         if matches.isEmpty {
             matches = MessageRegistry.matches(opCode: header.opCode, characteristic: specifiedCharacteristic)
         }
@@ -479,19 +499,24 @@ private extension TandemCLIMain {
         } else {
             if specifiedCharacteristic == nil {
                 let options = matches.map { $0.name + " [" + $0.characteristic.rawValue + "]" }.joined(separator: ", ")
-                throw CLIError("Multiple messages matched opcode " + String(header.opCode) + ": " + options + ". Provide --characteristic to disambiguate.")
+                throw CLIError(
+                    "Multiple messages matched opcode " + String(header.opCode) + ": " + options +
+                        ". Provide --characteristic to disambiguate."
+                )
             }
             metadata = matches[0]
         }
 
         let message = metadata.type.init(cargo: cargo)
         let sanitizedPackets = options.packets.map { sanitizeHexInput($0).lowercased() }
-        let output = buildDecodedOutput(metadata: metadata,
-                                        message: message,
-                                        cargo: cargo,
-                                        header: header,
-                                        crc: crc,
-                                        packets: sanitizedPackets)
+        let output = buildDecodedOutput(
+            metadata: metadata,
+            message: message,
+            cargo: cargo,
+            header: header,
+            crc: crc,
+            packets: sanitizedPackets
+        )
 
         switch options.format {
         case .json:
@@ -501,16 +526,18 @@ private extension TandemCLIMain {
         }
     }
 
-    @MainActor
-    static func runEncode(options: EncodeOptions) throws {
+    @MainActor  static func runEncode(options: EncodeOptions) throws {
         guard let metadata = MessageRegistry.metadata(forName: options.messageName) else {
-            throw CLIError("Unknown message type " + options.messageName + ". Use '" + programName + " list' to view available names.")
+            throw CLIError(
+                "Unknown message type " + options
+                    .messageName + ". Use '" + programName + " list' to view available names."
+            )
         }
 
         let cargoData: Data
         if let cargo = options.cargo {
             cargoData = try dataFromHex(cargo)
-        } else if metadata.size == 0 && !metadata.variableSize {
+        } else if metadata.size == 0, !metadata.variableSize {
             cargoData = Data()
         } else {
             throw CLIError("Message " + metadata.name + " expects payload bytes. Provide --cargo <hex>.")
@@ -520,7 +547,10 @@ private extension TandemCLIMain {
 
         if metadata.modifiesInsulinDelivery {
             if !options.allowInsulinActions {
-                throw CLIError("Message " + metadata.name + " modifies insulin delivery. Pass --allow-insulin-actions to proceed.")
+                throw CLIError(
+                    "Message " + metadata
+                        .name + " modifies insulin delivery. Pass --allow-insulin-actions to proceed."
+                )
             }
             PumpStateSupplier.enableActionsAffectingInsulinDelivery()
         }
@@ -542,17 +572,21 @@ private extension TandemCLIMain {
         }
 
         do {
-            let packets = try Packetize(message: message,
-                                        authenticationKey: authKeyData,
-                                        txId: options.txId,
-                                        timeSinceReset: tsr,
-                                        maxChunkSize: options.maxChunkSize)
+            let packets = try Packetize(
+                message: message,
+                authenticationKey: authKeyData,
+                txId: options.txId,
+                timeSinceReset: tsr,
+                maxChunkSize: options.maxChunkSize
+            )
             let merged = packets.reduce(into: Data()) { $0.append($1.build) }
-            let output = buildEncodedOutput(metadata: metadata,
-                                             message: message,
-                                             cargo: cargoData,
-                                             packets: packets,
-                                             merged: merged)
+            let output = buildEncodedOutput(
+                metadata: metadata,
+                message: message,
+                cargo: cargoData,
+                packets: packets,
+                merged: merged
+            )
             switch options.format {
             case .json:
                 try printJSON(output)
@@ -560,7 +594,9 @@ private extension TandemCLIMain {
                 printEncodedText(output: output, message: message)
             }
         } catch is ActionsAffectingInsulinDeliveryNotEnabled {
-            throw CLIError("Encoding aborted: actions affecting insulin delivery are disabled. Pass --allow-insulin-actions to override.")
+            throw CLIError(
+                "Encoding aborted: actions affecting insulin delivery are disabled. Pass --allow-insulin-actions to override."
+            )
         } catch PacketizeError.missingAuthenticationKey {
             throw CLIError("Authentication key and time since reset are required for signed messages.")
         }
@@ -596,14 +632,16 @@ private extension TandemCLIMain {
             for metadata in items.sorted(by: { $0.name < $1.name }) {
                 let kind = String(describing: metadata.messageType)
                 let opHex = String(format: "0x%02X", metadata.opCode)
-                let line = metadata.name + " [" + kind + "] op: " + String(metadata.opCode) + " (" + opHex + ") characteristic: " + metadata.characteristic.rawValue
+                let line = metadata
+                    .name + " [" + kind + "] op: " + String(metadata.opCode) + " (" + opHex + ") characteristic: " + metadata
+                    .characteristic.rawValue
                 print(line)
             }
         }
     }
 
     static func usage() -> String {
-        return [
+        [
             "Usage: " + programName + " <command> [options]",
             "",
             "Commands:",
@@ -619,7 +657,7 @@ private extension TandemCLIMain {
     }
 
     static func decodeUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " decode [options] <packet> [extra packets...]",
             "",
             "Options:",
@@ -629,7 +667,7 @@ private extension TandemCLIMain {
     }
 
     static func encodeUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " encode [options] <MessageName>",
             "",
             "Options:",
@@ -644,7 +682,7 @@ private extension TandemCLIMain {
     }
 
     static func listUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " list [options]",
             "",
             "Options:",
@@ -655,7 +693,7 @@ private extension TandemCLIMain {
     }
 
     static func pairUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " pair [options] <pairing-code>",
             "",
             "Options:",
@@ -668,7 +706,7 @@ private extension TandemCLIMain {
     }
 
     static func sendUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " send [options] <MessageName>",
             "",
             "Options:",
@@ -690,7 +728,7 @@ private extension TandemCLIMain {
     }
 
     static func consoleUsage() -> String {
-        return [
+        [
             "Usage: " + programName + " console [options]",
             "",
             "Options:",
@@ -717,153 +755,157 @@ private extension TandemCLIMain {
 
     static func runPair(options: PairOptions) async throws {
         #if canImport(CoreBluetooth) && !os(Linux)
-        guard !options.pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw CLIError("Pairing code cannot be empty.")
-        }
+            guard !options.pairingCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw CLIError("Pairing code cannot be empty.")
+            }
 
-        let sanitizedCode = try await MainActor.run {
-            try PumpStateSupplier.sanitizeAndStorePairingCode(options.pairingCode)
-        }
+            let sanitizedCode = try await MainActor.run {
+                try PumpStateSupplier.sanitizeAndStorePairingCode(options.pairingCode)
+            }
 
-        let codeLength = sanitizedCode.count
-        let pairingMode = codeLength == 6 ? "JPAKE (6-digit)" : "Legacy (16-character)"
+            let codeLength = sanitizedCode.count
+            let pairingMode = codeLength == 6 ? "JPAKE (6-digit)" : "Legacy (16-character)"
 
-        print("Starting Tandem pump pairing")
-        print("  Pairing code: \(sanitizedCode)")
-        print("  Mode: \(pairingMode)")
-        print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
-        print("")
-        print("Searching for nearby Tandem pumps...")
+            print("Starting Tandem pump pairing")
+            print("  Pairing code: \(sanitizedCode)")
+            print("  Mode: \(pairingMode)")
+            print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
+            print("")
+            print("Searching for nearby Tandem pumps...")
 
-        let coordinator = PairingCoordinator(pairingCode: sanitizedCode, timeout: options.timeout)
-        let result: PairingResult
+            let coordinator = PairingCoordinator(pairingCode: sanitizedCode, timeout: options.timeout)
+            let result: PairingResult
 
-        do {
-            result = try await coordinator.start()
-        } catch {
-            throw CLIError("Pairing failed: \(String(describing: error))")
-        }
+            do {
+                result = try await coordinator.start()
+            } catch {
+                throw CLIError("Pairing failed: \(String(describing: error))")
+            }
 
-        let derivedSecretHex = result.pumpState.derivedSecret?.hexadecimalString ?? "<not provided>"
-        let serverNonceHex = result.pumpState.serverNonce?.hexadecimalString ?? "<not provided>"
-        let authKeyHex = await MainActor.run { PumpStateSupplier.authenticationKey().hexadecimalString }
+            let derivedSecretHex = result.pumpState.derivedSecret?.hexadecimalString ?? "<not provided>"
+            let serverNonceHex = result.pumpState.serverNonce?.hexadecimalString ?? "<not provided>"
+            let authKeyHex = await MainActor.run { PumpStateSupplier.authenticationKey().hexadecimalString }
 
-        print("")
-        print("✅ Pairing completed successfully")
-        if let name = result.peripheralName {
-            print("  Pump name: \(name)")
-        }
-        if let identifier = result.peripheralIdentifier {
-            print("  Peripheral ID: \(identifier.uuidString)")
-        }
-        print("  Derived secret: \(derivedSecretHex)")
-        print("  Server nonce: \(serverNonceHex)")
-        print("  Authentication key: \(authKeyHex)")
+            print("")
+            print("✅ Pairing completed successfully")
+            if let name = result.peripheralName {
+                print("  Pump name: \(name)")
+            }
+            if let identifier = result.peripheralIdentifier {
+                print("  Peripheral ID: \(identifier.uuidString)")
+            }
+            print("  Derived secret: \(derivedSecretHex)")
+            print("  Server nonce: \(serverNonceHex)")
+            print("  Authentication key: \(authKeyHex)")
 
-        print("")
+            print("")
         #else
-        throw CLIError("Pairing command is only available on platforms with CoreBluetooth support.")
+            throw CLIError("Pairing command is only available on platforms with CoreBluetooth support.")
         #endif
     }
 
     static func runSend(options: SendOptions) async throws {
         #if canImport(CoreBluetooth) && !os(Linux)
-        // Validate message name
-        guard let metadata = MessageRegistry.metadata(forName: options.messageName) else {
-            throw CLIError("Unknown message type '\(options.messageName)'. Use '\(programName) list' to view available names.")
-        }
-
-        // Only allow Request messages
-        guard metadata.messageType == .Request else {
-            throw CLIError("'\(options.messageName)' is a response message. Only request messages can be sent.")
-        }
-
-        // Setup credentials using helper
-        try setupCredentials(options.credentials)
-
-        // Instantiate the message with empty cargo
-        let cargoData: Data
-        if metadata.size == 0 && !metadata.variableSize {
-            cargoData = Data()
-        } else {
-            throw CLIError("Message '\(metadata.name)' requires parameters. The send command only supports parameter-less messages.")
-        }
-
-        let message = metadata.type.init(cargo: cargoData)
-
-        print("Sending message to paired pump")
-        print("  Message: \(metadata.name)")
-        print("  OpCode: \(metadata.opCode)")
-        print("  Characteristic: \(metadata.characteristic.rawValue)")
-        print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
-        print("")
-        print("Searching for pump...")
-
-        let coordinator = SendCoordinator(message: message, metadata: metadata, timeout: options.timeout)
-        let result: SendResult
-
-        do {
-            result = try await coordinator.start()
-        } catch {
-            throw CLIError("Send failed: \(String(describing: error))")
-        }
-
-        print("")
-        print("✅ Message sent and response received")
-        print("")
-
-        // Display the response
-        switch options.format {
-        case .text:
-            print("Request:")
-            print("  Type: \(metadata.name)")
-            print("  OpCode: \(metadata.opCode)")
-            print("")
-            print("Response:")
-            let responseTypeName = String(describing: type(of: result.response))
-            print("  Type: \(responseTypeName)")
-            if let responseMeta = MessageRegistry.metadata(for: result.response) {
-                print("  OpCode: \(responseMeta.opCode)")
-                print("  Size: \(responseMeta.size) bytes")
+            // Validate message name
+            guard let metadata = MessageRegistry.metadata(forName: options.messageName) else {
+                throw CLIError(
+                    "Unknown message type '\(options.messageName)'. Use '\(programName) list' to view available names."
+                )
             }
-            let fields = messagePropertyDescriptions(result.response)
-            if !fields.isEmpty {
-                print("  Fields:")
-                for key in fields.keys.sorted() {
-                    if let value = fields[key] {
-                        print("    \(key): \(value)")
+
+            // Only allow Request messages
+            guard metadata.messageType == .Request else {
+                throw CLIError("'\(options.messageName)' is a response message. Only request messages can be sent.")
+            }
+
+            // Setup credentials using helper
+            try setupCredentials(options.credentials)
+
+            // Instantiate the message with empty cargo
+            let cargoData: Data
+            if metadata.size == 0, !metadata.variableSize {
+                cargoData = Data()
+            } else {
+                throw CLIError(
+                    "Message '\(metadata.name)' requires parameters. The send command only supports parameter-less messages."
+                )
+            }
+
+            let message = metadata.type.init(cargo: cargoData)
+
+            print("Sending message to paired pump")
+            print("  Message: \(metadata.name)")
+            print("  OpCode: \(metadata.opCode)")
+            print("  Characteristic: \(metadata.characteristic.rawValue)")
+            print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
+            print("")
+            print("Searching for pump...")
+
+            let coordinator = SendCoordinator(message: message, metadata: metadata, timeout: options.timeout)
+            let result: SendResult
+
+            do {
+                result = try await coordinator.start()
+            } catch {
+                throw CLIError("Send failed: \(String(describing: error))")
+            }
+
+            print("")
+            print("✅ Message sent and response received")
+            print("")
+
+            // Display the response
+            switch options.format {
+            case .text:
+                print("Request:")
+                print("  Type: \(metadata.name)")
+                print("  OpCode: \(metadata.opCode)")
+                print("")
+                print("Response:")
+                let responseTypeName = String(describing: type(of: result.response))
+                print("  Type: \(responseTypeName)")
+                if let responseMeta = MessageRegistry.metadata(for: result.response) {
+                    print("  OpCode: \(responseMeta.opCode)")
+                    print("  Size: \(responseMeta.size) bytes")
+                }
+                let fields = messagePropertyDescriptions(result.response)
+                if !fields.isEmpty {
+                    print("  Fields:")
+                    for key in fields.keys.sorted() {
+                        if let value = fields[key] {
+                            print("    \(key): \(value)")
+                        }
                     }
                 }
-            }
-        case .json:
-            let requestInfo: [String: AnyEncodable] = [
-                "type": AnyEncodable(metadata.name),
-                "opCode": AnyEncodable(metadata.opCode),
-                "characteristic": AnyEncodable(metadata.characteristic.rawValue)
-            ]
+            case .json:
+                let requestInfo: [String: AnyEncodable] = [
+                    "type": AnyEncodable(metadata.name),
+                    "opCode": AnyEncodable(metadata.opCode),
+                    "characteristic": AnyEncodable(metadata.characteristic.rawValue)
+                ]
 
-            var responseInfo: [String: AnyEncodable] = [
-                "type": AnyEncodable(String(describing: type(of: result.response)))
-            ]
-            if let responseMeta = MessageRegistry.metadata(for: result.response) {
-                responseInfo["opCode"] = AnyEncodable(responseMeta.opCode)
-                responseInfo["size"] = AnyEncodable(responseMeta.size)
-            }
+                var responseInfo: [String: AnyEncodable] = [
+                    "type": AnyEncodable(String(describing: type(of: result.response)))
+                ]
+                if let responseMeta = MessageRegistry.metadata(for: result.response) {
+                    responseInfo["opCode"] = AnyEncodable(responseMeta.opCode)
+                    responseInfo["size"] = AnyEncodable(responseMeta.size)
+                }
 
-            let fields = messagePropertyDescriptions(result.response)
-            if !fields.isEmpty {
-                responseInfo["fields"] = AnyEncodable(fields)
-            }
+                let fields = messagePropertyDescriptions(result.response)
+                if !fields.isEmpty {
+                    responseInfo["fields"] = AnyEncodable(fields)
+                }
 
-            let output: [String: AnyEncodable] = [
-                "request": AnyEncodable(requestInfo),
-                "response": AnyEncodable(responseInfo)
-            ]
-            try printJSON(output)
-        }
+                let output: [String: AnyEncodable] = [
+                    "request": AnyEncodable(requestInfo),
+                    "response": AnyEncodable(responseInfo)
+                ]
+                try printJSON(output)
+            }
 
         #else
-        throw CLIError("Send command is only available on platforms with CoreBluetooth support.")
+            throw CLIError("Send command is only available on platforms with CoreBluetooth support.")
         #endif
     }
 
@@ -871,12 +913,12 @@ private extension TandemCLIMain {
         // If credentials are provided, set them up
         if let derivedSecretHex = credentials.derivedSecret,
            let serverNonceHex = credentials.serverNonce,
-           let authKeyHex = credentials.authKey {
-
+           let authKeyHex = credentials.authKey
+        {
             // Parse hex strings
             let derivedSecret = try dataFromHex(derivedSecretHex)
             let serverNonce = try dataFromHex(serverNonceHex)
-            let _ = try dataFromHex(authKeyHex)  // Validate authKey format but don't use it directly
+            _ = try dataFromHex(authKeyHex) // Validate authKey format but don't use it directly
 
             // Store in PumpStateSupplier
             PumpStateSupplier.storePairingArtifacts(derivedSecret: derivedSecret, serverNonce: serverNonce)
@@ -889,12 +931,16 @@ private extension TandemCLIMain {
             }
         } else if credentials.derivedSecret != nil || credentials.serverNonce != nil || credentials.authKey != nil {
             // Partial credentials provided
-            throw CLIError("If providing credentials, you must specify all three: --derived-secret, --server-nonce, and --auth-key.")
+            throw CLIError(
+                "If providing credentials, you must specify all three: --derived-secret, --server-nonce, and --auth-key."
+            )
         } else {
             // Check if authentication is available from previous pairing
             let authKey = PumpStateSupplier.authenticationKey()
             if authKey.isEmpty {
-                throw CLIError("No pairing credentials found. Either:\n  1. Pair first using '\(programName) pair <code>', or\n  2. Provide credentials with --derived-secret, --server-nonce, and --auth-key.")
+                throw CLIError(
+                    "No pairing credentials found. Either:\n  1. Pair first using '\(programName) pair <code>', or\n  2. Provide credentials with --derived-secret, --server-nonce, and --auth-key."
+                )
             }
             print("Using previously stored pairing credentials")
         }
@@ -902,19 +948,19 @@ private extension TandemCLIMain {
 
     static func runConsole(options: ConsoleOptions) async throws {
         #if canImport(CoreBluetooth) && !os(Linux)
-        // Setup credentials
-        try setupCredentials(options.credentials)
+            // Setup credentials
+            try setupCredentials(options.credentials)
 
-        print("Starting interactive console")
-        print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
-        print("")
-        print("Searching for pump...")
+            print("Starting interactive console")
+            print("  Timeout: \(String(format: "%.0f", options.timeout)) seconds")
+            print("")
+            print("Searching for pump...")
 
-        let coordinator = ConsoleCoordinator(timeout: options.timeout)
-        try await coordinator.start()
+            let coordinator = ConsoleCoordinator(timeout: options.timeout)
+            try await coordinator.start()
 
         #else
-        throw CLIError("Console command is only available on platforms with CoreBluetooth support.")
+            throw CLIError("Console command is only available on platforms with CoreBluetooth support.")
         #endif
     }
 
@@ -968,1239 +1014,1291 @@ private extension TandemCLIMain {
         }
         print("Packets:")
         for packet in output.packets {
-            print("  [" + String(packet.index) + "] remaining=" + String(packet.packetsRemaining) + " txId=" + String(packet.txId) + " hex=" + packet.hex)
+            print(
+                "  [" + String(packet.index) + "] remaining=" + String(packet.packetsRemaining) + " txId=" +
+                    String(packet.txId) + " hex=" + packet.hex
+            )
         }
         print("Merged: " + output.mergedHex)
     }
 }
 
 #if canImport(CoreBluetooth) && !os(Linux)
-import CoreBluetooth
+    import CoreBluetooth
 
-private struct PairingResult {
-    let pumpState: PumpState
-    let peripheralName: String?
-    let peripheralIdentifier: UUID?
-}
-
-private struct SendResult {
-    let response: Message
-    let peripheralName: String?
-    let peripheralIdentifier: UUID?
-}
-
-private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, PumpCommDelegate {
-    private let pairingCode: String
-    private let timeout: TimeInterval
-    private let bluetoothManager = BluetoothManager()
-    private let pumpComm: PumpComm
-    private var transport: PeripheralManagerTransport?
-    private var eventListenerTask: Task<Void, Never>?
-
-    private var continuation: CheckedContinuation<PairingResult, Error>?
-    private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.PairingCoordinator.state")
-    private var timeoutWorkItem: DispatchWorkItem?
-    private var lastPumpState: PumpState = PumpState()
-    private var targetPeripheral: CBPeripheral?
-    private var didStartPairing = false
-
-    init(pairingCode: String, timeout: TimeInterval) {
-        self.pairingCode = pairingCode
-        self.timeout = timeout
-        self.pumpComm = PumpComm(pumpState: nil)
-        super.init()
-
-        bluetoothManager.delegate = self
-        pumpComm.delegate = self
+    private struct PairingResult {
+        let pumpState: PumpState
+        let peripheralName: String?
+        let peripheralIdentifier: UUID?
     }
 
-    deinit {
-        bluetoothManager.delegate = nil
-        eventListenerTask?.cancel()
-        pumpComm.delegate = nil
+    private struct SendResult {
+        let response: Message
+        let peripheralName: String?
+        let peripheralIdentifier: UUID?
     }
 
-    func start() async throws -> PairingResult {
-        try await withCheckedThrowingContinuation { continuation in
-            stateQueue.sync { self.continuation = continuation }
-            scheduleTimeout()
-            DispatchQueue.main.async {
-                self.bluetoothManager.scanForPeripheral()
-            }
-        }
-    }
+    private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, PumpCommDelegate {
+        private let pairingCode: String
+        private let timeout: TimeInterval
+        private let bluetoothManager = BluetoothManager()
+        private let pumpComm: PumpComm
+        private var transport: PeripheralManagerTransport?
+        private var eventListenerTask: Task<Void, Never>?
 
-    // MARK: - BluetoothManagerDelegate
+        private var continuation: CheckedContinuation<PairingResult, Error>?
+        private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.PairingCoordinator.state")
+        private var timeoutWorkItem: DispatchWorkItem?
+        private var lastPumpState = PumpState()
+        private var targetPeripheral: CBPeripheral?
+        private var didStartPairing = false
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          shouldConnectPeripheral peripheral: CBPeripheral,
-                          advertisementData: [String : Any]?) -> Bool {
-        return stateQueue.sync {
-            if let target = targetPeripheral, target.identifier != peripheral.identifier {
-                return false
-            }
-            if targetPeripheral == nil {
-                targetPeripheral = peripheral
-                print("Discovered pump candidate: \(peripheral.name ?? peripheral.identifier.uuidString)")
-            }
-            return true
-        }
-    }
+        init(pairingCode: String, timeout: TimeInterval) {
+            self.pairingCode = pairingCode
+            self.timeout = timeout
+            pumpComm = PumpComm(pumpState: nil)
+            super.init()
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          peripheralManager: PeripheralManager,
-                          isReadyWithError error: Error?) {
-        if let error {
-            finish(.failure(error))
-        } else {
-            print("Connected. Waiting for configuration...")
-        }
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didCompleteConfiguration peripheralManager: PeripheralManager) {
-        let shouldStartPairing: Bool = stateQueue.sync {
-            if didStartPairing {
-                return false
-            }
-            didStartPairing = true
-            transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
-            return true
+            bluetoothManager.delegate = self
+            pumpComm.delegate = self
         }
 
-        guard shouldStartPairing, let transport else { return }
+        deinit {
+            bluetoothManager.delegate = nil
+            eventListenerTask?.cancel()
+            pumpComm.delegate = nil
+        }
 
-        print("Peripheral configured. Beginning pairing exchange...")
+        func start() async throws -> PairingResult {
+            try await withCheckedThrowingContinuation { continuation in
+                stateQueue.sync { self.continuation = continuation }
+                scheduleTimeout()
+                DispatchQueue.main.async {
+                    self.bluetoothManager.scanForPeripheral()
+                }
+            }
+        }
 
-        // Run JPAKE initialization and pairing on background queue to avoid blocking
-        Task.detached { [weak self] in
-            guard let self else { return }
-            do {
-#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                if self.pairingCode.count == 6 {
-                    print("[PairingCoordinator] priming JPAKE handshake (background)")
-                    let builder = JpakeAuthBuilder.initializeWithPairingCode(self.pairingCode)
-                    if let initialRequest = builder.nextRequest() {
-                    print("[PairingCoordinator] sending initial JPAKE request: \(initialRequest)")
-                        do {
-                            let initialResponse = try self.pumpComm.sendMessage(transport: transport, message: initialRequest)
-                            print("[PairingCoordinator] received initial response: \(initialResponse)")
-                            builder.processResponse(initialResponse)
-                        } catch {
-                            print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
-                            self.finish(.failure(error))
-                            return
+        // MARK: - BluetoothManagerDelegate
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            shouldConnectPeripheral peripheral: CBPeripheral,
+            advertisementData _: [String: Any]?
+        ) -> Bool {
+            stateQueue.sync {
+                if let target = targetPeripheral, target.identifier != peripheral.identifier {
+                    return false
+                }
+                if targetPeripheral == nil {
+                    targetPeripheral = peripheral
+                    print("Discovered pump candidate: \(peripheral.name ?? peripheral.identifier.uuidString)")
+                }
+                return true
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            peripheralManager _: PeripheralManager,
+            isReadyWithError error: Error?
+        ) {
+            if let error {
+                finish(.failure(error))
+            } else {
+                print("Connected. Waiting for configuration...")
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            didCompleteConfiguration peripheralManager: PeripheralManager
+        ) {
+            let shouldStartPairing: Bool = stateQueue.sync {
+                if didStartPairing {
+                    return false
+                }
+                didStartPairing = true
+                transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+                return true
+            }
+
+            guard shouldStartPairing, let transport else { return }
+
+            print("Peripheral configured. Beginning pairing exchange...")
+
+            // Run JPAKE initialization and pairing on background queue to avoid blocking
+            Task.detached { [weak self] in
+                guard let self else { return }
+                do {
+                    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+                        if self.pairingCode.count == 6 {
+                            print("[PairingCoordinator] priming JPAKE handshake (background)")
+                            let builder = JpakeAuthBuilder.initializeWithPairingCode(self.pairingCode)
+                            if let initialRequest = builder.nextRequest() {
+                                print("[PairingCoordinator] sending initial JPAKE request: \(initialRequest)")
+                                do {
+                                    let initialResponse = try self.pumpComm.sendMessage(
+                                        transport: transport,
+                                        message: initialRequest
+                                    )
+                                    print("[PairingCoordinator] received initial response: \(initialResponse)")
+                                    builder.processResponse(initialResponse)
+                                } catch {
+                                    print("[PairingCoordinator] initial JPAKE exchange failed: \(error)")
+                                    self.finish(.failure(error))
+                                    return
+                                }
+                            } else {
+                                print("[PairingCoordinator] initial JPAKE request unavailable")
+                            }
                         }
-                    } else {
-                        print("[PairingCoordinator] initial JPAKE request unavailable")
-                    }
-                }
-#endif
+                    #endif
 
-                print("[PairingCoordinator] invoking PumpComm.pair")
-                try self.pumpComm.pair(transport: transport, pairingCode: self.pairingCode)
-                let state = self.stateQueue.sync { self.lastPumpState }
-                self.finish(.success(PairingResult(pumpState: state,
-                                                   peripheralName: self.targetPeripheral?.name,
-                                                   peripheralIdentifier: self.targetPeripheral?.identifier)))
-            } catch {
-                print("[PairingCoordinator] PumpComm.pair failed: \(error)")
-                self.finish(.failure(CLIError(String(describing: error))))
+                    print("[PairingCoordinator] invoking PumpComm.pair")
+                    try self.pumpComm.pair(transport: transport, pairingCode: self.pairingCode)
+                    let state = self.stateQueue.sync { self.lastPumpState }
+                    self.finish(.success(PairingResult(
+                        pumpState: state,
+                        peripheralName: self.targetPeripheral?.name,
+                        peripheralIdentifier: self.targetPeripheral?.identifier
+                    )))
+                } catch {
+                    print("[PairingCoordinator] PumpComm.pair failed: \(error)")
+                    self.finish(.failure(CLIError(String(describing: error))))
+                }
             }
         }
-    }
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didIdentifyPump manufacturer: String,
-                          model: String) {
-        print("[PairingCoordinator] pump model identified manufacturer=\(manufacturer) model=\(model)")
-    }
-
-    // MARK: - PumpCommDelegate
-
-    func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState) {
-        stateQueue.sync {
-            self.lastPumpState = pumpState
+        func bluetoothManager(
+            _: BluetoothManager,
+            didIdentifyPump manufacturer: String,
+            model: String
+        ) {
+            print("[PairingCoordinator] pump model identified manufacturer=\(manufacturer) model=\(model)")
         }
 
-        let derivedHex = pumpState.derivedSecret?.hexadecimalString ?? "none"
-        let nonceHex = pumpState.serverNonce?.hexadecimalString ?? "none"
-        print("Pump state updated (derivedSecret: \(derivedHex.prefix(8))…, serverNonce: \(nonceHex.prefix(8))…)")
-    }
+        // MARK: - PumpCommDelegate
 
-    func pumpComm(_ pumpComms: PumpComm,
-                  didReceive message: Message,
-                  metadata: MessageMetadata?,
-                  characteristic: CharacteristicUUID,
-                  txId: UInt8) {
-        let name = metadata?.name ?? String(describing: type(of: message))
-        print("[PairingCoordinator] notification message=\(name) characteristic=\(characteristic.prettyName) txId=\(txId)")
-    }
+        func pumpComm(_: PumpComm, didChange pumpState: PumpState) {
+            stateQueue.sync {
+                self.lastPumpState = pumpState
+            }
 
-    func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
-        let requestName = String(describing: type(of: event.request))
-        print("[PairingCoordinator] pump fault code=\(event.rawCode) category=\(event.category) request=\(requestName) attempt=\(event.attempt) willRetry=\(event.willRetry)")
-    }
-
-    // MARK: - Helpers
-
-    private func scheduleTimeout() {
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.finish(.failure(CLIError("Pairing timed out after \(Int(self.timeout)) seconds.")))
-        }
-        timeoutWorkItem = workItem
-        print("[PairingCoordinator] scheduling timeout in \(Int(timeout)) seconds")
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + self.timeout, execute: workItem)
-    }
-
-    private func cancelTimeout() {
-        timeoutWorkItem?.cancel()
-        timeoutWorkItem = nil
-    }
-
-    private func finish(_ result: Result<PairingResult, Error>) {
-        let continuation: CheckedContinuation<PairingResult, Error>? = stateQueue.sync {
-            defer { self.continuation = nil }
-            return self.continuation
+            let derivedHex = pumpState.derivedSecret?.hexadecimalString ?? "none"
+            let nonceHex = pumpState.serverNonce?.hexadecimalString ?? "none"
+            print("Pump state updated (derivedSecret: \(derivedHex.prefix(8))…, serverNonce: \(nonceHex.prefix(8))…)")
         }
 
-        guard let continuation else { return }
-
-        cancelTimeout()
-
-        DispatchQueue.main.async {
-            print("[PairingCoordinator] Disconnecting peripheral")
-            self.bluetoothManager.permanentDisconnect()
+        func pumpComm(
+            _: PumpComm,
+            didReceive message: Message,
+            metadata: MessageMetadata?,
+            characteristic: CharacteristicUUID,
+            txId: UInt8
+        ) {
+            let name = metadata?.name ?? String(describing: type(of: message))
+            print("[PairingCoordinator] notification message=\(name) characteristic=\(characteristic.prettyName) txId=\(txId)")
         }
 
-        switch result {
-        case .success(let value):
-            print("[PairingCoordinator] Completing with success")
-            let derivedHex = value.pumpState.derivedSecret?.hexadecimalString ?? "none"
-            let nonceHex = value.pumpState.serverNonce?.hexadecimalString ?? "none"
-            print("[PairingCoordinator] PumpState derivedSecret=\(derivedHex) serverNonce=\(nonceHex)")
-            continuation.resume(returning: value)
-        case .failure(let error):
-            print("[PairingCoordinator] Completing with failure: \(error)")
-            continuation.resume(throwing: error)
+        func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
+            let requestName = String(describing: type(of: event.request))
+            print(
+                "[PairingCoordinator] pump fault code=\(event.rawCode) category=\(event.category) request=\(requestName) attempt=\(event.attempt) willRetry=\(event.willRetry)"
+            )
         }
-    }
-}
 
-private final class SendCoordinator: NSObject, BluetoothManagerDelegate {
-    private let message: Message
-    private let metadata: MessageMetadata
-    private let timeout: TimeInterval
-    private let bluetoothManager = BluetoothManager()
-    private var transport: PeripheralManagerTransport?
+        // MARK: - Helpers
 
-    private var continuation: CheckedContinuation<SendResult, Error>?
-    private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.SendCoordinator.state")
-    private var timeoutWorkItem: DispatchWorkItem?
-    private var targetPeripheral: CBPeripheral?
-    private var didSendMessage = false
+        private func scheduleTimeout() {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.finish(.failure(CLIError("Pairing timed out after \(Int(self.timeout)) seconds.")))
+            }
+            timeoutWorkItem = workItem
+            print("[PairingCoordinator] scheduling timeout in \(Int(timeout)) seconds")
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: workItem)
+        }
 
-    init(message: Message, metadata: MessageMetadata, timeout: TimeInterval) {
-        self.message = message
-        self.metadata = metadata
-        self.timeout = timeout
-        super.init()
-        bluetoothManager.delegate = self
-    }
+        private func cancelTimeout() {
+            timeoutWorkItem?.cancel()
+            timeoutWorkItem = nil
+        }
 
-    deinit {
-        bluetoothManager.delegate = nil
-    }
+        private func finish(_ result: Result<PairingResult, Error>) {
+            let continuation: CheckedContinuation<PairingResult, Error>? = stateQueue.sync {
+                defer { self.continuation = nil }
+                return self.continuation
+            }
 
-    func start() async throws -> SendResult {
-        try await withCheckedThrowingContinuation { continuation in
-            stateQueue.sync { self.continuation = continuation }
-            scheduleTimeout()
+            guard let continuation else { return }
+
+            cancelTimeout()
+
             DispatchQueue.main.async {
-                self.bluetoothManager.scanForPeripheral()
+                print("[PairingCoordinator] Disconnecting peripheral")
+                self.bluetoothManager.permanentDisconnect()
+            }
+
+            switch result {
+            case let .success(value):
+                print("[PairingCoordinator] Completing with success")
+                let derivedHex = value.pumpState.derivedSecret?.hexadecimalString ?? "none"
+                let nonceHex = value.pumpState.serverNonce?.hexadecimalString ?? "none"
+                print("[PairingCoordinator] PumpState derivedSecret=\(derivedHex) serverNonce=\(nonceHex)")
+                continuation.resume(returning: value)
+            case let .failure(error):
+                print("[PairingCoordinator] Completing with failure: \(error)")
+                continuation.resume(throwing: error)
             }
         }
     }
 
-    // MARK: - BluetoothManagerDelegate
+    private final class SendCoordinator: NSObject, BluetoothManagerDelegate {
+        private let message: Message
+        private let metadata: MessageMetadata
+        private let timeout: TimeInterval
+        private let bluetoothManager = BluetoothManager()
+        private var transport: PeripheralManagerTransport?
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          shouldConnectPeripheral peripheral: CBPeripheral,
-                          advertisementData: [String : Any]?) -> Bool {
-        return stateQueue.sync {
-            if let target = targetPeripheral, target.identifier != peripheral.identifier {
-                return false
+        private var continuation: CheckedContinuation<SendResult, Error>?
+        private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.SendCoordinator.state")
+        private var timeoutWorkItem: DispatchWorkItem?
+        private var targetPeripheral: CBPeripheral?
+        private var didSendMessage = false
+
+        init(message: Message, metadata: MessageMetadata, timeout: TimeInterval) {
+            self.message = message
+            self.metadata = metadata
+            self.timeout = timeout
+            super.init()
+            bluetoothManager.delegate = self
+        }
+
+        deinit {
+            bluetoothManager.delegate = nil
+        }
+
+        func start() async throws -> SendResult {
+            try await withCheckedThrowingContinuation { continuation in
+                stateQueue.sync { self.continuation = continuation }
+                scheduleTimeout()
+                DispatchQueue.main.async {
+                    self.bluetoothManager.scanForPeripheral()
+                }
             }
-            if targetPeripheral == nil {
-                targetPeripheral = peripheral
-                print("Discovered pump: \(peripheral.name ?? peripheral.identifier.uuidString)")
+        }
+
+        // MARK: - BluetoothManagerDelegate
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            shouldConnectPeripheral peripheral: CBPeripheral,
+            advertisementData _: [String: Any]?
+        ) -> Bool {
+            stateQueue.sync {
+                if let target = targetPeripheral, target.identifier != peripheral.identifier {
+                    return false
+                }
+                if targetPeripheral == nil {
+                    targetPeripheral = peripheral
+                    print("Discovered pump: \(peripheral.name ?? peripheral.identifier.uuidString)")
+                }
+                return true
             }
-            return true
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            peripheralManager _: PeripheralManager,
+            isReadyWithError error: Error?
+        ) {
+            if let error {
+                finish(.failure(error))
+            } else {
+                print("Connected. Waiting for configuration...")
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            didCompleteConfiguration peripheralManager: PeripheralManager
+        ) {
+            let shouldSend: Bool = stateQueue.sync {
+                if didSendMessage {
+                    return false
+                }
+                didSendMessage = true
+                transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+                return true
+            }
+
+            guard shouldSend, let transport else { return }
+
+            print("Peripheral configured.")
+
+            // Send message on background queue
+            Task.detached { [weak self] in
+                guard let self else { return }
+                do {
+                    // Check if we need to perform quick JPAKE confirmation
+                    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+                        if let derivedSecretData = PumpStateSupplier.getDerivedSecret() {
+                            print("[SendCoordinator] Performing quick JPAKE confirmation with existing credentials...")
+
+                            // Use dummy pairing code - it's not needed for CONFIRM_INITIAL mode
+                            let builder = JpakeAuthBuilder.initializeWithDerivedSecret(
+                                pairingCode: "000000",
+                                derivedSecret: derivedSecretData
+                            )
+
+                            // Run the quick JPAKE confirmation flow (Jpake3 + Jpake4)
+                            while let request = builder.nextRequest(), !builder.done(), !builder.invalid() {
+                                print("[SendCoordinator] Sending JPAKE request: \(type(of: request))")
+                                let response = try transport.sendMessage(request)
+                                print("[SendCoordinator] Received JPAKE response: \(type(of: response))")
+                                builder.processResponse(response)
+                            }
+
+                            if builder.invalid() {
+                                throw CLIError("JPAKE confirmation failed - invalid credentials")
+                            }
+
+                            if builder.done() {
+                                print("[SendCoordinator] Quick JPAKE confirmation completed successfully")
+                            }
+                        }
+                    #endif
+
+                    // Now send the actual message
+                    print("Sending message...")
+                    let response = try transport.sendMessage(self.message)
+                    print("Received response: \(String(describing: type(of: response)))")
+                    self.finish(.success(SendResult(
+                        response: response,
+                        peripheralName: self.targetPeripheral?.name,
+                        peripheralIdentifier: self.targetPeripheral?.identifier
+                    )))
+                } catch {
+                    print("Send message failed: \(error)")
+                    self.finish(.failure(CLIError(String(describing: error))))
+                }
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            didIdentifyPump manufacturer: String,
+            model: String
+        ) {
+            print("Pump model identified: \(manufacturer) \(model)")
+        }
+
+        // MARK: - Helpers
+
+        private func scheduleTimeout() {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.finish(.failure(CLIError("Send timed out after \(Int(self.timeout)) seconds.")))
+            }
+            timeoutWorkItem = workItem
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: workItem)
+        }
+
+        private func cancelTimeout() {
+            timeoutWorkItem?.cancel()
+            timeoutWorkItem = nil
+        }
+
+        private func finish(_ result: Result<SendResult, Error>) {
+            let continuation: CheckedContinuation<SendResult, Error>? = stateQueue.sync {
+                defer { self.continuation = nil }
+                return self.continuation
+            }
+
+            guard let continuation else { return }
+
+            cancelTimeout()
+
+            DispatchQueue.main.async {
+                self.bluetoothManager.permanentDisconnect()
+            }
+
+            switch result {
+            case let .success(value):
+                continuation.resume(returning: value)
+            case let .failure(error):
+                continuation.resume(throwing: error)
+            }
         }
     }
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          peripheralManager: PeripheralManager,
-                          isReadyWithError error: Error?) {
-        if let error {
-            finish(.failure(error))
-        } else {
-            print("Connected. Waiting for configuration...")
-        }
-    }
+    private final class ConsoleCoordinator: NSObject, BluetoothManagerDelegate {
+        private static let supportedCommands = ["send", "list", "help", "exit", "quit"]
+        private static let sendableMessageNames: [String] = {
+            MessageRegistry.all
+                .filter { $0.messageType == .Request && $0.size == 0 }
+                .map(\.name)
+                .sorted()
+        }()
 
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didCompleteConfiguration peripheralManager: PeripheralManager) {
-        let shouldSend: Bool = stateQueue.sync {
-            if didSendMessage {
-                return false
-            }
-            didSendMessage = true
-            transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
-            return true
+        private weak static var activeCoordinator: ConsoleCoordinator?
+        private static var signalHandlerInstalled = false
+        private static let sigintHandler: @convention(c) (Int32) -> Void = { signal in
+            ConsoleLineEditor.handleInterruptSignal()
+            ConsoleCoordinator.activeCoordinator?.handleInterruptAndExit()
+            exit(signal)
         }
 
-        guard shouldSend, let transport else { return }
+        private let timeout: TimeInterval
+        private let bluetoothManager = BluetoothManager()
+        private var transport: PeripheralManagerTransport?
+        private let lineEditor: ConsoleLineEditor
+        private var eventListenerTask: Task<Void, Never>?
+        private var previousLogHandler: PumpLogging.Handler?
+        private let logger = PumpLogger(label: "TandemCLI.Console")
 
-        print("Peripheral configured.")
+        private var continuation: CheckedContinuation<Void, Error>?
+        private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.ConsoleCoordinator.state")
+        private var timeoutWorkItem: DispatchWorkItem?
+        private var targetPeripheral: CBPeripheral?
+        private var didStartConsole = false
+        private var shouldExit = false
 
-        // Send message on background queue
-        Task.detached { [weak self] in
-            guard let self else { return }
-            do {
-                // Check if we need to perform quick JPAKE confirmation
-                #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                if let derivedSecretData = PumpStateSupplier.getDerivedSecret() {
-                    print("[SendCoordinator] Performing quick JPAKE confirmation with existing credentials...")
+        init(timeout: TimeInterval) {
+            self.timeout = timeout
+            lineEditor = ConsoleLineEditor(
+                prompt: "> ",
+                commands: ConsoleCoordinator.supportedCommands,
+                messageNames: ConsoleCoordinator.sendableMessageNames
+            )
+            super.init()
+            bluetoothManager.delegate = self
 
-                    // Use dummy pairing code - it's not needed for CONFIRM_INITIAL mode
-                    let builder = JpakeAuthBuilder.initializeWithDerivedSecret(pairingCode: "000000", derivedSecret: derivedSecretData)
+            ConsoleCoordinator.activeCoordinator = self
+            installSignalHandlerIfNeeded()
 
-                    // Run the quick JPAKE confirmation flow (Jpake3 + Jpake4)
-                    while let request = builder.nextRequest(), !builder.done() && !builder.invalid() {
-                        print("[SendCoordinator] Sending JPAKE request: \(type(of: request))")
-                        let response = try transport.sendMessage(request)
-                        print("[SendCoordinator] Received JPAKE response: \(type(of: response))")
-                        builder.processResponse(response)
-                    }
-
-                    if builder.invalid() {
-                        throw CLIError("JPAKE confirmation failed - invalid credentials")
-                    }
-
-                    if builder.done() {
-                        print("[SendCoordinator] Quick JPAKE confirmation completed successfully")
+            previousLogHandler = PumpLogging.setHandler { [weak lineEditor] level, label, message in
+                guard let lineEditor else { return false }
+                if message.isEmpty {
+                    lineEditor.prepareForExternalOutput()
+                    Swift.print("")
+                    lineEditor.externalOutputDidOccur()
+                    return true
+                }
+                let isConsoleLog = (label == "TandemCLI.Console")
+                let prefix = isConsoleLog ? "" : "[\(level.description)][\(label)] "
+                let lines = message.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline })
+                lineEditor.prepareForExternalOutput()
+                if lines.isEmpty {
+                    Swift.print(prefix)
+                } else {
+                    for line in lines {
+                        Swift.print("\(prefix)\(String(line))")
                     }
                 }
-                #endif
-
-                // Now send the actual message
-                print("Sending message...")
-                let response = try transport.sendMessage(self.message)
-                print("Received response: \(String(describing: type(of: response)))")
-                self.finish(.success(SendResult(response: response,
-                                                peripheralName: self.targetPeripheral?.name,
-                                                peripheralIdentifier: self.targetPeripheral?.identifier)))
-            } catch {
-                print("Send message failed: \(error)")
-                self.finish(.failure(CLIError(String(describing: error))))
-            }
-        }
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didIdentifyPump manufacturer: String,
-                          model: String) {
-        print("Pump model identified: \(manufacturer) \(model)")
-    }
-
-    // MARK: - Helpers
-
-    private func scheduleTimeout() {
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.finish(.failure(CLIError("Send timed out after \(Int(self.timeout)) seconds.")))
-        }
-        timeoutWorkItem = workItem
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + self.timeout, execute: workItem)
-    }
-
-    private func cancelTimeout() {
-        timeoutWorkItem?.cancel()
-        timeoutWorkItem = nil
-    }
-
-    private func finish(_ result: Result<SendResult, Error>) {
-        let continuation: CheckedContinuation<SendResult, Error>? = stateQueue.sync {
-            defer { self.continuation = nil }
-            return self.continuation
-        }
-
-        guard let continuation else { return }
-
-        cancelTimeout()
-
-        DispatchQueue.main.async {
-            self.bluetoothManager.permanentDisconnect()
-        }
-
-        switch result {
-        case .success(let value):
-            continuation.resume(returning: value)
-        case .failure(let error):
-            continuation.resume(throwing: error)
-        }
-    }
-}
-
-private final class ConsoleCoordinator: NSObject, BluetoothManagerDelegate {
-    private static let supportedCommands = ["send", "list", "help", "exit", "quit"]
-    private static let sendableMessageNames: [String] = {
-        MessageRegistry.all
-            .filter { $0.messageType == .Request && $0.size == 0 }
-            .map { $0.name }
-            .sorted()
-    }()
-    private static weak var activeCoordinator: ConsoleCoordinator?
-    private static var signalHandlerInstalled = false
-    private static let sigintHandler: @convention(c) (Int32) -> Void = { signal in
-        ConsoleLineEditor.handleInterruptSignal()
-        ConsoleCoordinator.activeCoordinator?.handleInterruptAndExit()
-        exit(signal)
-    }
-
-    private let timeout: TimeInterval
-    private let bluetoothManager = BluetoothManager()
-    private var transport: PeripheralManagerTransport?
-    private let lineEditor: ConsoleLineEditor
-    private var eventListenerTask: Task<Void, Never>?
-    private var previousLogHandler: PumpLogging.Handler?
-    private let logger = PumpLogger(label: "TandemCLI.Console")
-
-    private var continuation: CheckedContinuation<Void, Error>?
-    private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.ConsoleCoordinator.state")
-    private var timeoutWorkItem: DispatchWorkItem?
-    private var targetPeripheral: CBPeripheral?
-    private var didStartConsole = false
-    private var shouldExit = false
-
-    init(timeout: TimeInterval) {
-        self.timeout = timeout
-        self.lineEditor = ConsoleLineEditor(
-            prompt: "> ",
-            commands: ConsoleCoordinator.supportedCommands,
-            messageNames: ConsoleCoordinator.sendableMessageNames
-        )
-        super.init()
-        bluetoothManager.delegate = self
-
-        ConsoleCoordinator.activeCoordinator = self
-        installSignalHandlerIfNeeded()
-
-        previousLogHandler = PumpLogging.setHandler { [weak lineEditor] level, label, message in
-            guard let lineEditor else { return false }
-            if message.isEmpty {
-                lineEditor.prepareForExternalOutput()
-                Swift.print("")
                 lineEditor.externalOutputDidOccur()
                 return true
             }
-            let isConsoleLog = (label == "TandemCLI.Console")
-            let prefix = isConsoleLog ? "" : "[\(level.description)][\(label)] "
-            let lines = message.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline })
-            lineEditor.prepareForExternalOutput()
-            if lines.isEmpty {
-                Swift.print(prefix)
+        }
+
+        deinit {
+            bluetoothManager.delegate = nil
+            eventListenerTask?.cancel()
+            _ = PumpLogging.setHandler(previousLogHandler)
+            previousLogHandler = nil
+            lineEditor.shutdown()
+            if ConsoleCoordinator.activeCoordinator === self {
+                ConsoleCoordinator.activeCoordinator = nil
+            }
+        }
+
+        func start() async throws {
+            try await withCheckedThrowingContinuation { continuation in
+                stateQueue.sync { self.continuation = continuation }
+                scheduleTimeout()
+                DispatchQueue.main.async {
+                    self.bluetoothManager.scanForPeripheral()
+                }
+            }
+        }
+
+        private func installSignalHandlerIfNeeded() {
+            guard !ConsoleCoordinator.signalHandlerInstalled else { return }
+            signal(SIGINT, ConsoleCoordinator.sigintHandler)
+            ConsoleCoordinator.signalHandlerInstalled = true
+        }
+
+        // MARK: - BluetoothManagerDelegate
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            shouldConnectPeripheral peripheral: CBPeripheral,
+            advertisementData _: [String: Any]?
+        ) -> Bool {
+            stateQueue.sync {
+                if let target = targetPeripheral, target.identifier != peripheral.identifier {
+                    return false
+                }
+                if targetPeripheral == nil {
+                    targetPeripheral = peripheral
+                    consolePrint("Discovered pump: \(peripheral.name ?? peripheral.identifier.uuidString)")
+                }
+                return true
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            peripheralManager _: PeripheralManager,
+            isReadyWithError error: Error?
+        ) {
+            if let error {
+                finish(.failure(error))
             } else {
-                for line in lines {
-                    Swift.print("\(prefix)\(String(line))")
+                consolePrint("Connected. Waiting for configuration...")
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            didCompleteConfiguration peripheralManager: PeripheralManager
+        ) {
+            let shouldStart: Bool = stateQueue.sync {
+                if didStartConsole {
+                    return false
                 }
-            }
-            lineEditor.externalOutputDidOccur()
-            return true
-        }
-    }
-
-    deinit {
-        bluetoothManager.delegate = nil
-        eventListenerTask?.cancel()
-        _ = PumpLogging.setHandler(previousLogHandler)
-        previousLogHandler = nil
-        lineEditor.shutdown()
-        if ConsoleCoordinator.activeCoordinator === self {
-            ConsoleCoordinator.activeCoordinator = nil
-        }
-    }
-
-    func start() async throws {
-        try await withCheckedThrowingContinuation { continuation in
-            stateQueue.sync { self.continuation = continuation }
-            scheduleTimeout()
-            DispatchQueue.main.async {
-                self.bluetoothManager.scanForPeripheral()
-            }
-        }
-    }
-
-    private func installSignalHandlerIfNeeded() {
-        guard !ConsoleCoordinator.signalHandlerInstalled else { return }
-        signal(SIGINT, ConsoleCoordinator.sigintHandler)
-        ConsoleCoordinator.signalHandlerInstalled = true
-    }
-
-    // MARK: - BluetoothManagerDelegate
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          shouldConnectPeripheral peripheral: CBPeripheral,
-                          advertisementData: [String : Any]?) -> Bool {
-        return stateQueue.sync {
-            if let target = targetPeripheral, target.identifier != peripheral.identifier {
-                return false
-            }
-            if targetPeripheral == nil {
-                targetPeripheral = peripheral
-                consolePrint("Discovered pump: \(peripheral.name ?? peripheral.identifier.uuidString)")
-            }
-            return true
-        }
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          peripheralManager: PeripheralManager,
-                          isReadyWithError error: Error?) {
-        if let error {
-            finish(.failure(error))
-        } else {
-            consolePrint("Connected. Waiting for configuration...")
-        }
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didCompleteConfiguration peripheralManager: PeripheralManager) {
-        let shouldStart: Bool = stateQueue.sync {
-            if didStartConsole {
-                return false
-            }
-            didStartConsole = true
-            transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
-            return true
-        }
-
-        guard shouldStart, let transport else { return }
-
-        consolePrint("Peripheral configured.")
-
-        // Run console on background queue
-        Task.detached { [weak self] in
-            guard let self else { return }
-            do {
-                self.cancelTimeout()
-
-                // Perform quick JPAKE confirmation
-                #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                if let derivedSecretData = PumpStateSupplier.getDerivedSecret() {
-                    consolePrint("[ConsoleCoordinator] Performing quick JPAKE confirmation...")
-
-                    let builder = JpakeAuthBuilder.initializeWithDerivedSecret(pairingCode: "000000", derivedSecret: derivedSecretData)
-
-                    while let request = builder.nextRequest(), !builder.done() && !builder.invalid() {
-                        consolePrint("[ConsoleCoordinator] Sending JPAKE request: \(type(of: request))")
-                        let response = try transport.sendMessage(request)
-                        consolePrint("[ConsoleCoordinator] Received JPAKE response: \(type(of: response))")
-                        builder.processResponse(response)
-                    }
-
-                    if builder.invalid() {
-                        throw CLIError("JPAKE confirmation failed - invalid credentials")
-                    }
-
-                    if builder.done() {
-                        consolePrint("[ConsoleCoordinator] Quick JPAKE confirmation completed successfully")
-                    }
-                }
-                #endif
-
-                self.startQualifyingEventListener(peripheralManager: peripheralManager)
-
-                consolePrint("")
-                consolePrint("✅ Connected to pump. Console is ready.")
-                consolePrint("Type 'help' for available commands or 'exit' to quit.")
-                consolePrint("")
-
-                // Run interactive console loop
-                self.runConsoleLoop(transport: transport)
-
-                self.finish(.success(()))
-            } catch {
-                consolePrint("Console setup failed: \(error)")
-                self.finish(.failure(CLIError(String(describing: error))))
-            }
-        }
-    }
-
-    func bluetoothManager(_ manager: BluetoothManager,
-                          didIdentifyPump manufacturer: String,
-                          model: String) {
-        consolePrint("Pump model identified: \(manufacturer) \(model)")
-    }
-
-    // MARK: - Console Loop
-
-    private func runConsoleLoop(transport: PeripheralManagerTransport) {
-        while !shouldExit {
-            guard let input = lineEditor.readLine() else {
-                consolePrint("Input stream closed. Exiting console...", level: .warning)
-                shouldExit = true
-                break
+                didStartConsole = true
+                transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+                return true
             }
 
-            let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+            guard shouldStart, let transport else { return }
 
-            let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-            guard let command = parts.first?.lowercased() else { continue }
+            consolePrint("Peripheral configured.")
 
-            switch command {
-            case "help":
-                printHelp()
-            case "list":
-                printList()
-            case "exit", "quit":
-                consolePrint("Exiting console...")
-                shouldExit = true
-            case "send":
-                if parts.count < 2 {
-                    consolePrint("Error: send command requires a message name", level: .warning)
-                    consolePrint("Usage: send <MessageName>", level: .debug)
-                } else {
-                    let messageName = String(parts[1])
-                    handleSendCommand(messageName: messageName, transport: transport)
-                }
-            default:
-                consolePrint("Unknown command: \(command)", level: .warning)
-                consolePrint("Type 'help' for available commands", level: .debug)
-            }
-        }
-    }
-
-    private func printHelp() {
-        consolePrint("Available commands:")
-        consolePrint("  send <MessageName>  Send a parameter-less request message")
-        consolePrint("  list                Show sendable request message names")
-        consolePrint("  help                Show this help message")
-        consolePrint("  exit                Exit the console")
-    }
-
-    private func printList() {
-        consolePrint("Sendable request messages:")
-        for name in ConsoleCoordinator.sendableMessageNames {
-            consolePrint("  \(name)")
-        }
-    }
-
-    private func handleSendCommand(messageName: String, transport: PeripheralManagerTransport) {
-        guard let metadata = MessageRegistry.metadata(forName: messageName) else {
-            consolePrint("Error: Unknown message type '\(messageName)'", level: .warning)
-            consolePrint("Use 'tandemkit-cli list' to see available message names", level: .debug)
-            return
-        }
-
-        guard metadata.messageType == .Request else {
-            consolePrint("Error: '\(messageName)' is a response message. Only request messages can be sent.", level: .warning)
-            return
-        }
-
-        guard metadata.size == 0 else {
-            consolePrint("Error: '\(messageName)' requires parameters. Only parameter-less messages are supported.", level: .warning)
-            return
-        }
-
-        let message = metadata.type.init(cargo: Data())
-
-        consolePrint("Sending \(messageName)...", level: .debug)
-        do {
-            let response = try transport.sendMessage(message)
-            consolePrint("Response: \(String(describing: type(of: response)))")
-
-            // Display response fields
-            if let responseMeta = MessageRegistry.metadata(for: response) {
-                consolePrint("  OpCode: \(responseMeta.opCode)")
-                consolePrint("  Size: \(responseMeta.size) bytes")
-            }
-            let fields = messagePropertyDescriptions(response)
-            if !fields.isEmpty {
-                consolePrint("  Fields:")
-                for key in fields.keys.sorted() {
-                    if let value = fields[key] {
-                        consolePrint("    \(key): \(value)")
-                    }
-                }
-            }
-        } catch {
-            consolePrint("Error sending message: \(error)", level: .error)
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func scheduleTimeout() {
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.finish(.failure(CLIError("Console connection timed out after \(Int(self.timeout)) seconds.")))
-        }
-        timeoutWorkItem = workItem
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + self.timeout, execute: workItem)
-    }
-
-    private func cancelTimeout() {
-        timeoutWorkItem?.cancel()
-        timeoutWorkItem = nil
-    }
-
-    private func finish(_ result: Result<Void, Error>) {
-        let continuation: CheckedContinuation<Void, Error>? = stateQueue.sync {
-            defer { self.continuation = nil }
-            return self.continuation
-        }
-
-        guard let continuation else { return }
-
-        cancelTimeout()
-
-        let priorHandler = previousLogHandler
-        previousLogHandler = nil
-        _ = PumpLogging.setHandler(priorHandler)
-
-        lineEditor.shutdown()
-
-        eventListenerTask?.cancel()
-        eventListenerTask = nil
-
-        DispatchQueue.main.async {
-            self.bluetoothManager.permanentDisconnect()
-        }
-
-        switch result {
-        case .success:
-            continuation.resume()
-        case .failure(let error):
-            continuation.resume(throwing: error)
-        }
-    }
-}
-
-extension ConsoleCoordinator {
-    private static func handleSigint(_ signal: Int32) {
-        ConsoleLineEditor.handleInterruptSignal()
-        ConsoleCoordinator.activeCoordinator?.handleInterruptAndExit()
-        exit(signal)
-    }
-
-    private func handleInterruptAndExit() {
-        consolePrint("\n[ConsoleCoordinator] Received SIGINT (Ctrl-C). Exiting...", level: .warning)
-    }
-
-    private func startQualifyingEventListener(peripheralManager: PeripheralManager) {
-        eventListenerTask?.cancel()
-        eventListenerTask = Task.detached(priority: .background) { [weak self] in
-            guard let self else { return }
-            await self.listenForQualifyingEvents(peripheralManager: peripheralManager)
-        }
-    }
-
-    private func listenForQualifyingEvents(peripheralManager: PeripheralManager) async {
-        let characteristic = CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS
-
-        while !Task.isCancelled && shouldContinueConsole() {
-            do {
-                let packet = try peripheralManager.performSync { manager -> Data? in
-                    try manager.readMessagePacket(for: characteristic, timeout: 0.2)
-                }
-
-                guard let data = packet, !data.isEmpty else {
-                    continue
-                }
-
-                await processQualifyingEventPayload(data)
-            } catch {
-                if Task.isCancelled || !shouldContinueConsole() {
-                    break
-                }
-
-                let description = String(describing: error)
-                if description.lowercased().contains("timeout") {
-                    continue
-                }
-
-                consolePrint("\n[ConsoleCoordinator] Qualifying event listener error: \(error)")
+            // Run console on background queue
+            Task.detached { [weak self] in
+                guard let self else { return }
                 do {
-                    try await Task.sleep(nanoseconds: 200_000_000)
+                    self.cancelTimeout()
+
+                    // Perform quick JPAKE confirmation
+                    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+                        if let derivedSecretData = PumpStateSupplier.getDerivedSecret() {
+                            consolePrint("[ConsoleCoordinator] Performing quick JPAKE confirmation...")
+
+                            let builder = JpakeAuthBuilder.initializeWithDerivedSecret(
+                                pairingCode: "000000",
+                                derivedSecret: derivedSecretData
+                            )
+
+                            while let request = builder.nextRequest(), !builder.done(), !builder.invalid() {
+                                consolePrint("[ConsoleCoordinator] Sending JPAKE request: \(type(of: request))")
+                                let response = try transport.sendMessage(request)
+                                consolePrint("[ConsoleCoordinator] Received JPAKE response: \(type(of: response))")
+                                builder.processResponse(response)
+                            }
+
+                            if builder.invalid() {
+                                throw CLIError("JPAKE confirmation failed - invalid credentials")
+                            }
+
+                            if builder.done() {
+                                consolePrint("[ConsoleCoordinator] Quick JPAKE confirmation completed successfully")
+                            }
+                        }
+                    #endif
+
+                    self.startQualifyingEventListener(peripheralManager: peripheralManager)
+
+                    consolePrint("")
+                    consolePrint("✅ Connected to pump. Console is ready.")
+                    consolePrint("Type 'help' for available commands or 'exit' to quit.")
+                    consolePrint("")
+
+                    // Run interactive console loop
+                    self.runConsoleLoop(transport: transport)
+
+                    self.finish(.success(()))
                 } catch {
+                    consolePrint("Console setup failed: \(error)")
+                    self.finish(.failure(CLIError(String(describing: error))))
+                }
+            }
+        }
+
+        func bluetoothManager(
+            _: BluetoothManager,
+            didIdentifyPump manufacturer: String,
+            model: String
+        ) {
+            consolePrint("Pump model identified: \(manufacturer) \(model)")
+        }
+
+        // MARK: - Console Loop
+
+        private func runConsoleLoop(transport: PeripheralManagerTransport) {
+            while !shouldExit {
+                guard let input = lineEditor.readLine() else {
+                    consolePrint("Input stream closed. Exiting console...", level: .warning)
+                    shouldExit = true
                     break
                 }
+
+                let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+
+                let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+                guard let command = parts.first?.lowercased() else { continue }
+
+                switch command {
+                case "help":
+                    printHelp()
+                case "list":
+                    printList()
+                case "exit",
+                     "quit":
+                    consolePrint("Exiting console...")
+                    shouldExit = true
+                case "send":
+                    if parts.count < 2 {
+                        consolePrint("Error: send command requires a message name", level: .warning)
+                        consolePrint("Usage: send <MessageName>", level: .debug)
+                    } else {
+                        let messageName = String(parts[1])
+                        handleSendCommand(messageName: messageName, transport: transport)
+                    }
+                default:
+                    consolePrint("Unknown command: \(command)", level: .warning)
+                    consolePrint("Type 'help' for available commands", level: .debug)
+                }
+            }
+        }
+
+        private func printHelp() {
+            consolePrint("Available commands:")
+            consolePrint("  send <MessageName>  Send a parameter-less request message")
+            consolePrint("  list                Show sendable request message names")
+            consolePrint("  help                Show this help message")
+            consolePrint("  exit                Exit the console")
+        }
+
+        private func printList() {
+            consolePrint("Sendable request messages:")
+            for name in ConsoleCoordinator.sendableMessageNames {
+                consolePrint("  \(name)")
+            }
+        }
+
+        private func handleSendCommand(messageName: String, transport: PeripheralManagerTransport) {
+            guard let metadata = MessageRegistry.metadata(forName: messageName) else {
+                consolePrint("Error: Unknown message type '\(messageName)'", level: .warning)
+                consolePrint("Use 'tandemkit-cli list' to see available message names", level: .debug)
+                return
+            }
+
+            guard metadata.messageType == .Request else {
+                consolePrint("Error: '\(messageName)' is a response message. Only request messages can be sent.", level: .warning)
+                return
+            }
+
+            guard metadata.size == 0 else {
+                consolePrint(
+                    "Error: '\(messageName)' requires parameters. Only parameter-less messages are supported.",
+                    level: .warning
+                )
+                return
+            }
+
+            let message = metadata.type.init(cargo: Data())
+
+            consolePrint("Sending \(messageName)...", level: .debug)
+            do {
+                let response = try transport.sendMessage(message)
+                consolePrint("Response: \(String(describing: type(of: response)))")
+
+                // Display response fields
+                if let responseMeta = MessageRegistry.metadata(for: response) {
+                    consolePrint("  OpCode: \(responseMeta.opCode)")
+                    consolePrint("  Size: \(responseMeta.size) bytes")
+                }
+                let fields = messagePropertyDescriptions(response)
+                if !fields.isEmpty {
+                    consolePrint("  Fields:")
+                    for key in fields.keys.sorted() {
+                        if let value = fields[key] {
+                            consolePrint("    \(key): \(value)")
+                        }
+                    }
+                }
+            } catch {
+                consolePrint("Error sending message: \(error)", level: .error)
+            }
+        }
+
+        // MARK: - Helpers
+
+        private func scheduleTimeout() {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.finish(.failure(CLIError("Console connection timed out after \(Int(self.timeout)) seconds.")))
+            }
+            timeoutWorkItem = workItem
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: workItem)
+        }
+
+        private func cancelTimeout() {
+            timeoutWorkItem?.cancel()
+            timeoutWorkItem = nil
+        }
+
+        private func finish(_ result: Result<Void, Error>) {
+            let continuation: CheckedContinuation<Void, Error>? = stateQueue.sync {
+                defer { self.continuation = nil }
+                return self.continuation
+            }
+
+            guard let continuation else { return }
+
+            cancelTimeout()
+
+            let priorHandler = previousLogHandler
+            previousLogHandler = nil
+            _ = PumpLogging.setHandler(priorHandler)
+
+            lineEditor.shutdown()
+
+            eventListenerTask?.cancel()
+            eventListenerTask = nil
+
+            DispatchQueue.main.async {
+                self.bluetoothManager.permanentDisconnect()
+            }
+
+            switch result {
+            case .success:
+                continuation.resume()
+            case let .failure(error):
+                continuation.resume(throwing: error)
             }
         }
     }
 
-    private func shouldContinueConsole() -> Bool {
-        stateQueue.sync { !shouldExit }
-    }
+    extension ConsoleCoordinator {
+        private static func handleSigint(_ signal: Int32) {
+            ConsoleLineEditor.handleInterruptSignal()
+            ConsoleCoordinator.activeCoordinator?.handleInterruptAndExit()
+            exit(signal)
+        }
 
-    private func processQualifyingEventPayload(_ data: Data) async {
-        var index = 0
-        while index + 4 <= data.count {
-            let chunk = data[index..<(index + 4)]
-            let chunkData = Data(chunk)
+        private func handleInterruptAndExit() {
+            consolePrint("\n[ConsoleCoordinator] Received SIGINT (Ctrl-C). Exiting...", level: .warning)
+        }
 
-            let mask = chunkData.withUnsafeBytes { pointer -> UInt32 in
-                guard pointer.count >= MemoryLayout<UInt32>.size else { return 0 }
-                return UInt32(littleEndian: pointer.load(as: UInt32.self))
+        private func startQualifyingEventListener(peripheralManager: PeripheralManager) {
+            eventListenerTask?.cancel()
+            eventListenerTask = Task.detached(priority: .background) { [weak self] in
+                guard let self else { return }
+                await self.listenForQualifyingEvents(peripheralManager: peripheralManager)
+            }
+        }
+
+        private func listenForQualifyingEvents(peripheralManager: PeripheralManager) async {
+            let characteristic = CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS
+
+            while !Task.isCancelled, shouldContinueConsole() {
+                do {
+                    let packet = try peripheralManager.performSync { manager -> Data? in
+                        try manager.readMessagePacket(for: characteristic, timeout: 0.2)
+                    }
+
+                    guard let data = packet, !data.isEmpty else {
+                        continue
+                    }
+
+                    await processQualifyingEventPayload(data)
+                } catch {
+                    if Task.isCancelled || !shouldContinueConsole() {
+                        break
+                    }
+
+                    let description = String(describing: error)
+                    if description.lowercased().contains("timeout") {
+                        continue
+                    }
+
+                    consolePrint("\n[ConsoleCoordinator] Qualifying event listener error: \(error)")
+                    do {
+                        try await Task.sleep(nanoseconds: 200_000_000)
+                    } catch {
+                        break
+                    }
+                }
+            }
+        }
+
+        private func shouldContinueConsole() -> Bool {
+            stateQueue.sync { !shouldExit }
+        }
+
+        private func processQualifyingEventPayload(_ data: Data) async {
+            var index = 0
+            while index + 4 <= data.count {
+                let chunk = data[index ..< (index + 4)]
+                let chunkData = Data(chunk)
+
+                let mask = chunkData.withUnsafeBytes { pointer -> UInt32 in
+                    guard pointer.count >= MemoryLayout<UInt32>.size else { return 0 }
+                    return UInt32(littleEndian: pointer.load(as: UInt32.self))
+                }
+
+                let events = QualifyingEvent.fromRawBytes(chunkData)
+
+                if mask != 0 {
+                    await MainActor.run {
+                        self.reportQualifyingEvents(mask: mask, events: events)
+                    }
+                }
+
+                index += 4
             }
 
-            let events = QualifyingEvent.fromRawBytes(chunkData)
+            let remainder = data.count % 4
+            if remainder != 0 {
+                let tail = data.suffix(remainder)
+                consolePrint(
+                    "\n[ConsoleCoordinator] Ignored trailing \(remainder) bytes from qualifying events payload: \(tail.hexadecimalString)"
+                )
+            }
+        }
 
-            if mask != 0 {
-                await MainActor.run {
-                    self.reportQualifyingEvents(mask: mask, events: events)
+        @MainActor  private func reportQualifyingEvents(mask: UInt32, events: Set<QualifyingEvent>) {
+            let maskHex = String(format: "0x%08X", mask)
+            let eventNames = events.sorted(by: { displayName(for: $0) < displayName(for: $1) }).map { displayName(for: $0) }
+
+            consolePrint("\n[QualifyingEvents] Received mask \(maskHex)")
+
+            if eventNames.isEmpty {
+                consolePrint("[QualifyingEvents] No events decoded from mask")
+            } else {
+                consolePrint("[QualifyingEvents] Events: \(eventNames.joined(separator: ", "))")
+            }
+
+            let suggested = QualifyingEvent.groupSuggestedHandlers(events)
+            if !suggested.isEmpty {
+                let requestNames = suggested.compactMap { message -> String? in
+                    if let metadata = MessageRegistry.metadata(for: message) {
+                        return metadata.name
+                    }
+                    return String(describing: type(of: message))
+                }
+                if !requestNames.isEmpty {
+                    consolePrint("[QualifyingEvents] Suggested follow-up requests: \(requestNames.joined(separator: ", "))")
                 }
             }
 
-            index += 4
-        }
-
-        let remainder = data.count % 4
-        if remainder != 0 {
-            let tail = data.suffix(remainder)
-            consolePrint("\n[ConsoleCoordinator] Ignored trailing \(remainder) bytes from qualifying events payload: \(tail.hexadecimalString)")
-        }
-    }
-
-    @MainActor
-    private func reportQualifyingEvents(mask: UInt32, events: Set<QualifyingEvent>) {
-        let maskHex = String(format: "0x%08X", mask)
-        let eventNames = events.sorted(by: { displayName(for: $0) < displayName(for: $1) }).map { displayName(for: $0) }
-
-        consolePrint("\n[QualifyingEvents] Received mask \(maskHex)")
-
-        if eventNames.isEmpty {
-            consolePrint("[QualifyingEvents] No events decoded from mask")
-        } else {
-            consolePrint("[QualifyingEvents] Events: \(eventNames.joined(separator: ", "))")
-        }
-
-        let suggested = QualifyingEvent.groupSuggestedHandlers(events)
-        if !suggested.isEmpty {
-            let requestNames = suggested.compactMap { message -> String? in
-                if let metadata = MessageRegistry.metadata(for: message) {
-                    return metadata.name
-                }
-                return String(describing: type(of: message))
-            }
-            if !requestNames.isEmpty {
-                consolePrint("[QualifyingEvents] Suggested follow-up requests: \(requestNames.joined(separator: ", "))")
+            if shouldContinueConsole() {
+                lineEditor.externalOutputDidOccur()
             }
         }
 
-        if shouldContinueConsole() {
-            lineEditor.externalOutputDidOccur()
-        }
-    }
-
-    private func displayName(for event: QualifyingEvent) -> String {
-        switch event {
-        case .alert: return "Alert"
-        case .alarm: return "Alarm"
-        case .reminder: return "Reminder"
-        case .malfunction: return "Malfunction"
-        case .cgmAlert: return "CGM Alert"
-        case .homeScreenChange: return "Home Screen Change"
-        case .pumpSuspend: return "Pump Suspend"
-        case .pumpResume: return "Pump Resume"
-        case .timeChange: return "Time Change"
-        case .basalChange: return "Basal Change"
-        case .bolusChange: return "Bolus Change"
-        case .iobChange: return "IOB Change"
-        case .extendedBolusChange: return "Extended Bolus Change"
-        case .profileChange: return "Profile Change"
-        case .bg: return "BG"
-        case .cgmChange: return "CGM Change"
-        case .battery: return "Battery"
-        case .basalIQ: return "Basal-IQ"
-        case .remainingInsulin: return "Remaining Insulin"
-        case .suspendComm: return "Suspend Comm"
-        case .activeSegmentChange: return "Active Segment Change"
-        case .basalIQStatus: return "Basal-IQ Status"
-        case .controlIQInfo: return "Control-IQ Info"
-        case .controlIQSleep: return "Control-IQ Sleep"
-        case .bolusPermissionRevoked: return "Bolus Permission Revoked"
-        }
-    }
-}
-
-private extension ConsoleCoordinator {
-    func consolePrint(_ text: String, level: PumpLogger.Level = .info) {
-        logger.log(level, text)
-    }
-}
-
-// MARK: - Console Line Editing
-
-private final class ConsoleLineEditor {
-    private enum CompletionDecision {
-        case none
-        case list([String])
-        case replace(String)
-    }
-
-    private let prompt: String
-    private let promptData: Data
-    private let commands: [String]
-    private let messageNames: [String]
-    private let inputHandle = FileHandle.standardInput
-    private let outputHandle = FileHandle.standardOutput
-    private let lock = NSLock()
-    private static weak var activeEditor: ConsoleLineEditor?
-
-    private var buffer: [UInt8] = []
-    private var lastRenderedLength: Int = 0
-    private var isActive: Bool = false
-
-    #if canImport(Darwin)
-    private var originalTermios = termios()
-    private var rawModeEnabled = false
-    #endif
-
-    init(prompt: String, commands: [String], messageNames: [String]) {
-        self.prompt = prompt
-        self.promptData = Data(prompt.utf8)
-        self.commands = commands
-        self.messageNames = messageNames
-        ConsoleLineEditor.activeEditor = self
-        enableRawMode()
-    }
-
-    func readLine() -> String? {
-        enableRawMode()
-
-        lock.lock()
-        buffer.removeAll(keepingCapacity: true)
-        lastRenderedLength = 0
-        isActive = true
-        lock.unlock()
-
-        writeData(promptData)
-
-        while true {
-            guard let byte = readByte() else {
-                lock.lock()
-                isActive = false
-                lock.unlock()
-                return nil
+        private func displayName(for event: QualifyingEvent) -> String {
+            switch event {
+            case .alert: return "Alert"
+            case .alarm: return "Alarm"
+            case .reminder: return "Reminder"
+            case .malfunction: return "Malfunction"
+            case .cgmAlert: return "CGM Alert"
+            case .homeScreenChange: return "Home Screen Change"
+            case .pumpSuspend: return "Pump Suspend"
+            case .pumpResume: return "Pump Resume"
+            case .timeChange: return "Time Change"
+            case .basalChange: return "Basal Change"
+            case .bolusChange: return "Bolus Change"
+            case .iobChange: return "IOB Change"
+            case .extendedBolusChange: return "Extended Bolus Change"
+            case .profileChange: return "Profile Change"
+            case .bg: return "BG"
+            case .cgmChange: return "CGM Change"
+            case .battery: return "Battery"
+            case .basalIQ: return "Basal-IQ"
+            case .remainingInsulin: return "Remaining Insulin"
+            case .suspendComm: return "Suspend Comm"
+            case .activeSegmentChange: return "Active Segment Change"
+            case .basalIQStatus: return "Basal-IQ Status"
+            case .controlIQInfo: return "Control-IQ Info"
+            case .controlIQSleep: return "Control-IQ Sleep"
+            case .bolusPermissionRevoked: return "Bolus Permission Revoked"
             }
+        }
+    }
 
-            switch byte {
-            case 10, 13:
-                lock.lock()
-                let line = String(bytes: buffer, encoding: .utf8) ?? ""
-                buffer.removeAll(keepingCapacity: true)
-                lastRenderedLength = 0
-                isActive = false
-                lock.unlock()
+    private extension ConsoleCoordinator {
+        func consolePrint(_ text: String, level: PumpLogger.Level = .info) {
+            logger.log(level, text)
+        }
+    }
 
-                write("\r\n")
-                return line
+    // MARK: - Console Line Editing
 
-            case 4:
-                lock.lock()
-                let empty = buffer.isEmpty
-                if empty {
+    private final class ConsoleLineEditor {
+        private enum CompletionDecision {
+            case none
+            case list([String])
+            case replace(String)
+        }
+
+        private let prompt: String
+        private let promptData: Data
+        private let commands: [String]
+        private let messageNames: [String]
+        private let inputHandle = FileHandle.standardInput
+        private let outputHandle = FileHandle.standardOutput
+        private let lock = NSLock()
+        private weak static var activeEditor: ConsoleLineEditor?
+
+        private var buffer: [UInt8] = []
+        private var lastRenderedLength: Int = 0
+        private var isActive: Bool = false
+
+        #if canImport(Darwin)
+            private var originalTermios = termios()
+            private var rawModeEnabled = false
+        #endif
+
+        init(prompt: String, commands: [String], messageNames: [String]) {
+            self.prompt = prompt
+            promptData = Data(prompt.utf8)
+            self.commands = commands
+            self.messageNames = messageNames
+            ConsoleLineEditor.activeEditor = self
+            enableRawMode()
+        }
+
+        func readLine() -> String? {
+            enableRawMode()
+
+            lock.lock()
+            buffer.removeAll(keepingCapacity: true)
+            lastRenderedLength = 0
+            isActive = true
+            lock.unlock()
+
+            writeData(promptData)
+
+            while true {
+                guard let byte = readByte() else {
+                    lock.lock()
                     isActive = false
                     lock.unlock()
-                    write("\r\n")
                     return nil
                 }
+
+                switch byte {
+                case 10,
+                     13:
+                    lock.lock()
+                    let line = String(bytes: buffer, encoding: .utf8) ?? ""
+                    buffer.removeAll(keepingCapacity: true)
+                    lastRenderedLength = 0
+                    isActive = false
+                    lock.unlock()
+
+                    write("\r\n")
+                    return line
+
+                case 4:
+                    lock.lock()
+                    let empty = buffer.isEmpty
+                    if empty {
+                        isActive = false
+                        lock.unlock()
+                        write("\r\n")
+                        return nil
+                    }
+                    lock.unlock()
+
+                case 9:
+                    handleTab()
+
+                case 8,
+                     127:
+                    handleBackspace()
+
+                default:
+                    if byte >= 32 {
+                        handleCharacter(byte)
+                    }
+                }
+            }
+        }
+
+        func externalOutputDidOccur() {
+            lock.lock()
+            guard isActive else {
                 lock.unlock()
+                return
+            }
+            refreshLineLocked()
+            lock.unlock()
+        }
 
-            case 9:
-                handleTab()
-
-            case 8, 127:
-                handleBackspace()
-
-            default:
-                if byte >= 32 {
-                    handleCharacter(byte)
-                }
+        func shutdown() {
+            lock.lock()
+            isActive = false
+            lock.unlock()
+            restoreRawMode()
+            if ConsoleLineEditor.activeEditor === self {
+                ConsoleLineEditor.activeEditor = nil
             }
         }
-    }
 
-    func externalOutputDidOccur() {
-        lock.lock()
-        guard isActive else {
-            lock.unlock()
-            return
+        deinit {
+            shutdown()
         }
-        refreshLineLocked()
-        lock.unlock()
-    }
 
-    func shutdown() {
-        lock.lock()
-        isActive = false
-        lock.unlock()
-        restoreRawMode()
-        if ConsoleLineEditor.activeEditor === self {
-            ConsoleLineEditor.activeEditor = nil
-        }
-    }
+        // MARK: - Input Helpers
 
-    deinit {
-        shutdown()
-    }
-
-    // MARK: - Input Helpers
-
-    private func readByte() -> UInt8? {
-        if #available(macOS 10.15.4, *) {
-            do {
-                if let data = try inputHandle.read(upToCount: 1), let byte = data.first {
-                    return byte
+        private func readByte() -> UInt8? {
+            if #available(macOS 10.15.4, *) {
+                do {
+                    if let data = try inputHandle.read(upToCount: 1), let byte = data.first {
+                        return byte
+                    }
+                    return nil
+                } catch {
+                    return nil
                 }
-                return nil
-            } catch {
-                return nil
+            } else {
+                let data = inputHandle.readData(ofLength: 1)
+                return data.first
             }
-        } else {
-            let data = inputHandle.readData(ofLength: 1)
-            return data.first
         }
-    }
 
-    private func handleCharacter(_ byte: UInt8) {
-        lock.lock()
-        buffer.append(byte)
-        lastRenderedLength = buffer.count
-        lock.unlock()
-
-        writeData(Data([byte]))
-    }
-
-    private func handleBackspace() {
-        lock.lock()
-        guard !buffer.isEmpty else {
+        private func handleCharacter(_ byte: UInt8) {
+            lock.lock()
+            buffer.append(byte)
+            lastRenderedLength = buffer.count
             lock.unlock()
-            write("\u{7}")
-            return
+
+            writeData(Data([byte]))
         }
-        buffer.removeLast()
-        lastRenderedLength = buffer.count
-        lock.unlock()
 
-        writeData(Data([8, 32, 8]))
-    }
-
-    private func handleTab() {
-        let currentLine = currentBufferString()
-        let decision = completionDecision(for: currentLine)
-
-        switch decision {
-        case .none:
-            write("\u{7}")
-
-        case .list(let options):
-            guard !options.isEmpty else {
+        private func handleBackspace() {
+            lock.lock()
+            guard !buffer.isEmpty else {
+                lock.unlock()
                 write("\u{7}")
                 return
             }
-            write("\n")
-            displayOptions(options)
-            lock.lock()
-            refreshLineLocked()
+            buffer.removeLast()
+            lastRenderedLength = buffer.count
             lock.unlock()
 
-        case .replace(let newLine):
-            replaceCurrentLine(with: newLine)
-        }
-    }
-
-    private func replaceCurrentLine(with newLine: String) {
-        lock.lock()
-        let oldLength = lastRenderedLength
-        buffer = Array(newLine.utf8)
-        lastRenderedLength = buffer.count
-        writePromptAndBufferLocked(oldLength: oldLength)
-        lock.unlock()
-    }
-
-    private func refreshLineLocked() {
-        let oldLength = lastRenderedLength
-        lastRenderedLength = buffer.count
-        writePromptAndBufferLocked(oldLength: oldLength)
-    }
-
-    // MARK: - Completion Logic
-
-    private func completionDecision(for line: String) -> CompletionDecision {
-        let trimmedLeading = line.drop { $0.isWhitespace }
-        let tokens = trimmedLeading.split(separator: " ", omittingEmptySubsequences: true).map { String($0) }
-        let hasTrailingSpace = line.last?.isWhitespace ?? false
-        let lastWhitespaceIndex = line.lastIndex(where: { $0 == " " || $0 == "\t" })
-        let tokenStart = lastWhitespaceIndex.map { line.index(after: $0) } ?? line.startIndex
-        let prefix = String(line[..<tokenStart])
-        let currentToken = hasTrailingSpace ? "" : String(line[tokenStart...])
-
-        if tokens.isEmpty {
-            return commandCompletion(prefix: prefix, token: currentToken)
+            writeData(Data([8, 32, 8]))
         }
 
-        if tokens.count == 1 && !hasTrailingSpace {
-            return commandCompletion(prefix: prefix, token: currentToken)
-        }
+        private func handleTab() {
+            let currentLine = currentBufferString()
+            let decision = completionDecision(for: currentLine)
 
-        guard let firstToken = tokens.first?.lowercased() else {
-            return .none
-        }
+            switch decision {
+            case .none:
+                write("\u{7}")
 
-        if firstToken == "send" {
-            if tokens.count == 1 && hasTrailingSpace {
-                return messageCompletion(prefix: prefix, token: "")
-            } else if tokens.count >= 2 {
-                return messageCompletion(prefix: prefix, token: currentToken)
+            case let .list(options):
+                guard !options.isEmpty else {
+                    write("\u{7}")
+                    return
+                }
+                write("\n")
+                displayOptions(options)
+                lock.lock()
+                refreshLineLocked()
+                lock.unlock()
+
+            case let .replace(newLine):
+                replaceCurrentLine(with: newLine)
             }
         }
 
-        return .none
-    }
-
-    private func commandCompletion(prefix: String, token: String) -> CompletionDecision {
-        let lowerToken = token.lowercased()
-        let matches = commands.filter { command in
-            lowerToken.isEmpty ? true : command.lowercased().hasPrefix(lowerToken)
+        private func replaceCurrentLine(with newLine: String) {
+            lock.lock()
+            let oldLength = lastRenderedLength
+            buffer = Array(newLine.utf8)
+            lastRenderedLength = buffer.count
+            writePromptAndBufferLocked(oldLength: oldLength)
+            lock.unlock()
         }
 
-        guard !matches.isEmpty else {
-            return .none
+        private func refreshLineLocked() {
+            let oldLength = lastRenderedLength
+            lastRenderedLength = buffer.count
+            writePromptAndBufferLocked(oldLength: oldLength)
         }
 
-        if matches.count == 1 {
-            var completed = prefix + matches[0]
-            if matches[0] == "send" && !completed.hasSuffix(" ") {
-                completed += " "
+        // MARK: - Completion Logic
+
+        private func completionDecision(for line: String) -> CompletionDecision {
+            let trimmedLeading = line.drop { $0.isWhitespace }
+            let tokens = trimmedLeading.split(separator: " ", omittingEmptySubsequences: true).map { String($0) }
+            let hasTrailingSpace = line.last?.isWhitespace ?? false
+            let lastWhitespaceIndex = line.lastIndex(where: { $0 == " " || $0 == "\t" })
+            let tokenStart = lastWhitespaceIndex.map { line.index(after: $0) } ?? line.startIndex
+            let prefix = String(line[..<tokenStart])
+            let currentToken = hasTrailingSpace ? "" : String(line[tokenStart...])
+
+            if tokens.isEmpty {
+                return commandCompletion(prefix: prefix, token: currentToken)
             }
-            return .replace(completed)
-        }
 
-        return .list(matches)
-    }
+            if tokens.count == 1, !hasTrailingSpace {
+                return commandCompletion(prefix: prefix, token: currentToken)
+            }
 
-    private func messageCompletion(prefix: String, token: String) -> CompletionDecision {
-        let lowerToken = token.lowercased()
-        let matches = messageNames.filter { name in
-            lowerToken.isEmpty ? true : name.lowercased().hasPrefix(lowerToken)
-        }
+            guard let firstToken = tokens.first?.lowercased() else {
+                return .none
+            }
 
-        guard !matches.isEmpty else {
+            if firstToken == "send" {
+                if tokens.count == 1, hasTrailingSpace {
+                    return messageCompletion(prefix: prefix, token: "")
+                } else if tokens.count >= 2 {
+                    return messageCompletion(prefix: prefix, token: currentToken)
+                }
+            }
+
             return .none
         }
 
-        if matches.count == 1 {
-            let completed = prefix + matches[0]
-            return .replace(completed)
+        private func commandCompletion(prefix: String, token: String) -> CompletionDecision {
+            let lowerToken = token.lowercased()
+            let matches = commands.filter { command in
+                lowerToken.isEmpty ? true : command.lowercased().hasPrefix(lowerToken)
+            }
+
+            guard !matches.isEmpty else {
+                return .none
+            }
+
+            if matches.count == 1 {
+                var completed = prefix + matches[0]
+                if matches[0] == "send", !completed.hasSuffix(" ") {
+                    completed += " "
+                }
+                return .replace(completed)
+            }
+
+            return .list(matches)
         }
 
-        return .list(matches)
-    }
+        private func messageCompletion(prefix: String, token: String) -> CompletionDecision {
+            let lowerToken = token.lowercased()
+            let matches = messageNames.filter { name in
+                lowerToken.isEmpty ? true : name.lowercased().hasPrefix(lowerToken)
+            }
 
-    // MARK: - Output Helpers
+            guard !matches.isEmpty else {
+                return .none
+            }
 
-    private func displayOptions(_ options: [String]) {
-        let sorted = options.sorted()
-        for option in sorted {
-            write(option)
-            write("\n")
+            if matches.count == 1 {
+                let completed = prefix + matches[0]
+                return .replace(completed)
+            }
+
+            return .list(matches)
         }
-    }
 
-    private func writePromptAndBufferLocked(oldLength: Int) {
-        let bufferData = Data(buffer)
-        writeData(Data("\r".utf8))
-        writeData(promptData)
-        writeData(bufferData)
+        // MARK: - Output Helpers
 
-        if oldLength > buffer.count {
-            let diff = oldLength - buffer.count
-            let spaces = String(repeating: " ", count: diff)
-            write(spaces)
+        private func displayOptions(_ options: [String]) {
+            let sorted = options.sorted()
+            for option in sorted {
+                write(option)
+                write("\n")
+            }
+        }
+
+        private func writePromptAndBufferLocked(oldLength: Int) {
+            let bufferData = Data(buffer)
             writeData(Data("\r".utf8))
             writeData(promptData)
             writeData(bufferData)
-        }
-    }
 
-    private func currentBufferString() -> String {
-        lock.lock()
-        let result = String(bytes: buffer, encoding: .utf8) ?? ""
-        lock.unlock()
-        return result
-    }
-
-    private func write(_ string: String) {
-        guard let data = string.data(using: .utf8) else { return }
-        writeData(data)
-    }
-
-    private func writeData(_ data: Data) {
-        outputHandle.write(data)
-    }
-
-    func prepareForExternalOutput() {
-        lock.lock()
-        guard isActive else {
-            lock.unlock()
-            return
-        }
-        clearLineLocked()
-        lock.unlock()
-    }
-
-    private func clearLineLocked() {
-        let total = promptData.count + lastRenderedLength
-        writeData(Data("\r".utf8))
-        if total > 0 {
-            write(String(repeating: " ", count: total))
-            writeData(Data("\r".utf8))
-        }
-    }
-
-    private func enableRawMode() {
-        #if canImport(Darwin)
-        guard !rawModeEnabled else { return }
-        var term = termios()
-        if tcgetattr(STDIN_FILENO, &term) == 0 {
-            originalTermios = term
-            var raw = term
-            cfmakeraw(&raw)
-            raw.c_lflag |= tcflag_t(ISIG)
-            if tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == 0 {
-                rawModeEnabled = true
+            if oldLength > buffer.count {
+                let diff = oldLength - buffer.count
+                let spaces = String(repeating: " ", count: diff)
+                write(spaces)
+                writeData(Data("\r".utf8))
+                writeData(promptData)
+                writeData(bufferData)
             }
         }
-        #endif
-    }
 
-    private func restoreRawMode() {
-        #if canImport(Darwin)
-        guard rawModeEnabled else { return }
-        var term = originalTermios
-        tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)
-        rawModeEnabled = false
-        #endif
-    }
+        private func currentBufferString() -> String {
+            lock.lock()
+            let result = String(bytes: buffer, encoding: .utf8) ?? ""
+            lock.unlock()
+            return result
+        }
 
-    static func handleInterruptSignal() {
-        activeEditor?.restoreRawMode()
+        private func write(_ string: String) {
+            guard let data = string.data(using: .utf8) else { return }
+            writeData(data)
+        }
+
+        private func writeData(_ data: Data) {
+            outputHandle.write(data)
+        }
+
+        func prepareForExternalOutput() {
+            lock.lock()
+            guard isActive else {
+                lock.unlock()
+                return
+            }
+            clearLineLocked()
+            lock.unlock()
+        }
+
+        private func clearLineLocked() {
+            let total = promptData.count + lastRenderedLength
+            writeData(Data("\r".utf8))
+            if total > 0 {
+                write(String(repeating: " ", count: total))
+                writeData(Data("\r".utf8))
+            }
+        }
+
+        private func enableRawMode() {
+            #if canImport(Darwin)
+                guard !rawModeEnabled else { return }
+                var term = termios()
+                if tcgetattr(STDIN_FILENO, &term) == 0 {
+                    originalTermios = term
+                    var raw = term
+                    cfmakeraw(&raw)
+                    raw.c_lflag |= tcflag_t(ISIG)
+                    if tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == 0 {
+                        rawModeEnabled = true
+                    }
+                }
+            #endif
+        }
+
+        private func restoreRawMode() {
+            #if canImport(Darwin)
+                guard rawModeEnabled else { return }
+                var term = originalTermios
+                tcsetattr(STDIN_FILENO, TCSAFLUSH, &term)
+                rawModeEnabled = false
+            #endif
+        }
+
+        static func handleInterruptSignal() {
+            activeEditor?.restoreRawMode()
+        }
     }
-}
 #endif

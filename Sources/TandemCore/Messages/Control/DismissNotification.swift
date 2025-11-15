@@ -1,14 +1,3 @@
-//
-//  DismissNotification.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of DismissNotificationRequest and DismissNotificationResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/DismissNotificationRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/DismissNotificationResponse.java
-//
-
 import Foundation
 
 /// Request to dismiss an alert/alarm/notification on the pump.
@@ -27,17 +16,17 @@ public class DismissNotificationRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.notificationId = Bytes.readUint32(cargo, 0)
-        self.notificationTypeId = Bytes.readShort(cargo, 4)
+        notificationId = Bytes.readUint32(cargo, 0)
+        notificationTypeId = Bytes.readShort(cargo, 4)
     }
 
     public init(notificationType: NotificationType, notificationId: UInt32) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.toUint32(notificationId),
             Bytes.firstTwoBytesLittleEndian(notificationType.rawValue)
         )
         self.notificationId = notificationId
-        self.notificationTypeId = notificationType.rawValue
+        notificationTypeId = notificationType.rawValue
     }
 
     public var notificationType: NotificationType? {
@@ -67,12 +56,11 @@ public class DismissNotificationResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

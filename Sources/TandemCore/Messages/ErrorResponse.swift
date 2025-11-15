@@ -1,10 +1,3 @@
-//
-//  ErrorResponse.swift
-//  TandemCore
-//
-//  Created by ChatGPT on 3/15/25.
-//
-
 import Foundation
 
 /// Pump error message that accompanies rejected requests.
@@ -27,21 +20,21 @@ public final class ErrorResponse: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         if cargo.count >= 1 {
-            self.requestCodeId = Int(cargo[0])
+            requestCodeId = Int(cargo[0])
         } else {
-            self.requestCodeId = 0
+            requestCodeId = 0
         }
         if cargo.count >= 2 {
-            self.errorCodeId = Int(cargo[1])
+            errorCodeId = Int(cargo[1])
         } else {
-            self.errorCodeId = 0
+            errorCodeId = 0
         }
         if cargo.count > 2 {
-            self.remainingBytes = Data(cargo.dropFirst(2))
+            remainingBytes = Data(cargo.dropFirst(2))
         } else {
-            self.remainingBytes = Data()
+            remainingBytes = Data()
         }
-        self.errorCode = PumpFaultCode(rawValue: errorCodeId)
+        errorCode = PumpFaultCode(rawValue: errorCodeId)
     }
 
     public init(requestCodeId: Int, errorCode: PumpFaultCode, remainingBytes: Data = Data()) {
@@ -49,9 +42,9 @@ public final class ErrorResponse: Message {
         if !remainingBytes.isEmpty {
             payload.append(contentsOf: remainingBytes)
         }
-        self.cargo = payload
+        cargo = payload
         self.requestCodeId = requestCodeId
-        self.errorCodeId = errorCode.rawValue
+        errorCodeId = errorCode.rawValue
         self.remainingBytes = remainingBytes
         self.errorCode = errorCode
     }

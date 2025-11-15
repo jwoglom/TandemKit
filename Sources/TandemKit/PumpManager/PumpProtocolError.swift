@@ -7,7 +7,7 @@ public enum PumpProtocolError: Error {
 extension PumpProtocolError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .messageIOException(let str):
+        case let .messageIOException(str):
             return str
         }
     }

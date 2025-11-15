@@ -1,14 +1,3 @@
-//
-//  SetActiveIDP.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetActiveIDPRequest and SetActiveIDPResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetActiveIDPRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetActiveIDPResponse.java
-//
-
 import Foundation
 
 /// Request to activate an insulin delivery profile.
@@ -28,11 +17,11 @@ public class SetActiveIDPRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
+        idpId = Int(cargo[0])
     }
 
     public init(idpId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(idpId & 0xFF)]),
             Data([1])
         )
@@ -57,12 +46,11 @@ public class SetActiveIDPResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

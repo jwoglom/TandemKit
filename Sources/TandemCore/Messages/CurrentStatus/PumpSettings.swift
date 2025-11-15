@@ -1,14 +1,3 @@
-//
-//  PumpSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of PumpSettingsRequest and PumpSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/PumpSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/PumpSettingsResponse.java
-//
-
 import Foundation
 
 /// Request pump configuration settings.
@@ -27,7 +16,7 @@ public class PumpSettingsRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -51,17 +40,25 @@ public class PumpSettingsResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.lowInsulinThreshold = Int(cargo[0])
-        self.cannulaPrimeSize = Int(cargo[1])
-        self.autoShutdownEnabled = Int(cargo[2])
-        self.autoShutdownDuration = Bytes.readShort(cargo, 3)
-        self.featureLock = Int(cargo[5])
-        self.oledTimeout = Int(cargo[6])
-        self.status = Bytes.readShort(cargo, 7)
+        lowInsulinThreshold = Int(cargo[0])
+        cannulaPrimeSize = Int(cargo[1])
+        autoShutdownEnabled = Int(cargo[2])
+        autoShutdownDuration = Bytes.readShort(cargo, 3)
+        featureLock = Int(cargo[5])
+        oledTimeout = Int(cargo[6])
+        status = Bytes.readShort(cargo, 7)
     }
 
-    public init(lowInsulinThreshold: Int, cannulaPrimeSize: Int, autoShutdownEnabled: Int, autoShutdownDuration: Int, featureLock: Int, oledTimeout: Int, status: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        lowInsulinThreshold: Int,
+        cannulaPrimeSize: Int,
+        autoShutdownEnabled: Int,
+        autoShutdownDuration: Int,
+        featureLock: Int,
+        oledTimeout: Int,
+        status: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(lowInsulinThreshold),
             Bytes.firstByteLittleEndian(cannulaPrimeSize),
             Bytes.firstByteLittleEndian(autoShutdownEnabled),

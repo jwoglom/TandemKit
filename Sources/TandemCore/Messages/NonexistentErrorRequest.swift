@@ -1,10 +1,3 @@
-//
-//  NonexistentErrorRequest.swift
-//  TandemCore
-//
-//  Created by ChatGPT on 3/15/25.
-//
-
 import Foundation
 
 /// Placeholder request paired with ``ErrorResponse`` entries in the registry.
@@ -24,6 +17,6 @@ public final class NonexistentErrorRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }

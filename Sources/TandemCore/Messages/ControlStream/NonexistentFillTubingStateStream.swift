@@ -28,7 +28,7 @@ public class NonexistentFillTubingStateStreamRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -49,14 +49,13 @@ public class FillTubingStateStreamResponse: Message {
     public required init(cargo: Data) {
         let raw = Bytes.dropLastN(cargo, 0)
         self.cargo = raw
-        self.buttonState = Int(raw[0])
+        buttonState = Int(raw[0])
     }
 
     public init(buttonState: Int) {
-        self.cargo = Data([UInt8(buttonState & 0xFF)])
+        cargo = Data([UInt8(buttonState & 0xFF)])
         self.buttonState = buttonState
     }
 
     public var buttonDown: Bool { buttonState == 1 }
 }
-

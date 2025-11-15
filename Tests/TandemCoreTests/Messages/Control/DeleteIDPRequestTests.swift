@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class DeleteIDPRequestTests: XCTestCase {
     func testDeleteIDPRequest_idpId2() {

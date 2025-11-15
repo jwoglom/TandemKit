@@ -1,14 +1,3 @@
-//
-//  BolusPermissionRelease.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BolusPermissionReleaseRequest and BolusPermissionReleaseResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/BolusPermissionReleaseRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/BolusPermissionReleaseResponse.java
-//
-
 import Foundation
 
 /// Request to release bolus permission for a previously granted bolus.
@@ -27,11 +16,11 @@ public class BolusPermissionReleaseRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bolusId = Bytes.readUint32(cargo, 0)
+        bolusId = Bytes.readUint32(cargo, 0)
     }
 
     public init(bolusId: UInt32) {
-        self.cargo = Bytes.toUint32(bolusId)
+        cargo = Bytes.toUint32(bolusId)
         self.bolusId = bolusId
     }
 }
@@ -52,11 +41,11 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 
@@ -68,4 +57,3 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
 
     public var releaseStatus: ReleaseStatus? { ReleaseStatus(rawValue: status) }
 }
-

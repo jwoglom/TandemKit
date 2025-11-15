@@ -1,14 +1,3 @@
-//
-//  ChangeTimeDate.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ChangeTimeDateRequest and ChangeTimeDateResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/ChangeTimeDateRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/ChangeTimeDateResponse.java
-//
-
 import Foundation
 
 /// Request to change the pump's date/time.
@@ -26,11 +15,11 @@ public class ChangeTimeDateRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.tandemEpochTime = Bytes.readUint32(cargo, 0)
+        tandemEpochTime = Bytes.readUint32(cargo, 0)
     }
 
     public init(tandemEpochTime: UInt32) {
-        self.cargo = Bytes.toUint32(tandemEpochTime)
+        cargo = Bytes.toUint32(tandemEpochTime)
         self.tandemEpochTime = tandemEpochTime
     }
 }
@@ -50,12 +39,11 @@ public class ChangeTimeDateResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

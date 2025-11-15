@@ -1,14 +1,3 @@
-//
-//  RenameIDP.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of RenameIDPRequest and RenameIDPResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/RenameIDPRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/RenameIDPResponse.java
-//
-
 import Foundation
 
 /// Request to rename an insulin delivery profile.
@@ -29,12 +18,12 @@ public class RenameIDPRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.idpId = Int(cargo[0])
-        self.profileName = Bytes.readString(cargo, 2, 16)
+        idpId = Int(cargo[0])
+        profileName = Bytes.readString(cargo, 2, 16)
     }
 
     public init(idpId: Int, profileName: String) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(idpId & 0xFF)]),
             Data([1]),
             Bytes.writeString(profileName, 16),
@@ -63,12 +52,12 @@ public class RenameIDPResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.numberOfProfiles = Int(cargo[1])
+        status = Int(cargo[0])
+        numberOfProfiles = Int(cargo[1])
     }
 
     public init(status: Int, numberOfProfiles: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
             Data([UInt8(numberOfProfiles & 0xFF)])
         )
@@ -76,4 +65,3 @@ public class RenameIDPResponse: Message, StatusMessage {
         self.numberOfProfiles = numberOfProfiles
     }
 }
-

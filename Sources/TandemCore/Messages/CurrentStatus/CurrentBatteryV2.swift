@@ -1,14 +1,3 @@
-//
-//  CurrentBatteryV2.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of CurrentBatteryV2Request and CurrentBatteryV2Response based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/CurrentBatteryV2Request.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/CurrentBatteryV2Response.java
-//
-
 import Foundation
 
 /// Request additional battery information available on newer API versions.
@@ -28,7 +17,7 @@ public class CurrentBatteryV2Request: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -53,17 +42,25 @@ public class CurrentBatteryV2Response: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.currentBatteryAbc = Int(cargo[0])
-        self.currentBatteryIbc = Int(cargo[1])
-        self.chargingStatus = Int(cargo[2])
-        self.unknown1 = Bytes.readShort(cargo, 3)
-        self.unknown2 = Bytes.readShort(cargo, 5)
-        self.unknown3 = Bytes.readShort(cargo, 7)
-        self.unknown4 = Bytes.readShort(cargo, 9)
+        currentBatteryAbc = Int(cargo[0])
+        currentBatteryIbc = Int(cargo[1])
+        chargingStatus = Int(cargo[2])
+        unknown1 = Bytes.readShort(cargo, 3)
+        unknown2 = Bytes.readShort(cargo, 5)
+        unknown3 = Bytes.readShort(cargo, 7)
+        unknown4 = Bytes.readShort(cargo, 9)
     }
 
-    public init(currentBatteryAbc: Int, currentBatteryIbc: Int, chargingStatus: Int, unknown1: Int, unknown2: Int, unknown3: Int, unknown4: Int) {
-        self.cargo = Bytes.combine(
+    public init(
+        currentBatteryAbc: Int,
+        currentBatteryIbc: Int,
+        chargingStatus: Int,
+        unknown1: Int,
+        unknown2: Int,
+        unknown3: Int,
+        unknown4: Int
+    ) {
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(currentBatteryAbc),
             Bytes.firstByteLittleEndian(currentBatteryIbc),
             Bytes.firstByteLittleEndian(chargingStatus),
@@ -83,14 +80,13 @@ public class CurrentBatteryV2Response: Message {
 
     /// Convenience accessor mapping to battery percent used by the pump UI.
     public func getBatteryPercent() -> Int {
-        return currentBatteryIbc
+        currentBatteryIbc
     }
 
     /// Returns true if the pump is currently charging.
     public func isCharging() -> Bool {
-        return chargingStatus == 1
+        chargingStatus == 1
     }
 }
-
 
 extension CurrentBatteryV2Response: CurrentBatteryAbstractResponse {}

@@ -31,12 +31,12 @@ let package = Package(
         .executable(
             name: "tandem-simulator",
             targets: ["TandemSimulator"]
-        ),
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/leif-ibsen/SwiftECC", from: "3.0.0"),
         .package(url: "https://github.com/leif-ibsen/BigInt", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-log", from: "1.5.3"),
+        .package(url: "https://github.com/apple/swift-log", from: "1.5.3")
     ],
     targets: {
         var targets: [Target] = [
@@ -130,7 +130,7 @@ let package = Package(
                 name: "TandemSimulatorTests",
                 dependencies: ["TandemSimulator", "TandemCore", "TandemBLE"],
                 path: "Tests/TandemSimulatorTests"
-            ),
+            )
         ]
 
         // Always use source-based shims since the binary frameworks don't support macOS

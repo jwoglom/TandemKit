@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class SetDexcomG7PairingCodeRequestTests: XCTestCase {
     func testSetG7PairingCodeRequest_code3546() {

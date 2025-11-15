@@ -1,9 +1,8 @@
 import Foundation
-import TandemCore
 import TandemBLE
+import TandemCore
 
-@main
-struct TandemSimulatorMain {
+@main enum TandemSimulatorMain {
     static func main() async {
         do {
             try await runSimulator()
@@ -42,7 +41,9 @@ private extension TandemSimulatorMain {
         case "test":
             let config = try parseTestArguments(remainder)
             try await runTest(config: config)
-        case "help", "-h", "--help":
+        case "--help",
+             "-h",
+             "help":
             print(usage())
         default:
             throw SimulatorError("Unknown command: \(command)\n\(usage())", exitCode: 1)
@@ -72,7 +73,8 @@ private extension TandemSimulatorMain {
                 config.useMockTransport = true
             case "--bypass-auth":
                 config.authenticationMode = .bypass
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw SimulatorError(startUsage(), exitCode: 0)
             default:
                 throw SimulatorError("Unknown option: \(arg)\n\(startUsage())")
@@ -98,7 +100,8 @@ private extension TandemSimulatorMain {
                     throw SimulatorError("Missing value for --pairing-code")
                 }
                 config.pairingCode = args[index]
-            case "--help", "-h":
+            case "--help",
+                 "-h":
                 throw SimulatorError(testUsage(), exitCode: 0)
             default:
                 throw SimulatorError("Unknown option: \(arg)\n\(testUsage())")
@@ -151,7 +154,7 @@ private extension TandemSimulatorMain {
     }
 
     static func usage() -> String {
-        return [
+        [
             "Usage: tandem-simulator <command> [options]",
             "",
             "Commands:",
@@ -163,25 +166,25 @@ private extension TandemSimulatorMain {
     }
 
     static func startUsage() -> String {
-        return [
+        [
             "Usage: tandem-simulator start [options]",
             "",
             "Options:",
             "  --pairing-code <code>   Set a pre-defined pairing code",
             "  --serial <number>       Set pump serial number",
             "  --mock-transport        Use mock transport (no BLE)",
-            "  --bypass-auth           Skip authentication (for testing)",
+            "  --bypass-auth           Skip authentication (for testing)"
         ].joined(separator: "\n")
     }
 
     static func testUsage() -> String {
-        return [
+        [
             "Usage: tandem-simulator test [options]",
             "",
             "Options:",
             "  --pairing-code <code>   Set a pre-defined pairing code (bypass auth enabled by default)",
             "",
-            "Note: Test mode automatically uses mock transport and bypass authentication.",
+            "Note: Test mode automatically uses mock transport and bypass authentication."
         ].joined(separator: "\n")
     }
 }

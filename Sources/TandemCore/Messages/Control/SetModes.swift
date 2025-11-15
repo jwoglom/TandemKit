@@ -1,14 +1,3 @@
-//
-//  SetModes.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of SetModesRequest and SetModesResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/SetModesRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/SetModesResponse.java
-//
-
 import Foundation
 
 /// Request to enable or disable pump modes like sleep or exercise.
@@ -29,11 +18,11 @@ public class SetModesRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bitmap = Int(cargo[0])
+        bitmap = Int(cargo[0])
     }
 
     public init(bitmap: Int) {
-        self.cargo = Data([UInt8(bitmap & 0xFF)])
+        cargo = Data([UInt8(bitmap & 0xFF)])
         self.bitmap = bitmap
     }
 
@@ -70,12 +59,11 @@ public class SetModesResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

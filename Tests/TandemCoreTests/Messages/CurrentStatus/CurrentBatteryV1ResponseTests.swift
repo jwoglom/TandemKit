@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class CurrentBatteryV1ResponseTests: XCTestCase {
     func testCurrentBatteryV1Response() {

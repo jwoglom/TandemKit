@@ -1,14 +1,3 @@
-//
-//  BolusPermission.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of BolusPermissionRequest and BolusPermissionResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/BolusPermissionRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/BolusPermissionResponse.java
-//
-
 import Foundation
 
 /// Request bolus permission from the pump.
@@ -29,7 +18,7 @@ public class BolusPermissionRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -51,13 +40,13 @@ public class BolusPermissionResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
-        self.bolusId = Bytes.readShort(cargo, 1)
-        self.nackReasonId = Int(cargo[5])
+        status = Int(cargo[0])
+        bolusId = Bytes.readShort(cargo, 1)
+        nackReasonId = Int(cargo[5])
     }
 
     public init(status: Int, bolusId: Int, nackReasonId: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([UInt8(status & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(bolusId),
             Data([0, 0]),
@@ -80,7 +69,6 @@ public class BolusPermissionResponse: Message, StatusMessage {
 
     /// True if permission was granted.
     public var isPermissionGranted: Bool {
-        return status == 0 && nackReason == .permissionGranted
+        status == 0 && nackReason == .permissionGranted
     }
 }
-

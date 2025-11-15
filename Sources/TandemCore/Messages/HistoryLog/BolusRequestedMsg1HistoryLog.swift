@@ -21,18 +21,38 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
     public let carbRatio: UInt32
 
     public required init(cargo: Data) {
-        self.bolusId = Bytes.readShort(cargo, 10)
-        self.bolusTypeId = Int(cargo[12])
-        self.correctionBolusIncluded = cargo[13] != 0
-        self.carbAmount = Bytes.readShort(cargo, 14)
-        self.bg = Bytes.readShort(cargo, 16)
-        self.iob = Bytes.readFloat(cargo, 18)
-        self.carbRatio = Bytes.readUint32(cargo, 22)
+        bolusId = Bytes.readShort(cargo, 10)
+        bolusTypeId = Int(cargo[12])
+        correctionBolusIncluded = cargo[13] != 0
+        carbAmount = Bytes.readShort(cargo, 14)
+        bg = Bytes.readShort(cargo, 16)
+        iob = Bytes.readFloat(cargo, 18)
+        carbRatio = Bytes.readUint32(cargo, 22)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, bolusTypeId: Int, correctionBolusIncluded: Bool, carbAmount: Int, bg: Int, iob: Float, carbRatio: UInt32) {
-        let payload = BolusRequestedMsg1HistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, bolusId: bolusId, bolusTypeId: bolusTypeId, correctionBolusIncluded: correctionBolusIncluded, carbAmount: carbAmount, bg: bg, iob: iob, carbRatio: carbRatio)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        bolusTypeId: Int,
+        correctionBolusIncluded: Bool,
+        carbAmount: Int,
+        bg: Int,
+        iob: Float,
+        carbRatio: UInt32
+    ) {
+        let payload = BolusRequestedMsg1HistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusId: bolusId,
+            bolusTypeId: bolusTypeId,
+            correctionBolusIncluded: correctionBolusIncluded,
+            carbAmount: carbAmount,
+            bg: bg,
+            iob: iob,
+            carbRatio: carbRatio
+        )
         self.bolusId = bolusId
         self.bolusTypeId = bolusTypeId
         self.correctionBolusIncluded = correctionBolusIncluded
@@ -43,8 +63,18 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, bolusTypeId: Int, correctionBolusIncluded: Bool, carbAmount: Int, bg: Int, iob: Float, carbRatio: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusId: Int,
+        bolusTypeId: Int,
+        correctionBolusIncluded: Bool,
+        carbAmount: Int,
+        bg: Int,
+        iob: Float,
+        carbRatio: UInt32
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -61,7 +91,6 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
     }
 
     public var bolusType: Set<BolusDeliveryHistoryLog.BolusType> {
-        return BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeId)
+        BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeId)
     }
 }
-

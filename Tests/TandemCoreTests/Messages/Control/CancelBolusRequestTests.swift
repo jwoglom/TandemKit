@@ -1,9 +1,9 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class CancelBolusRequestTests: XCTestCase {
     func testCancelBolusRequest_ID10677() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
         let expected = CancelBolusRequest(bolusId: 10677)
 
         let parsed: CancelBolusRequest = MessageTester.test(
@@ -19,7 +19,7 @@ final class CancelBolusRequestTests: XCTestCase {
     }
 
     func testCancelBolusRequest_ID10678() {
-        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461710145)
+        MessageTester.initPumpState("6VeDeRAL5DCigGw2", 461_710_145)
         let expected = CancelBolusRequest(bolusId: 10678)
 
         let parsed: CancelBolusRequest = MessageTester.test(

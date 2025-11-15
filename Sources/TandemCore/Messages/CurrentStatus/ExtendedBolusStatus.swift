@@ -1,14 +1,3 @@
-//
-//  ExtendedBolusStatus.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ExtendedBolusStatusRequest and ExtendedBolusStatusResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/currentStatus/ExtendedBolusStatusRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/currentStatus/ExtendedBolusStatusResponse.java
-//
-
 import Foundation
 
 /// Request information on the current extended bolus.
@@ -27,7 +16,7 @@ public class ExtendedBolusStatusRequest: Message {
     }
 
     public init() {
-        self.cargo = Data()
+        cargo = Data()
     }
 }
 
@@ -50,16 +39,16 @@ public class ExtendedBolusStatusResponse: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.bolusStatus = Int(cargo[0])
-        self.bolusId = Bytes.readShort(cargo, 1)
-        self.timestamp = Bytes.readUint32(cargo, 5)
-        self.requestedVolume = Bytes.readUint32(cargo, 9)
-        self.duration = Bytes.readUint32(cargo, 13)
-        self.bolusSource = Int(cargo[17])
+        bolusStatus = Int(cargo[0])
+        bolusId = Bytes.readShort(cargo, 1)
+        timestamp = Bytes.readUint32(cargo, 5)
+        requestedVolume = Bytes.readUint32(cargo, 9)
+        duration = Bytes.readUint32(cargo, 13)
+        bolusSource = Int(cargo[17])
     }
 
     public init(bolusStatus: Int, bolusId: Int, timestamp: UInt32, requestedVolume: UInt32, duration: UInt32, bolusSource: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstByteLittleEndian(bolusStatus),
             Bytes.firstTwoBytesLittleEndian(bolusId),
             Bytes.toUint32(timestamp),
@@ -76,4 +65,3 @@ public class ExtendedBolusStatusResponse: Message {
         self.bolusSource = bolusSource
     }
 }
-

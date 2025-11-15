@@ -1,5 +1,5 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class Jpake4KeyConfirmationRequestTests: XCTestCase {
     func test167cargoFifthchallengeSplit() {

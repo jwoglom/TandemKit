@@ -1,6 +1,6 @@
 import Foundation
 
-public struct CurrentBatteryRequestBuilder {
+public enum CurrentBatteryRequestBuilder {
     public static func create(apiVersion: ApiVersion) -> Message {
         if apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
             return CurrentBatteryV2Request()

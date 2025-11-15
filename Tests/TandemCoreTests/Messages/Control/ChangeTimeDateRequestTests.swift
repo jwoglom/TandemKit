@@ -1,8 +1,8 @@
-import XCTest
 @testable import TandemCore
+import XCTest
 
 final class ChangeTimeDateRequestTests: XCTestCase {
-    private let tandemEpochOffset: TimeInterval = 1199145600
+    private let tandemEpochOffset: TimeInterval = 1_199_145_600
 
     func testChangeTimeDateRequest_raw() {
         MessageTester.initPumpState("", 0)
@@ -18,15 +18,15 @@ final class ChangeTimeDateRequestTests: XCTestCase {
         )
 
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
-        XCTAssertEqual(540612400, parsed.tandemEpochTime)
-        let expectedDate = Date(timeIntervalSince1970: 1739758000)
+        XCTAssertEqual(540_612_400, parsed.tandemEpochTime)
+        let expectedDate = Date(timeIntervalSince1970: 1_739_758_000)
         let actualDate = Date(timeIntervalSince1970: TimeInterval(parsed.tandemEpochTime) + tandemEpochOffset)
         XCTAssertEqual(expectedDate, actualDate)
     }
 
     func testChangeTimeDateRequest_asInstant() {
         MessageTester.initPumpState("", 0)
-        let instant = Date(timeIntervalSince1970: 1739758000)
+        let instant = Date(timeIntervalSince1970: 1_739_758_000)
         let tandemEpochTime = UInt32(instant.timeIntervalSince1970 - tandemEpochOffset)
         let expected = ChangeTimeDateRequest(tandemEpochTime: tandemEpochTime)
 
@@ -40,8 +40,8 @@ final class ChangeTimeDateRequestTests: XCTestCase {
         )
 
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
-        XCTAssertEqual(540612400, parsed.tandemEpochTime)
-        let expectedDate = Date(timeIntervalSince1970: 1739758000)
+        XCTAssertEqual(540_612_400, parsed.tandemEpochTime)
+        let expectedDate = Date(timeIntervalSince1970: 1_739_758_000)
         let actualDate = Date(timeIntervalSince1970: TimeInterval(parsed.tandemEpochTime) + tandemEpochOffset)
         XCTAssertEqual(expectedDate, actualDate)
     }

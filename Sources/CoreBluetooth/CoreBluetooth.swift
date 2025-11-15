@@ -1,14 +1,6 @@
-//
-//  CoreBluetooth.swift
-//  TandemKit
-//
-//  Minimal stand‑in for Apple's CoreBluetooth when building on Linux,
-//  backed by the PureSwift Bluetooth stack.
-//
-
 import Bluetooth
-import Foundation
 import Dispatch
+import Foundation
 
 public typealias CBUUID = BluetoothUUID
 
@@ -23,7 +15,12 @@ public enum CBManagerState: Int {
 
 public protocol CBCentralManagerDelegate: AnyObject {
     func centralManagerDidUpdateState(_ central: CBCentralManager)
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber)
+    func centralManager(
+        _ central: CBCentralManager,
+        didDiscover peripheral: CBPeripheral,
+        advertisementData: [String: Any],
+        rssi RSSI: NSNumber
+    )
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral)
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?)
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?)
@@ -75,12 +72,12 @@ public class CBPeripheral {
         self.identifier = identifier
     }
 
-    public func discoverServices(_ serviceUUIDs: [CBUUID]?) { }
-    public func discoverCharacteristics(_ characteristicUUIDs: [CBUUID]?, for service: CBService) { }
-    public func setNotifyValue(_ enabled: Bool, for characteristic: CBCharacteristic) { }
-    public func writeValue(_ data: Data, for characteristic: CBCharacteristic, type: CBCharacteristicWriteType) { }
-    public func readRSSI() { }
-    public func readValue(for characteristic: CBCharacteristic) { }
+    public func discoverServices(_: [CBUUID]?) {}
+    public func discoverCharacteristics(_: [CBUUID]?, for _: CBService) {}
+    public func setNotifyValue(_: Bool, for _: CBCharacteristic) {}
+    public func writeValue(_: Data, for _: CBCharacteristic, type _: CBCharacteristicWriteType) {}
+    public func readRSSI() {}
+    public func readValue(for _: CBCharacteristic) {}
 }
 
 public class CBCentralManager {
@@ -89,29 +86,29 @@ public class CBCentralManager {
 
     public var state: CBManagerState = .unknown
 
-    public init(delegate: CBCentralManagerDelegate?, queue: DispatchQueue?) {
+    public init(delegate: CBCentralManagerDelegate?, queue _: DispatchQueue?) {
         self.delegate = delegate
         delegate?.centralManagerDidUpdateState(self)
     }
 
-    public func scanForPeripherals(withServices serviceUUIDs: [CBUUID]?, options: [String: Any]? = nil) {
+    public func scanForPeripherals(withServices _: [CBUUID]?, options _: [String: Any]? = nil) {
         isScanning = true
     }
 
     public func stopScan() { isScanning = false }
 
-    public func connect(_ peripheral: CBPeripheral, options: [String: Any]? = nil) { }
+    public func connect(_: CBPeripheral, options _: [String: Any]? = nil) {}
 
-    public func cancelPeripheralConnection(_ peripheral: CBPeripheral) { }
+    public func cancelPeripheralConnection(_: CBPeripheral) {}
 
-    public func retrievePeripherals(withIdentifiers identifiers: [UUID]) -> [CBPeripheral] { return [] }
+    public func retrievePeripherals(withIdentifiers _: [UUID]) -> [CBPeripheral] { [] }
 
-    public func retrieveConnectedPeripherals(withServices serviceUUIDs: [CBUUID]) -> [CBPeripheral] { return [] }
+    public func retrieveConnectedPeripherals(withServices _: [CBUUID]) -> [CBPeripheral] { [] }
 }
 
 // MARK: - Peripheral Manager (Server/Peripheral Mode)
 
-public struct CBAdvertisementData {
+public enum CBAdvertisementData {
     public static let LocalNameKey = "kCBAdvDataLocalName"
     public static let ServiceUUIDsKey = "kCBAdvDataServiceUUIDs"
 }
@@ -153,7 +150,11 @@ public protocol CBPeripheralManagerDelegate: AnyObject {
     func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?)
     func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?)
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic)
-    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic)
+    func peripheralManager(
+        _ peripheral: CBPeripheralManager,
+        central: CBCentral,
+        didUnsubscribeFrom characteristic: CBCharacteristic
+    )
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest)
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest])
     func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager)
@@ -161,7 +162,7 @@ public protocol CBPeripheralManagerDelegate: AnyObject {
 
 public class CBCentral {
     public let identifier: UUID
-    public var maximumUpdateValueLength: Int { return 512 }
+    public var maximumUpdateValueLength: Int { 512 }
 
     public init(identifier: UUID = UUID()) {
         self.identifier = identifier
@@ -216,7 +217,7 @@ public class CBMutableCharacteristic: CBCharacteristic {
 }
 
 public class CBMutableService: CBService {
-    public init(type uuid: CBUUID, primary: Bool) {
+    public init(type uuid: CBUUID, primary _: Bool) {
         super.init(uuid: uuid, characteristics: nil)
     }
 }
@@ -230,7 +231,7 @@ public class CBPeripheralManager {
     private var connectedCentrals: [CBCentral] = []
     private let queue: DispatchQueue?
 
-    public init(delegate: CBPeripheralManagerDelegate?, queue: DispatchQueue?, options: [String: Any]? = nil) {
+    public init(delegate: CBPeripheralManagerDelegate?, queue: DispatchQueue?, options _: [String: Any]? = nil) {
         self.delegate = delegate
         self.queue = queue
 
@@ -257,7 +258,7 @@ public class CBPeripheralManager {
         services.removeAll()
     }
 
-    public func startAdvertising(_ advertisementData: [String: Any]?) {
+    public func startAdvertising(_: [String: Any]?) {
         isAdvertising = true
 
         DispatchQueue.main.async {
@@ -269,15 +270,15 @@ public class CBPeripheralManager {
         isAdvertising = false
     }
 
-    public func respond(to request: CBATTRequest, withResult result: CBATTError) {
+    public func respond(to _: CBATTRequest, withResult _: CBATTError) {
         // In a real implementation, this would send the response back to the central
         // For the shim, this is a no-op
     }
 
-    public func updateValue(_ value: Data, for characteristic: CBMutableCharacteristic, onSubscribedCentrals centrals: [CBCentral]?) -> Bool {
+    public func updateValue(_: Data, for _: CBMutableCharacteristic, onSubscribedCentrals _: [CBCentral]?) -> Bool {
         // In a real implementation, this would send a notification to subscribed centrals
         // For the shim, we'll simulate success
-        return true
+        true
     }
 
     // Helper methods for simulator to inject events
@@ -303,4 +304,3 @@ public class CBPeripheralManager {
         delegate?.peripheralManager(self, didReceiveRead: request)
     }
 }
-

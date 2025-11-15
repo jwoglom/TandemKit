@@ -1,11 +1,11 @@
-import XCTest
-@testable import TandemKit
-@testable import TandemCore
 import LoopKit
+@testable import TandemCore
+@testable import TandemKit
+import XCTest
 
 final class TandemPumpManagerStateTests: XCTestCase {
     func testRawValueRoundTripPreservesLoopKitState() throws {
-        let pumpState = PumpState(address: 0x12345678, derivedSecret: Data([0x01, 0x02]), serverNonce: Data([0x03, 0x04]))
+        let pumpState = PumpState(address: 0x1234_5678, derivedSecret: Data([0x01, 0x02]), serverNonce: Data([0x03, 0x04]))
         let timestamp = Date(timeIntervalSinceReferenceDate: 1_234_567)
         let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: 142.5)
         let basalDose = DoseEntry(
@@ -27,7 +27,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         let schedule = BasalRateSchedule(
             items: [
                 RepeatingScheduleValue(startTime: 0, value: 0.8),
-                RepeatingScheduleValue(startTime: 3_600, value: 1.1)
+                RepeatingScheduleValue(startTime: 3600, value: 1.1)
             ],
             timeZone: TimeZone(secondsFromGMT: 0)!
         )
@@ -56,13 +56,13 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restoredState.lastBatteryReading?.chargeRemaining, battery.chargeRemaining)
         XCTAssertEqual(restoredState.lastBasalStatusDate, timestamp)
         switch restoredState.basalDeliveryState {
-        case .tempBasal(let dose)?:
+        case let .tempBasal(dose)?:
             XCTAssertEqual(dose, basalDose)
         default:
             XCTFail("Expected temp basal dose to round-trip")
         }
         switch restoredState.bolusState {
-        case .inProgress(let dose):
+        case let .inProgress(dose):
             XCTAssertEqual(dose, bolusDose)
         default:
             XCTFail("Expected bolus state to round-trip")
@@ -74,7 +74,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
     }
 
     func testVersion1RawValueMigration() throws {
-        let pumpState = PumpState(address: 0x87654321)
+        let pumpState = PumpState(address: 0x8765_4321)
         let lastReconciliation = Date(timeIntervalSinceReferenceDate: 2_468_000)
         let legacyRaw: [String: Any] = [
             "version": 1,
@@ -97,7 +97,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
     func testManagerRestoresCachedStatusFromRawState() throws {
         let timestamp = Date(timeIntervalSinceReferenceDate: 3_456_789)
         let pumpState = PumpState(
-            address: 0xABCDEF12,
+            address: 0xABCD_EF12,
             derivedSecret: Data([0x10, 0x11, 0x12, 0x13]),
             serverNonce: Data([0x20, 0x21, 0x22, 0x23])
         )

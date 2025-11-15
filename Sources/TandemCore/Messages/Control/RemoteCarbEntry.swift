@@ -1,14 +1,3 @@
-//
-//  RemoteCarbEntry.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of RemoteCarbEntryRequest and RemoteCarbEntryResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/RemoteCarbEntryRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/RemoteCarbEntryResponse.java
-//
-
 import Foundation
 
 /// Request to attach carbohydrate info to an in-progress bolus.
@@ -30,14 +19,14 @@ public class RemoteCarbEntryRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.carbs = Bytes.readShort(cargo, 0)
-        self.unknown = Int(cargo[2])
-        self.pumpTime = Bytes.readUint32(cargo, 3)
-        self.bolusId = Bytes.readShort(cargo, 7)
+        carbs = Bytes.readShort(cargo, 0)
+        unknown = Int(cargo[2])
+        pumpTime = Bytes.readUint32(cargo, 3)
+        bolusId = Bytes.readShort(cargo, 7)
     }
 
     public init(carbs: Int, pumpTime: UInt32, bolusId: Int, unknown: Int = 1) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(carbs),
             Data([UInt8(unknown & 0xFF)]),
             Bytes.toUint32(pumpTime),
@@ -66,12 +55,11 @@ public class RemoteCarbEntryResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF)])
+        cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
 }
-

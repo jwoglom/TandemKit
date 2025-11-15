@@ -1,6 +1,6 @@
 import Foundation
-import TandemCore
 import TandemBLE
+import TandemCore
 
 private struct AnyCodingKey: CodingKey {
     var stringValue: String
@@ -8,11 +8,11 @@ private struct AnyCodingKey: CodingKey {
 
     init?(stringValue: String) {
         self.stringValue = stringValue
-        self.intValue = nil
+        intValue = nil
     }
 
     init?(intValue: Int) {
-        self.stringValue = String(intValue)
+        stringValue = String(intValue)
         self.intValue = intValue
     }
 }
@@ -242,37 +242,47 @@ func buildMessageInfo(metadata: MessageMetadata, message: Message, cargo: Data, 
     )
 }
 
-func buildDecodedOutput(metadata: MessageMetadata,
-                        message: Message,
-                        cargo: Data,
-                        header: PacketHeader,
-                        crc: Data,
-                        packets: [String]) -> DecodedMessageOutput {
+func buildDecodedOutput(
+    metadata: MessageMetadata,
+    message: Message,
+    cargo: Data,
+    header: PacketHeader,
+    crc: Data,
+    packets: [String]
+) -> DecodedMessageOutput {
     let info = buildMessageInfo(metadata: metadata, message: message, cargo: cargo, payloadLength: cargo.count)
-    let headerInfo = DecodedMessageOutput.Header(packetsRemaining: header.packetsRemaining,
-                                                 packetTxId: header.packetTxId,
-                                                 messageTxId: header.messageTxId,
-                                                 declaredPayloadSize: header.declaredPayloadLength,
-                                                 actualPayloadSize: cargo.count,
-                                                 crc: crc.hexadecimalString)
+    let headerInfo = DecodedMessageOutput.Header(
+        packetsRemaining: header.packetsRemaining,
+        packetTxId: header.packetTxId,
+        messageTxId: header.messageTxId,
+        declaredPayloadSize: header.declaredPayloadLength,
+        actualPayloadSize: cargo.count,
+        crc: crc.hexadecimalString
+    )
     return DecodedMessageOutput(header: headerInfo, message: info, packets: packets)
 }
 
-func buildEncodedOutput(metadata: MessageMetadata,
-                        message: Message,
-                        cargo: Data,
-                        packets: [Packet],
-                        merged: Data) -> EncodedMessageOutput {
+func buildEncodedOutput(
+    metadata: MessageMetadata,
+    message: Message,
+    cargo: Data,
+    packets: [Packet],
+    merged: Data
+) -> EncodedMessageOutput {
     let packetInfos = packets.enumerated().map { index, packet in
-        EncodedMessageOutput.Packet(index: index,
-                                    packetsRemaining: packet.packetsRemaining,
-                                    txId: packet.txId,
-                                    hex: packet.build.hexadecimalString)
+        EncodedMessageOutput.Packet(
+            index: index,
+            packetsRemaining: packet.packetsRemaining,
+            txId: packet.txId,
+            hex: packet.build.hexadecimalString
+        )
     }
     let info = buildMessageInfo(metadata: metadata, message: message, cargo: cargo)
-    return EncodedMessageOutput(message: info,
-                                packets: packetInfos,
-                                mergedHex: merged.hexadecimalString)
+    return EncodedMessageOutput(
+        message: info,
+        packets: packetInfos,
+        mergedHex: merged.hexadecimalString
+    )
 }
 
 func printJSON<T: Encodable>(_ value: T) throws {

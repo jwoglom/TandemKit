@@ -1,7 +1,7 @@
-import Foundation
 import CoreBluetooth
-import TandemCore
+import Foundation
 import TandemBLE
+import TandemCore
 
 final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
     private final class Collector {
@@ -46,9 +46,11 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
 
     // MARK: - PeripheralManagerNotificationHandler
 
-    func peripheralManager(_ manager: PeripheralManager,
-                           didReceiveNotification value: Data,
-                           for characteristic: CBCharacteristic) {
+    func peripheralManager(
+        _: PeripheralManager,
+        didReceiveNotification value: Data,
+        for characteristic: CBCharacteristic
+    ) {
         guard let uuid = CharacteristicUUID(rawValue: characteristic.uuid.uuidString.uppercased()) else {
             return
         }
@@ -62,7 +64,10 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
 
     private func ingest(_ data: Data, characteristic: CharacteristicUUID) {
         guard data.count >= 5 else {
-            logger.warning("[PumpNotificationRouter] ignoring short packet len=\(data.count) characteristic=\(characteristic.prettyName)")
+            logger
+                .warning(
+                    "[PumpNotificationRouter] ignoring short packet len=\(data.count) characteristic=\(characteristic.prettyName)"
+                )
             return
         }
 
@@ -74,13 +79,15 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
             reportedLength += 256
         }
 
-        let candidates = MessageRegistry.bestMatches(opCode: opCode,
-                                                     characteristic: characteristic,
-                                                     payloadLength: reportedLength)
+        let candidates = MessageRegistry.bestMatches(
+            opCode: opCode,
+            characteristic: characteristic,
+            payloadLength: reportedLength
+        )
         let metadata = candidates.first
 
         let expectedSize: UInt8
-        if let meta = metadata, !meta.stream && !meta.variableSize {
+        if let meta = metadata, !meta.stream, !meta.variableSize {
             expectedSize = UInt8(truncatingIfNeeded: meta.size)
         } else {
             expectedSize = UInt8(truncatingIfNeeded: reportedLength)
@@ -92,12 +99,14 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
         if let existing = perCharacteristic[txId] {
             collector = existing
         } else {
-            var packetArray = PacketArrayList(expectedOpCode: opCode,
-                                              expectedCargoSize: expectedSize,
-                                              expectedTxId: txId,
-                                              isSigned: isSigned,
-                                              requestMetadata: nil,
-                                              responseMetadata: metadata)
+            var packetArray = PacketArrayList(
+                expectedOpCode: opCode,
+                expectedCargoSize: expectedSize,
+                expectedTxId: txId,
+                isSigned: isSigned,
+                requestMetadata: nil,
+                responseMetadata: metadata
+            )
             collector = Collector(packetArrayList: packetArray, metadata: metadata)
             perCharacteristic[txId] = collector
             collectors[characteristic] = perCharacteristic
@@ -106,7 +115,10 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
         do {
             try collector.packetArrayList.validatePacket(data)
         } catch {
-            logger.error("[PumpNotificationRouter] validation failed opCode=\(opCode) txId=\(txId) error=\(String(describing: error))")
+            logger
+                .error(
+                    "[PumpNotificationRouter] validation failed opCode=\(opCode) txId=\(txId) error=\(String(describing: error))"
+                )
             perCharacteristic.removeValue(forKey: txId)
             collectors[characteristic] = perCharacteristic
             return
@@ -133,9 +145,11 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
         if let meta = metadata {
             message = meta.type.init(cargo: payload)
         } else {
-            message = BTResponseParser.decodeMessage(opCode: collector.packetArrayList.opCode,
-                                                     characteristic: characteristic.cbUUID,
-                                                     payload: payload)
+            message = BTResponseParser.decodeMessage(
+                opCode: collector.packetArrayList.opCode,
+                characteristic: characteristic.cbUUID,
+                payload: payload
+            )
         }
 
         guard let finalMessage = message else {
@@ -150,10 +164,12 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
 
         let finalMetadata = metadata ?? MessageRegistry.metadata(for: finalMessage)
         session.runSession(withName: "Notification \(characteristic.prettyName) txId=\(txId)") {
-            session.handleIncoming(message: finalMessage,
-                                   metadata: finalMetadata,
-                                   characteristic: characteristic,
-                                   txId: txId)
+            session.handleIncoming(
+                message: finalMessage,
+                metadata: finalMetadata,
+                characteristic: characteristic,
+                txId: txId
+            )
         }
     }
 }

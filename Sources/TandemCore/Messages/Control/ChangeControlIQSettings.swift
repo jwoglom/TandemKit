@@ -1,14 +1,3 @@
-//
-//  ChangeControlIQSettings.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of ChangeControlIQSettingsRequest and ChangeControlIQSettingsResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/control/ChangeControlIQSettingsRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/control/ChangeControlIQSettingsResponse.java
-//
-
 import Foundation
 
 /// Request to enable or change Control-IQ settings.
@@ -28,13 +17,13 @@ public class ChangeControlIQSettingsRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.enabled = cargo[0] == 1
-        self.weightLbs = Bytes.readShort(cargo, 1)
-        self.totalDailyInsulinUnits = Int(cargo[4])
+        enabled = cargo[0] == 1
+        weightLbs = Bytes.readShort(cargo, 1)
+        totalDailyInsulinUnits = Int(cargo[4])
     }
 
     public init(enabled: Bool, weightLbs: Int, totalDailyInsulinUnits: Int) {
-        self.cargo = Bytes.combine(
+        cargo = Bytes.combine(
             Data([enabled ? 1 : 0]),
             Bytes.firstTwoBytesLittleEndian(weightLbs),
             Data([1, UInt8(totalDailyInsulinUnits & 0xFF), 1])
@@ -60,12 +49,11 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        self.status = Int(cargo[0])
+        status = Int(cargo[0])
     }
 
     public init(status: Int) {
-        self.cargo = Data([UInt8(status & 0xFF), 0, 0])
+        cargo = Data([UInt8(status & 0xFF), 0, 0])
         self.status = status
     }
 }
-

@@ -16,8 +16,8 @@ public class IdpActionMsg2HistoryLog: HistoryLog {
     public let name: String
 
     public required init(cargo: Data) {
-        self.idp = Int(cargo[10])
-        self.name = Bytes.readString(cargo, 18, 8)
+        idp = Int(cargo[10])
+        name = Bytes.readString(cargo, 18, 8)
         super.init(cargo: cargo)
     }
 
@@ -29,7 +29,7 @@ public class IdpActionMsg2HistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, idp: Int, name: String) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -40,4 +40,3 @@ public class IdpActionMsg2HistoryLog: HistoryLog {
         )
     }
 }
-

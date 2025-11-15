@@ -9,23 +9,35 @@ extension PumpPairingCodeValidationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .empty:
-            return LocalizedString("Enter the pairing code shown on your pump.", comment: "Error message when pairing code text field is empty")
+            return LocalizedString(
+                "Enter the pairing code shown on your pump.",
+                comment: "Error message when pairing code text field is empty"
+            )
         case .invalidLength:
-            return LocalizedString("Pairing codes are either 6 digits or 16 letters and numbers.", comment: "Error message when pairing code entry has the wrong length")
+            return LocalizedString(
+                "Pairing codes are either 6 digits or 16 letters and numbers.",
+                comment: "Error message when pairing code entry has the wrong length"
+            )
         }
     }
 
     public var recoverySuggestion: String? {
         switch self {
         case .empty:
-            return LocalizedString("Type the code displayed on the pump screen.", comment: "Recovery suggestion when pairing code text field is empty")
+            return LocalizedString(
+                "Type the code displayed on the pump screen.",
+                comment: "Recovery suggestion when pairing code text field is empty"
+            )
         case .invalidLength:
-            return LocalizedString("Check the code on the pump and try again.", comment: "Recovery suggestion when pairing code entry has the wrong length")
+            return LocalizedString(
+                "Check the code on the pump and try again.",
+                comment: "Recovery suggestion when pairing code entry has the wrong length"
+            )
         }
     }
 }
 
-public struct PumpStateSupplier {
+public enum PumpStateSupplier {
     private static let lock = NSRecursiveLock()
 
     private static func withLock<T>(_ body: () -> T) -> T {
@@ -33,6 +45,7 @@ public struct PumpStateSupplier {
         defer { lock.unlock() }
         return body()
     }
+
     static var pumpPairingCode: (() -> String)?
     static var jpakeDerivedSecretHex: (() -> String)?
     static var jpakeServerNonceHex: (() -> String)?
@@ -67,14 +80,15 @@ public struct PumpStateSupplier {
             (jpakeDerivedSecretHex?(), jpakeServerNonceHex?(), pumpPairingCode?())
         }
 
-        if (derivedSecret == nil || derivedSecret!.isEmpty) && (code == nil || code!.isEmpty) {
+        if derivedSecret == nil || derivedSecret!.isEmpty, code == nil || code!.isEmpty {
             fatalError("no pump authenticationKey")
         }
 
         if let ds = derivedSecret, !ds.isEmpty,
            let sn = serverNonce, !sn.isEmpty,
            let secretBytes = Data(hexadecimalString: ds),
-           let nonceBytes = Data(hexadecimalString: sn) {
+           let nonceBytes = Data(hexadecimalString: sn)
+        {
             let authKey = Hkdf.build(nonce: nonceBytes, keyMaterial: secretBytes)
             return authKey
         }
@@ -152,8 +166,8 @@ public struct PumpStateSupplier {
     public static func connectionSharingEnabled() -> Bool {
         withLock {
             tconnectAppConnectionSharing &&
-            sendSharedConnectionResponseMessages &&
-            relyOnConnectionSharingForAuthentication
+                sendSharedConnectionResponseMessages &&
+                relyOnConnectionSharingForAuthentication
         }
     }
 
@@ -162,8 +176,7 @@ public struct PumpStateSupplier {
     /// - Parameter rawCode: The user entered pairing code which may include separators or lowercase letters.
     /// - Returns: The sanitized pairing code that will be used for authentication.
     /// - Throws: ``PumpPairingCodeValidationError`` when the supplied code is empty or has an unexpected length.
-    @discardableResult
-    public static func sanitizeAndStorePairingCode(_ rawCode: String) throws -> String {
+    @discardableResult  public static func sanitizeAndStorePairingCode(_ rawCode: String) throws -> String {
         let trimmed = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw PumpPairingCodeValidationError.empty }
 

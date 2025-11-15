@@ -25,22 +25,50 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
     public let alertVolume: Int
 
     public required init(cargo: Data) {
-        self.modifiedData = Int(cargo[10])
-        self.qbDataStatus = Int(cargo[11])
-        self.qbActive = Int(cargo[12])
-        self.qbDataEntryType = Int(cargo[13])
-        self.qbIncrementUnits = Bytes.readShort(cargo, 14)
-        self.qbIncrementCarbs = Bytes.readShort(cargo, 16)
-        self.buttonVolume = Int(cargo[18])
-        self.qbVolume = Int(cargo[19])
-        self.bolusVolume = Int(cargo[20])
-        self.reminderVolume = Int(cargo[21])
-        self.alertVolume = Int(cargo[22])
+        modifiedData = Int(cargo[10])
+        qbDataStatus = Int(cargo[11])
+        qbActive = Int(cargo[12])
+        qbDataEntryType = Int(cargo[13])
+        qbIncrementUnits = Bytes.readShort(cargo, 14)
+        qbIncrementCarbs = Bytes.readShort(cargo, 16)
+        buttonVolume = Int(cargo[18])
+        qbVolume = Int(cargo[19])
+        bolusVolume = Int(cargo[20])
+        reminderVolume = Int(cargo[21])
+        alertVolume = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, modifiedData: Int, qbDataStatus: Int, qbActive: Int, qbDataEntryType: Int, qbIncrementUnits: Int, qbIncrementCarbs: Int, buttonVolume: Int, qbVolume: Int, bolusVolume: Int, reminderVolume: Int, alertVolume: Int) {
-        let payload = ParamChangeGlobalSettingsHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, modifiedData: modifiedData, qbDataStatus: qbDataStatus, qbActive: qbActive, qbDataEntryType: qbDataEntryType, qbIncrementUnits: qbIncrementUnits, qbIncrementCarbs: qbIncrementCarbs, buttonVolume: buttonVolume, qbVolume: qbVolume, bolusVolume: bolusVolume, reminderVolume: reminderVolume, alertVolume: alertVolume)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modifiedData: Int,
+        qbDataStatus: Int,
+        qbActive: Int,
+        qbDataEntryType: Int,
+        qbIncrementUnits: Int,
+        qbIncrementCarbs: Int,
+        buttonVolume: Int,
+        qbVolume: Int,
+        bolusVolume: Int,
+        reminderVolume: Int,
+        alertVolume: Int
+    ) {
+        let payload = ParamChangeGlobalSettingsHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            modifiedData: modifiedData,
+            qbDataStatus: qbDataStatus,
+            qbActive: qbActive,
+            qbDataEntryType: qbDataEntryType,
+            qbIncrementUnits: qbIncrementUnits,
+            qbIncrementCarbs: qbIncrementCarbs,
+            buttonVolume: buttonVolume,
+            qbVolume: qbVolume,
+            bolusVolume: bolusVolume,
+            reminderVolume: reminderVolume,
+            alertVolume: alertVolume
+        )
         self.modifiedData = modifiedData
         self.qbDataStatus = qbDataStatus
         self.qbActive = qbActive
@@ -55,8 +83,22 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, modifiedData: Int, qbDataStatus: Int, qbActive: Int, qbDataEntryType: Int, qbIncrementUnits: Int, qbIncrementCarbs: Int, buttonVolume: Int, qbVolume: Int, bolusVolume: Int, reminderVolume: Int, alertVolume: Int) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        modifiedData: Int,
+        qbDataStatus: Int,
+        qbActive: Int,
+        qbDataEntryType: Int,
+        qbIncrementUnits: Int,
+        qbIncrementCarbs: Int,
+        buttonVolume: Int,
+        qbVolume: Int,
+        bolusVolume: Int,
+        reminderVolume: Int,
+        alertVolume: Int
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -76,4 +118,3 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
         )
     }
 }
-

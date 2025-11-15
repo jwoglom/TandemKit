@@ -1,12 +1,3 @@
-//
-//  CgmDataGxHistoryLog.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//  Migrated from PumpX2's CgmDataGxHistoryLog.
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/historyLog/CgmDataGxHistoryLog.java
-//
-
 import Foundation
 
 /// History log entry containing a GX CGM data sample.
@@ -22,18 +13,38 @@ public class CgmDataGxHistoryLog: HistoryLog {
     public let transmitterTimestamp: UInt32
 
     public required init(cargo: Data) {
-        self.status = Bytes.readShort(cargo, 10)
-        self.type = Int(cargo[12])
-        self.rate = Int(cargo[13])
-        self.rssi = Int(cargo[15])
-        self.value = Bytes.readShort(cargo, 16)
-        self.timestamp = Bytes.readUint32(cargo, 18)
-        self.transmitterTimestamp = Bytes.readUint32(cargo, 22)
+        status = Bytes.readShort(cargo, 10)
+        type = Int(cargo[12])
+        rate = Int(cargo[13])
+        rssi = Int(cargo[15])
+        value = Bytes.readShort(cargo, 16)
+        timestamp = Bytes.readUint32(cargo, 18)
+        transmitterTimestamp = Bytes.readUint32(cargo, 22)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, status: Int, type: Int, rate: Int, rssi: Int, value: Int, timestamp: UInt32, transmitterTimestamp: UInt32) {
-        let payload = CgmDataGxHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, status: status, type: type, rate: rate, rssi: rssi, value: value, timestamp: timestamp, transmitterTimestamp: transmitterTimestamp)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        status: Int,
+        type: Int,
+        rate: Int,
+        rssi: Int,
+        value: Int,
+        timestamp: UInt32,
+        transmitterTimestamp: UInt32
+    ) {
+        let payload = CgmDataGxHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            status: status,
+            type: type,
+            rate: rate,
+            rssi: rssi,
+            value: value,
+            timestamp: timestamp,
+            transmitterTimestamp: transmitterTimestamp
+        )
         self.status = status
         self.type = type
         self.rate = rate
@@ -44,8 +55,18 @@ public class CgmDataGxHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, status: Int, type: Int, rate: Int, rssi: Int, value: Int, timestamp: UInt32, transmitterTimestamp: UInt32) -> Data {
-        return HistoryLog.fillCargo(
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        status: Int,
+        type: Int,
+        rate: Int,
+        rssi: Int,
+        value: Int,
+        timestamp: UInt32,
+        transmitterTimestamp: UInt32
+    ) -> Data {
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -61,4 +82,3 @@ public class CgmDataGxHistoryLog: HistoryLog {
         )
     }
 }
-

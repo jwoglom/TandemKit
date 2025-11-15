@@ -1,7 +1,7 @@
-import Foundation
-import TandemCore
-import Logging
 import CoreBluetooth
+import Foundation
+import Logging
+import TandemCore
 
 /// BLE peripheral transport for simulating a Tandem pump
 /// Works on both macOS (native CoreBluetooth) and Linux (custom shim)
@@ -38,7 +38,7 @@ class BLEPeripheralTransport: NSObject, SimulatorTransport {
     init(deviceName: String = "Tandem t:slim X2") {
         self.deviceName = deviceName
         // Tandem pump service UUID - must match ServiceUUID.PUMP_SERVICE
-        self.serviceUUID = CBUUID(string: "0000fdfb-0000-1000-8000-00805f9b34fb")
+        serviceUUID = CBUUID(string: "0000fdfb-0000-1000-8000-00805f9b34fb")
 
         super.init()
 
@@ -305,7 +305,7 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
         }
     }
 
-    func peripheralManager(_ peripheral: CBPeripheralManager, didAdd service: CBService, error: Error?) {
+    func peripheralManager(_: CBPeripheralManager, didAdd _: CBService, error: Error?) {
         if let error = error {
             logger.error("Failed to add service: \(error.localizedDescription)")
             if let continuation = startContinuation {
@@ -343,7 +343,7 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
         }
     }
 
-    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
+    func peripheralManager(_: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         logger.info("Central \(central.identifier) subscribed to characteristic: \(characteristic.uuid.uuidString)")
 
         lock.lock()
@@ -359,7 +359,7 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
         logger.info("BLE peripheral is now connected")
     }
 
-    func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
+    func peripheralManager(_: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
         logger.info("Central \(central.identifier) unsubscribed from characteristic: \(characteristic.uuid.uuidString)")
 
         lock.lock()
@@ -415,7 +415,7 @@ extension BLEPeripheralTransport: CBPeripheralManagerDelegate {
         peripheral.respond(to: request, withResult: .readNotPermitted)
     }
 
-    func peripheralManagerIsReady(toUpdateSubscribers peripheral: CBPeripheralManager) {
+    func peripheralManagerIsReady(toUpdateSubscribers _: CBPeripheralManager) {
         logger.debug("Peripheral manager is ready to send more notifications")
         // This is called when the notification queue has space available
         // We could use this to retry failed notifications
@@ -436,7 +436,7 @@ enum BLEPeripheralTransportError: Error, LocalizedError {
         switch self {
         case .notConnected:
             return "BLE peripheral is not connected"
-        case .unknownCharacteristic(let char):
+        case let .unknownCharacteristic(char):
             return "Unknown characteristic: \(char.rawValue)"
         case .peripheralManagerNotInitialized:
             return "Peripheral manager not initialized"

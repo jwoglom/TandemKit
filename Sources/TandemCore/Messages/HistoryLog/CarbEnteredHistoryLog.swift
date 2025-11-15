@@ -15,7 +15,7 @@ public class CarbEnteredHistoryLog: HistoryLog {
     public let carbs: Float
 
     public required init(cargo: Data) {
-        self.carbs = Bytes.readFloat(cargo, 10)
+        carbs = Bytes.readFloat(cargo, 10)
         super.init(cargo: cargo)
     }
 
@@ -26,7 +26,7 @@ public class CarbEnteredHistoryLog: HistoryLog {
     }
 
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, carbs: Float) -> Data {
-        return HistoryLog.fillCargo(
+        HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
@@ -36,4 +36,3 @@ public class CarbEnteredHistoryLog: HistoryLog {
         )
     }
 }
-
