@@ -73,9 +73,12 @@ public struct BTResponseParser {
 
     public static func decodeMessage(opCode: UInt8, characteristic: CBUUID, payload: Data) -> Message? {
         let charEnum = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased())
-        let candidates = MessageRegistry.bestMatches(opCode: opCode,
+        var candidates = MessageRegistry.bestMatches(opCode: opCode,
                                                      characteristic: charEnum,
                                                      payloadLength: payload.count)
+        if candidates.isEmpty && opCode == ErrorResponse.props.opCode {
+            return ErrorResponse(cargo: payload)
+        }
         if candidates.isEmpty {
             responseParserLogger.warning("[BTResponseParser] No registry candidate for opCode=\(opCode) characteristic=\(characteristic.uuidString) payloadLength=\(payload.count)")
         }

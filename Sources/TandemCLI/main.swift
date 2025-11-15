@@ -1137,6 +1137,11 @@ private final class PairingCoordinator: NSObject, BluetoothManagerDelegate, Pump
         print("[PairingCoordinator] notification message=\(name) characteristic=\(characteristic.prettyName) txId=\(txId)")
     }
 
+    func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
+        let requestName = String(describing: type(of: event.request))
+        print("[PairingCoordinator] pump fault code=\(event.rawCode) category=\(event.category) request=\(requestName) attempt=\(event.attempt) willRetry=\(event.willRetry)")
+    }
+
     // MARK: - Helpers
 
     private func scheduleTimeout() {
