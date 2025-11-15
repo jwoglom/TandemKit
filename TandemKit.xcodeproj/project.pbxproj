@@ -1343,6 +1343,12 @@
 			);
 			mainGroup = 1AAA18642D2B1E060061C043;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1A55E0E92EC941A0006E651D /* XCRemoteSwiftPackageReference "SwiftECC" */,
+				1A55E0EA2EC9430F006E651D /* XCRemoteSwiftPackageReference "BigInt" */,
+				1A55E0EB2EC94334006E651D /* XCRemoteSwiftPackageReference "ASN1" */,
+				1A55E0EC2EC9436D006E651D /* XCRemoteSwiftPackageReference "Digest" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1AAA186F2D2B1E060061C043 /* Products */;
 			projectDirPath = "";
@@ -2269,6 +2275,41 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1A55E0E92EC941A0006E651D /* XCRemoteSwiftPackageReference "SwiftECC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/SwiftECC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.5.0;
+			};
+		};
+		1A55E0EA2EC9430F006E651D /* XCRemoteSwiftPackageReference "BigInt" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/BigInt";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.22.0;
+			};
+		};
+		1A55E0EB2EC94334006E651D /* XCRemoteSwiftPackageReference "ASN1" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/ASN1";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+		1A55E0EC2EC9436D006E651D /* XCRemoteSwiftPackageReference "Digest" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/Digest";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.13.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = 1AAA18652D2B1E060061C043 /* Project object */;
 }

@@ -61,6 +61,7 @@ public enum PumpChallengeRequestBuilder {
 
             return nextMessage
         #else
+            print("<!> ECJPAKE not available, Tandem pairing will not work!!")
             throw InvalidPairingCodeFormat("ECJPAKE not supported on this platform")
         #endif
     }
