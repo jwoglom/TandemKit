@@ -1051,7 +1051,7 @@ public class TandemPumpManager: PumpManager {
         }
 
         let baselineRate = scheduledBasalRateForTempBasal(requestedRate: unitsPerHour)
-        let scheduledQuantity = HKQuantity(unit: HKUnit.internationalUnitPerHour(), doubleValue: baselineRate)
+        let scheduledQuantity = HKQuantity(unit: HKUnit.internationalUnit().unitDivided(by: .hour()), doubleValue: baselineRate)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -1587,7 +1587,7 @@ private extension PumpManagerStatus.BasalDeliveryState {
         switch self {
         case let .tempBasal(dose):
             if let quantity = dose.scheduledBasalRate {
-                return quantity.doubleValue(for: HKUnit.internationalUnitPerHour())
+                return quantity.doubleValue(for: HKUnit.internationalUnit().unitDivided(by: .hour()))
             }
             return dose.programmedUnits
         default:
