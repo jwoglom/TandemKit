@@ -88,25 +88,73 @@ public struct PumpStateSupplier {
     // MARK: - Configuration helpers
 
     public static func enableActionsAffectingInsulinDelivery() {
+        setActionsAffectingInsulinDeliveryEnabled(true)
+    }
+
+    public static func disableActionsAffectingInsulinDelivery() {
+        setActionsAffectingInsulinDeliveryEnabled(false)
+    }
+
+    public static func setActionsAffectingInsulinDeliveryEnabled(_ enabled: Bool) {
         withLock {
-            actionsAffectingInsulinDeliveryEnabled = { true }
+            actionsAffectingInsulinDeliveryEnabled = { enabled }
         }
     }
 
-    static func enableTconnectAppConnectionSharing() {
+    public static func enableTconnectAppConnectionSharing() {
         withLock { tconnectAppConnectionSharing = true }
     }
 
-    static func enableSendSharedConnectionResponseMessages() {
+    public static func disableTconnectAppConnectionSharing() {
+        withLock { tconnectAppConnectionSharing = false }
+    }
+
+    public static func enableSendSharedConnectionResponseMessages() {
         withLock { sendSharedConnectionResponseMessages = true }
     }
 
-    static func enableRelyOnConnectionSharingForAuthentication() {
+    public static func disableSendSharedConnectionResponseMessages() {
+        withLock { sendSharedConnectionResponseMessages = false }
+    }
+
+    public static func enableRelyOnConnectionSharingForAuthentication() {
         withLock { relyOnConnectionSharingForAuthentication = true }
     }
 
-    static func enableOnlySnoopBluetooth() {
+    public static func disableRelyOnConnectionSharingForAuthentication() {
+        withLock { relyOnConnectionSharingForAuthentication = false }
+    }
+
+    public static func enableOnlySnoopBluetooth() {
         withLock { onlySnoopBluetooth = true }
+    }
+
+    public static func disableOnlySnoopBluetooth() {
+        withLock { onlySnoopBluetooth = false }
+    }
+
+    public static func setConnectionSharingEnabled(_ enabled: Bool) {
+        if enabled {
+            enableTconnectAppConnectionSharing()
+            enableSendSharedConnectionResponseMessages()
+            enableRelyOnConnectionSharingForAuthentication()
+        } else {
+            disableTconnectAppConnectionSharing()
+            disableSendSharedConnectionResponseMessages()
+            disableRelyOnConnectionSharingForAuthentication()
+        }
+    }
+
+    public static func disableConnectionSharing() {
+        setConnectionSharingEnabled(false)
+    }
+
+    public static func connectionSharingEnabled() -> Bool {
+        withLock {
+            tconnectAppConnectionSharing &&
+            sendSharedConnectionResponseMessages &&
+            relyOnConnectionSharingForAuthentication
+        }
     }
 
     /// Normalizes and stores a pump pairing code so that future requests can fetch it.

@@ -114,6 +114,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private(set) var statusUpdates: [StatusUpdate] = []
     private(set) var recordedErrors: [PumpManagerError] = []
     private(set) var didUpdateStateCallCount: Int = 0
+    var didUpdateStateExpectation: XCTestExpectation?
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
@@ -182,6 +183,8 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     func pumpManagerDidUpdateState(_ pumpManager: PumpManager) {
         didUpdateStateCallCount += 1
+        didUpdateStateExpectation?.fulfill()
+        didUpdateStateExpectation = nil
     }
 
     func pumpManager(
