@@ -54,18 +54,50 @@ final class TandemPumpManagerConnectionTests: XCTestCase {
                 basalModifiedBitmask: 0
             )
         )
+        mockPeripheralManager.enqueueResponse(
+            for: CurrentBolusStatusRequest.self,
+            response: CurrentBolusStatusResponse(
+                statusId: 0,
+                bolusId: 0,
+                timestamp: 0,
+                requestedVolume: 0,
+                bolusSourceId: 0,
+                bolusTypeBitmask: 0
+            )
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: CurrentEGVGuiDataRequest.self,
+            response: CurrentEGVGuiDataResponse(
+                bgReadingTimestampSeconds: 0,
+                cgmReading: 120,
+                egvStatusId: CurrentEGVGuiDataResponse.EGVStatus.VALID.rawValue,
+                trendRate: 3
+            )
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: AlertStatusRequest.self,
+            response: AlertStatusResponse(intMap: 0)
+        )
+        mockPeripheralManager.enqueueResponse(
+            for: AlarmStatusRequest.self,
+            response: AlarmStatusResponse(intMap: 0)
+        )
 
         let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
         let mockPumpComm = MockPumpComm(pumpState: pumpState)
         manager.setPumpCommForTesting(mockPumpComm)
 
         let telemetryExpectation = expectation(description: "Telemetry triggered")
-        telemetryExpectation.expectedFulfillmentCount = 3
+        telemetryExpectation.expectedFulfillmentCount = 7
 
         mockPumpComm.onSend = { message in
             if message is CurrentBatteryV2Request ||
                 message is InsulinStatusRequest ||
-                message is CurrentBasalStatusRequest {
+                message is CurrentBasalStatusRequest ||
+                message is CurrentBolusStatusRequest ||
+                message is CurrentEGVGuiDataRequest ||
+                message is AlertStatusRequest ||
+                message is AlarmStatusRequest {
                 telemetryExpectation.fulfill()
             }
         }
