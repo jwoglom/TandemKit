@@ -71,7 +71,7 @@ public class PumpCommSession {
             #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
                 try pairUsingJpake(transport: transport, pairingCode: pairingCode)
             #else
-            logger.error("[PumpCommSession] Pairing cannot be performed, no JPAKE import")
+                logger.error("[PumpCommSession] Pairing cannot be performed, no JPAKE import")
                 throw PumpCommError.other
             #endif
         } else {
