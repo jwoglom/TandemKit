@@ -14,6 +14,13 @@ struct TandemKitScanView: View {
                 .bold()
                 .padding(.horizontal)
 
+            Text(LocalizedString(
+                "If your pump is not displayed, place the Mobi on its charger and pick it up. Then wait 3 seconds and press the pump button, wait 1 second, and press it again.",
+                comment: "Subtitle for TandemKitScanView.."
+            ))
+                .font(.caption)
+                .padding(.horizontal)
+
             HStack(alignment: .center, spacing: 0) {
                 Text(
                     !$viewModel.isConnecting.wrappedValue ?
@@ -68,7 +75,13 @@ struct TandemKitScanView: View {
             if let message = $viewModel.pinCodePromptError.wrappedValue {
                 Text(message)
             } else {
-                Text(LocalizedString("Enter the pairing code from your pump", comment: "Tandem pairing code prompt message"))
+                VStack {
+                    Text(LocalizedString("Enter the pairing code from your pump", comment: "Tandem pairing code prompt message"))
+                    Text(LocalizedString(
+                        "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
+                        comment: "Tandem instructions for finding pairing code"
+                    )).font(.caption)
+                }
             }
         }
     }

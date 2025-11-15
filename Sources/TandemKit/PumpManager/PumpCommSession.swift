@@ -2,6 +2,12 @@ import Dispatch
 import Foundation
 import TandemCore
 
+#if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+    import BigInt
+    import CryptoKit
+    import SwiftECC
+#endif
+
 protocol PumpCommSessionDelegate: AnyObject {
     func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState)
     func pumpCommSession(
