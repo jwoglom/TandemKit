@@ -191,7 +191,7 @@ public class TandemPumpManager: PumpManager {
             device: HKDevice(
                 name: "TandemPump",
                 manufacturer: "Tandem",
-                model: "t:slim X2",
+                model: "Mobi",
                 hardwareVersion: nil as String?,
                 firmwareVersion: nil as String?,
                 softwareVersion: nil as String?,
@@ -208,6 +208,7 @@ public class TandemPumpManager: PumpManager {
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         var status = makeDefaultStatus()
+        // TODO(jwoglom): add hardware/firmware/software versions from hardwareinforequest
         status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
         status.bolusState = state.bolusState
         status.deliveryIsUncertain = state.deliveryIsUncertain
