@@ -34,6 +34,8 @@ extension PumpCommError: LocalizedError {
                 "Feature not implemented",
                 comment: "Error message shown when a feature is not yet implemented"
             )
+        case .pumpChallengeError:
+            return LocalizedString("Pump challenge error", comment: "Error shown when we cannot perform crypto challenge operations to pair")
         default:
             return nil
         }
