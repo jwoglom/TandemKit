@@ -155,7 +155,7 @@ import Foundation
 
     // MARK: - Pump Manager Status
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct PumpStatusHighlight: DeviceStatusHighlight, Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct PumpStatusHighlight: DeviceStatusHighlight, Equatable {
         public var localizedMessage: String
         public var imageName: String
         public var state: DeviceStatusHighlightState
@@ -167,7 +167,7 @@ import Foundation
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct PumpLifecycleProgress: DeviceLifecycleProgress, Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct PumpLifecycleProgress: DeviceLifecycleProgress, Equatable {
         public var percentComplete: Double
         public var progressState: DeviceLifecycleProgressState
 
@@ -177,7 +177,7 @@ import Foundation
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct PumpManagerStatus: Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct PumpManagerStatus: Equatable {
         public enum BasalDeliveryState: Equatable {
             case active(_ at: Date)
             case initiatingTempBasal
@@ -231,11 +231,11 @@ import Foundation
 
     // MARK: - Pump Manager Delegates
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManagerStatusObserver: AnyObject {
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerStatusObserver: AnyObject {
         func pumpManager(_ pumpManager: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus)
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObserver,
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerDelegate: DeviceManagerDelegate, PumpManagerStatusObserver,
         AnyObject
     {
         func pumpManagerBLEHeartbeatDidFire(_ pumpManager: PumpManager)
@@ -275,7 +275,7 @@ import Foundation
         var automaticDosingEnabled: Bool { get }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManagerDosingDecisionDelegate: AnyObject {
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerDosingDecisionDelegate: AnyObject {
         func pumpManager(_ pumpManager: PumpManager, didEnactBolus result: PumpManagerResult<DoseEntry>)
         func pumpManager(_ pumpManager: PumpManager, didCancelBolus result: PumpManagerResult<DoseEntry?>)
         func pumpManager(_ pumpManager: PumpManager, didEnactTempBasal result: PumpManagerResult<DoseEntry>)
@@ -285,16 +285,16 @@ import Foundation
 
     // MARK: - Pump Manager Protocol
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum PumpManagerResult<T> {
+    @available(macOS 13.0, iOS 14.0, *) public enum PumpManagerResult<T> {
         case success(T)
         case failure(PumpManagerError)
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol DoseProgressReporter {
+    @available(macOS 13.0, iOS 14.0, *) public protocol DoseProgressReporter {
         var progress: DoseProgress { get }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct DoseProgress {
+    @available(macOS 13.0, iOS 14.0, *) public struct DoseProgress {
         public let deliveredUnits: Double
         public let percentComplete: Double
 
@@ -304,7 +304,7 @@ import Foundation
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManager: DeviceManager {
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManager: DeviceManager {
         static var onboardingMaximumBasalScheduleEntryCount: Int { get }
         static var onboardingSupportedBasalRates: [Double] { get }
         static var onboardingSupportedBolusVolumes: [Double] { get }
@@ -386,7 +386,7 @@ import Foundation
 
     // MARK: - Pump Manager UI
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol PumpManagerUI: PumpManager {
+    @available(macOS 13.0, iOS 14.0, *) public protocol PumpManagerUI: PumpManager {
         #if canImport(UIKit)
             func pairingViewController(onFinished: @escaping (Result<Void, Error>) -> Void) -> UIViewController
             func settingsViewController() -> UIViewController
@@ -396,7 +396,7 @@ import Foundation
 
     // MARK: - Dose Types & Entries
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum DoseType: String, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public enum DoseType: String, Codable {
         case basal
         case bolus
         case resume
@@ -404,12 +404,12 @@ import Foundation
         case tempBasal
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum DoseUnit: String, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public enum DoseUnit: String, Codable {
         case units
         case unitsPerHour
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum InsulinType: String, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public enum InsulinType: String, Codable {
         case rapidActingAnalog
         case ultraRapidActing
         case ultraRapidInsulin
@@ -417,7 +417,7 @@ import Foundation
         case unknown
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct DoseEntry: TimelineValue, Equatable, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public struct DoseEntry: TimelineValue, Equatable, Codable {
         public let type: DoseType
         public let startDate: Date
         public var endDate: Date
@@ -515,7 +515,7 @@ import Foundation
 
     // MARK: - Scheduling & Limits
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct RepeatingScheduleValue<T>: Codable,
+    @available(macOS 13.0, iOS 14.0, *) public struct RepeatingScheduleValue<T>: Codable,
         Equatable where T: Codable & Equatable
     {
         public var startTime: TimeInterval
@@ -527,7 +527,7 @@ import Foundation
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct BasalRateSchedule: Codable, Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct BasalRateSchedule: Codable, Equatable {
         public var items: [RepeatingScheduleValue<Double>]
         public var timeZone: TimeZone
 
@@ -537,7 +537,7 @@ import Foundation
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct DeliveryLimits: Codable, Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Codable, Equatable {
         public var maximumBasalRatePerHour: Double?
         public var maximumBolus: Double?
 
@@ -549,22 +549,12 @@ import Foundation
 
     // MARK: - Reservoir and Events
 
-    @available(macOS 13.0, iOS 14.0, *)  public protocol ReservoirValue {
+    @available(macOS 13.0, iOS 14.0, *) public protocol ReservoirValue {
         var startDate: Date { get }
         var unitVolume: Double { get }
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct SimpleReservoirValue: ReservoirValue {
-        public let startDate: Date
-        public let unitVolume: Double
-
-        public init(startDate: Date, unitVolume: Double) {
-            self.startDate = startDate
-            self.unitVolume = unitVolume
-        }
-    }
-
-    @available(macOS 13.0, iOS 14.0, *)  public enum PumpEventType: String, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public enum PumpEventType: String, Codable {
         case alarm
         case alarmClear
         case basal
@@ -576,7 +566,7 @@ import Foundation
         case tempBasal
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public struct NewPumpEvent: Codable, Equatable {
+    @available(macOS 13.0, iOS 14.0, *) public struct NewPumpEvent: Codable, Equatable {
         public let date: Date
         public let dose: DoseEntry?
         public let isMutable: Bool
@@ -603,7 +593,7 @@ import Foundation
 
     // MARK: - Errors & Activation
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum PumpManagerError: Error {
+    @available(macOS 13.0, iOS 14.0, *) public enum PumpManagerError: Error {
         case configuration(Error?)
         case connection(Error?)
         case communication(Error?)
@@ -611,7 +601,7 @@ import Foundation
         case uncertainDelivery
     }
 
-    @available(macOS 13.0, iOS 14.0, *)  public enum BolusActivationType: String, Codable {
+    @available(macOS 13.0, iOS 14.0, *) public enum BolusActivationType: String, Codable {
         case automatic
         case manualNoRecommendation
         case manualRecommendationAccepted

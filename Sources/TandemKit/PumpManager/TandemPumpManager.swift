@@ -68,8 +68,10 @@ private struct ActiveTempBasal {
 }
 
 @available(macOS 13.0, iOS 14.0, *)
-public class TandemPumpManager: PumpManager {
-    public static var localizedTitle: String = "TandemPumpManager"
+public class TandemPumpManager: PumpManager, Pluggable {
+    public static var pluginIdentifier: String = "TandemPumpManager"
+
+    public var localizedTitle: String = "TandemPumpManager"
     public static var managerIdentifier: String = "Tandem"
     public static let onboardingMaximumBasalScheduleEntryCount: Int = 24
     public static let onboardingSupportedBasalRates: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0]
@@ -1361,8 +1363,14 @@ public class TandemPumpManager: PumpManager {
 
                 self.notifyDelegateStateUpdated()
 
-                self.delegateQueue.async {
-                    completion(.success(schedule))
+                if let schedule = schedule {
+                    self.delegateQueue.async {
+                        completion(.success(schedule))
+                    }
+                } else {
+                    self.delegateQueue.async {
+                        completion(.failure(PumpManagerError.communication(PumpCommError.other)))
+                    }
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.other
@@ -1391,9 +1399,10 @@ public class TandemPumpManager: PumpManager {
             guard let self = self else { return }
 
             do {
+                let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
                 var appliedLimits = DeliveryLimits(maximumBasalRate: nil, maximumBolus: nil)
 
-                if let maxBasal = deliveryLimits.maximumBasalRate {
+                if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
                     let milliunits = Int((maxBasal * 1000.0).rounded())
                     let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -1405,10 +1414,10 @@ public class TandemPumpManager: PumpManager {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    appliedLimits.maximumBasalRatePerHour = maxBasal
+                    appliedLimits.maximumBasalRate = HKQuantity.init(unit: hkUnit, doubleValue: maxBasal)
                 }
 
-                if let maxBolus = deliveryLimits.maximumBolus {
+                if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
                     let milliunits = Int((maxBolus * 1000.0).rounded())
                     let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -1420,12 +1429,12 @@ public class TandemPumpManager: PumpManager {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    appliedLimits.maximumBolus = maxBolus
+                    appliedLimits.maximumBolus = HKQuantity.init(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
                 }
 
                 var managerState = self.lockedState.value
-                managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRatePerHour
-                managerState.settings.maxBolus = appliedLimits.maximumBolus
+                managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRate?.doubleValue(for: hkUnit)
+                managerState.settings.maxBolus = appliedLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
                 self.lockedState.value = managerState
 
                 self.notifyDelegateStateUpdated()
@@ -1596,9 +1605,16 @@ private extension PumpManagerStatus.BasalDeliveryState {
     }
 }
 
+extension TandemPumpManager: AlertResponder, AlertSoundVendor {
+    public func getSoundBaseURL() -> URL? {
+        nil
+    }
 
-extension TandemPumpManager : AlertResponder {
-    public func acknowledgeAlert(alertIdentifier: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
+    public func getSounds() -> [LoopKit.Alert.Sound] {
+        []
+    }
+
+    public func acknowledgeAlert(alertIdentifier _: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
         completion(nil)
     }
 }

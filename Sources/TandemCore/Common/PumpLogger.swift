@@ -7,7 +7,7 @@ public enum PumpLogging {
     private static let lock = NSLock()
     private static var handler: Handler?
 
-    @discardableResult  public static func setHandler(_ newHandler: Handler?) -> Handler? {
+    @discardableResult public static func setHandler(_ newHandler: Handler?) -> Handler? {
         lock.lock()
         let previous = handler
         handler = newHandler

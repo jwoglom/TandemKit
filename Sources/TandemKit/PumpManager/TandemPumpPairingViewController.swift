@@ -75,7 +75,7 @@
             title = LocalizedString("Pair Tandem Pump", comment: "Title for Tandem pump pairing flow")
         }
 
-        @available(*, unavailable)  required init?(coder _: NSCoder) {
+        @available(*, unavailable) required init?(coder _: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
 
@@ -115,12 +115,12 @@
             }
         }
 
-        @objc  private func textDidChange() {
+        @objc private func textDidChange() {
             statusLabel.isHidden = true
             updateInteractionState()
         }
 
-        @objc  private func pairButtonTapped() {
+        @objc private func pairButtonTapped() {
             guard !isPairing else { return }
             guard let code = pairingCodeField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else {
                 showStatus(.failure(PumpPairingCodeValidationError.empty))
@@ -147,8 +147,16 @@
                 )
             case let .failure(error):
                 statusLabel.textColor = .systemRed
-                statusLabel.text = [error.localizedDescription, error.recoverySuggestion].compactMap { $0 }
-                    .joined(separator: "\n")
+
+                var errors = [error.localizedDescription]
+                if let error = error as? PumpCommsError, let message = error.recoverySuggestion {
+                    errors.append(message)
+                }
+                if let error = error as? PumpCommError, let message = error.recoverySuggestion {
+                    errors.append(message)
+                }
+
+                statusLabel.text = errors.compactMap { $0 }.joined(separator: "\n")
             }
             statusLabel.isHidden = false
         }

@@ -79,11 +79,11 @@ public class TandemPump {
 
     // MARK: - Bluetooth events
 
-    @MainActor  func onPumpConnected(_ manager: PeripheralManager) {
+    @MainActor func onPumpConnected(_ manager: PeripheralManager) {
         sendDefaultStartupRequests(manager)
     }
 
-    @MainActor  private func sendDefaultStartupRequests(_ manager: PeripheralManager) {
+    @MainActor private func sendDefaultStartupRequests(_ manager: PeripheralManager) {
         log.default("Sending default startup requests")
 
         // Send initial status requests that Loop/Trio need
@@ -101,11 +101,11 @@ public class TandemPump {
         }
     }
 
-    @MainActor  public func sendCommand(_ message: Message, using manager: PeripheralManager) {
+    @MainActor public func sendCommand(_ message: Message, using manager: PeripheralManager) {
         send(message, via: manager)
     }
 
-    @MainActor  private func send(_ message: Message, via manager: PeripheralManager) {
+    @MainActor private func send(_ message: Message, via manager: PeripheralManager) {
         let wrapper = TronMessageWrapper(message: message, currentTxId: currentTxId)
         currentTxId = currentTxId &+ 1
         let targetCharacteristic = type(of: message).props.characteristic
