@@ -49,28 +49,35 @@ public class TandemPump {
     // MARK: - Configuration helpers
 
     func enableActionsAffectingInsulinDelivery() {
-        // TODO: Implement when PumpStateSupplier is available
-        print("TandemPump: enableActionsAffectingInsulinDelivery() called")
+        PumpStateSupplier.enableActionsAffectingInsulinDelivery()
     }
 
     func enableTconnectAppConnectionSharing() {
-        // TODO: Implement when PumpStateSupplier is available
-        print("TandemPump: enableTconnectAppConnectionSharing() called")
+        PumpStateSupplier.enableTconnectAppConnectionSharing()
     }
 
     func enableSendSharedConnectionResponseMessages() {
-        // TODO: Implement when PumpStateSupplier is available
-        print("TandemPump: enableSendSharedConnectionResponseMessages() called")
+        PumpStateSupplier.enableSendSharedConnectionResponseMessages()
     }
 
     func relyOnConnectionSharingForAuthentication() {
-        // TODO: Implement when PumpStateSupplier is available
-        print("TandemPump: relyOnConnectionSharingForAuthentication() called")
+        PumpStateSupplier.enableRelyOnConnectionSharingForAuthentication()
     }
 
     func onlySnoopBluetoothAndBlockAllPumpX2Functionality() {
-        // TODO: Implement when PumpStateSupplier is available
-        print("TandemPump: onlySnoopBluetoothAndBlockAllPumpX2Functionality() called")
+        PumpStateSupplier.enableOnlySnoopBluetooth()
+    }
+
+    func configureDeliveryActions(enabled: Bool) {
+        if enabled {
+            PumpStateSupplier.enableActionsAffectingInsulinDelivery()
+        } else {
+            PumpStateSupplier.disableActionsAffectingInsulinDelivery()
+        }
+    }
+
+    func configureConnectionSharing(enabled: Bool) {
+        PumpStateSupplier.setConnectionSharingEnabled(enabled)
     }
 
     func setAppInstanceId(_ id: Int) {
