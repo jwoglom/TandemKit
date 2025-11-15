@@ -95,6 +95,7 @@ public class TandemPumpManager: PumpManager {
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
     private let notificationLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Notifications")
+    private let maxStoredHistorySequenceNumbers = 100
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -1487,6 +1488,8 @@ extension TandemPumpManager: PumpCommDelegate {
             handleBasalResponse(basal, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
+        case let history as HistoryLogStreamResponse:
+            handleHistoryStreamResponse(history)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
@@ -1498,6 +1501,257 @@ extension TandemPumpManager: PumpCommDelegate {
 }
 
 private extension TandemPumpManager {
+    struct HistoryProcessingOutcome {
+        var event: NewPumpEvent?
+        var reservoir: ReservoirValue?
+        var basalDeliveryState: PumpManagerStatus.BasalDeliveryState?
+        var reconciliationDate: Date?
+    }
+
+    func notifyDelegateOfPumpEvents(_ events: [NewPumpEvent], reconciliationDate: Date?) {
+        guard !events.isEmpty else { return }
+        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
+
+        let last = reconciliationDate ?? lockedState.value.lastReconciliation
+        queue.async { [weak self] in
+            guard let self else { return }
+            delegate.pumpManager(
+                self,
+                hasNewPumpEvents: events,
+                lastReconciliation: last,
+                replacePendingEvents: false
+            ) { [weak self] error in
+                if let error {
+                    self?.notificationLogger.warning("Delegate failed to persist history events: \(error)")
+                } else {
+                    self?.notificationLogger.debug("Delegate stored \(events.count) history events")
+                }
+            }
+        }
+    }
+
+    func handleHistoryStreamResponse(_ response: HistoryLogStreamResponse) {
+        guard !response.historyLogs.isEmpty else { return }
+
+        notificationLogger.debug("[history] streamId=\(response.streamId) count=\(response.historyLogs.count)")
+
+        var managerState = lockedState.value
+        var knownSequences = managerState.recentHistorySequenceNumbers
+        var knownSet = Set(knownSequences)
+        var newEvents: [NewPumpEvent] = []
+        var latestReconciliation: Date?
+        var finalBasalState: PumpManagerStatus.BasalDeliveryState?
+        var latestReservoir = lockedReservoirValue.value
+        var reservoirToEmit: ReservoirValue?
+
+        for log in response.historyLogs {
+            if knownSet.contains(log.sequenceNum) {
+                continue
+            }
+
+            knownSequences.append(log.sequenceNum)
+            knownSet.insert(log.sequenceNum)
+            if knownSequences.count > maxStoredHistorySequenceNumbers {
+                let overflow = knownSequences.count - maxStoredHistorySequenceNumbers
+                if overflow > 0 {
+                    let dropped = knownSequences.prefix(overflow)
+                    knownSequences.removeFirst(overflow)
+                    for seq in dropped {
+                        knownSet.remove(seq)
+                    }
+                }
+            }
+
+            let outcome = process(historyLog: log, lastReservoir: latestReservoir)
+            if let event = outcome.event {
+                newEvents.append(event)
+            }
+            if let reservoir = outcome.reservoir {
+                latestReservoir = reservoir
+                reservoirToEmit = reservoir
+            }
+            if let basal = outcome.basalDeliveryState {
+                finalBasalState = basal
+            }
+            if let reconciliation = outcome.reconciliationDate {
+                if let current = latestReconciliation {
+                    if reconciliation > current {
+                        latestReconciliation = reconciliation
+                    }
+                } else {
+                    latestReconciliation = reconciliation
+                }
+            }
+        }
+
+        managerState.recentHistorySequenceNumbers = knownSequences
+        if let reconciliation = latestReconciliation {
+            managerState.lastReconciliation = reconciliation
+        }
+        lockedState.value = managerState
+
+        if let basal = finalBasalState {
+            updateStatus { status in
+                status.basalDeliveryState = basal
+            }
+        }
+
+        if let reservoir = reservoirToEmit {
+            lockedReservoirValue.value = reservoir
+            notifyDelegateOfReservoir(reservoir)
+        }
+
+        if let reconciliation = latestReconciliation {
+            recordReconciliation(at: reconciliation)
+        }
+
+        notifyDelegateOfPumpEvents(newEvents, reconciliationDate: latestReconciliation)
+    }
+
+    func process(historyLog log: HistoryLog, lastReservoir: ReservoirValue?) -> HistoryProcessingOutcome {
+        var outcome = HistoryProcessingOutcome()
+        let eventDate = historyDate(forPumpTime: log.pumpTimeSec)
+        outcome.reconciliationDate = eventDate
+
+        switch log {
+        case let bolus as BolusCompletedHistoryLog:
+            let deliveredUnits = Double(bolus.insulinDelivered)
+            let dose = DoseEntry(
+                type: .bolus,
+                startDate: eventDate,
+                endDate: eventDate,
+                value: deliveredUnits,
+                unit: .units,
+                deliveredUnits: deliveredUnits,
+                description: "Bolus Completed",
+                syncIdentifier: "bolus-\(bolus.bolusId)",
+                scheduledBasalRate: nil,
+                insulinType: nil,
+                automatic: nil,
+                manuallyEntered: false,
+                isMutable: false,
+                wasProgrammedByPumpUI: true
+            )
+            outcome.event = makeNewPumpEvent(title: "Bolus Completed", date: eventDate, dose: dose, type: .bolus, raw: bolus.cargo)
+            if let lastReservoir {
+                let newVolume = max(lastReservoir.unitVolume - deliveredUnits, 0)
+                outcome.reservoir = SimpleReservoirValue(startDate: eventDate, unitVolume: newVolume)
+            }
+        case let suspend as PumpingSuspendedHistoryLog:
+            let dose = DoseEntry(suspendDate: eventDate)
+            outcome.event = makeNewPumpEvent(title: "Pump Suspended", date: eventDate, dose: dose, type: .suspend, raw: suspend.cargo)
+            outcome.basalDeliveryState = .suspended(eventDate)
+            activeTempBasal.value = nil
+            lastScheduledBasalRate.value = nil
+        case let resume as PumpingResumedHistoryLog:
+            let dose = DoseEntry(resumeDate: eventDate)
+            outcome.event = makeNewPumpEvent(title: "Pump Resumed", date: eventDate, dose: dose, type: .resume, raw: resume.cargo)
+            outcome.basalDeliveryState = .active(eventDate)
+        case let temp as TempRateActivatedHistoryLog:
+            if let baseline = resolveScheduledBasalRate(at: eventDate) {
+                let percent = Double(temp.percent) / 100.0
+                let unitsPerHour = max(0, baseline * percent)
+                let endDate = eventDate.addingTimeInterval(TimeInterval(Double(temp.duration) * 60.0))
+                let scheduledQuantity = HKQuantity(unit: HKUnit.internationalUnitPerHour(), doubleValue: baseline)
+                let dose = DoseEntry(
+                    type: .tempBasal,
+                    startDate: eventDate,
+                    endDate: endDate,
+                    value: unitsPerHour,
+                    unit: .unitsPerHour,
+                    deliveredUnits: nil,
+                    description: "Temp Basal",
+                    syncIdentifier: "temp-\(temp.tempRateId)",
+                    scheduledBasalRate: scheduledQuantity,
+                    insulinType: nil,
+                    automatic: nil,
+                    manuallyEntered: false,
+                    isMutable: false,
+                    wasProgrammedByPumpUI: true
+                )
+                outcome.event = makeNewPumpEvent(title: "Temp Basal", date: eventDate, dose: dose, type: .tempBasal, raw: temp.cargo)
+                outcome.basalDeliveryState = .tempBasal(dose)
+                activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baseline)
+                lastScheduledBasalRate.value = baseline
+            }
+        case let completed as TempRateCompletedHistoryLog:
+            outcome.basalDeliveryState = .active(eventDate)
+            activeTempBasal.value = nil
+            lastScheduledBasalRate.value = nil
+        case let alarm as AlarmActivatedHistoryLog:
+            outcome.event = NewPumpEvent(
+                date: eventDate,
+                dose: nil,
+                isMutable: false,
+                raw: alarm.cargo,
+                title: "Alarm Activated",
+                type: .alarm
+            )
+        default:
+            break
+        }
+
+        return outcome
+    }
+
+    func historyDate(forPumpTime pumpTime: UInt32) -> Date {
+        if let pumpSeconds = PumpStateSupplier.pumpTimeSinceReset?(), pumpSeconds > 0 {
+            let offset = Date().timeIntervalSince1970 - TimeInterval(pumpSeconds)
+            let computed = Date(timeIntervalSince1970: offset + TimeInterval(pumpTime))
+            return computed
+        }
+
+        let offset = pumpManagerDelegate?.detectedSystemTimeOffset ?? 0
+        return Date(timeIntervalSince1970: TimeInterval(pumpTime) - offset)
+    }
+
+    func resolveScheduledBasalRate(at date: Date) -> Double? {
+        if let active = activeTempBasal.value {
+            return active.scheduledRate
+        }
+
+        if let lastScheduled = lastScheduledBasalRate.value {
+            return lastScheduled
+        }
+
+        if let schedule = lockedState.value.basalRateSchedule {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = schedule.timeZone
+            let components = calendar.dateComponents([.hour, .minute, .second], from: date)
+            if let hour = components.hour, let minute = components.minute, let second = components.second {
+                let secondsFromMidnight = TimeInterval(hour * 3600 + minute * 60 + second)
+                let sortedItems = schedule.items.sorted(by: { $0.startTime < $1.startTime })
+                var candidate: Double?
+                for item in sortedItems {
+                    if secondsFromMidnight >= item.startTime {
+                        candidate = item.value
+                    } else {
+                        break
+                    }
+                }
+                if candidate == nil {
+                    candidate = sortedItems.last?.value
+                }
+                if let candidate {
+                    return candidate
+                }
+            }
+        }
+
+        return lockedCurrentBasalRate.value
+    }
+
+    func makeNewPumpEvent(title: String, date: Date, dose: DoseEntry?, type: PumpEventType?, raw: Data) -> NewPumpEvent {
+        return NewPumpEvent(
+            date: date,
+            dose: dose,
+            isMutable: dose?.isMutable ?? false,
+            raw: raw,
+            title: title,
+            type: type
+        )
+    }
+
     func makeBasalSegmentRequests(from items: [RepeatingScheduleValue<Double>]) -> [SetIDPSegmentRequest] {
         let idpId = 0
         let unknownId = 1

@@ -41,7 +41,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
             lastBasalStatusDate: timestamp,
             bolusState: .inProgress(bolusDose),
             deliveryIsUncertain: true,
-            basalRateSchedule: schedule
+            basalRateSchedule: schedule,
+            recentHistorySequenceNumbers: [42, 84]
         )
 
         let rawValue = state.rawValue
@@ -67,6 +68,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         }
         XCTAssertTrue(restoredState.deliveryIsUncertain)
         XCTAssertEqual(restoredState.basalRateSchedule, schedule)
+        XCTAssertEqual(restoredState.recentHistorySequenceNumbers, [42, 84])
     }
 
     func testVersion1RawValueMigration() throws {
