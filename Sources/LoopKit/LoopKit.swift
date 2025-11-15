@@ -1,4 +1,6 @@
 import Foundation
+// This file is a shim for building on non-Apple platforms.
+#if os(Linux)
 
 // MARK: - Lightweight HealthKit shims
 
@@ -644,3 +646,4 @@ public enum BolusActivationType: String, Codable {
 // MARK: - CGM Manager
 
 public protocol CGMManagerUI {}
+#endif
