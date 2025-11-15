@@ -91,13 +91,13 @@ Requests:
 - [x] ControlIQSleepScheduleRequest
    - [ ] Tests for ControlIQSleepScheduleRequest
 - [x] CurrentBasalStatusRequest
-   - [ ] Tests for CurrentBasalStatusRequest
+   - [x] Tests for CurrentBasalStatusRequest
 - [x] CurrentBatteryV1Request
    - [x] Tests for CurrentBatteryV1Request
 - [x] CurrentBatteryV2Request
-   - [ ] Tests for CurrentBatteryV2Request
+   - [x] Tests for CurrentBatteryV2Request
 - [x] CurrentBolusStatusRequest
-   - [ ] Tests for CurrentBolusStatusRequest
+   - [x] Tests for CurrentBolusStatusRequest
 - [x] CurrentEGVGuiDataRequest
    - [ ] Tests for CurrentEGVGuiDataRequest
 - [x] ExtendedBolusStatusRequest
