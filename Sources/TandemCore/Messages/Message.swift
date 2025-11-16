@@ -10,7 +10,7 @@ public protocol Message: CustomStringConvertible {
 
 public extension Message {
     var description: String {
-        "Message(opCode=\(cargo.hexadecimalString))"
+        "Message(cargo=\(cargo.hexadecimalString))"
     }
 }
 

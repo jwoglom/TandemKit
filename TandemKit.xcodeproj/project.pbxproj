@@ -30,6 +30,10 @@
 		1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */; };
 		1A55E0EE2EC94539006E651D /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = 1A55E0ED2EC94539006E651D /* SwiftECC */; };
 		1A55E0F02EC94550006E651D /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 1A55E0EF2EC94550006E651D /* BigInt */; };
+		1A55E0F22EC9666F006E651D /* TandemKitSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0F12EC9666F006E651D /* TandemKitSettingsView.swift */; };
+		1A55E0F42EC967E6006E651D /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0F32EC967E5006E651D /* Image.swift */; };
+		1A55E0F62EC9686A006E651D /* Media.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A55E0F52EC9686A006E651D /* Media.xcassets */; };
+		1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */; };
 		1AAA18792D2B1E060061C043 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
 		3EE344242EC91286008A07F6 /* BluetoothCmd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3440F2EC91286008A07F6 /* BluetoothCmd.swift */; };
 		3EE344252EC91286008A07F6 /* Locked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344162EC91286008A07F6 /* Locked.swift */; };
@@ -382,6 +386,10 @@
 		1A2FA95C2EC8FD0800DF080F /* TandemKit.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = TandemKit.docc; sourceTree = "<group>"; };
 		1A2FA95D2EC8FD0800DF080F /* TandemKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKit.swift; sourceTree = "<group>"; };
 		1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitScanViewModel.swift; sourceTree = "<group>"; };
+		1A55E0F12EC9666F006E651D /* TandemKitSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSettingsView.swift; sourceTree = "<group>"; };
+		1A55E0F32EC967E5006E651D /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Image.swift; sourceTree = "<group>"; };
+		1A55E0F52EC9686A006E651D /* Media.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Media.xcassets; sourceTree = "<group>"; };
+		1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSettingsViewModel.swift; sourceTree = "<group>"; };
 		1A693F462D2B2B9100A65351 /* LoopKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKit.xcframework; path = Carthage/Build/LoopKit.xcframework; sourceTree = "<group>"; };
 		1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopKitUI.xcframework; path = Carthage/Build/LoopKitUI.xcframework; sourceTree = "<group>"; };
 		1A693F4D2D2B2B9500A65351 /* LoopTestingKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = LoopTestingKit.xcframework; path = Carthage/Build/LoopTestingKit.xcframework; sourceTree = "<group>"; };
@@ -746,6 +754,7 @@
 			isa = PBXGroup;
 			children = (
 				1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */,
+				1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1148,9 +1157,11 @@
 		3EE346132EC92709008A07F6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				1A55E0F32EC967E5006E651D /* Image.swift */,
 				3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */,
 				3EE346192EC92801008A07F6 /* TandemKitScanView.swift */,
 				3EE3461A2EC92802008A07F6 /* TandemKitSetupCompleteView.swift */,
+				1A55E0F12EC9666F006E651D /* TandemKitSettingsView.swift */,
 				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
 			);
 			path = Views;
@@ -1164,6 +1175,7 @@
 				3EE346132EC92709008A07F6 /* Views */,
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
 				3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */,
+				1A55E0F52EC9686A006E651D /* Media.xcassets */,
 			);
 			name = TandemKitUI;
 			path = Sources/TandemKitUI;
@@ -1374,6 +1386,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A55E0F62EC9686A006E651D /* Media.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1423,6 +1436,7 @@
 				1A2FA9652EC8FD0800DF080F /* PumpNotificationRouter.swift in Sources */,
 				1A2FA9662EC8FD0800DF080F /* PumpMessageTransport.swift in Sources */,
 				3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */,
+				1A55E0F22EC9666F006E651D /* TandemKitSettingsView.swift in Sources */,
 				3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */,
 				3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */,
 				3EE3461C2EC92804008A07F6 /* TandemKitScanView.swift in Sources */,
@@ -1431,10 +1445,12 @@
 				1A2FA9672EC8FD0800DF080F /* TandemPumpManager.swift in Sources */,
 				1A2FA9682EC8FD0800DF080F /* TandemPumpManagerState.swift in Sources */,
 				1A2FA9692EC8FD0800DF080F /* TandemKit.docc in Sources */,
+				1A55E0F42EC967E6006E651D /* Image.swift in Sources */,
 				1A2FA96A2EC8FD0800DF080F /* PumpCommError.swift in Sources */,
 				1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */,
 				1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */,
 				1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */,
+				1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */,
 				1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */,
 				1A2FA96E2EC8FD0800DF080F /* PeripheralManagerTransport.swift in Sources */,
 				1A2FA96F2EC8FD0800DF080F /* PumpCommsError.swift in Sources */,

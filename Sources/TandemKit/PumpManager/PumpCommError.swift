@@ -9,6 +9,7 @@ public enum PumpCommError: Error {
     case pumpFault(event: PumpCommFaultEvent)
     case notImplemented
     case pumpChallengeError
+    case invalidPacket
     case other
 }
 
@@ -40,7 +41,7 @@ extension PumpCommError: LocalizedError {
                 comment: "Error shown when we cannot perform crypto challenge operations to pair"
             )
         default:
-            return nil
+            return "Other PumpCommError: \(String(describing: self))"
         }
     }
 

@@ -33,6 +33,7 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
     let basePayloadLength = message.cargo.count
     let payloadLength = basePayloadLength + (props.signed ? 24 : 0)
     precondition(payloadLength < 256, "Payload too large for single packet header")
+
     var packet = Data()
     packet.append(opCode)
     packet.append(txId)

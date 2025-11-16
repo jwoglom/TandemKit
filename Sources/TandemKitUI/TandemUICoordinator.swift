@@ -6,6 +6,7 @@ enum TandemScreen {
     case setup
     case deviceScanning
     case setupComplete
+    case pumpSettings
 
     func next() -> TandemScreen? {
         switch self {
@@ -14,6 +15,8 @@ enum TandemScreen {
         case .deviceScanning:
             return .setupComplete
         case .setupComplete:
+            return .pumpSettings
+        default:
             return nil
         }
     }
@@ -98,12 +101,18 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: stepFinished)
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
-            let nextStep: () -> Void = {
+            let returnToMainScreen: () -> Void = {
                 self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager!)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }
 
-            let view = TandemKitSetupCompleteView(finish: nextStep)
+            let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
+            return hostingController(rootView: view)
+        case .pumpSettings:
+
+            // next step = deactivate the pump
+            let viewModel = TandemKitSettingsViewModel(pumpManager, nextStep: stepFinished)
+            let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
         }
     }
@@ -127,7 +136,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
         if pumpManager.isOnboarded {
             // If already onboarded, skip to settings or complete
-            return .setupComplete
+            return .pumpSettings
         }
 
         return .setup

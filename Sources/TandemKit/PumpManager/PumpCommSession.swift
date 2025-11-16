@@ -64,12 +64,12 @@ public class PumpCommSession {
         )
     }
 
-    public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
+    public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
         assertOnSessionQueue()
         logger.info("[PumpCommSession] Starting pair, shortCode=\(isShortPairingCode(pairingCode))")
         if isShortPairingCode(pairingCode) {
             #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                try pairUsingJpake(transport: transport, pairingCode: pairingCode)
+                try pairUsingJpake(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
             #else
                 logger.error("[PumpCommSession] Pairing cannot be performed, no JPAKE import")
                 throw PumpCommError.other
@@ -130,21 +130,7 @@ public class PumpCommSession {
     }
 
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-        private func pairUsingJpake(transport: PumpMessageTransport, pairingCode: String) throws {
-            #if DEBUG
-                if let override = PumpCommSession.testOverrideJpakeArtifacts {
-                    let artifacts = override()
-                    PumpStateSupplier.storePairingArtifacts(
-                        derivedSecret: artifacts.derivedSecret,
-                        serverNonce: artifacts.serverNonce
-                    )
-                    state.derivedSecret = artifacts.derivedSecret
-                    state.serverNonce = artifacts.serverNonce
-                    delegate?.pumpCommSession(self, didChange: state)
-                    logger.info("[PumpCommSession] JPAKE pairing bypassed via test override")
-                    return
-                }
-            #endif
+        private func pairUsingJpake(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
             defer {
                 JpakeAuthBuilder.clearInstance()
             }
@@ -175,6 +161,7 @@ public class PumpCommSession {
 
             state.derivedSecret = secret
             state.serverNonce = serverNonce
+            state.peripheralUuid = peripheralUuid
             delegate?.pumpCommSession(self, didChange: state)
             logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
         }

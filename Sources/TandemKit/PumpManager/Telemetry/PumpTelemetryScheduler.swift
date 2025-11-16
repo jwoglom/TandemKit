@@ -6,6 +6,7 @@ enum PumpTelemetryKind: CaseIterable {
     case battery
     case basal
     case bolus
+    case timeSinceReset
 }
 
 /// Simple timer-backed scheduler that executes telemetry fetch handlers on a serial queue.
