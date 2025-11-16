@@ -29,24 +29,24 @@ public protocol StateObserver: AnyObject {
 }
 
 // Simple delegate wrapper
-private class WeakSynchronizedDelegate<T> {
-    private weak var _value: AnyObject?
-    var _queue = DispatchQueue.main
-
-    var value: T? {
-        get {
-            _queue.sync { _value as? T }
-        }
-        set {
-            _queue.sync { _value = newValue as AnyObject? }
-        }
-    }
-
-    var queue: DispatchQueue {
-        get { _queue }
-        set { _queue = newValue }
-    }
-}
+// private class WeakSynchronizedDelegate<T> {
+//    private weak var _value: AnyObject?
+//    var _queue = DispatchQueue.main
+//
+//    var value: T? {
+//        get {
+//            _queue.sync { _value as? T }
+//        }
+//        set {
+//            _queue.sync { _value = newValue as AnyObject? }
+//        }
+//    }
+//
+//    var queue: DispatchQueue {
+//        get { _queue }
+//        set { _queue = newValue }
+//    }
+// }
 
 // Simple Locked wrapper
 private class Locked<Value> {
@@ -760,10 +760,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public var pumpManagerDelegate: PumpManagerDelegate? {
         get {
-            pumpDelegate.value
+            pumpDelegate.delegate
         }
         set {
-            pumpDelegate.value = newValue
+            pumpDelegate.delegate = newValue
         }
     }
 
@@ -852,11 +852,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
         targetPeripheralIdentifier = peripheralIdentifier
     }
 
-    #if canImport(UIKit)
-        public func pairPump(with pairingCode: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    public func pairPump(
+        with pairingCode: String,
+        peripheral: CBPeripheral,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        Task {
             do {
                 let sanitizedCode = try PumpStateSupplier.sanitizeAndStorePairingCode(pairingCode)
                 tandemPump.startScanning()
+
+                while peripheral.state != .connected {
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                    print("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
+                }
 
                 guard let transport = transportLock.value else {
                     completion(.failure(PumpCommError.pumpNotConnected))
@@ -887,7 +896,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.failure(error))
             }
         }
-    #endif
+    }
 
     // MARK: - Dose Delivery Methods
 
@@ -1528,8 +1537,8 @@ extension TandemPumpManager: TandemPumpDelegate {
         if let targetIdentifier = targetPeripheralIdentifier {
             return peripheral.identifier == targetIdentifier
         }
-        // Otherwise, connect to any Tandem pump
-        return true
+        // Otherwise, do not connect
+        return false
     }
 
     public func tandemPump(

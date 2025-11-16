@@ -96,7 +96,7 @@ class TandemKitScanViewModel: ObservableObject {
             // Set the target peripheral so the manager only connects to this specific device
             pumpManager.setTargetPeripheral(peripheral.identifier)
 
-            pumpManager.pairPump(with: devicePinCode) { result in
+            pumpManager.pairPump(with: devicePinCode, peripheral: peripheral) { result in
                 DispatchQueue.main.async {
                     self.pairComplete(result)
                 }

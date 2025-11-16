@@ -55,7 +55,7 @@ public struct TronMessageWrapper {
         if type(of: message).props.signed {
             authKey = PumpStateSupplier.authenticationKey()
         } else {
-            authKey = PumpStateSupplier.authenticationKey()
+            authKey = Data() // empty byte array
         }
         packets = try! Packetize(
             message: message,
