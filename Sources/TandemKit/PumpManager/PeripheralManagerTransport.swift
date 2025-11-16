@@ -45,6 +45,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         let wrapper = try withMainActor {
             TronMessageWrapper(message: message, currentTxId: self.currentTxId)
         }
+
         let txIdForRequest = currentTxId
         currentTxId = currentTxId &+ 1 // Increment with overflow
 
@@ -60,9 +61,15 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             characteristic: characteristic
         )
 
-        log.debug("Sending message: %{public}@ (TxId: %d)", String(describing: message), txIdForRequest)
+        log.debug(
+            "Sending message %s: %{public}@ (TxId: %d)",
+            String(describing: wrapper.requestMetadata.name),
+            String(describing: message),
+            txIdForRequest
+        )
         if wrapper.packets.isEmpty {
-            transportLogger.debug("[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=0")
+            transportLogger.error("[PeripheralManagerTransport] no packets for message=\(message) txId=\(currentTxId &- 1)")
+            throw PumpCommError.invalidPacket
         } else {
             transportLogger
                 .debug(

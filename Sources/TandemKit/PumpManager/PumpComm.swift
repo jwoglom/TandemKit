@@ -46,6 +46,10 @@ public class PumpComm: CustomDebugStringConvertible {
         pumpState?.derivedSecret != nil
     }
 
+    public var pumpPeripheralUuid: String? {
+        pumpState?.peripheralUuid
+    }
+
     // TODO(jwoglom): device name or PIN?
     public init(
         pumpState: PumpState?,
@@ -67,11 +71,11 @@ public class PumpComm: CustomDebugStringConvertible {
     }
 
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-        public func pair(transport: PumpMessageTransport, pairingCode: String) throws {
+        public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
             let session = ensureSession()
             log.debug("PumpComm pair started")
             try session.runSynchronously(withName: "Pairing") {
-                try session.pair(transport: transport, pairingCode: pairingCode)
+                try session.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
             }
             log.debug("PumpComm pair finished")
         }

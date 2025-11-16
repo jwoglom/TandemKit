@@ -3,36 +3,48 @@ import Foundation
 public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertible {
     public typealias RawValue = [String: Any]
 
-    public let address: UInt32
+    public var peripheralUuid: String?
     public var derivedSecret: Data?
     public var serverNonce: Data?
+    public var timeSinceReset: UInt32?
 
-    public init(address: UInt32, derivedSecret: Data? = nil, serverNonce: Data? = nil) {
-        self.address = address
+    public var valid: Bool {
+        peripheralUuid != nil && derivedSecret != nil && serverNonce != nil
+    }
+
+    public init(
+        peripheralUuid: String? = nil,
+        derivedSecret: Data? = nil,
+        serverNonce: Data? = nil,
+        timeSinceReset: UInt32? = nil
+    ) {
+        self.peripheralUuid = peripheralUuid
         self.derivedSecret = derivedSecret
         self.serverNonce = serverNonce
+        self.timeSinceReset = timeSinceReset
     }
 
     public init() {
-        self.init(address: 0, derivedSecret: nil, serverNonce: nil)
+        self.init(peripheralUuid: nil, derivedSecret: nil, serverNonce: nil, timeSinceReset: nil)
     }
 
     public init?(rawValue: RawValue) {
-        guard let address = rawValue["address"] as? UInt32
+        guard let peripheralUuid = rawValue["peripheralUuid"] as? String
         else { return nil }
 
-        self.address = address
+        self.peripheralUuid = peripheralUuid
         derivedSecret = rawValue["derivedSecret"] as? Data
         serverNonce = rawValue["serverNonce"] as? Data
+        timeSinceReset = rawValue["timeSinceReset"] as? UInt32
     }
 
     public var rawValue: RawValue {
-        var rawValue: RawValue = [
-            "address": address
-        ]
+        var rawValue: RawValue = [:]
 
+        rawValue["peripheralUuid"] = peripheralUuid
         rawValue["derivedSecret"] = derivedSecret
         rawValue["serverNonce"] = serverNonce
+        rawValue["timeSinceReset"] = timeSinceReset
 
         return rawValue
     }
@@ -40,9 +52,10 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     public var debugDescription: String {
         [
             "### PumpState",
-            "* address: \(String(format: "%04X", address))",
-            "* hasDerivedSecret: \(derivedSecret != nil)",
-            "* hasServerNonce: \(serverNonce != nil)"
+            "* peripheralUuid: \(String(describing: peripheralUuid))",
+            "* derivedSecret: \(String(describing: derivedSecret?.base64EncodedString()))",
+            "* serverNonce: \(String(describing: serverNonce?.base64EncodedString()))",
+            "* timeSinceReset: \(String(describing: timeSinceReset))"
         ].joined(separator: "\n")
     }
 }

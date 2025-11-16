@@ -25,7 +25,7 @@ public class TandemPump {
     private let log = OSLog(category: "TandemPump")
     private let bluetoothManager = BluetoothManager()
 
-    private var state: PumpState?
+    public var state: PumpState?
     private var appInstanceId = 1
     private var currentTxId: UInt8 = 0
 

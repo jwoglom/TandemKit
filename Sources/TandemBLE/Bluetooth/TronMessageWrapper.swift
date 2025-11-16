@@ -12,36 +12,10 @@ public struct TronMessageWrapper {
     public let packets: [Packet]
 
     @MainActor public init(message: Message, currentTxId: UInt8) {
-        self.message = message
-
-        // Get metadata for the message
-        guard let reqMeta = MessageRegistry.metadata(for: message) else {
-            fatalError("No metadata found for message type: \(String(describing: type(of: message)))")
-        }
-        requestMetadata = reqMeta
-        responseMetadata = MessageRegistry.responseMetadata(for: message)
-
-        tronLogger.debug("[TronMessageWrapper] creating wrapper for \(String(describing: type(of: message)))")
-        if let respMeta = responseMetadata {
-            tronLogger.debug("[TronMessageWrapper]   expects response: \(respMeta.name)")
-        }
-
-        var authKey = Data()
-        if type(of: message).props.signed {
-            authKey = PumpStateSupplier.authenticationKey()
-        } else {
-            // Attempt to fetch a key if available
-            authKey = PumpStateSupplier.authenticationKey()
-        }
-        packets = try! Packetize(
-            message: message,
-            authenticationKey: authKey,
-            txId: currentTxId,
-            timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?()
-        )
+        self.init(message: message, currentTxId: currentTxId, maxChunkSize: nil)
     }
 
-    @MainActor public init(message: Message, currentTxId: UInt8, maxChunkSize: Int) {
+    @MainActor public init(message: Message, currentTxId: UInt8, maxChunkSize: Int?) {
         self.message = message
 
         // Get metadata for the message
@@ -51,19 +25,25 @@ public struct TronMessageWrapper {
         requestMetadata = reqMeta
         responseMetadata = MessageRegistry.responseMetadata(for: message)
 
+        let signed = type(of: message).props.signed
         var authKey = Data()
-        if type(of: message).props.signed {
+        if signed {
             authKey = PumpStateSupplier.authenticationKey()
         } else {
             authKey = Data() // empty byte array
         }
+
+        let timeSinceReset = PumpStateSupplier.pumpTimeSinceReset?()
         packets = try! Packetize(
             message: message,
             authenticationKey: authKey,
             txId: currentTxId,
-            timeSinceReset: PumpStateSupplier.pumpTimeSinceReset?(),
+            timeSinceReset: timeSinceReset,
             maxChunkSize: maxChunkSize
         )
+        tronLogger.debug("[TronMessageWrapper]   signed: \(signed), authKey: \(authKey)")
+        tronLogger.debug("[TronMessageWrapper]   txId: \(currentTxId), timeSinceReset: \(String(describing: timeSinceReset))")
+        tronLogger.debug("[TronMessageWrapper]   got packets: \(packets)")
     }
 
     func buildPacketArrayList(_ messageType: MessageType) -> PacketArrayList {

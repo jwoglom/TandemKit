@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "tandem_mobi.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
