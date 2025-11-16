@@ -175,7 +175,8 @@ extension TandemPump: BluetoothManagerDelegate {
         if let delegate = delegate {
             return delegate.tandemPump(self, shouldConnect: peripheral, advertisementData: advertisementData)
         }
-        return true
+        // don't automatically connect if no delegate
+        return false
     }
 
     public func bluetoothManager(

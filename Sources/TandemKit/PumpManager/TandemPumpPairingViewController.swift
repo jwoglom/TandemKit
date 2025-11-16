@@ -46,7 +46,6 @@
             let button = UIButton(type: .system)
             button.translatesAutoresizingMaskIntoConstraints = false
             button.setTitle(LocalizedString("Pair Pump", comment: "Button title for Tandem pump pairing"), for: .normal)
-            button.addTarget(self, action: #selector(pairButtonTapped), for: .touchUpInside)
             button.isEnabled = false
             return button
         }()
@@ -120,23 +119,6 @@
             updateInteractionState()
         }
 
-        @objc private func pairButtonTapped() {
-            guard !isPairing else { return }
-            guard let code = pairingCodeField.text?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else {
-                showStatus(.failure(PumpPairingCodeValidationError.empty))
-                return
-            }
-
-            isPairing = true
-            pumpManager.pairPump(with: code) { [weak self] result in
-                DispatchQueue.main.async {
-                    self?.isPairing = false
-                    self?.showStatus(result)
-                    self?.completion(result)
-                }
-            }
-        }
-
         private func showStatus(_ result: Result<Void, Error>) {
             switch result {
             case .success:
@@ -164,8 +146,7 @@
 
     extension TandemPumpPairingViewController: UITextFieldDelegate {
         func textFieldShouldReturn(_: UITextField) -> Bool {
-            pairButtonTapped()
-            return false
+            false
         }
     }
 #endif
