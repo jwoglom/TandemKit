@@ -130,6 +130,32 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
+                "Cartridge Operations",
+                comment: "The title of the cartridge operations section in TandemKit settings"
+            ))) {
+                NavigationLink(destination: TandemKitChangeCartridgeView(
+                    viewModel: viewModel.createChangeCartridgeViewModel()
+                )) {
+                    Text(LocalizedString("Change Cartridge", comment: "Label for change cartridge"))
+                        .foregroundColor(Color.primary)
+                }
+
+                NavigationLink(destination: TandemKitFillTubingView(
+                    viewModel: viewModel.createFillTubingViewModel()
+                )) {
+                    Text(LocalizedString("Fill Tubing", comment: "Label for fill tubing"))
+                        .foregroundColor(Color.primary)
+                }
+
+                NavigationLink(destination: TandemKitFillCannulaView(
+                    viewModel: viewModel.createFillCannulaViewModel()
+                )) {
+                    Text(LocalizedString("Fill Cannula", comment: "Label for fill cannula"))
+                        .foregroundColor(Color.primary)
+                }
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
                 "Pump Information",
                 comment: "The title of the pump information section in TandemKit settings"
             ))) {
