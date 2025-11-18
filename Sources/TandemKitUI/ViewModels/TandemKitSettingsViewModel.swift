@@ -153,15 +153,15 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     // Cartridge operations
     func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
-        return TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
+        TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
     }
 
     func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
-        return TandemKitFillTubingViewModel(pumpManager: pumpManager)
+        TandemKitFillTubingViewModel(pumpManager: pumpManager)
     }
 
     func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
-        return TandemKitFillCannulaViewModel(pumpManager: pumpManager)
+        TandemKitFillCannulaViewModel(pumpManager: pumpManager)
     }
 
     deinit {

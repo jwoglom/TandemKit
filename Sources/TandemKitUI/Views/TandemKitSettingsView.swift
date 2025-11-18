@@ -281,7 +281,8 @@ struct TandemKitSettingsView: View {
 
     private func userModeText(_ mode: Int) -> String {
         switch mode {
-        case 0, 1:
+        case 0,
+             1:
             return "Standard"
         case 2:
             return "Sleep"

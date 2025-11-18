@@ -121,13 +121,13 @@ struct TandemKitFillTubingView: View {
                     "Press and hold the button on your pump to fill tubing.",
                     comment: "Instructions"
                 ))
-                .font(.body)
+                    .font(.body)
 
                 Text(LocalizedString(
                     "Watch the tubing for insulin and release the button when you see it.",
                     comment: "Instructions"
                 ))
-                .font(.body)
+                    .font(.body)
 
                 if viewModel.buttonDown {
                     HStack {

@@ -57,7 +57,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.isSuspended = mirror?.basalStatusIconId == 12
-                    if self.isSuspended && self.currentStep == .suspend {
+                    if self.isSuspended, self.currentStep == .suspend {
                         self.currentStep = .enterAmount
                     }
                 }
@@ -113,7 +113,8 @@ class TandemKitFillCannulaViewModel: ObservableObject {
             guard let self = self else { return }
 
             if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
+                let response = try? transport
+                    .sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
 
                 Thread.sleep(forTimeInterval: Double(self.primeAmount) * 2.0) // Simulate delivery time
 
