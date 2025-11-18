@@ -68,7 +68,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.isSuspended = mirror?.basalStatusIconId == 12
-                    if self.isSuspended && self.currentStep == .suspend {
+                    if self.isSuspended, self.currentStep == .suspend {
                         self.currentStep = .enterMode
                     }
                 }
@@ -217,8 +217,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
     func cancelOperation() {
         // Attempt to exit change cartridge mode if we're in it
-        if currentStep.rawValue >= CartridgeChangeStep.enterMode.rawValue &&
-           currentStep.rawValue < CartridgeChangeStep.done.rawValue {
+        if currentStep.rawValue >= CartridgeChangeStep.enterMode.rawValue,
+           currentStep.rawValue < CartridgeChangeStep.done.rawValue
+        {
             exitChangeCartridgeMode()
         }
     }

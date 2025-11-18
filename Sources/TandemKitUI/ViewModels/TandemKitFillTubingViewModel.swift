@@ -61,7 +61,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.isSuspended = mirror?.basalStatusIconId == 12
-                    if self.isSuspended && self.currentStep == .suspend {
+                    if self.isSuspended, self.currentStep == .suspend {
                         self.currentStep = .enterMode
                     }
                 }
@@ -182,8 +182,9 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     func cancelOperation() {
         // Attempt to exit fill tubing mode if we're in it
-        if currentStep.rawValue >= TubingFillStep.enterMode.rawValue &&
-           currentStep.rawValue < TubingFillStep.done.rawValue {
+        if currentStep.rawValue >= TubingFillStep.enterMode.rawValue,
+           currentStep.rawValue < TubingFillStep.done.rawValue
+        {
             exitFillTubingMode()
         }
     }

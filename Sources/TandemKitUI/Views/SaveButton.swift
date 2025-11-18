@@ -1,5 +1,5 @@
-import SwiftUI
 import LoopKitUI
+import SwiftUI
 
 struct SaveButton: View {
     var text = LocalizedString("Save", comment: "Text for save button")
