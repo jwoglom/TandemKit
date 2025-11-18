@@ -266,3 +266,38 @@ struct TandemKitChangeCartridgeView: View {
         )
     }
 }
+
+#Preview("Active Flow") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewInProgress)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Completed") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewCompleted)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+private extension TandemKitChangeCartridgeViewModel {
+    static var previewInProgress: TandemKitChangeCartridgeViewModel {
+        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
+        viewModel.isSuspended = true
+        viewModel.currentStep = .detecting
+        viewModel.isProcessing = true
+        viewModel.changeCartridgeState = .readyToChange
+        viewModel.isDetecting = true
+        viewModel.detectingProgress = 60
+        return viewModel
+    }
+
+    static var previewCompleted: TandemKitChangeCartridgeViewModel {
+        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
+        viewModel.isSuspended = true
+        viewModel.currentStep = .done
+        viewModel.isProcessing = false
+        return viewModel
+    }
+}
