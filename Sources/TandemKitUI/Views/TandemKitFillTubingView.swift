@@ -220,3 +220,36 @@ struct TandemKitFillTubingView: View {
         )
     }
 }
+
+#Preview("Filling") {
+    NavigationView {
+        TandemKitFillTubingView(viewModel: .previewFilling)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Completed") {
+    NavigationView {
+        TandemKitFillTubingView(viewModel: .previewCompleted)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+private extension TandemKitFillTubingViewModel {
+    static var previewFilling: TandemKitFillTubingViewModel {
+        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil)
+        viewModel.currentStep = .filling
+        viewModel.isSuspended = true
+        viewModel.isProcessing = true
+        viewModel.buttonDown = true
+        return viewModel
+    }
+
+    static var previewCompleted: TandemKitFillTubingViewModel {
+        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil)
+        viewModel.currentStep = .done
+        viewModel.isSuspended = true
+        viewModel.exitState = .tubingFilled
+        return viewModel
+    }
+}

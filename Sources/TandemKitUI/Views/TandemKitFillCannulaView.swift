@@ -236,3 +236,35 @@ struct TandemKitFillCannulaView: View {
         )
     }
 }
+
+#Preview("Enter Amount") {
+    NavigationView {
+        TandemKitFillCannulaView(viewModel: .previewEnteringAmount)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Completed") {
+    NavigationView {
+        TandemKitFillCannulaView(viewModel: .previewCompleted)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+private extension TandemKitFillCannulaViewModel {
+    static var previewEnteringAmount: TandemKitFillCannulaViewModel {
+        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil)
+        viewModel.isSuspended = true
+        viewModel.currentStep = .enterAmount
+        viewModel.isEditingAmount = true
+        viewModel.primeAmount = 0.7
+        return viewModel
+    }
+
+    static var previewCompleted: TandemKitFillCannulaViewModel {
+        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil)
+        viewModel.isSuspended = true
+        viewModel.currentStep = .done
+        return viewModel
+    }
+}

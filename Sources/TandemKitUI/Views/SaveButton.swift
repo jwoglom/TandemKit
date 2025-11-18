@@ -18,3 +18,26 @@ struct SaveButton: View {
         .disabled(loading.wrappedValue || disabled.wrappedValue)
     }
 }
+
+#Preview("Default") {
+    SaveButton(text: "Save") {}
+        .padding()
+}
+
+#Preview("Loading") {
+    SaveButton(
+        text: "Saving",
+        loading: .constant(true),
+        disabled: .constant(false)
+    ) {}
+        .padding()
+}
+
+#Preview("Disabled") {
+    SaveButton(
+        text: "Disabled",
+        loading: .constant(false),
+        disabled: .constant(true)
+    ) {}
+        .padding()
+}
