@@ -270,9 +270,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         sessionInitializationQueue.async { [weak self] in
             guard let self = self else { return }
-            self.telemetryLogger.debug("Running authenticated session bootstrap to refresh timeSinceReset")
+            self.telemetryLogger.debug("Running authenticated session bootstrap to refresh credentials and TimeSinceReset")
 
             do {
+                try self.reauthenticateIfNeeded(on: transport)
                 let response: TimeSinceResetResponse = try self.pumpComm.sendMessage(
                     transport: transport,
                     message: TimeSinceResetRequest(),
@@ -293,6 +294,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.scheduleBootstrapRetry(afterFailureWith: pumpError, transport: transport)
             }
         }
+    }
+
+    private func reauthenticateIfNeeded(on transport: PumpMessageTransport) throws {
+        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+            guard let pumpState = lockedState.value.pumpState,
+                  let derivedSecret = pumpState.derivedSecret,
+                  let peripheralUuid = pumpState.peripheralUuid
+            else {
+                telemetryLogger
+                    .error("Stored pump state missing authentication artifacts; cannot reauthenticate before telemetry")
+                throw PumpCommError.missingAuthenticationKey
+            }
+
+            telemetryLogger.debug("Authenticating reconnect session using stored derived secret")
+            try pumpComm.confirmAuthentication(
+                transport: transport,
+                peripheralUuid: peripheralUuid,
+                derivedSecret: derivedSecret
+            )
+        #else
+            telemetryLogger.debug("Skipping stored-credential authentication – JPake unavailable in this build")
+        #endif
     }
 
     private func scheduleBootstrapRetry(afterFailureWith _: PumpCommError, transport: PumpMessageTransport) {

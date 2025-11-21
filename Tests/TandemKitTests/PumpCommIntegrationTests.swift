@@ -138,7 +138,10 @@ final class PumpCommIntegrationTests: XCTestCase {
                 return ApiVersionResponse(cargo: Data([0x03, 0x05, 0x00, 0x00]))
             }
 
-            throw PumpCommError.unexpectedResponse(expected: "Mock transport handler", actual: String(describing: type(of: message)))
+            throw PumpCommError.unexpectedResponse(
+                expected: "Mock transport handler",
+                actual: String(describing: type(of: message))
+            )
         }
     }
 

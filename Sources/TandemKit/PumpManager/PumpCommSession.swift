@@ -24,6 +24,7 @@ public class PumpCommSession {
     private(set) var state: PumpState
     weak var delegate: PumpCommSessionDelegate?
     private let logger = PumpLogger(label: "TandemKit.PumpCommSession")
+    private static let fallbackPairingCode = "000000"
 
     #if DEBUG
         static var testOverrideJpakeArtifacts: (() -> (derivedSecret: Data, serverNonce: Data))?
@@ -187,6 +188,55 @@ public class PumpCommSession {
             state.timeSinceReset = response.pumpTimeSinceReset
             delegate?.pumpCommSession(self, didChange: state)
             logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
+        }
+
+        func confirmAuthentication(
+            transport: PumpMessageTransport,
+            peripheralUuid: String,
+            derivedSecret: Data
+        ) throws {
+            assertOnSessionQueue()
+
+            guard !derivedSecret.isEmpty else {
+                logger.error("[PumpCommSession] Stored derived secret missing; cannot confirm authentication")
+                throw PumpCommError.missingAuthenticationKey
+            }
+
+            defer {
+                JpakeAuthBuilder.clearInstance()
+            }
+
+            let storedPairingCode = PumpStateSupplier.storedPairingCode()
+            let pairingCode = storedPairingCode ?? Self.fallbackPairingCode
+            logger.info(
+                "[PumpCommSession] Starting stored-credential authentication, pairingCodeStored=\(storedPairingCode != nil)"
+            )
+            let builder = JpakeAuthBuilder.initializeWithDerivedSecret(pairingCode: pairingCode, derivedSecret: derivedSecret)
+            logger.debug("[PumpCommSession] authentication state: done=\(builder.done()) invalid=\(builder.invalid())")
+
+            while !builder.done(), !builder.invalid() {
+                guard let request = builder.nextRequest() else { break }
+                logger.debug("[PumpCommSession] Sending JPAKE confirm request: \(request)")
+                let response = try transport.sendMessage(request)
+                logger.debug("[PumpCommSession] Received JPAKE confirm response: \(response)")
+                builder.processResponse(response)
+                logger.debug("[PumpCommSession] authentication state: done=\(builder.done()) invalid=\(builder.invalid())")
+            }
+
+            guard builder.done(), let serverNonce = builder.getServerNonce() else {
+                logger
+                    .error(
+                        "[PumpCommSession] Stored-credential authentication failed: done=\(builder.done()) invalid=\(builder.invalid())"
+                    )
+                throw PumpCommError.missingAuthenticationKey
+            }
+
+            logger.info("[PumpCommSession] Stored-credential authentication succeeded; refreshing pump state")
+            state.derivedSecret = derivedSecret
+            state.serverNonce = serverNonce
+            state.peripheralUuid = peripheralUuid
+            delegate?.pumpCommSession(self, didChange: state)
+            logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE confirm)")
         }
     #endif
 }

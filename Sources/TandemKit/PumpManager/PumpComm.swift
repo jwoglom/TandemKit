@@ -79,6 +79,27 @@ public class PumpComm: CustomDebugStringConvertible {
             }
             log.debug("PumpComm pair finished")
         }
+
+        public func confirmAuthentication(
+            transport: PumpMessageTransport,
+            peripheralUuid: String,
+            derivedSecret: Data
+        ) throws {
+            guard !peripheralUuid.isEmpty, !derivedSecret.isEmpty else {
+                throw PumpCommError.missingAuthenticationKey
+            }
+
+            let session = ensureSession()
+            log.debug("PumpComm confirmAuthentication started")
+            try session.runSynchronously(withName: "ConfirmAuthentication") {
+                try session.confirmAuthentication(
+                    transport: transport,
+                    peripheralUuid: peripheralUuid,
+                    derivedSecret: derivedSecret
+                )
+            }
+            log.debug("PumpComm confirmAuthentication finished")
+        }
     #endif
 
     private func ensureSession() -> PumpCommSession {
