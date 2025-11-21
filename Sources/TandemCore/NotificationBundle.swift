@@ -19,7 +19,7 @@ public class NotificationBundle {
 
     /// Returns a list of request message types needed to populate the bundle.
     public static func allRequests() -> [Message] {
-        return [
+        [
             AlertStatusRequest(),
             ReminderStatusRequest(),
             AlarmStatusRequest(),
@@ -32,7 +32,7 @@ public class NotificationBundle {
 
     /// Returns the corresponding response class types for the bundle's status categories.
     public static func responseClasses() -> [Message.Type] {
-        return [
+        [
             AlertStatusResponse.self,
             ReminderStatusResponse.self,
             AlarmStatusResponse.self,
@@ -45,7 +45,7 @@ public class NotificationBundle {
 
     /// Validates whether a given message is one of the recognized notification response types.
     public static func isNotificationResponse(_ message: Message) -> Bool {
-        return message is AlertStatusResponse ||
+        message is AlertStatusResponse ||
             message is ReminderStatusResponse ||
             message is AlarmStatusResponse ||
             message is CGMAlertStatusResponse ||
@@ -145,12 +145,12 @@ public class NotificationBundle {
 
     /// Calculates the total number of active notifications across all response types.
     public func getNotificationCount() -> Int {
-        return get().count
+        get().count
     }
 
     /// Boolean check for whether any notifications exist.
     public var isEmpty: Bool {
-        return getNotificationCount() == 0
+        getNotificationCount() == 0
     }
 
     /// Returns the last updated time for a specific response type.
@@ -170,7 +170,7 @@ public struct NotificationItem: Identifiable, Hashable {
     public init(type: NotificationType, id: UInt32, name: String) {
         self.id = UUID()
         self.type = type
-        self.notificationId = id
+        notificationId = id
         self.name = name
     }
 
@@ -197,7 +197,7 @@ public struct NotificationItem: Identifiable, Hashable {
             case .reminder: return .reminder
             case .alarm: return .alarm
             case .cgmAlert: return .cgmAlert
-            case .malfunction: return nil  // Malfunctions cannot be dismissed
+            case .malfunction: return nil // Malfunctions cannot be dismissed
             }
         }
     }
@@ -206,7 +206,7 @@ public struct NotificationItem: Identifiable, Hashable {
     public var displayName: String {
         // Convert enum case names to readable format
         // e.g., "LOW_INSULIN_ALERT" -> "Low Insulin Alert"
-        return name
+        name
             .replacingOccurrences(of: "_", with: " ")
             .lowercased()
             .split(separator: " ")
@@ -216,7 +216,7 @@ public struct NotificationItem: Identifiable, Hashable {
 
     /// Whether this notification can be dismissed.
     public var canDismiss: Bool {
-        return type.dismissType != nil
+        type.dismissType != nil
     }
 }
 

@@ -84,7 +84,8 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            let response = self.sendMessage(message: SetG6TransmitterIdRequest(txId: self.g6TransmitterId)) as? SetG6TransmitterIdResponse
+            let response = self
+                .sendMessage(message: SetG6TransmitterIdRequest(txId: self.g6TransmitterId)) as? SetG6TransmitterIdResponse
 
             DispatchQueue.main.async {
                 self.isSettingG6Transmitter = false
@@ -112,7 +113,10 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            let response = self.sendMessage(message: StartDexcomG6SensorSessionRequest(sensorCode: sensorCode)) as? StartDexcomG6SensorSessionResponse
+            let response = self
+                .sendMessage(
+                    message: StartDexcomG6SensorSessionRequest(sensorCode: sensorCode)
+                ) as? StartDexcomG6SensorSessionResponse
 
             Thread.sleep(forTimeInterval: 1.0)
 
@@ -152,7 +156,8 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            let response = self.sendMessage(message: SetDexcomG7PairingCodeRequest(pairingCode: pairingCode)) as? SetDexcomG7PairingCodeResponse
+            let response = self
+                .sendMessage(message: SetDexcomG7PairingCodeRequest(pairingCode: pairingCode)) as? SetDexcomG7PairingCodeResponse
 
             DispatchQueue.main.async {
                 self.isSettingG7PairingCode = false
@@ -204,7 +209,10 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
             // For G7, we use the same StartDexcomG6SensorSessionRequest
             // with sensorCode = 0 or the provided code
-            let response = self.sendMessage(message: StartDexcomG6SensorSessionRequest(sensorCode: sensorCode)) as? StartDexcomG6SensorSessionResponse
+            let response = self
+                .sendMessage(
+                    message: StartDexcomG6SensorSessionRequest(sensorCode: sensorCode)
+                ) as? StartDexcomG6SensorSessionResponse
 
             Thread.sleep(forTimeInterval: 1.0)
 

@@ -54,9 +54,9 @@ public class MalfunctionStatusResponse: Message {
 
     /// Malfunction code pairs that should be ignored (not treated as actual malfunctions).
     public static let IGNORABLE_CODES: [(UInt32, UInt32)] = [
-        (0, 0),           // empty
-        (3, 8230),        // 3-0x2026
-        (18, 8311)        // 18-0x2077
+        (0, 0), // empty
+        (3, 8230), // 3-0x2026
+        (18, 8311) // 18-0x2077
     ]
 
     /// Formatted malfunction code string if present.
@@ -68,7 +68,7 @@ public class MalfunctionStatusResponse: Message {
     /// Whether the pump reports a malfunction.
     public var hasMalfunction: Bool {
         for code in Self.IGNORABLE_CODES {
-            if code.0 == codeA && code.1 == codeB {
+            if code.0 == codeA, code.1 == codeB {
                 return false
             }
         }

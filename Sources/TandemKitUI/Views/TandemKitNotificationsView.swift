@@ -31,7 +31,10 @@ struct TandemKitNotificationsView: View {
                                 .foregroundColor(.green)
                             Text(LocalizedString("No notifications", comment: "No notifications message"))
                                 .font(.headline)
-                            Text(LocalizedString("Your pump has no active notifications", comment: "No notifications detail message"))
+                            Text(LocalizedString(
+                                "Your pump has no active notifications",
+                                comment: "No notifications detail message"
+                            ))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
