@@ -7,6 +7,25 @@ struct TandemKitSettingsView: View {
     @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitSettingsViewModel
 
+    var removePumpManagerActionSheet: ActionSheet {
+        ActionSheet(
+            title: Text(LocalizedString("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")),
+            message: Text(LocalizedString(
+                "Are you sure you want to remove the pump from Trio? You will need to re-pair the device.",
+                comment: "Message for Tandem PumpManager deletion action sheet"
+            )),
+            buttons: [
+                .destructive(Text(LocalizedString(
+                    "Delete pump",
+                    comment: "Button text to confirm Tandem PumpManager deletion"
+                ))) {
+                    viewModel.removePump()
+                },
+                .cancel()
+            ]
+        )
+    }
+
     var body: some View {
         List {
             Section {
@@ -208,6 +227,18 @@ struct TandemKitSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            Section {
+                Button(action: {
+                    viewModel.showingDeleteConfirmation = true
+                }) {
+                    Text(LocalizedString("Delete Pump", comment: "Label for PumpManager deletion button"))
+                        .foregroundColor(guidanceColors.critical)
+                }
+                .actionSheet(isPresented: $viewModel.showingDeleteConfirmation) {
+                    removePumpManagerActionSheet
+                }
+            }
         }
         .listStyle(InsetGroupedListStyle())
         .navigationBarItems(trailing: doneButton)
@@ -380,6 +411,12 @@ private extension TandemKitSettingsViewModel {
         viewModel.isSuspended = false
         return viewModel
     }
+
+    static var previewDataInProgress: TandemKitSettingsViewModel {
+        let viewModel = previewData
+        viewModel.isUpdatingPumpState = true
+        return viewModel
+    }
 }
 
 private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewModel {
@@ -391,6 +428,13 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
 #Preview("Overview") {
     NavigationView {
         TandemKitSettingsView(viewModel: .previewData)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("In Progress") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewDataInProgress)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }

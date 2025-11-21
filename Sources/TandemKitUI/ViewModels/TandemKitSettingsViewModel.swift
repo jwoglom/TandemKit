@@ -15,6 +15,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var tempRateStatus: TempRateResponse?
     @Published var isUpdatingPumpState = false
     @Published var isSuspended = false
+    @Published var showingDeleteConfirmation = false
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -162,6 +163,14 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
         TandemKitFillCannulaViewModel(pumpManager: pumpManager)
+    }
+
+    func removePump() {
+        pumpManager?.notifyDelegateOfDeactivation {
+            DispatchQueue.main.async {
+                self.nextStep()
+            }
+        }
     }
 
     deinit {
