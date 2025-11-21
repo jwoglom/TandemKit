@@ -27,6 +27,9 @@ jobs:
         with:
           name: carthage-xcodebuild.log
           path: carthage.log
+      - name: Resolve Swift Package Manager dependencies
+        run: |
+          xcodebuild -resolvePackageDependencies -project TandemKit.xcodeproj -scheme TandemKit
       - name: Build TandemKit XCFramework
         run: |
           xcodebuild archive \
