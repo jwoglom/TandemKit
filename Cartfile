@@ -1,2 +1,1 @@
-github "LoopKit/LoopKit" "loop-release/v2.x"
-
+github "LoopKit/LoopKit" "dev"
