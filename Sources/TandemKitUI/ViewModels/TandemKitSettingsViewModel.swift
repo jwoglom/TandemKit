@@ -13,8 +13,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var controlIQInfo: ControlIQInfoV2Response?
     @Published var insulinStatus: InsulinStatusResponse?
     @Published var tempRateStatus: TempRateResponse?
+    @Published var currentBasalStatus: CurrentBasalStatusResponse?
     @Published var isUpdatingPumpState = false
-    @Published var isSuspended = false
+    @Published var isSuspended: Bool? = nil
     @Published var showingDeleteConfirmation = false
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
@@ -49,13 +50,15 @@ class TandemKitSettingsViewModel: ObservableObject {
             let controlIQ = self.sendMessage(message: ControlIQInfoV2Request()) as? ControlIQInfoV2Response
             let insulin = self.sendMessage(message: InsulinStatusRequest()) as? InsulinStatusResponse
             let tempRate = self.sendMessage(message: TempRateRequest()) as? TempRateResponse
+            let currentBasal = self.sendMessage(message: CurrentBasalStatusRequest()) as? CurrentBasalStatusResponse
 
             DispatchQueue.main.async {
                 self.mirrorDetail = mirror
                 self.controlIQInfo = controlIQ
                 self.insulinStatus = insulin
                 self.tempRateStatus = tempRate
-                self.isSuspended = mirror?.basalStatusIconId == 12 // Suspended icon
+                self.currentBasalStatus = currentBasal
+                self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
             }
         }
     }
@@ -64,8 +67,9 @@ class TandemKitSettingsViewModel: ObservableObject {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
+            guard let isSuspended = self.isSuspended else { return }
 
-            if self.isSuspended {
+            if isSuspended {
                 _ = self.sendMessage(message: ResumePumpingRequest())
             } else {
                 _ = self.sendMessage(message: SuspendPumpingRequest())
@@ -134,19 +138,24 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    var basalButtonText: String {
-        isSuspended ? "Resume insulin delivery" : "Suspend insulin delivery"
+    var suspendResumeText: String? {
+        if isSuspended == true {
+            return "Resume insulin delivery"
+        } else if isSuspended == false {
+            return "Suspend insulin delivery"
+        }
+        return nil
     }
 
     var exerciseModeText: String {
-        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == 3 {
+        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == ControlIQInfoV2Response.UserModeType.exercise.rawValue {
             return "Disable exercise mode"
         }
         return "Enable exercise mode"
     }
 
     var sleepModeText: String {
-        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == 2 {
+        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == ControlIQInfoV2Response.UserModeType.sleep.rawValue {
             return "Disable sleep mode"
         }
         return "Enable sleep mode"
