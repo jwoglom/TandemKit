@@ -18,6 +18,9 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
+        let instanceId = ObjectIdentifier(self)
+        log.info("PeripheralManagerTransport init: instance=%{public}@", String(describing: instanceId))
+        transportLogger.info("[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0")
     }
 
     private func withMainActor<T>(_ block: @MainActor @escaping () throws -> T) throws -> T {
@@ -41,6 +44,9 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     }
 
     public func sendMessage(_ message: Message) throws -> Message {
+        let instanceId = ObjectIdentifier(self)
+        transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
+
         // Create wrapper with current TxId
         let wrapper = try withMainActor {
             TronMessageWrapper(message: message, currentTxId: self.currentTxId)
@@ -48,6 +54,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         let txIdForRequest = currentTxId
         currentTxId = currentTxId &+ 1 // Increment with overflow
+        transportLogger.info("[PeripheralManagerTransport] txId assigned: \(txIdForRequest), next will be: \(currentTxId)")
 
         // Create initial history entry (no response yet)
         let characteristic = type(of: message).props.characteristic

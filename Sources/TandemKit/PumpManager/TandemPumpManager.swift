@@ -151,6 +151,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func updateTransport(_ transport: PumpMessageTransport?) {
+        if let transport = transport {
+            let instanceId = ObjectIdentifier(transport as AnyObject)
+            log.info("updateTransport: setting transport instance=%{public}@", String(describing: instanceId))
+        } else {
+            log.info("updateTransport: clearing transport (nil)")
+        }
         transportLock.value = transport
 
         if let peripheralManager = activePeripheralManager, transport != nil {
@@ -954,6 +960,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 }
 
+                // Also wait for transport to be initialized (didCompleteConfiguration must have been called)
+                tries = 0
+                while transportLock.value == nil {
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                    print("Waiting for transport to be initialized...")
+                    tries += 1
+
+                    if tries >= 50 {
+                        completion(.failure(NSError(
+                            domain: "TandemPumpManager",
+                            code: -2,
+                            userInfo: [NSLocalizedDescriptionKey: "Gave up waiting for transport initialization"]
+                        )))
+                        return
+                    }
+                }
+
                 guard let transport = transportLock.value else {
                     completion(.failure(PumpCommError.pumpNotConnected))
                     return
@@ -1648,12 +1671,20 @@ extension TandemPumpManager: TandemPumpDelegate {
         _: TandemPump,
         didCompleteConfiguration peripheralManager: PeripheralManager
     ) {
-        // Create and store the transport
-        let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+        // Only create a new transport if we don't have one yet, or if the peripheral manager changed
+        let needsNewTransport = transportLock.value == nil || activePeripheralManager !== peripheralManager
+
+        if needsNewTransport {
+            log.info("Creating new transport for peripheral manager")
+            let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
+            updateTransport(transport)
+        } else {
+            log.info("Reusing existing transport - peripheral manager unchanged")
+        }
+
         activePeripheralManager = peripheralManager
         pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
-        updateTransport(transport)
     }
 
     public func tandemPump(
