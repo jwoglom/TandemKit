@@ -63,3 +63,9 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
         case readyToChange = 2
     }
 }
+
+public extension EnterChangeCartridgeModeStateStreamResponse {
+    var description: String {
+        "EnterChangeCartridgeModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
+    }
+}

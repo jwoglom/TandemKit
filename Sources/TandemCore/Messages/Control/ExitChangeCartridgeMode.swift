@@ -44,3 +44,15 @@ public class ExitChangeCartridgeModeResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension ExitChangeCartridgeModeRequest {
+    var description: String {
+        "ExitChangeCartridgeModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ExitChangeCartridgeModeResponse {
+    var description: String {
+        "ExitChangeCartridgeModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

@@ -56,6 +56,10 @@ public class ControlIQSleepScheduleResponse: Message {
         self.schedule3 = schedule3
     }
 
+    public var description: String {
+        "ControlIQSleepScheduleResponse(cargo=\(cargo.hexadecimalString), schedule0=\(schedule0), schedule1=\(schedule1), schedule2=\(schedule2), schedule3=\(schedule3))"
+    }
+
     /// Represents a single sleep schedule block.
     public struct SleepSchedule {
         public var enabled: Int
@@ -85,5 +89,11 @@ public class ControlIQSleepScheduleResponse: Message {
                 Bytes.firstTwoBytesLittleEndian(endTime)
             )
         }
+    }
+}
+
+public extension ControlIQSleepScheduleRequest {
+    var description: String {
+        "ControlIQSleepScheduleRequest(cargo=\(cargo.hexadecimalString))"
     }
 }

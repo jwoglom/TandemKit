@@ -121,3 +121,15 @@ public class ReminderStatusResponse: Message {
         }
     }
 }
+
+public extension ReminderStatusRequest {
+    var description: String {
+        "ReminderStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ReminderStatusResponse {
+    var description: String {
+        "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap))"
+    }
+}

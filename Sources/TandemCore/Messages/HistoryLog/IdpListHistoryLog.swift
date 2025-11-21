@@ -90,3 +90,9 @@ public class IdpListHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension IdpListHistoryLog {
+    var description: String {
+        "IdpListHistoryLog(cargo=\(cargo.hexadecimalString), numProfiles=\(numProfiles), slot1=\(slot1), slot2=\(slot2), slot3=\(slot3), slot4=\(slot4), slot5=\(slot5), slot6=\(slot6))"
+    }
+}

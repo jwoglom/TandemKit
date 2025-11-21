@@ -113,3 +113,15 @@ public class IDPSegmentResponse: Message {
         }
     }
 }
+
+public extension IDPSegmentRequest {
+    var description: String {
+        "IDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex))"
+    }
+}
+
+public extension IDPSegmentResponse {
+    var description: String {
+        "IDPSegmentResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+    }
+}

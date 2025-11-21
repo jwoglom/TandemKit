@@ -44,3 +44,15 @@ public class PlaySoundResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension PlaySoundRequest {
+    var description: String {
+        "PlaySoundRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension PlaySoundResponse {
+    var description: String {
+        "PlaySoundResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

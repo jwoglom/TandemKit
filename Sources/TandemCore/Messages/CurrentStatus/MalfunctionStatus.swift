@@ -65,3 +65,15 @@ public class MalfunctionStatusResponse: Message {
         return true
     }
 }
+
+public extension MalfunctionStatusRequest {
+    var description: String {
+        "MalfunctionStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension MalfunctionStatusResponse {
+    var description: String {
+        "MalfunctionStatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB), remaining=\(remaining.hexadecimalString))"
+    }
+}

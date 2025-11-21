@@ -97,3 +97,9 @@ public class BGHistoryLog: HistoryLog {
         LastBGResponse.BgSource(rawValue: bgSourceId)
     }
 }
+
+public extension BGHistoryLog {
+    var description: String {
+        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(bgSource), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), spare=\(spare))"
+    }
+}

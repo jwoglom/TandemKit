@@ -168,3 +168,15 @@ public extension HomeScreenMirrorResponse {
     var basalStatusIcon: BasalStatusIcon? { BasalStatusIcon(rawValue: basalStatusIconId) }
     var apControlStateIcon: ApControlStateIcon? { ApControlStateIcon(rawValue: apControlStateIconId) }
 }
+
+public extension HomeScreenMirrorRequest {
+    var description: String {
+        "HomeScreenMirrorRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension HomeScreenMirrorResponse {
+    var description: String {
+        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(cgmTrendIcon), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(cgmAlertIcon), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(statusIcon0), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(statusIcon1), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(bolusStatusIcon), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(basalStatusIcon), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(apControlStateIcon), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
+    }
+}

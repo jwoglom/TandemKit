@@ -50,3 +50,9 @@ public class BolexActivatedHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension BolexActivatedHistoryLog {
+    var description: String {
+        "BolexActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), iob=\(iob), bolexSize=\(bolexSize))"
+    }
+}

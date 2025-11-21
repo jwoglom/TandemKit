@@ -203,3 +203,15 @@ public enum MultiDay: Int, CaseIterable, Sendable {
 
     public static let allDays: Set<MultiDay> = Set(MultiDay.allCases)
 }
+
+public extension RemindersRequest {
+    var description: String {
+        "RemindersRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension RemindersResponse {
+    var description: String {
+        "RemindersResponse(cargo=\(cargo.hexadecimalString), lowBGReminder=\(lowBGReminder), highBGReminder=\(highBGReminder), siteChangeReminder=\(siteChangeReminder), missedBolusReminder0=\(missedBolusReminder0), missedBolusReminder1=\(missedBolusReminder1), missedBolusReminder2=\(missedBolusReminder2), missedBolusReminder3=\(missedBolusReminder3), afterBolusReminder=\(afterBolusReminder), additionalBolusReminder=\(additionalBolusReminder), lowBGThreshold=\(lowBGThreshold), highBGThreshold=\(highBGThreshold), siteChangeDays=\(siteChangeDays), status=\(status))"
+    }
+}

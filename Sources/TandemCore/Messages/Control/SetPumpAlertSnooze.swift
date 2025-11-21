@@ -57,3 +57,15 @@ public class SetPumpAlertSnoozeResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetPumpAlertSnoozeRequest {
+    var description: String {
+        "SetPumpAlertSnoozeRequest(cargo=\(cargo.hexadecimalString), snoozeEnabled=\(snoozeEnabled), snoozeDurationMins=\(snoozeDurationMins))"
+    }
+}
+
+public extension SetPumpAlertSnoozeResponse {
+    var description: String {
+        "SetPumpAlertSnoozeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

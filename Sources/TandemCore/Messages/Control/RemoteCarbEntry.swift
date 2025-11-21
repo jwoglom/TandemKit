@@ -63,3 +63,15 @@ public class RemoteCarbEntryResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension RemoteCarbEntryRequest {
+    var description: String {
+        "RemoteCarbEntryRequest(cargo=\(cargo.hexadecimalString), carbs=\(carbs), unknown=\(unknown), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+    }
+}
+
+public extension RemoteCarbEntryResponse {
+    var description: String {
+        "RemoteCarbEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

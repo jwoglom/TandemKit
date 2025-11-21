@@ -78,3 +78,15 @@ public class BolusPermissionChangeReasonResponse: Message {
         case UNKNOWN = 7
     }
 }
+
+public extension BolusPermissionChangeReasonRequest {
+    var description: String {
+        "BolusPermissionChangeReasonRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    }
+}
+
+public extension BolusPermissionChangeReasonResponse {
+    var description: String {
+        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(lastChangeReason), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
+    }
+}

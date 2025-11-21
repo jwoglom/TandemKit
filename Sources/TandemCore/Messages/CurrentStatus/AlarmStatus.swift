@@ -132,3 +132,15 @@ public class AlarmStatusResponse: Message {
         }
     }
 }
+
+public extension AlarmStatusRequest {
+    var description: String {
+        "AlarmStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension AlarmStatusResponse {
+    var description: String {
+        "AlarmStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap), alarms=\(alarms))"
+    }
+}

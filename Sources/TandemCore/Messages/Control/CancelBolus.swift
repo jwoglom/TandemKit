@@ -80,3 +80,15 @@ public class CancelBolusResponse: Message {
         status == .success && reason == .noError
     }
 }
+
+public extension CancelBolusRequest {
+    var description: String {
+        "CancelBolusRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    }
+}
+
+public extension CancelBolusResponse {
+    var description: String {
+        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), reason=\(reason), reasonId=\(reasonId))"
+    }
+}

@@ -53,3 +53,15 @@ public class FillCannulaResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension FillCannulaRequest {
+    var description: String {
+        "FillCannulaRequest(cargo=\(cargo.hexadecimalString), primeSizeMilliUnits=\(primeSizeMilliUnits))"
+    }
+}
+
+public extension FillCannulaResponse {
+    var description: String {
+        "FillCannulaResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

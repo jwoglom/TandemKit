@@ -63,3 +63,9 @@ public class FillCannulaStateStreamResponse: Message {
         case cannulaFilled = 2
     }
 }
+
+public extension FillCannulaStateStreamResponse {
+    var description: String {
+        "FillCannulaStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
+    }
+}

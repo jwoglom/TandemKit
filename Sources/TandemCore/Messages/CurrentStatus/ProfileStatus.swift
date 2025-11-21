@@ -89,3 +89,15 @@ public class ProfileStatusResponse: Message {
         [idpSlot0Id, idpSlot1Id, idpSlot2Id, idpSlot3Id, idpSlot4Id, idpSlot5Id].prefix(numberOfProfiles).map { $0 }
     }
 }
+
+public extension ProfileStatusRequest {
+    var description: String {
+        "ProfileStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ProfileStatusResponse {
+    var description: String {
+        "ProfileStatusResponse(cargo=\(cargo.hexadecimalString), numberOfProfiles=\(numberOfProfiles), idpSlot0Id=\(idpSlot0Id), idpSlot1Id=\(idpSlot1Id), idpSlot2Id=\(idpSlot2Id), idpSlot3Id=\(idpSlot3Id), idpSlot4Id=\(idpSlot4Id), idpSlot5Id=\(idpSlot5Id), activeSegmentIndex=\(activeSegmentIndex))"
+    }
+}

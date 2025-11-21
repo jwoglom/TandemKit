@@ -82,3 +82,9 @@ public class CgmDataGxHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension CgmDataGxHistoryLog {
+    var description: String {
+        "CgmDataGxHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), type=\(type), rate=\(rate), rssi=\(rssi), value=\(value), timestamp=\(timestamp), transmitterTimestamp=\(transmitterTimestamp))"
+    }
+}

@@ -94,3 +94,9 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
         BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeId)
     }
 }
+
+public extension BolusRequestedMsg1HistoryLog {
+    var description: String {
+        "BolusRequestedMsg1HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), bolusTypeId=\(bolusTypeId), correctionBolusIncluded=\(correctionBolusIncluded), carbAmount=\(carbAmount), bg=\(bg), iob=\(iob), carbRatio=\(carbRatio))"
+    }
+}

@@ -60,3 +60,15 @@ public class ApiVersionResponse: Message {
         ApiVersion(major: majorVersion, minor: minorVersion)
     }
 }
+
+public extension ApiVersionRequest {
+    var description: String {
+        "ApiVersionRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ApiVersionResponse {
+    var description: String {
+        "ApiVersionResponse(cargo=\(cargo.hexadecimalString), majorVersion=\(majorVersion), minorVersion=\(minorVersion))"
+    }
+}

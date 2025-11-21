@@ -157,3 +157,15 @@ public class InitiateBolusResponse: Message, StatusMessage {
     public var statusType: BolusResponseStatus? { BolusResponseStatus(rawValue: statusTypeId) }
     public var wasBolusInitiated: Bool { status == 0 && statusType == .success }
 }
+
+public extension InitiateBolusRequest {
+    var description: String {
+        "InitiateBolusRequest(cargo=\(cargo.hexadecimalString), totalVolume=\(totalVolume), bolusID=\(bolusID), bolusTypeBitmask=\(bolusTypeBitmask), foodVolume=\(foodVolume), correctionVolume=\(correctionVolume), bolusCarbs=\(bolusCarbs), bolusBG=\(bolusBG), bolusIOB=\(bolusIOB), extendedVolume=\(extendedVolume), extendedSeconds=\(extendedSeconds), extended3=\(extended3))"
+    }
+}
+
+public extension InitiateBolusResponse {
+    var description: String {
+        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusType=\(statusType), statusTypeId=\(statusTypeId))"
+    }
+}

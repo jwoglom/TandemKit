@@ -44,3 +44,15 @@ public class ExitFillTubingModeResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension ExitFillTubingModeRequest {
+    var description: String {
+        "ExitFillTubingModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ExitFillTubingModeResponse {
+    var description: String {
+        "ExitFillTubingModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

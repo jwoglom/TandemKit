@@ -55,3 +55,15 @@ public class CurrentBatteryV1Response: Message {
 }
 
 extension CurrentBatteryV1Response: CurrentBatteryAbstractResponse {}
+
+public extension CurrentBatteryV1Request {
+    var description: String {
+        "CurrentBatteryV1Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CurrentBatteryV1Response {
+    var description: String {
+        "CurrentBatteryV1Response(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), currentBatteryIbc=\(currentBatteryIbc))"
+    }
+}

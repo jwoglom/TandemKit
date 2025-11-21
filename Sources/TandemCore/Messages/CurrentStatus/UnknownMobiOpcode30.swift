@@ -54,3 +54,15 @@ public class UnknownMobiOpcode30Response: Message {
         self.unknown4 = unknown4
     }
 }
+
+public extension UnknownMobiOpcode30Request {
+    var description: String {
+        "UnknownMobiOpcode30Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension UnknownMobiOpcode30Response {
+    var description: String {
+        "UnknownMobiOpcode30Response(cargo=\(cargo.hexadecimalString), unknown1=\(unknown1), unknown2=\(unknown2), unknown3=\(unknown3), unknown4=\(unknown4))"
+    }
+}

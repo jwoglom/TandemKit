@@ -91,3 +91,15 @@ public class LastBolusStatusResponse: Message {
     public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
     public var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }
+
+public extension LastBolusStatusRequest {
+    var description: String {
+        "LastBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension LastBolusStatusResponse {
+    var description: String {
+        "LastBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), unknown=\(unknown.hexadecimalString), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration))"
+    }
+}
