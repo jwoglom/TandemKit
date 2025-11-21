@@ -292,8 +292,8 @@
 		3EE3461F2EC92807008A07F6 /* ContinueButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3461E2EC92806008A07F6 /* ContinueButton.swift */; };
 		3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */; };
 		3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */; };
-		3EEECBCA2EC9023C0063D7BC /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
-		3EEECBCE2EC902420063D7BC /* LoopKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBCD2EC902420063D7BC /* LoopKitUI.framework */; };
+		1A693F472D2B2B9100A65351 /* LoopKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F462D2B2B9100A65351 /* LoopKit.xcframework */; };
+		1A693F4B2D2B2B9300A65351 /* LoopKitUI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1A693F4A2D2B2B9300A65351 /* LoopKitUI.xcframework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -667,8 +667,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3EEECBCA2EC9023C0063D7BC /* LoopKit.framework in Frameworks */,
-				3EEECBCE2EC902420063D7BC /* LoopKitUI.framework in Frameworks */,
+				1A693F472D2B2B9100A65351 /* LoopKit.xcframework in Frameworks */,
+				1A693F4B2D2B2B9300A65351 /* LoopKitUI.xcframework in Frameworks */,
 				3EE346042EC91332008A07F6 /* TandemCore.framework in Frameworks */,
 				3EE345FF2EC9132D008A07F6 /* TandemBLE.framework in Frameworks */,
 			);
