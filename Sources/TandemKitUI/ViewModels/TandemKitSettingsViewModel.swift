@@ -72,7 +72,31 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.insulinStatus = insulin
                 self.tempRateStatus = tempRate
                 self.currentBasalStatus = currentBasal
-                self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+                if let mirror = mirror {
+                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+                } else {
+                    self.isSuspended = nil
+                }
+                self.notificationCount = notifCount
+            }
+        }
+    }
+
+    func refreshNotificationCount() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            // Refresh notification count
+            for request in NotificationBundle.allRequests() {
+                if let response = self.sendMessage(message: request) {
+                    if NotificationBundle.isNotificationResponse(response) {
+                        self.notificationBundle.add(response)
+                    }
+                }
+            }
+            let notifCount = self.notificationBundle.getNotificationCount()
+
+            DispatchQueue.main.async {
                 self.notificationCount = notifCount
             }
         }

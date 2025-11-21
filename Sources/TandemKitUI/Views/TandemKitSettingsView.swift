@@ -306,6 +306,9 @@ struct TandemKitSettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationBarItems(trailing: doneButton)
         .navigationBarTitle("Tandem pump")
+        .onAppear {
+            viewModel.refreshNotificationCount()
+        }
     }
 
     private var doneButton: some View {

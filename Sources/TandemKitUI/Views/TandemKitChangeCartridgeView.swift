@@ -119,7 +119,10 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.failedEnterMode {
                 Label(
-                    LocalizedString("Failed to enter change mode. Ensure pump is suspended.", comment: "Error message"),
+                    LocalizedString(
+                        "Failed to enter change mode. Ensure insulin delivery is suspended and check pump notifications.",
+                        comment: "Error message"
+                    ),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
