@@ -339,6 +339,58 @@ struct TandemKitSettingsView: View {
     }
 }
 
-#Preview {
-    TandemKitSetupCompleteView(finish: {})
+#Preview("Overview") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewData)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+private extension TandemKitSettingsViewModel {
+    static var previewData: TandemKitSettingsViewModel {
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
+        viewModel.mirrorDetail = HomeScreenMirrorResponse(
+            cgmTrendIconId: HomeScreenMirrorResponse.CGMTrendIcon.up.rawValue,
+            cgmAlertIconId: HomeScreenMirrorResponse.CGMAlertIcon.noError.rawValue,
+            statusIcon0Id: HomeScreenMirrorResponse.StatusIcon0.cgmTransmitter.rawValue,
+            statusIcon1Id: HomeScreenMirrorResponse.StatusIcon1.bloodDrop.rawValue,
+            bolusStatusIconId: HomeScreenMirrorResponse.BolusStatusIcon.autoBolus.rawValue,
+            basalStatusIconId: HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue,
+            apControlStateIconId: HomeScreenMirrorResponse.ApControlStateIcon.stateGray.rawValue,
+            remainingInsulinPlusIcon: true,
+            cgmDisplayData: true
+        )
+        viewModel.controlIQInfo = ControlIQInfoV2Response(
+            closedLoopEnabled: true,
+            weight: 70,
+            weightUnit: ControlIQInfoAbstract.WeightUnit.kilograms.rawValue,
+            totalDailyInsulin: 32,
+            currentUserModeType: ControlIQInfoAbstract.UserModeType.exercise.rawValue,
+            byte6: 0,
+            byte7: 0,
+            byte8: 0,
+            controlStateType: 1,
+            exerciseChoice: 1,
+            exerciseDuration: 45
+        )
+        viewModel.insulinStatus = InsulinStatusResponse(
+            currentInsulinAmount: 180,
+            isEstimate: 0,
+            insulinLowAmount: 30
+        )
+        viewModel.tempRateStatus = TempRateResponse(
+            active: true,
+            percentage: 120,
+            startTimeRaw: 0,
+            duration: 1800
+        )
+        viewModel.isSuspended = false
+        return viewModel
+    }
+}
+
+private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewModel {
+    override func refreshPumpStatus() {
+        // Disable background refresh for previews so mocked data stays visible
+    }
 }

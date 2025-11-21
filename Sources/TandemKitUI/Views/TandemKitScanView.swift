@@ -9,17 +9,32 @@ struct TandemKitScanView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text(LocalizedString("Found Tandem pumps", comment: "Title for TandemKitScanView"))
+            Text(LocalizedString("Searching...", comment: "Searching text in TandemKitScanView"))
                 .font(.title)
                 .bold()
                 .padding(.horizontal)
 
-            Text(LocalizedString(
-                "If your pump is not displayed, place the Mobi on its charger and pick it up. Then wait 3 seconds and press the pump button, wait 1 second, and press it again.",
-                comment: "Subtitle for TandemKitScanView.."
-            ))
-                .font(.caption)
+            VStack(alignment: .leading, spacing: 20) {
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(LocalizedString("To place the pump in pairing mode:", comment: "Pairing mode instructions header"))
+                        .font(.headline)
+
+                    Text(LocalizedString("• Set the pump on the charger", comment: "Pairing instruction 1"))
+                    Text(LocalizedString("• Wait for it to begin charging", comment: "Pairing instruction 2"))
+                    Text(LocalizedString(
+                        "• Pick up the pump and wait 3 seconds",
+                        comment: "Pairing instruction 3"
+                    ))
+                    Text(LocalizedString("• Press and release the pump button", comment: "Pairing instruction 4"))
+                    Text(LocalizedString("• Wait 1 second and press the button again", comment: "Pairing instruction 5"))
+                    Text(LocalizedString("• When complete, the pump should beep twice", comment: "Pairing instruction 6"))
+                }
                 .padding(.horizontal)
+
+                Spacer()
+            }
 
             HStack(alignment: .center, spacing: 0) {
                 Text(
@@ -30,7 +45,7 @@ struct TandemKitScanView: View {
                 Spacer()
                 ActivityIndicator(isAnimating: .constant(true), style: .medium)
             }
-            .padding(.horizontal)
+            .padding(.all)
 
             Divider()
             content
@@ -107,6 +122,40 @@ struct TandemKitScanView: View {
     }
 }
 
-#Preview {
-    TandemKitScanView(viewModel: TandemKitScanViewModel(nextStep: {}))
+#Preview("Scanning With Results") {
+    NavigationView {
+        TandemKitScanView(viewModel: .previewWithDeviceList)
+    }
+}
+
+#Preview("Prompting For PIN") {
+    NavigationView {
+        TandemKitScanView(viewModel: .previewRequestingPin)
+    }
+}
+
+private extension TandemKitScanViewModel {
+    static var previewWithDeviceList: TandemKitScanViewModel {
+        let viewModel = TandemKitScanViewModel(nextStep: {})
+        viewModel.scannedDevices = [
+            ScanResultItem(name: "t:slim X2 2345", bleIdentifier: "ABCDEF01-2345"),
+            ScanResultItem(name: "Tandem Mobi 999", bleIdentifier: "ABCDEF01-9999")
+        ]
+        viewModel.isScanning = true
+        viewModel.isConnecting = false
+        viewModel.connectingTo = nil
+        return viewModel
+    }
+
+    static var previewRequestingPin: TandemKitScanViewModel {
+        let viewModel = TandemKitScanViewModel(nextStep: {})
+        viewModel.scannedDevices = [
+            ScanResultItem(name: "Tandem Mobi 9999", bleIdentifier: "ABCDEF01-9999")
+        ]
+        viewModel.isConnecting = true
+        viewModel.connectingTo = "Tandem Mobi 9999"
+        viewModel.isPromptingPincode = true
+        viewModel.devicePinCode = ""
+        return viewModel
+    }
 }
