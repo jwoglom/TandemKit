@@ -18,3 +18,7 @@ This project relies on Carthage for several dependencies (LoopKit, LoopKitUI, Lo
 4. Open `TandemKit.xcodeproj` and build the targets.
 
 The generated frameworks will appear under `Carthage/Build/` and are referenced by the project via a `carthage copy-frameworks` build phase.
+
+## Workspace Setup
+
+TandemKit can be used as part of a larger workspace (like Trio) where it's checked out alongside LoopKit and other dependencies. For detailed instructions on workspace setup, see [WORKSPACE_SETUP.md](WORKSPACE_SETUP.md).

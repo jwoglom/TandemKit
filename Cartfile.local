@@ -1,0 +1,4 @@
+# This Cartfile is used for workspace builds where dependencies are checked out alongside TandemKit
+# Use absolute paths with file:// protocol for local dependencies
+git "file://${PWD}/../LoopKit" "loop-release/v2.x"
+github "leif-ibsen/SwiftECC" ~> 5.5.0
