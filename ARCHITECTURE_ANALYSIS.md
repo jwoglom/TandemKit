@@ -581,7 +581,12 @@ enum PumpCommError: Error {
 
 ### Authenticated Session Bootstrap
 
-After every reconnect (or app relaunch) the manager keeps the `needsSessionInitialization` flag set until it successfully re-fetches `TimeSinceReset` over the authenticated transport. `pairedTransport` returns `nil` while this flag is true so telemetry/UI code cannot send signed commands prematurely. A dedicated serial queue runs the bootstrap, retries with exponential backoff when the pump responses time out or report `notReady`, and only re-enables telemetry once the updated `PumpState.timeSinceReset` is stored.
+After every reconnect (or app relaunch) the manager keeps the `needsSessionInitialization` flag set until it completes two operations on a background queue:
+
+1. **Stored-credential authentication** – `PumpComm.confirmAuthentication` executes the JPake `CONFIRM_INITIAL` flow using the persisted derived secret to refresh the pump-provided nonce so that subsequent signed requests use a valid HMAC key.
+2. **Time refresh** – once re-authenticated, the manager issues `TimeSinceResetRequest` to update `PumpState.timeSinceReset` and clear the initialization flag.
+
+`pairedTransport` returns `nil` while the flag is `true` so telemetry/UI code cannot dispatch signed commands prematurely. The bootstrap queue retries with exponential backoff when either the authentication step or `TimeSinceResetRequest` fails, and only re-enables telemetry once both succeed.
 
 ---
 

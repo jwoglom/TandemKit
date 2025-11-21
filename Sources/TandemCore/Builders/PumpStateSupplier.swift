@@ -201,6 +201,13 @@ public enum PumpStateSupplier {
         throw PumpPairingCodeValidationError.invalidLength
     }
 
+    /// Returns the most recently stored pairing code (already sanitized), if any.
+    public static func storedPairingCode() -> String? {
+        withLock {
+            pumpPairingCode?()
+        }
+    }
+
     public static func storePairingArtifacts(derivedSecret: Data?, serverNonce: Data?) {
         withLock {
             if let derivedSecret = derivedSecret, !derivedSecret.isEmpty {

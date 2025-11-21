@@ -47,6 +47,12 @@ struct TandemKitSettingsView: View {
                 .padding(.bottom, 5)
             }
 
+            Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
+
+            Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
+
+            Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
+
             Section(header: SectionHeader(label: LocalizedString(
                 "Actions",
                 comment: "The title of the actions section in TandemKit settings"
