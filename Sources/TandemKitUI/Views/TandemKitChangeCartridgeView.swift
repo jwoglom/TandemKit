@@ -12,7 +12,7 @@ struct TandemKitChangeCartridgeView: View {
             // Warning section
             Section {
                 Text(LocalizedString(
-                    "Changing your cartridge will require suspending insulin delivery. Follow each step carefully.",
+                    "Changing your cartridge will require suspending insulin delivery.",
                     comment: "Warning message for cartridge change"
                 ))
             } header: {
@@ -267,37 +267,111 @@ struct TandemKitChangeCartridgeView: View {
     }
 }
 
-#Preview("Active Flow") {
+private extension TandemKitChangeCartridgeViewModel {
+    static func preview(step: CartridgeChangeStep, configure: (TandemKitChangeCartridgeViewModel) -> Void = { _ in
+    }) -> TandemKitChangeCartridgeViewModel {
+        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
+        viewModel.currentStep = step
+        configure(viewModel)
+        return viewModel
+    }
+
+    static var previewSuspendPrompt: TandemKitChangeCartridgeViewModel {
+        preview(step: .suspend) {
+            $0.isSuspended = false
+        }
+    }
+
+    static var previewEnterMode: TandemKitChangeCartridgeViewModel {
+        preview(step: .enterMode) {
+            $0.isSuspended = true
+        }
+    }
+
+    static var previewWaitingForReady: TandemKitChangeCartridgeViewModel {
+        preview(step: .waitingForReady) {
+            $0.isSuspended = true
+            $0.isProcessing = true
+            $0.changeCartridgeState = .readyToChange
+        }
+    }
+
+    static var previewPhysicalChange: TandemKitChangeCartridgeViewModel {
+        preview(step: .physicalChange) {
+            $0.isSuspended = true
+        }
+    }
+
+    static var previewDetecting: TandemKitChangeCartridgeViewModel {
+        preview(step: .detecting) {
+            $0.isSuspended = true
+            $0.isProcessing = true
+            $0.isDetecting = true
+            $0.detectingProgress = 45
+        }
+    }
+
+    static var previewCompleting: TandemKitChangeCartridgeViewModel {
+        preview(step: .completing) {
+            $0.isSuspended = true
+            $0.isProcessing = true
+            $0.loadingExitMode = false
+        }
+    }
+
+    static var previewCompleted: TandemKitChangeCartridgeViewModel {
+        preview(step: .done) {
+            $0.isSuspended = true
+            $0.isProcessing = false
+        }
+    }
+}
+
+#Preview("Step 1 – Suspend") {
     NavigationView {
-        TandemKitChangeCartridgeView(viewModel: .previewInProgress)
+        TandemKitChangeCartridgeView(viewModel: .previewSuspendPrompt)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }
 
-#Preview("Completed") {
+#Preview("Step 2 – Enter Mode") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewEnterMode)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Step 3 – Waiting") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewWaitingForReady)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Step 4 – Physical Change") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewPhysicalChange)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Step 5 – Detecting") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewDetecting)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Step 6 – Completing") {
+    NavigationView {
+        TandemKitChangeCartridgeView(viewModel: .previewCompleting)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Step 7 – Done") {
     NavigationView {
         TandemKitChangeCartridgeView(viewModel: .previewCompleted)
     }
     .environment(\.guidanceColors, GuidanceColors())
-}
-
-private extension TandemKitChangeCartridgeViewModel {
-    static var previewInProgress: TandemKitChangeCartridgeViewModel {
-        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
-        viewModel.isSuspended = true
-        viewModel.currentStep = .detecting
-        viewModel.isProcessing = true
-        viewModel.changeCartridgeState = .readyToChange
-        viewModel.isDetecting = true
-        viewModel.detectingProgress = 60
-        return viewModel
-    }
-
-    static var previewCompleted: TandemKitChangeCartridgeViewModel {
-        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
-        viewModel.isSuspended = true
-        viewModel.currentStep = .done
-        viewModel.isProcessing = false
-        return viewModel
-    }
 }

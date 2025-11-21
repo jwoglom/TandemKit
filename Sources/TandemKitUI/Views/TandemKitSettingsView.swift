@@ -339,13 +339,6 @@ struct TandemKitSettingsView: View {
     }
 }
 
-#Preview("Overview") {
-    NavigationView {
-        TandemKitSettingsView(viewModel: .previewData)
-    }
-    .environment(\.guidanceColors, GuidanceColors())
-}
-
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
         let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
@@ -363,9 +356,9 @@ private extension TandemKitSettingsViewModel {
         viewModel.controlIQInfo = ControlIQInfoV2Response(
             closedLoopEnabled: true,
             weight: 70,
-            weightUnit: ControlIQInfoAbstract.WeightUnit.kilograms.rawValue,
+            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.kilograms.rawValue,
             totalDailyInsulin: 32,
-            currentUserModeType: ControlIQInfoAbstract.UserModeType.exercise.rawValue,
+            currentUserModeType: ControlIQInfoAbstractResponse.UserModeType.exercise.rawValue,
             byte6: 0,
             byte7: 0,
             byte8: 0,
@@ -393,4 +386,11 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
     override func refreshPumpStatus() {
         // Disable background refresh for previews so mocked data stays visible
     }
+}
+
+#Preview("Overview") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewData)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
 }
