@@ -32,18 +32,19 @@ jobs:
           xcodebuild -resolvePackageDependencies -project TandemKit.xcodeproj -scheme TandemKit
       - name: Build TandemKit XCFramework
         run: |
+          # Build for iOS device using xcconfig to selectively enable library evolution
           xcodebuild archive \
             -project TandemKit.xcodeproj -scheme TandemKit \
             -destination 'generic/platform=iOS' \
             -archivePath build/ios \
-            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+            -xcconfig ci-archive.xcconfig
+          # Build for iOS Simulator
           xcodebuild archive \
             -project TandemKit.xcodeproj -scheme TandemKit \
             -destination 'generic/platform=iOS Simulator' \
             -archivePath build/ios-sim \
-            SKIP_INSTALL=NO BUILD_LIBRARY_FOR_DISTRIBUTION=YES \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+            -xcconfig ci-archive.xcconfig
+          # Create XCFramework
           xcodebuild -create-xcframework \
             -framework build/ios.xcarchive/Products/Library/Frameworks/TandemKit.framework \
             -framework build/ios-sim.xcarchive/Products/Library/Frameworks/TandemKit.framework \
