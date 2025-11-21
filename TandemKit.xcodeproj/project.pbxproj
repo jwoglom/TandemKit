@@ -101,6 +101,7 @@
 		3EE345392EC91299008A07F6 /* CGMRateAlertSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3449B2EC91299008A07F6 /* CGMRateAlertSettings.swift */; };
 		3EE3453A2EC91299008A07F6 /* HmacSha256.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443D2EC91299008A07F6 /* HmacSha256.swift */; };
 		3EE3453B2EC91299008A07F6 /* PumpLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344512EC91299008A07F6 /* PumpLogger.swift */; };
+		1B2C3D4E5F6A7B8C9D0E1F2A /* NotificationBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F8E7D6A5B4C3A2D1E0F9G8H /* NotificationBundle.swift */; };
 		3EE3453C2EC91299008A07F6 /* EnterFillTubingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3446A2EC91299008A07F6 /* EnterFillTubingMode.swift */; };
 		3EE3453D2EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344872EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift */; };
 		3EE3453E2EC91299008A07F6 /* IDPSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344B02EC91299008A07F6 /* IDPSegment.swift */; };
@@ -460,6 +461,7 @@
 		3EE3444F2EC91299008A07F6 /* LocalizedString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedString.swift; sourceTree = "<group>"; };
 		3EE344502EC91299008A07F6 /* OSLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSLog.swift; sourceTree = "<group>"; };
 		3EE344512EC91299008A07F6 /* PumpLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpLogger.swift; sourceTree = "<group>"; };
+		9F8E7D6A5B4C3A2D1E0F9G8H /* NotificationBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBundle.swift; sourceTree = "<group>"; };
 		3EE344522EC91299008A07F6 /* SHA1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHA1.swift; sourceTree = "<group>"; };
 		3EE344532EC91299008A07F6 /* SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHA256.swift; sourceTree = "<group>"; };
 		3EE344552EC91299008A07F6 /* AbstractCentralChallengeRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AbstractCentralChallengeRequest.swift; sourceTree = "<group>"; };
@@ -1544,6 +1546,7 @@
 				3EE345392EC91299008A07F6 /* CGMRateAlertSettings.swift in Sources */,
 				3EE3453A2EC91299008A07F6 /* HmacSha256.swift in Sources */,
 				3EE3453B2EC91299008A07F6 /* PumpLogger.swift in Sources */,
+				1B2C3D4E5F6A7B8C9D0E1F2A /* NotificationBundle.swift in Sources */,
 				3EE3453C2EC91299008A07F6 /* EnterFillTubingMode.swift in Sources */,
 				3EE3453D2EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift in Sources */,
 				3EE3453E2EC91299008A07F6 /* IDPSegment.swift in Sources */,
