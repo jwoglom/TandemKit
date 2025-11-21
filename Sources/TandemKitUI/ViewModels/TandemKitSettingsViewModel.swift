@@ -17,6 +17,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isUpdatingPumpState = false
     @Published var isSuspended: Bool? = nil
     @Published var showingDeleteConfirmation = false
+    @Published var showingDebugDetails = false
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager

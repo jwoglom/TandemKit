@@ -26,6 +26,36 @@ struct TandemKitSettingsView: View {
         )
     }
 
+    var debugDetailsPopover: some View {
+        List {
+            Section(header: SectionHeader(label: LocalizedString("State", comment: "Debug state header"))) {
+                Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
+
+                Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
+
+                Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
+            }
+
+            HStack {
+                Text("Peripheral UUID")
+                    .foregroundColor(Color.primary)
+                Spacer()
+                Text(viewModel.pumpState?.peripheralUuid ?? "N/A")
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            HStack {
+                Text("PumpState Valid")
+                    .foregroundColor(Color.primary)
+                Spacer()
+                Text(String(describing: viewModel.pumpState?.valid ?? false))
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
     var body: some View {
         List {
             Section {
@@ -155,12 +185,13 @@ struct TandemKitSettingsView: View {
                     }
                 }
 
-                Section(header: SectionHeader(label: LocalizedString("Debug", comment: "Debug header"))) {
-                    Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
-
-                    Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
-
-                    Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
+                Button(action: {
+                    viewModel.showingDebugDetails = true
+                }) {
+                    Text(LocalizedString("View Debug Status", comment: "Label for button to view debug status of the pump"))
+                }
+                .popover(isPresented: $viewModel.showingDebugDetails) {
+                    debugDetailsPopover
                 }
             }
 
@@ -218,29 +249,6 @@ struct TandemKitSettingsView: View {
                         Text(cgmStatusText(mirror.cgmAlertIconId))
                             .foregroundColor(.secondary)
                     }
-                }
-            }
-
-            Section(header: SectionHeader(label: LocalizedString(
-                "Debug",
-                comment: "The title of the debug section in TandemKit settings"
-            ))) {
-                HStack {
-                    Text("Peripheral UUID")
-                        .foregroundColor(Color.primary)
-                    Spacer()
-                    Text(viewModel.pumpState?.peripheralUuid ?? "N/A")
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-
-                HStack {
-                    Text("PumpState Valid")
-                        .foregroundColor(Color.primary)
-                    Spacer()
-                    Text(String(describing: viewModel.pumpState?.valid ?? false))
-                        .foregroundColor(.secondary)
                 }
             }
 
@@ -340,6 +348,7 @@ struct TandemKitSettingsView: View {
         }
     }
 
+    // TODO(jwoglom): replace with consts from TandemCore
     private func userModeText(_ mode: Int) -> String {
         switch mode {
         case 0,
