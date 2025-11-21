@@ -56,7 +56,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
                 let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
 
                 DispatchQueue.main.async {
-                    self.isSuspended = mirror?.basalStatusIconId == 12
+                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
                     if self.isSuspended, self.currentStep == .suspend {
                         self.currentStep = .enterAmount
                     }

@@ -47,28 +47,30 @@ struct TandemKitSettingsView: View {
                 .padding(.bottom, 5)
             }
 
-            Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
-
-            Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
-
-            Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
-
             Section(header: SectionHeader(label: LocalizedString(
                 "Actions",
                 comment: "The title of the actions section in TandemKit settings"
             ))) {
-                Button(action: {
-                    viewModel.suspendResumeButtonPressed()
-                }) {
-                    HStack {
-                        Text(viewModel.basalButtonText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                if let suspendResumeText = viewModel.suspendResumeText {
+                    Button(action: {
+                        viewModel.suspendResumeButtonPressed()
+                    }) {
+                        HStack {
+                            Text(suspendResumeText)
+                            Spacer()
+                            if viewModel.isUpdatingPumpState {
+                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                            }
                         }
                     }
+                    .disabled(viewModel.isUpdatingPumpState)
+                } else {
+                    Button(action: {}) {
+                        HStack {
+                            Text("Insulin delivery status unknown")
+                        }
+                    }.disabled(true)
                 }
-                .disabled(viewModel.isUpdatingPumpState)
 
                 Button(action: {
                     viewModel.toggleExerciseMode()
@@ -151,6 +153,14 @@ struct TandemKitSettingsView: View {
                         Text("\(tempRate.percentage)% (\(formatDuration(tempRate.duration)))")
                             .foregroundColor(.secondary)
                     }
+                }
+
+                Section(header: SectionHeader(label: LocalizedString("Debug", comment: "Debug header"))) {
+                    Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
+
+                    Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
+
+                    Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
                 }
             }
 
@@ -282,7 +292,7 @@ struct TandemKitSettingsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
-            if viewModel.isSuspended {
+            if viewModel.isSuspended == true {
                 HStack(alignment: .center) {
                     Image(systemName: "pause.circle.fill")
                         .font(.system(size: 34))
@@ -292,7 +302,7 @@ struct TandemKitSettingsView: View {
                         .fontWeight(.bold)
                         .fixedSize()
                 }
-            } else {
+            } else if viewModel.isSuspended == false {
                 HStack(alignment: .center) {
                     Image(systemName: "drop.fill")
                         .font(.system(size: 34))
@@ -301,13 +311,27 @@ struct TandemKitSettingsView: View {
                     Text(LocalizedString("Active", comment: "Text shown when insulin active"))
                         .fontWeight(.bold)
                         .fixedSize()
+                    if viewModel.currentBasalStatus != nil {
+                        Text(viewModel.currentBasalStatus?.currentBasalRateForDisplay ?? "")
+                            .fontWeight(.bold)
+                    }
+                }
+            } else {
+                HStack(alignment: .center) {
+                    Image(systemName: "questionmark.square.dashed")
+                        .font(.system(size: 34))
+                        .fixedSize()
+                        .foregroundColor(.accentColor)
+                    Text(LocalizedString("Unknown", comment: "Text shown when insulin status unknown"))
+                        .fontWeight(.bold)
+                        .fixedSize()
                 }
             }
         }
     }
 
     var deliverySectionTitle: String {
-        if viewModel.isSuspended {
+        if viewModel.isSuspended == true {
             return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
         } else if let tempRate = viewModel.tempRateStatus, tempRate.active {
             return LocalizedString("Temp Rate", comment: "Title for temp rate")
