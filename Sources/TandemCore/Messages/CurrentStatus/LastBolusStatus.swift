@@ -22,7 +22,7 @@ public class LastBolusStatusRequest: Message {
 }
 
 /// Response with information on the last bolus delivered.
-public class LastBolusStatusResponse: Message {
+public class LastBolusStatusResponse: LastBolusStatusAbstractResponse {
     public static let props = MessageProps(
         opCode: 49,
         size: 20,
@@ -86,10 +86,6 @@ public class LastBolusStatusResponse: Message {
         self.bolusTypeBitmask = bolusTypeBitmask
         self.extendedBolusDuration = extendedBolusDuration
     }
-
-    public var bolusSource: BolusSource? { BolusSource.fromId(bolusSourceId) }
-    public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
-    public var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }
 
 public extension LastBolusStatusRequest {

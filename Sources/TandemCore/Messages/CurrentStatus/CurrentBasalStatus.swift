@@ -63,6 +63,7 @@ public extension CurrentBasalStatusResponse {
     var description: String {
         "CurrentBasalStatusResponse(cargo=\(cargo.hexadecimalString), profileBasalRate=\(profileBasalRate), currentBasalRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
     }
+
     var currentBasalRateForDisplay: String {
         let unitsPerHour = Double(currentBasalRate) / 1000.0
         return String(format: "%.2f u/hr", unitsPerHour)
