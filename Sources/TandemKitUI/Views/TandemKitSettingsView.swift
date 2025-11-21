@@ -156,6 +156,31 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
+                "Notifications",
+                comment: "The title of the notifications section in TandemKit settings"
+            ))) {
+                NavigationLink(destination: TandemKitNotificationsView(
+                    viewModel: viewModel.createNotificationsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("View Notifications", comment: "Label for viewing notifications"))
+                            .foregroundColor(Color.primary)
+                        Spacer()
+                        if viewModel.notificationCount > 0 {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 24, height: 24)
+                                Text("\(viewModel.notificationCount)")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
@@ -450,6 +475,7 @@ private extension TandemKitSettingsViewModel {
             duration: 1800
         )
         viewModel.isSuspended = false
+        viewModel.notificationCount = 3
         return viewModel
     }
 
