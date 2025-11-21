@@ -10,6 +10,14 @@ public enum PumpCommError: Error {
     case notImplemented
     case pumpChallengeError
     case invalidPacket
+    case jpakeUnavailable
+    case requestConstructionFailed(reason: String)
+    case unexpectedResponse(expected: String, actual: String)
+    case invalidPumpChallengeResponse
+    case timeSyncFailed
+    case noActiveBolus
+    case responseParsingFailed(underlying: Error)
+    case transportError(underlying: Error)
     case other
 }
 
@@ -40,6 +48,56 @@ extension PumpCommError: LocalizedError {
                 "Pump challenge error",
                 comment: "Error shown when we cannot perform crypto challenge operations to pair"
             )
+        case .jpakeUnavailable:
+            return LocalizedString(
+                "Secure pairing unavailable",
+                comment: "Error shown when the JPake pairing flow is not available"
+            )
+        case let .requestConstructionFailed(reason):
+            return String(
+                format: LocalizedString("Failed to build pump request: %@", comment: "Pump request build failure"),
+                reason
+            )
+        case let .unexpectedResponse(expected, actual):
+            return String(
+                format: LocalizedString(
+                    "Unexpected pump response (expected %@, received %@)",
+                    comment: "Unexpected pump response type"
+                ),
+                expected,
+                actual
+            )
+        case .invalidPumpChallengeResponse:
+            return LocalizedString(
+                "Pump challenge response invalid",
+                comment: "Error when pump challenge response contents were not valid"
+            )
+        case .timeSyncFailed:
+            return LocalizedString(
+                "Unable to read pump time",
+                comment: "Error shown when time-since-reset request fails"
+            )
+        case .noActiveBolus:
+            return LocalizedString(
+                "No active bolus to cancel",
+                comment: "Error when cancel bolus requested without an active bolus"
+            )
+        case let .responseParsingFailed(underlying):
+            return String(
+                format: LocalizedString(
+                    "Failed to parse pump response: %@",
+                    comment: "Error when parser fails"
+                ),
+                String(describing: underlying)
+            )
+        case let .transportError(underlying):
+            return String(
+                format: LocalizedString(
+                    "Transport error: %@",
+                    comment: "Error when BLE transport fails"
+                ),
+                String(describing: underlying)
+            )
         default:
             return "Other PumpCommError: \(String(describing: self))"
         }
@@ -57,6 +115,30 @@ extension PumpCommError: LocalizedError {
             return LocalizedString(
                 "This feature requires additional pump message implementation",
                 comment: "Recovery suggestion when a feature is not implemented"
+            )
+        case .jpakeUnavailable:
+            return LocalizedString(
+                "This build does not include secure pairing. Update the app or use a long pairing code.",
+                comment: "Recovery suggestion when JPake is unavailable"
+            )
+        case .requestConstructionFailed:
+            return LocalizedString(
+                "Please try again. If the problem persists, re-pair your pump.",
+                comment: "Recovery suggestion when building a request failed"
+            )
+        case .invalidPumpChallengeResponse,
+             .responseParsingFailed,
+             .timeSyncFailed,
+             .transportError,
+             .unexpectedResponse:
+            return LocalizedString(
+                "Ensure your pump is awake and retry.",
+                comment: "Recovery suggestion for transport/response failures"
+            )
+        case .noActiveBolus:
+            return LocalizedString(
+                "No bolus is running.",
+                comment: "Recovery suggestion when cancel bolus is called without an active bolus"
             )
         case let .pumpFault(event):
             switch event.category {

@@ -72,7 +72,7 @@ public class PumpCommSession {
                 try pairUsingJpake(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
             #else
                 logger.error("[PumpCommSession] Pairing cannot be performed, no JPAKE import")
-                throw PumpCommError.other
+                throw PumpCommError.jpakeUnavailable
             #endif
         } else {
             try pairUsingPumpChallenge(transport: transport, pairingCode: pairingCode)
@@ -87,7 +87,7 @@ public class PumpCommSession {
         let appInstanceId = 0
 
         guard let challengeRequest = CentralChallengeRequestBuilder.create(appInstanceId: appInstanceId) else {
-            throw PumpCommError.other
+            throw PumpCommError.requestConstructionFailed(reason: "CentralChallengeRequestBuilder returned nil")
         }
 
         logger.debug("[PumpCommSession] PumpChallenge centralChallengeRequest ready")
@@ -97,7 +97,10 @@ public class PumpCommSession {
         guard let centralResponse = responseMessage as? CentralChallengeResponse else {
             logger
                 .error("[PumpCommSession] Unexpected central challenge response payload: \(String(describing: responseMessage))")
-            throw PumpCommError.other
+            throw PumpCommError.unexpectedResponse(
+                expected: String(describing: CentralChallengeResponse.self),
+                actual: String(describing: type(of: responseMessage))
+            )
         }
 
         let challengeMessage = try PumpChallengeRequestBuilder.create(
@@ -116,7 +119,7 @@ public class PumpCommSession {
               pumpChallengeResponse.success
         else {
             logger.error("[PumpCommSession] Pump challenge response invalid: \(String(describing: pumpChallengeResponseMessage))")
-            throw PumpCommError.other
+            throw PumpCommError.invalidPumpChallengeResponse
         }
 
         PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
@@ -166,7 +169,7 @@ public class PumpCommSession {
             let timeSinceResetResponse = try transport.sendMessage(TimeSinceResetRequest())
             guard let response = timeSinceResetResponse as? TimeSinceResetResponse else {
                 logger.error("[PumpCommSession] Failed to get timeSinceReset response")
-                throw PumpCommError.other
+                throw PumpCommError.timeSyncFailed
             }
 
             // Fetch API version and pump version for session initialization

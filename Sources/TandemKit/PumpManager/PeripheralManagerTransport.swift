@@ -179,7 +179,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
                 }
             } catch {
                 log.error("Failed to parse response chunk: %{public}@", String(describing: error))
-                throw PumpCommError.other
+                throw PumpCommError.responseParsingFailed(underlying: error)
             }
 
             if let responseMessage = pumpResponse.message {
@@ -192,7 +192,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         guard let finalMessage = parsedMessage else {
             log.error("No message parsed from pump response")
-            throw PumpCommError.other
+            throw PumpCommError.noResponse
         }
 
         let responseType = String(describing: type(of: finalMessage))

@@ -37,7 +37,7 @@ public class MockPumpTransport: PumpMessageTransport {
             // Generate appropriate response
             return generateResponse(for: message, expectedType: responseMeta.type)
         }
-        throw PumpCommError.other
+        throw PumpCommError.unexpectedResponse(expected: "Simulator handler", actual: String(describing: type(of: message)))
     }
 }
 ```
@@ -304,7 +304,10 @@ func handleRequest(_ request: Message, txId: UInt8) -> Message {
     
     // Find expected response type from registry
     guard let responseMeta = MessageRegistry.responseMetadata(for: request) else {
-        throw PumpCommError.other
+        throw PumpCommError.unexpectedResponse(
+            expected: "Simulator handler",
+            actual: String(describing: type(of: request))
+        )
     }
     
     // Route based on message type
@@ -346,4 +349,3 @@ func handleRequest(_ request: Message, txId: UInt8) -> Message {
 5. **TxId Management**: Must increment for each message
 6. **Signed Messages**: Add HMAC before CRC
 7. **Multi-Packet**: "Packets remaining" counts down, not up
-
