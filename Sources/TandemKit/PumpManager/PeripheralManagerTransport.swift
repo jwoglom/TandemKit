@@ -61,11 +61,13 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             characteristic: characteristic
         )
 
-        log.debug(
-            "Sending message %s: %{public}@ (TxId: %d)",
+        let requestCargo = message.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
+        log.info(
+            "  SENT-MESSAGE(txId=%-3d, %{public}@):\t%{public}@[cargo={%{public}@}]",
+            txIdForRequest,
+            characteristic.prettyName,
             String(describing: wrapper.requestMetadata.name),
-            String(describing: message),
-            txIdForRequest
+            requestCargo
         )
         if wrapper.packets.isEmpty {
             transportLogger.error("[PeripheralManagerTransport] no packets for message=\(message) txId=\(currentTxId &- 1)")
@@ -78,6 +80,20 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             for (index, packet) in wrapper.packets.enumerated() {
                 let hex = packet.build.map { String(format: "%02X", $0) }.joined()
                 transportLogger.debug("[PeripheralManagerTransport]   packet \(index) len=\(packet.build.count) hex=\(hex)")
+
+                // Break down packet structure for debugging
+                if packet.build.count >= 5 {
+                    let packetsRemaining = packet.build[0]
+                    let txId = packet.build[1]
+                    let opCode = packet.build[2]
+                    let sizeOrFlags = packet.build.count > 3 ? packet.build[3] : 0
+                    let cargoStart = packet.build.count > 4 ? packet.build.dropFirst(4).prefix(8)
+                        .map { String(format: "%02X", $0) }.joined() : ""
+                    transportLogger
+                        .debug(
+                            "[PeripheralManagerTransport]     packetsRemaining=\(packetsRemaining) txId=\(txId) opCode=\(opCode) sizeOrFlags=\(sizeOrFlags) cargoStart=\(cargoStart)"
+                        )
+                }
             }
         }
 
@@ -99,7 +115,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
-            log.debug("Message sent successfully")
+            log.debug("  → Message sent (txId=%d)", txIdForRequest)
             transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
         }
 
@@ -118,9 +134,22 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
                 throw PumpCommError.noResponse
             }
 
-            log.debug("Received response: %{public}@ bytes", String(describing: data.count))
+            log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
             let responseHex = data.map { String(format: "%02X", $0) }.joined()
             transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
+
+            // Break down received packet structure for debugging
+            if data.count >= 5 {
+                let packetsRemaining = data[0]
+                let rxTxId = data[1]
+                let rxOpCode = data[2]
+                let rxSizeOrFlags = data[3]
+                let cargoStart = data.count > 4 ? data.dropFirst(4).prefix(8).map { String(format: "%02X", $0) }.joined() : ""
+                transportLogger
+                    .debug(
+                        "[PeripheralManagerTransport]   packetsRemaining=\(packetsRemaining) rxTxId=\(rxTxId) opCode=\(rxOpCode) sizeOrFlags=\(rxSizeOrFlags) cargoStart=\(cargoStart)"
+                    )
+            }
 
             let pumpResponse: PumpResponseMessage
             do {
@@ -145,7 +174,15 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             throw PumpCommError.other
         }
 
-        log.debug("Parsed response message: %{public}@", String(describing: finalMessage))
+        let responseType = String(describing: type(of: finalMessage))
+        let responseCargo = finalMessage.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
+        log.info(
+            "PARSED-MESSAGE(txId=%-3d, %{public}@):\t%{public}@[cargo={%{public}@}]",
+            txIdForRequest,
+            characteristic.prettyName,
+            responseType,
+            responseCargo
+        )
 
         // Add completed pair to history
         let completedPair = historyEntry.withResponse(finalMessage)

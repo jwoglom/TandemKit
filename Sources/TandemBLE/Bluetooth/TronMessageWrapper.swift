@@ -34,6 +34,12 @@ public struct TronMessageWrapper {
         }
 
         let timeSinceReset = PumpStateSupplier.pumpTimeSinceReset?()
+        let authKeyHex = authKey.map { String(format: "%02X", $0) }.joined()
+        let authKeyDisplay = authKey.isEmpty ? "none" : "\(authKey.count) bytes [\(authKeyHex.prefix(16))...]"
+
+        tronLogger.debug("[TronMessageWrapper]   signed: \(signed), authKey: \(authKeyDisplay)")
+        tronLogger.debug("[TronMessageWrapper]   txId: \(currentTxId), timeSinceReset: \(String(describing: timeSinceReset))")
+
         packets = try! Packetize(
             message: message,
             authenticationKey: authKey,
@@ -41,8 +47,6 @@ public struct TronMessageWrapper {
             timeSinceReset: timeSinceReset,
             maxChunkSize: maxChunkSize
         )
-        tronLogger.debug("[TronMessageWrapper]   signed: \(signed), authKey: \(authKey)")
-        tronLogger.debug("[TronMessageWrapper]   txId: \(currentTxId), timeSinceReset: \(String(describing: timeSinceReset))")
         tronLogger.debug("[TronMessageWrapper]   got packets: \(packets)")
     }
 
