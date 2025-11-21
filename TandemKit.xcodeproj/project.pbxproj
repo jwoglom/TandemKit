@@ -742,6 +742,7 @@
 				1A2FA9532EC8FD0800DF080F /* PumpMessageTransport.swift */,
 				1A2FA9542EC8FD0800DF080F /* PumpProtocolError.swift */,
 				1A2FA9552EC8FD0800DF080F /* PumpState.swift */,
+				3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */,
 				1A2FA9562EC8FD0800DF080F /* TandemPump.swift */,
 				1A2FA9572EC8FD0800DF080F /* TandemPumpManager.swift */,
 				1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */,
@@ -887,7 +888,6 @@
 		3EE344542EC91299008A07F6 /* Common */ = {
 			isa = PBXGroup;
 			children = (
-				3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */,
 				3EE3444A2EC91299008A07F6 /* Extensions */,
 				3EE3444B2EC91299008A07F6 /* Bytes.swift */,
 				3EE3444C2EC91299008A07F6 /* CRC16.swift */,
@@ -1448,6 +1448,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A2FA95F2EC8FD0800DF080F /* PumpState.swift in Sources */,
+				3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */,
 				3EE346172EC92751008A07F6 /* Bundle.swift in Sources */,
 				1A2FA9602EC8FD0800DF080F /* MessageTransport.swift in Sources */,
 				1A2FA9612EC8FD0800DF080F /* TandemPumpPairingViewController.swift in Sources */,
@@ -1640,7 +1641,6 @@
 				3EE345A02EC91299008A07F6 /* CannulaFilledHistoryLog.swift in Sources */,
 				3EE345A12EC91299008A07F6 /* BasalIQAlertInfo.swift in Sources */,
 				3EE345A22EC91299008A07F6 /* BasalDeliveryHistoryLog.swift in Sources */,
-				3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */,
 				3EE345A32EC91299008A07F6 /* DismissNotification.swift in Sources */,
 				3EE345A42EC91299008A07F6 /* CRC16.swift in Sources */,
 				3EE345A52EC91299008A07F6 /* CGMOORAlertSettings.swift in Sources */,
