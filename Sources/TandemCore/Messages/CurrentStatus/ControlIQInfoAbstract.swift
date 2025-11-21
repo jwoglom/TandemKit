@@ -43,10 +43,8 @@ public class ControlIQInfoAbstractResponse: Message {
         case kilograms = 0
         case pounds = 1
     }
-}
 
-public extension ControlIQInfoAbstractResponse {
-    var description: String {
+    public var description: String {
         "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(currentUserModeType), weightUnit=\(weightUnit))"
     }
 }

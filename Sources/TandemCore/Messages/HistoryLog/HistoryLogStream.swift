@@ -75,6 +75,6 @@ public class HistoryLogStreamResponse: Message {
 
 public extension HistoryLogStreamResponse {
     var description: String {
-        "HistoryLogStreamResponse(cargo=\(cargo.hexadecimalString), numberOfHistoryLogs=\(numberOfHistoryLogs), streamId=\(streamId), historyLogStreamBytes=\(historyLogStreamBytes.map { $0.hexadecimalString }), historyLogs=\(historyLogs))"
+        "HistoryLogStreamResponse(cargo=\(cargo.hexadecimalString), numberOfHistoryLogs=\(numberOfHistoryLogs), streamId=\(streamId), historyLogStreamBytes=\(historyLogStreamBytes.map(\.hexadecimalString)), historyLogs=\(historyLogs))"
     }
 }
