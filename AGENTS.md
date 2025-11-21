@@ -4,20 +4,20 @@
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Message catalog (`Sources/TandemCore/Messages/Authentication`) | ✅ Complete | All authentication requests and responses serialize/deserialize correctly per the audit’s protocol review. |
+| Message catalog (`Sources/TandemCore/Messages/Authentication`) | ✅ Complete | Fully described in [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) and the serialization audit. |
 | Unit tests | ✅ Complete | `TandemCoreTests` exercises JPake rounds, pump challenges, and the central challenge flow; no outstanding gaps were identified in the audit. |
-| Pairing flow implementation (`PumpCommSession`, `PumpChallengeRequestBuilder`) | ✅ Complete | Legacy 16-character and JPake PIN flows advance correctly and persist derived secrets/nonces as required for PumpManager reconnection. |
+| Pairing flow implementation (`PumpCommSession`, `PumpChallengeRequestBuilder`) | ✅ Complete | Legacy 16-character and JPake PIN flows advance correctly and persist derived secrets/nonces as required for PumpManager reconnection (see [wire_bt_transport.md](TandemKit/docs/plans/wire_bt_transport.md)). |
 | Cross-platform dependency story | ⚠️ Partial | SwiftECC/BigInt remain required for JPake; Linux builds function through the shim, but deterministic RNG configuration for CI is still pending. |
 
 ### Control
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Message catalog (`Sources/TandemCore/Messages/Control`) | ✅ Complete | Full suite of Tandem control requests/responses is implemented with correct serialization metadata. |
+| Message catalog (`Sources/TandemCore/Messages/Control`) | ✅ Complete | Full suite of Tandem control requests/responses is implemented with correct serialization metadata (see [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md#control)). |
 | Command validation (`TandemPumpManager`, `PumpStateSupplier`) | ✅ Complete | Bolus, temp basal, suspend/resume, and configuration requests enforce LoopKit `PumpManager` safety limits before dispatch. |
 | Unit tests (requests) | ✅ Complete | Core therapy commands and high-risk configuration requests are covered in `TandemCoreTests`. |
 | Unit tests (responses & long tail) | ⚠️ Partial | Many responses and less frequently used configuration messages lack direct coverage; additional fixtures needed to satisfy LoopKit QA expectations. |
-| Transport orchestration (`PumpComm`, `PeripheralManagerTransport`) | ⚠️ Partial | Message dispatch works, but retry/backoff handling for pump faults is pending per audit. |
+| Transport orchestration (`PumpComm`, `PeripheralManagerTransport`) | ⚠️ Partial | Message dispatch works, but retry/backoff handling for pump faults is pending per audit; reconnection/bootstrap mechanics are documented in [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md#authenticated-session-bootstrap). |
 
 ### ControlStream
 Requests:

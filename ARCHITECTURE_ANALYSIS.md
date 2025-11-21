@@ -554,10 +554,20 @@ enum PeripheralManagerError: Error {
 }
 
 enum PumpCommError: Error {
-    case errorResponse(response: Message)  // Got error response from pump
-    case noResponse                        // No response received
-    case missingAuthenticationKey          // Not yet authenticated
-    case other                             // Generic error
+    case pumpNotConnected
+    case noResponse
+    case missingAuthenticationKey
+    case errorResponse(response: Message)
+    case pumpFault(event: PumpCommFaultEvent)
+    case pumpChallengeError
+    case jpakeUnavailable
+    case requestConstructionFailed(reason: String)
+    case unexpectedResponse(expected: String, actual: String)
+    case invalidPumpChallengeResponse
+    case timeSyncFailed
+    case noActiveBolus
+    case responseParsingFailed(underlying: Error)
+    case transportError(underlying: Error)
 }
 ```
 
@@ -566,6 +576,12 @@ enum PumpCommError: Error {
 1. **Packet Validation**: CRC16 check
 2. **HMAC Validation**: HMAC-SHA1 for signed messages
 3. **Message Size Validation**: Expected size matches received
+
+---
+
+### Authenticated Session Bootstrap
+
+After every reconnect (or app relaunch) the manager keeps the `needsSessionInitialization` flag set until it successfully re-fetches `TimeSinceReset` over the authenticated transport. `pairedTransport` returns `nil` while this flag is true so telemetry/UI code cannot send signed commands prematurely. A dedicated serial queue runs the bootstrap, retries with exponential backoff when the pump responses time out or report `notReady`, and only re-enables telemetry once the updated `PumpState.timeSinceReset` is stored.
 
 ---
 
@@ -743,4 +759,3 @@ App
                        │
                        └→ Message.init(cargo:) (instantiate)
 ```
-
