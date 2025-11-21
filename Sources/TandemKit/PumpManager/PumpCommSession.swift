@@ -169,6 +169,13 @@ public class PumpCommSession {
                 throw PumpCommError.other
             }
 
+            // Fetch API version and pump version for session initialization
+            logger.info("[PumpCommSession] Fetching API version")
+            _ = try transport.sendMessage(ApiVersionRequest())
+
+            logger.info("[PumpCommSession] Fetching pump version")
+            _ = try transport.sendMessage(PumpVersionRequest())
+
             logger.info("[PumpCommSession] Session fully authenticated with timeSinceReset: \(response.pumpTimeSinceReset)")
 
             state.derivedSecret = secret

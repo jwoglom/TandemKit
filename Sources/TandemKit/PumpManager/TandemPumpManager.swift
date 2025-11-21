@@ -132,6 +132,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    private func clearStalePairingArtifactsIfNeeded() {
+        var currentState = lockedState.value
+        guard var pumpState = currentState.pumpState,
+              pumpState.derivedSecret != nil || pumpState.serverNonce != nil || pumpState.timeSinceReset != nil
+        else {
+            // Still clear the global supplier so transports stop signing with old keys.
+            PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
+            return
+        }
+
+        telemetryLogger.debug("Clearing stored authentication artifacts before pairing")
+        pumpState.derivedSecret = nil
+        pumpState.serverNonce = nil
+        pumpState.timeSinceReset = nil
+        currentState.pumpState = pumpState
+        lockedState.value = currentState
+        updatePairingArtifacts(with: pumpState)
+    }
+
     public var delegateQueue: DispatchQueue! {
         get {
             pumpDelegate.queue
@@ -938,6 +957,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         peripheral: CBPeripheral,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        // Ensure we don't reuse stale authentication material from a previous pairing.
+        // Otherwise telemetry triggers when the transport comes online and the pump
+        // immediately disconnects because requests are signed with an invalid key.
+        clearStalePairingArtifactsIfNeeded()
+
         Task {
             do {
                 let peripheralUuid = peripheral.identifier.uuidString

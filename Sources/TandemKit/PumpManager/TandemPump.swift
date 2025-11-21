@@ -108,9 +108,9 @@ public class TandemPump {
             return
         }
 
-        // Already authenticated - proceed with startup requests
-        log.info("Pump connected and authenticated - sending startup requests")
-        sendDefaultStartupRequests(manager)
+        // Already authenticated - proceed with configuration
+        // Note: Startup requests are now handled via the transport to maintain proper txId sequencing
+        log.info("Pump connected and authenticated - completing configuration")
         delegate?.tandemPump(self, didCompleteConfiguration: manager)
     }
 

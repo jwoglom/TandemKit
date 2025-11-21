@@ -462,6 +462,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
 
         if stayConnected {
+            self.peripheral = nil
             scanAfterDelay()
         }
     }
