@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/leif-ibsen/ASN1",
       "state" : {
-        "revision" : "d54a60ee8fa93d4e4e2f83ea12b73fa8e57b1e67",
-        "version" : "2.8.0"
+        "revision" : "e38d1b8b43d8b53ffadde9836f34289176bb7a0c",
+        "version" : "2.7.0"
       }
     },
     {
@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/leif-ibsen/Digest",
       "state" : {
-        "revision" : "de418bb1e14186d3c7ce4dbff5c3a22b11a831dc",
-        "version" : "1.14.0"
+        "revision" : "95ba89b494aaff5f3cd2933c03b9a890323dbf2c",
+        "version" : "1.13.0"
       }
     },
     {
@@ -41,7 +41,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/leif-ibsen/SwiftECC",
       "state" : {
-        "revision" : "8a9ccc8a12e7a8ffcf47c3c1e6e24e55d2b651ea",
+        "revision" : "85c529c9c56b649a8d8edcef60aab3925ab0f69f",
         "version" : "5.5.0"
       }
     }

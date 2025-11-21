@@ -141,7 +141,10 @@ struct TandemKitCGMSettingsView: View {
                         .foregroundColor(guidanceColors.critical)
                     } else {
                         TextField(
-                            LocalizedString("Sensor Code (optional, use 0000 to reconnect)", comment: "Placeholder for sensor code"),
+                            LocalizedString(
+                                "Sensor Code (optional, use 0000 to reconnect)",
+                                comment: "Placeholder for sensor code"
+                            ),
                             text: $viewModel.g6SensorCode
                         )
                         .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -158,8 +161,8 @@ struct TandemKitCGMSettingsView: View {
                             "Enter the sensor code from your G6 sensor. Leave blank or enter 0000 to reconnect to an existing session.",
                             comment: "Help text for G6 sensor code"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
@@ -249,8 +252,8 @@ struct TandemKitCGMSettingsView: View {
                             "Enter the sensor code if prompted by the pump. Most G7 sensors do not require a code.",
                             comment: "Help text for G7 sensor code"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
