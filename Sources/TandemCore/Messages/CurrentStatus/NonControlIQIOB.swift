@@ -52,3 +52,15 @@ public class NonControlIQIOBResponse: Message {
         self.totalIOB = totalIOB
     }
 }
+
+public extension NonControlIQIOBRequest {
+    var description: String {
+        "NonControlIQIOBRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension NonControlIQIOBResponse {
+    var description: String {
+        "NonControlIQIOBResponse(cargo=\(cargo.hexadecimalString), iob=\(iob), timeRemaining=\(timeRemaining), totalIOB=\(totalIOB))"
+    }
+}

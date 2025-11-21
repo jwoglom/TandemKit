@@ -36,3 +36,9 @@ public class CarbEnteredHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension CarbEnteredHistoryLog {
+    var description: String {
+        "CarbEnteredHistoryLog(cargo=\(cargo.hexadecimalString), carbs=\(carbs))"
+    }
+}

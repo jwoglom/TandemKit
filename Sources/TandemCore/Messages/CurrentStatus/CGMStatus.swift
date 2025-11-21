@@ -92,3 +92,15 @@ public class CGMStatusResponse: Message {
         case outOfRange = 4
     }
 }
+
+public extension CGMStatusRequest {
+    var description: String {
+        "CGMStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CGMStatusResponse {
+    var description: String {
+        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
+    }
+}

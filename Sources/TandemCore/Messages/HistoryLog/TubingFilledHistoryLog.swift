@@ -36,3 +36,9 @@ public class TubingFilledHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension TubingFilledHistoryLog {
+    var description: String {
+        "TubingFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize))"
+    }
+}

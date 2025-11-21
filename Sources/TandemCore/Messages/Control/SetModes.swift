@@ -67,3 +67,15 @@ public class SetModesResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetModesRequest {
+    var description: String {
+        "SetModesRequest(cargo=\(cargo.hexadecimalString), bitmap=\(bitmap))"
+    }
+}
+
+public extension SetModesResponse {
+    var description: String {
+        "SetModesResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

@@ -76,3 +76,9 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
         )
     }
 }
+
+public extension BolusRequestedMsg3HistoryLog {
+    var description: String {
+        "BolusRequestedMsg3HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), spare=\(spare), foodBolusSize=\(foodBolusSize), correctionBolusSize=\(correctionBolusSize), totalBolusSize=\(totalBolusSize))"
+    }
+}

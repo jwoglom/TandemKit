@@ -45,3 +45,9 @@ public class TempRateCompletedHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension TempRateCompletedHistoryLog {
+    var description: String {
+        "TempRateCompletedHistoryLog(cargo=\(cargo.hexadecimalString), tempRateId=\(tempRateId), timeLeft=\(timeLeft))"
+    }
+}

@@ -65,3 +65,15 @@ public class ExtendedBolusStatusResponse: Message {
         self.bolusSource = bolusSource
     }
 }
+
+public extension ExtendedBolusStatusRequest {
+    var description: String {
+        "ExtendedBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ExtendedBolusStatusResponse {
+    var description: String {
+        "ExtendedBolusStatusResponse(cargo=\(cargo.hexadecimalString), bolusStatus=\(bolusStatus), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), duration=\(duration), bolusSource=\(bolusSource))"
+    }
+}

@@ -46,3 +46,15 @@ public class UnknownMobiOpcodeNeg124Response: Message {
         self.status = status
     }
 }
+
+public extension UnknownMobiOpcodeNeg124Request {
+    var description: String {
+        "UnknownMobiOpcodeNeg124Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension UnknownMobiOpcodeNeg124Response {
+    var description: String {
+        "UnknownMobiOpcodeNeg124Response(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

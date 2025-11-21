@@ -128,3 +128,15 @@ public enum PumpSoundChangeBitmask: Int {
     case alarm = 16
     case cgmAlert = 32
 }
+
+public extension SetPumpSoundsRequest {
+    var description: String {
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnunRaw=\(generalAnnunRaw), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnunRaw=\(alertAnnunRaw), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+    }
+}
+
+public extension SetPumpSoundsResponse {
+    var description: String {
+        "SetPumpSoundsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

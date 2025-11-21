@@ -68,3 +68,15 @@ public class RemoteBgEntryResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension RemoteBgEntryRequest {
+    var description: String {
+        "RemoteBgEntryRequest(cargo=\(cargo.hexadecimalString), bg=\(bg), useForCgmCalibration=\(useForCgmCalibration), isAutopopBg=\(isAutopopBg), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+    }
+}
+
+public extension RemoteBgEntryResponse {
+    var description: String {
+        "RemoteBgEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

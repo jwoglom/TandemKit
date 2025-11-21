@@ -52,3 +52,15 @@ public class HistoryLogStatusResponse: Message {
         self.lastSequenceNum = lastSequenceNum
     }
 }
+
+public extension HistoryLogStatusRequest {
+    var description: String {
+        "HistoryLogStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension HistoryLogStatusResponse {
+    var description: String {
+        "HistoryLogStatusResponse(cargo=\(cargo.hexadecimalString), numEntries=\(numEntries), firstSequenceNum=\(firstSequenceNum), lastSequenceNum=\(lastSequenceNum))"
+    }
+}

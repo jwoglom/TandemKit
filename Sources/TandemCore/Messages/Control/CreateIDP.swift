@@ -140,3 +140,15 @@ public class CreateIDPResponse: Message, StatusMessage {
         self.newIdpId = newIdpId
     }
 }
+
+public extension CreateIDPRequest {
+    var description: String {
+        "CreateIDPRequest(cargo=\(cargo.hexadecimalString), profileName=\(profileName), firstSegmentProfileCarbRatio=\(firstSegmentProfileCarbRatio), firstSegmentProfileBasalRate=\(firstSegmentProfileBasalRate), firstSegmentProfileTargetBG=\(firstSegmentProfileTargetBG), firstSegmentProfileISF=\(firstSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
+    }
+}
+
+public extension CreateIDPResponse {
+    var description: String {
+        "CreateIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), newIdpId=\(newIdpId))"
+    }
+}

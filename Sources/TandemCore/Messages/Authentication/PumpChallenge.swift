@@ -66,3 +66,15 @@ public class PumpChallengeResponse: Message {
         )
     }
 }
+
+public extension PumpChallengeRequest {
+    var description: String {
+        "PumpChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), pumpChallengeHash=\(pumpChallengeHash.hexadecimalString))"
+    }
+}
+
+public extension PumpChallengeResponse {
+    var description: String {
+        "PumpChallengeResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), success=\(success))"
+    }
+}

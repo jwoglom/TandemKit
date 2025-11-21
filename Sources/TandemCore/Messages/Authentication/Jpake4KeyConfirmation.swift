@@ -103,3 +103,15 @@ public class Jpake4KeyConfirmationResponse: Message {
         )
     }
 }
+
+public extension Jpake4KeyConfirmationRequest {
+    var description: String {
+        "Jpake4KeyConfirmationRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
+    }
+}
+
+public extension Jpake4KeyConfirmationResponse {
+    var description: String {
+        "Jpake4KeyConfirmationResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
+    }
+}

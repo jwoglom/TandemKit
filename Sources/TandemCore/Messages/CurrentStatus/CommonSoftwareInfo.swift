@@ -94,3 +94,15 @@ public class CommonSoftwareInfoResponse: Message {
         self.bootloaderPartRevisionNumber = bootloaderPartRevisionNumber
     }
 }
+
+public extension CommonSoftwareInfoRequest {
+    var description: String {
+        "CommonSoftwareInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CommonSoftwareInfoResponse {
+    var description: String {
+        "CommonSoftwareInfoResponse(cargo=\(cargo.hexadecimalString), appSoftwareVersion=\(appSoftwareVersion), appSoftwarePartNumber=\(appSoftwarePartNumber), appSoftwarePartDashNumber=\(appSoftwarePartDashNumber), appSoftwarePartRevisionNumber=\(appSoftwarePartRevisionNumber), bootloaderVersion=\(bootloaderVersion), bootloaderPartNumber=\(bootloaderPartNumber), bootloaderPartDashNumber=\(String(describing: bootloaderPartDashNumber)), bootloaderPartRevisionNumber=\(String(describing: bootloaderPartRevisionNumber)))"
+    }
+}

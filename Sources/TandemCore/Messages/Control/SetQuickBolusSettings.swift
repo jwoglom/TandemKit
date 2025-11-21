@@ -121,3 +121,15 @@ public class SetQuickBolusSettingsResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetQuickBolusSettingsRequest {
+    var description: String {
+        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+    }
+}
+
+public extension SetQuickBolusSettingsResponse {
+    var description: String {
+        "SetQuickBolusSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

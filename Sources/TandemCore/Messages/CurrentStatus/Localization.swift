@@ -56,3 +56,15 @@ public class LocalizationResponse: Message {
         self.languagesAvailableBitmask = languagesAvailableBitmask
     }
 }
+
+public extension LocalizationRequest {
+    var description: String {
+        "LocalizationRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension LocalizationResponse {
+    var description: String {
+        "LocalizationResponse(cargo=\(cargo.hexadecimalString), glucoseOUM=\(glucoseOUM), regionSetting=\(regionSetting), languageSelected=\(languageSelected), languagesAvailableBitmask=\(languagesAvailableBitmask))"
+    }
+}

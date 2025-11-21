@@ -1,7 +1,7 @@
 import Foundation
 
 /// First half of the first JPAKE round containing a 165-byte challenge.
-public class Jpake1aRequest: AbstractCentralChallengeRequest, CustomStringConvertible {
+public class Jpake1aRequest: AbstractCentralChallengeRequest {
     public static let props = MessageProps(
         opCode: 32,
         size: 167,
@@ -44,11 +44,6 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest, CustomStringConver
         padded.append(Data(repeating: 0, count: 165 - challenge.count))
         return padded
     }
-
-    public var description: String {
-        let challengeHex = centralChallenge.map { String(format: "%02X", $0) }.joined()
-        return "Jpake1aRequest(appInstanceId=\(appInstanceId), centralChallengeLength=\(centralChallenge.count), centralChallenge=\(challengeHex))"
-    }
 }
 
 /// Response to `Jpake1aRequest` providing a 165-byte hash of the challenge.
@@ -83,5 +78,17 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
             Bytes.firstTwoBytesLittleEndian(appInstanceId),
             centralChallengeHash
         )
+    }
+}
+
+public extension Jpake1aRequest {
+    var description: String {
+        "Jpake1aRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
+}
+
+public extension Jpake1aResponse {
+    var description: String {
+        "Jpake1aResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
     }
 }

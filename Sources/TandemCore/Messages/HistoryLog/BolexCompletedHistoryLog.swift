@@ -76,3 +76,9 @@ public class BolexCompletedHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension BolexCompletedHistoryLog {
+    var description: String {
+        "BolexCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(completionStatus), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
+    }
+}

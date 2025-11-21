@@ -63,3 +63,15 @@ public class BasalIQStatusResponse: Message {
         }
     }
 }
+
+public extension BasalIQStatusRequest {
+    var description: String {
+        "BasalIQStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension BasalIQStatusResponse {
+    var description: String {
+        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
+    }
+}

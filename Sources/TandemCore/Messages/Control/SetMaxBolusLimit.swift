@@ -47,3 +47,15 @@ public class SetMaxBolusLimitResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetMaxBolusLimitRequest {
+    var description: String {
+        "SetMaxBolusLimitRequest(cargo=\(cargo.hexadecimalString), maxBolusMilliunits=\(maxBolusMilliunits))"
+    }
+}
+
+public extension SetMaxBolusLimitResponse {
+    var description: String {
+        "SetMaxBolusLimitResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

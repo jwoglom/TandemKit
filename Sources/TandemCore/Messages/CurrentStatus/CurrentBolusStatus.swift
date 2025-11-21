@@ -99,3 +99,15 @@ public class CurrentBolusStatusResponse: Message {
         case alreadyDeliveredOrInvalid = 0
     }
 }
+
+public extension CurrentBolusStatusRequest {
+    var description: String {
+        "CurrentBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CurrentBolusStatusResponse {
+    var description: String {
+        "CurrentBolusStatusResponse(cargo=\(cargo.hexadecimalString), statusId=\(statusId), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
+    }
+}

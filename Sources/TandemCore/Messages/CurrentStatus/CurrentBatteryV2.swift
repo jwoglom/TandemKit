@@ -90,3 +90,15 @@ public class CurrentBatteryV2Response: Message {
 }
 
 extension CurrentBatteryV2Response: CurrentBatteryAbstractResponse {}
+
+public extension CurrentBatteryV2Request {
+    var description: String {
+        "CurrentBatteryV2Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CurrentBatteryV2Response {
+    var description: String {
+        "CurrentBatteryV2Response(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), currentBatteryIbc=\(currentBatteryIbc), chargingStatus=\(chargingStatus), unknown1=\(unknown1), unknown2=\(unknown2), unknown3=\(unknown3), unknown4=\(unknown4))"
+    }
+}

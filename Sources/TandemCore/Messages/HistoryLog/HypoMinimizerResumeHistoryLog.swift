@@ -36,3 +36,9 @@ public class HypoMinimizerResumeHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension HypoMinimizerResumeHistoryLog {
+    var description: String {
+        "HypoMinimizerResumeHistoryLog(cargo=\(cargo.hexadecimalString), reason=\(reason))"
+    }
+}

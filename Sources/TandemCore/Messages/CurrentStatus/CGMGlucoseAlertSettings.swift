@@ -81,3 +81,15 @@ public class CGMGlucoseAlertSettingsResponse: Message {
         self.lowGlucoseAlertDefaultBitmask = lowGlucoseAlertDefaultBitmask
     }
 }
+
+public extension CGMGlucoseAlertSettingsRequest {
+    var description: String {
+        "CGMGlucoseAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CGMGlucoseAlertSettingsResponse {
+    var description: String {
+        "CGMGlucoseAlertSettingsResponse(cargo=\(cargo.hexadecimalString), highGlucoseAlertThreshold=\(highGlucoseAlertThreshold), highGlucoseAlertEnabled=\(highGlucoseAlertEnabled), highGlucoseRepeatDuration=\(highGlucoseRepeatDuration), highGlucoseAlertDefaultBitmask=\(highGlucoseAlertDefaultBitmask), lowGlucoseAlertThreshold=\(lowGlucoseAlertThreshold), lowGlucoseAlertEnabled=\(lowGlucoseAlertEnabled), lowGlucoseRepeatDuration=\(lowGlucoseRepeatDuration), lowGlucoseAlertDefaultBitmask=\(lowGlucoseAlertDefaultBitmask))"
+    }
+}

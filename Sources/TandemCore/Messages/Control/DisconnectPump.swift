@@ -46,3 +46,15 @@ public class DisconnectPumpResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension DisconnectPumpRequest {
+    var description: String {
+        "DisconnectPumpRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension DisconnectPumpResponse {
+    var description: String {
+        "DisconnectPumpResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

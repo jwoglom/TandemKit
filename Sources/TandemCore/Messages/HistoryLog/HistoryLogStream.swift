@@ -20,6 +20,12 @@ public class NonexistentHistoryLogStreamRequest: Message {
     }
 }
 
+public extension NonexistentHistoryLogStreamRequest {
+    var description: String {
+        "NonexistentHistoryLogStreamRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
 /// Response containing a stream of history log entries.
 public class HistoryLogStreamResponse: Message {
     public static let props = MessageProps(
@@ -64,5 +70,11 @@ public class HistoryLogStreamResponse: Message {
         self.streamId = streamId
         self.historyLogStreamBytes = historyLogStreamBytes
         historyLogs = historyLogStreamBytes.map { HistoryLogParser.parse($0) }
+    }
+}
+
+public extension HistoryLogStreamResponse {
+    var description: String {
+        "HistoryLogStreamResponse(cargo=\(cargo.hexadecimalString), numberOfHistoryLogs=\(numberOfHistoryLogs), streamId=\(streamId), historyLogStreamBytes=\(historyLogStreamBytes.map { $0.hexadecimalString }), historyLogs=\(historyLogs))"
     }
 }

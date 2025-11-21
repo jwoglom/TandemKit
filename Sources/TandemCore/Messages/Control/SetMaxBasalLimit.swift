@@ -50,3 +50,15 @@ public class SetMaxBasalLimitResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetMaxBasalLimitRequest {
+    var description: String {
+        "SetMaxBasalLimitRequest(cargo=\(cargo.hexadecimalString), maxHourlyBasalMilliunits=\(maxHourlyBasalMilliunits))"
+    }
+}
+
+public extension SetMaxBasalLimitResponse {
+    var description: String {
+        "SetMaxBasalLimitResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

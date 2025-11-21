@@ -56,3 +56,9 @@ public final class ErrorResponse: Message {
     /// Indicates whether Tandem appended a signature for signed characteristics.
     public var containsSignature: Bool { remainingBytes.count >= 24 }
 }
+
+public extension ErrorResponse {
+    var description: String {
+        "ErrorResponse(cargo=\(cargo.hexadecimalString), requestCodeId=\(requestCodeId), errorCodeId=\(errorCodeId), remainingBytes=\(remainingBytes.hexadecimalString), errorCode=\(errorCode))"
+    }
+}

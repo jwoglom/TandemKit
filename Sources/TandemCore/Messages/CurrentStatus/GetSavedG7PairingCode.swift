@@ -42,3 +42,15 @@ public class GetSavedG7PairingCodeResponse: Message {
         self.pairingCode = pairingCode
     }
 }
+
+public extension GetSavedG7PairingCodeRequest {
+    var description: String {
+        "GetSavedG7PairingCodeRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension GetSavedG7PairingCodeResponse {
+    var description: String {
+        "GetSavedG7PairingCodeResponse(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
+    }
+}

@@ -65,3 +65,15 @@ public class SetTempRateResponse: Message, StatusMessage {
         self.tempRateId = tempRateId
     }
 }
+
+public extension SetTempRateRequest {
+    var description: String {
+        "SetTempRateRequest(cargo=\(cargo.hexadecimalString), minutes=\(minutes), percent=\(percent))"
+    }
+}
+
+public extension SetTempRateResponse {
+    var description: String {
+        "SetTempRateResponse(cargo=\(cargo.hexadecimalString), status=\(status), tempRateId=\(tempRateId))"
+    }
+}

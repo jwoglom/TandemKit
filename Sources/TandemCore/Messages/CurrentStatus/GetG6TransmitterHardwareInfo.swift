@@ -65,3 +65,15 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         unusedRemaining = Bytes.emptyBytes(32)
     }
 }
+
+public extension GetG6TransmitterHardwareInfoRequest {
+    var description: String {
+        "GetG6TransmitterHardwareInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension GetG6TransmitterHardwareInfoResponse {
+    var description: String {
+        "GetG6TransmitterHardwareInfoResponse(cargo=\(cargo.hexadecimalString), transmitterFirmwareVersion=\(transmitterFirmwareVersion), transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), unusedRemaining=\(unusedRemaining.hexadecimalString))"
+    }
+}
