@@ -9,6 +9,7 @@ import TandemCore
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
     func tandemPump(_ pump: TandemPump, didCompleteConfiguration peripheralManager: PeripheralManager)
+    func tandemPump(_ pump: TandemPump, didDisconnectWithError error: Error?)
     func tandemPump(
         _ pump: TandemPump,
         didDiscoverDevice peripheral: CBPeripheral,
@@ -19,6 +20,7 @@ public protocol TandemPumpDelegate: AnyObject {
 
 public extension TandemPumpDelegate {
     func tandemPump(_: TandemPump, didDiscoverDevice _: CBPeripheral, advertisementData _: [String: Any]?, rssi _: NSNumber) {}
+    func tandemPump(_: TandemPump, didDisconnectWithError _: Error?) {}
 }
 
 public class TandemPump {
@@ -161,9 +163,12 @@ extension TandemPump: BluetoothManagerDelegate {
         peripheralManager: PeripheralManager,
         isReadyWithError error: Error?
     ) {
-        guard error == nil else { return }
         DispatchQueue.main.async {
-            self.onPumpConnected(peripheralManager)
+            if let error {
+                self.delegate?.tandemPump(self, didDisconnectWithError: error)
+            } else {
+                self.onPumpConnected(peripheralManager)
+            }
         }
     }
 

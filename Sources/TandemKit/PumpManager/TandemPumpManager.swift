@@ -109,6 +109,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
     private let inScanningMode = Locked<Bool>(false)
     private let lockedStatus: Locked<PumpManagerStatus>
+    private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
+    private let needsSessionInitialization = Locked<Bool>(false)
+    private let sessionBootstrapInProgress = Locked<Bool>(false)
+    private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
     private let lastScheduledBasalRate = Locked<Double?>(nil)
@@ -151,6 +155,48 @@ public class TandemPumpManager: PumpManager, Pluggable {
         updatePairingArtifacts(with: pumpState)
     }
 
+    private func resetManagerStateAfterDeactivation() {
+        telemetryLogger.debug("Resetting stored pump state after deactivation")
+        let now = Date()
+        updateStatus { status in
+            status.pumpBatteryChargeRemaining = nil
+            status.bolusState = .noBolus
+            status.basalDeliveryState = .suspended(now)
+            status.deliveryIsUncertain = true
+        }
+
+        lockedBatteryChargeRemaining.value = nil
+        lockedReservoirValue.value = nil
+        lockedCurrentBasalRate.value = nil
+        lastScheduledBasalRate.value = nil
+        activeBolus.value = nil
+        activeTempBasal.value = nil
+
+        var managerState = lockedState.value
+        managerState.pumpState = nil
+        managerState.lastReconciliation = nil
+        managerState.lastReservoirReading = nil
+        managerState.lastBatteryReading = nil
+        managerState.lastBasalStatusDate = nil
+        managerState.latestInsulinOnBoard = nil
+        managerState.basalRateSchedule = nil
+        lockedState.value = managerState
+
+        tandemPump.state = nil
+        needsSessionInitialization.value = false
+
+        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
+            PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
+        #endif
+        PumpStateSupplier.pumpTimeSinceReset = { 0 }
+
+        let refreshedPumpComm = PumpComm(pumpState: nil, retryPolicy: pumpComm.retryPolicy)
+        refreshedPumpComm.delegate = self
+        tandemPump.pumpComm = refreshedPumpComm
+
+        notifyPumpManagerDelegateDidUpdateState()
+    }
+
     public var delegateQueue: DispatchQueue! {
         get {
             pumpDelegate.queue
@@ -184,7 +230,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             pumpComm.manager = nil
         }
 
-        if transport != nil {
+        if let activeTransport = transport {
             telemetryLogger.debug("Transport available – checking authentication before telemetry")
             updateStatus { status in
                 status.deliveryIsUncertain = false
@@ -195,8 +241,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                pumpState.derivedSecret != nil,
                pumpState.serverNonce != nil
             {
-                telemetryLogger.debug("Authenticated – triggering telemetry refresh")
-                telemetryScheduler.triggerAll()
+                bootstrapAuthenticatedSessionIfNeeded(on: activeTransport)
             } else {
                 telemetryLogger.debug("Not authenticated yet – skipping telemetry until pairing completes")
             }
@@ -205,6 +250,62 @@ public class TandemPumpManager: PumpManager, Pluggable {
             updateStatus { status in
                 status.deliveryIsUncertain = true
             }
+            needsSessionInitialization.value = lockedState.value.pumpState?.valid == true
+        }
+    }
+
+    private func bootstrapAuthenticatedSessionIfNeeded(on transport: PumpMessageTransport) {
+        if needsSessionInitialization.value == false {
+            telemetryLogger.debug("Authenticated session already initialized – triggering telemetry refresh")
+            telemetryScheduler.triggerAll()
+            return
+        }
+
+        if sessionBootstrapInProgress.value {
+            telemetryLogger.debug("Session bootstrap already in progress; skipping duplicate trigger")
+            return
+        }
+
+        sessionBootstrapInProgress.value = true
+
+        sessionInitializationQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.telemetryLogger.debug("Running authenticated session bootstrap to refresh timeSinceReset")
+
+            do {
+                let response: TimeSinceResetResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: TimeSinceResetRequest(),
+                    expecting: TimeSinceResetResponse.self
+                )
+
+                self.handleTimeSinceResetResponse(response, source: .telemetry)
+                self.needsSessionInitialization.value = false
+                self.sessionBootstrapRetryAttempt.value = 0
+                self.telemetryLogger.debug("Session bootstrap complete – triggering telemetry refresh")
+                self.telemetryScheduler.triggerAll()
+                self.sessionBootstrapInProgress.value = false
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
+                self.telemetryLogger.error("Session bootstrap failed: \(pumpError)")
+                self.needsSessionInitialization.value = true
+                self.sessionBootstrapInProgress.value = false
+                self.scheduleBootstrapRetry(afterFailureWith: pumpError, transport: transport)
+            }
+        }
+    }
+
+    private func scheduleBootstrapRetry(afterFailureWith _: PumpCommError, transport: PumpMessageTransport) {
+        var nextAttempt = sessionBootstrapRetryAttempt.value + 1
+        if nextAttempt > 10 { nextAttempt = 10 }
+        sessionBootstrapRetryAttempt.value = nextAttempt
+
+        let delay = min(pow(2.0, Double(nextAttempt - 1)), 60.0)
+        telemetryLogger.debug("Scheduling session bootstrap retry in \(delay)s (attempt \(nextAttempt))")
+
+        sessionInitializationQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
+            self.bootstrapAuthenticatedSessionIfNeeded(on: transport)
         }
     }
 
@@ -273,6 +374,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
         tandemPump = TandemPump(state.pumpState)
+        needsSessionInitialization.value = state.pumpState?.valid == true
 
         tandemPump.delegate = self
         pumpComm.delegate = self
@@ -292,6 +394,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
         tandemPump = TandemPump(state.pumpState)
+        needsSessionInitialization.value = state.pumpState?.valid == true
 
         tandemPump.delegate = self
         pumpComm.delegate = self
@@ -340,7 +443,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var pairedTransport: PumpMessageTransport? {
-        guard let transport = transportLock.value else {
+        guard let transport = transportLock.value,
+              lockedState.value.pumpState?.valid == true,
+              needsSessionInitialization.value == false
+        else {
             return nil
         }
 
@@ -557,6 +663,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             pumpState.timeSinceReset = timeSinceReset
             managerState.pumpState = pumpState
             lockedState.value = managerState
+            needsSessionInitialization.value = false
 
             // Update the PumpStateSupplier with the new value
             updatePairingArtifacts(with: pumpState)
@@ -1151,7 +1258,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.recordReconciliation(at: Date())
                 self.completeBolus(.success(dose), completion: completion)
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
                     self.releaseBolusPermission(transport: transport, bolusId: bolusId)
                 }
@@ -1184,7 +1291,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             updateStatus { status in
                 status.bolusState = .noBolus
             }
-            let error = PumpCommError.other
+            let error = PumpCommError.noActiveBolus
             notifyPumpManagerDelegateOfError(error)
             completeCancelBolus(.failure(.communication(error)), completion: completion)
             return
@@ -1225,7 +1332,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.recordReconciliation(at: endDate)
                 self.completeCancelBolus(.success(canceledDose), completion: completion)
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.updateStatus { status in
                     status.bolusState = .inProgress(active.dose)
                 }
@@ -1358,7 +1465,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     self.completeTempBasal(.success(dose), completion: completion)
                 }
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.updateStatus { status in
                     status.basalDeliveryState = previousStatus.basalDeliveryState
                 }
@@ -1466,7 +1573,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.recordReconciliation(at: suspendDate)
                 self.completeSuspend(nil, completion: completion)
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.updateStatus { status in
                     status.basalDeliveryState = previousStatus.basalDeliveryState
                 }
@@ -1516,7 +1623,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.recordReconciliation(at: resumeDate)
                 self.completeResume(nil, completion: completion)
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.updateStatus { status in
                     status.basalDeliveryState = previousStatus.basalDeliveryState
                 }
@@ -1584,11 +1691,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 } else {
                     self.delegateQueue.async {
-                        completion(.failure(PumpManagerError.communication(PumpCommError.other)))
+                        completion(
+                            .failure(
+                                PumpManagerError.communication(
+                                    PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
+                                )
+                            )
+                        )
                     }
                 }
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.notifyPumpManagerDelegateOfError(pumpError)
                 self.delegateQueue.async {
                     completion(.failure(PumpManagerError.communication(pumpError)))
@@ -1658,7 +1771,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion(.success(appliedLimits))
                 }
             } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.other
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.notifyPumpManagerDelegateOfError(pumpError)
                 self.delegateQueue.async {
                     completion(.failure(PumpManagerError.communication(pumpError)))
@@ -1668,6 +1781,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
+        telemetryLogger.debug("Preparing for pump deactivation – tearing down transport")
+        disconnect()
+        tandemPump.stopScanning()
+        targetPeripheralIdentifier = nil
+        inScanningMode.value = false
+        resetManagerStateAfterDeactivation()
+
         notifyDelegateOfDeactivation {
             completion(nil)
         }
@@ -1743,6 +1863,30 @@ extension TandemPumpManager: TandemPumpDelegate {
             }
         }
     }
+
+    public func tandemPump(
+        _: TandemPump,
+        didDisconnectWithError error: Error?
+    ) {
+        log.error("Pump disconnected with error: %{public}@", String(describing: error))
+
+        if let manager = activePeripheralManager {
+            notificationRouter.stop(with: manager)
+            activePeripheralManager = nil
+        }
+
+        pumpComm.manager = nil
+        updateTransport(nil)
+
+        updateStatus { status in
+            status.deliveryIsUncertain = true
+        }
+
+        if isOnboarded {
+            telemetryLogger.debug("Pump disconnected – restarting scan to reconnect")
+            tandemPump.startScanning()
+        }
+    }
 }
 
 // MARK: - PumpCommDelegate Conformance
@@ -1754,6 +1898,9 @@ extension TandemPumpManager: PumpCommDelegate {
         var currentState = lockedState.value
         currentState.pumpState = pumpState
         lockedState.value = currentState
+        if pumpState.valid {
+            needsSessionInitialization.value = false
+        }
 
         // Update pairing artifacts so messages will be signed with the derived secret
         updatePairingArtifacts(with: pumpState)

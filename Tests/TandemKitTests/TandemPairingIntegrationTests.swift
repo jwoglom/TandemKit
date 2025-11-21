@@ -115,7 +115,7 @@ final class TandemPairingIntegrationTests: XCTestCase {
                 }
             #endif
 
-            throw PumpCommError.other
+            throw PumpCommError.unexpectedResponse(expected: "Mock pairing transport", actual: String(describing: type(of: message)))
         }
     }
 

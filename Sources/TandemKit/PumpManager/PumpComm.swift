@@ -139,7 +139,7 @@ public class PumpComm: CustomDebugStringConvertible {
                 throw error
             } catch {
                 log.error("sendMessage unexpected error: %{public}@", String(describing: error))
-                throw PumpCommError.other
+                throw PumpCommError.transportError(underlying: error)
             }
         }
     }

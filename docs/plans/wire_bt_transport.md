@@ -170,8 +170,8 @@ class PeripheralManagerTransport: PumpMessageTransport {
 
 // Add error cases
 extension PumpCommError {
-    static let noResponse = PumpCommError.other
-    static let invalidResponse = PumpCommError.other
+    static let noResponse = PumpCommError.noResponse
+    static let invalidResponse = PumpCommError.unexpectedResponse(expected: "Response", actual: "Unknown")
 }
 ```
 
@@ -298,7 +298,7 @@ public func pairPump(with pairingCode: String, completion: @escaping (Result<Voi
             }
         }
         #else
-        completion(.failure(PumpCommError.other))
+        completion(.failure(PumpCommError.jpakeUnavailable))
         #endif
     } catch {
         completion(.failure(error))

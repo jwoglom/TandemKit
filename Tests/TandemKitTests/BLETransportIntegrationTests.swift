@@ -357,7 +357,7 @@ final class BLETransportIntegrationTests: XCTestCase {
             // Setup: Mock response with invalid CRC or format
             // Action: Send message
             // Expected: BTResponseParser returns nil
-            // Expected: Throws PumpCommError.other
+            // Expected: Throws PumpCommError.responseParsingFailed
         }
     }
 

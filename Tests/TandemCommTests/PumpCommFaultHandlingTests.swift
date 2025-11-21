@@ -110,7 +110,7 @@ private final class MockTransport: PumpMessageTransport {
     func sendMessage(_ message: Message) throws -> Message {
         sentMessages.append(message)
         guard !results.isEmpty else {
-            throw PumpCommError.other
+            throw PumpCommError.noResponse
         }
         let result = results.removeFirst()
         switch result {
