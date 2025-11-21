@@ -32,7 +32,11 @@ class TandemKitScanViewModel: ObservableObject {
         self.nextStep = nextStep
 
         self.pumpManager?.addScanDeviceObserver(self, queue: .main)
-        self.pumpManager?.tandemPump.startScanning()
+    }
+
+    func startScan() {
+        pumpManager?.setScanningMode(true)
+        pumpManager?.tandemPump.startScanning()
         isScanning = true
     }
 
@@ -52,6 +56,7 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func stopScan() {
+        pumpManager?.setScanningMode(false)
         pumpManager?.tandemPump.stopScanning()
         isScanning = false
     }
@@ -66,6 +71,7 @@ class TandemKitScanViewModel: ObservableObject {
         pumpManager?.setTargetPeripheral(nil)
 
         // Restart scanning
+        pumpManager?.setScanningMode(true)
         pumpManager?.tandemPump.startScanning()
         isScanning = true
     }

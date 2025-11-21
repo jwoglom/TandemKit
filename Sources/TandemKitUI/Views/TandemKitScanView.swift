@@ -50,7 +50,9 @@ struct TandemKitScanView: View {
             Divider()
             content
         }
-
+        .onAppear {
+            viewModel.startScan()
+        }
         .navigationBarHidden(false)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {

@@ -155,13 +155,26 @@ public class PumpCommSession {
                 throw PumpCommError.missingAuthenticationKey
             }
 
+            logger.info("[PumpCommSession] JPAKE pairing succeeded; waiting 250ms before session initialization")
+            Thread.sleep(forTimeInterval: 0.25)
+
+            // Temporarily store artifacts so we can send TimeSinceResetRequest
             PumpStateSupplier.storePairingArtifacts(derivedSecret: secret, serverNonce: serverNonce)
 
-            logger.info("[PumpCommSession] JPAKE pairing succeeded; stored artifacts")
+            // Fetch timeSinceReset to initialize the session properly
+            logger.info("[PumpCommSession] Fetching timeSinceReset to initialize authenticated session")
+            let timeSinceResetResponse = try transport.sendMessage(TimeSinceResetRequest())
+            guard let response = timeSinceResetResponse as? TimeSinceResetResponse else {
+                logger.error("[PumpCommSession] Failed to get timeSinceReset response")
+                throw PumpCommError.other
+            }
+
+            logger.info("[PumpCommSession] Session fully authenticated with timeSinceReset: \(response.pumpTimeSinceReset)")
 
             state.derivedSecret = secret
             state.serverNonce = serverNonce
             state.peripheralUuid = peripheralUuid
+            state.timeSinceReset = response.pumpTimeSinceReset
             delegate?.pumpCommSession(self, didChange: state)
             logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
         }
