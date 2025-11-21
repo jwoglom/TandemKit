@@ -77,6 +77,17 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
 
     private let lockedStayConnected: Locked<Bool> = Locked(true)
 
+    var autoScanEnabled: Bool {
+        get {
+            lockedAutoScanEnabled.value
+        }
+        set {
+            lockedAutoScanEnabled.value = newValue
+        }
+    }
+
+    private let lockedAutoScanEnabled: Locked<Bool> = Locked(false)
+
     private var isPermanentlyDisconnecting: Bool = false
 
     public weak var delegate: BluetoothManagerDelegate?
@@ -149,6 +160,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
     public func scanForPeripheral() {
         dispatchPrecondition(condition: .notOnQueue(managerQueue))
 
+        autoScanEnabled = true
         managerQueue.sync {
             self.managerQueue_scanForPeripheral()
         }
@@ -341,7 +353,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
         switch central.state {
         case .poweredOn:
-            managerQueue_scanForPeripheral()
+            if autoScanEnabled {
+                managerQueue_scanForPeripheral()
+            }
         case .poweredOff,
              .resetting,
              .unauthorized,

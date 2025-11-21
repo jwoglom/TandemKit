@@ -923,6 +923,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         targetPeripheralIdentifier = peripheralIdentifier
     }
 
+    public func setScanningMode(_ enabled: Bool) {
+        inScanningMode.value = enabled
+    }
+
     public func pairPump(
         with pairingCode: String,
         peripheral: CBPeripheral,
@@ -958,12 +962,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
                     DispatchQueue.global(qos: .userInitiated).async { [pumpComm, weak self, telemetryScheduler] in
                         do {
+                            // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
                             try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
 
-                            // After successful pairing, trigger initial telemetry refresh
+                            // After successful pairing and session initialization, trigger initial telemetry refresh
                             DispatchQueue.main.async {
                                 guard let self = self else { return }
-                                self.telemetryLogger.debug("Pairing successful – triggering initial telemetry refresh")
+                                self.telemetryLogger.debug("Pairing complete – triggering initial telemetry refresh")
                                 telemetryScheduler.triggerAll()
                             }
 
@@ -1658,8 +1663,8 @@ extension TandemPumpManager: TandemPumpDelegate {
         rssi: NSNumber
     ) {
         log.info(
-            "[tandemPump didDiscoverDevice] inScanningMode=%s peripheral=%s",
-            inScanningMode.value,
+            "[tandemPump didDiscoverDevice] inScanningMode=%{public}@ peripheral=%{public}@",
+            String(describing: inScanningMode.value),
             String(describing: peripheral)
         )
         if inScanningMode.value == true {
@@ -1671,7 +1676,7 @@ extension TandemPumpManager: TandemPumpDelegate {
                 rssi: rssi
             )
             notifyScanDeviceDidChange(device)
-        } else {
+        } else if inScanningMode.value == false {
             configureDeliveryActions(true)
             log.info(
                 "[tandemPump didDiscoverDevice] expected pumpComm.pumpPeripheralUuid=%s",
@@ -1695,6 +1700,7 @@ extension TandemPumpManager: PumpCommDelegate {
         currentState.pumpState = pumpState
         lockedState.value = currentState
 
+        // Update pairing artifacts so messages will be signed with the derived secret
         updatePairingArtifacts(with: pumpState)
 
         notifyPumpManagerDelegateDidUpdateState()
