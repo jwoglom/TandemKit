@@ -20,7 +20,7 @@ struct TandemKitSetupCompleteView: View {
                     "You can now use your Tandem pump with this app. Make sure to keep your pump nearby and within Bluetooth range.",
                     comment: "Tandem setup complete instructions"
                 ))
-                    .padding(.horizontal)
+                    .padding(.all)
             }
 
             Spacer()

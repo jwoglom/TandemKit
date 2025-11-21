@@ -20,10 +20,13 @@ struct TandemKitSetupView: View {
 
                     Text(LocalizedString("• Ensure your pump is nearby", comment: "Setup instruction 1"))
                     Text(LocalizedString(
-                        "• Ensure you have the Mobi wireless charger (or other Qi compatible wireless charger) plugged in",
+                        "• Plug in the Mobi wireless charger, which is required to pair the pump",
                         comment: "Setup instruction 2"
                     ))
-                    Text(LocalizedString("• Have your pump's pairing code ready", comment: "Setup instruction 3"))
+                    Text(LocalizedString(
+                        "• Have your pump PIN code ready, which is written on the inside of the cartridge area",
+                        comment: "Setup instruction 3"
+                    ))
                     Text(LocalizedString("• Make sure Bluetooth is enabled", comment: "Setup instruction 4"))
                 }
                 .padding(.horizontal)

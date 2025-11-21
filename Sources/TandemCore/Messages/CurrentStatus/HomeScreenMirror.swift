@@ -86,3 +86,85 @@ public class HomeScreenMirrorResponse: Message {
         self.cgmDisplayData = cgmDisplayData
     }
 }
+
+public extension HomeScreenMirrorResponse {
+    enum CGMTrendIcon: Int {
+        case noArrow = 0
+        case doubleUp = 1
+        case up = 2
+        case upRight = 3
+        case flat = 4
+        case downRight = 5
+        case down = 6
+        case doubleDown = 7
+    }
+
+    enum CGMAlertIcon: Int {
+        case startup1 = 0
+        case startup2 = 1
+        case startup3 = 2
+        case startup4 = 3
+        case calibrate = 4
+        case startupCalibrate = 5
+        case checkmarkBloodDrop = 6
+        case errorHighWedge = 7
+        case errorLowWedge = 8
+        case replaceSensor = 11
+        case replaceTransmitter = 12
+        case outOfRange = 13
+        case failedSensor = 14
+        case tripleDashes = 15
+        case low = 16
+        case high = 17
+        case noError = 255
+    }
+
+    enum StatusIcon0: Int {
+        case aam = 0
+        case cgmTransmitter = 1
+        case cgmTransmitterOutOfRange = 4
+        case hide = 200
+    }
+
+    enum StatusIcon1: Int {
+        case aam = 0
+        case bloodDrop = 1
+        case hide = 200
+    }
+
+    enum BolusStatusIcon: Int {
+        case bolus = 0
+        case autoBolus = 1
+        case blackLockSecurityPin = 2
+        case greyLockSecurityPinCgmGraphActive = 3
+        case hide = 200
+    }
+
+    enum BasalStatusIcon: Int {
+        case basal = 0
+        case zeroBasal = 1
+        case tempRate = 2
+        case zeroTempRate = 3
+        case suspend = 4
+        case hypoSuspendBasalIQ = 5
+        case increaseBasal = 6
+        case attenuatedBasal = 7
+        case hide = 200
+    }
+
+    enum ApControlStateIcon: Int {
+        case stateGray = 0
+        case stateGrayRedBasalSuspended = 1
+        case stateGrayBlueIncreaseBasal = 2
+        case stateGrayOrangeAttenuatedBasal = 3
+        case hide = 200
+    }
+
+    var cgmTrendIcon: CGMTrendIcon? { CGMTrendIcon(rawValue: cgmTrendIconId) }
+    var cgmAlertIcon: CGMAlertIcon? { CGMAlertIcon(rawValue: cgmAlertIconId) }
+    var statusIcon0: StatusIcon0? { StatusIcon0(rawValue: statusIcon0Id) }
+    var statusIcon1: StatusIcon1? { StatusIcon1(rawValue: statusIcon1Id) }
+    var bolusStatusIcon: BolusStatusIcon? { BolusStatusIcon(rawValue: bolusStatusIconId) }
+    var basalStatusIcon: BasalStatusIcon? { BasalStatusIcon(rawValue: basalStatusIconId) }
+    var apControlStateIcon: ApControlStateIcon? { ApControlStateIcon(rawValue: apControlStateIconId) }
+}
