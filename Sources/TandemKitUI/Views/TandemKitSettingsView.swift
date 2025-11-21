@@ -29,11 +29,13 @@ struct TandemKitSettingsView: View {
     var debugDetailsPopover: some View {
         List {
             Section(header: SectionHeader(label: LocalizedString("State", comment: "Debug state header"))) {
-                Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))")
+                Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))").font(.system(size: 12))
 
-                Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))")
+                Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))").font(.system(size: 12))
 
-                Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))")
+                Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))").font(.system(size: 12))
+
+                Text("CurrentBasalStatus: \(String(describing: viewModel.currentBasalStatus))").font(.system(size: 12))
             }
 
             HStack {
