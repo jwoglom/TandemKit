@@ -52,3 +52,15 @@ public class InsulinStatusResponse: Message {
         self.insulinLowAmount = insulinLowAmount
     }
 }
+
+public extension InsulinStatusRequest {
+    var description: String {
+        "InsulinStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension InsulinStatusResponse {
+    var description: String {
+        "InsulinStatusResponse(cargo=\(cargo.hexadecimalString), currentInsulinAmount=\(currentInsulinAmount), isEstimate=\(isEstimate), insulinLowAmount=\(insulinLowAmount))"
+    }
+}

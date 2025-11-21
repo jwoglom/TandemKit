@@ -44,3 +44,15 @@ public class StopDexcomCGMSensorSessionResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension StopDexcomCGMSensorSessionRequest {
+    var description: String {
+        "StopDexcomCGMSensorSessionRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension StopDexcomCGMSensorSessionResponse {
+    var description: String {
+        "StopDexcomCGMSensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

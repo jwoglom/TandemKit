@@ -56,3 +56,15 @@ public class SetG6TransmitterIdResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetG6TransmitterIdRequest {
+    var description: String {
+        "SetG6TransmitterIdRequest(cargo=\(cargo.hexadecimalString), txId=\(txId))"
+    }
+}
+
+public extension SetG6TransmitterIdResponse {
+    var description: String {
+        "SetG6TransmitterIdResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

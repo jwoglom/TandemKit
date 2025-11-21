@@ -48,3 +48,15 @@ public class OtherNotification2StatusResponse: Message {
         self.codeB = codeB
     }
 }
+
+public extension OtherNotification2StatusRequest {
+    var description: String {
+        "OtherNotification2StatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension OtherNotification2StatusResponse {
+    var description: String {
+        "OtherNotification2StatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB))"
+    }
+}

@@ -69,3 +69,15 @@ public class Jpake3SessionKeyResponse: Message {
         )
     }
 }
+
+public extension Jpake3SessionKeyRequest {
+    var description: String {
+        "Jpake3SessionKeyRequest(cargo=\(cargo.hexadecimalString), challengeParam=\(challengeParam))"
+    }
+}
+
+public extension Jpake3SessionKeyResponse {
+    var description: String {
+        "Jpake3SessionKeyResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), deviceKeyNonce=\(deviceKeyNonce.hexadecimalString), deviceKeyReserved=\(deviceKeyReserved.hexadecimalString))"
+    }
+}

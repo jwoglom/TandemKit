@@ -68,3 +68,15 @@ public class CurrentEGVGuiDataResponse: Message {
         case UNAVAILABLE = 4
     }
 }
+
+public extension CurrentEGVGuiDataRequest {
+    var description: String {
+        "CurrentEGVGuiDataRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension CurrentEGVGuiDataResponse {
+    var description: String {
+        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
+    }
+}

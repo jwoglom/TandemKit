@@ -49,3 +49,15 @@ public class SuspendPumpingResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SuspendPumpingRequest {
+    var description: String {
+        "SuspendPumpingRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension SuspendPumpingResponse {
+    var description: String {
+        "SuspendPumpingResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

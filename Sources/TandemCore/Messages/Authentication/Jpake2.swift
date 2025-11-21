@@ -72,3 +72,15 @@ public class Jpake2Response: Message {
         )
     }
 }
+
+public extension Jpake2Request {
+    var description: String {
+        "Jpake2Request(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
+}
+
+public extension Jpake2Response {
+    var description: String {
+        "Jpake2Response(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
+    }
+}

@@ -76,3 +76,15 @@ public class PumpSettingsResponse: Message {
         self.status = status
     }
 }
+
+public extension PumpSettingsRequest {
+    var description: String {
+        "PumpSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension PumpSettingsResponse {
+    var description: String {
+        "PumpSettingsResponse(cargo=\(cargo.hexadecimalString), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), autoShutdownEnabled=\(autoShutdownEnabled), autoShutdownDuration=\(autoShutdownDuration), featureLock=\(featureLock), oledTimeout=\(oledTimeout), status=\(status))"
+    }
+}

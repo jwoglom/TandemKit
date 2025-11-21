@@ -46,3 +46,15 @@ public class EnterFillTubingModeResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension EnterFillTubingModeRequest {
+    var description: String {
+        "EnterFillTubingModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension EnterFillTubingModeResponse {
+    var description: String {
+        "EnterFillTubingModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

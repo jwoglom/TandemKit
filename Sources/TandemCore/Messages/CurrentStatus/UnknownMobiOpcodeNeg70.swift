@@ -41,3 +41,15 @@ public class UnknownMobiOpcodeNeg70Response: Message {
         cargo = Data()
     }
 }
+
+public extension UnknownMobiOpcodeNeg70Request {
+    var description: String {
+        "UnknownMobiOpcodeNeg70Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension UnknownMobiOpcodeNeg70Response {
+    var description: String {
+        "UnknownMobiOpcodeNeg70Response(cargo=\(cargo.hexadecimalString))"
+    }
+}

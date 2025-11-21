@@ -57,3 +57,9 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
         SuspendReason(rawValue: reasonId)
     }
 }
+
+public extension PumpingSuspendedHistoryLog {
+    var description: String {
+        "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reason=\(reason), reasonId=\(reasonId))"
+    }
+}

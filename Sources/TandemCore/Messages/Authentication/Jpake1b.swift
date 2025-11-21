@@ -72,3 +72,15 @@ public class Jpake1bResponse: Message {
         )
     }
 }
+
+public extension Jpake1bRequest {
+    var description: String {
+        "Jpake1bRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
+}
+
+public extension Jpake1bResponse {
+    var description: String {
+        "Jpake1bResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
+    }
+}

@@ -83,3 +83,9 @@ public class IdpBolusHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension IdpBolusHistoryLog {
+    var description: String {
+        "IdpBolusHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), modification=\(modification), bolusStatus=\(bolusStatus), insulinDuration=\(insulinDuration), maxBolusSize=\(maxBolusSize), bolusEntryType=\(bolusEntryType))"
+    }
+}

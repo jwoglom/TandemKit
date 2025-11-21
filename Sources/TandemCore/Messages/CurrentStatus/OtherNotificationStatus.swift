@@ -41,3 +41,15 @@ public class OtherNotificationStatusResponse: Message {
         cargo = Bytes.emptyBytes(Int(Self.props.size))
     }
 }
+
+public extension OtherNotificationStatusRequest {
+    var description: String {
+        "OtherNotificationStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension OtherNotificationStatusResponse {
+    var description: String {
+        "OtherNotificationStatusResponse(cargo=\(cargo.hexadecimalString))"
+    }
+}

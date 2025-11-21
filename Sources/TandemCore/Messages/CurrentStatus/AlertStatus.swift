@@ -127,3 +127,15 @@ public class AlertStatusResponse: Message {
         }
     }
 }
+
+public extension AlertStatusRequest {
+    var description: String {
+        "AlertStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension AlertStatusResponse {
+    var description: String {
+        "AlertStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap), alerts=\(alerts))"
+    }
+}

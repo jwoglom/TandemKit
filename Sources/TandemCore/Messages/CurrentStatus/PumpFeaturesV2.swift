@@ -71,3 +71,15 @@ public class PumpFeaturesV2Response: Message {
         return PumpFeaturesV1Response.PumpFeatureType.fromBitmask(UInt64(pumpFeaturesBitmask))
     }
 }
+
+public extension PumpFeaturesV2Request {
+    var description: String {
+        "PumpFeaturesV2Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension PumpFeaturesV2Response {
+    var description: String {
+        "PumpFeaturesV2Response(cargo=\(cargo.hexadecimalString), status=\(status), supportedFeatureIndex=\(supportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
+    }
+}

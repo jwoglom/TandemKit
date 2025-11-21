@@ -76,3 +76,15 @@ public class CentralChallengeResponse: AbstractCentralChallengeResponse {
         )
     }
 }
+
+public extension CentralChallengeRequest {
+    var description: String {
+        "CentralChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
+}
+
+public extension CentralChallengeResponse {
+    var description: String {
+        "CentralChallengeResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString), hmacKey=\(hmacKey.hexadecimalString))"
+    }
+}
