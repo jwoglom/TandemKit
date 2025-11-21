@@ -181,6 +181,18 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
+                "CGM Configuration",
+                comment: "The title of the CGM configuration section in TandemKit settings"
+            ))) {
+                NavigationLink(destination: TandemKitCGMSettingsView(
+                    viewModel: viewModel.createCGMSettingsViewModel()
+                )) {
+                    Text(LocalizedString("CGM Settings", comment: "Label for CGM settings"))
+                        .foregroundColor(Color.primary)
+                }
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
