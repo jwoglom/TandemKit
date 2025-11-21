@@ -286,7 +286,6 @@
 		3EE346042EC91332008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
 		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */; };
-		3EE346102EC91B3D008A07F6 /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
 		3EE346172EC92751008A07F6 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346162EC9274E008A07F6 /* Bundle.swift */; };
 		3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */; };
 		3EE3461C2EC92804008A07F6 /* TandemKitScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346192EC92801008A07F6 /* TandemKitScanView.swift */; };
@@ -692,7 +691,6 @@
 			files = (
 				1A55E0F02EC94550006E651D /* BigInt in Frameworks */,
 				1A55E0EE2EC94539006E651D /* SwiftECC in Frameworks */,
-				3EE346102EC91B3D008A07F6 /* LoopKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

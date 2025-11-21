@@ -65,7 +65,6 @@ let package = Package(
                 name: "TandemBLE",
                 dependencies: [
                     "TandemCore",
-                    "LoopKit",
                     .target(name: "Bluetooth", condition: .when(platforms: [.linux])),
                     .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
                 ],
