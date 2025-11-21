@@ -60,3 +60,15 @@ public class DeleteIDPResponse: Message, StatusMessage {
         self.deletedIdpId = deletedIdpId
     }
 }
+
+public extension DeleteIDPRequest {
+    var description: String {
+        "DeleteIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    }
+}
+
+public extension DeleteIDPResponse {
+    var description: String {
+        "DeleteIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), deletedIdpId=\(deletedIdpId))"
+    }
+}

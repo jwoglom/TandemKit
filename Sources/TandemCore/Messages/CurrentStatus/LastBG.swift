@@ -65,3 +65,15 @@ public class LastBGResponse: Message {
         case cgm = 1
     }
 }
+
+public extension LastBGRequest {
+    var description: String {
+        "LastBGRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension LastBGResponse {
+    var description: String {
+        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSourceId=\(bgSourceId))"
+    }
+}

@@ -54,3 +54,15 @@ public class SetActiveIDPResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetActiveIDPRequest {
+    var description: String {
+        "SetActiveIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    }
+}
+
+public extension SetActiveIDPResponse {
+    var description: String {
+        "SetActiveIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

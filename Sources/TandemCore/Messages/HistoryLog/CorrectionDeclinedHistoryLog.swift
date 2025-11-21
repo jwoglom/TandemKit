@@ -68,3 +68,9 @@ public class CorrectionDeclinedHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension CorrectionDeclinedHistoryLog {
+    var description: String {
+        "CorrectionDeclinedHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), bolusId=\(bolusId), iob=\(iob), targetBg=\(targetBg), isf=\(isf))"
+    }
+}

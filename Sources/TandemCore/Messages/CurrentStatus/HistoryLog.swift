@@ -57,3 +57,15 @@ public class HistoryLogResponse: Message {
         self.streamId = streamId
     }
 }
+
+public extension HistoryLogRequest {
+    var description: String {
+        "HistoryLogRequest(cargo=\(cargo.hexadecimalString), startLog=\(startLog), numberOfLogs=\(numberOfLogs))"
+    }
+}
+
+public extension HistoryLogResponse {
+    var description: String {
+        "HistoryLogResponse(cargo=\(cargo.hexadecimalString), status=\(status), streamId=\(streamId))"
+    }
+}

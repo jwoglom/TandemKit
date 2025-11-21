@@ -47,3 +47,15 @@ public class StartDexcomG6SensorSessionResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension StartDexcomG6SensorSessionRequest {
+    var description: String {
+        "StartDexcomG6SensorSessionRequest(cargo=\(cargo.hexadecimalString), sensorCode=\(sensorCode))"
+    }
+}
+
+public extension StartDexcomG6SensorSessionResponse {
+    var description: String {
+        "StartDexcomG6SensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

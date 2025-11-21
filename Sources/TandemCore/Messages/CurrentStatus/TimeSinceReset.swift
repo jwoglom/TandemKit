@@ -53,3 +53,15 @@ public class TimeSinceResetResponse: Message {
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(currentTime))
     }
 }
+
+public extension TimeSinceResetRequest {
+    var description: String {
+        "TimeSinceResetRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension TimeSinceResetResponse {
+    var description: String {
+        "TimeSinceResetResponse(cargo=\(cargo.hexadecimalString), currentTime=\(currentTime), pumpTimeSinceReset=\(pumpTimeSinceReset))"
+    }
+}

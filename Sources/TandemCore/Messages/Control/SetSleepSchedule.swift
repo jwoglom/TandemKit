@@ -69,3 +69,15 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension SetSleepScheduleRequest {
+    var description: String {
+        "SetSleepScheduleRequest(cargo=\(cargo.hexadecimalString), slot=\(slot), rawSchedule=\(rawSchedule.hexadecimalString), flag=\(flag))"
+    }
+}
+
+public extension SetSleepScheduleResponse {
+    var description: String {
+        "SetSleepScheduleResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

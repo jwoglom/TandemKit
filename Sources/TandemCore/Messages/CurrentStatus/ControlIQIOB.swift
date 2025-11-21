@@ -82,3 +82,15 @@ public class ControlIQIOBResponse: Message {
         }
     }
 }
+
+public extension ControlIQIOBRequest {
+    var description: String {
+        "ControlIQIOBRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ControlIQIOBResponse {
+    var description: String {
+        "ControlIQIOBResponse(cargo=\(cargo.hexadecimalString), mudaliarIOB=\(mudaliarIOB), timeRemainingSeconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), iobType=\(iobType))"
+    }
+}

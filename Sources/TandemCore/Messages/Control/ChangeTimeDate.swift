@@ -47,3 +47,15 @@ public class ChangeTimeDateResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension ChangeTimeDateRequest {
+    var description: String {
+        "ChangeTimeDateRequest(cargo=\(cargo.hexadecimalString), tandemEpochTime=\(tandemEpochTime))"
+    }
+}
+
+public extension ChangeTimeDateResponse {
+    var description: String {
+        "ChangeTimeDateResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

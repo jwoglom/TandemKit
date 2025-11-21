@@ -57,3 +57,15 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
 
     public var releaseStatus: ReleaseStatus? { ReleaseStatus(rawValue: status) }
 }
+
+public extension BolusPermissionReleaseRequest {
+    var description: String {
+        "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    }
+}
+
+public extension BolusPermissionReleaseResponse {
+    var description: String {
+        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

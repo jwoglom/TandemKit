@@ -57,3 +57,15 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension ChangeControlIQSettingsRequest {
+    var description: String {
+        "ChangeControlIQSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), weightLbs=\(weightLbs), totalDailyInsulinUnits=\(totalDailyInsulinUnits))"
+    }
+}
+
+public extension ChangeControlIQSettingsResponse {
+    var description: String {
+        "ChangeControlIQSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

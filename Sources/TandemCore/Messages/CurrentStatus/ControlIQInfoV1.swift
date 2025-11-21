@@ -98,3 +98,15 @@ public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
     override public func getByte8() -> Int { byte8 }
     override public func getControlStateType() -> Int { controlStateType }
 }
+
+public extension ControlIQInfoV1Request {
+    var description: String {
+        "ControlIQInfoV1Request(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ControlIQInfoV1Response {
+    var description: String {
+        "ControlIQInfoV1Response(cargo=\(cargo.hexadecimalString), closedLoopEnabled=\(closedLoopEnabled), weight=\(weight), weightUnitRaw=\(weightUnitRaw), totalDailyInsulin=\(totalDailyInsulin), currentUserModeTypeRaw=\(currentUserModeTypeRaw), byte6=\(byte6), byte7=\(byte7), byte8=\(byte8), controlStateType=\(controlStateType))"
+    }
+}

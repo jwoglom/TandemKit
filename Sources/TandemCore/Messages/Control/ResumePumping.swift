@@ -48,3 +48,15 @@ public class ResumePumpingResponse: Message, StatusMessage {
         self.status = status
     }
 }
+
+public extension ResumePumpingRequest {
+    var description: String {
+        "ResumePumpingRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension ResumePumpingResponse {
+    var description: String {
+        "ResumePumpingResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
+}

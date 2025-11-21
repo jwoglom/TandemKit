@@ -80,3 +80,9 @@ public class BolusCompletedHistoryLog: HistoryLog {
         LastBolusStatusAbstractResponse.BolusStatus(rawValue: completionStatusId)
     }
 }
+
+public extension BolusCompletedHistoryLog {
+    var description: String {
+        "BolusCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatusId=\(completionStatusId), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
+    }
+}

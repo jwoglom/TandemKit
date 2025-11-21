@@ -72,3 +72,15 @@ public class BolusPermissionResponse: Message, StatusMessage {
         status == 0 && nackReason == .permissionGranted
     }
 }
+
+public extension BolusPermissionRequest {
+    var description: String {
+        "BolusPermissionRequest(cargo=\(cargo.hexadecimalString))"
+    }
+}
+
+public extension BolusPermissionResponse {
+    var description: String {
+        "BolusPermissionResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), nackReasonId=\(nackReasonId))"
+    }
+}

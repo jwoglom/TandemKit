@@ -41,3 +41,9 @@ public class PumpingResumedHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension PumpingResumedHistoryLog {
+    var description: String {
+        "PumpingResumedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount))"
+    }
+}

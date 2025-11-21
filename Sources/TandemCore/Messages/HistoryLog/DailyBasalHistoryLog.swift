@@ -83,3 +83,9 @@ public class DailyBasalHistoryLog: HistoryLog {
         )
     }
 }
+
+public extension DailyBasalHistoryLog {
+    var description: String {
+        "DailyBasalHistoryLog(cargo=\(cargo.hexadecimalString), dailyTotalBasal=\(dailyTotalBasal), lastBasalRate=\(lastBasalRate), iob=\(iob), finalEventForDay=\(finalEventForDay), batteryChargeRaw=\(batteryChargeRaw), lipoMv=\(lipoMv))"
+    }
+}
