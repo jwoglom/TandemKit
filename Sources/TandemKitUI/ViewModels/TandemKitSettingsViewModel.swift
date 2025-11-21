@@ -18,6 +18,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isSuspended: Bool? = nil
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
+    @Published var notificationCount: Int = 0
+
+    private let notificationBundle = NotificationBundle()
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -53,6 +56,16 @@ class TandemKitSettingsViewModel: ObservableObject {
             let tempRate = self.sendMessage(message: TempRateRequest()) as? TempRateResponse
             let currentBasal = self.sendMessage(message: CurrentBasalStatusRequest()) as? CurrentBasalStatusResponse
 
+            // Refresh notification count
+            for request in NotificationBundle.allRequests() {
+                if let response = self.sendMessage(message: request) {
+                    if NotificationBundle.isNotificationResponse(response) {
+                        self.notificationBundle.add(response)
+                    }
+                }
+            }
+            let notifCount = self.notificationBundle.getNotificationCount()
+
             DispatchQueue.main.async {
                 self.mirrorDetail = mirror
                 self.controlIQInfo = controlIQ
@@ -60,6 +73,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.tempRateStatus = tempRate
                 self.currentBasalStatus = currentBasal
                 self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+                self.notificationCount = notifCount
             }
         }
     }
@@ -173,6 +187,10 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
         TandemKitFillCannulaViewModel(pumpManager: pumpManager)
+    }
+
+    func createNotificationsViewModel() -> TandemKitNotificationsViewModel {
+        TandemKitNotificationsViewModel(pumpManager)
     }
 
     func removePump() {
