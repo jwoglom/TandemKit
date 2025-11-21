@@ -124,7 +124,7 @@ public class SetQuickBolusSettingsResponse: Message, StatusMessage {
 
 public extension SetQuickBolusSettingsRequest {
     var description: String {
-        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(mode), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
     }
 }
 

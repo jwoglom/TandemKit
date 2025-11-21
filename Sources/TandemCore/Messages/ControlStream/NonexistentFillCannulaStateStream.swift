@@ -66,6 +66,6 @@ public class FillCannulaStateStreamResponse: Message {
 
 public extension FillCannulaStateStreamResponse {
     var description: String {
-        "FillCannulaStateStreamResponse(cargo=\(cargo.hexadecimalString), stateId=\(stateId))"
+        "FillCannulaStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }

@@ -93,6 +93,6 @@ public class BasalRateChangeHistoryLog: HistoryLog {
 
 public extension BasalRateChangeHistoryLog {
     var description: String {
-        "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeTypeId=\(changeTypeId))"
+        "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeType=\(changeType), changeTypeId=\(changeTypeId))"
     }
 }

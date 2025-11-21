@@ -166,6 +166,6 @@ public extension InitiateBolusRequest {
 
 public extension InitiateBolusResponse {
     var description: String {
-        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusTypeId=\(statusTypeId))"
+        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusType=\(statusType), statusTypeId=\(statusTypeId))"
     }
 }

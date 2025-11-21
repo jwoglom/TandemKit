@@ -101,6 +101,6 @@ public extension CGMStatusRequest {
 
 public extension CGMStatusResponse {
     var description: String {
-        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
+        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionState=\(sessionState), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
     }
 }

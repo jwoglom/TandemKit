@@ -102,6 +102,6 @@ public extension LastBolusStatusV2Request {
 
 public extension LastBolusStatusV2Response {
     var description: String {
-        "LastBolusStatusV2Response(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration), requestedVolume=\(requestedVolume))"
+        "LastBolusStatusV2Response(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration), requestedVolume=\(requestedVolume))"
     }
 }

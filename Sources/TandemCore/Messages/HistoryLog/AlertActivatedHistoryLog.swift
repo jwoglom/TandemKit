@@ -43,6 +43,6 @@ public class AlertActivatedHistoryLog: HistoryLog {
 
 public extension AlertActivatedHistoryLog {
     var description: String {
-        "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertId=\(alertId))"
+        "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(alertResponseType), alertId=\(alertId))"
     }
 }

@@ -131,7 +131,7 @@ public enum PumpSoundChangeBitmask: Int {
 
 public extension SetPumpSoundsRequest {
     var description: String {
-        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnunRaw=\(generalAnnunRaw), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnunRaw=\(alertAnnunRaw), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(quickBolusAnnun), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(generalAnnun), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(reminderAnnun), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(alertAnnun), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(alarmAnnun), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
     }
 }
 

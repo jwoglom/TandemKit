@@ -66,6 +66,6 @@ public extension BolusPermissionReleaseRequest {
 
 public extension BolusPermissionReleaseResponse {
     var description: String {
-        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), releaseStatus=\(releaseStatus), status=\(status))"
     }
 }

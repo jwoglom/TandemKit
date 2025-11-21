@@ -67,7 +67,7 @@ public class DismissNotificationResponse: Message, StatusMessage {
 
 public extension DismissNotificationRequest {
     var description: String {
-        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationTypeId=\(notificationTypeId))"
+        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
     }
 }
 

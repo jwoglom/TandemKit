@@ -64,6 +64,6 @@ public extension BasalIQAlertInfoRequest {
 
 public extension BasalIQAlertInfoResponse {
     var description: String {
-        "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alertId=\(alertId))"
+        "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alert=\(alert), alertId=\(alertId))"
     }
 }

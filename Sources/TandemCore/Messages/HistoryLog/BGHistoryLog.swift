@@ -100,6 +100,6 @@ public class BGHistoryLog: HistoryLog {
 
 public extension BGHistoryLog {
     var description: String {
-        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), spare=\(spare))"
+        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(bgSource), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), spare=\(spare))"
     }
 }
