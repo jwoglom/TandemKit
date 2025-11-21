@@ -87,6 +87,6 @@ public extension BolusPermissionChangeReasonRequest {
 
 public extension BolusPermissionChangeReasonResponse {
     var description: String {
-        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
+        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(lastChangeReason), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
     }
 }

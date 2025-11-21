@@ -79,7 +79,7 @@ public class SetIDPSettingsResponse: Message, StatusMessage {
 
 public extension SetIDPSettingsRequest {
     var description: String {
-        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeTypeId=\(changeTypeId))"
+        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
     }
 }
 

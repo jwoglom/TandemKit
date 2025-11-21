@@ -89,6 +89,6 @@ public extension CancelBolusRequest {
 
 public extension CancelBolusResponse {
     var description: String {
-        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), statusId=\(statusId), bolusId=\(bolusId), reasonId=\(reasonId))"
+        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), reason=\(reason), reasonId=\(reasonId))"
     }
 }

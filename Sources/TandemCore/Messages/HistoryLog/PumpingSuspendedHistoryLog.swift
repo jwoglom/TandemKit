@@ -60,6 +60,6 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
 
 public extension PumpingSuspendedHistoryLog {
     var description: String {
-        "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reasonId=\(reasonId))"
+        "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reason=\(reason), reasonId=\(reasonId))"
     }
 }

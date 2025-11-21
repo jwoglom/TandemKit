@@ -77,6 +77,6 @@ public extension CurrentEGVGuiDataRequest {
 
 public extension CurrentEGVGuiDataResponse {
     var description: String {
-        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
+        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
     }
 }

@@ -47,6 +47,6 @@ public class ControlIQInfoAbstractResponse: Message {
 
 public extension ControlIQInfoAbstractResponse {
     var description: String {
-        "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString))"
+        "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(currentUserModeType), weightUnit=\(weightUnit))"
     }
 }

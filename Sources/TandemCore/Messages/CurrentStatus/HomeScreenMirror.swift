@@ -177,6 +177,6 @@ public extension HomeScreenMirrorRequest {
 
 public extension HomeScreenMirrorResponse {
     var description: String {
-        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIconId=\(cgmAlertIconId), statusIcon0Id=\(statusIcon0Id), statusIcon1Id=\(statusIcon1Id), bolusStatusIconId=\(bolusStatusIconId), basalStatusIconId=\(basalStatusIconId), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
+        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(cgmTrendIcon), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(cgmAlertIcon), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(statusIcon0), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(statusIcon1), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(bolusStatusIcon), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(basalStatusIcon), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(apControlStateIcon), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
     }
 }

@@ -72,6 +72,6 @@ public extension BasalIQStatusRequest {
 
 public extension BasalIQStatusResponse {
     var description: String {
-        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
+        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusState=\(basalIQStatusState), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
     }
 }

@@ -136,7 +136,7 @@ public class SetIDPSegmentResponse: Message, StatusMessage {
 
 public extension SetIDPSegmentRequest {
     var description: String {
-        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(operation), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }
 }
 

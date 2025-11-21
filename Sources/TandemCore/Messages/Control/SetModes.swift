@@ -70,7 +70,7 @@ public class SetModesResponse: Message, StatusMessage {
 
 public extension SetModesRequest {
     var description: String {
-        "SetModesRequest(cargo=\(cargo.hexadecimalString), bitmap=\(bitmap))"
+        "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(command), bitmap=\(bitmap))"
     }
 }
 

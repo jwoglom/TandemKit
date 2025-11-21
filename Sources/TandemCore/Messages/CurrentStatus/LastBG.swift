@@ -74,6 +74,6 @@ public extension LastBGRequest {
 
 public extension LastBGResponse {
     var description: String {
-        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSourceId=\(bgSourceId))"
+        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSource=\(bgSource), bgSourceId=\(bgSourceId))"
     }
 }

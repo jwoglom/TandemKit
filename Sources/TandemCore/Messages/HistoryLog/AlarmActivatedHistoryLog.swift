@@ -34,6 +34,6 @@ public class AlarmActivatedHistoryLog: HistoryLog {
 
 public extension AlarmActivatedHistoryLog {
     var description: String {
-        "AlarmActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alarmId=\(alarmId))"
+        "AlarmActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alarmResponseType=\(alarmResponseType), alarmId=\(alarmId))"
     }
 }
