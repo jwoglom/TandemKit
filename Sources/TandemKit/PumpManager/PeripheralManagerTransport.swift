@@ -15,6 +15,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     private let log = OSLog(category: "PeripheralManagerTransport")
     private var requestResponseHistory: [RequestResponsePair] = []
     private let maxHistorySize = 100 // Keep last 100 exchanges
+    private let txIdLock = NSLock() // Protects currentTxId from concurrent access
 
     public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
@@ -45,16 +46,29 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     public func sendMessage(_ message: Message) throws -> Message {
         let instanceId = ObjectIdentifier(self)
+
+        // Atomically assign txId and create wrapper (protected by lock)
+        txIdLock.lock()
+        let txIdForRequest = currentTxId
         transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
 
-        // Create wrapper with current TxId
-        let wrapper = try withMainActor {
-            TronMessageWrapper(message: message, currentTxId: self.currentTxId)
+        // Create wrapper with current TxId while holding lock
+        let wrapper: TronMessageWrapper
+        do {
+            wrapper = try withMainActor {
+                TronMessageWrapper(message: message, currentTxId: txIdForRequest)
+            }
+        } catch {
+            txIdLock.unlock()
+            throw error
         }
 
-        let txIdForRequest = currentTxId
+        // Increment after wrapper is created successfully
         currentTxId = currentTxId &+ 1 // Increment with overflow
-        transportLogger.info("[PeripheralManagerTransport] txId assigned: \(txIdForRequest), next will be: \(currentTxId)")
+        let nextTxId = currentTxId
+        txIdLock.unlock()
+
+        transportLogger.info("[PeripheralManagerTransport] txId assigned: \(txIdForRequest), next will be: \(nextTxId)")
 
         // Create initial history entry (no response yet)
         let characteristic = type(of: message).props.characteristic
