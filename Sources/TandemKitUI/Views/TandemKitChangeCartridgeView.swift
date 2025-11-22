@@ -24,33 +24,63 @@ struct TandemKitChangeCartridgeView: View {
             }
 
             // Step 1: Suspend Insulin
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.suspend.rawValue {
+            if viewModel.currentStep == .suspend {
                 suspendSection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.suspend.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 1: Suspend Insulin", comment: "Step header"),
+                    message: LocalizedString("Insulin suspended", comment: "Status text")
+                )
             }
 
             // Step 2: Enter Change Mode
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.enterMode.rawValue {
+            if viewModel.currentStep == .enterMode {
                 enterModeSection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.enterMode.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 2: Prepare Pump", comment: "Step header"),
+                    message: LocalizedString("Cartridge change mode started", comment: "Status text")
+                )
             }
 
             // Step 3: Waiting for Ready
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.waitingForReady.rawValue {
+            if viewModel.currentStep == .waitingForReady {
                 waitingForReadySection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.waitingForReady.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Waiting for Pump", comment: "Step header"),
+                    message: LocalizedString("Pump ready", comment: "Status text")
+                )
             }
 
             // Step 4: Physical Change
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.physicalChange.rawValue {
+            if viewModel.currentStep == .physicalChange {
                 physicalChangeSection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.physicalChange.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 3: Replace Cartridge", comment: "Step header"),
+                    message: LocalizedString("Cartridge replaced", comment: "Status text")
+                )
             }
 
             // Step 5: Detecting
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.detecting.rawValue {
+            if viewModel.currentStep == .detecting {
                 detectingSection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.detecting.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 4: Detection", comment: "Step header"),
+                    message: LocalizedString("Cartridge detected", comment: "Status text")
+                )
             }
 
             // Step 6: Completing
-            if viewModel.currentStep.rawValue >= CartridgeChangeStep.completing.rawValue {
+            if viewModel.currentStep == .completing {
                 completingSection
+            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.completing.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 5: Finalize", comment: "Step header"),
+                    message: LocalizedString("Change completed", comment: "Status text")
+                )
             }
 
             // Step 7: Done
@@ -72,7 +102,7 @@ struct TandemKitChangeCartridgeView: View {
 
     var suspendSection: some View {
         Section {
-            if viewModel.isSuspended {
+            if viewModel.isSuspended == true {
                 HStack {
                     Label(
                         LocalizedString("Insulin suspended", comment: "Status text"),
@@ -233,6 +263,18 @@ struct TandemKitChangeCartridgeView: View {
             } else {
                 viewModel.showingCancelConfirmation = true
             }
+        }
+    }
+
+    func completedStepSection(title: String, message: String) -> some View {
+        Section {
+            HStack {
+                Label(message, systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Spacer()
+            }
+        } header: {
+            Text(title)
         }
     }
 

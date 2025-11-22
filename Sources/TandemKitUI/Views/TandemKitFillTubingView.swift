@@ -24,18 +24,33 @@ struct TandemKitFillTubingView: View {
             }
 
             // Step 1: Suspend Insulin
-            if viewModel.currentStep.rawValue >= TubingFillStep.suspend.rawValue {
+            if viewModel.currentStep == .suspend {
                 suspendSection
+            } else if viewModel.currentStep.rawValue > TubingFillStep.suspend.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 1: Suspend Insulin", comment: "Step header"),
+                    message: LocalizedString("Insulin suspended", comment: "Status text")
+                )
             }
 
             // Step 2: Enter Fill Mode
-            if viewModel.currentStep.rawValue >= TubingFillStep.enterMode.rawValue {
+            if viewModel.currentStep == .enterMode {
                 enterModeSection
+            } else if viewModel.currentStep.rawValue > TubingFillStep.enterMode.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 2: Prepare Pump", comment: "Step header"),
+                    message: LocalizedString("Fill mode started", comment: "Status text")
+                )
             }
 
             // Step 3: Filling
-            if viewModel.currentStep.rawValue >= TubingFillStep.filling.rawValue {
+            if viewModel.currentStep == .filling {
                 fillingSection
+            } else if viewModel.currentStep.rawValue > TubingFillStep.filling.rawValue {
+                completedStepSection(
+                    title: LocalizedString("Step 3: Fill Tubing", comment: "Step header"),
+                    message: LocalizedString("Tubing filled", comment: "Status text")
+                )
             }
 
             // Step 4: Done
@@ -57,7 +72,7 @@ struct TandemKitFillTubingView: View {
 
     var suspendSection: some View {
         Section {
-            if viewModel.isSuspended {
+            if viewModel.isSuspended == true {
                 HStack {
                     Label(
                         LocalizedString("Insulin suspended", comment: "Status text"),
@@ -187,6 +202,18 @@ struct TandemKitFillTubingView: View {
             } else {
                 viewModel.showingCancelConfirmation = true
             }
+        }
+    }
+
+    func completedStepSection(title: String, message: String) -> some View {
+        Section {
+            HStack {
+                Label(message, systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+                Spacer()
+            }
+        } header: {
+            Text(title)
         }
     }
 

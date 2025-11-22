@@ -21,6 +21,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var notificationCount: Int = 0
 
     private let notificationBundle = NotificationBundle()
+    private var pendingRefreshOnReconnect = false
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -47,6 +48,13 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func refreshPumpStatus() {
+        guard pumpManager?.connectedAndPaired == true else {
+            log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
+            pendingRefreshOnReconnect = true
+            return
+        }
+
+        pendingRefreshOnReconnect = false
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -83,6 +91,13 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func refreshNotificationCount() {
+        guard pumpManager?.connectedAndPaired == true else {
+            log.debug("Skipping TandemPumpSettings notification refresh – pump not connected/paired")
+            pendingRefreshOnReconnect = true
+            return
+        }
+
+        pendingRefreshOnReconnect = false
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -242,6 +257,11 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
     ) {
         guard let pumpManager = loopkitPumpManager as? TandemPumpManager else {
             return
+        }
+
+        if pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
+            pendingRefreshOnReconnect = false
+            refreshPumpStatus()
         }
     }
 }

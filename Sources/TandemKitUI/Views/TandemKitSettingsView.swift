@@ -342,7 +342,14 @@ struct TandemKitSettingsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
-            if viewModel.isSuspended == true {
+            if viewModel.isUpdatingPumpState {
+                HStack(alignment: .center) {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text(LocalizedString("Updating...", comment: "Text shown when updating pump state"))
+                        .fontWeight(.bold)
+                        .fixedSize()
+                }
+            } else if viewModel.isSuspended == true {
                 HStack(alignment: .center) {
                     Image(systemName: "pause.circle.fill")
                         .font(.system(size: 34))

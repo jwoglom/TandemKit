@@ -476,6 +476,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return transport
     }
 
+    private func telemetryTransportIfReady(for kind: PumpTelemetryKind) -> PumpMessageTransport? {
+        guard connectedAndPaired else {
+            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – pump not connected/paired")
+            return nil
+        }
+
+        guard activePeripheralManager != nil else {
+            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – no active peripheral manager")
+            return nil
+        }
+
+        guard let transport = pairedTransport else {
+            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – paired transport unavailable")
+            return nil
+        }
+
+        return transport
+    }
+
     // MARK: - Pump Capabilities
 
     public var supportedBasalRates: [Double] {
@@ -701,7 +720,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func fetchBatteryStatus() {
-        guard let transport = pairedTransport else {
+        guard let transport = telemetryTransportIfReady(for: .battery) else {
             return
         }
 
@@ -736,7 +755,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func fetchReservoirStatus() {
-        guard let transport = pairedTransport else {
+        guard let transport = telemetryTransportIfReady(for: .reservoir) else {
             return
         }
 
@@ -754,7 +773,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func fetchBasalStatus() {
-        guard let transport = pairedTransport else {
+        guard let transport = telemetryTransportIfReady(for: .basal) else {
             return
         }
 
@@ -773,7 +792,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func fetchBolusStatus() {
-        guard let transport = pairedTransport else {
+        guard let transport = telemetryTransportIfReady(for: .bolus) else {
             return
         }
 
@@ -791,7 +810,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func fetchTimeSinceReset() {
-        guard let transport = pairedTransport else {
+        guard let transport = telemetryTransportIfReady(for: .timeSinceReset) else {
             return
         }
 
@@ -2049,5 +2068,22 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
 
     public func acknowledgeAlert(alertIdentifier _: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
         completion(nil)
+    }
+}
+
+private extension PumpTelemetryKind {
+    var logDescription: String {
+        switch self {
+        case .reservoir:
+            return "reservoir"
+        case .battery:
+            return "battery"
+        case .basal:
+            return "basal"
+        case .bolus:
+            return "bolus"
+        case .timeSinceReset:
+            return "timeSinceReset"
+        }
     }
 }
