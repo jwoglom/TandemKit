@@ -27,7 +27,7 @@ enum TubingFillStep: Int {
 
 class TandemKitFillTubingViewModel: ObservableObject {
     @Published var currentStep: TubingFillStep = .suspend
-    @Published var isSuspended = false
+    @Published var isSuspended: Bool? = nil
     @Published var isProcessing = false
 
     @Published var loadingSuspend = false
@@ -61,7 +61,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-                    if self.isSuspended, self.currentStep == .suspend {
+                    if self.isSuspended == true, self.currentStep == .suspend {
                         self.currentStep = .enterMode
                     }
                 }
@@ -102,7 +102,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
     }
 
     func enterFillTubingMode() {
-        guard isSuspended else {
+        guard isSuspended == true else {
             failedEnterMode = true
             return
         }

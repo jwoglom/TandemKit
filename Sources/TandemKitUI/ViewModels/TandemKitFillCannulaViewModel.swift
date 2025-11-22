@@ -24,7 +24,7 @@ enum CannulaFillStep: Int {
 
 class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var currentStep: CannulaFillStep = .suspend
-    @Published var isSuspended = false
+    @Published var isSuspended: Bool? = nil
     @Published var isProcessing = false
 
     @Published var primeAmount: Double = 0.3 // Default 0.3 units
@@ -57,7 +57,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
                 DispatchQueue.main.async {
                     self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-                    if self.isSuspended, self.currentStep == .suspend {
+                    if self.isSuspended == true, self.currentStep == .suspend {
                         self.currentStep = .enterAmount
                     }
                 }
@@ -98,7 +98,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     }
 
     func fillCannula() {
-        guard isSuspended else {
+        guard isSuspended == true else {
             failedFill = true
             return
         }
