@@ -6,6 +6,8 @@ import Foundation
 
     /// Pre-loads SwiftECC resources to avoid first-use blocking
     public final class SwiftECCPreloader {
+        private let log = PumpLogger(label: "SwiftECCPreloader")
+
         public static let shared = SwiftECCPreloader()
 
         private var isPreloaded = false
@@ -27,7 +29,7 @@ import Foundation
             lock.unlock()
 
             DispatchQueue.global(qos: .utility).async {
-                print("[SwiftECCPreloader] Starting preload...")
+                self.log.debug("[SwiftECCPreloader] Starting preload...")
                 let start = Date()
 
                 // Initialize the EC256r1 domain (used by JPAKE)
@@ -38,7 +40,7 @@ import Foundation
                 _ = try? domain.multiplyPoint(domain.g, testPriv)
 
                 let elapsed = Date().timeIntervalSince(start)
-                print("[SwiftECCPreloader] Preload completed in \(elapsed)s")
+                self.log.debug("[SwiftECCPreloader] Preload completed in \(elapsed)s")
 
                 self.lock.lock()
                 self.isPreloaded = true

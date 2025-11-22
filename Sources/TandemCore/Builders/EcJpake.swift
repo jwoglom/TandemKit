@@ -4,6 +4,8 @@ import BigInt
 import SwiftECC
 
 public final class EcJpake {
+    private let log = PumpLogger(label: "EcJpake")
+
     public enum Role {
         case client
         case server
@@ -42,13 +44,13 @@ public final class EcJpake {
     }
 
     public init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
-        print("[EcJpake.init] START")
+        log.trace("[EcJpake.init] START")
         self.role = role
-        print("[EcJpake.init] role set")
+        log.trace("[EcJpake.init] role set")
         rand = random
-        print("[EcJpake.init] rand set")
+        log.trace("[EcJpake.init] rand set")
         s = BInt(magnitude: [UInt8](password))
-        print("[EcJpake.init] s (password BInt) set")
+        log.trace("[EcJpake.init] s (password BInt) set")
 
         let domain = Domain.instance(curve: .EC256r1)
         domainInstance = domain
@@ -59,102 +61,87 @@ public final class EcJpake {
         if role == .client {
             myId = Data("client".utf8)
             peerId = Data("server".utf8)
-            print("[EcJpake.init] client IDs set")
+            log.trace("[EcJpake.init] client IDs set")
         } else {
             myId = Data("server".utf8)
             peerId = Data("client".utf8)
-            print("[EcJpake.init] server IDs set")
+            log.trace("[EcJpake.init] server IDs set")
         }
 
-        print("[EcJpake.init] COMPLETE")
+        log.trace("[EcJpake.init] COMPLETE")
     }
 
     public func getRound1() -> Data {
-        print("[EcJpake.getRound1] ENTERED FUNCTION")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] ENTERED FUNCTION")
 
         if let data = myRound1 {
-            print("[EcJpake.getRound1] Returning cached data")
-            fflush(stdout)
+            log.trace("[EcJpake.getRound1] Returning cached data")
             return data
         }
 
-        print("[EcJpake.getRound1] No cache, starting generation")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] No cache, starting generation")
 
         var out = Data()
 
-        print("[EcJpake.getRound1] Generating first key pair")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Generating first key pair")
         let kp1 = genKeyPair(domainGenerator)
         xm1 = kp1.priv
         Xm1 = kp1.pub
-        print("[EcJpake.getRound1] First key pair done")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] First key pair done")
 
-        print("[EcJpake.getRound1] Writing first point")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Writing first point")
         writePoint(Xm1!, to: &out)
-        print("[EcJpake.getRound1] First point written")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] First point written")
 
-        print("[EcJpake.getRound1] Writing first ZKP")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Writing first ZKP")
         writeZkp(&out, base: domainGenerator, x: xm1!, X: Xm1!, id: myId)
-        print("[EcJpake.getRound1] First ZKP done")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] First ZKP done")
 
-        print("[EcJpake.getRound1] Generating second key pair")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Generating second key pair")
         let kp2 = genKeyPair(domainGenerator)
         xm2 = kp2.priv
         Xm2 = kp2.pub
-        print("[EcJpake.getRound1] Second key pair done")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Second key pair done")
 
-        print("[EcJpake.getRound1] Writing second point")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Writing second point")
         writePoint(Xm2!, to: &out)
-        print("[EcJpake.getRound1] Second point written")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Second point written")
 
-        print("[EcJpake.getRound1] Writing second ZKP")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Writing second ZKP")
         writeZkp(&out, base: domainGenerator, x: xm2!, X: Xm2!, id: myId)
-        print("[EcJpake.getRound1] Second ZKP done")
-        fflush(stdout)
+        log.trace("[EcJpake.getRound1] Second ZKP done")
 
         myRound1 = out
         return out
     }
 
     func getRound1_original() -> Data {
-        print("[EcJpake.getRound1] ENTERED FUNCTION")
+        log.trace("[EcJpake.getRound1] ENTERED FUNCTION")
         if let data = myRound1 { return data }
-        print("[EcJpake.getRound1] Starting")
-        print("[EcJpake.getRound1] About to access domain.g...")
+        log.trace("[EcJpake.getRound1] Starting")
+        log.trace("[EcJpake.getRound1] About to access domain.g...")
         let g = domain.g
-        print("[EcJpake.getRound1] domain.g accessed: \(g)")
+        log.trace("[EcJpake.getRound1] domain.g accessed: \(g)")
         var out = Data()
-        print("[EcJpake.getRound1] Generating first key pair")
+        log.trace("[EcJpake.getRound1] Generating first key pair")
         let kp1 = genKeyPair(g)
-        print("[EcJpake.getRound1] First key pair generated")
+        log.trace("[EcJpake.getRound1] First key pair generated")
         xm1 = kp1.priv
         Xm1 = kp1.pub
-        print("[EcJpake.getRound1] Writing first point")
+        log.trace("[EcJpake.getRound1] Writing first point")
         writePoint(Xm1!, to: &out)
-        print("[EcJpake.getRound1] Writing first ZKP")
+        log.trace("[EcJpake.getRound1] Writing first ZKP")
         writeZkp(&out, base: domain.g, x: xm1!, X: Xm1!, id: myId)
-        print("[EcJpake.getRound1] First ZKP written, generating second key pair")
+        log.trace("[EcJpake.getRound1] First ZKP written, generating second key pair")
         let kp2 = genKeyPair(domain.g)
-        print("[EcJpake.getRound1] Second key pair generated")
+        log.trace("[EcJpake.getRound1] Second key pair generated")
         xm2 = kp2.priv
         Xm2 = kp2.pub
-        print("[EcJpake.getRound1] Writing second point")
+        log.trace("[EcJpake.getRound1] Writing second point")
         writePoint(Xm2!, to: &out)
-        print("[EcJpake.getRound1] Writing second ZKP")
+        log.trace("[EcJpake.getRound1] Writing second ZKP")
         writeZkp(&out, base: domain.g, x: xm2!, X: Xm2!, id: myId)
-        print("[EcJpake.getRound1] Second ZKP written, done!")
+        log.trace("[EcJpake.getRound1] Second ZKP written, done!")
         myRound1 = out
         return out
     }
@@ -223,76 +210,55 @@ public final class EcJpake {
     }
 
     private func writeZkp(_ out: inout Data, base: Point, x: BInt, X: Point, id: Data) {
-        print("[writeZkp] START")
-        fflush(stdout)
+        log.trace("[writeZkp] START")
 
-        print("[writeZkp] Calling genKeyPair")
-        fflush(stdout)
+        log.trace("[writeZkp] Calling genKeyPair")
         let kp = genKeyPair(base)
-        print("[writeZkp] genKeyPair returned")
-        fflush(stdout)
+        log.trace("[writeZkp] genKeyPair returned")
 
         let v = kp.priv
         let V = kp.pub
 
-        print("[writeZkp] Calling zkpHash")
-        fflush(stdout)
+        log.trace("[writeZkp] Calling zkpHash")
         let h = zkpHash(base: base, V: V, X: X, id: id)
-        print("[writeZkp] zkpHash returned")
-        fflush(stdout)
+        log.trace("[writeZkp] zkpHash returned")
 
-        print("[writeZkp] Computing r with mod")
-        fflush(stdout)
+        log.trace("[writeZkp] Computing r with mod")
         let r = (v - x * h).mod(domainOrder)
-        print("[writeZkp] Mod complete")
-        fflush(stdout)
+        log.trace("[writeZkp] Mod complete")
 
-        print("[writeZkp] Writing point V")
-        fflush(stdout)
+        log.trace("[writeZkp] Writing point V")
         writePoint(V, to: &out)
-        print("[writeZkp] Writing num r")
-        fflush(stdout)
+        log.trace("[writeZkp] Writing num r")
         writeNum(r, to: &out)
-        print("[writeZkp] DONE")
-        fflush(stdout)
+        log.trace("[writeZkp] DONE")
     }
 
     private func zkpHash(base: Point, V: Point, X: Point, id: Data) -> BInt {
-        print("[zkpHash] START")
-        fflush(stdout)
+        log.trace("[zkpHash] START")
 
         var out = Data()
 
-        print("[zkpHash] Writing base point")
-        fflush(stdout)
+        log.trace("[zkpHash] Writing base point")
         writeZkpHashPoint(base, to: &out)
-        print("[zkpHash] Base point written")
-        fflush(stdout)
+        log.trace("[zkpHash] Base point written")
 
-        print("[zkpHash] Writing V point")
-        fflush(stdout)
+        log.trace("[zkpHash] Writing V point")
         writeZkpHashPoint(V, to: &out)
-        print("[zkpHash] V point written")
-        fflush(stdout)
+        log.trace("[zkpHash] V point written")
 
-        print("[zkpHash] Writing X point")
-        fflush(stdout)
+        log.trace("[zkpHash] Writing X point")
         writeZkpHashPoint(X, to: &out)
-        print("[zkpHash] X point written")
-        fflush(stdout)
+        log.trace("[zkpHash] X point written")
 
-        print("[zkpHash] Appending id")
-        fflush(stdout)
+        log.trace("[zkpHash] Appending id")
         out.appendUInt32BE(UInt32(id.count))
         out.append(id)
-        print("[zkpHash] Computing SHA256")
-        fflush(stdout)
+        log.trace("[zkpHash] Computing SHA256")
         let h = SHA256.hash(out)
-        print("[zkpHash] Computing mod")
-        fflush(stdout)
+        log.trace("[zkpHash] Computing mod")
         let result = BInt(magnitude: [UInt8](h)).mod(domainOrder)
-        print("[zkpHash] DONE")
-        fflush(stdout)
+        log.trace("[zkpHash] DONE")
         return result
     }
 

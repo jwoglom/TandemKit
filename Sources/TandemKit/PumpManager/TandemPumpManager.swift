@@ -98,7 +98,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     public let tandemPump: TandemPump
-    private let log = OSLog(category: "TandemPumpManager")
+    private let log = PumpLogger(label: "TandemPumpManager")
     private let telemetryScheduler = PumpTelemetryScheduler(label: "com.jwoglom.TandemKit.telemetry")
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
@@ -218,7 +218,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func updateTransport(_ transport: PumpMessageTransport?) {
         if let transport = transport {
             let instanceId = ObjectIdentifier(transport as AnyObject)
-            log.info("updateTransport: setting transport instance=%{public}@", String(describing: instanceId))
+            log.info("updateTransport: setting transport instance=\(instanceId)")
         } else {
             log.info("updateTransport: clearing transport (nil)")
         }
@@ -392,6 +392,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public init(state: TandemPumpManagerState) {
+        // Configure logging - hide debug and trace logs
+        PumpLogging.setMinimumLevel(.info)
+
         lockedState = Locked(state)
         lockedStatus = Locked(Self.makeStatus(from: state))
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
@@ -412,6 +415,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return nil
         }
 
+        // Configure logging - hide debug and trace logs
+        PumpLogging.setMinimumLevel(.info)
+
         lockedState = Locked(state)
         lockedStatus = Locked(Self.makeStatus(from: state))
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
@@ -426,7 +432,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         setupTelemetry()
 
-        print("Initialized TandemPumpManager: state=\(state)")
+        log.debug("Initialized TandemPumpManager: state=\(state)")
 
         if state.pumpState?.valid == true {
             // start connection
@@ -1120,7 +1126,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 var tries = 0
                 while peripheral.state != .connected {
                     try await Task.sleep(nanoseconds: 100_000_000)
-                    print("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
+                    log.debug("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
                     tries += 1
 
                     if tries >= 50 {
@@ -1137,7 +1143,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 tries = 0
                 while transportLock.value == nil {
                     try await Task.sleep(nanoseconds: 100_000_000)
-                    print("Waiting for transport to be initialized...")
+                    log.debug("Waiting for transport to be initialized...")
                     tries += 1
 
                     if tries >= 50 {

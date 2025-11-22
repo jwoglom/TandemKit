@@ -17,6 +17,14 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     private let maxHistorySize = 100 // Keep last 100 exchanges
     private let txIdLock = NSLock() // Protects currentTxId from concurrent access
 
+    // Request throttling to prevent BLE write queue saturation
+    private let throttleLock = NSLock()
+    private var lastSendTimestamp: Date?
+    private let minimumDelayBetweenSends: TimeInterval = 0.15 // 150ms between sends
+
+    // Protects requestResponseHistory from concurrent access
+    private let historyLock = NSLock()
+
     public init(peripheralManager: PeripheralManager) {
         self.peripheralManager = peripheralManager
         let instanceId = ObjectIdentifier(self)
@@ -46,6 +54,24 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     public func sendMessage(_ message: Message) throws -> Message {
         let instanceId = ObjectIdentifier(self)
+
+        // Apply request throttling to prevent BLE write queue saturation
+        throttleLock.lock()
+        if let lastSend = lastSendTimestamp {
+            let timeSinceLastSend = Date().timeIntervalSince(lastSend)
+            let remainingDelay = minimumDelayBetweenSends - timeSinceLastSend
+
+            if remainingDelay > 0 {
+                transportLogger.debug(
+                    "[PeripheralManagerTransport] Throttling: waiting \(String(format: "%.0f", remainingDelay * 1000))ms before sending \(String(describing: type(of: message)))"
+                )
+                throttleLock.unlock()
+                Thread.sleep(forTimeInterval: remainingDelay)
+                throttleLock.lock()
+            }
+        }
+        lastSendTimestamp = Date()
+        throttleLock.unlock()
 
         // Atomically assign txId and create wrapper (protected by lock)
         txIdLock.lock()
@@ -205,14 +231,16 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             responseCargo
         )
 
-        // Add completed pair to history
+        // Add completed pair to history (thread-safe)
         let completedPair = historyEntry.withResponse(finalMessage)
+        historyLock.lock()
         requestResponseHistory.append(completedPair)
 
         // Trim history if needed
         if requestResponseHistory.count > maxHistorySize {
             requestResponseHistory.removeFirst(requestResponseHistory.count - maxHistorySize)
         }
+        historyLock.unlock()
 
         return finalMessage
     }
@@ -221,11 +249,16 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     /// Get all request-response pairs in history
     public func getHistory() -> [RequestResponsePair] {
-        requestResponseHistory
+        historyLock.lock()
+        defer { historyLock.unlock() }
+        return requestResponseHistory
     }
 
     /// Get the request that corresponds to a specific response
     public func getRequestForResponse(_ response: Message) -> Message? {
+        historyLock.lock()
+        defer { historyLock.unlock() }
+
         // First try to find by type association
         if let requestType = MessageRegistry.requestMetadata(for: response)?.type {
             // Find most recent matching request in history
@@ -243,6 +276,9 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     /// Get the response that corresponds to a specific request
     public func getResponseForRequest(_ request: Message) -> Message? {
+        historyLock.lock()
+        defer { historyLock.unlock() }
+
         // Find in history by request instance or type
         for pair in requestResponseHistory.reversed() {
             if type(of: pair.request) == type(of: request) {
@@ -254,16 +290,22 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
     /// Get all pairs matching a specific request type
     public func getPairsForRequestType(_ requestType: Message.Type) -> [RequestResponsePair] {
-        requestResponseHistory.filter { type(of: $0.request) == requestType }
+        historyLock.lock()
+        defer { historyLock.unlock() }
+        return requestResponseHistory.filter { type(of: $0.request) == requestType }
     }
 
     /// Get all pairs matching a specific TxId
     public func getPairForTxId(_ txId: UInt8) -> RequestResponsePair? {
-        requestResponseHistory.first { $0.txId == txId }
+        historyLock.lock()
+        defer { historyLock.unlock() }
+        return requestResponseHistory.first { $0.txId == txId }
     }
 
     /// Clear the request-response history
     public func clearHistory() {
+        historyLock.lock()
+        defer { historyLock.unlock() }
         requestResponseHistory.removeAll()
     }
 }

@@ -1,5 +1,7 @@
 import Foundation
 
+private let pumpChallengeLog = PumpLogger(label: "PumpChallengeRequestBuilder")
+
 public enum PumpChallengeRequestBuilder {
     #if DEBUG
         static var testJpakeHandler: ((Jpake1aResponse, String) throws -> Message)?
@@ -61,7 +63,7 @@ public enum PumpChallengeRequestBuilder {
 
             return nextMessage
         #else
-            print("<!> ECJPAKE not available, Tandem pairing will not work!!")
+            pumpChallengeLog.error("ECJPAKE not available, Tandem pairing will not work!!")
             throw InvalidPairingCodeFormat("ECJPAKE not supported on this platform")
         #endif
     }
