@@ -83,6 +83,10 @@
 		3EE345272EC91299008A07F6 /* Dates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444D2EC91299008A07F6 /* Dates.swift */; };
 		3EE345282EC91299008A07F6 /* PumpChallengeRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */; };
 		3EE345292EC91299008A07F6 /* JpakeAuthBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */; };
+		A7AFA1288F9755B399515588 /* JpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A0AC6B2C666A4CB33297CA6 /* JpakeProvider.swift */; };
+		7598FB77F5DE38B574633560 /* SwiftECCJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BC339F3B6E157F65F12E846 /* SwiftECCJpakeProvider.swift */; };
+		7F63FDA87946CAF4FA19B4F8 /* MbedTLSJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E242857D78AF62F32FF62B /* MbedTLSJpakeProvider.swift */; };
+		C6BF6661B88419CAA81257D3 /* MbedTLSJpake.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF893B2C367F759445DB5E7F /* MbedTLSJpake.swift */; };
 		3EE3452A2EC91299008A07F6 /* PairingCodeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345072EC91299008A07F6 /* PairingCodeType.swift */; };
 		3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345112EC91299008A07F6 /* NonexistentErrorRequest.swift */; };
 		3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344C22EC91299008A07F6 /* PumpVersion.swift */; };
@@ -448,6 +452,10 @@
 		3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsulinDeliveryProfileRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOBRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeAuthBuilder.swift; sourceTree = "<group>"; };
+		5A0AC6B2C666A4CB33297CA6 /* JpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeProvider.swift; sourceTree = "<group>"; };
+		1BC339F3B6E157F65F12E846 /* SwiftECCJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftECCJpakeProvider.swift; sourceTree = "<group>"; };
+		A6E242857D78AF62F32FF62B /* MbedTLSJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MbedTLSJpakeProvider.swift; sourceTree = "<group>"; };
+		CF893B2C367F759445DB5E7F /* MbedTLSJpake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MbedTLSJpake.swift; sourceTree = "<group>"; };
 		3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastBolusStatusRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpChallengeRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFeaturesRequestBuilder.swift; sourceTree = "<group>"; };
@@ -878,6 +886,10 @@
 				3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */,
 				3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */,
 				3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */,
+				5A0AC6B2C666A4CB33297CA6 /* JpakeProvider.swift */,
+				1BC339F3B6E157F65F12E846 /* SwiftECCJpakeProvider.swift */,
+				A6E242857D78AF62F32FF62B /* MbedTLSJpakeProvider.swift */,
+				CF893B2C367F759445DB5E7F /* MbedTLSJpake.swift */,
 				3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */,
 				3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */,
 				3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */,
@@ -1539,6 +1551,10 @@
 				3EE345272EC91299008A07F6 /* Dates.swift in Sources */,
 				3EE345282EC91299008A07F6 /* PumpChallengeRequestBuilder.swift in Sources */,
 				3EE345292EC91299008A07F6 /* JpakeAuthBuilder.swift in Sources */,
+				A7AFA1288F9755B399515588 /* JpakeProvider.swift in Sources */,
+				7598FB77F5DE38B574633560 /* SwiftECCJpakeProvider.swift in Sources */,
+				7F63FDA87946CAF4FA19B4F8 /* MbedTLSJpakeProvider.swift in Sources */,
+				C6BF6661B88419CAA81257D3 /* MbedTLSJpake.swift in Sources */,
 				3EE3452A2EC91299008A07F6 /* PairingCodeType.swift in Sources */,
 				3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */,
 				3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */,
