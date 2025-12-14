@@ -10,7 +10,7 @@ on:
       trio_repo:
         description: "Repo to build (must contain TandemKit submodule at path TandemKit)"
         required: false
-        default: "bastiaanv2/Trio-TandemKit"
+        default: "jwoglom/Trio-tandem"
       trio_ref:
         description: "Git ref (branch/tag/SHA) for trio_repo"
         required: false
@@ -20,7 +20,7 @@ jobs:
   build-trio:
     runs-on: macos-latest
     env:
-      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'bastiaanv2/Trio-TandemKit' }}
+      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
       TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
       DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
     steps:
