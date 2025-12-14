@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, re, subprocess
+          import json, os, re, subprocess
           
           def runtime_sort_key(rt: str):
             # rt looks like: com.apple.CoreSimulator.SimRuntime.iOS-18-6
@@ -73,7 +73,7 @@ jobs:
           name, udid, rt = preferred
           print(f"Selected simulator: {name} ({udid}) [{rt}]")
           
-          with open("${GITHUB_ENV}", "a") as f:
+          with open(os.environ["GITHUB_ENV"], "a") as f:
             f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
           PY
 
