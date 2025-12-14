@@ -250,3 +250,5 @@ public class PumpCommSession {
         delegate?.pumpCommSession(self, didChange: state)
         logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE confirm)")
     }
+
+}
