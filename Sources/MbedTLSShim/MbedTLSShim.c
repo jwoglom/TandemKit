@@ -21,6 +21,19 @@ static void mbedtls_shim_secure_free(void *ptr, size_t len) {
     free(ptr);
 }
 
+static int mbedtls_shim_random(void *p_rng, unsigned char *output, size_t length) {
+    if (p_rng == NULL || output == NULL) {
+        return -1;
+    }
+
+    mbedtls_shim_jpake_client *client = (mbedtls_shim_jpake_client *)p_rng;
+    if (client->rng != NULL) {
+        return client->rng(client->rng_context, output, length);
+    }
+
+    return mbedtls_ctr_drbg_random(&client->drbg, output, length);
+}
+
 static int mbedtls_shim_seed_rng(mbedtls_shim_jpake_client *client) {
     mbedtls_entropy_init(&client->entropy);
     mbedtls_ctr_drbg_init(&client->drbg);
@@ -31,6 +44,8 @@ static int mbedtls_shim_seed_rng(mbedtls_shim_jpake_client *client) {
 
 static int mbedtls_shim_setup_client(mbedtls_shim_jpake_client *client, const uint8_t *password, size_t password_len) {
     client->is_ready = 0;
+    client->rng = NULL;
+    client->rng_context = NULL;
     mbedtls_ecjpake_init(&client->ctx);
     int ret = mbedtls_shim_seed_rng(client);
     if (ret != 0) {
@@ -39,7 +54,7 @@ static int mbedtls_shim_setup_client(mbedtls_shim_jpake_client *client, const ui
         return ret;
     }
 
-    ret = mbedtls_ecjpake_setup(&client->ctx, MBEDTLS_MD_SHA256, MBEDTLS_ECP_DP_SECP256R1, MBEDTLS_ECJPAKE_CLIENT, password, password_len, mbedtls_ctr_drbg_random, &client->drbg);
+    ret = mbedtls_ecjpake_setup(&client->ctx, MBEDTLS_MD_SHA256, MBEDTLS_ECP_DP_SECP256R1, MBEDTLS_ECJPAKE_CLIENT, password, password_len, mbedtls_shim_random, client);
     if (ret != 0) {
         // Avoid leaking partially-initialized state when Swift init throws.
         mbedtls_shim_jpake_free(client);
@@ -155,6 +170,15 @@ int mbedtls_shim_jpake_derive(mbedtls_shim_jpake_client *client, mbedtls_shim_bu
     return mbedtls_shim_write_with_grow(mbedtls_ecjpake_derive_secret, client, buffer, 64, 4096);
 }
 
+void mbedtls_shim_jpake_set_rng(mbedtls_shim_jpake_client *client, mbedtls_shim_rng_callback rng, void *context) {
+    if (client == NULL) {
+        return;
+    }
+
+    client->rng = rng;
+    client->rng_context = context;
+}
+
 void mbedtls_shim_buffer_free(mbedtls_shim_buffer *buffer) {
     if (buffer == NULL || buffer->bytes == NULL) {
         return;
@@ -172,5 +196,7 @@ void mbedtls_shim_jpake_free(mbedtls_shim_jpake_client *client) {
     mbedtls_ecjpake_free(&client->ctx);
     mbedtls_ctr_drbg_free(&client->drbg);
     mbedtls_entropy_free(&client->entropy);
+    client->rng = NULL;
+    client->rng_context = NULL;
     client->is_ready = 0;
 }
