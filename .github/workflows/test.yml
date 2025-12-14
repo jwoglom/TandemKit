@@ -34,6 +34,14 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Ensure TRIO_REPO_TOKEN is available (required for private Trio repo)
+        if: ${{ env.TRIO_REPO == 'jwoglom/Trio-tandem' && secrets.TRIO_REPO_TOKEN == '' }}
+        run: |
+          echo "Missing required secret TRIO_REPO_TOKEN."
+          echo "This is expected for forked PRs (secrets are not provided)."
+          echo "Fix: run CI from a branch in the main repo, or enable secrets for fork PRs in repo Settings -> Actions."
+          exit 1
+
       - name: Checkout Trio app repository (default branch, with submodules)
         if: env.TRIO_REF == ''
         uses: actions/checkout@v4
@@ -42,7 +50,7 @@ jobs:
           path: trio
           submodules: recursive
           fetch-depth: 1
-          token: ${{ secrets.TRIO_REPO_TOKEN || github.token }}
+          token: ${{ secrets.TRIO_REPO_TOKEN }}
 
       - name: Checkout Trio app repository (specific ref, with submodules)
         if: env.TRIO_REF != ''
@@ -53,7 +61,7 @@ jobs:
           path: trio
           submodules: recursive
           fetch-depth: 1
-          token: ${{ secrets.TRIO_REPO_TOKEN || github.token }}
+          token: ${{ secrets.TRIO_REPO_TOKEN }}
 
       - name: Replace Trio TandemKit submodule with TandemKit under test
         run: |
