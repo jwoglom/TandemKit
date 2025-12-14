@@ -10,7 +10,7 @@ on:
       trio_repo:
         description: "Repo to test (must contain TandemKit submodule at path TandemKit)"
         required: false
-        default: "bastiaanv2/Trio-TandemKit"
+        default: "jwoglom/Trio-tandem"
       trio_ref:
         description: "Git ref (branch/tag/SHA) for trio_repo"
         required: false
@@ -20,9 +20,9 @@ jobs:
   test-trio:
     runs-on: macos-latest
     env:
-      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'bastiaanv2/Trio-TandemKit' }}
+      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
       TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
-      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      DERIVED_DATA_PATH: DerivedData
     steps:
       - name: Checkout TandemKit (this repo)
         uses: actions/checkout@v4
@@ -101,9 +101,9 @@ jobs:
             -configuration Debug \
             -destination "platform=iOS Simulator,name=iPhone 15" \
             -derivedDataPath "${DERIVED_DATA_PATH}" \
-            -resultBundlePath "${RUNNER_TEMP}/TrioTests.xcresult" \
+            -resultBundlePath "TrioTests.xcresult" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "${RUNNER_TEMP}/xcodebuild-test.log"
+            2>&1 | tee "xcodebuild-test.log"
 
       - name: Upload test logs/results (on failure)
         if: failure()
@@ -111,5 +111,5 @@ jobs:
         with:
           name: trio-test-artifacts
           path: |
-            ${{ runner.temp }}/xcodebuild-test.log
-            ${{ runner.temp }}/TrioTests.xcresult
+            xcodebuild-test.log
+            TrioTests.xcresult
