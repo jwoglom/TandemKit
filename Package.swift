@@ -40,6 +40,20 @@ let package = Package(
     ],
     targets: {
         var targets: [Target] = [
+            // Optional: Mbed TLS headers and shim are only built when the underlying library is
+            // available in the build environment. See the README for the linker flags needed to
+            // provide vendored sources or prebuilt binaries to SwiftPM.
+            .target(
+                name: "MbedTLS",
+                path: "Sources/MbedTLS",
+                publicHeadersPath: "include"
+            ),
+            .target(
+                name: "MbedTLSShim",
+                dependencies: ["MbedTLS"],
+                path: "Sources/MbedTLSShim",
+                publicHeadersPath: "include"
+            ),
             .target(
                 name: "Bluetooth",
                 path: "Sources/Bluetooth"
@@ -58,6 +72,7 @@ let package = Package(
                     .product(name: "BigInt", package: "BigInt"),
                     .product(name: "Logging", package: "swift-log"),
                     .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
+                    // Add "MbedTLSShim" here when providing Mbed TLS headers and binaries to SwiftPM.
                 ],
                 path: "Sources/TandemCore"
             ),
