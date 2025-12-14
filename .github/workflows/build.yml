@@ -22,7 +22,7 @@ jobs:
     env:
       TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
       TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
-      DERIVED_DATA_PATH: ${{ runner.temp }}/DerivedData
+      DERIVED_DATA_PATH: DerivedData
     steps:
       # Checkout TandemKit under test into a subfolder so we can also checkout Trio.
       - name: Checkout TandemKit (this repo)
@@ -105,11 +105,11 @@ jobs:
             -destination "platform=iOS Simulator,name=iPhone 15" \
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "${RUNNER_TEMP}/xcodebuild-build.log"
+            2>&1 | tee "xcodebuild-build.log"
 
       - name: Upload xcodebuild log (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-build.log
-          path: ${{ runner.temp }}/xcodebuild-build.log
+          path: xcodebuild-build.log
