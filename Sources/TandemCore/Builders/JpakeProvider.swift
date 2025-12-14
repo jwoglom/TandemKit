@@ -44,14 +44,22 @@ public struct DefaultJpakeProviderFactory: JpakeProviderFactory {
         derivedSecret: Data?,
         random: @escaping JpakeProvider.RandomBytesGenerator
     ) -> JpakeProvider? {
+        #if canImport(MbedTLS) && canImport(MbedTLSShim)
+            if let provider = try? MbedTLSJpakeProvider(
+                pairingCode: pairingCode,
+                derivedSecret: derivedSecret,
+                rand: random
+            ) {
+                return provider
+            }
+        #endif
+
         #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
             return SwiftECCJpakeProvider(
                 pairingCode: pairingCode,
                 derivedSecret: derivedSecret,
                 rand: random
             )
-        #elseif canImport(MbedTLS)
-            return nil
         #else
             return nil
         #endif
