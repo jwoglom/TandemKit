@@ -42,30 +42,35 @@ public enum PumpChallengeRequestBuilder {
     }
 
     private static func createV2(challengeResponse: Jpake1aResponse, pairingCode: String) throws -> Message {
-        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-            #if DEBUG
-                if let handler = testJpakeHandler {
-                    return try handler(challengeResponse, pairingCode)
-                }
-            #endif
-            let sanitizedCode = try processPairingCode(pairingCode, type: .short6Char)
-            let builder = JpakeAuthBuilder.initializeWithPairingCode(sanitizedCode)
-
-            guard builder.sentMessages.last is Jpake1aRequest else {
-                throw InvalidPairingCodeFormat("JPake session not initialized with client round 1 request")
+        #if DEBUG
+            if let handler = testJpakeHandler {
+                return try handler(challengeResponse, pairingCode)
             }
+        #endif
+        let sanitizedCode = try processPairingCode(pairingCode, type: .short6Char)
 
-            builder.processResponse(challengeResponse)
-
-            guard let nextMessage = builder.nextRequest() else {
-                throw InvalidPairingCodeFormat("JPake session could not advance after Round 1A response")
-            }
-
-            return nextMessage
-        #else
+        guard let provider = JpakeAuthBuilder.providerFactory.make(
+            pairingCode: sanitizedCode,
+            derivedSecret: nil,
+            random: JpakeAuthBuilder.defaultRandom
+        ) else {
             pumpChallengeLog.error("ECJPAKE not available, Tandem pairing will not work!!")
             throw InvalidPairingCodeFormat("ECJPAKE not supported on this platform")
-        #endif
+        }
+
+        let builder = JpakeAuthBuilder.initializeWithPairingCode(sanitizedCode, provider: provider)
+
+        guard builder.sentMessages.last is Jpake1aRequest else {
+            throw InvalidPairingCodeFormat("JPake session not initialized with client round 1 request")
+        }
+
+        builder.processResponse(challengeResponse)
+
+        guard let nextMessage = builder.nextRequest() else {
+            throw InvalidPairingCodeFormat("JPake session could not advance after Round 1A response")
+        }
+
+        return nextMessage
     }
 
     public class InvalidPairingCodeFormat: Error, @unchecked Sendable {
