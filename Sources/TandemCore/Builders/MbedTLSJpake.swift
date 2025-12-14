@@ -11,8 +11,9 @@ public enum MbedTLSJpakeError: Error {
 
 public final class MbedTLSJpakeAdapter {
     private var client = mbedtls_shim_jpake_client()
+    private var rngContext: Unmanaged<RngBox>?
 
-    public init(password: Data) throws {
+    public init(password: Data, random: @escaping JpakeProvider.RandomBytesGenerator) throws {
         guard !password.isEmpty else {
             throw MbedTLSJpakeError.missingPassword
         }
@@ -25,9 +26,16 @@ public final class MbedTLSJpakeAdapter {
         guard status == 0 else {
             throw MbedTLSJpakeError.initializationFailed(status)
         }
+
+        let box = RngBox(random)
+        rngContext = Unmanaged.passRetained(box)
+        mbedtls_shim_jpake_set_rng(&client, MbedTLSJpakeAdapter.rngCallback, rngContext?.toOpaque())
     }
 
     deinit {
+        if let rngContext {
+            rngContext.release()
+        }
         mbedtls_shim_jpake_free(&client)
     }
 
@@ -77,6 +85,30 @@ public final class MbedTLSJpakeAdapter {
 
         guard status == 0 else {
             throw MbedTLSJpakeError.operationFailed(status)
+        }
+    }
+
+    private static let rngCallback: @convention(c) (UnsafeMutableRawPointer?, UnsafeMutablePointer<UInt8>?, Int) -> Int32 = {
+        context, output, length in
+        guard let context, let output, length > 0 else {
+            return -1
+        }
+
+        let box = Unmanaged<RngBox>.fromOpaque(context).takeUnretainedValue()
+        let bytes = box.generator(length)
+        guard bytes.count >= length else {
+            return -1
+        }
+
+        bytes.copyBytes(to: output, count: length)
+        return 0
+    }
+
+    private final class RngBox {
+        let generator: JpakeProvider.RandomBytesGenerator
+
+        init(_ generator: @escaping JpakeProvider.RandomBytesGenerator) {
+            self.generator = generator
         }
     }
 }
