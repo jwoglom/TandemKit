@@ -29,6 +29,7 @@
 		1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */; };
 		1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA94F2EC8FD0800DF080F /* PumpCommFaultEvent.swift */; };
 		1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9562EC8FD0800DF080F /* TandemPump.swift */; };
+		1A2FA9BB2EC8FD0800DF080F /* SimpleReservoirValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9AA2EC8FD0800DF080F /* SimpleReservoirValue.swift */; };
 		1A2FA96E2EC8FD0800DF080F /* PeripheralManagerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA94C2EC8FD0800DF080F /* PeripheralManagerTransport.swift */; };
 		1A2FA96F2EC8FD0800DF080F /* PumpCommsError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9512EC8FD0800DF080F /* PumpCommsError.swift */; };
 		1A2FA9702EC8FD0800DF080F /* PumpCommRetryPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9502EC8FD0800DF080F /* PumpCommRetryPolicy.swift */; };
@@ -83,6 +84,10 @@
 		3EE345272EC91299008A07F6 /* Dates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444D2EC91299008A07F6 /* Dates.swift */; };
 		3EE345282EC91299008A07F6 /* PumpChallengeRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */; };
 		3EE345292EC91299008A07F6 /* JpakeAuthBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */; };
+		3EE346AB2EC91299008A07F6 /* JpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */; };
+		3EE346AF2EC91299008A07F6 /* MbedTLSJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */; };
+		3EE346B12EC91299008A07F6 /* MbedTLSJpake.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346B02EC91299008A07F6 /* MbedTLSJpake.swift */; };
+		3EE346AD2EC91299008A07F6 /* SwiftECCJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */; };
 		3EE3452A2EC91299008A07F6 /* PairingCodeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345072EC91299008A07F6 /* PairingCodeType.swift */; };
 		3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345112EC91299008A07F6 /* NonexistentErrorRequest.swift */; };
 		3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344C22EC91299008A07F6 /* PumpVersion.swift */; };
@@ -285,7 +290,6 @@
 		3EE346002EC9132D008A07F6 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE346042EC91332008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
 		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */; };
 		3EE346102EC91B3D008A07F6 /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
 		3EE346172EC92751008A07F6 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346162EC9274E008A07F6 /* Bundle.swift */; };
 		3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */; };
@@ -396,6 +400,7 @@
 		1A2FA9542EC8FD0800DF080F /* PumpProtocolError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpProtocolError.swift; sourceTree = "<group>"; };
 		1A2FA9552EC8FD0800DF080F /* PumpState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpState.swift; sourceTree = "<group>"; };
 		1A2FA9562EC8FD0800DF080F /* TandemPump.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPump.swift; sourceTree = "<group>"; };
+		1A2FA9AA2EC8FD0800DF080F /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
 		1A2FA9572EC8FD0800DF080F /* TandemPumpManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpManager.swift; sourceTree = "<group>"; };
 		1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerSettings.swift; sourceTree = "<group>"; };
 		1A2FA9592EC8FD0800DF080F /* TandemPumpManagerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerState.swift; sourceTree = "<group>"; };
@@ -448,6 +453,10 @@
 		3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsulinDeliveryProfileRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOBRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeAuthBuilder.swift; sourceTree = "<group>"; };
+		3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeProvider.swift; sourceTree = "<group>"; };
+		3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MbedTLSJpakeProvider.swift; sourceTree = "<group>"; };
+		3EE346B02EC91299008A07F6 /* MbedTLSJpake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MbedTLSJpake.swift; sourceTree = "<group>"; };
+		3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftECCJpakeProvider.swift; sourceTree = "<group>"; };
 		3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastBolusStatusRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpChallengeRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFeaturesRequestBuilder.swift; sourceTree = "<group>"; };
@@ -653,7 +662,6 @@
 		3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TandemKitPlugin.h; sourceTree = "<group>"; };
 		3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPlugin.swift; sourceTree = "<group>"; };
 		3EE345F02EC912F9008A07F6 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.0.sdk/System/Library/Frameworks/HealthKit.framework; sourceTree = DEVELOPER_DIR; };
-		3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
 		3EE346162EC9274E008A07F6 /* Bundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bundle.swift; sourceTree = "<group>"; };
 		3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSetupView.swift; sourceTree = "<group>"; };
 		3EE346192EC92801008A07F6 /* TandemKitScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitScanView.swift; sourceTree = "<group>"; };
@@ -753,6 +761,7 @@
 				1A2FA9542EC8FD0800DF080F /* PumpProtocolError.swift */,
 				1A2FA9552EC8FD0800DF080F /* PumpState.swift */,
 				1A2FA9562EC8FD0800DF080F /* TandemPump.swift */,
+				1A2FA9AA2EC8FD0800DF080F /* SimpleReservoirValue.swift */,
 				1A2FA9572EC8FD0800DF080F /* TandemPumpManager.swift */,
 				1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */,
 				1A2FA9592EC8FD0800DF080F /* TandemPumpManagerState.swift */,
@@ -878,6 +887,10 @@
 				3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */,
 				3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */,
 				3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */,
+				3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */,
+				3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */,
+				3EE346B02EC91299008A07F6 /* MbedTLSJpake.swift */,
+				3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */,
 				3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */,
 				3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */,
 				3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */,
@@ -900,7 +913,6 @@
 		3EE344542EC91299008A07F6 /* Common */ = {
 			isa = PBXGroup;
 			children = (
-				3EE346082EC915A8008A07F6 /* SimpleReservoirValue.swift */,
 				3EE3444A2EC91299008A07F6 /* Extensions */,
 				3EE3444B2EC91299008A07F6 /* Bytes.swift */,
 				3EE3444C2EC91299008A07F6 /* CRC16.swift */,
@@ -1492,6 +1504,7 @@
 				1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */,
 				1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */,
 				1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */,
+				1A2FA9BB2EC8FD0800DF080F /* SimpleReservoirValue.swift in Sources */,
 				1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */,
 				16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */,
 				D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */,
@@ -1539,6 +1552,10 @@
 				3EE345272EC91299008A07F6 /* Dates.swift in Sources */,
 				3EE345282EC91299008A07F6 /* PumpChallengeRequestBuilder.swift in Sources */,
 				3EE345292EC91299008A07F6 /* JpakeAuthBuilder.swift in Sources */,
+				3EE346AB2EC91299008A07F6 /* JpakeProvider.swift in Sources */,
+				3EE346AF2EC91299008A07F6 /* MbedTLSJpakeProvider.swift in Sources */,
+				3EE346B12EC91299008A07F6 /* MbedTLSJpake.swift in Sources */,
+				3EE346AD2EC91299008A07F6 /* SwiftECCJpakeProvider.swift in Sources */,
 				3EE3452A2EC91299008A07F6 /* PairingCodeType.swift in Sources */,
 				3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */,
 				3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */,
@@ -1660,7 +1677,6 @@
 				3EE345A02EC91299008A07F6 /* CannulaFilledHistoryLog.swift in Sources */,
 				3EE345A12EC91299008A07F6 /* BasalIQAlertInfo.swift in Sources */,
 				3EE345A22EC91299008A07F6 /* BasalDeliveryHistoryLog.swift in Sources */,
-				3EE346092EC915AD008A07F6 /* SimpleReservoirValue.swift in Sources */,
 				3EE345A32EC91299008A07F6 /* DismissNotification.swift in Sources */,
 				3EE345A42EC91299008A07F6 /* CRC16.swift in Sources */,
 				3EE345A52EC91299008A07F6 /* CGMOORAlertSettings.swift in Sources */,

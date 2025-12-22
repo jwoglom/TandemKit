@@ -59,7 +59,7 @@ public class JpakeAuthBuilder {
     }
 
     public static func initializeWithDerivedSecret(
-        pairingCode: String,
+        pairingCode _: String,
         derivedSecret: Data,
         provider: JpakeProvider
     ) -> JpakeAuthBuilder {

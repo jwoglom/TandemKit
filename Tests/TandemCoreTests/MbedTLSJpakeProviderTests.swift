@@ -45,12 +45,12 @@ import XCTest
     }
 
     private final class DeterministicRandom {
-        private var state: UInt64 = 0x0123_4567_89ab_cdef
+        private var state: UInt64 = 0x0123_4567_89AB_CDEF
 
         func next(count: Int) -> Data {
             var output = Data(count: count)
             for index in 0 ..< count {
-                state = state &* 6364136223846793005 &+ 1
+                state = state &* 6_364_136_223_846_793_005 &+ 1
                 output[index] = UInt8(truncatingIfNeeded: state >> 24)
             }
             return output

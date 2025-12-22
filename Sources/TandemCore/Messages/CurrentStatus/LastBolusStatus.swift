@@ -95,4 +95,3 @@ public class LastBolusStatusResponse: Message, LastBolusStatusAbstractResponse {
         "LastBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), unknown=\(unknown.hexadecimalString), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus?.rawValue ?? -1), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration))"
     }
 }
-

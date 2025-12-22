@@ -1885,11 +1885,10 @@ extension TandemPumpManager: TandemPumpDelegate {
         advertisementData: [String: Any]?,
         rssi: NSNumber
     ) {
-        log.info(
-            "[tandemPump didDiscoverDevice] inScanningMode=%{public}@ peripheral=%{public}@",
-            String(describing: inScanningMode.value),
-            String(describing: peripheral)
-        )
+        log
+            .info(
+                "[tandemPump didDiscoverDevice] inScanningMode=\(String(describing: inScanningMode.value)) peripheral=\(String(describing: peripheral))"
+            )
         if inScanningMode.value == true {
             let device = TandemPumpScan(
                 bleIdentifier: peripheral.identifier.uuidString,
@@ -1901,10 +1900,10 @@ extension TandemPumpManager: TandemPumpDelegate {
             notifyScanDeviceDidChange(device)
         } else if inScanningMode.value == false {
             configureDeliveryActions(true)
-            log.info(
-                "[tandemPump didDiscoverDevice] expected pumpComm.pumpPeripheralUuid=%s",
-                String(describing: pumpComm.pumpPeripheralUuid)
-            )
+            log
+                .info(
+                    "[tandemPump didDiscoverDevice] expected pumpComm.pumpPeripheralUuid=\(String(describing: pumpComm.pumpPeripheralUuid))"
+                )
             if peripheral.identifier.uuidString == pumpComm.pumpPeripheralUuid {
                 log.info("[tandemPump didDiscoverDevice] set targetPeripheralIdentifier")
                 targetPeripheralIdentifier = peripheral.identifier
@@ -1916,7 +1915,7 @@ extension TandemPumpManager: TandemPumpDelegate {
         _: TandemPump,
         didDisconnectWithError error: Error?
     ) {
-        log.error("Pump disconnected with error: %{public}@", String(describing: error))
+        log.error("Pump disconnected with error: \(String(describing: error))")
 
         if let manager = activePeripheralManager {
             notificationRouter.stop(with: manager)
@@ -2041,10 +2040,10 @@ private extension TandemPumpManager {
             )
 
             if response.status != 0 {
-                log.error("Failed to release bolus permission for id %{public}u with status %{public}d", bolusId, response.status)
+                log.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
             }
         } catch {
-            log.error("Error releasing bolus permission for id %{public}u: %{public}@", bolusId, String(describing: error))
+            log.error("Error releasing bolus permission for id \(bolusId): \(String(describing: error))")
         }
     }
 }

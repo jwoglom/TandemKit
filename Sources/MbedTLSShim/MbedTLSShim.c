@@ -54,7 +54,8 @@ static int mbedtls_shim_setup_client(mbedtls_shim_jpake_client *client, const ui
         return ret;
     }
 
-    ret = mbedtls_ecjpake_setup(&client->ctx, MBEDTLS_MD_SHA256, MBEDTLS_ECP_DP_SECP256R1, MBEDTLS_ECJPAKE_CLIENT, password, password_len, mbedtls_shim_random, client);
+    // MbedTLS 3.x API: role, hash, curve, secret, len (RNG set separately)
+    ret = mbedtls_ecjpake_setup(&client->ctx, MBEDTLS_ECJPAKE_CLIENT, MBEDTLS_MD_SHA256, MBEDTLS_ECP_DP_SECP256R1, password, password_len);
     if (ret != 0) {
         // Avoid leaking partially-initialized state when Swift init throws.
         mbedtls_shim_jpake_free(client);

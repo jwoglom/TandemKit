@@ -97,4 +97,3 @@ public class LastBolusStatusV2Response: Message, LastBolusStatusAbstractResponse
         "LastBolusStatusV2Response(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus?.rawValue ?? -1), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration), requestedVolume=\(requestedVolume))"
     }
 }
-
