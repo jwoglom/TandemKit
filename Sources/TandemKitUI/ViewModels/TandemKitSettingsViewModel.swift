@@ -20,6 +20,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var notificationCount: Int = 0
+    @Published var autoAcknowledgeBasalAlerts: Bool = false
 
     private let notificationBundle = NotificationBundle()
     private var pendingRefreshOnReconnect = false
@@ -27,6 +28,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
+        self.autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
         refreshPumpStatus()
@@ -202,6 +204,11 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.isUpdatingPumpState = false
             }
         }
+    }
+
+    func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
+        pumpManager?.configureAutoAcknowledgeBasalAlerts(enabled)
+        autoAcknowledgeBasalAlerts = enabled
     }
 
     var suspendResumeText: String? {
