@@ -303,4 +303,133 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
             XCTAssertEqual(request.idpStatusId, 31, "All requests should have mask = 31")
         }
     }
+
+    func testSyncBasalRateScheduleOnlyModifiesChangedSegments() throws {
+        let pumpState = PumpState(address: 0x0910_1112)
+        let manager = makeManager(pumpState: pumpState)
+        let peripheral = MockPeripheralManager()
+        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
+        let mockComm = MockPumpComm(pumpState: pumpState)
+        manager.setPumpCommForTesting(mockComm)
+        manager.updateTransport(transport)
+
+        // User changes only the first segment from 0.8 to 0.81
+        // The other segments remain the same
+        let items = [
+            RepeatingScheduleValue(startTime: 0, value: 0.81),     // Changed from 0.8
+            RepeatingScheduleValue(startTime: 3600, value: 1.2),   // Unchanged
+            RepeatingScheduleValue(startTime: 7200, value: 0.9)    // Unchanged
+        ]
+
+        // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
+        peripheral.enqueueResponse(
+            for: ProfileStatusRequest.self,
+            response: ProfileStatusResponse(
+                numberOfProfiles: 1,
+                idpSlot0Id: 10,
+                idpSlot1Id: 0,
+                idpSlot2Id: 0,
+                idpSlot3Id: 0,
+                idpSlot4Id: 0,
+                idpSlot5Id: 0,
+                activeSegmentIndex: 0
+            )
+        )
+
+        // Step 2: Mock IDPSettingsRequest -> IDPSettingsResponse (3 segments exist)
+        peripheral.enqueueResponse(
+            for: IDPSettingsRequest.self,
+            response: IDPSettingsResponse(
+                idpId: 10,
+                profileName: "Test",
+                numberOfProfileSegments: 3,
+                activeProfile: 1,
+                carbEntry: 1,
+                totalDailyInsulin: 0,
+                profileInsulinDuration: 180
+            )
+        )
+
+        // Step 3: Mock IDPSegmentRequest -> IDPSegmentResponse for existing segments
+        // Segment 0: 0.8 u/hr at 0 min
+        peripheral.enqueueResponse(
+            for: IDPSegmentRequest.self,
+            response: IDPSegmentResponse(
+                idpId: 10,
+                segmentIndex: 0,
+                profileStartTime: 0,
+                profileBasalRate: 800,  // Will change to 810
+                profileCarbRatio: 10000,
+                profileTargetBG: 110,
+                profileISF: 50,
+                idpStatusId: 31
+            )
+        )
+        // Segment 1: 1.2 u/hr at 60 min
+        peripheral.enqueueResponse(
+            for: IDPSegmentRequest.self,
+            response: IDPSegmentResponse(
+                idpId: 10,
+                segmentIndex: 1,
+                profileStartTime: 60,
+                profileBasalRate: 1200,  // Unchanged
+                profileCarbRatio: 10000,
+                profileTargetBG: 110,
+                profileISF: 50,
+                idpStatusId: 31
+            )
+        )
+        // Segment 2: 0.9 u/hr at 120 min
+        peripheral.enqueueResponse(
+            for: IDPSegmentRequest.self,
+            response: IDPSegmentResponse(
+                idpId: 10,
+                segmentIndex: 2,
+                profileStartTime: 120,
+                profileBasalRate: 900,  // Unchanged
+                profileCarbRatio: 10000,
+                profileTargetBG: 110,
+                profileISF: 50,
+                idpStatusId: 31
+            )
+        )
+
+        // Step 4: Mock SetIDPSegmentRequest response - only ONE modify needed
+        peripheral.enqueueResponse(
+            for: SetIDPSegmentRequest.self,
+            response: SetIDPSegmentResponse(status: 0, unknown: 0)
+        )
+
+        let expectation = expectation(description: "basal schedule synced")
+        var result: Result<BasalRateSchedule, Error>?
+
+        manager.syncBasalRateSchedule(items: items) { syncResult in
+            result = syncResult
+            expectation.fulfill()
+        }
+
+        waitForExpectations(timeout: 5)
+
+        let unwrappedResult = try XCTUnwrap(result)
+        _ = try XCTUnwrap(try? unwrappedResult.get())
+
+        // Find the SetIDPSegmentRequest messages
+        let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
+        
+        // Should only have 1 modify request (for the changed segment)
+        XCTAssertEqual(setRequests.count, 1, "Should only modify the changed segment")
+
+        // Verify it's modifying segment 0 with the new value
+        let modifyRequest = try XCTUnwrap(setRequests.first)
+        XCTAssertEqual(modifyRequest.operation, .modifySegmentId)
+        XCTAssertEqual(modifyRequest.segmentIndex, 0)
+        XCTAssertEqual(modifyRequest.profileBasalRate, 810, "Should be 0.81 u/hr = 810 milliunits")
+        XCTAssertEqual(modifyRequest.profileStartTime, 0)
+        
+        // Should preserve other fields
+        XCTAssertEqual(modifyRequest.profileCarbRatio, 10000)
+        XCTAssertEqual(modifyRequest.profileTargetBG, 110)
+        XCTAssertEqual(modifyRequest.profileISF, 50)
+        XCTAssertEqual(modifyRequest.idpStatusId, 31)
+    }
 }
