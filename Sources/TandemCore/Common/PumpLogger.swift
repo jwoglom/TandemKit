@@ -86,7 +86,7 @@ public struct PumpLogger {
             return
         }
 
-        logger.log("%@", type: level.loggerLevel, [text])
+        logger.log(type: level.loggerLevel, "%@", text)
     }
 
     // Printf-style logging with format string and variadic arguments (OSLog-compatible)
@@ -96,7 +96,7 @@ public struct PumpLogger {
             return
         }
 
-        logger.log("%@", type: level.loggerLevel, [text])
+        logger.log(type: level.loggerLevel, "%@", text)
     }
 
     public func trace(_ message: @autoclosure () -> String) { log(.trace, message()) }
@@ -140,6 +140,6 @@ public struct PumpLogger {
             return
         }
 
-        logger.log("%@", type: level.loggerLevel, [text])
+        logger.log(type: level.loggerLevel, "%@", text)
     }
 }
