@@ -6,6 +6,7 @@ struct TandemKitChangeCartridgeView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitChangeCartridgeViewModel
+    @State private var didLoad = false
 
     var body: some View {
         List {
@@ -92,6 +93,11 @@ struct TandemKitChangeCartridgeView: View {
         .navigationBarTitle(LocalizedString("Change Cartridge", comment: "Title for change cartridge"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            viewModel.checkSuspendedStatus()
+        }
         .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
             suspendInsulinSheet
         }

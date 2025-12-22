@@ -34,7 +34,6 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
-        refreshCGMStatus()
     }
 
     func sendMessage(message: Message) -> Message? {

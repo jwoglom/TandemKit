@@ -45,7 +45,6 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
-        checkSuspendedStatus()
     }
 
     func checkSuspendedStatus() {

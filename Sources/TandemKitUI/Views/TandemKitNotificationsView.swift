@@ -5,6 +5,7 @@ import TandemCore
 struct TandemKitNotificationsView: View {
     @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitNotificationsViewModel
+    @State private var didLoad = false
 
     var body: some View {
         List {
@@ -73,6 +74,11 @@ struct TandemKitNotificationsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationBarTitle(LocalizedString("Notifications", comment: "Notifications view title"))
         .navigationBarItems(trailing: refreshButton)
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            viewModel.refreshNotifications()
+        }
         .alert(item: Binding(
             get: { viewModel.errorMessage.map { ErrorWrapper(message: $0) } },
             set: { _ in viewModel.clearError() }

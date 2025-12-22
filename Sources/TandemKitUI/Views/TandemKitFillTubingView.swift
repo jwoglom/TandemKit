@@ -6,6 +6,7 @@ struct TandemKitFillTubingView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitFillTubingViewModel
+    @State private var didLoad = false
 
     var body: some View {
         List {
@@ -62,6 +63,11 @@ struct TandemKitFillTubingView: View {
         .navigationBarTitle(LocalizedString("Fill Tubing", comment: "Title for fill tubing"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            viewModel.checkSuspendedStatus()
+        }
         .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
             suspendInsulinSheet
         }

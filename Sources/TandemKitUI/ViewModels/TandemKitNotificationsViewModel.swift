@@ -16,7 +16,6 @@ class TandemKitNotificationsViewModel: ObservableObject {
 
     init(_ pumpManager: TandemPumpManager? = nil) {
         self.pumpManager = pumpManager
-        refreshNotifications()
     }
 
     var pumpComm: PumpComm? {

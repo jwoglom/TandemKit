@@ -6,6 +6,7 @@ struct TandemKitCGMSettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitCGMSettingsViewModel
+    @State private var didLoad = false
 
     var body: some View {
         List {
@@ -269,6 +270,11 @@ struct TandemKitCGMSettingsView: View {
         }
         .listStyle(InsetGroupedListStyle())
         .navigationBarTitle(LocalizedString("CGM Settings", comment: "Title for CGM settings"))
+        .task {
+            guard !didLoad else { return }
+            didLoad = true
+            viewModel.refreshCGMStatus()
+        }
         .actionSheet(isPresented: $viewModel.showingStartG6Confirmation) {
             startG6SensorSheet
         }
