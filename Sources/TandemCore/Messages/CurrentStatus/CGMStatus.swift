@@ -95,14 +95,7 @@ public class CGMStatusResponse: Message {
         case ok = 3
         case outOfRange = 4
     }
-
-  tateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
+    public var description: String {
+        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionState=\(sessionState), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
     }
 }
-
-public extension CGMStatusRequest {
-    var description: String {
-        "CGMStatusRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

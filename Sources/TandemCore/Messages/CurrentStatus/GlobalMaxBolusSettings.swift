@@ -51,14 +51,7 @@ public class GlobalMaxBolusSettingsResponse: Message {
         self.maxBolus = maxBolus
         self.maxBolusDefault = maxBolusDefault
     }
-
-  ault))"
+    public var description: String {
+        "GlobalMaxBolusSettingsResponse(cargo=\(cargo.hexadecimalString), maxBolus=\(maxBolus), maxBolusDefault=\(maxBolusDefault))"
     }
 }
-
-public extension GlobalMaxBolusSettingsRequest {
-    var description: String {
-        "GlobalMaxBolusSettingsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

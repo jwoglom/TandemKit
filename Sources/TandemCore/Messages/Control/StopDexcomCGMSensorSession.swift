@@ -47,10 +47,7 @@ public class StopDexcomCGMSensorSessionResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  CGMSensorSessionRequest {
-    var description: String {
-        "StopDexcomCGMSensorSessionRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "StopDexcomCGMSensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

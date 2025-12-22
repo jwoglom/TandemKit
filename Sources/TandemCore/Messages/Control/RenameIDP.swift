@@ -68,10 +68,7 @@ public class RenameIDPResponse: Message, StatusMessage {
         self.status = status
         self.numberOfProfiles = numberOfProfiles
     }
-
-   RenameIDPRequest {
-    var description: String {
-        "RenameIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileName=\(profileName))"
+    public var description: String {
+        "RenameIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), numberOfProfiles=\(numberOfProfiles))"
     }
 }
-

@@ -67,8 +67,7 @@ public class DismissNotificationResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  malString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
+    public var description: String {
+        "DismissNotificationResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

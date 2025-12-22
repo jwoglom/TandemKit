@@ -51,14 +51,7 @@ public class BasalLimitSettingsResponse: Message {
         self.basalLimit = basalLimit
         self.basalLimitDefault = basalLimitDefault
     }
-
-  asalLimitDefault))"
+    public var description: String {
+        "BasalLimitSettingsResponse(cargo=\(cargo.hexadecimalString), basalLimit=\(basalLimit), basalLimitDefault=\(basalLimitDefault))"
     }
 }
-
-public extension BasalLimitSettingsRequest {
-    var description: String {
-        "BasalLimitSettingsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

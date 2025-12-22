@@ -74,14 +74,7 @@ public class CGMRateAlertSettingsResponse: Message {
         self.fallRateEnabled = fallRateEnabled
         self.fallRateDefaultBitmask = fallRateDefaultBitmask
     }
-
-  nabled=\(riseRateEnabled), riseRateDefaultBitmask=\(riseRateDefaultBitmask), fallRateThreshold=\(fallRateThreshold), fallRateEnabled=\(fallRateEnabled), fallRateDefaultBitmask=\(fallRateDefaultBitmask))"
+    public var description: String {
+        "CGMRateAlertSettingsResponse(cargo=\(cargo.hexadecimalString), riseRateThreshold=\(riseRateThreshold), riseRateEnabled=\(riseRateEnabled), riseRateDefaultBitmask=\(riseRateDefaultBitmask), fallRateThreshold=\(fallRateThreshold), fallRateEnabled=\(fallRateEnabled), fallRateDefaultBitmask=\(fallRateDefaultBitmask))"
     }
 }
-
-public extension CGMRateAlertSettingsRequest {
-    var description: String {
-        "CGMRateAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

@@ -75,13 +75,7 @@ public class PumpFeaturesV1Response: Message {
 
     /// Convenience accessor for the set of primary features.
     public var primaryFeatures: Set<PumpFeatureType> { features }
-
+    public var description: String {
+        "PumpFeaturesV1Response(cargo=\(cargo.hexadecimalString), features=\(features), intMap=\(intMap))"
     }
 }
-
-public extension PumpFeaturesV1Request {
-    var description: String {
-        "PumpFeaturesV1Request(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

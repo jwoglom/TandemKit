@@ -97,14 +97,7 @@ public class CommonSoftwareInfoResponse: Message {
         self.bootloaderPartDashNumber = bootloaderPartDashNumber
         self.bootloaderPartRevisionNumber = bootloaderPartRevisionNumber
     }
-
-  ftwarePartNumber=\(appSoftwarePartNumber), appSoftwarePartDashNumber=\(appSoftwarePartDashNumber), appSoftwarePartRevisionNumber=\(appSoftwarePartRevisionNumber), bootloaderVersion=\(bootloaderVersion), bootloaderPartNumber=\(bootloaderPartNumber), bootloaderPartDashNumber=\(String(describing: bootloaderPartDashNumber)), bootloaderPartRevisionNumber=\(String(describing: bootloaderPartRevisionNumber)))"
+    public var description: String {
+        "CommonSoftwareInfoResponse(cargo=\(cargo.hexadecimalString), appSoftwareVersion=\(appSoftwareVersion), appSoftwarePartNumber=\(appSoftwarePartNumber), appSoftwarePartDashNumber=\(appSoftwarePartDashNumber), appSoftwarePartRevisionNumber=\(appSoftwarePartRevisionNumber), bootloaderVersion=\(bootloaderVersion), bootloaderPartNumber=\(bootloaderPartNumber), bootloaderPartDashNumber=\(String(describing: bootloaderPartDashNumber)), bootloaderPartRevisionNumber=\(String(describing: bootloaderPartRevisionNumber)))"
     }
 }
-
-public extension CommonSoftwareInfoRequest {
-    var description: String {
-        "CommonSoftwareInfoRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

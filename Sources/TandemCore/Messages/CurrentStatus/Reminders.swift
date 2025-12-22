@@ -187,7 +187,13 @@ public struct MinsTime: Equatable, CustomStringConvertible {
 
 /// Days of the week bitmask helper.
 public enum MultiDay: Int, CaseIterable, Sendable {
-    case monda64
+    case monday = 1
+    case tuesday = 2
+    case wednesday = 4
+    case thursday = 8
+    case friday = 16
+    case saturday = 32
+    case sunday = 64
 
     public static func fromBitmask(_ bitmask: Int) -> Set<MultiDay> {
         var set = Set<MultiDay>()
@@ -205,10 +211,3 @@ public enum MultiDay: Int, CaseIterable, Sendable {
 
     public static let allDays: Set<MultiDay> = Set(MultiDay.allCases)
 }
-
-public extension RemindersRequest {
-    var description: String {
-        "RemindersRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

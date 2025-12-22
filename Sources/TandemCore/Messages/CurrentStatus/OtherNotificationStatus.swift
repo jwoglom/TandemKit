@@ -44,10 +44,7 @@ public class OtherNotificationStatusResponse: Message {
     public init() {
         cargo = Bytes.emptyBytes(Int(Self.props.size))
     }
-
-  quest {
-    var description: String {
-        "OtherNotificationStatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "OtherNotificationStatusResponse(cargo=\(cargo.hexadecimalString))"
     }
 }
-

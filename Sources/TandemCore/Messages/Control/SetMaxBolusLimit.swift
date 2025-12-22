@@ -50,9 +50,7 @@ public class SetMaxBolusLimitResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  ion: String {
-        "SetMaxBolusLimitRequest(cargo=\(cargo.hexadecimalString), maxBolusMilliunits=\(maxBolusMilliunits))"
+    public var description: String {
+        "SetMaxBolusLimitResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

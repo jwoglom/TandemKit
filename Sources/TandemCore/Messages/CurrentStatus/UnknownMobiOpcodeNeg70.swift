@@ -44,10 +44,7 @@ public class UnknownMobiOpcodeNeg70Response: Message {
     public init() {
         cargo = Data()
     }
-
-  quest {
-    var description: String {
-        "UnknownMobiOpcodeNeg70Request(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "UnknownMobiOpcodeNeg70Response(cargo=\(cargo.hexadecimalString))"
     }
 }
-

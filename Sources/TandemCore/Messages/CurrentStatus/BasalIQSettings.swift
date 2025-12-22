@@ -55,14 +55,7 @@ public class BasalIQSettingsResponse: Message {
         self.suspendAlert = suspendAlert
         self.resumeAlert = resumeAlert
     }
-
-  dAlert=\(suspendAlert), resumeAlert=\(resumeAlert))"
+    public var description: String {
+        "BasalIQSettingsResponse(cargo=\(cargo.hexadecimalString), hypoMinimization=\(hypoMinimization), suspendAlert=\(suspendAlert), resumeAlert=\(resumeAlert))"
     }
 }
-
-public extension BasalIQSettingsRequest {
-    var description: String {
-        "BasalIQSettingsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

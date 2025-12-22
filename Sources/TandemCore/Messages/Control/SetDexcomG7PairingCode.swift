@@ -57,8 +57,7 @@ public class SetDexcomG7PairingCodeResponse: Message, StatusMessage {
         self.status = status
     }
 
-    var description: String {
-        "SetDexcomG7PairingCodeRequest(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
+    public var description: String {
+        "SetDexcomG7PairingCodeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

@@ -70,9 +70,7 @@ public class SetModesResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  ription: String {
-        "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(command), bitmap=\(bitmap))"
+    public var description: String {
+        "SetModesResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

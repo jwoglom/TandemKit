@@ -60,10 +60,7 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
     }
 
     public var releaseStatus: ReleaseStatus? { ReleaseStatus(rawValue: status) }
-
-  nsion BolusPermissionReleaseRequest {
-    var description: String {
-        "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    public var description: String {
+        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), status=\(status), releaseStatus=\(releaseStatus))"
     }
 }
-

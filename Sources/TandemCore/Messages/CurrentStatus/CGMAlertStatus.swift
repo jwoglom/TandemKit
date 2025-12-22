@@ -130,12 +130,7 @@ public class CGMAlertStatusResponse: Message {
             return set
         }
     }
-
-  }
-
-public extension CGMAlertStatusRequest {
-    var description: String {
-        "CGMAlertStatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "CGMAlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"
     }
 }
-

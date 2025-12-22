@@ -49,10 +49,7 @@ public class DisconnectPumpResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  n DisconnectPumpRequest {
-    var description: String {
-        "DisconnectPumpRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "DisconnectPumpResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

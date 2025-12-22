@@ -58,11 +58,8 @@ public class CurrentBatteryV1Response: Message {
     }
 
     public var description: String {
-        "CurrentBatteryV1Response(caResponse: CurrentBatteryAbstractResponse {}
-
-public extension CurrentBatteryV1Request {
-    var description: String {
-        "CurrentBatteryV1Request(cargo=\(cargo.hexadecimalString))"
+        "CurrentBatteryV1Response(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), currentBatteryIbc=\(currentBatteryIbc))"
     }
 }
 
+extension CurrentBatteryV1Response: CurrentBatteryAbstractResponse {}

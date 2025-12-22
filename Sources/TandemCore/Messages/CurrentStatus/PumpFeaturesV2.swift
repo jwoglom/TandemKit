@@ -74,14 +74,7 @@ public class PumpFeaturesV2Response: Message {
         guard supportedFeatureIndex == .mainFeatures else { return nil }
         return PumpFeaturesV1Response.PumpFeatureType.fromBitmask(UInt64(pumpFeaturesBitmask))
     }
-
-  upportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
+    public var description: String {
+        "PumpFeaturesV2Response(cargo=\(cargo.hexadecimalString), status=\(status), supportedFeatureIndex=\(supportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
     }
 }
-
-public extension PumpFeaturesV2Request {
-    var description: String {
-        "PumpFeaturesV2Request(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

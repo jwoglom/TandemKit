@@ -60,8 +60,7 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF), 0, 0])
         self.status = status
     }
-
-  t(cargo=\(cargo.hexadecimalString), enabled=\(enabled), weightLbs=\(weightLbs), totalDailyInsulinUnits=\(totalDailyInsulinUnits))"
+    public var description: String {
+        "ChangeControlIQSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

@@ -66,8 +66,7 @@ public class RemoteCarbEntryResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  ryRequest(cargo=\(cargo.hexadecimalString), carbs=\(carbs), unknown=\(unknown), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+    public var description: String {
+        "RemoteCarbEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

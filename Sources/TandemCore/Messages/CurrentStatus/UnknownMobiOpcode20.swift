@@ -51,10 +51,7 @@ public class UnknownMobiOpcode20Response: Message {
         self.status = status
         self.unknown = unknown
     }
-
-  public extension UnknownMobiOpcode20Request {
-    var description: String {
-        "UnknownMobiOpcode20Request(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "UnknownMobiOpcode20Response(cargo=\(cargo.hexadecimalString), status=\(status), unknown=\(unknown))"
     }
 }
-
