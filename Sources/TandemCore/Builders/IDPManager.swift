@@ -241,7 +241,7 @@ public class IDPManager {
     /// Process a response message from the pump.
     ///
     /// Call this for each response received after sending messages from `nextMessages()`.
-    @discardableResult  public func processMessage(_ message: Message) -> IDPManager {
+    @discardableResult public func processMessage(_ message: Message) -> IDPManager {
         if let profileStatus = message as? ProfileStatusResponse {
             profileStatusResponse = profileStatus
             // Remove profiles that no longer exist

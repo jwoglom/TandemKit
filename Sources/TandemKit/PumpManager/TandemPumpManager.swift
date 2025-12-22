@@ -1786,30 +1786,31 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
                     let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
 
-                    // Try to find existing segment to preserve its other values
-                    var segment: IDPSegmentResponse
                     if index < currentSegments.count {
-                        // Modify existing segment
-                        segment = currentSegments[index]
-                        segment.profileStartTime = startMinutes
-                        segment.profileBasalRate = basalMilliunits
+                        // Check if existing segment needs modification
+                        let currentSegment = currentSegments[index]
+                        let needsUpdate = currentSegment.profileStartTime != startMinutes ||
+                                         currentSegment.profileBasalRate != basalMilliunits
+                        
+                        if needsUpdate {
+                            var segment = currentSegment
+                            segment.profileStartTime = startMinutes
+                            segment.profileBasalRate = basalMilliunits
+                            let request = activeProfile.modifySegmentMessage(segment: segment)
+                            modifyRequests.append(request)
+                        }
                     } else {
                         // Create new segment with default values from first segment
                         let firstSegment = currentSegments.first!
-                        segment = IDPSegmentResponse(
-                            idpId: activeProfile.idpId,
-                            segmentIndex: index,
+                        let request = activeProfile.createSegmentMessage(
                             profileStartTime: startMinutes,
                             profileBasalRate: basalMilliunits,
                             profileCarbRatio: firstSegment.profileCarbRatio,
-                            profileTargetBG: firstSegment.profileTargetBG,
-                            profileISF: firstSegment.profileISF,
-                            idpStatusId: 31
+                            profileTargetBG: Int(firstSegment.profileTargetBG),
+                            profileISF: firstSegment.profileISF
                         )
+                        modifyRequests.append(request)
                     }
-
-                    let request = activeProfile.modifySegmentMessage(segment: segment)
-                    modifyRequests.append(request)
                 }
 
                 // Step 5: If we have fewer items than current segments, delete extra segments
