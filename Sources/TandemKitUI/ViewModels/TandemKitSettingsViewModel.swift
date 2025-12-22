@@ -14,6 +14,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var insulinStatus: InsulinStatusResponse?
     @Published var tempRateStatus: TempRateResponse?
     @Published var currentBasalStatus: CurrentBasalStatusResponse?
+    @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
     @Published var isSuspended: Bool? = nil
     @Published var showingDeleteConfirmation = false
@@ -80,6 +81,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.insulinStatus = insulin
                 self.tempRateStatus = tempRate
                 self.currentBasalStatus = currentBasal
+                self.reservoirValue = self.pumpManager?.reservoirLevel
                 if let mirror = mirror {
                     self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
                 } else {
@@ -88,6 +90,16 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.notificationCount = notifCount
             }
         }
+    }
+
+    var reservoirUnitsText: String? {
+        if let reservoirValue {
+            return String(format: "%.1f", reservoirValue.unitVolume)
+        }
+        if let insulinStatus {
+            return String(format: "%.1f", Double(insulinStatus.currentInsulinAmount) / 1000.0)
+        }
+        return nil
     }
 
     func refreshNotificationCount() {
@@ -258,6 +270,8 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         guard let pumpManager = loopkitPumpManager as? TandemPumpManager else {
             return
         }
+
+        reservoirValue = pumpManager.reservoirLevel
 
         if pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
             pendingRefreshOnReconnect = false

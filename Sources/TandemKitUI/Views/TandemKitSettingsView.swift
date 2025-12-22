@@ -321,9 +321,9 @@ struct TandemKitSettingsView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
                 .foregroundColor(Color(UIColor.secondaryLabel))
-            if let insulin = viewModel.insulinStatus {
+            if let unitsText = viewModel.reservoirUnitsText {
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text("\(insulin.currentInsulinAmount / 100)")
+                    Text(unitsText)
                         .font(.system(size: 28))
                         .fontWeight(.heavy)
                         .fixedSize()

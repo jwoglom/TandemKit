@@ -607,7 +607,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
-        let units = Double(response.currentInsulinAmount) / 1000.0
+        // integer units
+        let units = Double(response.currentInsulinAmount)
         let timestamp = Date()
         let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
