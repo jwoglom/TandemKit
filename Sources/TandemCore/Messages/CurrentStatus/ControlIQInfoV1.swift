@@ -18,6 +18,10 @@ public class ControlIQInfoV1Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ControlIQInfoV1Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with Control-IQ V1 information.
@@ -100,11 +104,5 @@ public class ControlIQInfoV1Response: ControlIQInfoAbstractResponse {
 
     override public var description: String {
         "ControlIQInfoV1Response(cargo=\(cargo.hexadecimalString), closedLoopEnabled=\(closedLoopEnabled), weight=\(weight), weightUnitRaw=\(weightUnitRaw), totalDailyInsulin=\(totalDailyInsulin), currentUserModeTypeRaw=\(currentUserModeTypeRaw), byte6=\(byte6), byte7=\(byte7), byte8=\(byte8), controlStateType=\(controlStateType))"
-    }
-}
-
-public extension ControlIQInfoV1Request {
-    var description: String {
-        "ControlIQInfoV1Request(cargo=\(cargo.hexadecimalString))"
     }
 }

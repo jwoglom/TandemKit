@@ -19,10 +19,14 @@ public class LastBolusStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "LastBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with information on the last bolus delivered.
-public class LastBolusStatusResponse: LastBolusStatusAbstractResponse {
+public class LastBolusStatusResponse: Message, LastBolusStatusAbstractResponse {
     public static let props = MessageProps(
         opCode: 49,
         size: 20,
@@ -86,16 +90,9 @@ public class LastBolusStatusResponse: LastBolusStatusAbstractResponse {
         self.bolusTypeBitmask = bolusTypeBitmask
         self.extendedBolusDuration = extendedBolusDuration
     }
-}
 
-public extension LastBolusStatusRequest {
-    var description: String {
-        "LastBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "LastBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), unknown=\(unknown.hexadecimalString), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus?.rawValue ?? -1), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration))"
     }
 }
 
-public extension LastBolusStatusResponse {
-    var description: String {
-        "LastBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), unknown=\(unknown.hexadecimalString), timestamp=\(timestamp), deliveredVolume=\(deliveredVolume), bolusStatus=\(bolusStatus), bolusStatusId=\(bolusStatusId), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask), extendedBolusDuration=\(extendedBolusDuration))"
-    }
-}

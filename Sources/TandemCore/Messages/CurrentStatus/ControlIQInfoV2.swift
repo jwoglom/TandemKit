@@ -18,6 +18,10 @@ public class ControlIQInfoV2Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ControlIQInfoV2Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with Control-IQ V2 information, includes exercise choice/duration.
@@ -111,11 +115,5 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
 
     override public var description: String {
         "ControlIQInfoV2Response(cargo=\(cargo.hexadecimalString), closedLoopEnabled=\(closedLoopEnabled), weight=\(weight), weightUnitRaw=\(weightUnitRaw), totalDailyInsulin=\(totalDailyInsulin), currentUserModeTypeRaw=\(currentUserModeTypeRaw), byte6=\(byte6), byte7=\(byte7), byte8=\(byte8), controlStateType=\(controlStateType), exerciseChoice=\(exerciseChoice), exerciseDuration=\(exerciseDuration))"
-    }
-}
-
-public extension ControlIQInfoV2Request {
-    var description: String {
-        "ControlIQInfoV2Request(cargo=\(cargo.hexadecimalString))"
     }
 }

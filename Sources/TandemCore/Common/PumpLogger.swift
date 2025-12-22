@@ -86,39 +86,27 @@ public struct PumpLogger {
             return
         }
 
-        logger.log(type: level.loggerLevel, "%@", text)
+        os_log("%{public}@", log: logger, type: level.loggerLevel, text)
     }
 
     // Printf-style logging with format string and variadic arguments (OSLog-compatible)
     public func log(_ level: Level, _ format: String, _ args: CVarArg...) {
-        let text = String(format: format, arguments: args)
-        if PumpLogging.handle(level: level, label: label, message: text) {
-            return
-        }
-
-        logger.log(type: level.loggerLevel, "%@", text)
+        log(level, format, arguments: args)
     }
 
     public func trace(_ message: @autoclosure () -> String) { log(.trace, message()) }
-    public func trace(_ format: String, _ args: CVarArg...) { log(.trace, format, arguments: args) }
 
     public func debug(_ message: @autoclosure () -> String) { log(.debug, message()) }
-    public func debug(_ format: String, _ args: CVarArg...) { log(.debug, format, arguments: args) }
 
     public func info(_ message: @autoclosure () -> String) { log(.info, message()) }
-    public func info(_ format: String, _ args: CVarArg...) { log(.info, format, arguments: args) }
 
     public func notice(_ message: @autoclosure () -> String) { log(.notice, message()) }
-    public func notice(_ format: String, _ args: CVarArg...) { log(.notice, format, arguments: args) }
 
     public func warning(_ message: @autoclosure () -> String) { log(.warning, message()) }
-    public func warning(_ format: String, _ args: CVarArg...) { log(.warning, format, arguments: args) }
 
     public func error(_ message: @autoclosure () -> String) { log(.error, message()) }
-    public func error(_ format: String, _ args: CVarArg...) { log(.error, format, arguments: args) }
 
     public func critical(_ message: @autoclosure () -> String) { log(.critical, message()) }
-    public func critical(_ format: String, _ args: CVarArg...) { log(.critical, format, arguments: args) }
 
     // Helper to convert variadic args to array for String(format:arguments:)
     private func log(_ level: Level, _ format: String, arguments: [CVarArg]) {
@@ -140,6 +128,6 @@ public struct PumpLogger {
             return
         }
 
-        logger.log(type: level.loggerLevel, "%@", text)
+        os_log("%{public}@", log: logger, type: level.loggerLevel, text)
     }
 }
