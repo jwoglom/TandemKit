@@ -44,7 +44,7 @@ public class ControlIQInfoAbstractResponse: Message {
         case pounds = 1
     }
 
-    public var description: String {
+    open var description: String {
         "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(currentUserModeType), weightUnit=\(weightUnit))"
     }
 }
