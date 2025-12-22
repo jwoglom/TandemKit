@@ -108,12 +108,13 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             characteristic: characteristic
         )
 
+        let requestDescription = String(describing: message)
         let requestCargo = message.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
         log.info(
-            "  SENT-MESSAGE(txId=%-3d, %{public}@):\t%{public}@[cargo={%{public}@}]",
+            "  SENT-MESSAGE(txId=%-3d, %{public}@):\t%{public}@ [cargo={%{public}@}]",
             txIdForRequest,
             characteristic.prettyName,
-            String(describing: wrapper.requestMetadata.name),
+            requestDescription,
             requestCargo
         )
         if wrapper.packets.isEmpty {
@@ -221,13 +222,13 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             throw PumpCommError.noResponse
         }
 
-        let responseType = String(describing: type(of: finalMessage))
+        let responseDescription = String(describing: finalMessage)
         let responseCargo = finalMessage.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
         log.info(
-            "PARSED-MESSAGE(txId=%-3d, %{public}@):\t%{public}@[cargo={%{public}@}]",
+            "PARSED-MESSAGE(txId=%-3d, %{public}@):\t%{public}@ [cargo={%{public}@}]",
             txIdForRequest,
             characteristic.prettyName,
-            responseType,
+            responseDescription,
             responseCargo
         )
 
