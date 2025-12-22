@@ -87,12 +87,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public var localizedTitle: String = "TandemPumpManager"
     public static var managerIdentifier: String = "Tandem"
-    public static let onboardingMaximumBasalScheduleEntryCount: Int = 24
-    public static let onboardingSupportedBasalRates: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1.0, 1.5, 2.0]
-    public static let onboardingSupportedBolusVolumes: [Double] = [0.1, 0.2, 0.3, 0.5, 1.0, 2.0, 3.0, 5.0]
-    public static let onboardingSupportedMaximumBolusVolumes: [Double] = onboardingSupportedBolusVolumes
-
     public typealias RawStateValue = [String: Any]
+
+    // Tandem Mobi and t:slim X2: max 16 basal segments
+    public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
+
+    // Tandem Mobi and t:slim X2: 0.01 - 15.00u/hr
+    public static var onboardingSupportedBasalRates: [Double] = Array(stride(from: 0.01, through: 15.0, by: 0.01))
+
+    // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus
+    public static var onboardingSupportedBolusVolumes: [Double] = Array(stride(from: 0.05, through: 25.0, by: 0.01))
+
+    public static var onboardingSupportedMaximumBolusVolumes: [Double] = Array(stride(from: 0.05, through: 25.0, by: 0.01))
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     private let lockedState: Locked<TandemPumpManagerState>
@@ -504,13 +510,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - Pump Capabilities
 
     public var supportedBasalRates: [Double] {
-        // Tandem t:slim X2 supports 0.001 to 35.0 U/hr in 0.001 U increments
-        stride(from: 0.001, through: 35.0, by: 0.001).map { $0 }
+        Self.onboardingSupportedBasalRates
     }
 
     public var supportedBolusVolumes: [Double] {
-        // Tandem t:slim X2 supports 0.01 to 25.0 U in 0.01 U increments
-        stride(from: 0.01, through: 25.0, by: 0.01).map { $0 }
+        Self.onboardingSupportedBolusVolumes
     }
 
     public var supportedMaximumBolusVolumes: [Double] {
@@ -518,19 +522,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var maximumBasalScheduleEntryCount: Int {
-        24 // One entry per hour
+        Self.onboardingMaximumBasalScheduleEntryCount
     }
 
     public var minimumBasalScheduleEntryDuration: TimeInterval {
-        30 * 60 // 30 minutes in seconds
+        10 * 60 // 10 minutes in seconds
     }
 
     public var pumpRecordsBasalProfileStartEvents: Bool {
-        false // Tandem pumps do not explicitly record basal profile start events
+        false // TODO(jwoglom): TBD
     }
 
     public var pumpReservoirCapacity: Double {
-        300.0 // t:slim X2 reservoir capacity in units
+        300.0 // t:slim X2 reservoir capacity in units. Tandem Mobi is 250.
     }
 
     public var lastSync: Date? {
@@ -2053,7 +2057,8 @@ private extension TandemPumpManager {
     func makeBasalSegmentRequests(from items: [RepeatingScheduleValue<Double>]) -> [SetIDPSegmentRequest] {
         let idpId = 0
         let unknownId = 1
-        let mask = idpStatusMask([.BASAL_RATE, .START_TIME])
+        // Per pumpX2 IDPManager.modifySegmentMessage: must include all fields even if some are 0
+        let mask = idpStatusMask([.BASAL_RATE, .CARB_RATIO, .TARGET_BG, .CORRECTION_FACTOR, .START_TIME])
 
         return items.enumerated().map { index, entry in
             let startMinutes = Int((entry.startTime / 60.0).rounded())

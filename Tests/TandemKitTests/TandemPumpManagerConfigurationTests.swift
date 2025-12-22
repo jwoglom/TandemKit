@@ -50,8 +50,13 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         XCTAssertEqual(firstRequest.segmentIndex, 0)
         XCTAssertEqual(firstRequest.profileStartTime, Int((items[0].startTime / 60.0).rounded()))
         XCTAssertEqual(firstRequest.profileBasalRate, Int((items[0].value * 1000.0).rounded()))
+        // Per pumpX2 IDPManager: all 5 flags must be set when modifying segments
         let expectedMask = IDPSegmentResponse.IDPSegmentStatus.fromBitmask(firstRequest.idpStatusId)
+        XCTAssertEqual(firstRequest.idpStatusId, 31, "Status mask should be 31 (all 5 fields)")
         XCTAssertTrue(expectedMask.contains(.BASAL_RATE))
+        XCTAssertTrue(expectedMask.contains(.CARB_RATIO))
+        XCTAssertTrue(expectedMask.contains(.TARGET_BG))
+        XCTAssertTrue(expectedMask.contains(.CORRECTION_FACTOR))
         XCTAssertTrue(expectedMask.contains(.START_TIME))
 
         let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
