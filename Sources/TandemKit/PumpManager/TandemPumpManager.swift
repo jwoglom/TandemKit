@@ -651,6 +651,50 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
     }
 
+    private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
+        let timestamp = Date()
+
+//    case active(_ at: Date)
+//    case initiatingTempBasal
+//    case tempBasal(_ dose: DoseEntry)
+//    case cancelingTempBasal
+//    case suspending
+//    case suspended(_ at: Date)
+//    case resuming
+
+        let newBasalState: PumpManagerStatus.BasalDeliveryState
+
+        if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue ||
+            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.zeroBasal.rawValue ||
+            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.increaseBasal.rawValue ||
+            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.attenuatedBasal.rawValue
+        {
+            newBasalState = .active(timestamp)
+
+        } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue {
+            newBasalState = .suspended(timestamp)
+        } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.tempRate.rawValue ||
+            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.zeroTempRate.rawValue
+        {
+            // not updated here, instead see handleTempRateResponse
+            return
+        } else {
+            // unknown state
+            return
+        }
+
+        updateStatus { status in
+            status.basalDeliveryState = newBasalState
+        }
+
+        var managerState = lockedState.value
+        managerState.basalDeliveryState = newBasalState
+        managerState.lastBasalStatusDate = timestamp
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
+    }
+
     private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
         logger(for: source)
             .debug("[\(source.label)] Bolus status response received statusId=\(response.statusId) bolusId=\(response.bolusId)")
@@ -1978,6 +2022,8 @@ extension TandemPumpManager: PumpCommDelegate {
             handleReservoirResponse(insulin, source: .notification)
         case let basal as CurrentBasalStatusResponse:
             handleBasalResponse(basal, source: .notification)
+        case let homeScreenResponse as HomeScreenMirrorResponse:
+            handleHomeScreenMirrorResponse(homeScreenResponse, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
         case let timeSinceReset as TimeSinceResetResponse:

@@ -138,7 +138,7 @@ public class PumpComm: CustomDebugStringConvertible {
             attempt += 1
             do {
                 let response = try transport.sendMessage(message)
-                log.debug("sendMessage: received response %@", String(describing: response))
+                // log.debug("sendMessage: received response %@", String(describing: response))
 
                 if let errorResponse = response as? ErrorResponse {
                     log.error(
