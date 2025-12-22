@@ -18,6 +18,10 @@ public class ExtendedBolusStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ExtendedBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing details of the current extended bolus.
@@ -64,6 +68,9 @@ public class ExtendedBolusStatusResponse: Message {
         self.duration = duration
         self.bolusSource = bolusSource
     }
+
+  timestamp=\(timestamp), requestedVolume=\(requestedVolume), duration=\(duration), bolusSource=\(bolusSource))"
+    }
 }
 
 public extension ExtendedBolusStatusRequest {
@@ -72,8 +79,3 @@ public extension ExtendedBolusStatusRequest {
     }
 }
 
-public extension ExtendedBolusStatusResponse {
-    var description: String {
-        "ExtendedBolusStatusResponse(cargo=\(cargo.hexadecimalString), bolusStatus=\(bolusStatus), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), duration=\(duration), bolusSource=\(bolusSource))"
-    }
-}

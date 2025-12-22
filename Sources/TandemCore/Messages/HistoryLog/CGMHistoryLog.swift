@@ -104,10 +104,9 @@ public class CGMHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CGMHistoryLog {
-    var description: String {
+    public var description: String {
         "CGMHistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatus=\(glucoseValueStatus), cgmDataType=\(cgmDataType), rate=\(rate), algorithmState=\(algorithmState), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), timeStampSeconds=\(timeStampSeconds), egvInfoBitmask=\(egvInfoBitmask), interval=\(interval))"
     }
 }
+

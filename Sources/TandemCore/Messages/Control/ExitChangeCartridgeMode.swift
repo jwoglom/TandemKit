@@ -19,6 +19,10 @@ public class ExitChangeCartridgeModeRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ExitChangeCartridgeModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response confirming exit from change cartridge mode.
@@ -43,16 +47,10 @@ public class ExitChangeCartridgeModeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension ExitChangeCartridgeModeRequest {
+  ngeCartridgeModeRequest {
     var description: String {
         "ExitChangeCartridgeModeRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension ExitChangeCartridgeModeResponse {
-    var description: String {
-        "ExitChangeCartridgeModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

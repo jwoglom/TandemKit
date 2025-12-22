@@ -18,6 +18,10 @@ public class ProfileStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ProfileStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing insulin delivery profile slots.
@@ -88,6 +92,9 @@ public class ProfileStatusResponse: Message {
     public var idpSlotIds: [Int] {
         [idpSlot0Id, idpSlot1Id, idpSlot2Id, idpSlot3Id, idpSlot4Id, idpSlot5Id].prefix(numberOfProfiles).map { $0 }
     }
+
+  lot0Id=\(idpSlot0Id), idpSlot1Id=\(idpSlot1Id), idpSlot2Id=\(idpSlot2Id), idpSlot3Id=\(idpSlot3Id), idpSlot4Id=\(idpSlot4Id), idpSlot5Id=\(idpSlot5Id), activeSegmentIndex=\(activeSegmentIndex))"
+    }
 }
 
 public extension ProfileStatusRequest {
@@ -96,8 +103,3 @@ public extension ProfileStatusRequest {
     }
 }
 
-public extension ProfileStatusResponse {
-    var description: String {
-        "ProfileStatusResponse(cargo=\(cargo.hexadecimalString), numberOfProfiles=\(numberOfProfiles), idpSlot0Id=\(idpSlot0Id), idpSlot1Id=\(idpSlot1Id), idpSlot2Id=\(idpSlot2Id), idpSlot3Id=\(idpSlot3Id), idpSlot4Id=\(idpSlot4Id), idpSlot5Id=\(idpSlot5Id), activeSegmentIndex=\(activeSegmentIndex))"
-    }
-}

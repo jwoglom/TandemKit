@@ -18,6 +18,10 @@ public class GetSavedG7PairingCodeRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "GetSavedG7PairingCodeRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with the saved Dexcom G7 pairing code.
@@ -41,16 +45,10 @@ public class GetSavedG7PairingCodeResponse: Message {
         cargo = Bytes.firstTwoBytesLittleEndian(pairingCode)
         self.pairingCode = pairingCode
     }
-}
 
-public extension GetSavedG7PairingCodeRequest {
+  sion GetSavedG7PairingCodeRequest {
     var description: String {
         "GetSavedG7PairingCodeRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension GetSavedG7PairingCodeResponse {
-    var description: String {
-        "GetSavedG7PairingCodeResponse(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
-    }
-}

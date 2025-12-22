@@ -20,6 +20,10 @@ public class EnterChangeCartridgeModeRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "EnterChangeCartridgeModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response after entering change cartridge mode.
@@ -45,16 +49,10 @@ public class EnterChangeCartridgeModeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension EnterChangeCartridgeModeRequest {
+  ngeCartridgeModeRequest {
     var description: String {
         "EnterChangeCartridgeModeRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension EnterChangeCartridgeModeResponse {
-    var description: String {
-        "EnterChangeCartridgeModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

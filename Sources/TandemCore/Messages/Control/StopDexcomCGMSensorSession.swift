@@ -19,6 +19,10 @@ public class StopDexcomCGMSensorSessionRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "StopDexcomCGMSensorSessionRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response to stopping the Dexcom CGM session.
@@ -43,16 +47,10 @@ public class StopDexcomCGMSensorSessionResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension StopDexcomCGMSensorSessionRequest {
+  CGMSensorSessionRequest {
     var description: String {
         "StopDexcomCGMSensorSessionRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension StopDexcomCGMSensorSessionResponse {
-    var description: String {
-        "StopDexcomCGMSensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

@@ -18,6 +18,10 @@ public class ControlIQIOBRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ControlIQIOBRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with Control-IQ insulin on board information.
@@ -81,6 +85,9 @@ public class ControlIQIOBResponse: Message {
             return max(mudaliarIOB, swan6hrIOB)
         }
     }
+
+  Seconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(type), iobType=\(iobType))"
+    }
 }
 
 public extension ControlIQIOBRequest {
@@ -89,8 +96,3 @@ public extension ControlIQIOBRequest {
     }
 }
 
-public extension ControlIQIOBResponse {
-    var description: String {
-        "ControlIQIOBResponse(cargo=\(cargo.hexadecimalString), mudaliarIOB=\(mudaliarIOB), timeRemainingSeconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(type), iobType=\(iobType))"
-    }
-}

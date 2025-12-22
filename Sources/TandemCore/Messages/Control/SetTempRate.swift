@@ -32,6 +32,10 @@ public class SetTempRateRequest: Message {
         self.minutes = minutes
         self.percent = percent
     }
+
+    public var description: String {
+        "SetTempRateRequest(cargo=\(cargo.hexadecimalString), minutes=\(minutes), percent=\(percent))"
+    }
 }
 
 /// Response confirming a temp rate was set.
@@ -64,16 +68,10 @@ public class SetTempRateResponse: Message, StatusMessage {
         self.status = status
         self.tempRateId = tempRateId
     }
-}
 
-public extension SetTempRateRequest {
+  teRequest {
     var description: String {
         "SetTempRateRequest(cargo=\(cargo.hexadecimalString), minutes=\(minutes), percent=\(percent))"
     }
 }
 
-public extension SetTempRateResponse {
-    var description: String {
-        "SetTempRateResponse(cargo=\(cargo.hexadecimalString), status=\(status), tempRateId=\(tempRateId))"
-    }
-}

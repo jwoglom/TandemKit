@@ -18,6 +18,10 @@ public class CGMAlertStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMAlertStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing active CGM alerts via bitmask.
@@ -126,7 +130,8 @@ public class CGMAlertStatusResponse: Message {
             return set
         }
     }
-}
+
+  }
 
 public extension CGMAlertStatusRequest {
     var description: String {
@@ -134,8 +139,3 @@ public extension CGMAlertStatusRequest {
     }
 }
 
-public extension CGMAlertStatusResponse {
-    var description: String {
-        "CGMAlertStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap), alerts=\(alerts))"
-    }
-}

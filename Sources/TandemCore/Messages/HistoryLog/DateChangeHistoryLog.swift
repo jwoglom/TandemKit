@@ -56,10 +56,9 @@ public class DateChangeHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension DateChangeHistoryLog {
-    var description: String {
+    public var description: String {
         "DateChangeHistoryLog(cargo=\(cargo.hexadecimalString), datePrior=\(datePrior), dateAfter=\(dateAfter), rawRTCTime=\(rawRTCTime))"
     }
 }
+

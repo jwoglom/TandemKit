@@ -37,6 +37,10 @@ public class RemoteCarbEntryRequest: Message {
         self.pumpTime = pumpTime
         self.bolusId = bolusId
     }
+
+    public var description: String {
+        "RemoteCarbEntryRequest(cargo=\(cargo.hexadecimalString), carbs=\(carbs), unknown=\(unknown), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+    }
 }
 
 /// Response after attaching carb info.
@@ -62,16 +66,8 @@ public class RemoteCarbEntryResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension RemoteCarbEntryRequest {
-    var description: String {
-        "RemoteCarbEntryRequest(cargo=\(cargo.hexadecimalString), carbs=\(carbs), unknown=\(unknown), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+  ryRequest(cargo=\(cargo.hexadecimalString), carbs=\(carbs), unknown=\(unknown), pumpTime=\(pumpTime), bolusId=\(bolusId))"
     }
 }
 
-public extension RemoteCarbEntryResponse {
-    var description: String {
-        "RemoteCarbEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

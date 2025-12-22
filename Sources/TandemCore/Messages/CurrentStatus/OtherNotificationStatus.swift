@@ -19,6 +19,10 @@ public class OtherNotificationStatusRequest: Message {
     public init() {
         cargo = Data([0])
     }
+
+    public var description: String {
+        "OtherNotificationStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response for miscellaneous notifications (Mobi only).
@@ -40,16 +44,10 @@ public class OtherNotificationStatusResponse: Message {
     public init() {
         cargo = Bytes.emptyBytes(Int(Self.props.size))
     }
-}
 
-public extension OtherNotificationStatusRequest {
+  quest {
     var description: String {
         "OtherNotificationStatusRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension OtherNotificationStatusResponse {
-    var description: String {
-        "OtherNotificationStatusResponse(cargo=\(cargo.hexadecimalString))"
-    }
-}

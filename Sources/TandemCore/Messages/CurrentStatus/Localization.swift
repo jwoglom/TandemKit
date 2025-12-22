@@ -18,6 +18,10 @@ public class LocalizationRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "LocalizationRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing localization preferences.
@@ -55,6 +59,9 @@ public class LocalizationResponse: Message {
         self.languageSelected = languageSelected
         self.languagesAvailableBitmask = languagesAvailableBitmask
     }
+
+  (regionSetting), languageSelected=\(languageSelected), languagesAvailableBitmask=\(languagesAvailableBitmask))"
+    }
 }
 
 public extension LocalizationRequest {
@@ -63,8 +70,3 @@ public extension LocalizationRequest {
     }
 }
 
-public extension LocalizationResponse {
-    var description: String {
-        "LocalizationResponse(cargo=\(cargo.hexadecimalString), glucoseOUM=\(glucoseOUM), regionSetting=\(regionSetting), languageSelected=\(languageSelected), languagesAvailableBitmask=\(languagesAvailableBitmask))"
-    }
-}

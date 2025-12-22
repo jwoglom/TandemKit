@@ -50,6 +50,10 @@ public class Jpake4KeyConfirmationRequest: Message {
             hashDigest
         )
     }
+
+    public var description: String {
+        "Jpake4KeyConfirmationRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
+    }
 }
 
 /// Response echoing the confirmation data from the pump.
@@ -102,16 +106,10 @@ public class Jpake4KeyConfirmationResponse: Message {
             hashDigest
         )
     }
-}
 
-public extension Jpake4KeyConfirmationRequest {
+  quest {
     var description: String {
         "Jpake4KeyConfirmationRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
     }
 }
 
-public extension Jpake4KeyConfirmationResponse {
-    var description: String {
-        "Jpake4KeyConfirmationResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
-    }
-}

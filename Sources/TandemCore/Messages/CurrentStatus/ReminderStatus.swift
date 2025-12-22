@@ -18,6 +18,10 @@ public class ReminderStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ReminderStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing the reminders bitmask.
@@ -120,16 +124,10 @@ public class ReminderStatusResponse: Message {
             return set
         }
     }
-}
 
-public extension ReminderStatusRequest {
+  n ReminderStatusRequest {
     var description: String {
         "ReminderStatusRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension ReminderStatusResponse {
-    var description: String {
-        "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap))"
-    }
-}

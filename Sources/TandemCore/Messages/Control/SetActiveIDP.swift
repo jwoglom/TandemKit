@@ -27,6 +27,10 @@ public class SetActiveIDPRequest: Message {
         )
         self.idpId = idpId
     }
+
+    public var description: String {
+        "SetActiveIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    }
 }
 
 /// Response indicating whether the profile was activated.
@@ -53,16 +57,10 @@ public class SetActiveIDPResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetActiveIDPRequest {
+  Request {
     var description: String {
         "SetActiveIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
     }
 }
 
-public extension SetActiveIDPResponse {
-    var description: String {
-        "SetActiveIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

@@ -23,6 +23,10 @@ public class BolusPermissionReleaseRequest: Message {
         cargo = Bytes.toUint32(bolusId)
         self.bolusId = bolusId
     }
+
+    public var description: String {
+        "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    }
 }
 
 /// Response indicating whether bolus permission release succeeded.
@@ -56,16 +60,10 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
     }
 
     public var releaseStatus: ReleaseStatus? { ReleaseStatus(rawValue: status) }
-}
 
-public extension BolusPermissionReleaseRequest {
+  nsion BolusPermissionReleaseRequest {
     var description: String {
         "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
     }
 }
 
-public extension BolusPermissionReleaseResponse {
-    var description: String {
-        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), releaseStatus=\(releaseStatus), status=\(status))"
-    }
-}

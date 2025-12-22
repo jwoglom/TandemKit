@@ -18,6 +18,10 @@ public class LastBGRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "LastBGRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing the last manually entered BG.
@@ -64,6 +68,9 @@ public class LastBGResponse: Message {
         case manual = 0
         case cgm = 1
     }
+
+  =\(bgValue), bgSource=\(bgSource), bgSourceId=\(bgSourceId))"
+    }
 }
 
 public extension LastBGRequest {
@@ -72,8 +79,3 @@ public extension LastBGRequest {
     }
 }
 
-public extension LastBGResponse {
-    var description: String {
-        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSource=\(bgSource), bgSourceId=\(bgSourceId))"
-    }
-}

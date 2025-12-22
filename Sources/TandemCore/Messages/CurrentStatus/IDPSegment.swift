@@ -27,6 +27,10 @@ public class IDPSegmentRequest: Message {
         self.idpId = idpId
         self.segmentIndex = segmentIndex
     }
+
+    public var description: String {
+        "IDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex))"
+    }
 }
 
 /// Response describing an insulin delivery profile segment.
@@ -112,6 +116,9 @@ public class IDPSegmentResponse: Message {
             return set
         }
     }
+
+  rofileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+    }
 }
 
 public extension IDPSegmentRequest {
@@ -120,8 +127,3 @@ public extension IDPSegmentRequest {
     }
 }
 
-public extension IDPSegmentResponse {
-    var description: String {
-        "IDPSegmentResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
-    }
-}

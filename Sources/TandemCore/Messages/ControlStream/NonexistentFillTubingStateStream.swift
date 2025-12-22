@@ -58,10 +58,9 @@ public class FillTubingStateStreamResponse: Message {
     }
 
     public var buttonDown: Bool { buttonState == 1 }
-}
 
-public extension FillTubingStateStreamResponse {
-    var description: String {
+    public var description: String {
         "FillTubingStateStreamResponse(cargo=\(cargo.hexadecimalString), buttonState=\(buttonState))"
     }
 }
+

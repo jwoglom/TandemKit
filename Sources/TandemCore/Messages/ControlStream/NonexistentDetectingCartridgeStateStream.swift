@@ -58,10 +58,9 @@ public class DetectingCartridgeStateStreamResponse: Message {
     }
 
     public var isComplete: Bool { percentComplete == 100 }
-}
 
-public extension DetectingCartridgeStateStreamResponse {
-    var description: String {
+    public var description: String {
         "DetectingCartridgeStateStreamResponse(cargo=\(cargo.hexadecimalString), percentComplete=\(percentComplete))"
     }
 }
+

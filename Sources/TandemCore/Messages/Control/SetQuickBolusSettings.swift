@@ -39,6 +39,10 @@ public class SetQuickBolusSettingsRequest: Message {
 
     public var mode: QuickBolusMode? { QuickBolusMode(rawValue: modeRaw) }
     public var increment: QuickBolusIncrement? { QuickBolusIncrement.forMagic(magic) }
+
+    public var description: String {
+        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(mode), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+    }
 }
 
 /// Supported quick bolus modes.
@@ -120,16 +124,8 @@ public class SetQuickBolusSettingsResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetQuickBolusSettingsRequest {
-    var description: String {
-        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(mode), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+  quest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(mode), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
     }
 }
 
-public extension SetQuickBolusSettingsResponse {
-    var description: String {
-        "SetQuickBolusSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

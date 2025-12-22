@@ -18,6 +18,10 @@ public class PumpSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "PumpSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with basic pump settings and status information.
@@ -75,6 +79,9 @@ public class PumpSettingsResponse: Message {
         self.oledTimeout = oledTimeout
         self.status = status
     }
+
+  ), cannulaPrimeSize=\(cannulaPrimeSize), autoShutdownEnabled=\(autoShutdownEnabled), autoShutdownDuration=\(autoShutdownDuration), featureLock=\(featureLock), oledTimeout=\(oledTimeout), status=\(status))"
+    }
 }
 
 public extension PumpSettingsRequest {
@@ -83,8 +90,3 @@ public extension PumpSettingsRequest {
     }
 }
 
-public extension PumpSettingsResponse {
-    var description: String {
-        "PumpSettingsResponse(cargo=\(cargo.hexadecimalString), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), autoShutdownEnabled=\(autoShutdownEnabled), autoShutdownDuration=\(autoShutdownDuration), featureLock=\(featureLock), oledTimeout=\(oledTimeout), status=\(status))"
-    }
-}

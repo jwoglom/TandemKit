@@ -39,6 +39,10 @@ public class SetModesRequest: Message {
         case exerciseModeOn = 3
         case exerciseModeOff = 4
     }
+
+    public var description: String {
+        "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(command), bitmap=\(bitmap))"
+    }
 }
 
 /// Response confirming mode changes.
@@ -66,16 +70,9 @@ public class SetModesResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetModesRequest {
-    var description: String {
+  ription: String {
         "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(command), bitmap=\(bitmap))"
     }
 }
 
-public extension SetModesResponse {
-    var description: String {
-        "SetModesResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

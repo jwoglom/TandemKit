@@ -19,6 +19,10 @@ public class BolusCalcDataSnapshotRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BolusCalcDataSnapshotRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing bolus calculator snapshot data.
@@ -117,6 +121,9 @@ public class BolusCalcDataSnapshotResponse: Message {
         self.isAutopopAllowed = isAutopopAllowed
         self.unknown8bytes = unknown8bytes
     }
+
+  ionFactor), iob=\(iob), cartridgeRemainingInsulin=\(cartridgeRemainingInsulin), targetBg=\(targetBg), isf=\(isf), carbEntryEnabled=\(carbEntryEnabled), carbRatio=\(carbRatio), maxBolusAmount=\(maxBolusAmount), maxBolusHourlyTotal=\(maxBolusHourlyTotal), maxBolusEventsExceeded=\(maxBolusEventsExceeded), maxIobEventsExceeded=\(maxIobEventsExceeded), unknown11bytes=\(unknown11bytes.hexadecimalString), isAutopopAllowed=\(isAutopopAllowed), unknown8bytes=\(unknown8bytes.hexadecimalString))"
+    }
 }
 
 public extension BolusCalcDataSnapshotRequest {
@@ -125,8 +132,3 @@ public extension BolusCalcDataSnapshotRequest {
     }
 }
 
-public extension BolusCalcDataSnapshotResponse {
-    var description: String {
-        "BolusCalcDataSnapshotResponse(cargo=\(cargo.hexadecimalString), isUnacked=\(isUnacked), correctionFactor=\(correctionFactor), iob=\(iob), cartridgeRemainingInsulin=\(cartridgeRemainingInsulin), targetBg=\(targetBg), isf=\(isf), carbEntryEnabled=\(carbEntryEnabled), carbRatio=\(carbRatio), maxBolusAmount=\(maxBolusAmount), maxBolusHourlyTotal=\(maxBolusHourlyTotal), maxBolusEventsExceeded=\(maxBolusEventsExceeded), maxIobEventsExceeded=\(maxIobEventsExceeded), unknown11bytes=\(unknown11bytes.hexadecimalString), isAutopopAllowed=\(isAutopopAllowed), unknown8bytes=\(unknown8bytes.hexadecimalString))"
-    }
-}

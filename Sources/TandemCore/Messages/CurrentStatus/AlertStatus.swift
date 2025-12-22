@@ -18,6 +18,10 @@ public class AlertStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "AlertStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing active alerts represented as a bitmask.
@@ -126,6 +130,8 @@ public class AlertStatusResponse: Message {
             return current
         }
     }
+
+   }
 }
 
 public extension AlertStatusRequest {
@@ -134,8 +140,3 @@ public extension AlertStatusRequest {
     }
 }
 
-public extension AlertStatusResponse {
-    var description: String {
-        "AlertStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap), alerts=\(alerts))"
-    }
-}

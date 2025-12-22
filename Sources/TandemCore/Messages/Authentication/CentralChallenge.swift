@@ -32,6 +32,10 @@ public class CentralChallengeRequest: AbstractCentralChallengeRequest {
             centralChallenge
         )
     }
+
+    public var description: String {
+        "CentralChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
 }
 
 /// Response to `CentralChallengeRequest` providing challenge hash and HMAC key.
@@ -75,6 +79,9 @@ public class CentralChallengeResponse: AbstractCentralChallengeResponse {
             hmacKey
         )
     }
+
+  "
+    }
 }
 
 public extension CentralChallengeRequest {
@@ -83,8 +90,3 @@ public extension CentralChallengeRequest {
     }
 }
 
-public extension CentralChallengeResponse {
-    var description: String {
-        "CentralChallengeResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString), hmacKey=\(hmacKey.hexadecimalString))"
-    }
-}

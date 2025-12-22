@@ -105,6 +105,10 @@ public class SetIDPSegmentRequest: Message {
     public var operation: IDPSegmentOperation? { IDPSegmentOperation(rawValue: operationId) }
     public var idpStatus: Set<IDPSegmentResponse.IDPSegmentStatus> { IDPSegmentResponse.IDPSegmentStatus.fromBitmask(idpStatusId)
     }
+
+    public var description: String {
+        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(operation), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+    }
 }
 
 /// Response indicating status of segment update.
@@ -132,16 +136,8 @@ public class SetIDPSegmentResponse: Message, StatusMessage {
         self.status = status
         self.unknown = unknown
     }
-}
 
-public extension SetIDPSegmentRequest {
-    var description: String {
-        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(operation), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+  BasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }
 }
 
-public extension SetIDPSegmentResponse {
-    var description: String {
-        "SetIDPSegmentResponse(cargo=\(cargo.hexadecimalString), status=\(status), unknown=\(unknown))"
-    }
-}

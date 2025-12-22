@@ -18,6 +18,10 @@ public class PumpFeaturesV1Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "PumpFeaturesV1Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing a bitmask of primary pump features.
@@ -71,6 +75,8 @@ public class PumpFeaturesV1Response: Message {
 
     /// Convenience accessor for the set of primary features.
     public var primaryFeatures: Set<PumpFeatureType> { features }
+
+    }
 }
 
 public extension PumpFeaturesV1Request {
@@ -79,8 +85,3 @@ public extension PumpFeaturesV1Request {
     }
 }
 
-public extension PumpFeaturesV1Response {
-    var description: String {
-        "PumpFeaturesV1Response(cargo=\(cargo.hexadecimalString), intMap=\(intMap), features=\(features))"
-    }
-}

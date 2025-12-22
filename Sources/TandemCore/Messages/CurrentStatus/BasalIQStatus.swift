@@ -18,6 +18,10 @@ public class BasalIQStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BasalIQStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing current Basal-IQ state.
@@ -62,6 +66,9 @@ public class BasalIQStatusResponse: Message {
             BasalIQStatusState(rawValue: id)
         }
     }
+
+  basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
+    }
 }
 
 public extension BasalIQStatusRequest {
@@ -70,8 +77,3 @@ public extension BasalIQStatusRequest {
     }
 }
 
-public extension BasalIQStatusResponse {
-    var description: String {
-        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusState=\(basalIQStatusState), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
-    }
-}

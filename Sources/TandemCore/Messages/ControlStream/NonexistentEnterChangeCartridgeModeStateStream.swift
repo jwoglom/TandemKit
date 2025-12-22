@@ -62,10 +62,9 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
     public enum ChangeCartridgeState: Int {
         case readyToChange = 2
     }
-}
 
-public extension EnterChangeCartridgeModeStateStreamResponse {
-    var description: String {
+    public var description: String {
         "EnterChangeCartridgeModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
+

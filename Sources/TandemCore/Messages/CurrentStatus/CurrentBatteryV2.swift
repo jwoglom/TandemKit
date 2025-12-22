@@ -19,6 +19,10 @@ public class CurrentBatteryV2Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CurrentBatteryV2Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Extended battery information including charging status.
@@ -87,6 +91,10 @@ public class CurrentBatteryV2Response: Message {
     public func isCharging() -> Bool {
         chargingStatus == 1
     }
+
+    public var description: String {
+        "CurrentBatteryV2Response(caknown1=\(unknown1), unknown2=\(unknown2), unknown3=\(unknown3), unknown4=\(unknown4))"
+    }
 }
 
 extension CurrentBatteryV2Response: CurrentBatteryAbstractResponse {}
@@ -97,8 +105,3 @@ public extension CurrentBatteryV2Request {
     }
 }
 
-public extension CurrentBatteryV2Response {
-    var description: String {
-        "CurrentBatteryV2Response(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), currentBatteryIbc=\(currentBatteryIbc), chargingStatus=\(chargingStatus), unknown1=\(unknown1), unknown2=\(unknown2), unknown3=\(unknown3), unknown4=\(unknown4))"
-    }
-}

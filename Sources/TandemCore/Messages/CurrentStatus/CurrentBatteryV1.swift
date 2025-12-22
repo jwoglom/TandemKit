@@ -18,6 +18,10 @@ public class CurrentBatteryV1Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CurrentBatteryV1Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with basic battery info for older API versions.
@@ -52,9 +56,9 @@ public class CurrentBatteryV1Response: Message {
     public func getBatteryPercent() -> Int {
         currentBatteryIbc
     }
-}
 
-extension CurrentBatteryV1Response: CurrentBatteryAbstractResponse {}
+    public var description: String {
+        "CurrentBatteryV1Response(caResponse: CurrentBatteryAbstractResponse {}
 
 public extension CurrentBatteryV1Request {
     var description: String {
@@ -62,8 +66,3 @@ public extension CurrentBatteryV1Request {
     }
 }
 
-public extension CurrentBatteryV1Response {
-    var description: String {
-        "CurrentBatteryV1Response(cargo=\(cargo.hexadecimalString), currentBatteryAbc=\(currentBatteryAbc), currentBatteryIbc=\(currentBatteryIbc))"
-    }
-}

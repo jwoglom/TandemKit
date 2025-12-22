@@ -32,6 +32,10 @@ public class RenameIDPRequest: Message {
         self.idpId = idpId
         self.profileName = profileName
     }
+
+    public var description: String {
+        "RenameIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileName=\(profileName))"
+    }
 }
 
 /// Response to a rename profile command.
@@ -64,16 +68,10 @@ public class RenameIDPResponse: Message, StatusMessage {
         self.status = status
         self.numberOfProfiles = numberOfProfiles
     }
-}
 
-public extension RenameIDPRequest {
+   RenameIDPRequest {
     var description: String {
         "RenameIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileName=\(profileName))"
     }
 }
 
-public extension RenameIDPResponse {
-    var description: String {
-        "RenameIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), numberOfProfiles=\(numberOfProfiles))"
-    }
-}

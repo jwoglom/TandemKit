@@ -20,6 +20,10 @@ public class DisconnectPumpRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "DisconnectPumpRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response indicating pump disconnect status.
@@ -45,16 +49,10 @@ public class DisconnectPumpResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension DisconnectPumpRequest {
+  n DisconnectPumpRequest {
     var description: String {
         "DisconnectPumpRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension DisconnectPumpResponse {
-    var description: String {
-        "DisconnectPumpResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

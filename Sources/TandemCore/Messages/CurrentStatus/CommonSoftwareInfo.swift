@@ -19,6 +19,10 @@ public class CommonSoftwareInfoRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CommonSoftwareInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing pump software and bootloader versions.
@@ -93,6 +97,9 @@ public class CommonSoftwareInfoResponse: Message {
         self.bootloaderPartDashNumber = bootloaderPartDashNumber
         self.bootloaderPartRevisionNumber = bootloaderPartRevisionNumber
     }
+
+  ftwarePartNumber=\(appSoftwarePartNumber), appSoftwarePartDashNumber=\(appSoftwarePartDashNumber), appSoftwarePartRevisionNumber=\(appSoftwarePartRevisionNumber), bootloaderVersion=\(bootloaderVersion), bootloaderPartNumber=\(bootloaderPartNumber), bootloaderPartDashNumber=\(String(describing: bootloaderPartDashNumber)), bootloaderPartRevisionNumber=\(String(describing: bootloaderPartRevisionNumber)))"
+    }
 }
 
 public extension CommonSoftwareInfoRequest {
@@ -101,8 +108,3 @@ public extension CommonSoftwareInfoRequest {
     }
 }
 
-public extension CommonSoftwareInfoResponse {
-    var description: String {
-        "CommonSoftwareInfoResponse(cargo=\(cargo.hexadecimalString), appSoftwareVersion=\(appSoftwareVersion), appSoftwarePartNumber=\(appSoftwarePartNumber), appSoftwarePartDashNumber=\(appSoftwarePartDashNumber), appSoftwarePartRevisionNumber=\(appSoftwarePartRevisionNumber), bootloaderVersion=\(bootloaderVersion), bootloaderPartNumber=\(bootloaderPartNumber), bootloaderPartDashNumber=\(String(describing: bootloaderPartDashNumber)), bootloaderPartRevisionNumber=\(String(describing: bootloaderPartRevisionNumber)))"
-    }
-}

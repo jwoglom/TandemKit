@@ -117,10 +117,9 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ParamChangeGlobalSettingsHistoryLog {
-    var description: String {
+    public var description: String {
         "ParamChangeGlobalSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modifiedData=\(modifiedData), qbDataStatus=\(qbDataStatus), qbActive=\(qbActive), qbDataEntryType=\(qbDataEntryType), qbIncrementUnits=\(qbIncrementUnits), qbIncrementCarbs=\(qbIncrementCarbs), buttonVolume=\(buttonVolume), qbVolume=\(qbVolume), bolusVolume=\(bolusVolume), reminderVolume=\(reminderVolume), alertVolume=\(alertVolume))"
     }
 }
+

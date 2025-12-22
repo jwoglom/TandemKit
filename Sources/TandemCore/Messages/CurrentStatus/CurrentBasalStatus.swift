@@ -18,6 +18,10 @@ public class CurrentBasalStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CurrentBasalStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing the basal profile rate and current delivery rate.
@@ -51,6 +55,9 @@ public class CurrentBasalStatusResponse: Message {
         self.currentBasalRate = currentBasalRate
         self.basalModifiedBitmask = basalModifiedBitmask
     }
+
+  salRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
+    }
 }
 
 public extension CurrentBasalStatusRequest {
@@ -59,13 +66,4 @@ public extension CurrentBasalStatusRequest {
     }
 }
 
-public extension CurrentBasalStatusResponse {
-    var description: String {
-        "CurrentBasalStatusResponse(cargo=\(cargo.hexadecimalString), profileBasalRate=\(profileBasalRate), currentBasalRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
-    }
-
-    var currentBasalRateForDisplay: String {
-        let unitsPerHour = Double(currentBasalRate) / 1000.0
-        return String(format: "%.2f u/hr", unitsPerHour)
-    }
 }

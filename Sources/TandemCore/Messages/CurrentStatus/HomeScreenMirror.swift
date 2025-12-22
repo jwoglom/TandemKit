@@ -18,6 +18,10 @@ public class HomeScreenMirrorRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "HomeScreenMirrorRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response mirroring the pump home screen icons.
@@ -84,6 +88,10 @@ public class HomeScreenMirrorResponse: Message {
         self.apControlStateIconId = apControlStateIconId
         self.remainingInsulinPlusIcon = remainingInsulinPlusIcon
         self.cgmDisplayData = cgmDisplayData
+    }
+
+    public var description: String {
+        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(cgmTrendIcon), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(cgmAlertIcon), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(statusIcon0), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(statusIcon1), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(bolusStatusIcon), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(basalStatusIcon), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(apControlStateIcon), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
     }
 }
 
@@ -155,12 +163,7 @@ public extension HomeScreenMirrorResponse {
     enum ApControlStateIcon: Int {
         case stateGray = 0
         case stateGrayRedBasalSuspended = 1
-        case stateGrayBlueIncreaseBasal = 2
-        case stateGrayOrangeAttenuatedBasal = 3
-        case hide = 200
-    }
-
-    var cgmTrendIcon: CGMTrendIcon? { CGMTrendIcon(rawValue: cgmTrendIconId) }
+        case stateGrayBlueIncralue: cgmTrendIconId) }
     var cgmAlertIcon: CGMAlertIcon? { CGMAlertIcon(rawValue: cgmAlertIconId) }
     var statusIcon0: StatusIcon0? { StatusIcon0(rawValue: statusIcon0Id) }
     var statusIcon1: StatusIcon1? { StatusIcon1(rawValue: statusIcon1Id) }
@@ -175,8 +178,3 @@ public extension HomeScreenMirrorRequest {
     }
 }
 
-public extension HomeScreenMirrorResponse {
-    var description: String {
-        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(cgmTrendIcon), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(cgmAlertIcon), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(statusIcon0), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(statusIcon1), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(bolusStatusIcon), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(basalStatusIcon), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(apControlStateIcon), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
-    }
-}

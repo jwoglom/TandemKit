@@ -22,6 +22,10 @@ public class SuspendPumpingRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "SuspendPumpingRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response after requesting pump suspension.
@@ -48,16 +52,10 @@ public class SuspendPumpingResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SuspendPumpingRequest {
+  n SuspendPumpingRequest {
     var description: String {
         "SuspendPumpingRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension SuspendPumpingResponse {
-    var description: String {
-        "SuspendPumpingResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

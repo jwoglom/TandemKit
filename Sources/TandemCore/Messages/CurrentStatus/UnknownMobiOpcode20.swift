@@ -18,6 +18,10 @@ public class UnknownMobiOpcode20Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "UnknownMobiOpcode20Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response to UnknownMobiOpcode20.
@@ -47,16 +51,10 @@ public class UnknownMobiOpcode20Response: Message {
         self.status = status
         self.unknown = unknown
     }
-}
 
-public extension UnknownMobiOpcode20Request {
+  public extension UnknownMobiOpcode20Request {
     var description: String {
         "UnknownMobiOpcode20Request(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension UnknownMobiOpcode20Response {
-    var description: String {
-        "UnknownMobiOpcode20Response(cargo=\(cargo.hexadecimalString), status=\(status), unknown=\(unknown))"
-    }
-}

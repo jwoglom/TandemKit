@@ -62,10 +62,9 @@ public class FillCannulaStateStreamResponse: Message {
     public enum FillCannulaState: Int {
         case cannulaFilled = 2
     }
-}
 
-public extension FillCannulaStateStreamResponse {
-    var description: String {
+    public var description: String {
         "FillCannulaStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
+

@@ -18,6 +18,10 @@ public class BasalLimitSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BasalLimitSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing the configured basal limits.
@@ -47,6 +51,9 @@ public class BasalLimitSettingsResponse: Message {
         self.basalLimit = basalLimit
         self.basalLimitDefault = basalLimitDefault
     }
+
+  asalLimitDefault))"
+    }
 }
 
 public extension BasalLimitSettingsRequest {
@@ -55,8 +62,3 @@ public extension BasalLimitSettingsRequest {
     }
 }
 
-public extension BasalLimitSettingsResponse {
-    var description: String {
-        "BasalLimitSettingsResponse(cargo=\(cargo.hexadecimalString), basalLimit=\(basalLimit), basalLimitDefault=\(basalLimitDefault))"
-    }
-}

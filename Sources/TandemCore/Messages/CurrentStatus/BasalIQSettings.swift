@@ -18,6 +18,10 @@ public class BasalIQSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BasalIQSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing Basal-IQ configuration settings.
@@ -51,6 +55,9 @@ public class BasalIQSettingsResponse: Message {
         self.suspendAlert = suspendAlert
         self.resumeAlert = resumeAlert
     }
+
+  dAlert=\(suspendAlert), resumeAlert=\(resumeAlert))"
+    }
 }
 
 public extension BasalIQSettingsRequest {
@@ -59,8 +66,3 @@ public extension BasalIQSettingsRequest {
     }
 }
 
-public extension BasalIQSettingsResponse {
-    var description: String {
-        "BasalIQSettingsResponse(cargo=\(cargo.hexadecimalString), hypoMinimization=\(hypoMinimization), suspendAlert=\(suspendAlert), resumeAlert=\(resumeAlert))"
-    }
-}

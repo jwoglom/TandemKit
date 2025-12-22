@@ -146,10 +146,9 @@ public class BolusDeliveryHistoryLog: HistoryLog {
             types.reduce(0) { $0 | $1.rawValue }
         }
     }
-}
 
-public extension BolusDeliveryHistoryLog {
-    var description: String {
+    public var description: String {
         "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(bolusSourceEnum), bolusSource=\(bolusSource), reserved=\(reserved), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
     }
 }
+

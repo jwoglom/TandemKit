@@ -26,6 +26,10 @@ public class CancelBolusRequest: Message {
         )
         self.bolusId = bolusId
     }
+
+    public var description: String {
+        "CancelBolusRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+    }
 }
 
 /// Response after attempting to cancel a bolus.
@@ -79,6 +83,9 @@ public class CancelBolusResponse: Message {
     public var wasCancelled: Bool {
         status == .success && reason == .noError
     }
+
+  reason=\(reason), reasonId=\(reasonId))"
+    }
 }
 
 public extension CancelBolusRequest {
@@ -87,8 +94,3 @@ public extension CancelBolusRequest {
     }
 }
 
-public extension CancelBolusResponse {
-    var description: String {
-        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), reason=\(reason), reasonId=\(reasonId))"
-    }
-}

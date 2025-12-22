@@ -61,10 +61,9 @@ public class IdpActionHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension IdpActionHistoryLog {
-    var description: String {
+    public var description: String {
         "IdpActionHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), status=\(status), sourceIdp=\(sourceIdp), name=\(name))"
     }
 }
+

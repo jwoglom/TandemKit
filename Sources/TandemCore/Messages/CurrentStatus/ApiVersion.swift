@@ -24,6 +24,10 @@ public class ApiVersionRequest: Message {
 
     public static let opCode = props.opCode
     public var payload: Data { cargo }
+
+    public var description: String {
+        "ApiVersionRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /**
@@ -59,6 +63,9 @@ public class ApiVersionResponse: Message {
     public func getApiVersion() -> ApiVersion {
         ApiVersion(major: majorVersion, minor: minorVersion)
     }
+
+  ion=\(minorVersion))"
+    }
 }
 
 public extension ApiVersionRequest {
@@ -67,8 +74,3 @@ public extension ApiVersionRequest {
     }
 }
 
-public extension ApiVersionResponse {
-    var description: String {
-        "ApiVersionResponse(cargo=\(cargo.hexadecimalString), majorVersion=\(majorVersion), minorVersion=\(minorVersion))"
-    }
-}

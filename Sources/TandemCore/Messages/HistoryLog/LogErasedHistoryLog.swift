@@ -38,10 +38,9 @@ public class LogErasedHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension LogErasedHistoryLog {
-    var description: String {
+    public var description: String {
         "LogErasedHistoryLog(cargo=\(cargo.hexadecimalString), numErased=\(numErased))"
     }
 }
+

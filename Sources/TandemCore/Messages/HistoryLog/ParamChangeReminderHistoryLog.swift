@@ -96,10 +96,9 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ParamChangeReminderHistoryLog {
-    var description: String {
+    public var description: String {
         "ParamChangeReminderHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), reminderId=\(reminderId), status=\(status), enable=\(enable), frequencyMinutes=\(frequencyMinutes), startTime=\(startTime), endTime=\(endTime), activeDays=\(activeDays))"
     }
 }
+

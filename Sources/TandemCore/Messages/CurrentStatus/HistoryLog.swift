@@ -27,6 +27,10 @@ public class HistoryLogRequest: Message {
         self.startLog = startLog
         self.numberOfLogs = numberOfLogs
     }
+
+    public var description: String {
+        "HistoryLogRequest(cargo=\(cargo.hexadecimalString), startLog=\(startLog), numberOfLogs=\(numberOfLogs))"
+    }
 }
 
 /// Response containing status and stream ID for a history log request.
@@ -56,16 +60,9 @@ public class HistoryLogResponse: Message {
         self.status = status
         self.streamId = streamId
     }
-}
 
-public extension HistoryLogRequest {
-    var description: String {
+  var description: String {
         "HistoryLogRequest(cargo=\(cargo.hexadecimalString), startLog=\(startLog), numberOfLogs=\(numberOfLogs))"
     }
 }
 
-public extension HistoryLogResponse {
-    var description: String {
-        "HistoryLogResponse(cargo=\(cargo.hexadecimalString), status=\(status), streamId=\(streamId))"
-    }
-}

@@ -31,10 +31,9 @@ public class UsbEnumeratedHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension UsbEnumeratedHistoryLog {
-    var description: String {
+    public var description: String {
         "UsbEnumeratedHistoryLog(cargo=\(cargo.hexadecimalString), negotiatedCurrentmA=\(negotiatedCurrentmA))"
     }
 }
+

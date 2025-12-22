@@ -18,6 +18,10 @@ public class MalfunctionStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "MalfunctionStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with malfunction codes.
@@ -74,6 +78,9 @@ public class MalfunctionStatusResponse: Message {
         }
         return true
     }
+
+  maining.hexadecimalString))"
+    }
 }
 
 public extension MalfunctionStatusRequest {
@@ -82,8 +89,3 @@ public extension MalfunctionStatusRequest {
     }
 }
 
-public extension MalfunctionStatusResponse {
-    var description: String {
-        "MalfunctionStatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB), remaining=\(remaining.hexadecimalString))"
-    }
-}

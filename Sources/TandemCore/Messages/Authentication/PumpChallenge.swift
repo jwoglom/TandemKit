@@ -32,6 +32,10 @@ public class PumpChallengeRequest: Message {
             pumpChallengeHash
         )
     }
+
+    public var description: String {
+        "PumpChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), pumpChallengeHash=\(pumpChallengeHash.hexadecimalString))"
+    }
 }
 
 /// Response indicating whether pairing succeeded.
@@ -65,16 +69,8 @@ public class PumpChallengeResponse: Message {
             Data([UInt8(success ? 1 : 0)])
         )
     }
-}
 
-public extension PumpChallengeRequest {
-    var description: String {
-        "PumpChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), pumpChallengeHash=\(pumpChallengeHash.hexadecimalString))"
+          "PumpChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), pumpChallengeHash=\(pumpChallengeHash.hexadecimalString))"
     }
 }
 
-public extension PumpChallengeResponse {
-    var description: String {
-        "PumpChallengeResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), success=\(success))"
-    }
-}

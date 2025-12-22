@@ -39,10 +39,9 @@ public class AlertActivatedHistoryLog: HistoryLog {
     public var alertResponseType: AlertStatusResponse.AlertResponseType? {
         AlertStatusResponse.AlertResponseType(rawValue: Int(alertId))
     }
-}
 
-public extension AlertActivatedHistoryLog {
-    var description: String {
+    public var description: String {
         "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(alertResponseType), alertId=\(alertId))"
     }
 }
+

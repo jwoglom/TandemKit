@@ -20,6 +20,10 @@ public class UnknownMobiOpcodeNeg124Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "UnknownMobiOpcodeNeg124Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 public class UnknownMobiOpcodeNeg124Response: Message {
@@ -45,16 +49,10 @@ public class UnknownMobiOpcodeNeg124Response: Message {
         cargo = Bytes.firstByteLittleEndian(status)
         self.status = status
     }
-}
 
-public extension UnknownMobiOpcodeNeg124Request {
+  MobiOpcodeNeg124Request {
     var description: String {
         "UnknownMobiOpcodeNeg124Request(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension UnknownMobiOpcodeNeg124Response {
-    var description: String {
-        "UnknownMobiOpcodeNeg124Response(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

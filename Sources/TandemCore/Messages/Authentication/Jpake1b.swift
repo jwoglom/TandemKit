@@ -36,6 +36,10 @@ public class Jpake1bRequest: Message {
         cargo.replaceSubrange(0 ..< 167, with: combined)
         return cargo
     }
+
+    public var description: String {
+        "Jpake1bRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
 }
 
 /// Response providing a hash of the second half of the first round.
@@ -71,16 +75,10 @@ public class Jpake1bResponse: Message {
             centralChallengeHash
         )
     }
-}
 
-public extension Jpake1bRequest {
+  pake1bRequest {
     var description: String {
         "Jpake1bRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
     }
 }
 
-public extension Jpake1bResponse {
-    var description: String {
-        "Jpake1bResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
-    }
-}

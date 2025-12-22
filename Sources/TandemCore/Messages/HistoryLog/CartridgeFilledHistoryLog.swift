@@ -42,10 +42,9 @@ public class CartridgeFilledHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CartridgeFilledHistoryLog {
-    var description: String {
+    public var description: String {
         "CartridgeFilledHistoryLog(cargo=\(cargo.hexadecimalString), insulinDisplay=\(insulinDisplay), insulinActual=\(insulinActual))"
     }
 }
+

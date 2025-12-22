@@ -19,6 +19,10 @@ public class PumpFeaturesV2Request: Message {
     public init(input: Int = 2) {
         cargo = Bytes.firstByteLittleEndian(input)
     }
+
+    public var description: String {
+        "PumpFeaturesV2Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing supported pump feature sets.
@@ -70,6 +74,9 @@ public class PumpFeaturesV2Response: Message {
         guard supportedFeatureIndex == .mainFeatures else { return nil }
         return PumpFeaturesV1Response.PumpFeatureType.fromBitmask(UInt64(pumpFeaturesBitmask))
     }
+
+  upportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
+    }
 }
 
 public extension PumpFeaturesV2Request {
@@ -78,8 +85,3 @@ public extension PumpFeaturesV2Request {
     }
 }
 
-public extension PumpFeaturesV2Response {
-    var description: String {
-        "PumpFeaturesV2Response(cargo=\(cargo.hexadecimalString), status=\(status), supportedFeatureIndex=\(supportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
-    }
-}

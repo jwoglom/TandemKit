@@ -39,6 +39,10 @@ public class DismissNotificationRequest: Message {
         case alarm = 2
         case cgmAlert = 3
     }
+
+    public var description: String {
+        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
+    }
 }
 
 /// Response after requesting a notification dismissal.
@@ -63,16 +67,8 @@ public class DismissNotificationResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension DismissNotificationRequest {
-    var description: String {
-        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
+  malString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
     }
 }
 
-public extension DismissNotificationResponse {
-    var description: String {
-        "DismissNotificationResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

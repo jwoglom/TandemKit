@@ -63,10 +63,9 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         case notComplete = 0
         case tubingFilled = 1
     }
-}
 
-public extension ExitFillTubingModeStateStreamResponse {
-    var description: String {
+    public var description: String {
         "ExitFillTubingModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
+

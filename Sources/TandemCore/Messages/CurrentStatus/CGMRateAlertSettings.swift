@@ -18,6 +18,10 @@ public class CGMRateAlertSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMRateAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing rate-of-change CGM alert configuration.
@@ -70,6 +74,9 @@ public class CGMRateAlertSettingsResponse: Message {
         self.fallRateEnabled = fallRateEnabled
         self.fallRateDefaultBitmask = fallRateDefaultBitmask
     }
+
+  nabled=\(riseRateEnabled), riseRateDefaultBitmask=\(riseRateDefaultBitmask), fallRateThreshold=\(fallRateThreshold), fallRateEnabled=\(fallRateEnabled), fallRateDefaultBitmask=\(fallRateDefaultBitmask))"
+    }
 }
 
 public extension CGMRateAlertSettingsRequest {
@@ -78,8 +85,3 @@ public extension CGMRateAlertSettingsRequest {
     }
 }
 
-public extension CGMRateAlertSettingsResponse {
-    var description: String {
-        "CGMRateAlertSettingsResponse(cargo=\(cargo.hexadecimalString), riseRateThreshold=\(riseRateThreshold), riseRateEnabled=\(riseRateEnabled), riseRateDefaultBitmask=\(riseRateDefaultBitmask), fallRateThreshold=\(fallRateThreshold), fallRateEnabled=\(fallRateEnabled), fallRateDefaultBitmask=\(fallRateDefaultBitmask))"
-    }
-}

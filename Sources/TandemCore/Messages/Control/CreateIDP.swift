@@ -110,6 +110,10 @@ public class CreateIDPRequest: Message {
             Data([UInt8(carbEntry & 0xFF)])
         )
     }
+
+    public var description: String {
+        "CreateIDPRequest(cargo=\(cargo.hexadecimalString), profileName=\(profileName), firstSegmentProfileCarbRatio=\(firstSegmentProfileCarbRatio), firstSegmentProfileBasalRate=\(firstSegmentProfileBasalRate), firstSegmentProfileTargetBG=\(firstSegmentProfileTargetBG), firstSegmentProfileISF=\(firstSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
+    }
 }
 
 /// Response indicating status of profile creation.
@@ -139,16 +143,8 @@ public class CreateIDPResponse: Message, StatusMessage {
         self.status = status
         self.newIdpId = newIdpId
     }
-}
 
-public extension CreateIDPRequest {
-    var description: String {
-        "CreateIDPRequest(cargo=\(cargo.hexadecimalString), profileName=\(profileName), firstSegmentProfileCarbRatio=\(firstSegmentProfileCarbRatio), firstSegmentProfileBasalRate=\(firstSegmentProfileBasalRate), firstSegmentProfileTargetBG=\(firstSegmentProfileTargetBG), firstSegmentProfileISF=\(firstSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
+  stSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
     }
 }
 
-public extension CreateIDPResponse {
-    var description: String {
-        "CreateIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), newIdpId=\(newIdpId))"
-    }
-}

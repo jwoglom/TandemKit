@@ -55,10 +55,9 @@ public class TimeChangedHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension TimeChangedHistoryLog {
-    var description: String {
+    public var description: String {
         "TimeChangedHistoryLog(cargo=\(cargo.hexadecimalString), timePrior=\(timePrior), timeAfter=\(timeAfter), rawRTC=\(rawRTC))"
     }
 }
+

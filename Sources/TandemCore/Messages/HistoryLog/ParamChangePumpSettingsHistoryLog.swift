@@ -96,10 +96,9 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ParamChangePumpSettingsHistoryLog {
-    var description: String {
+    public var description: String {
         "ParamChangePumpSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), isFeatureLocked=\(isFeatureLocked), autoShutdownEnabled=\(autoShutdownEnabled), oledTimeout=\(oledTimeout), autoShutdownDuration=\(autoShutdownDuration))"
     }
 }
+

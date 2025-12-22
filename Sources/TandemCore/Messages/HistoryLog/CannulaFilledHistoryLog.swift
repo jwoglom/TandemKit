@@ -27,10 +27,9 @@ public class CannulaFilledHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CannulaFilledHistoryLog {
-    var description: String {
+    public var description: String {
         "CannulaFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize))"
     }
 }
+

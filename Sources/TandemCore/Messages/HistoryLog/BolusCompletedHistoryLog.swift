@@ -79,10 +79,9 @@ public class BolusCompletedHistoryLog: HistoryLog {
     public var completionStatus: LastBolusStatusAbstractResponse.BolusStatus? {
         LastBolusStatusAbstractResponse.BolusStatus(rawValue: completionStatusId)
     }
-}
 
-public extension BolusCompletedHistoryLog {
-    var description: String {
+    public var description: String {
         "BolusCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(completionStatus), completionStatusId=\(completionStatusId), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
     }
 }
+

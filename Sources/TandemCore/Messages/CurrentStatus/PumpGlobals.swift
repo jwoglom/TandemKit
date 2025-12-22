@@ -18,6 +18,10 @@ public class PumpGlobalsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "PumpGlobalsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing global pump settings.
@@ -113,6 +117,9 @@ public class PumpGlobalsResponse: Message {
         case audioLow = 2
         case vibrate = 3
     }
+
+  Raw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), bolusAnnun=\(bolusAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
+    }
 }
 
 public extension PumpGlobalsRequest {
@@ -121,8 +128,3 @@ public extension PumpGlobalsRequest {
     }
 }
 
-public extension PumpGlobalsResponse {
-    var description: String {
-        "PumpGlobalsResponse(cargo=\(cargo.hexadecimalString), quickBolusEnabledRaw=\(quickBolusEnabledRaw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), bolusAnnun=\(bolusAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
-    }
-}

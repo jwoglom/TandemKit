@@ -32,6 +32,10 @@ public class ChangeControlIQSettingsRequest: Message {
         self.weightLbs = weightLbs
         self.totalDailyInsulinUnits = totalDailyInsulinUnits
     }
+
+    public var description: String {
+        "ChangeControlIQSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), weightLbs=\(weightLbs), totalDailyInsulinUnits=\(totalDailyInsulinUnits))"
+    }
 }
 
 /// Response with status after attempting to change Control-IQ settings.
@@ -56,16 +60,8 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF), 0, 0])
         self.status = status
     }
-}
 
-public extension ChangeControlIQSettingsRequest {
-    var description: String {
-        "ChangeControlIQSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), weightLbs=\(weightLbs), totalDailyInsulinUnits=\(totalDailyInsulinUnits))"
+  t(cargo=\(cargo.hexadecimalString), enabled=\(enabled), weightLbs=\(weightLbs), totalDailyInsulinUnits=\(totalDailyInsulinUnits))"
     }
 }
 
-public extension ChangeControlIQSettingsResponse {
-    var description: String {
-        "ChangeControlIQSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

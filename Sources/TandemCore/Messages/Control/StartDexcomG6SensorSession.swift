@@ -22,6 +22,10 @@ public class StartDexcomG6SensorSessionRequest: Message {
         cargo = Bytes.firstTwoBytesLittleEndian(sensorCode)
         self.sensorCode = sensorCode
     }
+
+    public var description: String {
+        "StartDexcomG6SensorSessionRequest(cargo=\(cargo.hexadecimalString), sensorCode=\(sensorCode))"
+    }
 }
 
 /// Response after starting a Dexcom G6 sensor session.
@@ -46,16 +50,9 @@ public class StartDexcomG6SensorSessionResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension StartDexcomG6SensorSessionRequest {
-    var description: String {
+      var description: String {
         "StartDexcomG6SensorSessionRequest(cargo=\(cargo.hexadecimalString), sensorCode=\(sensorCode))"
     }
 }
 
-public extension StartDexcomG6SensorSessionResponse {
-    var description: String {
-        "StartDexcomG6SensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

@@ -18,6 +18,10 @@ public class CGMOORAlertSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMOORAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing out-of-range CGM alert configuration.
@@ -51,6 +55,9 @@ public class CGMOORAlertSettingsResponse: Message {
         self.sensorTimeoutAlertEnabled = sensorTimeoutAlertEnabled
         self.sensorTimeoutDefaultBitmask = sensorTimeoutDefaultBitmask
     }
+
+  Threshold), sensorTimeoutAlertEnabled=\(sensorTimeoutAlertEnabled), sensorTimeoutDefaultBitmask=\(sensorTimeoutDefaultBitmask))"
+    }
 }
 
 public extension CGMOORAlertSettingsRequest {
@@ -59,8 +66,3 @@ public extension CGMOORAlertSettingsRequest {
     }
 }
 
-public extension CGMOORAlertSettingsResponse {
-    var description: String {
-        "CGMOORAlertSettingsResponse(cargo=\(cargo.hexadecimalString), sensorTimeoutAlertThreshold=\(sensorTimeoutAlertThreshold), sensorTimeoutAlertEnabled=\(sensorTimeoutAlertEnabled), sensorTimeoutDefaultBitmask=\(sensorTimeoutDefaultBitmask))"
-    }
-}

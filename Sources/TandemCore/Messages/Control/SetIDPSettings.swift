@@ -51,6 +51,10 @@ public class SetIDPSettingsRequest: Message {
     }
 
     public var changeType: ChangeType? { ChangeType(rawValue: changeTypeId) }
+
+    public var description: String {
+        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
+    }
 }
 
 /// Response confirming profile settings update.
@@ -75,16 +79,8 @@ public class SetIDPSettingsResponse: Message, StatusMessage {
         cargo = Bytes.combine(Data([UInt8(status & 0xFF)]), Data([2]))
         self.status = status
     }
-}
 
-public extension SetIDPSettingsRequest {
-    var description: String {
-        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
+  \(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
     }
 }
 
-public extension SetIDPSettingsResponse {
-    var description: String {
-        "SetIDPSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

@@ -39,10 +39,9 @@ public class NewDayHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension NewDayHistoryLog {
-    var description: String {
+    public var description: String {
         "NewDayHistoryLog(cargo=\(cargo.hexadecimalString), commandedBasalRate=\(commandedBasalRate))"
     }
 }
+

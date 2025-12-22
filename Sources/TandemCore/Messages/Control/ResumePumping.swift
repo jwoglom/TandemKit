@@ -21,6 +21,10 @@ public class ResumePumpingRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ResumePumpingRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response after requesting pump resume.
@@ -47,16 +51,9 @@ public class ResumePumpingResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension ResumePumpingRequest {
-    var description: String {
-        "ResumePumpingRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-
-public extension ResumePumpingResponse {
-    var description: String {
+    public var description: String {
         "ResumePumpingResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
+

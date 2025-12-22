@@ -91,10 +91,9 @@ public class PumpingStateStreamResponse: Message {
         case cartridgeIsInstalled = 16384
         case canSnooze = 32768
     }
-}
 
-public extension PumpingStateStreamResponse {
-    var description: String {
+    public var description: String {
         "PumpingStateStreamResponse(cargo=\(cargo.hexadecimalString), isPumpingStateSetAfterStartUp=\(isPumpingStateSetAfterStartUp), stateBitmask=\(stateBitmask))"
     }
 }
+

@@ -42,6 +42,10 @@ public class RemoteBgEntryRequest: Message {
         self.pumpTime = pumpTime
         self.bolusId = bolusId
     }
+
+    public var description: String {
+        "RemoteBgEntryRequest(cargo=\(cargo.hexadecimalString), bg=\(bg), useForCgmCalibration=\(useForCgmCalibration), isAutopopBg=\(isAutopopBg), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+    }
 }
 
 /// Response after adding a BG entry.
@@ -67,16 +71,8 @@ public class RemoteBgEntryResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension RemoteBgEntryRequest {
-    var description: String {
-        "RemoteBgEntryRequest(cargo=\(cargo.hexadecimalString), bg=\(bg), useForCgmCalibration=\(useForCgmCalibration), isAutopopBg=\(isAutopopBg), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+  g), useForCgmCalibration=\(useForCgmCalibration), isAutopopBg=\(isAutopopBg), pumpTime=\(pumpTime), bolusId=\(bolusId))"
     }
 }
 
-public extension RemoteBgEntryResponse {
-    var description: String {
-        "RemoteBgEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

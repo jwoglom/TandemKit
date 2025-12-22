@@ -25,6 +25,10 @@ public class SetDexcomG7PairingCodeRequest: Message {
         )
         self.pairingCode = pairingCode
     }
+
+    public var description: String {
+        "SetDexcomG7PairingCodeRequest(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
+    }
 }
 
 /// Response after setting a Dexcom G7 pairing code.
@@ -52,16 +56,9 @@ public class SetDexcomG7PairingCodeResponse: Message, StatusMessage {
         )
         self.status = status
     }
-}
 
-public extension SetDexcomG7PairingCodeRequest {
     var description: String {
         "SetDexcomG7PairingCodeRequest(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
     }
 }
 
-public extension SetDexcomG7PairingCodeResponse {
-    var description: String {
-        "SetDexcomG7PairingCodeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

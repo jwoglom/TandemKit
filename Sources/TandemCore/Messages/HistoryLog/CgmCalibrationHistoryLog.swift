@@ -67,10 +67,9 @@ public class CgmCalibrationHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CgmCalibrationHistoryLog {
-    var description: String {
+    public var description: String {
         "CgmCalibrationHistoryLog(cargo=\(cargo.hexadecimalString), currentTime=\(currentTime), timestamp=\(timestamp), calTimestamp=\(calTimestamp), value=\(value), currentDisplayValue=\(currentDisplayValue))"
     }
 }
+

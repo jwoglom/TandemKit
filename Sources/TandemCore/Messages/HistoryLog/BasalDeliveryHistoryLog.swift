@@ -77,10 +77,9 @@ public class BasalDeliveryHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension BasalDeliveryHistoryLog {
-    var description: String {
+    public var description: String {
         "BasalDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), commandedRateSource=\(commandedRateSource), commandedRate=\(commandedRate), profileBasalRate=\(profileBasalRate), algorithmRate=\(algorithmRate), tempRate=\(tempRate))"
     }
 }
+

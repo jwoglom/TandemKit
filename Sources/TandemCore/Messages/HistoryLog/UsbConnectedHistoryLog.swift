@@ -31,10 +31,9 @@ public class UsbConnectedHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension UsbConnectedHistoryLog {
-    var description: String {
+    public var description: String {
         "UsbConnectedHistoryLog(cargo=\(cargo.hexadecimalString), negotiatedCurrentmA=\(negotiatedCurrentmA))"
     }
 }
+

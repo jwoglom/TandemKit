@@ -18,6 +18,10 @@ public class CurrentBolusStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CurrentBolusStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing the currently active bolus, if any.
@@ -98,6 +102,9 @@ public class CurrentBolusStatusResponse: Message {
         case delivering = 1
         case alreadyDeliveredOrInvalid = 0
     }
+
+  =\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
+    }
 }
 
 public extension CurrentBolusStatusRequest {
@@ -106,8 +113,3 @@ public extension CurrentBolusStatusRequest {
     }
 }
 
-public extension CurrentBolusStatusResponse {
-    var description: String {
-        "CurrentBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
-    }
-}

@@ -18,6 +18,10 @@ public class HistoryLogStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "HistoryLogStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing counts for entries in the history log.
@@ -51,6 +55,9 @@ public class HistoryLogStatusResponse: Message {
         self.firstSequenceNum = firstSequenceNum
         self.lastSequenceNum = lastSequenceNum
     }
+
+  firstSequenceNum), lastSequenceNum=\(lastSequenceNum))"
+    }
 }
 
 public extension HistoryLogStatusRequest {
@@ -59,8 +66,3 @@ public extension HistoryLogStatusRequest {
     }
 }
 
-public extension HistoryLogStatusResponse {
-    var description: String {
-        "HistoryLogStatusResponse(cargo=\(cargo.hexadecimalString), numEntries=\(numEntries), firstSequenceNum=\(firstSequenceNum), lastSequenceNum=\(lastSequenceNum))"
-    }
-}

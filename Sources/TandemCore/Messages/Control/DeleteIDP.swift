@@ -27,6 +27,10 @@ public class DeleteIDPRequest: Message {
         )
         self.idpId = idpId
     }
+
+    public var description: String {
+        "DeleteIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    }
 }
 
 /// Response after deleting a profile.
@@ -59,6 +63,8 @@ public class DeleteIDPResponse: Message, StatusMessage {
         self.status = status
         self.deletedIdpId = deletedIdpId
     }
+
+  
 }
 
 public extension DeleteIDPRequest {
@@ -67,8 +73,3 @@ public extension DeleteIDPRequest {
     }
 }
 
-public extension DeleteIDPResponse {
-    var description: String {
-        "DeleteIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), deletedIdpId=\(deletedIdpId))"
-    }
-}

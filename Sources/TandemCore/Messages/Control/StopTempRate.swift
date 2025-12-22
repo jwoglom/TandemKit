@@ -22,6 +22,10 @@ public class StopTempRateRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "StopTempRateRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response after requesting a temp rate stop.
@@ -54,6 +58,9 @@ public class StopTempRateResponse: Message, StatusMessage {
         self.status = status
         self.tempRateId = tempRateId
     }
+
+  ))"
+    }
 }
 
 public extension StopTempRateRequest {
@@ -62,8 +69,3 @@ public extension StopTempRateRequest {
     }
 }
 
-public extension StopTempRateResponse {
-    var description: String {
-        "StopTempRateResponse(cargo=\(cargo.hexadecimalString), status=\(status), tempRateId=\(tempRateId))"
-    }
-}

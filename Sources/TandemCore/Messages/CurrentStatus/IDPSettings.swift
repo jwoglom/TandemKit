@@ -21,6 +21,10 @@ public class IDPSettingsRequest: Message {
         cargo = Bytes.firstByteLittleEndian(idpId)
         self.idpId = idpId
     }
+
+    public var description: String {
+        "IDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    }
 }
 
 /// Response describing the insulin delivery profile settings.
@@ -66,6 +70,9 @@ public class IDPSettingsResponse: Message {
         self.maxBolus = maxBolus
         self.carbEntry = carbEntry
     }
+
+  numberOfProfileSegments), insulinDuration=\(insulinDuration), maxBolus=\(maxBolus), carbEntry=\(carbEntry))"
+    }
 }
 
 public extension IDPSettingsRequest {
@@ -74,8 +81,3 @@ public extension IDPSettingsRequest {
     }
 }
 
-public extension IDPSettingsResponse {
-    var description: String {
-        "IDPSettingsResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), name=\(name), numberOfProfileSegments=\(numberOfProfileSegments), insulinDuration=\(insulinDuration), maxBolus=\(maxBolus), carbEntry=\(carbEntry))"
-    }
-}

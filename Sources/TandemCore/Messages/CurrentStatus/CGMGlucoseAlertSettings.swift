@@ -18,6 +18,10 @@ public class CGMGlucoseAlertSettingsRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMGlucoseAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing CGM glucose alert configuration.
@@ -80,6 +84,9 @@ public class CGMGlucoseAlertSettingsResponse: Message {
         self.lowGlucoseRepeatDuration = lowGlucoseRepeatDuration
         self.lowGlucoseAlertDefaultBitmask = lowGlucoseAlertDefaultBitmask
     }
+
+  d), highGlucoseAlertEnabled=\(highGlucoseAlertEnabled), highGlucoseRepeatDuration=\(highGlucoseRepeatDuration), highGlucoseAlertDefaultBitmask=\(highGlucoseAlertDefaultBitmask), lowGlucoseAlertThreshold=\(lowGlucoseAlertThreshold), lowGlucoseAlertEnabled=\(lowGlucoseAlertEnabled), lowGlucoseRepeatDuration=\(lowGlucoseRepeatDuration), lowGlucoseAlertDefaultBitmask=\(lowGlucoseAlertDefaultBitmask))"
+    }
 }
 
 public extension CGMGlucoseAlertSettingsRequest {
@@ -88,8 +95,3 @@ public extension CGMGlucoseAlertSettingsRequest {
     }
 }
 
-public extension CGMGlucoseAlertSettingsResponse {
-    var description: String {
-        "CGMGlucoseAlertSettingsResponse(cargo=\(cargo.hexadecimalString), highGlucoseAlertThreshold=\(highGlucoseAlertThreshold), highGlucoseAlertEnabled=\(highGlucoseAlertEnabled), highGlucoseRepeatDuration=\(highGlucoseRepeatDuration), highGlucoseAlertDefaultBitmask=\(highGlucoseAlertDefaultBitmask), lowGlucoseAlertThreshold=\(lowGlucoseAlertThreshold), lowGlucoseAlertEnabled=\(lowGlucoseAlertEnabled), lowGlucoseRepeatDuration=\(lowGlucoseRepeatDuration), lowGlucoseAlertDefaultBitmask=\(lowGlucoseAlertDefaultBitmask))"
-    }
-}

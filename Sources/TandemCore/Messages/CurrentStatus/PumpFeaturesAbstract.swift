@@ -16,10 +16,9 @@ public class PumpFeaturesAbstractResponse: Message {
     }
 
     public func getPrimaryFeatures() -> Set<PumpFeaturesV1Response.PumpFeatureType> { fatalError("abstract") }
-}
 
-public extension PumpFeaturesAbstractResponse {
-    var description: String {
+    public var description: String {
         "PumpFeaturesAbstractResponse(cargo=\(cargo.hexadecimalString))"
     }
 }
+

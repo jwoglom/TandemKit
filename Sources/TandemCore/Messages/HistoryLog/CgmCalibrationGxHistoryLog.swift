@@ -27,10 +27,9 @@ public class CgmCalibrationGxHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CgmCalibrationGxHistoryLog {
-    var description: String {
+    public var description: String {
         "CgmCalibrationGxHistoryLog(cargo=\(cargo.hexadecimalString), value=\(value))"
     }
 }
+

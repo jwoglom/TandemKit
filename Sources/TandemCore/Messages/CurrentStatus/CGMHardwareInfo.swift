@@ -18,6 +18,10 @@ public class CGMHardwareInfoRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMHardwareInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing CGM hardware information (e.g. transmitter ID).
@@ -47,6 +51,9 @@ public class CGMHardwareInfoResponse: Message {
         self.hardwareInfoString = hardwareInfoString
         self.lastByte = lastByte
     }
+
+  stByte=\(lastByte))"
+    }
 }
 
 public extension CGMHardwareInfoRequest {
@@ -55,8 +62,3 @@ public extension CGMHardwareInfoRequest {
     }
 }
 
-public extension CGMHardwareInfoResponse {
-    var description: String {
-        "CGMHardwareInfoResponse(cargo=\(cargo.hexadecimalString), hardwareInfoString=\(hardwareInfoString), lastByte=\(lastByte))"
-    }
-}

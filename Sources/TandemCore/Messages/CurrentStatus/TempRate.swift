@@ -18,6 +18,10 @@ public class TempRateRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "TempRateRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing temporary basal rate details.
@@ -60,6 +64,9 @@ public class TempRateResponse: Message {
     public var startTime: Date {
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(startTimeRaw))
     }
+
+  tage), startTimeRaw=\(startTimeRaw), duration=\(duration))"
+    }
 }
 
 public extension TempRateRequest {
@@ -68,8 +75,3 @@ public extension TempRateRequest {
     }
 }
 
-public extension TempRateResponse {
-    var description: String {
-        "TempRateResponse(cargo=\(cargo.hexadecimalString), active=\(active), percentage=\(percentage), startTimeRaw=\(startTimeRaw), duration=\(duration))"
-    }
-}

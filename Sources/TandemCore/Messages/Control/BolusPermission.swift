@@ -20,6 +20,10 @@ public class BolusPermissionRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BolusPermissionRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response for bolus permission including bolusId and nack reason.
@@ -71,6 +75,9 @@ public class BolusPermissionResponse: Message, StatusMessage {
     public var isPermissionGranted: Bool {
         status == 0 && nackReason == .permissionGranted
     }
+
+  ason=\(nackReason), nackReasonId=\(nackReasonId))"
+    }
 }
 
 public extension BolusPermissionRequest {
@@ -79,8 +86,3 @@ public extension BolusPermissionRequest {
     }
 }
 
-public extension BolusPermissionResponse {
-    var description: String {
-        "BolusPermissionResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), nackReason=\(nackReason), nackReasonId=\(nackReasonId))"
-    }
-}

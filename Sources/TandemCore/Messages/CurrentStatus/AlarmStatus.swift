@@ -20,6 +20,10 @@ public class AlarmStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "AlarmStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /**
@@ -131,6 +135,8 @@ public class AlarmStatusResponse: Message {
             return current
         }
     }
+
+   }
 }
 
 public extension AlarmStatusRequest {
@@ -139,8 +145,3 @@ public extension AlarmStatusRequest {
     }
 }
 
-public extension AlarmStatusResponse {
-    var description: String {
-        "AlarmStatusResponse(cargo=\(cargo.hexadecimalString), intMap=\(intMap), alarms=\(alarms))"
-    }
-}

@@ -19,6 +19,10 @@ public class ExitFillTubingModeRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ExitFillTubingModeRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response to exit fill tubing mode request.
@@ -43,16 +47,10 @@ public class ExitFillTubingModeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension ExitFillTubingModeRequest {
+  itFillTubingModeRequest {
     var description: String {
         "ExitFillTubingModeRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension ExitFillTubingModeResponse {
-    var description: String {
-        "ExitFillTubingModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

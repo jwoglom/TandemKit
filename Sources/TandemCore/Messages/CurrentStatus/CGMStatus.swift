@@ -18,6 +18,10 @@ public class CGMStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CGMStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with details about the current CGM session.
@@ -91,6 +95,9 @@ public class CGMStatusResponse: Message {
         case ok = 3
         case outOfRange = 4
     }
+
+  tateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
+    }
 }
 
 public extension CGMStatusRequest {
@@ -99,8 +106,3 @@ public extension CGMStatusRequest {
     }
 }
 
-public extension CGMStatusResponse {
-    var description: String {
-        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionState=\(sessionState), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
-    }
-}

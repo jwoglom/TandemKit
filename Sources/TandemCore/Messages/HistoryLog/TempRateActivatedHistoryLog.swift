@@ -55,10 +55,9 @@ public class TempRateActivatedHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension TempRateActivatedHistoryLog {
-    var description: String {
+    public var description: String {
         "TempRateActivatedHistoryLog(cargo=\(cargo.hexadecimalString), percent=\(percent), duration=\(duration), tempRateId=\(tempRateId))"
     }
 }
+

@@ -46,10 +46,9 @@ public class ControlIQUserModeChangeHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ControlIQUserModeChangeHistoryLog {
-    var description: String {
+    public var description: String {
         "ControlIQUserModeChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentUserMode=\(currentUserMode), previousUserMode=\(previousUserMode))"
     }
 }
+

@@ -18,6 +18,10 @@ public class BasalIQAlertInfoRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "BasalIQAlertInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing the Basal-IQ alert identifier.
@@ -54,16 +58,11 @@ public class BasalIQAlertInfoResponse: Message {
         case INSULIN_RESUMED_ALERT = 24577
         case INSULIN_RESUMED_TIMEOUT = 24578
     }
-}
 
+  
 public extension BasalIQAlertInfoRequest {
     var description: String {
         "BasalIQAlertInfoRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension BasalIQAlertInfoResponse {
-    var description: String {
-        "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alert=\(alert), alertId=\(alertId))"
-    }
-}

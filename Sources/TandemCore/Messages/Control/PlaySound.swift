@@ -19,6 +19,10 @@ public class PlaySoundRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "PlaySoundRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response after requesting a sound to be played.
@@ -43,16 +47,10 @@ public class PlaySoundResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension PlaySoundRequest {
+  ension PlaySoundRequest {
     var description: String {
         "PlaySoundRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension PlaySoundResponse {
-    var description: String {
-        "PlaySoundResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

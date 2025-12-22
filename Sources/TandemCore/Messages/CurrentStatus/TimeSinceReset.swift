@@ -18,6 +18,10 @@ public class TimeSinceResetRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "TimeSinceResetRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with pump internal time data.
@@ -52,6 +56,9 @@ public class TimeSinceResetResponse: Message {
     public var currentTimeDate: Date {
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(currentTime))
     }
+
+  set=\(pumpTimeSinceReset))"
+    }
 }
 
 public extension TimeSinceResetRequest {
@@ -60,8 +67,3 @@ public extension TimeSinceResetRequest {
     }
 }
 
-public extension TimeSinceResetResponse {
-    var description: String {
-        "TimeSinceResetResponse(cargo=\(cargo.hexadecimalString), currentTime=\(currentTime), pumpTimeSinceReset=\(pumpTimeSinceReset))"
-    }
-}

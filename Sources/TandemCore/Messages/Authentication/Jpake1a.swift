@@ -44,6 +44,10 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest {
         padded.append(Data(repeating: 0, count: 165 - challenge.count))
         return padded
     }
+
+    public var description: String {
+        "Jpake1aRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    }
 }
 
 /// Response to `Jpake1aRequest` providing a 165-byte hash of the challenge.
@@ -79,16 +83,10 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
             centralChallengeHash
         )
     }
-}
 
-public extension Jpake1aRequest {
+  pake1aRequest {
     var description: String {
         "Jpake1aRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
     }
 }
 
-public extension Jpake1aResponse {
-    var description: String {
-        "Jpake1aResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
-    }
-}

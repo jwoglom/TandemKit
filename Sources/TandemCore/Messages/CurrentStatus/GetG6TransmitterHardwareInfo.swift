@@ -18,6 +18,10 @@ public class GetG6TransmitterHardwareInfoRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "GetG6TransmitterHardwareInfoRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing Dexcom G6 transmitter hardware info.
@@ -64,6 +68,9 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         self.transmitterSoftwareNumber = transmitterSoftwareNumber
         unusedRemaining = Bytes.emptyBytes(32)
     }
+
+   transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), unusedRemaining=\(unusedRemaining.hexadecimalString))"
+    }
 }
 
 public extension GetG6TransmitterHardwareInfoRequest {
@@ -72,8 +79,3 @@ public extension GetG6TransmitterHardwareInfoRequest {
     }
 }
 
-public extension GetG6TransmitterHardwareInfoResponse {
-    var description: String {
-        "GetG6TransmitterHardwareInfoResponse(cargo=\(cargo.hexadecimalString), transmitterFirmwareVersion=\(transmitterFirmwareVersion), transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), unusedRemaining=\(unusedRemaining.hexadecimalString))"
-    }
-}

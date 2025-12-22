@@ -75,10 +75,9 @@ public class ParamChangeRemSettingsHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ParamChangeRemSettingsHistoryLog {
-    var description: String {
+    public var description: String {
         "ParamChangeRemSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowBgThreshold=\(lowBgThreshold), highBgThreshold=\(highBgThreshold), siteChangeDays=\(siteChangeDays))"
     }
 }
+

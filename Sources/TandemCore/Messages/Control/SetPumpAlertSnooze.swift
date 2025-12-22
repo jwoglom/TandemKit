@@ -32,6 +32,10 @@ public class SetPumpAlertSnoozeRequest: Message {
             UInt8(snoozeDurationMins & 0xFF)
         ])
     }
+
+    public var description: String {
+        "SetPumpAlertSnoozeRequest(cargo=\(cargo.hexadecimalString), snoozeEnabled=\(snoozeEnabled), snoozeDurationMins=\(snoozeDurationMins))"
+    }
 }
 
 /// Response after setting the pump alert snooze preference.
@@ -56,16 +60,8 @@ public class SetPumpAlertSnoozeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetPumpAlertSnoozeRequest {
-    var description: String {
-        "SetPumpAlertSnoozeRequest(cargo=\(cargo.hexadecimalString), snoozeEnabled=\(snoozeEnabled), snoozeDurationMins=\(snoozeDurationMins))"
+  ertSnoozeRequest(cargo=\(cargo.hexadecimalString), snoozeEnabled=\(snoozeEnabled), snoozeDurationMins=\(snoozeDurationMins))"
     }
 }
 
-public extension SetPumpAlertSnoozeResponse {
-    var description: String {
-        "SetPumpAlertSnoozeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

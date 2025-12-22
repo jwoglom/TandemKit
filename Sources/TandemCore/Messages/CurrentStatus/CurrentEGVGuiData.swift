@@ -18,6 +18,10 @@ public class CurrentEGVGuiDataRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "CurrentEGVGuiDataRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with the current CGM reading and trend information.
@@ -67,6 +71,9 @@ public class CurrentEGVGuiDataResponse: Message {
         case HIGH = 3
         case UNAVAILABLE = 4
     }
+
+  Seconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
+    }
 }
 
 public extension CurrentEGVGuiDataRequest {
@@ -75,8 +82,3 @@ public extension CurrentEGVGuiDataRequest {
     }
 }
 
-public extension CurrentEGVGuiDataResponse {
-    var description: String {
-        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
-    }
-}

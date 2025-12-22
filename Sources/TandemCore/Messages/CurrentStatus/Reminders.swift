@@ -18,6 +18,10 @@ public class RemindersRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "RemindersRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response with reminder configuration details.
@@ -156,6 +160,10 @@ public class RemindersResponse: Message {
             MultiDay.fromBitmask(Int(activeDays))
         }
     }
+
+    public var description: String {
+        "RemindersResponse(cargo=\(cargo.hexadecimalString), lowBGReminder=\(lowBGReminder), highBGReminder=\(highBGReminder), siteChangeReminder=\(siteChangeReminder), missedBolusReminder0=\(missedBolusReminder0), missedBolusReminder1=\(missedBolusReminder1), missedBolusReminder2=\(missedBolusReminder2), missedBolusReminder3=\(missedBolusReminder3), afterBolusReminder=\(afterBolusReminder), additionalBolusReminder=\(additionalBolusReminder), lowBGThreshold=\(lowBGThreshold), highBGThreshold=\(highBGThreshold), siteChangeDays=\(siteChangeDays), status=\(status))"
+    }
 }
 
 /// Representation of a HH:MM timestamp in minutes.
@@ -179,13 +187,7 @@ public struct MinsTime: Equatable, CustomStringConvertible {
 
 /// Days of the week bitmask helper.
 public enum MultiDay: Int, CaseIterable, Sendable {
-    case monday = 1
-    case tuesday = 2
-    case wednesday = 4
-    case thursday = 8
-    case friday = 16
-    case saturday = 32
-    case sunday = 64
+    case monda64
 
     public static func fromBitmask(_ bitmask: Int) -> Set<MultiDay> {
         var set = Set<MultiDay>()
@@ -210,8 +212,3 @@ public extension RemindersRequest {
     }
 }
 
-public extension RemindersResponse {
-    var description: String {
-        "RemindersResponse(cargo=\(cargo.hexadecimalString), lowBGReminder=\(lowBGReminder), highBGReminder=\(highBGReminder), siteChangeReminder=\(siteChangeReminder), missedBolusReminder0=\(missedBolusReminder0), missedBolusReminder1=\(missedBolusReminder1), missedBolusReminder2=\(missedBolusReminder2), missedBolusReminder3=\(missedBolusReminder3), afterBolusReminder=\(afterBolusReminder), additionalBolusReminder=\(additionalBolusReminder), lowBGThreshold=\(lowBGThreshold), highBGThreshold=\(highBGThreshold), siteChangeDays=\(siteChangeDays), status=\(status))"
-    }
-}

@@ -20,6 +20,10 @@ public class UnknownMobiOpcode110Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "UnknownMobiOpcode110Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Unknown MOBI opcode 110 response.
@@ -42,16 +46,10 @@ public class UnknownMobiOpcode110Response: Message {
     public init() {
         cargo = Data()
     }
-}
 
-public extension UnknownMobiOpcode110Request {
+  quest {
     var description: String {
         "UnknownMobiOpcode110Request(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension UnknownMobiOpcode110Response {
-    var description: String {
-        "UnknownMobiOpcode110Response(cargo=\(cargo.hexadecimalString))"
-    }
-}

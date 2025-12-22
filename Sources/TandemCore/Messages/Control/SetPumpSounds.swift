@@ -93,6 +93,10 @@ public class SetPumpSoundsRequest: Message {
         .AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnunRaw) }
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnunRaw) }
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw) }
+
+    public var description: String {
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(quickBolusAnnun), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(generalAnnun), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(reminderAnnun), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(alertAnnun), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(alarmAnnun), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+    }
 }
 
 /// Response confirming pump sound settings update.
@@ -117,26 +121,15 @@ public class SetPumpSoundsResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
+    public var description: String {
+        "SetPumpSoundsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
+    }
 }
 
 /// Bitmask fields indicating which annunciation settings changed.
 public enum PumpSoundChangeBitmask: Int {
-    case quickBolus = 1
-    case general = 2
-    case reminder = 4
-    case alert = 8
-    case alarm = 16
-    case cgmAlert = 32
-}
-
-public extension SetPumpSoundsRequest {
-    var description: String {
-        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(quickBolusAnnun), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(generalAnnun), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(reminderAnnun), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(alertAnnun), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(alarmAnnun), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+    w=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
     }
 }
 
-public extension SetPumpSoundsResponse {
-    var description: String {
-        "SetPumpSoundsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

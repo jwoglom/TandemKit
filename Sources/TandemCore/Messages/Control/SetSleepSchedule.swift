@@ -42,6 +42,10 @@ public class SetSleepScheduleRequest: Message {
     public var schedule: ControlIQSleepScheduleResponse.SleepSchedule {
         ControlIQSleepScheduleResponse.SleepSchedule(data: rawSchedule, index: 0)
     }
+
+    public var description: String {
+        "SetSleepScheduleRequest(cargo=\(cargo.hexadecimalString), slot=\(slot), rawSchedule=\(rawSchedule.hexadecimalString), flag=\(flag))"
+    }
 }
 
 /// Response indicating whether the sleep schedule was saved.
@@ -68,16 +72,8 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetSleepScheduleRequest {
-    var description: String {
-        "SetSleepScheduleRequest(cargo=\(cargo.hexadecimalString), slot=\(slot), rawSchedule=\(rawSchedule.hexadecimalString), flag=\(flag))"
+  cheduleRequest(cargo=\(cargo.hexadecimalString), slot=\(slot), rawSchedule=\(rawSchedule.hexadecimalString), flag=\(flag))"
     }
 }
 
-public extension SetSleepScheduleResponse {
-    var description: String {
-        "SetSleepScheduleResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

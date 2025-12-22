@@ -22,6 +22,10 @@ public class SetMaxBolusLimitRequest: Message {
         cargo = Bytes.firstTwoBytesLittleEndian(maxBolusMilliunits)
         self.maxBolusMilliunits = maxBolusMilliunits
     }
+
+    public var description: String {
+        "SetMaxBolusLimitRequest(cargo=\(cargo.hexadecimalString), maxBolusMilliunits=\(maxBolusMilliunits))"
+    }
 }
 
 /// Response after setting the max bolus limit.
@@ -46,16 +50,9 @@ public class SetMaxBolusLimitResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetMaxBolusLimitRequest {
-    var description: String {
+  ion: String {
         "SetMaxBolusLimitRequest(cargo=\(cargo.hexadecimalString), maxBolusMilliunits=\(maxBolusMilliunits))"
     }
 }
 
-public extension SetMaxBolusLimitResponse {
-    var description: String {
-        "SetMaxBolusLimitResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

@@ -18,6 +18,10 @@ public class NonControlIQIOBRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "NonControlIQIOBRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response providing IOB information when Control-IQ is not supported.
@@ -51,6 +55,9 @@ public class NonControlIQIOBResponse: Message {
         self.timeRemaining = timeRemaining
         self.totalIOB = totalIOB
     }
+
+  totalIOB=\(totalIOB))"
+    }
 }
 
 public extension NonControlIQIOBRequest {
@@ -59,8 +66,3 @@ public extension NonControlIQIOBRequest {
     }
 }
 
-public extension NonControlIQIOBResponse {
-    var description: String {
-        "NonControlIQIOBResponse(cargo=\(cargo.hexadecimalString), iob=\(iob), timeRemaining=\(timeRemaining), totalIOB=\(totalIOB))"
-    }
-}

@@ -22,6 +22,10 @@ public class ChangeTimeDateRequest: Message {
         cargo = Bytes.toUint32(tandemEpochTime)
         self.tandemEpochTime = tandemEpochTime
     }
+
+    public var description: String {
+        "ChangeTimeDateRequest(cargo=\(cargo.hexadecimalString), tandemEpochTime=\(tandemEpochTime))"
+    }
 }
 
 /// Response containing status after changing date/time.
@@ -46,16 +50,9 @@ public class ChangeTimeDateResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension ChangeTimeDateRequest {
-    var description: String {
+  scription: String {
         "ChangeTimeDateRequest(cargo=\(cargo.hexadecimalString), tandemEpochTime=\(tandemEpochTime))"
     }
 }
 
-public extension ChangeTimeDateResponse {
-    var description: String {
-        "ChangeTimeDateResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

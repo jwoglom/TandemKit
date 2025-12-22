@@ -18,10 +18,8 @@ public class NonexistentHistoryLogStreamRequest: Message {
     public init() {
         cargo = Data()
     }
-}
 
-public extension NonexistentHistoryLogStreamRequest {
-    var description: String {
+    public var description: String {
         "NonexistentHistoryLogStreamRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
@@ -71,10 +69,9 @@ public class HistoryLogStreamResponse: Message {
         self.historyLogStreamBytes = historyLogStreamBytes
         historyLogs = historyLogStreamBytes.map { HistoryLogParser.parse($0) }
     }
-}
 
-public extension HistoryLogStreamResponse {
-    var description: String {
+    public var description: String {
         "HistoryLogStreamResponse(cargo=\(cargo.hexadecimalString), numberOfHistoryLogs=\(numberOfHistoryLogs), streamId=\(streamId), historyLogStreamBytes=\(historyLogStreamBytes.map(\.hexadecimalString)), historyLogs=\(historyLogs))"
     }
 }
+

@@ -19,6 +19,10 @@ public class UnknownMobiOpcodeNeg70Request: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "UnknownMobiOpcodeNeg70Request(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 public class UnknownMobiOpcodeNeg70Response: Message {
@@ -40,16 +44,10 @@ public class UnknownMobiOpcodeNeg70Response: Message {
     public init() {
         cargo = Data()
     }
-}
 
-public extension UnknownMobiOpcodeNeg70Request {
+  quest {
     var description: String {
         "UnknownMobiOpcodeNeg70Request(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension UnknownMobiOpcodeNeg70Response {
-    var description: String {
-        "UnknownMobiOpcodeNeg70Response(cargo=\(cargo.hexadecimalString))"
-    }
-}

@@ -18,6 +18,10 @@ public class InsulinStatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "InsulinStatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response describing remaining insulin in the reservoir.
@@ -51,6 +55,9 @@ public class InsulinStatusResponse: Message {
         self.isEstimate = isEstimate
         self.insulinLowAmount = insulinLowAmount
     }
+
+  t), isEstimate=\(isEstimate), insulinLowAmount=\(insulinLowAmount))"
+    }
 }
 
 public extension InsulinStatusRequest {
@@ -59,8 +66,3 @@ public extension InsulinStatusRequest {
     }
 }
 
-public extension InsulinStatusResponse {
-    var description: String {
-        "InsulinStatusResponse(cargo=\(cargo.hexadecimalString), currentInsulinAmount=\(currentInsulinAmount), isEstimate=\(isEstimate), insulinLowAmount=\(insulinLowAmount))"
-    }
-}

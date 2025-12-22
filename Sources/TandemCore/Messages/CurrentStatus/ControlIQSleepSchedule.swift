@@ -18,6 +18,10 @@ public class ControlIQSleepScheduleRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "ControlIQSleepScheduleRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing up to four sleep schedule segments.
@@ -92,8 +96,3 @@ public class ControlIQSleepScheduleResponse: Message {
     }
 }
 
-public extension ControlIQSleepScheduleRequest {
-    var description: String {
-        "ControlIQSleepScheduleRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}

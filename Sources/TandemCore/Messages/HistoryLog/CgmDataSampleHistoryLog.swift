@@ -36,10 +36,9 @@ public class CgmDataSampleHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension CgmDataSampleHistoryLog {
-    var description: String {
+    public var description: String {
         "CgmDataSampleHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), value=\(value))"
     }
 }
+

@@ -18,6 +18,10 @@ public class OtherNotification2StatusRequest: Message {
     public init() {
         cargo = Data()
     }
+
+    public var description: String {
+        "OtherNotification2StatusRequest(cargo=\(cargo.hexadecimalString))"
+    }
 }
 
 /// Response containing two additional notification codes.
@@ -47,16 +51,10 @@ public class OtherNotification2StatusResponse: Message {
         self.codeA = codeA
         self.codeB = codeB
     }
-}
 
-public extension OtherNotification2StatusRequest {
+  nsion OtherNotification2StatusRequest {
     var description: String {
         "OtherNotification2StatusRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public extension OtherNotification2StatusResponse {
-    var description: String {
-        "OtherNotification2StatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB))"
-    }
-}

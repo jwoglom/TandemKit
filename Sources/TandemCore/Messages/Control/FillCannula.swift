@@ -25,6 +25,10 @@ public class FillCannulaRequest: Message {
         cargo = Bytes.firstTwoBytesLittleEndian(primeSizeMilliUnits)
         self.primeSizeMilliUnits = primeSizeMilliUnits
     }
+
+    public var description: String {
+        "FillCannulaRequest(cargo=\(cargo.hexadecimalString), primeSizeMilliUnits=\(primeSizeMilliUnits))"
+    }
 }
 
 /// Response to FillCannulaRequest.
@@ -52,16 +56,9 @@ public class FillCannulaResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension FillCannulaRequest {
-    var description: String {
+  n: String {
         "FillCannulaRequest(cargo=\(cargo.hexadecimalString), primeSizeMilliUnits=\(primeSizeMilliUnits))"
     }
 }
 
-public extension FillCannulaResponse {
-    var description: String {
-        "FillCannulaResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

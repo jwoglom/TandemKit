@@ -46,10 +46,9 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
             )
         )
     }
-}
 
-public extension ControlIQPcmChangeHistoryLog {
-    var description: String {
+    public var description: String {
         "ControlIQPcmChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentPcm=\(currentPcm), previousPcm=\(previousPcm))"
     }
 }
+

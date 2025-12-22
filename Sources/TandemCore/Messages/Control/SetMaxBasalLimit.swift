@@ -25,6 +25,10 @@ public class SetMaxBasalLimitRequest: Message {
         )
         self.maxHourlyBasalMilliunits = maxHourlyBasalMilliunits
     }
+
+    public var description: String {
+        "SetMaxBasalLimitRequest(cargo=\(cargo.hexadecimalString), maxHourlyBasalMilliunits=\(maxHourlyBasalMilliunits))"
+    }
 }
 
 /// Response after setting the max basal limit.
@@ -49,16 +53,9 @@ public class SetMaxBasalLimitResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-}
 
-public extension SetMaxBasalLimitRequest {
-    var description: String {
+  {
         "SetMaxBasalLimitRequest(cargo=\(cargo.hexadecimalString), maxHourlyBasalMilliunits=\(maxHourlyBasalMilliunits))"
     }
 }
 
-public extension SetMaxBasalLimitResponse {
-    var description: String {
-        "SetMaxBasalLimitResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
-    }
-}

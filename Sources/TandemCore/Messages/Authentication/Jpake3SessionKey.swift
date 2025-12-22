@@ -26,6 +26,10 @@ public class Jpake3SessionKeyRequest: Message {
     public static func buildCargo(challengeParam: Int) -> Data {
         Bytes.firstTwoBytesLittleEndian(challengeParam)
     }
+
+    public var description: String {
+        "Jpake3SessionKeyRequest(cargo=\(cargo.hexadecimalString), challengeParam=\(challengeParam))"
+    }
 }
 
 /// Response with nonce and reserved values.
@@ -68,6 +72,9 @@ public class Jpake3SessionKeyResponse: Message {
             reserved
         )
     }
+
+  ng), deviceKeyReserved=\(deviceKeyReserved.hexadecimalString))"
+    }
 }
 
 public extension Jpake3SessionKeyRequest {
@@ -76,8 +83,3 @@ public extension Jpake3SessionKeyRequest {
     }
 }
 
-public extension Jpake3SessionKeyResponse {
-    var description: String {
-        "Jpake3SessionKeyResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), deviceKeyNonce=\(deviceKeyNonce.hexadecimalString), deviceKeyReserved=\(deviceKeyReserved.hexadecimalString))"
-    }
-}
