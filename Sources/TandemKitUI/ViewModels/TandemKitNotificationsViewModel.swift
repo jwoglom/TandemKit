@@ -46,6 +46,11 @@ class TandemKitNotificationsViewModel: ObservableObject {
                 }
             }
 
+            // Auto-acknowledge basal alerts if enabled
+            if self.pumpManager?.autoAcknowledgeBasalAlerts == true {
+                self.autoAcknowledgeBasalAlerts()
+            }
+
             // Get all active notifications
             let items = self.notificationBundle.get()
 
@@ -54,6 +59,38 @@ class TandemKitNotificationsViewModel: ObservableObject {
                 self.isRefreshing = false
                 self.lastRefreshTime = Date()
             }
+        }
+    }
+
+    private func autoAcknowledgeBasalAlerts() {
+        guard let alertResponse = notificationBundle.alertStatusResponse else { return }
+
+        let basalAlertsToAck = alertResponse.alerts.intersection(
+            AlertStatusResponse.AlertResponseType.basalAlertsToIgnoreWhenLooping
+        )
+
+        guard !basalAlertsToAck.isEmpty else { return }
+
+        log.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge")
+
+        for alert in basalAlertsToAck {
+            let request = DismissNotificationRequest(
+                notificationType: .alert,
+                notificationId: UInt32(alert.rawValue)
+            )
+
+            if let response = self.sendMessage(message: request) as? DismissNotificationResponse {
+                if response.status == 0 {
+                    log.info("[auto-ack] Successfully acknowledged \(alert)")
+                } else {
+                    log.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
+                }
+            }
+        }
+
+        // Re-fetch alert status after acknowledging
+        if let response = self.sendMessage(message: AlertStatusRequest()) as? AlertStatusResponse {
+            notificationBundle.add(response)
         }
     }
 
