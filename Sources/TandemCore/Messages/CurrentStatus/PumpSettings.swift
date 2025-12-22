@@ -79,6 +79,7 @@ public class PumpSettingsResponse: Message {
         self.oledTimeout = oledTimeout
         self.status = status
     }
+
     public var description: String {
         "PumpSettingsResponse(cargo=\(cargo.hexadecimalString), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), autoShutdownEnabled=\(autoShutdownEnabled), autoShutdownDuration=\(autoShutdownDuration), featureLock=\(featureLock), oledTimeout=\(oledTimeout), status=\(status))"
     }

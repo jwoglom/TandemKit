@@ -74,4 +74,3 @@ public class HistoryLogStreamResponse: Message {
         "HistoryLogStreamResponse(cargo=\(cargo.hexadecimalString), numberOfHistoryLogs=\(numberOfHistoryLogs), streamId=\(streamId), historyLogStreamBytes=\(historyLogStreamBytes.map(\.hexadecimalString)), historyLogs=\(historyLogs))"
     }
 }
-

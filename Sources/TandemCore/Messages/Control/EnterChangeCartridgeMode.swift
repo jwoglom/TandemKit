@@ -49,6 +49,7 @@ public class EnterChangeCartridgeModeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
     public var description: String {
         "EnterChangeCartridgeModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

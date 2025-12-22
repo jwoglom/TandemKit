@@ -60,6 +60,7 @@ public class SetPumpAlertSnoozeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
     public var description: String {
         "SetPumpAlertSnoozeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

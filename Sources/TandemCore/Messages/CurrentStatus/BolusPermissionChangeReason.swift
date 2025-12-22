@@ -81,6 +81,7 @@ public class BolusPermissionChangeReasonResponse: Message {
         case REVOKED_INVALID_REQUEST = 6
         case UNKNOWN = 7
     }
+
     public var description: String {
         "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(lastChangeReason), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
     }

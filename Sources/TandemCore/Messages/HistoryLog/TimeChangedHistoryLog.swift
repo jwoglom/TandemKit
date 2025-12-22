@@ -60,4 +60,3 @@ public class TimeChangedHistoryLog: HistoryLog {
         "TimeChangedHistoryLog(cargo=\(cargo.hexadecimalString), timePrior=\(timePrior), timeAfter=\(timeAfter), rawRTC=\(rawRTC))"
     }
 }
-

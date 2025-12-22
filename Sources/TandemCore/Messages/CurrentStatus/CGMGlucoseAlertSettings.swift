@@ -84,6 +84,7 @@ public class CGMGlucoseAlertSettingsResponse: Message {
         self.lowGlucoseRepeatDuration = lowGlucoseRepeatDuration
         self.lowGlucoseAlertDefaultBitmask = lowGlucoseAlertDefaultBitmask
     }
+
     public var description: String {
         "CGMGlucoseAlertSettingsResponse(cargo=\(cargo.hexadecimalString), highGlucoseAlertThreshold=\(highGlucoseAlertThreshold), highGlucoseAlertEnabled=\(highGlucoseAlertEnabled), highGlucoseRepeatDuration=\(highGlucoseRepeatDuration), highGlucoseAlertDefaultBitmask=\(highGlucoseAlertDefaultBitmask), lowGlucoseAlertThreshold=\(lowGlucoseAlertThreshold), lowGlucoseAlertEnabled=\(lowGlucoseAlertEnabled), lowGlucoseRepeatDuration=\(lowGlucoseRepeatDuration), lowGlucoseAlertDefaultBitmask=\(lowGlucoseAlertDefaultBitmask))"
     }

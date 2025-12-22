@@ -43,4 +43,3 @@ public class LogErasedHistoryLog: HistoryLog {
         "LogErasedHistoryLog(cargo=\(cargo.hexadecimalString), numErased=\(numErased))"
     }
 }
-

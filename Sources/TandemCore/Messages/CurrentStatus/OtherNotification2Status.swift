@@ -51,6 +51,7 @@ public class OtherNotification2StatusResponse: Message {
         self.codeA = codeA
         self.codeB = codeB
     }
+
     public var description: String {
         "OtherNotification2StatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB))"
     }

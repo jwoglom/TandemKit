@@ -74,6 +74,7 @@ public class CGMRateAlertSettingsResponse: Message {
         self.fallRateEnabled = fallRateEnabled
         self.fallRateDefaultBitmask = fallRateDefaultBitmask
     }
+
     public var description: String {
         "CGMRateAlertSettingsResponse(cargo=\(cargo.hexadecimalString), riseRateThreshold=\(riseRateThreshold), riseRateEnabled=\(riseRateEnabled), riseRateDefaultBitmask=\(riseRateDefaultBitmask), fallRateThreshold=\(fallRateThreshold), fallRateEnabled=\(fallRateEnabled), fallRateDefaultBitmask=\(fallRateDefaultBitmask))"
     }

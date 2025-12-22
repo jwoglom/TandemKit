@@ -80,4 +80,3 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
         "BolusRequestedMsg3HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), spare=\(spare), foodBolusSize=\(foodBolusSize), correctionBolusSize=\(correctionBolusSize), totalBolusSize=\(totalBolusSize))"
     }
 }
-

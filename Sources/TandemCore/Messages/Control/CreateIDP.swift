@@ -143,6 +143,7 @@ public class CreateIDPResponse: Message, StatusMessage {
         self.status = status
         self.newIdpId = newIdpId
     }
+
     public var description: String {
         "CreateIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), newIdpId=\(newIdpId))"
     }

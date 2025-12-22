@@ -72,6 +72,7 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
     public var description: String {
         "SetSleepScheduleResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

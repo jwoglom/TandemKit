@@ -87,4 +87,3 @@ public class DailyBasalHistoryLog: HistoryLog {
         "DailyBasalHistoryLog(cargo=\(cargo.hexadecimalString), dailyTotalBasal=\(dailyTotalBasal), lastBasalRate=\(lastBasalRate), iob=\(iob), finalEventForDay=\(finalEventForDay), batteryChargeRaw=\(batteryChargeRaw), lipoMv=\(lipoMv))"
     }
 }
-

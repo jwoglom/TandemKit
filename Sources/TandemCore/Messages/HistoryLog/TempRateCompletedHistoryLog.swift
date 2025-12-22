@@ -49,4 +49,3 @@ public class TempRateCompletedHistoryLog: HistoryLog {
         "TempRateCompletedHistoryLog(cargo=\(cargo.hexadecimalString), tempRateId=\(tempRateId), timeLeft=\(timeLeft))"
     }
 }
-

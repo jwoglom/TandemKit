@@ -32,4 +32,3 @@ public class CannulaFilledHistoryLog: HistoryLog {
         "CannulaFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize))"
     }
 }
-

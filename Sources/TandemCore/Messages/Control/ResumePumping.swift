@@ -56,4 +56,3 @@ public class ResumePumpingResponse: Message, StatusMessage {
         "ResumePumpingResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

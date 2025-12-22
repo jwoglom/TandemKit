@@ -68,6 +68,7 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         self.transmitterSoftwareNumber = transmitterSoftwareNumber
         unusedRemaining = Bytes.emptyBytes(32)
     }
+
     public var description: String {
         "GetG6TransmitterHardwareInfoResponse(cargo=\(cargo.hexadecimalString), transmitterFirmwareVersion=\(transmitterFirmwareVersion), transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), unusedRemaining=\(unusedRemaining.hexadecimalString))"
     }

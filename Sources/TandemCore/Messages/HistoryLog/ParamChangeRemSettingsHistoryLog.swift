@@ -80,4 +80,3 @@ public class ParamChangeRemSettingsHistoryLog: HistoryLog {
         "ParamChangeRemSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowBgThreshold=\(lowBgThreshold), highBgThreshold=\(highBgThreshold), siteChangeDays=\(siteChangeDays))"
     }
 }
-

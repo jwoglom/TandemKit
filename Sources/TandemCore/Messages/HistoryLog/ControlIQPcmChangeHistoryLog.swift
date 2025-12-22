@@ -51,4 +51,3 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
         "ControlIQPcmChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentPcm=\(currentPcm), previousPcm=\(previousPcm))"
     }
 }
-

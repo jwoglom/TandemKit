@@ -80,4 +80,3 @@ public class BolexCompletedHistoryLog: HistoryLog {
         "BolexCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(completionStatus), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
     }
 }
-

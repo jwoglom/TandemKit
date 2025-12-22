@@ -35,4 +35,3 @@ public class AlarmActivatedHistoryLog: HistoryLog {
         "AlarmActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alarmResponseType=\(alarmResponseType), alarmId=\(alarmId))"
     }
 }
-

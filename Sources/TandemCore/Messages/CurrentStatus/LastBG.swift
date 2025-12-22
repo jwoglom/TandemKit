@@ -68,6 +68,7 @@ public class LastBGResponse: Message {
         case manual = 0
         case cgm = 1
     }
+
     public var description: String {
         "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSource=\(bgSource), bgSourceId=\(bgSourceId))"
     }

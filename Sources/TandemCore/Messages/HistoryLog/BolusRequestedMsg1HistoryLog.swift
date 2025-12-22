@@ -98,4 +98,3 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
         "BolusRequestedMsg1HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), bolusTypeId=\(bolusTypeId), correctionBolusIncluded=\(correctionBolusIncluded), carbAmount=\(carbAmount), bg=\(bg), iob=\(iob), carbRatio=\(carbRatio))"
     }
 }
-

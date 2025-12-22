@@ -55,6 +55,7 @@ public class NonControlIQIOBResponse: Message {
         self.timeRemaining = timeRemaining
         self.totalIOB = totalIOB
     }
+
     public var description: String {
         "NonControlIQIOBResponse(cargo=\(cargo.hexadecimalString), iob=\(iob), timeRemaining=\(timeRemaining), totalIOB=\(totalIOB))"
     }

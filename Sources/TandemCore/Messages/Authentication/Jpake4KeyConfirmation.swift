@@ -106,6 +106,7 @@ public class Jpake4KeyConfirmationResponse: Message {
             hashDigest
         )
     }
+
     public var description: String {
         "Jpake4KeyConfirmationResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
     }

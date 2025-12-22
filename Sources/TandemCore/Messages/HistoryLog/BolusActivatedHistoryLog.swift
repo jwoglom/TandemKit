@@ -54,4 +54,3 @@ public class BolusActivatedHistoryLog: HistoryLog {
         "BolusActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), iob=\(iob), bolusSize=\(bolusSize))"
     }
 }
-

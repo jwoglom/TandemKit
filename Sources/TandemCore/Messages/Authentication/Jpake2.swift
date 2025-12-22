@@ -75,6 +75,7 @@ public class Jpake2Response: Message {
             centralChallengeHash
         )
     }
+
     public var description: String {
         "Jpake2Response(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
     }

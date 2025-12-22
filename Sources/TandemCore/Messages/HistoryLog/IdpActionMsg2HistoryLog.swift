@@ -44,4 +44,3 @@ public class IdpActionMsg2HistoryLog: HistoryLog {
         "IdpActionMsg2HistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), name=\(name))"
     }
 }
-

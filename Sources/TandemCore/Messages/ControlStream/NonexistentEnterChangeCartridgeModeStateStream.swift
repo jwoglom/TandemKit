@@ -67,4 +67,3 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
         "EnterChangeCartridgeModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
-

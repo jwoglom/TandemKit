@@ -70,7 +70,7 @@ public class PumpChallengeResponse: Message {
         )
     }
 
-          "PumpChallengeRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), pumpChallengeHash=\(pumpChallengeHash.hexadecimalString))"
+    public var description: String {
+        "PumpChallengeResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), success=\(success))"
     }
 }
-

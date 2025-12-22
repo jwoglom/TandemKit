@@ -86,4 +86,3 @@ public class CgmDataGxHistoryLog: HistoryLog {
         "CgmDataGxHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), type=\(type), rate=\(rate), rssi=\(rssi), value=\(value), timestamp=\(timestamp), transmitterTimestamp=\(transmitterTimestamp))"
     }
 }
-

@@ -66,4 +66,3 @@ public class IdpActionHistoryLog: HistoryLog {
         "IdpActionHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), status=\(status), sourceIdp=\(sourceIdp), name=\(name))"
     }
 }
-

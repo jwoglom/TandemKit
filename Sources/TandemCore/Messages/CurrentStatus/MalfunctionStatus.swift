@@ -78,6 +78,7 @@ public class MalfunctionStatusResponse: Message {
         }
         return true
     }
+
     public var description: String {
         "MalfunctionStatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB), remaining=\(remaining.hexadecimalString))"
     }

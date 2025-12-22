@@ -68,4 +68,3 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         "ExitFillTubingModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
-

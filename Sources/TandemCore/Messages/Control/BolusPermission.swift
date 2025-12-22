@@ -75,6 +75,7 @@ public class BolusPermissionResponse: Message, StatusMessage {
     public var isPermissionGranted: Bool {
         status == 0 && nackReason == .permissionGranted
     }
+
     public var description: String {
         "BolusPermissionResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), nackReason=\(nackReason), nackReasonId=\(nackReasonId))"
     }

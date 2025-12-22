@@ -44,6 +44,7 @@ public class OtherNotificationStatusResponse: Message {
     public init() {
         cargo = Bytes.emptyBytes(Int(Self.props.size))
     }
+
     public var description: String {
         "OtherNotificationStatusResponse(cargo=\(cargo.hexadecimalString))"
     }

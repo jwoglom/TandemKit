@@ -67,4 +67,3 @@ public class FillCannulaStateStreamResponse: Message {
         "FillCannulaStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
     }
 }
-

@@ -36,4 +36,3 @@ public class UsbConnectedHistoryLog: HistoryLog {
         "UsbConnectedHistoryLog(cargo=\(cargo.hexadecimalString), negotiatedCurrentmA=\(negotiatedCurrentmA))"
     }
 }
-

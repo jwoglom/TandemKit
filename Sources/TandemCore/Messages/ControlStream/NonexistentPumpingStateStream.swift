@@ -96,4 +96,3 @@ public class PumpingStateStreamResponse: Message {
         "PumpingStateStreamResponse(cargo=\(cargo.hexadecimalString), isPumpingStateSetAfterStartUp=\(isPumpingStateSetAfterStartUp), stateBitmask=\(stateBitmask))"
     }
 }
-

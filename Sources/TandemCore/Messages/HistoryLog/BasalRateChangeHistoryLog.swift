@@ -94,4 +94,3 @@ public class BasalRateChangeHistoryLog: HistoryLog {
         "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeType=\(changeType), changeTypeId=\(changeTypeId))"
     }
 }
-

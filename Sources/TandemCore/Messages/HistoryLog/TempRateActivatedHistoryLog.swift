@@ -60,4 +60,3 @@ public class TempRateActivatedHistoryLog: HistoryLog {
         "TempRateActivatedHistoryLog(cargo=\(cargo.hexadecimalString), percent=\(percent), duration=\(duration), tempRateId=\(tempRateId))"
     }
 }
-

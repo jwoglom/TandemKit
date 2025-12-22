@@ -40,4 +40,3 @@ public class CarbEnteredHistoryLog: HistoryLog {
         "CarbEnteredHistoryLog(cargo=\(cargo.hexadecimalString), carbs=\(carbs))"
     }
 }
-

@@ -72,6 +72,7 @@ public class Jpake3SessionKeyResponse: Message {
             reserved
         )
     }
+
     public var description: String {
         "Jpake3SessionKeyResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), deviceKeyNonce=\(deviceKeyNonce.hexadecimalString), deviceKeyReserved=\(deviceKeyReserved.hexadecimalString))"
     }

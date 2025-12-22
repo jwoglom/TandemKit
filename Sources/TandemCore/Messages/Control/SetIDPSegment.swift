@@ -136,6 +136,7 @@ public class SetIDPSegmentResponse: Message, StatusMessage {
         self.status = status
         self.unknown = unknown
     }
+
     public var description: String {
         "SetIDPSegmentResponse(cargo=\(cargo.hexadecimalString), status=\(status), unknown=\(unknown))"
     }

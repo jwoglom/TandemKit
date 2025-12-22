@@ -61,4 +61,3 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
         "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reason=\(reason), reasonId=\(reasonId))"
     }
 }
-

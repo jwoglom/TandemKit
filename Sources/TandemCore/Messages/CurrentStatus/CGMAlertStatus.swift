@@ -130,6 +130,7 @@ public class CGMAlertStatusResponse: Message {
             return set
         }
     }
+
     public var description: String {
         "CGMAlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"
     }

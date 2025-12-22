@@ -122,4 +122,3 @@ public class ParamChangeGlobalSettingsHistoryLog: HistoryLog {
         "ParamChangeGlobalSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modifiedData=\(modifiedData), qbDataStatus=\(qbDataStatus), qbActive=\(qbActive), qbDataEntryType=\(qbDataEntryType), qbIncrementUnits=\(qbIncrementUnits), qbIncrementCarbs=\(qbIncrementCarbs), buttonVolume=\(buttonVolume), qbVolume=\(qbVolume), bolusVolume=\(bolusVolume), reminderVolume=\(reminderVolume), alertVolume=\(alertVolume))"
     }
 }
-

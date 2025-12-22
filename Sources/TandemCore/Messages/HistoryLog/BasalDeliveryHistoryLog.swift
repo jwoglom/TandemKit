@@ -82,4 +82,3 @@ public class BasalDeliveryHistoryLog: HistoryLog {
         "BasalDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), commandedRateSource=\(commandedRateSource), commandedRate=\(commandedRate), profileBasalRate=\(profileBasalRate), algorithmRate=\(algorithmRate), tempRate=\(tempRate))"
     }
 }
-

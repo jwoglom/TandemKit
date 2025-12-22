@@ -63,4 +63,3 @@ public class FillTubingStateStreamResponse: Message {
         "FillTubingStateStreamResponse(cargo=\(cargo.hexadecimalString), buttonState=\(buttonState))"
     }
 }
-

@@ -58,6 +58,7 @@ public class BasalIQAlertInfoResponse: Message {
         case INSULIN_RESUMED_ALERT = 24577
         case INSULIN_RESUMED_TIMEOUT = 24578
     }
+
     public var description: String {
         "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alert=\(alert), alertId=\(alertId))"
     }

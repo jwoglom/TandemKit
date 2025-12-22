@@ -51,4 +51,3 @@ public class ControlIQUserModeChangeHistoryLog: HistoryLog {
         "ControlIQUserModeChangeHistoryLog(cargo=\(cargo.hexadecimalString), currentUserMode=\(currentUserMode), previousUserMode=\(previousUserMode))"
     }
 }
-

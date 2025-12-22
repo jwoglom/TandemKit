@@ -94,6 +94,7 @@ public class PumpVersionResponse: Message {
         self.pcbaRev = pcbaRev
         self.modelNum = modelNum
     }
+
     public var description: String {
         "PumpVersionResponse(cargo=\(cargo.hexadecimalString), armSwVer=\(armSwVer), mspSwVer=\(mspSwVer), configABits=\(configABits), configBBits=\(configBBits), serialNum=\(serialNum), partNum=\(partNum), pumpRev=\(pumpRev), pcbaSN=\(pcbaSN), pcbaRev=\(pcbaRev), modelNum=\(modelNum))"
     }

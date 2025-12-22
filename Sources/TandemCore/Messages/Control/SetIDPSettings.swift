@@ -80,7 +80,7 @@ public class SetIDPSettingsResponse: Message, StatusMessage {
         self.status = status
     }
 
-  \(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
+    public var description: String {
+        "SetIDPSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

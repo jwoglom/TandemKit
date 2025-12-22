@@ -109,4 +109,3 @@ public class CGMHistoryLog: HistoryLog {
         "CGMHistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatus=\(glucoseValueStatus), cgmDataType=\(cgmDataType), rate=\(rate), algorithmState=\(algorithmState), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), timeStampSeconds=\(timeStampSeconds), egvInfoBitmask=\(egvInfoBitmask), interval=\(interval))"
     }
 }
-

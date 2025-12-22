@@ -45,6 +45,7 @@ public class GetSavedG7PairingCodeResponse: Message {
         cargo = Bytes.firstTwoBytesLittleEndian(pairingCode)
         self.pairingCode = pairingCode
     }
+
     public var description: String {
         "GetSavedG7PairingCodeResponse(cargo=\(cargo.hexadecimalString), pairingCode=\(pairingCode))"
     }

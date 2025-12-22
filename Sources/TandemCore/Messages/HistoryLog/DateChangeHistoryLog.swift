@@ -61,4 +61,3 @@ public class DateChangeHistoryLog: HistoryLog {
         "DateChangeHistoryLog(cargo=\(cargo.hexadecimalString), datePrior=\(datePrior), dateAfter=\(dateAfter), rawRTCTime=\(rawRTCTime))"
     }
 }
-

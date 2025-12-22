@@ -44,6 +44,7 @@ public class UnknownMobiOpcodeNeg70Response: Message {
     public init() {
         cargo = Data()
     }
+
     public var description: String {
         "UnknownMobiOpcodeNeg70Response(cargo=\(cargo.hexadecimalString))"
     }

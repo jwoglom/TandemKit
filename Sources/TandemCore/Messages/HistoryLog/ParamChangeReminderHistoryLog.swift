@@ -101,4 +101,3 @@ public class ParamChangeReminderHistoryLog: HistoryLog {
         "ParamChangeReminderHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), reminderId=\(reminderId), status=\(status), enable=\(enable), frequencyMinutes=\(frequencyMinutes), startTime=\(startTime), endTime=\(endTime), activeDays=\(activeDays))"
     }
 }
-

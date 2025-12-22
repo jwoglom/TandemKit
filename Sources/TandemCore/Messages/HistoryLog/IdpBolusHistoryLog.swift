@@ -87,4 +87,3 @@ public class IdpBolusHistoryLog: HistoryLog {
         "IdpBolusHistoryLog(cargo=\(cargo.hexadecimalString), idp=\(idp), modification=\(modification), bolusStatus=\(bolusStatus), insulinDuration=\(insulinDuration), maxBolusSize=\(maxBolusSize), bolusEntryType=\(bolusEntryType))"
     }
 }
-

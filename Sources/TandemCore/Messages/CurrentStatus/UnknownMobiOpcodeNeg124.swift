@@ -49,6 +49,7 @@ public class UnknownMobiOpcodeNeg124Response: Message {
         cargo = Bytes.firstByteLittleEndian(status)
         self.status = status
     }
+
     public var description: String {
         "UnknownMobiOpcodeNeg124Response(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

@@ -55,6 +55,12 @@ public class CurrentBasalStatusResponse: Message {
         self.currentBasalRate = currentBasalRate
         self.basalModifiedBitmask = basalModifiedBitmask
     }
+
+    /// Human-readable representation of the current basal rate in units per hour.
+    public var currentBasalRateForDisplay: String {
+        String(format: "%.3f U/hr", Double(currentBasalRate) / 1000.0)
+    }
+
     public var description: String {
         "CurrentBasalStatusResponse(cargo=\(cargo.hexadecimalString), profileBasalRate=\(profileBasalRate), currentBasalRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
     }

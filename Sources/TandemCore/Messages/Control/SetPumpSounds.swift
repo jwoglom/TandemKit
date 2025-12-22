@@ -128,8 +128,26 @@ public class SetPumpSoundsResponse: Message, StatusMessage {
 }
 
 /// Bitmask fields indicating which annunciation settings changed.
-public enum PumpSoundChangeBitmask: Int {
-    w=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+public enum PumpSoundChangeBitmask: Int, CaseIterable {
+    case quickBolusAnnun = 1
+    case generalAnnun = 2
+    case reminderAnnun = 4
+    case alertAnnun = 8
+    case alarmAnnun = 16
+    case cgmAlertAnnunA = 32
+    case cgmAlertAnnunB = 64
+
+    public static func fromBitmask(_ bitmask: Int) -> Set<PumpSoundChangeBitmask> {
+        var set = Set<PumpSoundChangeBitmask>()
+        for field in PumpSoundChangeBitmask.allCases {
+            if (bitmask & field.rawValue) != 0 { set.insert(field) }
+        }
+        return set
+    }
+
+    public static func toBitmask(_ fields: [PumpSoundChangeBitmask]) -> Int {
+        var mask = 0
+        for field in fields { mask |= field.rawValue }
+        return mask
     }
 }
-

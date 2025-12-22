@@ -50,6 +50,7 @@ public class ChangeTimeDateResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
     public var description: String {
         "ChangeTimeDateResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

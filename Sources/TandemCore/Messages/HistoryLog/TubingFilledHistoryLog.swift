@@ -40,4 +40,3 @@ public class TubingFilledHistoryLog: HistoryLog {
         "TubingFilledHistoryLog(cargo=\(cargo.hexadecimalString), primeSize=\(primeSize))"
     }
 }
-

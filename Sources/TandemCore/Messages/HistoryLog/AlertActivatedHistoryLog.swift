@@ -44,4 +44,3 @@ public class AlertActivatedHistoryLog: HistoryLog {
         "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(alertResponseType), alertId=\(alertId))"
     }
 }
-

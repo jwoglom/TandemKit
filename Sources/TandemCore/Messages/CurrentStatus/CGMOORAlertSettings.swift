@@ -55,6 +55,7 @@ public class CGMOORAlertSettingsResponse: Message {
         self.sensorTimeoutAlertEnabled = sensorTimeoutAlertEnabled
         self.sensorTimeoutDefaultBitmask = sensorTimeoutDefaultBitmask
     }
+
     public var description: String {
         "CGMOORAlertSettingsResponse(cargo=\(cargo.hexadecimalString), sensorTimeoutAlertThreshold=\(sensorTimeoutAlertThreshold), sensorTimeoutAlertEnabled=\(sensorTimeoutAlertEnabled), sensorTimeoutDefaultBitmask=\(sensorTimeoutDefaultBitmask))"
     }

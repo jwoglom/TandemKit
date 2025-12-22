@@ -60,6 +60,7 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF), 0, 0])
         self.status = status
     }
+
     public var description: String {
         "ChangeControlIQSettingsResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

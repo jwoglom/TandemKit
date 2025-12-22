@@ -102,6 +102,7 @@ public class CurrentBolusStatusResponse: Message {
         case delivering = 1
         case alreadyDeliveredOrInvalid = 0
     }
+
     public var description: String {
         "CurrentBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSource=\(bolusSource), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
     }

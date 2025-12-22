@@ -63,4 +63,3 @@ public class DetectingCartridgeStateStreamResponse: Message {
         "DetectingCartridgeStateStreamResponse(cargo=\(cargo.hexadecimalString), percentComplete=\(percentComplete))"
     }
 }
-

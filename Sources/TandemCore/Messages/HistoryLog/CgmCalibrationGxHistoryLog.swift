@@ -32,4 +32,3 @@ public class CgmCalibrationGxHistoryLog: HistoryLog {
         "CgmCalibrationGxHistoryLog(cargo=\(cargo.hexadecimalString), value=\(value))"
     }
 }
-

@@ -21,4 +21,3 @@ public class PumpFeaturesAbstractResponse: Message {
         "PumpFeaturesAbstractResponse(cargo=\(cargo.hexadecimalString))"
     }
 }
-

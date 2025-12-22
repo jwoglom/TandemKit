@@ -59,6 +59,7 @@ public class LocalizationResponse: Message {
         self.languageSelected = languageSelected
         self.languagesAvailableBitmask = languagesAvailableBitmask
     }
+
     public var description: String {
         "LocalizationResponse(cargo=\(cargo.hexadecimalString), glucoseOUM=\(glucoseOUM), regionSetting=\(regionSetting), languageSelected=\(languageSelected), languagesAvailableBitmask=\(languagesAvailableBitmask))"
     }

@@ -101,4 +101,3 @@ public class BGHistoryLog: HistoryLog {
         "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(bgSource), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), spare=\(spare))"
     }
 }
-

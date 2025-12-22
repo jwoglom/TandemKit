@@ -45,4 +45,3 @@ public class PumpingResumedHistoryLog: HistoryLog {
         "PumpingResumedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount))"
     }
 }
-

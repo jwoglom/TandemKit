@@ -56,6 +56,7 @@ public class TimeSinceResetResponse: Message {
     public var currentTimeDate: Date {
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(currentTime))
     }
+
     public var description: String {
         "TimeSinceResetResponse(cargo=\(cargo.hexadecimalString), currentTime=\(currentTime), pumpTimeSinceReset=\(pumpTimeSinceReset))"
     }

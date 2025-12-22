@@ -71,6 +71,7 @@ public class RemoteBgEntryResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
+
     public var description: String {
         "RemoteBgEntryResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }

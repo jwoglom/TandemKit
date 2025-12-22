@@ -116,6 +116,7 @@ public class IDPSegmentResponse: Message {
             return set
         }
     }
+
     public var description: String {
         "IDPSegmentResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }

@@ -135,6 +135,7 @@ public class AlarmStatusResponse: Message {
             return current
         }
     }
+
     public var description: String {
         "AlarmStatusResponse(cargo=\(cargo.hexadecimalString), alarms=\(alarms), intMap=\(intMap))"
     }

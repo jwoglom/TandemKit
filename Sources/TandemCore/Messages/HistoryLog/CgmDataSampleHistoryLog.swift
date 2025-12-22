@@ -41,4 +41,3 @@ public class CgmDataSampleHistoryLog: HistoryLog {
         "CgmDataSampleHistoryLog(cargo=\(cargo.hexadecimalString), status=\(status), value=\(value))"
     }
 }
-

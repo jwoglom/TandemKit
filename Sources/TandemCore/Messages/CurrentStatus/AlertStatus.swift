@@ -130,6 +130,7 @@ public class AlertStatusResponse: Message {
             return current
         }
     }
+
     public var description: String {
         "AlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"
     }

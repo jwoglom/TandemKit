@@ -44,4 +44,3 @@ public class NewDayHistoryLog: HistoryLog {
         "NewDayHistoryLog(cargo=\(cargo.hexadecimalString), commandedBasalRate=\(commandedBasalRate))"
     }
 }
-

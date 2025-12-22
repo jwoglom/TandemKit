@@ -122,4 +122,3 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
         "BolusRequestedMsg2HistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), options=\(options), standardPercent=\(standardPercent), duration=\(duration), spare1=\(spare1), isf=\(isf), targetBG=\(targetBG), userOverride=\(userOverride), declinedCorrection=\(declinedCorrection), selectedIOB=\(selectedIOB), spare2=\(spare2))"
     }
 }
-

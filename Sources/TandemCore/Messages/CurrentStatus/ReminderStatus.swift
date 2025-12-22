@@ -124,6 +124,7 @@ public class ReminderStatusResponse: Message {
             return set
         }
     }
+
     public var description: String {
         "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), reminders=\(reminders), intMap=\(intMap))"
     }

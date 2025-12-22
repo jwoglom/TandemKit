@@ -68,6 +68,7 @@ public class SetTempRateResponse: Message, StatusMessage {
         self.status = status
         self.tempRateId = tempRateId
     }
+
     public var description: String {
         "SetTempRateResponse(cargo=\(cargo.hexadecimalString), status=\(status), tempRateId=\(tempRateId))"
     }

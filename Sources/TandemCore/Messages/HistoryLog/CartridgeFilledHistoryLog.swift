@@ -47,4 +47,3 @@ public class CartridgeFilledHistoryLog: HistoryLog {
         "CartridgeFilledHistoryLog(cargo=\(cargo.hexadecimalString), insulinDisplay=\(insulinDisplay), insulinActual=\(insulinActual))"
     }
 }
-

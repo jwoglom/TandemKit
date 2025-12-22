@@ -101,4 +101,3 @@ public class ParamChangePumpSettingsHistoryLog: HistoryLog {
         "ParamChangePumpSettingsHistoryLog(cargo=\(cargo.hexadecimalString), modification=\(modification), status=\(status), lowInsulinThreshold=\(lowInsulinThreshold), cannulaPrimeSize=\(cannulaPrimeSize), isFeatureLocked=\(isFeatureLocked), autoShutdownEnabled=\(autoShutdownEnabled), oledTimeout=\(oledTimeout), autoShutdownDuration=\(autoShutdownDuration))"
     }
 }
-

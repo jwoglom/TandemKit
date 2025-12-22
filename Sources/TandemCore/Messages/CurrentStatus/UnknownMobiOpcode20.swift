@@ -51,6 +51,7 @@ public class UnknownMobiOpcode20Response: Message {
         self.status = status
         self.unknown = unknown
     }
+
     public var description: String {
         "UnknownMobiOpcode20Response(cargo=\(cargo.hexadecimalString), status=\(status), unknown=\(unknown))"
     }

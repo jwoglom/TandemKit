@@ -63,6 +63,7 @@ public class DeleteIDPResponse: Message, StatusMessage {
         self.status = status
         self.deletedIdpId = deletedIdpId
     }
+
     public var description: String {
         "DeleteIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), deletedIdpId=\(deletedIdpId))"
     }

@@ -40,4 +40,3 @@ public class HypoMinimizerResumeHistoryLog: HistoryLog {
         "HypoMinimizerResumeHistoryLog(cargo=\(cargo.hexadecimalString), reason=\(reason))"
     }
 }
-

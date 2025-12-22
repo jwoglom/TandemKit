@@ -55,6 +55,7 @@ public class InsulinStatusResponse: Message {
         self.isEstimate = isEstimate
         self.insulinLowAmount = insulinLowAmount
     }
+
     public var description: String {
         "InsulinStatusResponse(cargo=\(cargo.hexadecimalString), currentInsulinAmount=\(currentInsulinAmount), isEstimate=\(isEstimate), insulinLowAmount=\(insulinLowAmount))"
     }
