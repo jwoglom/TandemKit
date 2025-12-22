@@ -23,6 +23,64 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
             RepeatingScheduleValue(startTime: 3600, value: 1.2)
         ]
 
+        // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
+        peripheral.enqueueResponse(
+            for: ProfileStatusRequest.self,
+            response: ProfileStatusResponse(
+                numberOfProfiles: 1,
+                idpSlot0Id: 10,
+                idpSlot1Id: 0,
+                idpSlot2Id: 0,
+                idpSlot3Id: 0,
+                idpSlot4Id: 0,
+                idpSlot5Id: 0,
+                activeSegmentIndex: 0
+            )
+        )
+
+        // Step 2: Mock IDPSettingsRequest -> IDPSettingsResponse
+        peripheral.enqueueResponse(
+            for: IDPSettingsRequest.self,
+            response: IDPSettingsResponse(
+                idpId: 10,
+                profileName: "Test",
+                numberOfProfileSegments: 2,
+                activeProfile: 1,
+                carbEntry: 1,
+                totalDailyInsulin: 0,
+                profileInsulinDuration: 180
+            )
+        )
+
+        // Step 3: Mock IDPSegmentRequest -> IDPSegmentResponse for existing segments
+        peripheral.enqueueResponse(
+            for: IDPSegmentRequest.self,
+            response: IDPSegmentResponse(
+                idpId: 10,
+                segmentIndex: 0,
+                profileStartTime: 0,
+                profileBasalRate: 1000,
+                profileCarbRatio: 10000,
+                profileTargetBG: 110,
+                profileISF: 50,
+                idpStatusId: 31
+            )
+        )
+        peripheral.enqueueResponse(
+            for: IDPSegmentRequest.self,
+            response: IDPSegmentResponse(
+                idpId: 10,
+                segmentIndex: 1,
+                profileStartTime: 480,
+                profileBasalRate: 1200,
+                profileCarbRatio: 10000,
+                profileTargetBG: 110,
+                profileISF: 50,
+                idpStatusId: 31
+            )
+        )
+
+        // Step 4: Mock SetIDPSegmentRequest -> SetIDPSegmentResponse for modifications
         for _ in items {
             peripheral.enqueueResponse(
                 for: SetIDPSegmentRequest.self,
@@ -38,15 +96,18 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
             expectation.fulfill()
         }
 
-        waitForExpectations(timeout: 1)
+        waitForExpectations(timeout: 5)
 
         let unwrappedResult = try XCTUnwrap(result)
         let schedule = try XCTUnwrap(try? unwrappedResult.get())
         XCTAssertEqual(schedule.items, items.sorted { $0.startTime < $1.startTime })
         XCTAssertEqual(schedule.timeZone, manager.status.timeZone)
 
-        XCTAssertEqual(peripheral.sentMessages.count, items.count)
-        let firstRequest = try XCTUnwrap(peripheral.sentMessages.first?.message as? SetIDPSegmentRequest)
+        // Find the SetIDPSegmentRequest messages (should be the last 2)
+        let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
+        XCTAssertEqual(setRequests.count, items.count)
+
+        let firstRequest = try XCTUnwrap(setRequests.first)
         XCTAssertEqual(firstRequest.segmentIndex, 0)
         XCTAssertEqual(firstRequest.profileStartTime, Int((items[0].startTime / 60.0).rounded()))
         XCTAssertEqual(firstRequest.profileBasalRate, Int((items[0].value * 1000.0).rounded()))
@@ -58,6 +119,11 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         XCTAssertTrue(expectedMask.contains(.TARGET_BG))
         XCTAssertTrue(expectedMask.contains(.CORRECTION_FACTOR))
         XCTAssertTrue(expectedMask.contains(.START_TIME))
+
+        // Verify other fields from existing segment were preserved
+        XCTAssertEqual(firstRequest.profileCarbRatio, 10000)
+        XCTAssertEqual(firstRequest.profileTargetBG, 110)
+        XCTAssertEqual(firstRequest.profileISF, 50)
 
         let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
         XCTAssertEqual(restoredState.basalRateSchedule?.items, items.sorted { $0.startTime < $1.startTime })

@@ -1751,13 +1751,79 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         let sortedItems = scheduleItems.sorted { $0.startTime < $1.startTime }
-        let requests = makeBasalSegmentRequests(from: sortedItems)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
             do {
-                for request in requests {
+                // Step 1: Fetch current profile data using IDPManager
+                let idpManager = IDPManager()
+
+                // Fetch all IDP data until complete
+                while !idpManager.isComplete {
+                    let messages = idpManager.nextMessages()
+                    for message in messages {
+                        let response = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: message
+                        )
+                        idpManager.processMessage(response)
+                    }
+                }
+
+                // Step 2: Get the active profile
+                guard let activeProfile = idpManager.getActiveProfile() else {
+                    throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
+                }
+
+                // Step 3: Get current segments to preserve non-basal fields
+                let currentSegments = activeProfile.getSegments()
+
+                // Step 4: Build modify requests for each new basal schedule item
+                var modifyRequests: [SetIDPSegmentRequest] = []
+
+                for (index, scheduleItem) in sortedItems.enumerated() {
+                    let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
+                    let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
+
+                    // Try to find existing segment to preserve its other values
+                    var segment: IDPSegmentResponse
+                    if index < currentSegments.count {
+                        // Modify existing segment
+                        segment = currentSegments[index]
+                        segment.profileStartTime = startMinutes
+                        segment.profileBasalRate = basalMilliunits
+                    } else {
+                        // Create new segment with default values from first segment
+                        let firstSegment = currentSegments.first!
+                        segment = IDPSegmentResponse(
+                            idpId: activeProfile.idpId,
+                            segmentIndex: index,
+                            profileStartTime: startMinutes,
+                            profileBasalRate: basalMilliunits,
+                            profileCarbRatio: firstSegment.profileCarbRatio,
+                            profileTargetBG: firstSegment.profileTargetBG,
+                            profileISF: firstSegment.profileISF,
+                            idpStatusId: 31
+                        )
+                    }
+
+                    let request = activeProfile.modifySegmentMessage(segment: segment)
+                    modifyRequests.append(request)
+                }
+
+                // Step 5: If we have fewer items than current segments, delete extra segments
+                if sortedItems.count < currentSegments.count {
+                    for i in sortedItems.count ..< currentSegments.count {
+                        if i > 0 { // Can't delete segment 0
+                            let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
+                            modifyRequests.append(deleteRequest)
+                        }
+                    }
+                }
+
+                // Step 6: Send all modification requests
+                for request in modifyRequests {
                     let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
@@ -1769,6 +1835,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 }
 
+                // Step 7: Update local state
                 let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
 
                 var managerState = self.lockedState.value
@@ -2054,35 +2121,6 @@ extension TandemPumpManager: PumpCommDelegate {
 }
 
 private extension TandemPumpManager {
-    func makeBasalSegmentRequests(from items: [RepeatingScheduleValue<Double>]) -> [SetIDPSegmentRequest] {
-        let idpId = 0
-        let unknownId = 1
-        // Per pumpX2 IDPManager.modifySegmentMessage: must include all fields even if some are 0
-        let mask = idpStatusMask([.BASAL_RATE, .CARB_RATIO, .TARGET_BG, .CORRECTION_FACTOR, .START_TIME])
-
-        return items.enumerated().map { index, entry in
-            let startMinutes = Int((entry.startTime / 60.0).rounded())
-            let basalMilliunits = Int((entry.value * 1000.0).rounded())
-
-            return SetIDPSegmentRequest(
-                idpId: idpId,
-                unknownId: unknownId,
-                segmentIndex: index,
-                operation: .modifySegmentId,
-                profileStartTime: startMinutes,
-                profileBasalRate: basalMilliunits,
-                profileCarbRatio: 0,
-                profileTargetBG: 0,
-                profileISF: 0,
-                idpStatusId: mask
-            )
-        }
-    }
-
-    func idpStatusMask(_ statuses: Set<IDPSegmentResponse.IDPSegmentStatus>) -> Int {
-        statuses.reduce(0) { $0 | $1.rawValue }
-    }
-
     func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(

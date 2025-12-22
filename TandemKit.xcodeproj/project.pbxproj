@@ -92,6 +92,7 @@
 		3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345112EC91299008A07F6 /* NonexistentErrorRequest.swift */; };
 		3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344C22EC91299008A07F6 /* PumpVersion.swift */; };
 		3EE3452D2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */; };
+		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
 		3EE3452E2EC91299008A07F6 /* IdpTimeDependentSegmentHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344F32EC91299008A07F6 /* IdpTimeDependentSegmentHistoryLog.swift */; };
 		3EE3452F2EC91299008A07F6 /* CGMAlertStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344972EC91299008A07F6 /* CGMAlertStatus.swift */; };
 		3EE345302EC91299008A07F6 /* BasalLimitSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344942EC91299008A07F6 /* BasalLimitSettings.swift */; };
@@ -451,6 +452,7 @@
 		3EE3443C2EC91299008A07F6 /* Hkdf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hkdf.swift; sourceTree = "<group>"; };
 		3EE3443D2EC91299008A07F6 /* HmacSha256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HmacSha256.swift; sourceTree = "<group>"; };
 		3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsulinDeliveryProfileRequestBuilder.swift; sourceTree = "<group>"; };
+		066632B7C69B4CEFB5782A14 /* IDPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IDPManager.swift; sourceTree = "<group>"; };
 		3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOBRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeAuthBuilder.swift; sourceTree = "<group>"; };
 		3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeProvider.swift; sourceTree = "<group>"; };
@@ -885,6 +887,7 @@
 				3EE3443C2EC91299008A07F6 /* Hkdf.swift */,
 				3EE3443D2EC91299008A07F6 /* HmacSha256.swift */,
 				3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */,
+				066632B7C69B4CEFB5782A14 /* IDPManager.swift */,
 				3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */,
 				3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */,
 				3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */,
@@ -1560,6 +1563,7 @@
 				3EE3452B2EC91299008A07F6 /* NonexistentErrorRequest.swift in Sources */,
 				3EE3452C2EC91299008A07F6 /* PumpVersion.swift in Sources */,
 				3EE3452D2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift in Sources */,
+				2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */,
 				3EE3452E2EC91299008A07F6 /* IdpTimeDependentSegmentHistoryLog.swift in Sources */,
 				3EE3452F2EC91299008A07F6 /* CGMAlertStatus.swift in Sources */,
 				3EE345302EC91299008A07F6 /* BasalLimitSettings.swift in Sources */,
