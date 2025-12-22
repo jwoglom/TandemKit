@@ -63,14 +63,7 @@ public class ApiVersionResponse: Message {
     public func getApiVersion() -> ApiVersion {
         ApiVersion(major: majorVersion, minor: minorVersion)
     }
-
-  ion=\(minorVersion))"
+    public var description: String {
+        "ApiVersionResponse(cargo=\(cargo.hexadecimalString), majorVersion=\(majorVersion), minorVersion=\(minorVersion))"
     }
 }
-
-public extension ApiVersionRequest {
-    var description: String {
-        "ApiVersionRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

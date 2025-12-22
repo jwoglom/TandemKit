@@ -47,10 +47,7 @@ public class PlaySoundResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  ension PlaySoundRequest {
-    var description: String {
-        "PlaySoundRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "PlaySoundResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

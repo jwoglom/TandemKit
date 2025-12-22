@@ -70,14 +70,7 @@ public class IDPSettingsResponse: Message {
         self.maxBolus = maxBolus
         self.carbEntry = carbEntry
     }
-
-  numberOfProfileSegments), insulinDuration=\(insulinDuration), maxBolus=\(maxBolus), carbEntry=\(carbEntry))"
+    public var description: String {
+        "IDPSettingsResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), name=\(name), numberOfProfileSegments=\(numberOfProfileSegments), insulinDuration=\(insulinDuration), maxBolus=\(maxBolus), carbEntry=\(carbEntry))"
     }
 }
-
-public extension IDPSettingsRequest {
-    var description: String {
-        "IDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
-    }
-}
-

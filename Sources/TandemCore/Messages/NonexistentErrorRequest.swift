@@ -19,10 +19,8 @@ public final class NonexistentErrorRequest: Message {
     public init() {
         cargo = Data()
     }
-}
 
-public extension NonexistentErrorRequest {
-    var description: String {
+    public var description: String {
         "NonexistentErrorRequest(cargo=\(cargo.hexadecimalString))"
     }
 }

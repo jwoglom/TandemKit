@@ -163,7 +163,10 @@ public extension HomeScreenMirrorResponse {
     enum ApControlStateIcon: Int {
         case stateGray = 0
         case stateGrayRedBasalSuspended = 1
-        case stateGrayBlueIncralue: cgmTrendIconId) }
+        case stateGrayBlueIncreaseBasal = 2
+    }
+
+    var cgmTrendIcon: CGMTrendIcon? { CGMTrendIcon(rawValue: cgmTrendIconId) }
     var cgmAlertIcon: CGMAlertIcon? { CGMAlertIcon(rawValue: cgmAlertIconId) }
     var statusIcon0: StatusIcon0? { StatusIcon0(rawValue: statusIcon0Id) }
     var statusIcon1: StatusIcon1? { StatusIcon1(rawValue: statusIcon1Id) }
@@ -171,10 +174,3 @@ public extension HomeScreenMirrorResponse {
     var basalStatusIcon: BasalStatusIcon? { BasalStatusIcon(rawValue: basalStatusIconId) }
     var apControlStateIcon: ApControlStateIcon? { ApControlStateIcon(rawValue: apControlStateIconId) }
 }
-
-public extension HomeScreenMirrorRequest {
-    var description: String {
-        "HomeScreenMirrorRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

@@ -59,10 +59,7 @@ public class SetG6TransmitterIdResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  IdRequest {
-    var description: String {
-        "SetG6TransmitterIdRequest(cargo=\(cargo.hexadecimalString), txId=\(txId))"
+    public var description: String {
+        "SetG6TransmitterIdResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

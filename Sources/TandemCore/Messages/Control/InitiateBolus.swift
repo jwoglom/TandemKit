@@ -160,8 +160,7 @@ public class InitiateBolusResponse: Message, StatusMessage {
 
     public var statusType: BolusResponseStatus? { BolusResponseStatus(rawValue: statusTypeId) }
     public var wasBolusInitiated: Bool { status == 0 && statusType == .success }
-
-  ectionVolume=\(correctionVolume), bolusCarbs=\(bolusCarbs), bolusBG=\(bolusBG), bolusIOB=\(bolusIOB), extendedVolume=\(extendedVolume), extendedSeconds=\(extendedSeconds), extended3=\(extended3))"
+    public var description: String {
+        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusType=\(statusType), statusTypeId=\(statusTypeId))"
     }
 }
-

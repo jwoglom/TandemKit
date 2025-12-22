@@ -64,14 +64,7 @@ public class TempRateResponse: Message {
     public var startTime: Date {
         Dates.fromJan12008EpochSecondsToDate(TimeInterval(startTimeRaw))
     }
-
-  tage), startTimeRaw=\(startTimeRaw), duration=\(duration))"
+    public var description: String {
+        "TempRateResponse(cargo=\(cargo.hexadecimalString), active=\(active), percentage=\(percentage), startTimeRaw=\(startTimeRaw), duration=\(duration))"
     }
 }
-
-public extension TempRateRequest {
-    var description: String {
-        "TempRateRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

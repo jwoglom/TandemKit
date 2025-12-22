@@ -135,13 +135,7 @@ public class AlarmStatusResponse: Message {
             return current
         }
     }
-
-   }
-}
-
-public extension AlarmStatusRequest {
-    var description: String {
-        "AlarmStatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "AlarmStatusResponse(cargo=\(cargo.hexadecimalString), alarms=\(alarms), intMap=\(intMap))"
     }
 }
-

@@ -106,10 +106,7 @@ public class Jpake4KeyConfirmationResponse: Message {
             hashDigest
         )
     }
-
-  quest {
-    var description: String {
-        "Jpake4KeyConfirmationRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
+    public var description: String {
+        "Jpake4KeyConfirmationResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), nonce=\(nonce.hexadecimalString), reserved=\(reserved.hexadecimalString), hashDigest=\(hashDigest.hexadecimalString))"
     }
 }
-

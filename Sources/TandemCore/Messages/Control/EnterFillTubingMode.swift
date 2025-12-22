@@ -49,10 +49,7 @@ public class EnterFillTubingModeResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  erFillTubingModeRequest {
-    var description: String {
-        "EnterFillTubingModeRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "EnterFillTubingModeResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

@@ -55,15 +55,7 @@ public class CurrentBasalStatusResponse: Message {
         self.currentBasalRate = currentBasalRate
         self.basalModifiedBitmask = basalModifiedBitmask
     }
-
-  salRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
+    public var description: String {
+        "CurrentBasalStatusResponse(cargo=\(cargo.hexadecimalString), profileBasalRate=\(profileBasalRate), currentBasalRate=\(currentBasalRate), basalModifiedBitmask=\(basalModifiedBitmask))"
     }
-}
-
-public extension CurrentBasalStatusRequest {
-    var description: String {
-        "CurrentBasalStatusRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-
 }

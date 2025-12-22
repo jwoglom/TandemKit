@@ -51,14 +51,7 @@ public class CGMHardwareInfoResponse: Message {
         self.hardwareInfoString = hardwareInfoString
         self.lastByte = lastByte
     }
-
-  stByte=\(lastByte))"
+    public var description: String {
+        "CGMHardwareInfoResponse(cargo=\(cargo.hexadecimalString), hardwareInfoString=\(hardwareInfoString), lastByte=\(lastByte))"
     }
 }
-
-public extension CGMHardwareInfoRequest {
-    var description: String {
-        "CGMHardwareInfoRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

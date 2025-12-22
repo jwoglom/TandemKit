@@ -57,10 +57,7 @@ public class SetActiveIDPResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  Request {
-    var description: String {
-        "SetActiveIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId))"
+    public var description: String {
+        "SetActiveIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

@@ -51,10 +51,7 @@ public class OtherNotification2StatusResponse: Message {
         self.codeA = codeA
         self.codeB = codeB
     }
-
-  nsion OtherNotification2StatusRequest {
-    var description: String {
-        "OtherNotification2StatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "OtherNotification2StatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB))"
     }
 }
-

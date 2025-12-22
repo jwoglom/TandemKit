@@ -81,14 +81,7 @@ public class BolusPermissionChangeReasonResponse: Message {
         case REVOKED_INVALID_REQUEST = 6
         case UNKNOWN = 7
     }
-
-  , lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
+    public var description: String {
+        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(lastChangeReason), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
     }
 }
-
-public extension BolusPermissionChangeReasonRequest {
-    var description: String {
-        "BolusPermissionChangeReasonRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
-    }
-}
-

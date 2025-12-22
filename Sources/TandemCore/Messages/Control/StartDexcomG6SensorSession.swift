@@ -51,8 +51,7 @@ public class StartDexcomG6SensorSessionResponse: Message, StatusMessage {
         self.status = status
     }
 
-      var description: String {
-        "StartDexcomG6SensorSessionRequest(cargo=\(cargo.hexadecimalString), sensorCode=\(sensorCode))"
+    public var description: String {
+        "StartDexcomG6SensorSessionResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

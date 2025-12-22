@@ -143,8 +143,7 @@ public class CreateIDPResponse: Message, StatusMessage {
         self.status = status
         self.newIdpId = newIdpId
     }
-
-  stSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
+    public var description: String {
+        "CreateIDPResponse(cargo=\(cargo.hexadecimalString), status=\(status), newIdpId=\(newIdpId))"
     }
 }
-

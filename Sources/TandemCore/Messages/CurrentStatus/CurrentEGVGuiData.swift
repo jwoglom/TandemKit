@@ -71,14 +71,7 @@ public class CurrentEGVGuiDataResponse: Message {
         case HIGH = 3
         case UNAVAILABLE = 4
     }
-
-  Seconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
+    public var description: String {
+        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
     }
 }
-
-public extension CurrentEGVGuiDataRequest {
-    var description: String {
-        "CurrentEGVGuiDataRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

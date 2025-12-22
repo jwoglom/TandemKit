@@ -66,14 +66,7 @@ public class BasalIQStatusResponse: Message {
             BasalIQStatusState(rawValue: id)
         }
     }
-
-  basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
+    public var description: String {
+        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusState=\(basalIQStatusState), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
     }
 }
-
-public extension BasalIQStatusRequest {
-    var description: String {
-        "BasalIQStatusRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

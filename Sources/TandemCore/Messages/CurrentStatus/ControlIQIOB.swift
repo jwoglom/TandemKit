@@ -85,14 +85,7 @@ public class ControlIQIOBResponse: Message {
             return max(mudaliarIOB, swan6hrIOB)
         }
     }
-
-  Seconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(type), iobType=\(iobType))"
+    public var description: String {
+        "ControlIQIOBResponse(cargo=\(cargo.hexadecimalString), mudaliarIOB=\(mudaliarIOB), timeRemainingSeconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(type), iobType=\(iobType))"
     }
 }
-
-public extension ControlIQIOBRequest {
-    var description: String {
-        "ControlIQIOBRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

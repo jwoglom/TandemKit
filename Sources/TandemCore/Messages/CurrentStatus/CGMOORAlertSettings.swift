@@ -55,14 +55,7 @@ public class CGMOORAlertSettingsResponse: Message {
         self.sensorTimeoutAlertEnabled = sensorTimeoutAlertEnabled
         self.sensorTimeoutDefaultBitmask = sensorTimeoutDefaultBitmask
     }
-
-  Threshold), sensorTimeoutAlertEnabled=\(sensorTimeoutAlertEnabled), sensorTimeoutDefaultBitmask=\(sensorTimeoutDefaultBitmask))"
+    public var description: String {
+        "CGMOORAlertSettingsResponse(cargo=\(cargo.hexadecimalString), sensorTimeoutAlertThreshold=\(sensorTimeoutAlertThreshold), sensorTimeoutAlertEnabled=\(sensorTimeoutAlertEnabled), sensorTimeoutDefaultBitmask=\(sensorTimeoutDefaultBitmask))"
     }
 }
-
-public extension CGMOORAlertSettingsRequest {
-    var description: String {
-        "CGMOORAlertSettingsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

@@ -117,14 +117,7 @@ public class PumpGlobalsResponse: Message {
         case audioLow = 2
         case vibrate = 3
     }
-
-  Raw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), bolusAnnun=\(bolusAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
+    public var description: String {
+        "PumpGlobalsResponse(cargo=\(cargo.hexadecimalString), quickBolusEnabledRaw=\(quickBolusEnabledRaw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), bolusAnnun=\(bolusAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
     }
 }
-
-public extension PumpGlobalsRequest {
-    var description: String {
-        "PumpGlobalsRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

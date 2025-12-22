@@ -60,9 +60,7 @@ public class HistoryLogResponse: Message {
         self.status = status
         self.streamId = streamId
     }
-
-  var description: String {
-        "HistoryLogRequest(cargo=\(cargo.hexadecimalString), startLog=\(startLog), numberOfLogs=\(numberOfLogs))"
+    public var description: String {
+        "HistoryLogResponse(cargo=\(cargo.hexadecimalString), status=\(status), streamId=\(streamId))"
     }
 }
-

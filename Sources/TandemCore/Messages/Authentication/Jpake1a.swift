@@ -83,10 +83,7 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
             centralChallengeHash
         )
     }
-
-  pake1aRequest {
-    var description: String {
-        "Jpake1aRequest(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallenge=\(centralChallenge.hexadecimalString))"
+    public var description: String {
+        "Jpake1aResponse(cargo=\(cargo.hexadecimalString), appInstanceId=\(appInstanceId), centralChallengeHash=\(centralChallengeHash.hexadecimalString))"
     }
 }
-

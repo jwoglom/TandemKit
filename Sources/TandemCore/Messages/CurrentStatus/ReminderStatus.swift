@@ -124,10 +124,7 @@ public class ReminderStatusResponse: Message {
             return set
         }
     }
-
-  n ReminderStatusRequest {
-    var description: String {
-        "ReminderStatusRequest(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), reminders=\(reminders), intMap=\(intMap))"
     }
 }
-

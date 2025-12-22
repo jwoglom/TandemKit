@@ -56,9 +56,7 @@ public class FillCannulaResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  n: String {
-        "FillCannulaRequest(cargo=\(cargo.hexadecimalString), primeSizeMilliUnits=\(primeSizeMilliUnits))"
+    public var description: String {
+        "FillCannulaResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

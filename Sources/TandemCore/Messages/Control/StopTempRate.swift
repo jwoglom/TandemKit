@@ -58,14 +58,7 @@ public class StopTempRateResponse: Message, StatusMessage {
         self.status = status
         self.tempRateId = tempRateId
     }
-
-  ))"
+    public var description: String {
+        "StopTempRateResponse(cargo=\(cargo.hexadecimalString), status=\(status), tempRateId=\(tempRateId))"
     }
 }
-
-public extension StopTempRateRequest {
-    var description: String {
-        "StopTempRateRequest(cargo=\(cargo.hexadecimalString))"
-    }
-}
-

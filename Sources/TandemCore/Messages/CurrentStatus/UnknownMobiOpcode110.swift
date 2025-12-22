@@ -46,10 +46,7 @@ public class UnknownMobiOpcode110Response: Message {
     public init() {
         cargo = Data()
     }
-
-  quest {
-    var description: String {
-        "UnknownMobiOpcode110Request(cargo=\(cargo.hexadecimalString))"
+    public var description: String {
+        "UnknownMobiOpcode110Response(cargo=\(cargo.hexadecimalString))"
     }
 }
-

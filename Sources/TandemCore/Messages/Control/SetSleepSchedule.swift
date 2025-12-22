@@ -72,8 +72,7 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
         cargo = Data([UInt8(status & 0xFF)])
         self.status = status
     }
-
-  cheduleRequest(cargo=\(cargo.hexadecimalString), slot=\(slot), rawSchedule=\(rawSchedule.hexadecimalString), flag=\(flag))"
+    public var description: String {
+        "SetSleepScheduleResponse(cargo=\(cargo.hexadecimalString), status=\(status))"
     }
 }
-

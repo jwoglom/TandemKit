@@ -116,14 +116,7 @@ public class IDPSegmentResponse: Message {
             return set
         }
     }
-
-  rofileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+    public var description: String {
+        "IDPSegmentResponse(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }
 }
-
-public extension IDPSegmentRequest {
-    var description: String {
-        "IDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), segmentIndex=\(segmentIndex))"
-    }
-}
-
