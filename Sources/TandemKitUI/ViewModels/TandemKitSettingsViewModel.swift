@@ -152,6 +152,30 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
+    func toggleControlIQMode() {
+        // TODO(jwoglom): this should enforce that Trio closed loop is FULLY turned off
+        isUpdatingPumpState = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            guard let controlIqInfo = self.controlIQInfo else { return }
+
+            let isPumpControlIqOn = controlIqInfo.closedLoopEnabled == true
+            _ = self.sendMessage(message: ChangeControlIQSettingsRequest(
+                enabled: !isPumpControlIqOn,
+                weightLbs: controlIqInfo.weight,
+                totalDailyInsulinUnits: controlIqInfo.totalDailyInsulin
+            ))
+
+            Thread.sleep(forTimeInterval: 1.0)
+            self.refreshPumpStatus()
+
+            DispatchQueue.main.async {
+                self.isUpdatingPumpState = false
+            }
+        }
+    }
+
     func toggleExerciseMode() {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -211,6 +235,13 @@ class TandemKitSettingsViewModel: ObservableObject {
             return "Suspend insulin delivery"
         }
         return nil
+    }
+
+    var controlIqModeText: String {
+        if controlIQInfo?.closedLoopEnabled == true {
+            return "Disable ControlIQ"
+        }
+        return "Enable ControlIQ"
     }
 
     var exerciseModeText: String {

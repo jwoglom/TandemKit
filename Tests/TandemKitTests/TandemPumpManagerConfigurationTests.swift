@@ -316,9 +316,9 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         // User changes only the first segment from 0.8 to 0.81
         // The other segments remain the same
         let items = [
-            RepeatingScheduleValue(startTime: 0, value: 0.81),     // Changed from 0.8
-            RepeatingScheduleValue(startTime: 3600, value: 1.2),   // Unchanged
-            RepeatingScheduleValue(startTime: 7200, value: 0.9)    // Unchanged
+            RepeatingScheduleValue(startTime: 0, value: 0.81), // Changed from 0.8
+            RepeatingScheduleValue(startTime: 3600, value: 1.2), // Unchanged
+            RepeatingScheduleValue(startTime: 7200, value: 0.9) // Unchanged
         ]
 
         // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
@@ -358,7 +358,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
                 idpId: 10,
                 segmentIndex: 0,
                 profileStartTime: 0,
-                profileBasalRate: 800,  // Will change to 810
+                profileBasalRate: 800, // Will change to 810
                 profileCarbRatio: 10000,
                 profileTargetBG: 110,
                 profileISF: 50,
@@ -372,7 +372,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
                 idpId: 10,
                 segmentIndex: 1,
                 profileStartTime: 60,
-                profileBasalRate: 1200,  // Unchanged
+                profileBasalRate: 1200, // Unchanged
                 profileCarbRatio: 10000,
                 profileTargetBG: 110,
                 profileISF: 50,
@@ -386,7 +386,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
                 idpId: 10,
                 segmentIndex: 2,
                 profileStartTime: 120,
-                profileBasalRate: 900,  // Unchanged
+                profileBasalRate: 900, // Unchanged
                 profileCarbRatio: 10000,
                 profileTargetBG: 110,
                 profileISF: 50,
@@ -415,7 +415,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
 
         // Find the SetIDPSegmentRequest messages
         let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
-        
+
         // Should only have 1 modify request (for the changed segment)
         XCTAssertEqual(setRequests.count, 1, "Should only modify the changed segment")
 
@@ -425,7 +425,7 @@ final class TandemPumpManagerConfigurationTests: XCTestCase {
         XCTAssertEqual(modifyRequest.segmentIndex, 0)
         XCTAssertEqual(modifyRequest.profileBasalRate, 810, "Should be 0.81 u/hr = 810 milliunits")
         XCTAssertEqual(modifyRequest.profileStartTime, 0)
-        
+
         // Should preserve other fields
         XCTAssertEqual(modifyRequest.profileCarbRatio, 10000)
         XCTAssertEqual(modifyRequest.profileTargetBG, 110)

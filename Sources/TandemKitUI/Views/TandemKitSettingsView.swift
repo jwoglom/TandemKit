@@ -104,32 +104,6 @@ struct TandemKitSettingsView: View {
                     }.disabled(true)
                 }
 
-                Button(action: {
-                    viewModel.toggleExerciseMode()
-                }) {
-                    HStack {
-                        Text(viewModel.exerciseModeText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isUpdatingPumpState)
-
-                Button(action: {
-                    viewModel.toggleSleepMode()
-                }) {
-                    HStack {
-                        Text(viewModel.sleepModeText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isUpdatingPumpState)
-
                 if let tempRate = viewModel.tempRateStatus, tempRate.active {
                     Button(action: {
                         viewModel.stopTempRate()
@@ -261,6 +235,50 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
+                "ControlIQ Settings",
+                comment: "The title of the ControlIQ settings section in TandemKit settings"
+            ))) {
+                Button(action: {
+                    viewModel.toggleControlIQMode()
+                }) {
+                    HStack {
+                        Text(viewModel.controlIqModeText)
+                        Spacer()
+                        if viewModel.isUpdatingPumpState {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        }
+                    }
+                }
+                .disabled(viewModel.isUpdatingPumpState)
+
+                Button(action: {
+                    viewModel.toggleExerciseMode()
+                }) {
+                    HStack {
+                        Text(viewModel.exerciseModeText)
+                        Spacer()
+                        if viewModel.isUpdatingPumpState {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        }
+                    }
+                }
+                .disabled(viewModel.isUpdatingPumpState || viewModel.controlIQInfo?.closedLoopEnabled == false)
+
+                Button(action: {
+                    viewModel.toggleSleepMode()
+                }) {
+                    HStack {
+                        Text(viewModel.sleepModeText)
+                        Spacer()
+                        if viewModel.isUpdatingPumpState {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        }
+                    }
+                }
+                .disabled(viewModel.isUpdatingPumpState || viewModel.controlIQInfo?.closedLoopEnabled == false)
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
                 "Pump Information",
                 comment: "The title of the pump information section in TandemKit settings"
             ))) {
@@ -365,12 +383,13 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(.accentColor)
-                    Text(LocalizedString("Active", comment: "Text shown when insulin active"))
-                        .fontWeight(.bold)
-                        .fixedSize()
                     if viewModel.currentBasalStatus != nil {
                         Text(viewModel.currentBasalStatus?.currentBasalRateForDisplay ?? "")
                             .fontWeight(.bold)
+                    } else {
+                        Text(LocalizedString("Active", comment: "Text shown when insulin active"))
+                            .fontWeight(.bold)
+                            .fixedSize()
                     }
                 }
             } else {

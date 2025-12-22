@@ -58,7 +58,7 @@ public class CurrentBasalStatusResponse: Message {
 
     /// Human-readable representation of the current basal rate in units per hour.
     public var currentBasalRateForDisplay: String {
-        String(format: "%.3f U/hr", Double(currentBasalRate) / 1000.0)
+        String(format: "%.2f U/hr", Double(currentBasalRate) / 1000.0)
     }
 
     public var description: String {

@@ -1790,8 +1790,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         // Check if existing segment needs modification
                         let currentSegment = currentSegments[index]
                         let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-                                         currentSegment.profileBasalRate != basalMilliunits
-                        
+                            currentSegment.profileBasalRate != basalMilliunits
+
                         if needsUpdate {
                             var segment = currentSegment
                             segment.profileStartTime = startMinutes
