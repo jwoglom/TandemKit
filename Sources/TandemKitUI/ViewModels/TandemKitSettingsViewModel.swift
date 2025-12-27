@@ -132,8 +132,18 @@ class TandemKitSettingsViewModel: ObservableObject {
     func suspendResumeButtonPressed() {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            guard let isSuspended = self.isSuspended else { return }
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    self?.isUpdatingPumpState = false
+                }
+                return
+            }
+            guard let isSuspended = self.isSuspended else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
+                return
+            }
 
             if isSuspended {
                 _ = self.sendMessage(message: ResumePumpingRequest())
@@ -156,9 +166,19 @@ class TandemKitSettingsViewModel: ObservableObject {
         // TODO(jwoglom): this should enforce that Trio closed loop is FULLY turned off
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    self?.isUpdatingPumpState = false
+                }
+                return
+            }
 
-            guard let controlIqInfo = self.controlIQInfo else { return }
+            guard let controlIqInfo = self.controlIQInfo else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
+                return
+            }
 
             let isPumpControlIqOn = controlIqInfo.closedLoopEnabled == true
             _ = self.sendMessage(message: ChangeControlIQSettingsRequest(
@@ -179,7 +199,12 @@ class TandemKitSettingsViewModel: ObservableObject {
     func toggleExerciseMode() {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    self?.isUpdatingPumpState = false
+                }
+                return
+            }
 
             let isExerciseOn = self.controlIQInfo?.currentUserModeTypeRaw == 3
             let command: SetModesRequest.ModeCommand = isExerciseOn ? .exerciseModeOff : .exerciseModeOn
@@ -197,7 +222,12 @@ class TandemKitSettingsViewModel: ObservableObject {
     func toggleSleepMode() {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    self?.isUpdatingPumpState = false
+                }
+                return
+            }
 
             let isSleepOn = self.controlIQInfo?.currentUserModeTypeRaw == 2
             let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
@@ -215,7 +245,12 @@ class TandemKitSettingsViewModel: ObservableObject {
     func stopTempRate() {
         isUpdatingPumpState = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                DispatchQueue.main.async {
+                    self?.isUpdatingPumpState = false
+                }
+                return
+            }
 
             _ = self.sendMessage(message: StopTempRateRequest())
 

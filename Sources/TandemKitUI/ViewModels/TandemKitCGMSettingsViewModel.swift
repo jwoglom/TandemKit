@@ -5,7 +5,7 @@ import TandemCore
 class TandemKitCGMSettingsViewModel: ObservableObject {
     @Published var cgmStatus: CGMStatusResponse?
     @Published var g6TransmitterInfo: GetG6TransmitterHardwareInfoResponse?
-    @Published var g7PairingCode: GetSavedG7PairingCodeResponse?
+    @Published var g7SavedPairingCode: GetSavedG7PairingCodeResponse?
 
     // G6 fields
     @Published var g6TransmitterId: String = ""
@@ -13,14 +13,12 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
     // G7 fields
     @Published var g7PairingCodeInput: String = ""
-    @Published var g7SensorCode: String = ""
 
     // Loading states
     @Published var isRefreshing = false
     @Published var isStartingG6Session = false
     @Published var isStoppingSession = false
     @Published var isSettingG6Transmitter = false
-    @Published var isStartingG7Session = false
     @Published var isSettingG7PairingCode = false
     @Published var isGettingG7PairingCode = false
 
@@ -58,7 +56,7 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.cgmStatus = status
                 self.g6TransmitterInfo = g6Info
-                self.g7PairingCode = g7Code
+                self.g7SavedPairingCode = g7Code
                 self.isRefreshing = false
             }
         }
@@ -158,6 +156,8 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
             let response = self
                 .sendMessage(message: SetDexcomG7PairingCodeRequest(pairingCode: pairingCode)) as? SetDexcomG7PairingCodeResponse
 
+            Thread.sleep(forTimeInterval: 1.0)
+
             DispatchQueue.main.async {
                 self.isSettingG7PairingCode = false
 
@@ -188,45 +188,10 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                 self.isGettingG7PairingCode = false
 
                 if let response = response {
-                    self.g7PairingCode = response
-                    self.errorMessage = "Saved pairing code: \(response.pairingCode)"
+                    self.g7SavedPairingCode = response
+                    self.errorMessage = "Saved pairing code: \(String(response.pairingCode))"
                 } else {
                     self.errorMessage = "Failed to get saved pairing code"
-                }
-            }
-        }
-    }
-
-    func startG7SensorSession() {
-        let sensorCode = Int(g7SensorCode) ?? 0
-
-        isStartingG7Session = true
-        errorMessage = nil
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            // For G7, we use the same StartDexcomG6SensorSessionRequest
-            // with sensorCode = 0 or the provided code
-            let response = self
-                .sendMessage(
-                    message: StartDexcomG6SensorSessionRequest(sensorCode: sensorCode)
-                ) as? StartDexcomG6SensorSessionResponse
-
-            Thread.sleep(forTimeInterval: 1.0)
-
-            DispatchQueue.main.async {
-                self.isStartingG7Session = false
-
-                if let response = response {
-                    if response.status == 0 {
-                        self.g7SensorCode = ""
-                        self.refreshCGMStatus()
-                    } else {
-                        self.errorMessage = "Failed to start G7 session (status: \(response.status))"
-                    }
-                } else {
-                    self.errorMessage = "Failed to communicate with pump"
                 }
             }
         }

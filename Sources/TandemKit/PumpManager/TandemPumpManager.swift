@@ -1521,42 +1521,79 @@ private struct ActiveTempBasal {
 
                     self.recordReconciliation(at: endDate)
                     self.completeTempBasal(.success(cancellationDose), completion: completion)
-                } else {
+                } else { // valid duration
                     let minutes = max(1, Int((duration / 60.0).rounded()))
                     let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+                    
+                    // we can't set a temp rate of 100% since it does nothing.
+                    // Try to cancel any current temp rate instead of setting a new one.
+                    if (percent == 100) {
+                        let response: StopTempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: StopTempRateRequest(),
+                            expecting: StopTempRateResponse.self
+                        )
 
-                    let request = SetTempRateRequest(minutes: minutes, percent: percent)
-                    let response: SetTempRateResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: SetTempRateResponse.self
-                    )
-
-                    guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(response: response)
+                        if response.status != 0 {
+                            // there is no active temp rate to stop.
+                        }
+                        
+                        
+                        let endDate = startDate.addingTimeInterval(duration)
+                        let dose = DoseEntry(
+                            type: .tempBasal,
+                            startDate: startDate,
+                            endDate: endDate,
+                            value: unitsPerHour,
+                            unit: .unitsPerHour,
+                            deliveredUnits: nil,
+                            syncIdentifier: UUID().uuidString,
+                            scheduledBasalRate: scheduledQuantity
+                        )
+                        
+                        self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
+                        self.lastScheduledBasalRate.value = baselineRate
+                        
+                        self.updateStatus { status in
+                            status.basalDeliveryState = .tempBasal(dose)
+                        }
+                        
+                        self.recordReconciliation(at: startDate)
+                        self.completeTempBasal(.success(dose), completion: completion)
+                    } else {
+                        let request = SetTempRateRequest(minutes: minutes, percent: percent)
+                        let response: SetTempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: request,
+                            expecting: SetTempRateResponse.self
+                        )
+                        
+                        guard response.status == 0 else {
+                            throw PumpCommError.errorResponse(response: response)
+                        }
+                        
+                        let endDate = startDate.addingTimeInterval(duration)
+                        let dose = DoseEntry(
+                            type: .tempBasal,
+                            startDate: startDate,
+                            endDate: endDate,
+                            value: unitsPerHour,
+                            unit: .unitsPerHour,
+                            deliveredUnits: nil,
+                            syncIdentifier: UUID().uuidString,
+                            scheduledBasalRate: scheduledQuantity
+                        )
+                        
+                        self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
+                        self.lastScheduledBasalRate.value = baselineRate
+                        
+                        self.updateStatus { status in
+                            status.basalDeliveryState = .tempBasal(dose)
+                        }
+                        
+                        self.recordReconciliation(at: startDate)
+                        self.completeTempBasal(.success(dose), completion: completion)
                     }
-
-                    let endDate = startDate.addingTimeInterval(duration)
-                    let dose = DoseEntry(
-                        type: .tempBasal,
-                        startDate: startDate,
-                        endDate: endDate,
-                        value: unitsPerHour,
-                        unit: .unitsPerHour,
-                        deliveredUnits: nil,
-                        syncIdentifier: UUID().uuidString,
-                        scheduledBasalRate: scheduledQuantity
-                    )
-
-                    self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
-                    self.lastScheduledBasalRate.value = baselineRate
-
-                    self.updateStatus { status in
-                        status.basalDeliveryState = .tempBasal(dose)
-                    }
-
-                    self.recordReconciliation(at: startDate)
-                    self.completeTempBasal(.success(dose), completion: completion)
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)

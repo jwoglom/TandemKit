@@ -143,7 +143,7 @@ struct TandemKitCGMSettingsView: View {
                     } else {
                         TextField(
                             LocalizedString(
-                                "Sensor Code (optional, use 0000 to reconnect)",
+                                "Sensor Code",
                                 comment: "Placeholder for sensor code"
                             ),
                             text: $viewModel.g6SensorCode
@@ -174,53 +174,12 @@ struct TandemKitCGMSettingsView: View {
                 "Dexcom G7",
                 comment: "The title of the Dexcom G7 section"
             ))) {
-                // Pairing Code
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(LocalizedString("Pairing Code", comment: "Label for pairing code"))
-                        .font(.headline)
+                if viewModel.isSessionActive {
+                    // Show stop button when session is active
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(LocalizedString("Sensor Session", comment: "Label for sensor session"))
+                            .font(.headline)
 
-                    TextField(
-                        LocalizedString("Enter pairing code", comment: "Placeholder for pairing code"),
-                        text: $viewModel.g7PairingCodeInput
-                    )
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .keyboardType(.numberPad)
-
-                    HStack(spacing: 8) {
-                        SaveButton(
-                            text: LocalizedString("Set Pairing Code", comment: "Button to set pairing code"),
-                            loading: $viewModel.isSettingG7PairingCode
-                        ) {
-                            viewModel.setG7PairingCode()
-                        }
-
-                        Button(action: {
-                            viewModel.getSavedG7PairingCode()
-                        }) {
-                            HStack {
-                                Text(LocalizedString("Get Saved", comment: "Button to get saved pairing code"))
-                                if viewModel.isGettingG7PairingCode {
-                                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                                }
-                            }
-                        }
-                        .disabled(viewModel.isGettingG7PairingCode)
-                    }
-
-                    if let pairingCode = viewModel.g7PairingCode, pairingCode.pairingCode > 0 {
-                        Text("Saved pairing code: \(pairingCode.pairingCode)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.vertical, 4)
-
-                // Sensor Session
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(LocalizedString("Sensor Session", comment: "Label for sensor session"))
-                        .font(.headline)
-
-                    if viewModel.isSessionActive {
                         Button(action: {
                             viewModel.showingStopConfirmation = true
                         }) {
@@ -234,30 +193,57 @@ struct TandemKitCGMSettingsView: View {
                         }
                         .disabled(viewModel.isStoppingSession)
                         .foregroundColor(guidanceColors.critical)
-                    } else {
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    // Pairing Code input when no session is active
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(LocalizedString("Pairing Code", comment: "Label for pairing code"))
+                            .font(.headline)
+
                         TextField(
-                            LocalizedString("Sensor Code (optional)", comment: "Placeholder for sensor code"),
-                            text: $viewModel.g7SensorCode
+                            LocalizedString("Enter pairing code", comment: "Placeholder for pairing code"),
+                            text: $viewModel.g7PairingCodeInput
                         )
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .keyboardType(.numberPad)
 
-                        SaveButton(
-                            text: LocalizedString("Start G7 Sensor", comment: "Button to start G7 sensor"),
-                            loading: $viewModel.isStartingG7Session
-                        ) {
-                            viewModel.showingStartG7Confirmation = true
+                        HStack(spacing: 8) {
+                            SaveButton(
+                                text: LocalizedString("Start G7 Sensor", comment: "Button to start G7 sensor"),
+                                loading: $viewModel.isSettingG7PairingCode
+                            ) {
+                                viewModel.showingStartG7Confirmation = true
+                            }
+
+                            Button(action: {
+                                viewModel.getSavedG7PairingCode()
+                            }) {
+                                HStack {
+                                    Text(LocalizedString("Get Saved", comment: "Button to get saved pairing code"))
+                                    if viewModel.isGettingG7PairingCode {
+                                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                                    }
+                                }
+                            }
+                            .disabled(viewModel.isGettingG7PairingCode)
+                        }
+
+                        if let pairingCode = viewModel.g7SavedPairingCode, pairingCode.pairingCode > 0 {
+                            Text("Saved pairing code: \(pairingCode.pairingCode)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
 
                         Text(LocalizedString(
-                            "Enter the sensor code if prompted by the pump. Most G7 sensors do not require a code.",
-                            comment: "Help text for G7 sensor code"
+                            "Enter the 4-digit pairing code from your G7 sensor to start a new sensor session.",
+                            comment: "Help text for G7 pairing code"
                         ))
                         .font(.caption)
                         .foregroundColor(.secondary)
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
             }
 
             // Error message
@@ -306,12 +292,12 @@ struct TandemKitCGMSettingsView: View {
         ActionSheet(
             title: Text(LocalizedString("Start Dexcom G7 Sensor?", comment: "Action sheet title")),
             message: Text(LocalizedString(
-                "This will start a new sensor session on the pump.",
+                "This will set the pairing code and start a new sensor session on the pump.",
                 comment: "Action sheet message"
             )),
             buttons: [
                 .default(Text(LocalizedString("Start Sensor", comment: "Confirm button"))) {
-                    viewModel.startG7SensorSession()
+                    viewModel.setG7PairingCode()
                 },
                 .cancel()
             ]
