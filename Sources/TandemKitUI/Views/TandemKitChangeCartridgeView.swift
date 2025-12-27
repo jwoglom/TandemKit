@@ -98,12 +98,6 @@ struct TandemKitChangeCartridgeView: View {
             didLoad = true
             viewModel.checkSuspendedStatus()
         }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
     }
 
     var suspendSection: some View {
@@ -130,6 +124,9 @@ struct TandemKitChangeCartridgeView: View {
                     }
                 }
                 .disabled(viewModel.loadingSuspend)
+                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+                    suspendInsulinSheet
+                }
 
                 if viewModel.failedSuspend {
                     Label(
@@ -269,6 +266,9 @@ struct TandemKitChangeCartridgeView: View {
             } else {
                 viewModel.showingCancelConfirmation = true
             }
+        }
+        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
+            cancelOperationSheet
         }
     }
 

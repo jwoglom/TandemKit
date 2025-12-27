@@ -70,15 +70,6 @@ struct TandemKitFillCannulaView: View {
             didLoad = true
             viewModel.checkSuspendedStatus()
         }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-            resumeInsulinSheet
-        }
     }
 
     var suspendSection: some View {
@@ -105,6 +96,9 @@ struct TandemKitFillCannulaView: View {
                     }
                 }
                 .disabled(viewModel.loadingSuspend)
+                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+                    suspendInsulinSheet
+                }
 
                 if viewModel.failedSuspend {
                     Label(
@@ -191,6 +185,9 @@ struct TandemKitFillCannulaView: View {
             }) {
                 Text(LocalizedString("Resume insulin delivery", comment: "Button text"))
             }
+            .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
+                resumeInsulinSheet
+            }
 
             Button(action: {
                 presentationMode.wrappedValue.dismiss()
@@ -208,6 +205,9 @@ struct TandemKitFillCannulaView: View {
             } else {
                 viewModel.showingCancelConfirmation = true
             }
+        }
+        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
+            cancelOperationSheet
         }
     }
 

@@ -85,8 +85,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
             if let transport = self.pumpManager?.pairedTransport {
                 let response = try? transport.sendMessage(SuspendPumpingRequest())
 
-                Thread.sleep(forTimeInterval: 1.0)
-                self.checkSuspendedStatus()
 
                 DispatchQueue.main.async {
                     self.loadingSuspend = false
