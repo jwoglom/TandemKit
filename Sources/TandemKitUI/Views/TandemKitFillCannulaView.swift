@@ -46,17 +46,7 @@ struct TandemKitFillCannulaView: View {
                 )
             }
 
-            // Step 3: Filling
-            if viewModel.currentStep == .filling {
-                fillingSection
-            } else if viewModel.currentStep.rawValue > CannulaFillStep.filling.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 3: Filling", comment: "Step header"),
-                    message: LocalizedString("Cannula filled", comment: "Status text")
-                )
-            }
-
-            // Step 4: Done
+            // Step 3: Done
             if viewModel.currentStep == .done {
                 doneSection
             }
@@ -164,17 +154,6 @@ struct TandemKitFillCannulaView: View {
             }
         } header: {
             Text(LocalizedString("Step 2: Set Prime Amount", comment: "Step header"))
-        }
-    }
-
-    var fillingSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Delivering prime...", comment: "Status text"))
-                ProgressView()
-            }
-        } header: {
-            Text(LocalizedString("Step 3: Filling", comment: "Step header"))
         }
     }
 
