@@ -144,7 +144,7 @@ public class AlarmStatusResponse: Message, NotificationMessage {
             switch self {
             case .CARTRIDGE_ALARM, .CARTRIDGE_ALARM2, .CARTRIDGE_ALARM3, .CARTRIDGE_ALARM4,
                  .CARTRIDGE_ALARM5, .CARTRIDGE_ALARM6, .CARTRIDGE_ALARM7, .CARTRIDGE_ALARM10,
-                 .CARTRIDGE_ALARM11, .CARTRIDGE_ALARM12, .CARTRIDGE_ALARM_34:
+                 .CARTRIDGE_ALARM11, .CARTRIDGE_ALARM12:
                 return "There is an issue with the cartridge and it needs to be replaced."
             case .OCCLUSION_ALARM, .OCCLUSION_ALARM2:
                 return "An occlusion has occurred. Please check your pump site and tubing and restart insulin delivery."

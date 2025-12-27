@@ -86,7 +86,7 @@ public class NotificationBundle {
     /// Assembles all active notifications into a single sorted list.
     public func get() -> [NotificationItem] {
         var items: [NotificationItem] = []
-        let alarmAndAlerts: [NotificationMessage] = [alertStatusResponse, alarmStatusResponse].compactMap { $0 }
+        let alarmAndAlerts: [NotificationMessage] = [alertStatusResponse as NotificationMessage?, alarmStatusResponse as NotificationMessage?].compactMap { $0 }
 
         // Add alerts
         if let response = alertStatusResponse {
@@ -147,7 +147,7 @@ public class NotificationBundle {
     /// Calculates the total number of active notifications across all response types.
     public func getNotificationCount() -> Int {
         var count = 0
-        let alarmAndAlerts: [NotificationMessage] = [alarmStatusResponse, alertStatusResponse].compactMap { $0 }
+        let alarmAndAlerts: [NotificationMessage] = [alarmStatusResponse as NotificationMessage?, alertStatusResponse as NotificationMessage?].compactMap { $0 }
 
         if let response = alarmStatusResponse {
             count += response.notificationCount

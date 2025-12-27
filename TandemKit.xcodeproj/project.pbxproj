@@ -155,6 +155,7 @@
 		3EE345692EC91299008A07F6 /* HmacSha1.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444E2EC91299008A07F6 /* HmacSha1.swift */; };
 		3EE3456A2EC91299008A07F6 /* BGHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344D22EC91299008A07F6 /* BGHistoryLog.swift */; };
 		3EE3456B2EC91299008A07F6 /* PumpFaultCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345082EC91299008A07F6 /* PumpFaultCode.swift */; };
+		3FF000022EC91299008A07F6 /* NotificationInterfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF000012EC91299008A07F6 /* NotificationInterfaces.swift */; };
 		3EE3456C2EC91299008A07F6 /* ControlStreamMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344862EC91299008A07F6 /* ControlStreamMessages.swift */; };
 		3EE3456D2EC91299008A07F6 /* NonexistentPumpingStateStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3448C2EC91299008A07F6 /* NonexistentPumpingStateStream.swift */; };
 		3EE3456E2EC91299008A07F6 /* LastBG.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344B32EC91299008A07F6 /* LastBG.swift */; };
@@ -649,6 +650,7 @@
 		3EE345032EC91299008A07F6 /* UsbEnumeratedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsbEnumeratedHistoryLog.swift; sourceTree = "<group>"; };
 		3EE345052EC91299008A07F6 /* BolusDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BolusDelivery.swift; sourceTree = "<group>"; };
 		3EE345062EC91299008A07F6 /* KnownApiVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnownApiVersion.swift; sourceTree = "<group>"; };
+		3FF000012EC91299008A07F6 /* NotificationInterfaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationInterfaces.swift; sourceTree = "<group>"; };
 		3EE345072EC91299008A07F6 /* PairingCodeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeType.swift; sourceTree = "<group>"; };
 		3EE345082EC91299008A07F6 /* PumpFaultCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFaultCode.swift; sourceTree = "<group>"; };
 		3EE345092EC91299008A07F6 /* StatusMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMessage.swift; sourceTree = "<group>"; };
@@ -1141,6 +1143,7 @@
 			children = (
 				3EE345052EC91299008A07F6 /* BolusDelivery.swift */,
 				3EE345062EC91299008A07F6 /* KnownApiVersion.swift */,
+				3FF000012EC91299008A07F6 /* NotificationInterfaces.swift */,
 				3EE345072EC91299008A07F6 /* PairingCodeType.swift */,
 				3EE345082EC91299008A07F6 /* PumpFaultCode.swift */,
 				3EE345092EC91299008A07F6 /* StatusMessage.swift */,
@@ -1626,6 +1629,7 @@
 				3EE345692EC91299008A07F6 /* HmacSha1.swift in Sources */,
 				3EE3456A2EC91299008A07F6 /* BGHistoryLog.swift in Sources */,
 				3EE3456B2EC91299008A07F6 /* PumpFaultCode.swift in Sources */,
+				3FF000022EC91299008A07F6 /* NotificationInterfaces.swift in Sources */,
 				3EE3456C2EC91299008A07F6 /* ControlStreamMessages.swift in Sources */,
 				3EE3456D2EC91299008A07F6 /* NonexistentPumpingStateStream.swift in Sources */,
 				3EE3456E2EC91299008A07F6 /* LastBG.swift in Sources */,
