@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitFillCannulaView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitFillCannulaViewModel
+    @StateObject var viewModel: TandemKitFillCannulaViewModel
     @State private var didLoad = false
 
     let unitText = LocalizedString("U", comment: "Insulin unit")

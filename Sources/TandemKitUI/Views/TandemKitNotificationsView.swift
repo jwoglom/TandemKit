@@ -4,7 +4,7 @@ import TandemCore
 
 struct TandemKitNotificationsView: View {
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitNotificationsViewModel
+    @StateObject var viewModel: TandemKitNotificationsViewModel
     @State private var didLoad = false
 
     var body: some View {

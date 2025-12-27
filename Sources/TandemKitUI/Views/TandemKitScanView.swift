@@ -5,7 +5,7 @@ struct TandemKitScanView: View {
     @Environment(\.isPresented) var isPresented
     @Environment(\.dismissAction) private var dismiss
 
-    @ObservedObject var viewModel: TandemKitScanViewModel
+    @StateObject var viewModel: TandemKitScanViewModel
 
     var body: some View {
         VStack(alignment: .leading) {

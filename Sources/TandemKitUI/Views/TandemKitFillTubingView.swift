@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitFillTubingView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitFillTubingViewModel
+    @StateObject var viewModel: TandemKitFillTubingViewModel
     @State private var didLoad = false
 
     var body: some View {

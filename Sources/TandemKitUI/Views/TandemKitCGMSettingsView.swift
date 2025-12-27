@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitCGMSettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitCGMSettingsViewModel
+    @StateObject var viewModel: TandemKitCGMSettingsViewModel
     @State private var didLoad = false
 
     var body: some View {
