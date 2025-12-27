@@ -2106,7 +2106,29 @@ private struct ActiveTempBasal {
 
     public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
         notificationLogger.info("[notification] Received qualifying events: \(events)")
-        // TODO: Handle qualifying events - fetch suggested status messages, update UI state, etc.
+
+        // Fetch suggested status messages for these events
+        Task { @MainActor in
+            let handlers = QualifyingEvent.groupSuggestedHandlers(events)
+            notificationLogger.debug("[notification] Fetching \(handlers.count) status messages for qualifying events")
+
+            for message in handlers {
+                do {
+                    guard let transport = pairedTransport else {
+                        notificationLogger.warning("[notification] No transport available for qualifying event handler")
+                        break
+                    }
+
+                    let response = try transport.sendMessage(message)
+                    let metadata = MessageRegistry.metadata(for: response)
+
+                    // Process the response through the normal notification handler
+                    pumpComm(pumpComm, didReceive: response, metadata: metadata, characteristic: .CURRENT_STATUS_CHARACTERISTICS, txId: 0)
+                } catch {
+                    notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
+                }
+            }
+        }
     }
 
     public func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
