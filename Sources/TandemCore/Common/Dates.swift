@@ -1,6 +1,6 @@
 import Foundation
 
-struct Dates {
+enum Dates {
     static let JANUARY_1_2008_UNIX_EPOCH: TimeInterval = 1_199_145_600
 
     static func fromJan12008ToUnixEpochSeconds(_ seconds: TimeInterval) -> TimeInterval {

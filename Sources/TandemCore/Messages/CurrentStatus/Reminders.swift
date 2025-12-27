@@ -205,7 +205,9 @@ public enum MultiDay: Int, CaseIterable, Sendable {
 
     public static func toBitmask(_ days: [MultiDay]) -> Int {
         var mask = 0
-        for day in days { mask |= day.rawValue }
+        for day in days {
+            mask |= day.rawValue
+        }
         return mask
     }
 

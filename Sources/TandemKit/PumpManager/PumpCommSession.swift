@@ -29,11 +29,11 @@ public class PumpCommSession {
         self.delegate = delegate
     }
 
-    public func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
+    public func runSession(withName _: String, _ block: @escaping @Sendable () -> Void) {
         sessionQueue.async(execute: block)
     }
 
-    public func runSynchronously<T>(withName _: String, _ block: @escaping @Sendable() throws -> T) rethrows -> T {
+    public func runSynchronously<T>(withName _: String, _ block: @escaping @Sendable () throws -> T) rethrows -> T {
         try sessionQueue.sync {
             try block()
         }

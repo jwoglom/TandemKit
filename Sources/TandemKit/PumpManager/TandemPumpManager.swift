@@ -81,8 +81,7 @@ private struct ActiveTempBasal {
     let scheduledRate: Double
 }
 
-@available(macOS 13.0, iOS 14.0, *)
-public class TandemPumpManager: PumpManager, Pluggable {
+@available(macOS 13.0, iOS 14.0, *) public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
     public var localizedTitle: String = "TandemPumpManager"
@@ -946,11 +945,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         scanDeviceObservers.removeElement(observer)
     }
 
-    internal func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
-        DispatchQueue.main.async {
-            self.scanDeviceObservers.forEach { observer in
-                observer.deviceScanDidUpdate(device)
-            }
+    func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
+        self.scanDeviceObservers.forEach { observer in
+            observer.deviceScanDidUpdate(device)
         }
     }
 
@@ -1961,8 +1958,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
 // MARK: - TandemPumpDelegate Conformance
 
-@available(macOS 13.0, iOS 14.0, *)
-extension TandemPumpManager: TandemPumpDelegate {
+@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: TandemPumpDelegate {
     public func tandemPump(
         _: TandemPump,
         shouldConnect peripheral: CBPeripheral,
@@ -2055,8 +2051,7 @@ extension TandemPumpManager: TandemPumpDelegate {
 
 // MARK: - PumpCommDelegate Conformance
 
-@available(macOS 13.0, iOS 14.0, *)
-extension TandemPumpManager: PumpCommDelegate {
+@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: PumpCommDelegate {
     public func pumpComm(_: PumpComm, didChange pumpState: PumpState) {
         // Update the stored state when pump state changes (e.g., after pairing)
         var currentState = lockedState.value

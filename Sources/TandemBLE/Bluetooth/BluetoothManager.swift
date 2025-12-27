@@ -311,7 +311,6 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
     private func isTandemPeripheral(_ cbPeripheral: CBPeripheral, advertisementData _: [String: Any]?) -> Bool {
         log.info("isTandemPeripheral? cbPeripheral.name: %s", cbPeripheral.name ?? "")
         return cbPeripheral.services?.contains { btService in
-
             if btService.uuid == ServiceUUID.PUMP_SERVICE.cbUUID {
                 log.info("isTandemPeripheral? cbPeripheral.name: %s btService.uuid: %s", cbPeripheral.name ?? "", btService.uuid)
                 return true
@@ -436,7 +435,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         peripheralManager?.centralManager(central, didConnect: peripheral)
 
         if case .poweredOn = manager.state, case .connected = peripheral.state, let peripheralManager = peripheralManager {
-            self.delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: nil)
+            delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: nil)
         }
     }
 

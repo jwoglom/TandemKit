@@ -103,7 +103,7 @@ public class PumpComm: CustomDebugStringConvertible {
     #endif
 
     private func ensureSession() -> PumpCommSession {
-        if let session = self.session {
+        if let session = session {
             return session
         }
 

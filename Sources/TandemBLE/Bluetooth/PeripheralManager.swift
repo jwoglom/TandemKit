@@ -10,7 +10,8 @@ public class PeripheralManager: NSObject {
     private let logger = PumpLogger(label: "TandemBLE.PeripheralManager")
 
     ///
-    /// This is mutable, because CBPeripheral instances can seemingly become invalid, and need to be periodically re-fetched from CBCentralManager
+    /// This is mutable, because CBPeripheral instances can seemingly become invalid, and need to be periodically re-fetched from
+    /// CBCentralManager
     var peripheral: CBPeripheral {
         didSet {
             guard oldValue !== peripheral else {
@@ -175,7 +176,7 @@ extension PeripheralManager {
 
                 needsConfiguration = false
 
-                if let delegate = self.delegate {
+                if let delegate = delegate {
                     try delegate.completeConfiguration(for: self)
 
                     log.default("Delegate configuration notified")
@@ -291,11 +292,11 @@ extension PeripheralManager {
         return nil
     }
 
-    func configureAndRun(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) -> @Sendable() -> Void {
+    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
         { self.runConfigured(block) }
     }
 
-    public func perform(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) {
+    public func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
         queue.async {
             self.runConfigured(block)
         }
@@ -331,7 +332,7 @@ extension PeripheralManager {
         // Prelude
         dispatchPrecondition(condition: .onQueue(queue))
         guard central?.state == .poweredOn, peripheral.state == .connected else {
-            self.log.info(
+            log.info(
                 "runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@",
                 String(describing: peripheral)
             )
@@ -365,7 +366,7 @@ extension PeripheralManager {
         }
 
         guard signaled else {
-            self.log.info("runCommand lock timeout reached - not signalled")
+            log.info("runCommand lock timeout reached - not signalled")
             throw PeripheralManagerError.timeout(commandConditions)
         }
 
@@ -461,7 +462,7 @@ extension PeripheralManager: CBPeripheralDelegate {
         log.default("didDiscoverServices")
         commandLock.lock()
 
-        if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
+        if let index = commandConditions.firstIndex(where: { condition -> Bool in
             if case .discoverServices = condition {
                 return true
             } else {
@@ -482,7 +483,7 @@ extension PeripheralManager: CBPeripheralDelegate {
     public func peripheral(_: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         commandLock.lock()
 
-        if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
+        if let index = commandConditions.firstIndex(where: { condition -> Bool in
             if case .discoverCharacteristicsForService(serviceUUID: service.uuid) = condition {
                 return true
             } else {
@@ -503,7 +504,7 @@ extension PeripheralManager: CBPeripheralDelegate {
     public func peripheral(_: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         commandLock.lock()
 
-        if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
+        if let index = commandConditions.firstIndex(where: { condition -> Bool in
             if case .notificationStateUpdate(
                 characteristicUUID: characteristic.uuid,
                 enabled: characteristic.isNotifying
@@ -581,10 +582,10 @@ extension PeripheralManager: CBPeripheralDelegate {
 
     public func peripheral(_: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard error == nil else {
-            self.log.error("Error reading rssi: %{public}@", String(describing: RSSI))
+            log.error("Error reading rssi: %{public}@", String(describing: RSSI))
             return
         }
-        self.log.default("didReadRSSI: %{public}@", String(describing: RSSI))
+        log.default("didReadRSSI: %{public}@", String(describing: RSSI))
     }
 }
 
@@ -592,26 +593,26 @@ extension PeripheralManager {
     func clearCommsQueues() {
         queueLock.lock()
         if !cmdQueue.isEmpty {
-            self.log.default("Removing %{public}d leftover elements from command queue", cmdQueue.count)
+            log.default("Removing %{public}d leftover elements from command queue", cmdQueue.count)
             cmdQueue.removeAll()
         }
         queueLock.unlock()
     }
 
     func centralManager(_: CBCentralManager, didDisconnect _: CBPeripheral, error _: Error?) {
-        self.idleStart = nil
+        idleStart = nil
     }
 
     func centralManager(_: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        self.log.debug("PeripheralManager - didConnect: %@", String(describing: peripheral))
+        log.debug("PeripheralManager - didConnect: %@", String(describing: peripheral))
         switch peripheral.state {
         case .connected:
             clearCommsQueues()
-            self.log.debug("PeripheralManager - didConnect - running assertConfiguration")
+            log.debug("PeripheralManager - didConnect - running assertConfiguration")
             assertConfiguration()
 
             commandLock.lock()
-            if let index = commandConditions.firstIndex(where: { (condition) -> Bool in
+            if let index = commandConditions.firstIndex(where: { condition -> Bool in
                 if case .connect = condition {
                     return true
                 } else {
@@ -635,7 +636,7 @@ extension PeripheralManager {
 // MARK: - Command session management
 
 public extension PeripheralManager {
-    func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
+    func runSession(withName _: String, _ block: @escaping @Sendable () -> Void) {
         perform { _ in block() }
     }
 }

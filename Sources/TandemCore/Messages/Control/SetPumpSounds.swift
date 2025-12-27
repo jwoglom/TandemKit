@@ -147,7 +147,9 @@ public enum PumpSoundChangeBitmask: Int, CaseIterable {
 
     public static func toBitmask(_ fields: [PumpSoundChangeBitmask]) -> Int {
         var mask = 0
-        for field in fields { mask |= field.rawValue }
+        for field in fields {
+            mask |= field.rawValue
+        }
         return mask
     }
 }

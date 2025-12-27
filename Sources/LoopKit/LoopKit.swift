@@ -1,4 +1,5 @@
 import Foundation
+
 // This file is a shim for building on non-Apple platforms.
 #if os(Linux)
 
@@ -362,8 +363,7 @@ import Foundation
         func prepareForDeactivation(_ completion: @escaping (Error?) -> Void)
     }
 
-    @available(macOS 13.0, iOS 14.0, *)
-    public extension PumpManager {
+    @available(macOS 13.0, iOS 14.0, *) public extension PumpManager {
         func roundToSupportedBasalRate(unitsPerHour: Double) -> Double {
             supportedBasalRates.filter { $0 <= unitsPerHour }.max() ?? 0
         }

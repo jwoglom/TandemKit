@@ -2,8 +2,7 @@
 @testable import TandemKit
 import XCTest
 
-@available(macOS 13.0, iOS 14.0, *)
-final class TandemPumpManagerConnectionTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerConnectionTests: XCTestCase {
     private var originalApiVersionSupplier: (() -> Int)? = PumpStateSupplier.pumpApiVersion
 
     override func tearDown() {

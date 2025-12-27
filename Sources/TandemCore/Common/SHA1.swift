@@ -1,6 +1,6 @@
 import Foundation
 
-struct SHA1 {
+enum SHA1 {
     private static func rotateLeft(_ value: UInt32, by: UInt32) -> UInt32 {
         (value << by) | (value >> (32 - by))
     }
@@ -35,7 +35,9 @@ struct SHA1 {
                     UInt32(message[index + 3])
                 w[i] = word
             }
-            for i in 16 ..< 80 { w[i] = rotateLeft(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], by: 1) }
+            for i in 16 ..< 80 {
+                w[i] = rotateLeft(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], by: 1)
+            }
             var a = h0, b = h1, c = h2, d = h3, e = h4
             for i in 0 ..< 80 {
                 let f: UInt32
@@ -69,7 +71,7 @@ struct SHA1 {
             chunkStart += 64
         }
         var digest = Data()
-        [h0, h1, h2, h3, h4].forEach { h in
+        for h in [h0, h1, h2, h3, h4] {
             digest.append(UInt8((h >> 24) & 0xFF))
             digest.append(UInt8((h >> 16) & 0xFF))
             digest.append(UInt8((h >> 8) & 0xFF))

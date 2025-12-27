@@ -2,7 +2,7 @@ import Foundation
 import TandemCore
 
 /// Utilities for building and parsing packets in tests
-struct PacketTestUtils {
+enum PacketTestUtils {
     // MARK: - Packet Building
 
     /// Build a simple request packet (single packet, no HMAC)

@@ -4,7 +4,8 @@
 //
 //  Created by OpenAI's Codex.
 //
-//  Swift representations of NonexistentEnterChangeCartridgeModeStateStreamRequest and EnterChangeCartridgeModeStateStreamResponse based on
+//  Swift representations of NonexistentEnterChangeCartridgeModeStateStreamRequest and EnterChangeCartridgeModeStateStreamResponse
+//  based on
 //  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentEnterChangeCartridgeModeStateStreamRequest.java
 //  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/EnterChangeCartridgeModeStateStreamResponse.java
 //
