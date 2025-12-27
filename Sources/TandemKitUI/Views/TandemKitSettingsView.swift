@@ -354,22 +354,29 @@ struct TandemKitSettingsView: View {
     }
 
     var reservoirStatus: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
-                .foregroundColor(Color(UIColor.secondaryLabel))
-            if let unitsText = viewModel.reservoirUnitsText {
-                HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text(unitsText)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading) {
+                Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
+                    .foregroundColor(Color(UIColor.secondaryLabel))
+                if let unitsText = viewModel.reservoirUnitsText {
+                    HStack(alignment: .lastTextBaseline, spacing: 3) {
+                        Text(unitsText)
+                            .font(.system(size: 28))
+                            .fontWeight(.heavy)
+                            .fixedSize()
+                        Text("U")
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Text("--")
                         .font(.system(size: 28))
                         .fontWeight(.heavy)
-                        .fixedSize()
-                    Text("U")
-                        .foregroundColor(.secondary)
                 }
-            } else {
-                Text("--")
-                    .font(.system(size: 28))
-                    .fontWeight(.heavy)
+                
+                // fixed cartridge size for Mobi
+                ProgressBar(value: (viewModel.reservoirValue?.unitVolume ?? 0), total: 200)
+                    .frame(maxWidth: 128)
+                    .frame(height: 12)
             }
         }
     }
@@ -410,12 +417,23 @@ struct TandemKitSettingsView: View {
                                 Text("\(tempRate.percentage)% (\(formatDuration(tempRate.duration)))")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
+                            } else {
+                                Text("No Temp Rate")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 16))
+                                
                             }
                         }
                     } else {
-                        Text(LocalizedString("Active", comment: "Text shown when insulin active"))
-                            .fontWeight(.bold)
-                            .fixedSize()
+                        VStack(alignment: .center) {
+                            Text(LocalizedString("Unknown", comment: "Text shown when insulin active"))
+                                .fontWeight(.bold)
+                                .fixedSize()
+                            Text("No Temp Rate")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 16))
+                        }
+                        
                     }
                 }
             } else {
