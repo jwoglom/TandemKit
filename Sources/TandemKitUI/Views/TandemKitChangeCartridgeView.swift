@@ -93,6 +93,7 @@ struct TandemKitChangeCartridgeView: View {
         .navigationBarTitle(LocalizedString("Change Cartridge", comment: "Title for change cartridge"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .interactiveDismissDisabled(viewModel.isProcessing)
         .task {
             print("TandemKit Change Cartridge: .task called, didLoad=\(didLoad)")
             guard !didLoad else {

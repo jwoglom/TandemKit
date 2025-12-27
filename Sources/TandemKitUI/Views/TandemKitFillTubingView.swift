@@ -63,6 +63,7 @@ struct TandemKitFillTubingView: View {
         .navigationBarTitle(LocalizedString("Fill Tubing", comment: "Title for fill tubing"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .interactiveDismissDisabled(viewModel.isProcessing)
         .task {
             guard !didLoad else { return }
             didLoad = true
