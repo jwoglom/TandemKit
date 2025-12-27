@@ -384,8 +384,16 @@ struct TandemKitSettingsView: View {
                         .fixedSize()
                         .foregroundColor(.accentColor)
                     if viewModel.currentBasalStatus != nil {
-                        Text(viewModel.currentBasalStatus?.currentBasalRateForDisplay ?? "")
-                            .fontWeight(.bold)
+                        VStack(alignment: .center) {
+                            Text(viewModel.currentBasalStatus?.currentBasalRateForDisplay ?? "")
+                                .fontWeight(.bold)
+                                .font(.system(size: 24))
+                            if let tempRate = viewModel.tempRateStatus, tempRate.active == true {
+                                Text("\(tempRate.percentage)% (\(formatDuration(tempRate.duration)))")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 16))
+                            }
+                        }
                     } else {
                         Text(LocalizedString("Active", comment: "Text shown when insulin active"))
                             .fontWeight(.bold)
