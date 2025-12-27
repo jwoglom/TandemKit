@@ -62,7 +62,32 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
 
     // MARK: - Parsing
 
+    private func handleQualifyingEvent(_ data: Data) {
+        let events = QualifyingEvent.fromRawBytes(data)
+        logger.info("[PumpNotificationRouter] received qualifying events: \(events)")
+
+        guard let session else {
+            logger.warning("[PumpNotificationRouter] dropping qualifying events – missing session")
+            return
+        }
+
+        session.runSession(withName: "QualifyingEvents") {
+            session.handleQualifyingEvents(events)
+        }
+    }
+
     private func ingest(_ data: Data, characteristic: CharacteristicUUID) {
+        // QualifyingEvents are 4-byte bitmasks, not standard packets
+        if characteristic == .QUALIFYING_EVENTS_CHARACTERISTICS {
+            guard data.count >= 4 else {
+                logger.warning("[PumpNotificationRouter] ignoring short qualifying event len=\(data.count)")
+                return
+            }
+            handleQualifyingEvent(data)
+            return
+        }
+
+        // Standard packet handling
         guard data.count >= 5 else {
             logger
                 .warning(

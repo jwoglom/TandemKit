@@ -2104,6 +2104,11 @@ private struct ActiveTempBasal {
         }
     }
 
+    public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
+        notificationLogger.info("[notification] Received qualifying events: \(events)")
+        // TODO: Handle qualifying events - fetch suggested status messages, update UI state, etc.
+    }
+
     public func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
         telemetryLogger
             .error(
