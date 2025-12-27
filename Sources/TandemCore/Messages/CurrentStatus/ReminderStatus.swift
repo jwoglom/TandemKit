@@ -25,7 +25,7 @@ public class ReminderStatusRequest: Message {
 }
 
 /// Response containing the reminders bitmask.
-public class ReminderStatusResponse: Message {
+public class ReminderStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 73,
         size: 8,
@@ -50,7 +50,7 @@ public class ReminderStatusResponse: Message {
     public var reminders: Set<ReminderType> { ReminderType.fromBitmask(intMap) }
 
     /// Reminder type bit positions.
-    public enum ReminderType: Int, CaseIterable {
+    public enum ReminderType: Int, CaseIterable, NotificationEnum {
         case LOW_BG_REMINDER = 0
         case HIGH_BG_REMINDER = 1
         case SITE_CHANGE_REMINDER = 2
@@ -123,7 +123,13 @@ public class ReminderStatusResponse: Message {
             }
             return set
         }
+
+        public var id: Int { rawValue }
     }
+
+    public var notificationCount: Int { reminders.count }
+
+    public var notificationIds: Set<Int> { Set(reminders.map { $0.rawValue }) }
 
     public var description: String {
         "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), reminders=\(reminders), intMap=\(intMap))"
