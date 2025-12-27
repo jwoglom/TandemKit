@@ -152,6 +152,24 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
+
+                Toggle(isOn: Binding(
+                    get: { viewModel.autoAcknowledgeBasalAlerts },
+                    set: { viewModel.setAutoAcknowledgeBasalAlerts($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(LocalizedString(
+                            "Auto-Acknowledge Basal Alerts",
+                            comment: "Label for auto-acknowledge basal alerts toggle"
+                        ))
+                        Text(LocalizedString(
+                            "Automatically dismiss min/max basal rate alerts during looping",
+                            comment: "Description for auto-acknowledge basal alerts toggle"
+                        ))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                }
             }
 
             Section(header: SectionHeader(label: LocalizedString(

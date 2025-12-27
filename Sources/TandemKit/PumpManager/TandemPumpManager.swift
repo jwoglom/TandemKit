@@ -564,6 +564,10 @@ private struct ActiveTempBasal {
         lockedState.value.connectionSharingEnabled
     }
 
+    public var autoAcknowledgeBasalAlerts: Bool {
+        lockedState.value.autoAcknowledgeBasalAlerts
+    }
+
     private func setupTelemetry() {
         guard !telemetryConfigured else { return }
         telemetryConfigured = true
@@ -582,6 +586,10 @@ private struct ActiveTempBasal {
 
         telemetryScheduler.schedule(kind: .bolus, interval: 60) { [weak self] in
             self?.fetchBolusStatus()
+        }
+
+        telemetryScheduler.schedule(kind: .alerts, interval: 60) { [weak self] in
+            self?.fetchAlertAndAlarmStatus()
         }
 
         // NOTE: TimeSinceResetRequest causes timeouts and disconnections on some pumps
@@ -881,6 +889,78 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func fetchAlertAndAlarmStatus() {
+        guard let transport = telemetryTransportIfReady(for: .alerts) else {
+            return
+        }
+
+        // Fetch alert status
+        do {
+            let alertResponse: AlertStatusResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: AlertStatusRequest(),
+                expecting: AlertStatusResponse.self
+            )
+
+            telemetryLogger.debug("[telemetry] Alert status: \(alertResponse.alerts)")
+
+            // Auto-acknowledge basal alerts if enabled
+            if lockedState.value.autoAcknowledgeBasalAlerts {
+                autoAcknowledgeBasalAlertsIfNeeded(alertResponse: alertResponse, transport: transport)
+            }
+        } catch {
+            telemetryLogger.error("Alert status telemetry request failed: \(error)")
+        }
+
+        // Fetch alarm status (no auto-ack for alarms)
+        do {
+            let alarmResponse: AlarmStatusResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: AlarmStatusRequest(),
+                expecting: AlarmStatusResponse.self
+            )
+
+            telemetryLogger.debug("[telemetry] Alarm status: \(alarmResponse.alarms)")
+        } catch {
+            telemetryLogger.error("Alarm status telemetry request failed: \(error)")
+        }
+    }
+
+    private func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse, transport: PumpMessageTransport) {
+        let basalAlertsToAck = alertResponse.alerts.intersection(
+            AlertStatusResponse.AlertResponseType.basalAlertsToIgnoreWhenLooping
+        )
+
+        guard !basalAlertsToAck.isEmpty else {
+            return
+        }
+
+        telemetryLogger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
+
+        for alert in basalAlertsToAck {
+            do {
+                let request = DismissNotificationRequest(
+                    notificationType: .alert,
+                    notificationId: UInt32(alert.rawValue)
+                )
+
+                let response: DismissNotificationResponse = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: request,
+                    expecting: DismissNotificationResponse.self
+                )
+
+                if response.status == 0 {
+                    telemetryLogger.info("[auto-ack] Successfully acknowledged \(alert)")
+                } else {
+                    telemetryLogger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
+                }
+            } catch {
+                telemetryLogger.error("[auto-ack] Error acknowledging \(alert): \(error)")
+            }
+        }
+    }
+
     private func notifyDelegateStateUpdated() {
         guard let delegate = pumpManagerDelegate else { return }
         pumpDelegate.queue.async { [weak self] in
@@ -1119,6 +1199,16 @@ private struct ActiveTempBasal {
         state.connectionSharingEnabled = enabled
         lockedState.value = state
 
+        notifyDelegateStateUpdated()
+    }
+
+    public func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
+        var state = lockedState.value
+        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
+        state.autoAcknowledgeBasalAlerts = enabled
+        lockedState.value = state
+
+        telemetryLogger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
         notifyDelegateStateUpdated()
     }
 
@@ -2239,6 +2329,8 @@ private extension PumpTelemetryKind {
             return "bolus"
         case .timeSinceReset:
             return "timeSinceReset"
+        case .alerts:
+            return "alerts"
         }
     }
 }
