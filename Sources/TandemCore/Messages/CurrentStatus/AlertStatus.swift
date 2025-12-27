@@ -25,7 +25,7 @@ public class AlertStatusRequest: Message {
 }
 
 /// Response containing active alerts represented as a bitmask.
-public class AlertStatusResponse: Message {
+public class AlertStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 69,
         size: 8,
@@ -50,7 +50,7 @@ public class AlertStatusResponse: Message {
     }
 
     /// Alert types encoded in the response bitmask.
-    public enum AlertResponseType: Int, CaseIterable, Comparable {
+    public enum AlertResponseType: Int, CaseIterable, Comparable, NotificationEnum {
         case LOW_INSULIN_ALERT = 0
         case USB_CONNECTION_ALERT = 1
         case LOW_POWER_ALERT = 2
@@ -129,7 +129,13 @@ public class AlertStatusResponse: Message {
             }
             return current
         }
+
+        public var id: Int { rawValue }
     }
+
+    public var notificationCount: Int { alerts.count }
+
+    public var notificationIds: Set<Int> { Set(alerts.map { $0.rawValue }) }
 
     public var description: String {
         "AlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"

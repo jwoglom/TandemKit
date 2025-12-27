@@ -29,7 +29,7 @@ public class AlarmStatusRequest: Message {
 /**
  * Response containing active alarms represented as a bitmask.
  */
-public class AlarmStatusResponse: Message {
+public class AlarmStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 71,
         size: 8,
@@ -54,7 +54,7 @@ public class AlarmStatusResponse: Message {
     }
 
     /// Alarm types encoded in the response bitmask.
-    public enum AlarmResponseType: Int, CaseIterable, Comparable {
+    public enum AlarmResponseType: Int, CaseIterable, Comparable, NotificationEnum {
         case CARTRIDGE_ALARM = 0
         case CARTRIDGE_ALARM2 = 1
         case OCCLUSION_ALARM = 2
@@ -134,6 +134,52 @@ public class AlarmStatusResponse: Message {
             }
             return current
         }
+
+        public var id: Int { rawValue }
+
+        /// Whether the alarm has an associated user-facing description.
+        public var isKnownAlarm: Bool { notificationDescription != nil && !(notificationDescription ?? "").isEmpty }
+
+        public var notificationDescription: String? {
+            switch self {
+            case .CARTRIDGE_ALARM, .CARTRIDGE_ALARM2, .CARTRIDGE_ALARM3, .CARTRIDGE_ALARM4,
+                 .CARTRIDGE_ALARM5, .CARTRIDGE_ALARM6, .CARTRIDGE_ALARM7, .CARTRIDGE_ALARM10,
+                 .CARTRIDGE_ALARM11, .CARTRIDGE_ALARM12, .CARTRIDGE_ALARM_34:
+                return "There is an issue with the cartridge and it needs to be replaced."
+            case .OCCLUSION_ALARM, .OCCLUSION_ALARM2:
+                return "An occlusion has occurred. Please check your pump site and tubing and restart insulin delivery."
+            case .PUMP_RESET_ALARM:
+                return "The pump was reset. IOB has been reset to 0 and CGM may need to be re-activated."
+            case .AUTO_OFF_ALARM:
+                return "Pump will stop delivering insulin automatically soon because no user activity has occurred and the auto-off setting is enabled."
+            case .EMPTY_CARTRIDGE_ALARM:
+                return "Cartridge is out of insulin and insulin delivery cannot occur. Please fill a new cartridge."
+            case .TEMPERATURE_ALARM, .TEMPERATURE_ALARM2, .TEMPERATURE_ALARM3:
+                return "Pump temperature is out of range and insulin cannot be safely delivered."
+            case .BATTERY_SHUTDOWN_ALARM:
+                return "Pump battery level is critically low and the device will shut down. Please charge pump immediately."
+            case .INVALID_DATE_ALARM:
+                return "The pump's configured date is invalid."
+            case .RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2:
+                return "Insulin delivery is currently off. Please restart insulin delivery soon."
+            case .ALTITUDE_ALARM:
+                return "Pump altitude is out of range and insulin cannot be safely delivered."
+            case .STUCK_BUTTON_ALARM:
+                return "The pump button may be stuck or has been pressed for too long a period of time."
+            case .ATMOSPHERIC_PRESSURE_OUT_OF_RANGE_ALARM:
+                return "Pump atmospheric pressure is out of range and insulin cannot be safely delivered."
+            case .CARTRIDGE_REMOVED_ALARM:
+                return "The cartridge was removed from the pump. Please fill a new cartridge."
+            default:
+                return nil
+            }
+        }
+    }
+
+    public var notificationCount: Int { alarms.count }
+
+    public var notificationIds: Set<Int> {
+        Set(alarms.filter { $0.isKnownAlarm }.map { $0.rawValue })
     }
 
     public var description: String {

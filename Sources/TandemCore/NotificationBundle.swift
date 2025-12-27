@@ -86,6 +86,7 @@ public class NotificationBundle {
     /// Assembles all active notifications into a single sorted list.
     public func get() -> [NotificationItem] {
         var items: [NotificationItem] = []
+        let alarmAndAlerts: [NotificationMessage] = [alertStatusResponse, alarmStatusResponse].compactMap { $0 }
 
         // Add alerts
         if let response = alertStatusResponse {
@@ -132,7 +133,7 @@ public class NotificationBundle {
         }
 
         // Add malfunction if present
-        if let response = malfunctionStatusResponse, response.hasMalfunction {
+        if let response = malfunctionStatusResponse, response.hasMalfunction(alarmAndAlerts) {
             items.append(NotificationItem(
                 type: .malfunction,
                 id: UInt32(response.codeA),
@@ -145,7 +146,30 @@ public class NotificationBundle {
 
     /// Calculates the total number of active notifications across all response types.
     public func getNotificationCount() -> Int {
-        get().count
+        var count = 0
+        let alarmAndAlerts: [NotificationMessage] = [alarmStatusResponse, alertStatusResponse].compactMap { $0 }
+
+        if let response = alarmStatusResponse {
+            count += response.notificationCount
+        }
+
+        if let response = alertStatusResponse {
+            count += response.notificationCount
+        }
+
+        if let response = reminderStatusResponse {
+            count += response.notificationCount
+        }
+
+        if let response = cgmAlertStatusResponse {
+            count += response.notificationCount
+        }
+
+        if let response = malfunctionStatusResponse, response.hasMalfunction(alarmAndAlerts) {
+            count += response.notificationCount
+        }
+
+        return count
     }
 
     /// Boolean check for whether any notifications exist.
