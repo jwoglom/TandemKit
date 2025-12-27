@@ -1481,6 +1481,7 @@ private struct ActiveTempBasal {
             return
         }
 
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -1557,14 +1558,109 @@ private struct ActiveTempBasal {
             completeTempBasal(.failure(.communication(error)), completion: completion)
             return
         }
+        
 
         let baselineRate = scheduledBasalRateForTempBasal(requestedRate: unitsPerHour)
         let scheduledQuantity = HKQuantity(unit: HKUnit.internationalUnit().unitDivided(by: .hour()), doubleValue: baselineRate)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-
+            
+            let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+            
+            
             do {
+                let currentTempRate: TempRateResponse? = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: TempRateRequest(),
+                    expecting: TempRateResponse.self
+                )
+                guard let currentTempRate = currentTempRate else {
+                    throw PumpCommError.noResponse
+                }
+                
+                if currentTempRate.active {
+                    // When temp rate is already running at the same percent,
+                    // check its duration, and delete and re-create if there are
+                    // 10 minutes or fewer remaining on the temp rate, as the pump
+                    // beeps or vibrates whenever a temp rate is changed.
+                    if currentTempRate.percentage == percent && currentTempRate.duration <= 10 {
+                        let response: StopTempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: StopTempRateRequest(),
+                            expecting: StopTempRateResponse.self
+                        )
+                        
+                        guard response.status == 0 else {
+                            throw PumpCommError.errorResponse(response: response)
+                        }
+                        
+                        let endDate = Date()
+                        let cancellationDose: DoseEntry
+                        if let active = self.activeTempBasal.value {
+                            cancellationDose = DoseEntry(
+                                type: .tempBasal,
+                                startDate: active.dose.startDate,
+                                endDate: endDate,
+                                value: active.dose.programmedUnits,
+                                unit: active.dose.unit,
+                                deliveredUnits: active.dose.deliveredUnits,
+                                syncIdentifier: active.dose.syncIdentifier,
+                                scheduledBasalRate: active.dose.scheduledBasalRate
+                            )
+                            
+                            self.activeTempBasal.value = nil
+                            self.lastScheduledBasalRate.value = nil
+
+                            self.updateStatus { status in
+                                status.basalDeliveryState = .active(Date())
+                            }
+
+                            self.recordReconciliation(at: endDate)
+                            self.completeTempBasal(.success(cancellationDose), completion: completion)
+                        }
+                    } else if currentTempRate.percentage == percent && currentTempRate.duration > 10 {
+                        // Do nothing for now since we have more than 10m remaining on the existing temp basal.
+                        return
+                    }
+                    
+                    // Cancel the existing temp basal
+                    let response: StopTempRateResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: StopTempRateRequest(),
+                        expecting: StopTempRateResponse.self
+                    )
+                    
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+                    
+                    let endDate = Date()
+                    let cancellationDose: DoseEntry
+                    if let active = self.activeTempBasal.value {
+                        cancellationDose = DoseEntry(
+                            type: .tempBasal,
+                            startDate: active.dose.startDate,
+                            endDate: endDate,
+                            value: active.dose.programmedUnits,
+                            unit: active.dose.unit,
+                            deliveredUnits: active.dose.deliveredUnits,
+                            syncIdentifier: active.dose.syncIdentifier,
+                            scheduledBasalRate: active.dose.scheduledBasalRate
+                        )
+                        
+                        self.activeTempBasal.value = nil
+                        self.lastScheduledBasalRate.value = nil
+
+                        self.updateStatus { status in
+                            status.basalDeliveryState = .active(Date())
+                        }
+
+                        self.recordReconciliation(at: endDate)
+                        self.completeTempBasal(.success(cancellationDose), completion: completion)
+                    }
+                }
+
                 if duration <= 0 {
                     let response: StopTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -1613,7 +1709,6 @@ private struct ActiveTempBasal {
                     self.completeTempBasal(.success(cancellationDose), completion: completion)
                 } else { // valid duration
                     let minutes = max(1, Int((duration / 60.0).rounded()))
-                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
                     
                     // we can't set a temp rate of 100% since it does nothing.
                     // Try to cancel any current temp rate instead of setting a new one.
