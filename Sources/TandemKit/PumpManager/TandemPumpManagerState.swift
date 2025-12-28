@@ -30,6 +30,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var basalRateSchedule: BasalRateSchedule?
     public var insulinDeliveryActionsEnabled: Bool
     public var connectionSharingEnabled: Bool
+    public var insulinType: InsulinType?
 
     public init(
         pumpState: PumpState?,
@@ -44,7 +45,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         deliveryIsUncertain: Bool = false,
         basalRateSchedule: BasalRateSchedule? = nil,
         insulinDeliveryActionsEnabled: Bool = false,
-        connectionSharingEnabled: Bool = false
+        connectionSharingEnabled: Bool = false,
+        insulinType: InsulinType? = nil
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -59,6 +61,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.basalRateSchedule = basalRateSchedule
         self.insulinDeliveryActionsEnabled = insulinDeliveryActionsEnabled
         self.connectionSharingEnabled = connectionSharingEnabled
+        self.insulinType = insulinType
     }
 
     public init?(rawValue: RawValue) {
@@ -149,6 +152,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         } else {
             connectionSharingEnabled = false
         }
+
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
+        }
     }
 
     public var rawValue: RawValue {
@@ -205,6 +214,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
         raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
         raw["connectionSharingEnabled"] = connectionSharingEnabled
+        raw["insulinType"] = insulinType
 
         return raw
     }
@@ -224,7 +234,8 @@ public extension TandemPumpManagerState {
             lhs.deliveryIsUncertain == rhs.deliveryIsUncertain &&
             lhs.basalRateSchedule == rhs.basalRateSchedule &&
             lhs.insulinDeliveryActionsEnabled == rhs.insulinDeliveryActionsEnabled &&
-            lhs.connectionSharingEnabled == rhs.connectionSharingEnabled
+            lhs.connectionSharingEnabled == rhs.connectionSharingEnabled &&
+            lhs.insulinType == rhs.insulinType
     }
 }
 
