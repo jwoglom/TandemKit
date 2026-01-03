@@ -149,6 +149,71 @@ import XCTest
         let requests = peripheral.sentMessages.compactMap { $0 as? HistoryLogRequest }
         XCTAssertEqual(requests.first?.startLog, 13)
     }
+
+    func testScheduledHistoryFetchTriggersAfterTransportComesOnline() {
+        var pumpState = PumpState()
+        pumpState.derivedSecret = Data(repeating: 0x01, count: 32)
+        pumpState.serverNonce = Data(repeating: 0x02, count: 8)
+
+        let manager = TandemPumpManager(state: TandemPumpManagerState(pumpState: pumpState))
+        manager.setHistoryTelemetryIntervalForTesting(0.05)
+        let delegate = CapturingPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = DispatchQueue(label: "com.loopkit.TandemKit.tests.history.telemetry")
+
+        let peripheral = MockPeripheralManager()
+        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
+        let mockPumpComm = MockPumpComm(pumpState: pumpState)
+        manager.setPumpCommForTesting(mockPumpComm)
+
+        let status = HistoryLogStatusResponse(numEntries: 1, firstSequenceNum: 1, lastSequenceNum: 1)
+        peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
+        peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 2))
+
+        let activation = BolusActivatedHistoryLog(pumpTimeSec: 50, sequenceNum: 1, bolusId: 3, iob: 0, bolusSize: 0.5)
+        let completedLog = BolusCompletedHistoryLog(
+            pumpTimeSec: 60,
+            sequenceNum: 1,
+            bolusId: 3,
+            requestedVolume: 0.5,
+            deliveredVolume: 0.5,
+            duration: 120,
+            iob: 0
+        )
+
+        let delegateExpectation = expectation(description: "delegate received scheduled history events")
+        delegate.onHasNewPumpEvents = { events, _, _, eventsCompletion in
+            XCTAssertEqual(events.count, 1)
+            if case let .bolus(dose: dose, units: units) = events.first {
+                XCTAssertEqual(units, completedLog.deliveredVolume, accuracy: 0.01)
+                XCTAssertEqual(dose.programmedUnits, completedLog.requestedVolume, accuracy: 0.01)
+            } else {
+                XCTFail("Expected bolus event from scheduled fetch")
+            }
+            delegateExpectation.fulfill()
+            eventsCompletion(nil)
+        }
+
+        manager.updateTransport(transport)
+
+        let stream = HistoryLogStreamResponse(
+            numberOfHistoryLogs: 1,
+            streamId: 2,
+            historyLogStreamBytes: [activation.cargo, completedLog.cargo]
+        )
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+            mockPumpComm.delegate?.pumpComm(
+                mockPumpComm,
+                didReceive: stream,
+                metadata: nil,
+                characteristic: .HISTORY_LOG_CHARACTERISTICS,
+                txId: 0
+            )
+        }
+
+        wait(for: [delegateExpectation], timeout: 1.0)
+    }
 }
 
 @available(macOS 13.0, iOS 14.0, *) private final class CapturingPumpManagerDelegate: MockPumpManagerDelegate {

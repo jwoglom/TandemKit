@@ -92,6 +92,8 @@ private struct ActiveTempBasal {
     private let historyTimestampReconciler = HistoryTimestampReconciler()
     private let historyMapper = HistoryToDoseMapper()
     private let historyReconciler = HistoryReconciler()
+    private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
+    private var historyTelemetryInterval: TimeInterval = 5 * 60
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -187,6 +189,50 @@ private struct ActiveTempBasal {
         notifyPumpManagerDelegateDidUpdateState()
     }
 
+    private func configureTelemetry() {
+        guard !telemetryConfigured else { return }
+
+        telemetryConfigured = true
+        scheduleHistoryTelemetry()
+    }
+
+    private func scheduleHistoryTelemetry() {
+        telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+            self?.performScheduledHistoryFetch()
+        }
+    }
+
+    func setHistoryTelemetryIntervalForTesting(_ interval: TimeInterval) {
+        historyTelemetryInterval = interval
+        scheduleHistoryTelemetry()
+    }
+
+    private func performScheduledHistoryFetch() {
+        guard pumpComm.isDevicePaired else {
+            telemetryLogger.debug("Skipping history telemetry – pump not paired")
+            return
+        }
+
+        guard transportLock.value != nil else {
+            telemetryLogger.debug("Skipping history telemetry – no transport available")
+            return
+        }
+
+        guard activeHistoryFetchSession.value == nil else {
+            telemetryLogger.debug("Skipping history telemetry – fetch already in progress")
+            return
+        }
+
+        telemetryLogger.debug("[telemetry] Fetching pump history")
+        fetchPumpHistory { [weak self] error in
+            if let error {
+                self?.telemetryLogger.error("[telemetry] History fetch failed: \(error)")
+            } else {
+                self?.telemetryLogger.debug("[telemetry] History fetch completed")
+            }
+        }
+    }
+
     public var delegateQueue: DispatchQueue! {
         get {
             pumpDelegate.queue
@@ -248,6 +294,7 @@ private struct ActiveTempBasal {
         if needsSessionInitialization.value == false {
             telemetryLogger.debug("Authenticated session already initialized – triggering telemetry refresh")
             ensureCurrentPumpData { _ in }
+            telemetryScheduler.trigger(kind: .history)
             return
         }
 
@@ -275,6 +322,7 @@ private struct ActiveTempBasal {
                 self.sessionBootstrapRetryAttempt.value = 0
                 self.telemetryLogger.debug("Session bootstrap complete – triggering telemetry refresh")
                 self.ensureCurrentPumpData { _ in }
+                self.telemetryScheduler.trigger(kind: .history)
                 self.sessionBootstrapInProgress.value = false
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -402,6 +450,8 @@ private struct ActiveTempBasal {
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
 
+        configureTelemetry()
+
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
@@ -427,6 +477,8 @@ private struct ActiveTempBasal {
         updatePairingArtifacts(with: state.pumpState)
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
+
+        configureTelemetry()
 
         log.debug("Initialized TandemPumpManager: state=\(state)")
 
@@ -2630,6 +2682,8 @@ private extension PumpTelemetryKind {
             return "homeScreen"
         case .notifications:
             return "notifications"
+        case .history:
+            return "history"
         }
     }
 }

@@ -667,6 +667,7 @@ Tests/TandemKitTests/
 - Implemented Phase 4 pending dose reconciliation primitives (`PendingDose`, `HistoryReconciler`) with aging detection for uncertain deliveries and sync identifier propagation.
 - Completed Phase 5 stream-based fetching and Phase 6 manager integration by wiring `fetchPumpHistory` through deduplication, timestamp reconciliation, domain mapping, and pending-dose matching with delegate delivery and persisted state updates.
  - Added Phase 5 retry handling for stream timeouts so history fetches automatically retry transient failures before surfacing errors.
+ - Added Phase 7 scheduled history telemetry to trigger periodic fetches and immediate refreshes after reconnection using the telemetry scheduler.
 
 ### Phase 1: Timestamp Reconciliation
 - [x] Create `HistoryTimestampReconciler.swift`
@@ -712,10 +713,10 @@ Tests/TandemKitTests/
 - [x] Write integration tests
 
 ### Phase 7: Scheduled Fetching
-- [ ] Add `.history` to `PumpTelemetryKind`
-- [ ] Schedule periodic fetch
-- [ ] Trigger on reconnection
-- [ ] Add logging
+- [x] Add `.history` to `PumpTelemetryKind`
+- [x] Schedule periodic fetch
+- [x] Trigger on reconnection
+- [x] Add logging
 
 ### Phase 8: Testing
 - [ ] Create test fixtures
