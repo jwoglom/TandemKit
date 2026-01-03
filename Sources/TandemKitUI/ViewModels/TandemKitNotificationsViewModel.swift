@@ -79,7 +79,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
                 notificationId: UInt32(alert.rawValue)
             )
 
-            if let response = self.sendMessage(message: request) as? DismissNotificationResponse {
+            if let response = sendMessage(message: request) as? DismissNotificationResponse {
                 if response.status == 0 {
                     log.info("[auto-ack] Successfully acknowledged \(alert)")
                 } else {
@@ -89,7 +89,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
         }
 
         // Re-fetch alert status after acknowledging
-        if let response = self.sendMessage(message: AlertStatusRequest()) as? AlertStatusResponse {
+        if let response = sendMessage(message: AlertStatusRequest()) as? AlertStatusResponse {
             notificationBundle.add(response)
         }
     }

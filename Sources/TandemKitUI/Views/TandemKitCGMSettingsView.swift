@@ -162,8 +162,8 @@ struct TandemKitCGMSettingsView: View {
                             "Enter the sensor code from your G6 sensor. Leave blank or enter 0000 to reconnect to an existing session.",
                             comment: "Help text for G6 sensor code"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .padding(.vertical, 4)
@@ -239,8 +239,8 @@ struct TandemKitCGMSettingsView: View {
                             "Enter the 4-digit pairing code from your G7 sensor to start a new sensor session.",
                             comment: "Help text for G7 pairing code"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                     .padding(.vertical, 4)
                 }

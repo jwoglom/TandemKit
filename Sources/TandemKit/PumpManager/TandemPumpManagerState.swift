@@ -112,7 +112,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         bolusStatusIcon: HomeScreenBolusStatus? = nil,
         cgmAlertIcon: HomeScreenCGMAlert? = nil,
         notificationCount: Int? = nil,
-        lastNotificationUpdate: Date? = nil
+        lastNotificationUpdate: Date? = nil,
         insulinType: InsulinType? = nil
     ) {
         self.pumpState = pumpState
@@ -243,6 +243,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             autoAcknowledgeBasalAlerts = false
         }
 
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
+        }
+
         // Version 5+ properties
         if version >= 5 {
             if let controlIQEnabled = rawValue["controlIQEnabled"] as? Bool {
@@ -358,10 +364,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             cgmAlertIcon = nil
             notificationCount = nil
             lastNotificationUpdate = nil
-        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
-            insulinType = InsulinType(rawValue: rawInsulinType)
-        } else {
-            insulinType = nil
         }
     }
 
@@ -522,7 +524,7 @@ public extension TandemPumpManagerState {
             lhs.bolusStatusIcon == rhs.bolusStatusIcon &&
             lhs.cgmAlertIcon == rhs.cgmAlertIcon &&
             lhs.notificationCount == rhs.notificationCount &&
-            lhs.lastNotificationUpdate == rhs.lastNotificationUpdate
+            lhs.lastNotificationUpdate == rhs.lastNotificationUpdate &&
             lhs.insulinType == rhs.insulinType
     }
 }

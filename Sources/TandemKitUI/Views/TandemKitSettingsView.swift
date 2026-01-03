@@ -36,7 +36,8 @@ struct TandemKitSettingsView: View {
                 Text("ControlIQ Mode: \(String(describing: viewModel.controlIQUserMode))").font(.system(size: 12))
                 Text("Temp Rate Active: \(viewModel.tempRateActive ? "Yes" : "No")").font(.system(size: 12))
                 if viewModel.tempRateActive {
-                    Text("Temp Rate: \(viewModel.tempRatePercentage ?? 0)% for \(viewModel.tempRateDuration ?? 0)s").font(.system(size: 12))
+                    Text("Temp Rate: \(viewModel.tempRatePercentage ?? 0)% for \(viewModel.tempRateDuration ?? 0)s")
+                        .font(.system(size: 12))
                 }
                 Text("Current Basal Rate: \(viewModel.currentBasalRateForDisplay)").font(.system(size: 12))
             }
@@ -169,8 +170,8 @@ struct TandemKitSettingsView: View {
                             "Automatically dismiss min/max basal rate alerts during looping",
                             comment: "Description for auto-acknowledge basal alerts toggle"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -211,7 +212,8 @@ struct TandemKitSettingsView: View {
 
                 if viewModel.tempRateActive,
                    let percentage = viewModel.tempRatePercentage,
-                   let duration = viewModel.tempRateDuration {
+                   let duration = viewModel.tempRateDuration
+                {
                     HStack {
                         Text(LocalizedString("Temp rate", comment: "Text for temp rate"))
                             .foregroundColor(Color.primary)
@@ -381,9 +383,9 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 28))
                         .fontWeight(.heavy)
                 }
-                
+
                 // fixed cartridge size for Mobi
-                ProgressBar(value: (viewModel.reservoirValue?.unitVolume ?? 0), total: 200)
+                ProgressBar(value: viewModel.reservoirValue?.unitVolume ?? 0, total: 200)
                     .frame(maxWidth: 128)
                     .frame(height: 12)
             }
@@ -424,7 +426,8 @@ struct TandemKitSettingsView: View {
                                 .font(.system(size: 24))
                             if viewModel.tempRateActive,
                                let percentage = viewModel.tempRatePercentage,
-                               let duration = viewModel.tempRateDuration {
+                               let duration = viewModel.tempRateDuration
+                            {
                                 Text("\(percentage)% (\(formatDuration(duration)))")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
@@ -432,7 +435,6 @@ struct TandemKitSettingsView: View {
                                 Text("No Temp Rate")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
-
                             }
                         }
                     } else {
@@ -444,7 +446,6 @@ struct TandemKitSettingsView: View {
                                 .foregroundColor(.secondary)
                                 .font(.system(size: 16))
                         }
-                        
                     }
                 }
             } else {
@@ -528,9 +529,9 @@ struct TandemKitSettingsView: View {
             return "\(mins)m"
         }
     }
-    
+
     private var isControlIQClosedLoopEnabled: Bool {
-        return viewModel.controlIQEnabled
+        viewModel.controlIQEnabled
     }
 }
 
@@ -569,4 +570,3 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
     }
     .environment(\.guidanceColors, GuidanceColors())
 }
-

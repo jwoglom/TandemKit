@@ -94,7 +94,7 @@ public class PeripheralManager: NSObject {
         queue.setSpecific(key: queueSpecificKey, value: ())
         assertConfiguration()
     }
-    
+
     func logTrace(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.trace(msg)
@@ -298,11 +298,11 @@ extension PeripheralManager {
         return nil
     }
 
-    func configureAndRun(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) -> @Sendable () -> Void {
+    func configureAndRun(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) -> @Sendable() -> Void {
         { self.runConfigured(block) }
     }
 
-    public func perform(_ block: @escaping @Sendable (_ manager: PeripheralManager) -> Void) {
+    public func perform(_ block: @escaping @Sendable(_ manager: PeripheralManager) -> Void) {
         queue.async {
             self.runConfigured(block)
         }
@@ -642,7 +642,7 @@ extension PeripheralManager {
 // MARK: - Command session management
 
 public extension PeripheralManager {
-    func runSession(withName _: String, _ block: @escaping @Sendable () -> Void) {
+    func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
         perform { _ in block() }
     }
 }
