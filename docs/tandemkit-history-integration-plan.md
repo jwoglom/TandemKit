@@ -719,11 +719,11 @@ Tests/TandemKitTests/
 - [x] Add logging
 
 ### Phase 8: Testing
-- [ ] Create test fixtures
-- [ ] Write all unit tests
-- [ ] Write integration tests
-- [ ] Perform hardware testing
-- [ ] Document known limitations
+- [x] Create test fixtures (mock pump/transport delegates plus reusable history log helpers in tests)
+- [x] Write all unit tests (timestamp reconciliation, deduplication, mapping, reconciliation, fetch session, retry handling)
+- [x] Write integration tests (manager fetch delivery, start-sequence selection, scheduled history, deduped follow-on fetches)
+- [ ] Perform hardware testing (blocked pending device availability; requires manual validation on t:slim X2/Mobi/Trio)
+- [x] Document known limitations (listed below with outstanding hardware validation gap)
 
 ---
 

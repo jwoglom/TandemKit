@@ -214,6 +214,123 @@ import XCTest
 
         wait(for: [delegateExpectation], timeout: 1.0)
     }
+
+    func testSubsequentFetchSkipsDuplicatesAndAdvancesSequence() {
+        var pumpState = PumpState()
+        pumpState.derivedSecret = Data(repeating: 0x01, count: 32)
+        pumpState.serverNonce = Data(repeating: 0x02, count: 8)
+
+        let manager = TandemPumpManager(state: TandemPumpManagerState(pumpState: pumpState))
+        let delegate = CapturingPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = DispatchQueue(label: "com.loopkit.TandemKit.tests.history.duplicates")
+
+        let peripheral = MockPeripheralManager()
+        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
+        let mockPumpComm = MockPumpComm(pumpState: pumpState)
+        manager.setPumpCommForTesting(mockPumpComm)
+        manager.updateTransport(transport)
+
+        // First fetch delivers two bolus events
+        var status = HistoryLogStatusResponse(numEntries: 2, firstSequenceNum: 4, lastSequenceNum: 5)
+        peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
+        peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 1))
+
+        let activation = BolusActivatedHistoryLog(pumpTimeSec: 10, sequenceNum: 4, bolusId: 2, iob: 0, bolusSize: 0.5)
+        let completedLog = BolusCompletedHistoryLog(
+            pumpTimeSec: 20,
+            sequenceNum: 5,
+            bolusId: 2,
+            requestedVolume: 0.5,
+            deliveredVolume: 0.5,
+            duration: 90,
+            iob: 0
+        )
+
+        let firstFetchExpectation = expectation(description: "first fetch delivered")
+        delegate.onHasNewPumpEvents = { events, _, _, completion in
+            XCTAssertEqual(events.count, 1)
+            firstFetchExpectation.fulfill()
+            completion(nil)
+        }
+
+        manager.fetchPumpHistory { error in
+            XCTAssertNil(error)
+        }
+
+        let firstStream = HistoryLogStreamResponse(
+            numberOfHistoryLogs: 2,
+            streamId: 1,
+            historyLogStreamBytes: [activation.cargo, completedLog.cargo]
+        )
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+            mockPumpComm.delegate?.pumpComm(
+                mockPumpComm,
+                didReceive: firstStream,
+                metadata: nil,
+                characteristic: .HISTORY_LOG_CHARACTERISTICS,
+                txId: 0
+            )
+        }
+
+        wait(for: [firstFetchExpectation], timeout: 1.0)
+        XCTAssertEqual(manager.state.lastHistorySequenceNum, 5)
+
+        // Second fetch overlaps with previously seen history and includes a new event
+        status = HistoryLogStatusResponse(numEntries: 3, firstSequenceNum: 4, lastSequenceNum: 7)
+        peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
+        peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 2))
+
+        let newActivation = BolusActivatedHistoryLog(pumpTimeSec: 30, sequenceNum: 6, bolusId: 3, iob: 0, bolusSize: 1.0)
+        let newCompletion = BolusCompletedHistoryLog(
+            pumpTimeSec: 40,
+            sequenceNum: 7,
+            bolusId: 3,
+            requestedVolume: 1.0,
+            deliveredVolume: 0.95,
+            duration: 120,
+            iob: 0
+        )
+
+        let secondFetchExpectation = expectation(description: "second fetch delivered")
+        delegate.onHasNewPumpEvents = { events, _, _, completion in
+            XCTAssertEqual(events.count, 1)
+            if case let .bolus(_, units) = events.first {
+                XCTAssertEqual(units, newCompletion.deliveredVolume, accuracy: 0.01)
+            } else {
+                XCTFail("Expected bolus event from second fetch")
+            }
+            secondFetchExpectation.fulfill()
+            completion(nil)
+        }
+
+        manager.fetchPumpHistory { error in
+            XCTAssertNil(error)
+        }
+
+        let secondStream = HistoryLogStreamResponse(
+            numberOfHistoryLogs: 3,
+            streamId: 2,
+            historyLogStreamBytes: [activation.cargo, completedLog.cargo, newActivation.cargo, newCompletion.cargo]
+        )
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
+            mockPumpComm.delegate?.pumpComm(
+                mockPumpComm,
+                didReceive: secondStream,
+                metadata: nil,
+                characteristic: .HISTORY_LOG_CHARACTERISTICS,
+                txId: 0
+            )
+        }
+
+        wait(for: [secondFetchExpectation], timeout: 1.0)
+
+        let requests = peripheral.sentMessages.compactMap { $0 as? HistoryLogRequest }
+        XCTAssertEqual(requests.last?.startLog, 6)
+        XCTAssertEqual(manager.state.lastHistorySequenceNum, 7)
+    }
 }
 
 @available(macOS 13.0, iOS 14.0, *) private final class CapturingPumpManagerDelegate: MockPumpManagerDelegate {
