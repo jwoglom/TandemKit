@@ -153,4 +153,30 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertFalse(restoredState.insulinDeliveryActionsEnabled)
         XCTAssertFalse(restoredState.connectionSharingEnabled)
     }
+
+    func testHistoryFieldsRoundTrip() throws {
+        let timestamp = Date()
+        let pendingDose = DoseEntry(
+            type: .bolus,
+            startDate: timestamp,
+            value: 1.0,
+            unit: .units,
+            deliveredUnits: 0.95,
+            isMutable: true
+        )
+        let pending = PendingDose(syncIdentifier: "sync-1", dose: pendingDose, requestedAt: timestamp)
+
+        let state = TandemPumpManagerState(
+            pumpState: nil,
+            lastHistorySequenceNum: 123,
+            lastHistoryReconciliation: timestamp,
+            pendingDoses: [pending]
+        )
+
+        let restored = try XCTUnwrap(TandemPumpManagerState(rawValue: state.rawValue))
+
+        XCTAssertEqual(restored.lastHistorySequenceNum, 123)
+        XCTAssertEqual(restored.lastHistoryReconciliation, timestamp)
+        XCTAssertEqual(restored.pendingDoses, [pending])
+    }
 }

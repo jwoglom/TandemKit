@@ -87,6 +87,13 @@ private struct ActiveTempBasal {
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
     private let notificationLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Notifications")
+    private let historyFetchQueue = DispatchQueue(label: "com.loopkit.TandemKit.HistoryFetchQueue")
+    private let historyDeduplicator = HistoryDeduplicator()
+    private let historyTimestampReconciler = HistoryTimestampReconciler()
+    private let historyMapper = HistoryToDoseMapper()
+    private let historyReconciler = HistoryReconciler()
+    private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
+    private var historyTelemetryInterval: TimeInterval = 5 * 60
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -99,6 +106,7 @@ private struct ActiveTempBasal {
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
+    private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
     private let lastScheduledBasalRate = Locked<Double?>(nil)
     private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
@@ -181,6 +189,50 @@ private struct ActiveTempBasal {
         notifyPumpManagerDelegateDidUpdateState()
     }
 
+    private func configureTelemetry() {
+        guard !telemetryConfigured else { return }
+
+        telemetryConfigured = true
+        scheduleHistoryTelemetry()
+    }
+
+    private func scheduleHistoryTelemetry() {
+        telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+            self?.performScheduledHistoryFetch()
+        }
+    }
+
+    func setHistoryTelemetryIntervalForTesting(_ interval: TimeInterval) {
+        historyTelemetryInterval = interval
+        scheduleHistoryTelemetry()
+    }
+
+    private func performScheduledHistoryFetch() {
+        guard pumpComm.isDevicePaired else {
+            telemetryLogger.debug("Skipping history telemetry – pump not paired")
+            return
+        }
+
+        guard transportLock.value != nil else {
+            telemetryLogger.debug("Skipping history telemetry – no transport available")
+            return
+        }
+
+        guard activeHistoryFetchSession.value == nil else {
+            telemetryLogger.debug("Skipping history telemetry – fetch already in progress")
+            return
+        }
+
+        telemetryLogger.debug("[telemetry] Fetching pump history")
+        fetchPumpHistory { [weak self] error in
+            if let error {
+                self?.telemetryLogger.error("[telemetry] History fetch failed: \(error)")
+            } else {
+                self?.telemetryLogger.debug("[telemetry] History fetch completed")
+            }
+        }
+    }
+
     public var delegateQueue: DispatchQueue! {
         get {
             pumpDelegate.queue
@@ -242,6 +294,7 @@ private struct ActiveTempBasal {
         if needsSessionInitialization.value == false {
             telemetryLogger.debug("Authenticated session already initialized – triggering telemetry refresh")
             ensureCurrentPumpData { _ in }
+            telemetryScheduler.trigger(kind: .history)
             return
         }
 
@@ -269,6 +322,7 @@ private struct ActiveTempBasal {
                 self.sessionBootstrapRetryAttempt.value = 0
                 self.telemetryLogger.debug("Session bootstrap complete – triggering telemetry refresh")
                 self.ensureCurrentPumpData { _ in }
+                self.telemetryScheduler.trigger(kind: .history)
                 self.sessionBootstrapInProgress.value = false
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -319,6 +373,10 @@ private struct ActiveTempBasal {
     func setPumpCommForTesting(_ pumpComm: PumpComm) {
         pumpComm.delegate = self
         tandemPump.pumpComm = pumpComm
+    }
+
+    func setActiveHistoryFetchSession(_ session: HistoryFetchSession?) {
+        activeHistoryFetchSession.value = session
     }
 
     private enum ResponseSource {
@@ -392,6 +450,8 @@ private struct ActiveTempBasal {
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
 
+        configureTelemetry()
+
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
@@ -417,6 +477,8 @@ private struct ActiveTempBasal {
         updatePairingArtifacts(with: state.pumpState)
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
+
+        configureTelemetry()
 
         log.debug("Initialized TandemPumpManager: state=\(state)")
 
@@ -1107,6 +1169,35 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
+        if let lastSequence = lockedState.value.lastHistorySequenceNum {
+            return lastSequence &+ 1
+        }
+
+        if startDate == nil,
+           let delegate = pumpManagerDelegate
+        {
+            _ = delegate.startDateToFilterNewPumpEvents(for: self)
+        }
+
+        return nil
+    }
+
+    private func applyClockChanges(from logs: [HistoryLog]) {
+        logs.forEach { log in
+            switch log {
+            case let clockChange as DateChangeHistoryLog:
+                let delta = Int(clockChange.dateAfter) - Int(clockChange.datePrior)
+                historyTimestampReconciler.recordClockChange(at: clockChange.sequenceNum, deltaSec: delta)
+            case let clockChange as TimeChangedHistoryLog:
+                let delta = Int(clockChange.timeAfter) - Int(clockChange.timePrior)
+                historyTimestampReconciler.recordClockChange(at: clockChange.sequenceNum, deltaSec: delta)
+            default:
+                break
+            }
+        }
+    }
+
     private func notifyDelegateOfReservoir(_ value: ReservoirValue) {
         guard let delegate = pumpManagerDelegate else { return }
         pumpDelegate.queue.async { [weak self] in
@@ -1451,6 +1542,76 @@ private struct ActiveTempBasal {
             self?.fetchControlIQStatus()
             self?.fetchHomeScreenStatus()
             self?.fetchNotificationCount()
+        }
+    }
+
+    // MARK: - History Fetching
+
+    public func fetchPumpHistory(since startDate: Date? = nil, completion: @escaping (Error?) -> Void) {
+        guard let transport = transportLock.value else {
+            completion(PumpManagerError.connection(nil))
+            return
+        }
+
+        historyFetchQueue.async { [weak self] in
+            guard let self else { return }
+
+            let session = HistoryFetchSession(
+                transport: transport,
+                pumpComm: self.pumpComm,
+                startSequence: self.resolvedStartSequence(after: startDate),
+                maxEntries: 500
+            )
+
+            self.activeHistoryFetchSession.value = session
+
+            do {
+                let logs = try session.fetchWithRetry()
+                self.activeHistoryFetchSession.value = nil
+
+                let unseen = self.historyDeduplicator.filterUnseen(logs)
+                self.applyClockChanges(from: unseen)
+
+                let events = self.historyMapper.mapToEvents(
+                    unseen,
+                    reconciler: self.historyTimestampReconciler,
+                    insulinType: self.lockedState.value.insulinType,
+                    timeZone: self.lockedStatus.value.timeZone
+                )
+
+                let (reconciledEvents, stillPending) = self.historyReconciler.reconcile(
+                    pendingDoses: self.lockedState.value.pendingDoses,
+                    historyEvents: events
+                )
+
+                var updatedState = self.lockedState.value
+                updatedState.pendingDoses = stillPending
+                updatedState.lastHistoryReconciliation = Date()
+                if let lastLog = unseen.last {
+                    updatedState.lastHistorySequenceNum = lastLog.sequenceNum
+                }
+                self.lockedState.value = updatedState
+
+                self.notifyPumpManagerDelegateDidUpdateState()
+
+                guard let delegate = self.pumpManagerDelegate, let queue = self.delegateQueue else {
+                    completion(nil)
+                    return
+                }
+
+                queue.async {
+                    delegate.pumpManager(
+                        self,
+                        hasNewPumpEvents: reconciledEvents,
+                        lastReconciliation: updatedState.lastHistoryReconciliation,
+                        replacePendingEvents: true,
+                        completion: completion
+                    )
+                }
+            } catch {
+                self.activeHistoryFetchSession.value = nil
+                completion(PumpManagerError.communication(error))
+            }
         }
     }
 
@@ -2404,6 +2565,8 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
         case let tempRate as TempRateResponse:
             handleTempRateResponse(tempRate, source: .notification)
+        case let historyStream as HistoryLogStreamResponse:
+            activeHistoryFetchSession.value?.handleStreamResponse(historyStream)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
@@ -2519,6 +2682,8 @@ private extension PumpTelemetryKind {
             return "homeScreen"
         case .notifications:
             return "notifications"
+        case .history:
+            return "history"
         }
     }
 }
