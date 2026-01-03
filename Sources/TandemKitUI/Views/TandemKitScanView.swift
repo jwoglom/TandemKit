@@ -88,6 +88,13 @@ struct TandemKitScanView: View {
             }
 
             TextField(LocalizedString("Pairing Code", comment: "Tandem pairing code prompt"), text: $viewModel.devicePinCode)
+                .keyboardType(.numberPad)
+                .onChange(of: viewModel.devicePinCode) { newValue in
+                    let filtered = newValue.filter { $0.isNumber }
+                    if filtered != newValue {
+                        viewModel.devicePinCode = filtered
+                    }
+                }
         } message: {
             if let message = $viewModel.pinCodePromptError.wrappedValue {
                 Text(message)
