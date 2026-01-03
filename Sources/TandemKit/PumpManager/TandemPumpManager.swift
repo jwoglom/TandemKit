@@ -776,6 +776,60 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
+        let timestamp = Date()
+
+        logger(for: source).debug("[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)")
+
+        if response.active {
+            // Get the scheduled basal rate to calculate actual temp rate
+            let scheduledRate = scheduledBasalRateForTempBasal(requestedRate: 0)
+            let tempRateUnitsPerHour = scheduledRate * Double(response.percentage) / 100.0
+            let durationSeconds = TimeInterval(response.duration * 60)
+
+            // Use the actual start time from the pump
+            let startDate = response.startTime
+            let endDate = startDate.addingTimeInterval(durationSeconds)
+
+            let scheduledQuantity = HKQuantity(
+                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
+                doubleValue: scheduledRate
+            )
+
+            let dose = DoseEntry(
+                type: .tempBasal,
+                startDate: startDate,
+                endDate: endDate,
+                value: tempRateUnitsPerHour,
+                unit: .unitsPerHour,
+                deliveredUnits: nil,
+                syncIdentifier: "temp-\(Int(startDate.timeIntervalSince1970))",
+                scheduledBasalRate: scheduledQuantity
+            )
+
+            activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: scheduledRate)
+            lastScheduledBasalRate.value = scheduledRate
+
+            updateStatus { status in
+                status.basalDeliveryState = .tempBasal(dose)
+            }
+
+            var managerState = lockedState.value
+            managerState.basalDeliveryState = .tempBasal(dose)
+            managerState.lastBasalStatusDate = timestamp
+            lockedState.value = managerState
+        } else {
+            // No temp basal active - clear tracking
+            activeTempBasal.value = nil
+
+            // Don't update basalDeliveryState here - let handleBasalResponse do it
+            // This avoids a race where we clear temp basal but haven't gotten current basal status yet
+            logger(for: source).debug("[\(source.label)] TempRate inactive - clearing activeTempBasal tracking")
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
     private func makeBatteryRequest() -> Message {
         let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
         return CurrentBatteryRequestBuilder.create(apiVersion: apiVersion)
@@ -841,13 +895,26 @@ private struct ActiveTempBasal {
 
         do {
             telemetryLogger.debug("Requesting message fetchBasalStatus")
-            let response = try pumpComm.sendMessage(
+
+            // First check if a temp basal is active
+            let tempRateResponse: TempRateResponse = try pumpComm.sendMessage(
                 transport: transport,
-                message: CurrentBasalStatusRequest(),
-                expecting: CurrentBasalStatusResponse.self
+                message: TempRateRequest(),
+                expecting: TempRateResponse.self
             )
 
-            handleBasalResponse(response, source: .telemetry)
+            handleTempRateResponse(tempRateResponse, source: .telemetry)
+
+            // If no temp basal is active, get current basal rate to ensure we're showing scheduled
+            if !tempRateResponse.active {
+                let basalResponse = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: CurrentBasalStatusRequest(),
+                    expecting: CurrentBasalStatusResponse.self
+                )
+
+                handleBasalResponse(basalResponse, source: .telemetry)
+            }
         } catch {
             telemetryLogger.error("Basal telemetry request failed: \(error)")
         }
@@ -886,6 +953,24 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(response, source: .telemetry)
         } catch {
             telemetryLogger.error("TimeSinceReset telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchTempRateStatus() {
+        guard let transport = telemetryTransportIfReady(for: .basal) else {
+            return
+        }
+
+        do {
+            let response: TempRateResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: TempRateRequest(),
+                expecting: TempRateResponse.self
+            )
+
+            handleTempRateResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("TempRate telemetry request failed: \(error)")
         }
     }
 
@@ -2317,6 +2402,8 @@ private struct ActiveTempBasal {
             handleBolusResponse(bolus, source: .notification)
         case let timeSinceReset as TimeSinceResetResponse:
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
+        case let tempRate as TempRateResponse:
+            handleTempRateResponse(tempRate, source: .notification)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
