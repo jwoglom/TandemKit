@@ -4,7 +4,7 @@ import TandemCore
 
 struct TandemKitNotificationsView: View {
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitNotificationsViewModel
+    @StateObject var viewModel: TandemKitNotificationsViewModel
     @State private var didLoad = false
 
     var body: some View {
@@ -36,9 +36,9 @@ struct TandemKitNotificationsView: View {
                                 "Your pump has no active notifications",
                                 comment: "No notifications detail message"
                             ))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
                         }
                         .padding()
                         Spacer()

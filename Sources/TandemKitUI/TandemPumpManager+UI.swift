@@ -38,7 +38,7 @@ extension TandemPumpManager: PumpManagerUI {
         colorPalette: LoopUIColorPalette,
         allowDebugFeatures: Bool
     ) -> (UIViewController & CompletionNotifying) {
-        return TandemUICoordinator(pumpManager: self, colorPalette: colorPalette, allowDebugFeatures: allowDebugFeatures)
+        TandemUICoordinator(pumpManager: self, colorPalette: colorPalette, allowDebugFeatures: allowDebugFeatures)
     }
 
     public func hudProvider(

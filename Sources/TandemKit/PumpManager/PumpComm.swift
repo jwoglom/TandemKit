@@ -15,6 +15,7 @@ public protocol PumpCommDelegate: AnyObject {
         txId: UInt8
     )
     func pumpComm(_ pumpComms: PumpComm, didEncounterFault event: PumpCommFaultEvent)
+    func pumpComm(_ pumpComms: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>)
 }
 
 public class PumpComm: CustomDebugStringConvertible {
@@ -103,7 +104,7 @@ public class PumpComm: CustomDebugStringConvertible {
     #endif
 
     private func ensureSession() -> PumpCommSession {
-        if let session = self.session {
+        if let session = session {
             return session
         }
 
@@ -256,5 +257,10 @@ extension PumpComm: PumpCommSessionDelegate {
             characteristic: characteristic,
             txId: txId
         )
+    }
+
+    public func pumpCommSession(_ pumpCommSession: PumpCommSession, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
+        pumpCommSession.assertOnSessionQueue()
+        delegate?.pumpComm(self, didReceiveQualifyingEvents: events)
     }
 }

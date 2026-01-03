@@ -20,39 +20,23 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     // Request throttling to prevent BLE write queue saturation
     private let throttleLock = NSLock()
     private var lastSendTimestamp: Date?
-    private let minimumDelayBetweenSends: TimeInterval = 0.15 // 150ms between sends
+    private let minimumDelayBetweenSends: TimeInterval = 0.025 // 25ms between sends
 
     // Protects requestResponseHistory from concurrent access
     private let historyLock = NSLock()
 
-    public init(peripheralManager: PeripheralManager) {
+    // Control verbose packet-level logging to reduce overhead in critical path
+    private let enableVerbosePacketLogging: Bool
+
+    public init(peripheralManager: PeripheralManager, enableVerbosePacketLogging: Bool = false) {
         self.peripheralManager = peripheralManager
+        self.enableVerbosePacketLogging = enableVerbosePacketLogging
         let instanceId = ObjectIdentifier(self)
         log.info("PeripheralManagerTransport init: instance=%{public}@", String(describing: instanceId))
-        transportLogger.info("[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0")
+        transportLogger.info("[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)")
     }
 
-    private func withMainActor<T>(_ block: @MainActor @escaping () throws -> T) throws -> T {
-        if Thread.isMainThread {
-            return try MainActor.assumeIsolated { try block() }
-        }
-
-        var result: Result<T, Error>?
-        let semaphore = DispatchSemaphore(value: 0)
-        Task { @MainActor in
-            result = Result { try block() }
-            semaphore.signal()
-        }
-        semaphore.wait()
-
-        guard let unwrapped = result else {
-            fatalError("withMainActor completed without producing a result")
-        }
-
-        return try unwrapped.get()
-    }
-
-    public func sendMessage(_ message: Message) throws -> Message {
+    @MainActor public func sendMessage(_ message: Message) throws -> Message {
         let instanceId = ObjectIdentifier(self)
 
         // Apply request throttling to prevent BLE write queue saturation
@@ -62,9 +46,11 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             let remainingDelay = minimumDelayBetweenSends - timeSinceLastSend
 
             if remainingDelay > 0 {
-                transportLogger.debug(
-                    "[PeripheralManagerTransport] Throttling: waiting \(String(format: "%.0f", remainingDelay * 1000))ms before sending \(String(describing: type(of: message)))"
-                )
+                if enableVerbosePacketLogging {
+                    transportLogger.debug(
+                        "[PeripheralManagerTransport] Throttling: waiting \(String(format: "%.0f", remainingDelay * 1000))ms before sending \(String(describing: type(of: message)))"
+                    )
+                }
                 throttleLock.unlock()
                 Thread.sleep(forTimeInterval: remainingDelay)
                 throttleLock.lock()
@@ -76,25 +62,21 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         // Atomically assign txId and create wrapper (protected by lock)
         txIdLock.lock()
         let txIdForRequest = currentTxId
-        transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
-
-        // Create wrapper with current TxId while holding lock
-        let wrapper: TronMessageWrapper
-        do {
-            wrapper = try withMainActor {
-                TronMessageWrapper(message: message, currentTxId: txIdForRequest)
-            }
-        } catch {
-            txIdLock.unlock()
-            throw error
+        if enableVerbosePacketLogging {
+            transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
         }
+
+        // Create wrapper with current TxId while holding lock (we are on @MainActor)
+        let wrapper = TronMessageWrapper(message: message, currentTxId: txIdForRequest)
 
         // Increment after wrapper is created successfully
         currentTxId = currentTxId &+ 1 // Increment with overflow
         let nextTxId = currentTxId
         txIdLock.unlock()
 
-        transportLogger.info("[PeripheralManagerTransport] txId assigned: \(txIdForRequest), next will be: \(nextTxId)")
+        if enableVerbosePacketLogging {
+            transportLogger.info("[PeripheralManagerTransport] txId assigned: \(txIdForRequest), next will be: \(nextTxId)")
+        }
 
         // Create initial history entry (no response yet)
         let characteristic = type(of: message).props.characteristic
@@ -120,7 +102,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         if wrapper.packets.isEmpty {
             transportLogger.error("[PeripheralManagerTransport] no packets for message=\(message) txId=\(currentTxId &- 1)")
             throw PumpCommError.invalidPacket
-        } else {
+        } else if enableVerbosePacketLogging {
             transportLogger
                 .debug(
                     "[PeripheralManagerTransport] send message=\(message) txId=\(currentTxId &- 1) pkts=\(wrapper.packets.count)"
@@ -163,15 +145,17 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
-            log.debug("  → Message sent (txId=%d)", txIdForRequest)
-            transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
+            if enableVerbosePacketLogging {
+                log.debug("  → Message sent (txId=%d)", txIdForRequest)
+                transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
+            }
         }
 
         var parsedMessage: Message?
 
         while parsedMessage == nil {
             let data = try peripheralManager.performSync { manager -> Data in
-                guard let responseData = try manager.readMessagePacket(for: characteristic, timeout: 15) else {
+                guard let responseData = try manager.readMessagePacket(for: characteristic, timeout: 5) else {
                     throw PumpCommError.noResponse
                 }
                 return responseData
@@ -182,38 +166,42 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
                 throw PumpCommError.noResponse
             }
 
-            log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
-            let responseHex = data.map { String(format: "%02X", $0) }.joined()
-            transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
+            if enableVerbosePacketLogging {
+                log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
+                let responseHex = data.map { String(format: "%02X", $0) }.joined()
+                transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
 
-            // Break down received packet structure for debugging
-            if data.count >= 5 {
-                let packetsRemaining = data[0]
-                let rxTxId = data[1]
-                let rxOpCode = data[2]
-                let rxSizeOrFlags = data[3]
-                let cargoStart = data.count > 4 ? data.dropFirst(4).prefix(8).map { String(format: "%02X", $0) }.joined() : ""
-                transportLogger
-                    .debug(
-                        "[PeripheralManagerTransport]   packetsRemaining=\(packetsRemaining) rxTxId=\(rxTxId) opCode=\(rxOpCode) sizeOrFlags=\(rxSizeOrFlags) cargoStart=\(cargoStart)"
-                    )
+                // Break down received packet structure for debugging
+                if data.count >= 5 {
+                    let packetsRemaining = data[0]
+                    let rxTxId = data[1]
+                    let rxOpCode = data[2]
+                    let rxSizeOrFlags = data[3]
+                    let cargoStart = data.count > 4 ? data.dropFirst(4).prefix(8).map { String(format: "%02X", $0) }.joined() : ""
+                    transportLogger
+                        .debug(
+                            "[PeripheralManagerTransport]   packetsRemaining=\(packetsRemaining) rxTxId=\(rxTxId) opCode=\(rxOpCode) sizeOrFlags=\(rxSizeOrFlags) cargoStart=\(cargoStart)"
+                        )
+                }
             }
 
             let pumpResponse: PumpResponseMessage
             do {
-                pumpResponse = try withMainActor {
-                    try collector.ingest(data, characteristic: characteristic.cbUUID)
-                }
+                pumpResponse = try collector.ingest(data, characteristic: characteristic.cbUUID)
             } catch {
                 log.error("Failed to parse response chunk: %{public}@", String(describing: error))
                 throw PumpCommError.responseParsingFailed(underlying: error)
             }
 
             if let responseMessage = pumpResponse.message {
-                transportLogger.debug("[PeripheralManagerTransport] parsed response message=\(responseMessage)")
+                if enableVerbosePacketLogging {
+                    transportLogger.debug("[PeripheralManagerTransport] parsed response message=\(responseMessage)")
+                }
                 parsedMessage = responseMessage
             } else {
-                transportLogger.debug("[PeripheralManagerTransport] awaiting additional packets for \(message)")
+                if enableVerbosePacketLogging {
+                    transportLogger.debug("[PeripheralManagerTransport] awaiting additional packets for \(message)")
+                }
             }
         }
 
@@ -309,4 +297,21 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         defer { historyLock.unlock() }
         requestResponseHistory.removeAll()
     }
+
+    // MARK: - Utilities
+    /// Execute a closure synchronously on the main thread and return its value.
+    /// This provides a cohesive solution to call @MainActor APIs from a synchronous context.
+    @inline(__always)
+    private func syncOnMain<T>(_ work: () -> T) -> T {
+        if Thread.isMainThread {
+            return work()
+        } else {
+            var result: T!
+            DispatchQueue.main.sync {
+                result = work()
+            }
+            return result
+        }
+    }
 }
+

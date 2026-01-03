@@ -15,7 +15,30 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
-    public static let version = 4
+    public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
+        case standard = 0
+        case sleep = 2
+        case exercise = 3
+    }
+
+    public enum HomeScreenBasalStatus: Int, RawRepresentable, Equatable {
+        case active = 0
+        case tempRate = 2
+        case suspended = 4
+    }
+
+    public enum HomeScreenBolusStatus: Int, RawRepresentable, Equatable {
+        case none = 200
+        case bolus = 0
+    }
+
+    public enum HomeScreenCGMAlert: Int, RawRepresentable, Equatable {
+        case noError = 255
+        case low = 16
+        case high = 17
+    }
+
+    public static let version = 5
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -30,6 +53,33 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var basalRateSchedule: BasalRateSchedule?
     public var insulinDeliveryActionsEnabled: Bool
     public var connectionSharingEnabled: Bool
+    public var autoAcknowledgeBasalAlerts: Bool
+
+    // Control-IQ state
+    public var controlIQEnabled: Bool?
+    public var controlIQUserMode: ControlIQUserMode?
+    public var controlIQWeight: Int?
+    public var controlIQTotalDailyInsulin: Int?
+    public var lastControlIQUpdate: Date?
+
+    // Temp rate (additional detail beyond existing basal state)
+    public var tempRateActive: Bool?
+    public var tempRatePercentage: Int?
+    public var tempRateDuration: UInt32?
+    public var lastTempRateUpdate: Date?
+
+    // Current basal rate for display
+    public var currentBasalRate: Double?
+    public var lastBasalRateUpdate: Date?
+
+    // Status icons from HomeScreenMirror
+    public var basalStatusIcon: HomeScreenBasalStatus?
+    public var bolusStatusIcon: HomeScreenBolusStatus?
+    public var cgmAlertIcon: HomeScreenCGMAlert?
+
+    // Notification count
+    public var notificationCount: Int?
+    public var lastNotificationUpdate: Date?
     public var insulinType: InsulinType?
 
     public init(
@@ -46,6 +96,23 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         basalRateSchedule: BasalRateSchedule? = nil,
         insulinDeliveryActionsEnabled: Bool = false,
         connectionSharingEnabled: Bool = false,
+        autoAcknowledgeBasalAlerts: Bool = false,
+        controlIQEnabled: Bool? = nil,
+        controlIQUserMode: ControlIQUserMode? = nil,
+        controlIQWeight: Int? = nil,
+        controlIQTotalDailyInsulin: Int? = nil,
+        lastControlIQUpdate: Date? = nil,
+        tempRateActive: Bool? = nil,
+        tempRatePercentage: Int? = nil,
+        tempRateDuration: UInt32? = nil,
+        lastTempRateUpdate: Date? = nil,
+        currentBasalRate: Double? = nil,
+        lastBasalRateUpdate: Date? = nil,
+        basalStatusIcon: HomeScreenBasalStatus? = nil,
+        bolusStatusIcon: HomeScreenBolusStatus? = nil,
+        cgmAlertIcon: HomeScreenCGMAlert? = nil,
+        notificationCount: Int? = nil,
+        lastNotificationUpdate: Date? = nil
         insulinType: InsulinType? = nil
     ) {
         self.pumpState = pumpState
@@ -61,6 +128,23 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.basalRateSchedule = basalRateSchedule
         self.insulinDeliveryActionsEnabled = insulinDeliveryActionsEnabled
         self.connectionSharingEnabled = connectionSharingEnabled
+        self.autoAcknowledgeBasalAlerts = autoAcknowledgeBasalAlerts
+        self.controlIQEnabled = controlIQEnabled
+        self.controlIQUserMode = controlIQUserMode
+        self.controlIQWeight = controlIQWeight
+        self.controlIQTotalDailyInsulin = controlIQTotalDailyInsulin
+        self.lastControlIQUpdate = lastControlIQUpdate
+        self.tempRateActive = tempRateActive
+        self.tempRatePercentage = tempRatePercentage
+        self.tempRateDuration = tempRateDuration
+        self.lastTempRateUpdate = lastTempRateUpdate
+        self.currentBasalRate = currentBasalRate
+        self.lastBasalRateUpdate = lastBasalRateUpdate
+        self.basalStatusIcon = basalStatusIcon
+        self.bolusStatusIcon = bolusStatusIcon
+        self.cgmAlertIcon = cgmAlertIcon
+        self.notificationCount = notificationCount
+        self.lastNotificationUpdate = lastNotificationUpdate
         self.insulinType = insulinType
     }
 
@@ -153,6 +237,127 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             connectionSharingEnabled = false
         }
 
+        if let autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool {
+            self.autoAcknowledgeBasalAlerts = autoAcknowledgeBasalAlerts
+        } else {
+            autoAcknowledgeBasalAlerts = false
+        }
+
+        // Version 5+ properties
+        if version >= 5 {
+            if let controlIQEnabled = rawValue["controlIQEnabled"] as? Bool {
+                self.controlIQEnabled = controlIQEnabled
+            } else {
+                controlIQEnabled = nil
+            }
+
+            if let modeRaw = rawValue["controlIQUserMode"] as? Int {
+                controlIQUserMode = ControlIQUserMode(rawValue: modeRaw)
+            } else {
+                controlIQUserMode = nil
+            }
+
+            if let controlIQWeight = rawValue["controlIQWeight"] as? Int {
+                self.controlIQWeight = controlIQWeight
+            } else {
+                controlIQWeight = nil
+            }
+
+            if let controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int {
+                self.controlIQTotalDailyInsulin = controlIQTotalDailyInsulin
+            } else {
+                controlIQTotalDailyInsulin = nil
+            }
+
+            if let lastControlIQInterval = rawValue["lastControlIQUpdate"] as? TimeInterval {
+                lastControlIQUpdate = Date(timeIntervalSinceReferenceDate: lastControlIQInterval)
+            } else {
+                lastControlIQUpdate = nil
+            }
+
+            if let tempRateActive = rawValue["tempRateActive"] as? Bool {
+                self.tempRateActive = tempRateActive
+            } else {
+                tempRateActive = nil
+            }
+
+            if let tempRatePercentage = rawValue["tempRatePercentage"] as? Int {
+                self.tempRatePercentage = tempRatePercentage
+            } else {
+                tempRatePercentage = nil
+            }
+
+            if let tempRateDuration = rawValue["tempRateDuration"] as? UInt32 {
+                self.tempRateDuration = tempRateDuration
+            } else {
+                tempRateDuration = nil
+            }
+
+            if let lastTempRateInterval = rawValue["lastTempRateUpdate"] as? TimeInterval {
+                lastTempRateUpdate = Date(timeIntervalSinceReferenceDate: lastTempRateInterval)
+            } else {
+                lastTempRateUpdate = nil
+            }
+
+            if let currentBasalRate = rawValue["currentBasalRate"] as? Double {
+                self.currentBasalRate = currentBasalRate
+            } else {
+                currentBasalRate = nil
+            }
+
+            if let lastBasalRateInterval = rawValue["lastBasalRateUpdate"] as? TimeInterval {
+                lastBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
+            } else {
+                lastBasalRateUpdate = nil
+            }
+
+            if let basalIconRaw = rawValue["basalStatusIcon"] as? Int {
+                basalStatusIcon = HomeScreenBasalStatus(rawValue: basalIconRaw)
+            } else {
+                basalStatusIcon = nil
+            }
+
+            if let bolusIconRaw = rawValue["bolusStatusIcon"] as? Int {
+                bolusStatusIcon = HomeScreenBolusStatus(rawValue: bolusIconRaw)
+            } else {
+                bolusStatusIcon = nil
+            }
+
+            if let cgmIconRaw = rawValue["cgmAlertIcon"] as? Int {
+                cgmAlertIcon = HomeScreenCGMAlert(rawValue: cgmIconRaw)
+            } else {
+                cgmAlertIcon = nil
+            }
+
+            if let notificationCount = rawValue["notificationCount"] as? Int {
+                self.notificationCount = notificationCount
+            } else {
+                notificationCount = nil
+            }
+
+            if let lastNotificationInterval = rawValue["lastNotificationUpdate"] as? TimeInterval {
+                lastNotificationUpdate = Date(timeIntervalSinceReferenceDate: lastNotificationInterval)
+            } else {
+                lastNotificationUpdate = nil
+            }
+        } else {
+            // Pre-v5: all new fields are nil
+            controlIQEnabled = nil
+            controlIQUserMode = nil
+            controlIQWeight = nil
+            controlIQTotalDailyInsulin = nil
+            lastControlIQUpdate = nil
+            tempRateActive = nil
+            tempRatePercentage = nil
+            tempRateDuration = nil
+            lastTempRateUpdate = nil
+            currentBasalRate = nil
+            lastBasalRateUpdate = nil
+            basalStatusIcon = nil
+            bolusStatusIcon = nil
+            cgmAlertIcon = nil
+            notificationCount = nil
+            lastNotificationUpdate = nil
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
         } else {
@@ -214,6 +419,72 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
         raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
         raw["connectionSharingEnabled"] = connectionSharingEnabled
+        raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
+
+        // Version 5+ properties
+        if let controlIQEnabled = controlIQEnabled {
+            raw["controlIQEnabled"] = controlIQEnabled
+        }
+
+        if let controlIQUserMode = controlIQUserMode {
+            raw["controlIQUserMode"] = controlIQUserMode.rawValue
+        }
+
+        if let controlIQWeight = controlIQWeight {
+            raw["controlIQWeight"] = controlIQWeight
+        }
+
+        if let controlIQTotalDailyInsulin = controlIQTotalDailyInsulin {
+            raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
+        }
+
+        if let lastControlIQUpdate = lastControlIQUpdate {
+            raw["lastControlIQUpdate"] = lastControlIQUpdate.timeIntervalSinceReferenceDate
+        }
+
+        if let tempRateActive = tempRateActive {
+            raw["tempRateActive"] = tempRateActive
+        }
+
+        if let tempRatePercentage = tempRatePercentage {
+            raw["tempRatePercentage"] = tempRatePercentage
+        }
+
+        if let tempRateDuration = tempRateDuration {
+            raw["tempRateDuration"] = tempRateDuration
+        }
+
+        if let lastTempRateUpdate = lastTempRateUpdate {
+            raw["lastTempRateUpdate"] = lastTempRateUpdate.timeIntervalSinceReferenceDate
+        }
+
+        if let currentBasalRate = currentBasalRate {
+            raw["currentBasalRate"] = currentBasalRate
+        }
+
+        if let lastBasalRateUpdate = lastBasalRateUpdate {
+            raw["lastBasalRateUpdate"] = lastBasalRateUpdate.timeIntervalSinceReferenceDate
+        }
+
+        if let basalStatusIcon = basalStatusIcon {
+            raw["basalStatusIcon"] = basalStatusIcon.rawValue
+        }
+
+        if let bolusStatusIcon = bolusStatusIcon {
+            raw["bolusStatusIcon"] = bolusStatusIcon.rawValue
+        }
+
+        if let cgmAlertIcon = cgmAlertIcon {
+            raw["cgmAlertIcon"] = cgmAlertIcon.rawValue
+        }
+
+        if let notificationCount = notificationCount {
+            raw["notificationCount"] = notificationCount
+        }
+
+        if let lastNotificationUpdate = lastNotificationUpdate {
+            raw["lastNotificationUpdate"] = lastNotificationUpdate.timeIntervalSinceReferenceDate
+        }
         raw["insulinType"] = insulinType
 
         return raw
@@ -235,6 +506,23 @@ public extension TandemPumpManagerState {
             lhs.basalRateSchedule == rhs.basalRateSchedule &&
             lhs.insulinDeliveryActionsEnabled == rhs.insulinDeliveryActionsEnabled &&
             lhs.connectionSharingEnabled == rhs.connectionSharingEnabled &&
+            lhs.autoAcknowledgeBasalAlerts == rhs.autoAcknowledgeBasalAlerts &&
+            lhs.controlIQEnabled == rhs.controlIQEnabled &&
+            lhs.controlIQUserMode == rhs.controlIQUserMode &&
+            lhs.controlIQWeight == rhs.controlIQWeight &&
+            lhs.controlIQTotalDailyInsulin == rhs.controlIQTotalDailyInsulin &&
+            lhs.lastControlIQUpdate == rhs.lastControlIQUpdate &&
+            lhs.tempRateActive == rhs.tempRateActive &&
+            lhs.tempRatePercentage == rhs.tempRatePercentage &&
+            lhs.tempRateDuration == rhs.tempRateDuration &&
+            lhs.lastTempRateUpdate == rhs.lastTempRateUpdate &&
+            lhs.currentBasalRate == rhs.currentBasalRate &&
+            lhs.lastBasalRateUpdate == rhs.lastBasalRateUpdate &&
+            lhs.basalStatusIcon == rhs.basalStatusIcon &&
+            lhs.bolusStatusIcon == rhs.bolusStatusIcon &&
+            lhs.cgmAlertIcon == rhs.cgmAlertIcon &&
+            lhs.notificationCount == rhs.notificationCount &&
+            lhs.lastNotificationUpdate == rhs.lastNotificationUpdate
             lhs.insulinType == rhs.insulinType
     }
 }

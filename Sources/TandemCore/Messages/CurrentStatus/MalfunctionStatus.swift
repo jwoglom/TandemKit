@@ -25,12 +25,13 @@ public class MalfunctionStatusRequest: Message {
 }
 
 /// Response with malfunction codes.
-public class MalfunctionStatusResponse: Message {
+public class MalfunctionStatusResponse: Message, NotificationMessage, NotificationEnum {
     public static let props = MessageProps(
         opCode: 121,
         size: 11,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        variableSize: true
     )
 
     public var cargo: Data
@@ -42,7 +43,11 @@ public class MalfunctionStatusResponse: Message {
         self.cargo = cargo
         codeA = Bytes.readUint32(cargo, 0)
         codeB = Bytes.readUint32(cargo, 4)
-        remaining = cargo.subdata(in: 8 ..< 11)
+        if cargo.count > 8 {
+            remaining = cargo.subdata(in: 8 ..< cargo.count)
+        } else {
+            remaining = Data()
+        }
     }
 
     public init(codeA: UInt32, codeB: UInt32, remaining: Data = Data([0, 0, 0])) {
@@ -60,24 +65,52 @@ public class MalfunctionStatusResponse: Message {
     public static let IGNORABLE_CODES: [(UInt32, UInt32)] = [
         (0, 0), // empty
         (3, 8230), // 3-0x2026
-        (18, 8311) // 18-0x2077
+        (18, 8311), // 18-0x2077
+        (26, 8322) // 26-0x2082
     ]
 
     /// Formatted malfunction code string if present.
     public var errorString: String {
-        if !hasMalfunction { return "" }
+        if !hasMalfunction() { return "" }
         return String(format: "%d-%#x", codeA, codeB)
     }
 
-    /// Whether the pump reports a malfunction.
-    public var hasMalfunction: Bool {
+    /// Whether the pump reports a malfunction. Optionally suppresses malfunctions when
+    /// other notification payloads contain matching IDs.
+    public func hasMalfunction(_ otherMessages: [NotificationMessage] = []) -> Bool {
         for code in Self.IGNORABLE_CODES {
             if code.0 == codeA, code.1 == codeB {
                 return false
             }
         }
+
+        if matchesKnownIds(otherMessages) {
+            return false
+        }
+
         return true
     }
+
+    private func matchesKnownIds(_ otherMessages: [NotificationMessage]) -> Bool {
+        for message in otherMessages {
+            if message.notificationIds.contains(Int(codeA)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    public var notificationCount: Int {
+        (hasMalfunction() && !errorString.isEmpty) ? 1 : 0
+    }
+
+    public var notificationIds: Set<Int> {
+        hasMalfunction() ? [Int(codeA)] : []
+    }
+
+    public var id: Int { Int(codeA) }
+
+    public var notificationDescription: String? { errorString }
 
     public var description: String {
         "MalfunctionStatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB), remaining=\(remaining.hexadecimalString))"

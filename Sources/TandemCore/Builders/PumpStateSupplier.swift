@@ -15,7 +15,7 @@ extension PumpPairingCodeValidationError: LocalizedError {
             )
         case .invalidLength:
             return LocalizedString(
-                "Pairing codes are either 6 digits or 16 letters and numbers.",
+                "Pairing codes are 6 digits long.",
                 comment: "Error message when pairing code entry has the wrong length"
             )
         }

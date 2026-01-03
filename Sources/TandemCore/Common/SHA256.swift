@@ -3,7 +3,7 @@ import Foundation
     import CryptoKit
 #endif
 
-struct SHA256 {
+enum SHA256 {
     static func hash(_ data: Data) -> Data {
         #if canImport(CryptoKit)
             return Data(CryptoKit.SHA256.hash(data: data))
@@ -32,7 +32,9 @@ struct SHA256 {
             var message = data
             let bitLength = UInt64(message.count) * 8
             message.append(0x80)
-            while (message.count % 64) != 56 { message.append(0) }
+            while (message.count % 64) != 56 {
+                message.append(0)
+            }
             var lengthBytes = Data()
             for i in (0 ..< 8).reversed() {
                 lengthBytes.append(UInt8((bitLength >> UInt64(i * 8)) & 0xFF))
@@ -92,7 +94,7 @@ struct SHA256 {
             }
 
             var digest = Data()
-            [h0, h1, h2, h3, h4, h5, h6, h7].forEach { h in
+            for h in [h0, h1, h2, h3, h4, h5, h6, h7] {
                 digest.append(UInt8((h >> 24) & 0xFF))
                 digest.append(UInt8((h >> 16) & 0xFF))
                 digest.append(UInt8((h >> 8) & 0xFF))

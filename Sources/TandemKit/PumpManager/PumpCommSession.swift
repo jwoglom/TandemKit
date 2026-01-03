@@ -11,6 +11,7 @@ protocol PumpCommSessionDelegate: AnyObject {
         characteristic: CharacteristicUUID,
         txId: UInt8
     )
+    func pumpCommSession(_ pumpCommSession: PumpCommSession, didReceiveQualifyingEvents events: Set<QualifyingEvent>)
 }
 
 public class PumpCommSession {
@@ -29,11 +30,11 @@ public class PumpCommSession {
         self.delegate = delegate
     }
 
-    public func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
+    public func runSession(withName _: String, _ block: @escaping @Sendable () -> Void) {
         sessionQueue.async(execute: block)
     }
 
-    public func runSynchronously<T>(withName _: String, _ block: @escaping @Sendable() throws -> T) rethrows -> T {
+    public func runSynchronously<T>(withName _: String, _ block: @escaping @Sendable () throws -> T) rethrows -> T {
         try sessionQueue.sync {
             try block()
         }
@@ -57,6 +58,11 @@ public class PumpCommSession {
             characteristic: characteristic,
             txId: txId
         )
+    }
+
+    func handleQualifyingEvents(_ events: Set<QualifyingEvent>) {
+        assertOnSessionQueue()
+        delegate?.pumpCommSession(self, didReceiveQualifyingEvents: events)
     }
 
     public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {

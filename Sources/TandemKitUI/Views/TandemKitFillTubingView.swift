@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitFillTubingView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitFillTubingViewModel
+    @StateObject var viewModel: TandemKitFillTubingViewModel
     @State private var didLoad = false
 
     var body: some View {
@@ -63,6 +63,7 @@ struct TandemKitFillTubingView: View {
         .navigationBarTitle(LocalizedString("Fill Tubing", comment: "Title for fill tubing"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .interactiveDismissDisabled(viewModel.isProcessing)
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -142,13 +143,13 @@ struct TandemKitFillTubingView: View {
                     "Press and hold the button on your pump to fill tubing.",
                     comment: "Instructions"
                 ))
-                    .font(.body)
+                .font(.body)
 
                 Text(LocalizedString(
                     "Watch the tubing for insulin and release the button when you see it.",
                     comment: "Instructions"
                 ))
-                    .font(.body)
+                .font(.body)
 
                 if viewModel.buttonDown {
                     HStack {

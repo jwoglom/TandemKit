@@ -25,7 +25,7 @@ public class CGMAlertStatusRequest: Message {
 }
 
 /// Response describing active CGM alerts via bitmask.
-public class CGMAlertStatusResponse: Message {
+public class CGMAlertStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 75,
         size: 8,
@@ -50,7 +50,7 @@ public class CGMAlertStatusResponse: Message {
     }
 
     /// CGM alert bit positions.
-    public enum CGMAlert: Int, CaseIterable, Comparable {
+    public enum CGMAlert: Int, CaseIterable, Comparable, NotificationEnum {
         case DEFAULT_CGM_ALERT_0 = 0
         case FIXED_LOW_CGM_ALERT = 1
         case HIGH_CGM_ALERT = 2
@@ -129,7 +129,13 @@ public class CGMAlertStatusResponse: Message {
             }
             return set
         }
+
+        public var id: Int { rawValue }
     }
+
+    public var notificationCount: Int { alerts.count }
+
+    public var notificationIds: Set<Int> { Set(alerts.map { $0.rawValue }) }
 
     public var description: String {
         "CGMAlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"

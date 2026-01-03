@@ -109,7 +109,6 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
             return hostingController(rootView: view)
         case .pumpSettings:
-
             // next step = deactivate the pump
             let viewModel = TandemKitSettingsViewModel(pumpManager, nextStep: stepFinished)
             let view = TandemKitSettingsView(viewModel: viewModel)
@@ -130,7 +129,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     }
 
     func getInitialScreen() -> TandemScreen {
-        guard let pumpManager = self.pumpManager else {
+        guard let pumpManager = pumpManager else {
             return .setup
         }
 

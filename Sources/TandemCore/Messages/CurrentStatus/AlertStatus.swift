@@ -25,7 +25,7 @@ public class AlertStatusRequest: Message {
 }
 
 /// Response containing active alerts represented as a bitmask.
-public class AlertStatusResponse: Message {
+public class AlertStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 69,
         size: 8,
@@ -50,7 +50,7 @@ public class AlertStatusResponse: Message {
     }
 
     /// Alert types encoded in the response bitmask.
-    public enum AlertResponseType: Int, CaseIterable, Comparable {
+    public enum AlertResponseType: Int, CaseIterable, Comparable, NotificationEnum {
         case LOW_INSULIN_ALERT = 0
         case USB_CONNECTION_ALERT = 1
         case LOW_POWER_ALERT = 2
@@ -119,6 +119,15 @@ public class AlertStatusResponse: Message {
             lhs.rawValue < rhs.rawValue
         }
 
+        /// Basal-related alerts that can be automatically acknowledged when looping.
+        /// These alerts indicate Control-IQ basal adjustments that are expected during closed-loop operation.
+        public static let basalAlertsToIgnoreWhenLooping: Set<AlertResponseType> = [
+            .MIN_BASAL_ALERT,
+            .MIN_BASAL_ALERT2,
+            .MAX_BASAL_ALERT,
+            .MAX_BASAL_RATE_ALERT
+        ]
+
         /// Returns a set of alerts encoded in the provided bitmask.
         public static func fromBitmask(_ intMap: UInt64) -> Set<AlertResponseType> {
             var current = Set<AlertResponseType>()
@@ -129,7 +138,13 @@ public class AlertStatusResponse: Message {
             }
             return current
         }
+
+        public var id: Int { rawValue }
     }
+
+    public var notificationCount: Int { alerts.count }
+
+    public var notificationIds: Set<Int> { Set(alerts.map { $0.rawValue }) }
 
     public var description: String {
         "AlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"

@@ -1435,12 +1435,10 @@ private extension TandemCLIMain {
 
     private final class ConsoleCoordinator: NSObject, BluetoothManagerDelegate {
         private static let supportedCommands = ["send", "list", "help", "exit", "quit"]
-        private static let sendableMessageNames: [String] = {
-            MessageRegistry.all
-                .filter { $0.messageType == .Request && $0.size == 0 }
-                .map(\.name)
-                .sorted()
-        }()
+        private static let sendableMessageNames: [String] = MessageRegistry.all
+            .filter { $0.messageType == .Request && $0.size == 0 }
+            .map(\.name)
+            .sorted()
 
         private weak static var activeCoordinator: ConsoleCoordinator?
         private static var signalHandlerInstalled = false

@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitChangeCartridgeView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitChangeCartridgeViewModel
+    @StateObject var viewModel: TandemKitChangeCartridgeViewModel
     @State private var didLoad = false
 
     var body: some View {
@@ -93,9 +93,15 @@ struct TandemKitChangeCartridgeView: View {
         .navigationBarTitle(LocalizedString("Change Cartridge", comment: "Title for change cartridge"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .interactiveDismissDisabled(viewModel.isProcessing)
         .task {
-            guard !didLoad else { return }
+            print("TandemKit Change Cartridge: .task called, didLoad=\(didLoad)")
+            guard !didLoad else {
+                print("TandemKit Change Cartridge: .task skipped - already loaded")
+                return
+            }
             didLoad = true
+            print("TandemKit Change Cartridge: Calling checkSuspendedStatus()")
             viewModel.checkSuspendedStatus()
         }
     }
@@ -192,8 +198,8 @@ struct TandemKitChangeCartridgeView: View {
                     "1. Remove the old cartridge from the pump\n2. Insert a new cartridge\n3. Press the button below when complete",
                     comment: "Instructions"
                 ))
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
 

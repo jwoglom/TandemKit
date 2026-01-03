@@ -2,8 +2,7 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-@available(macOS 13.0, iOS 14.0, *)
-final class TandemPumpManagerValidationTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerValidationTests: XCTestCase {
     func testEnactBolusExceedsMaxBolus() {
         var state = TandemPumpManagerState(
             pumpState: nil,

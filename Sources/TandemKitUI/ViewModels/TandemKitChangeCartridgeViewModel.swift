@@ -59,17 +59,48 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     }
 
     func checkSuspendedStatus() {
+        print("TandemKit Change Cartridge: checkSuspendedStatus() entered")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            print("TandemKit Change Cartridge: async block started")
+            guard let self = self else {
+                print("TandemKit Change Cartridge: self is nil")
+                return
+            }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
+            guard let transport = self.pumpManager?.pairedTransport else {
+                print("TandemKit Change Cartridge: No paired transport available")
+                DispatchQueue.main.async {
+                    self.isSuspended = nil
+                }
+                return
+            }
+
+            do {
+                guard let mirror = try transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse else {
+                    print("TandemKit Change Cartridge: Failed to get HomeScreenMirrorResponse")
+                    DispatchQueue.main.async {
+                        self.isSuspended = nil
+                    }
+                    return
+                }
 
                 DispatchQueue.main.async {
-                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+                    // Check for any suspended state (manual suspend or BasalIQ hypo suspend)
+                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue ||
+                        mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
+
+                    print(
+                        "TandemKit Change Cartridge: Checked suspend status - isSuspended=\(self.isSuspended ?? false), basalStatusIconId=\(mirror.basalStatusIconId)"
+                    )
+
                     if self.isSuspended == true, self.currentStep == .suspend {
                         self.currentStep = .enterMode
                     }
+                }
+            } catch {
+                print("TandemKit Change Cartridge: Error checking suspend status: \(error)")
+                DispatchQueue.main.async {
+                    self.isSuspended = nil
                 }
             }
         }

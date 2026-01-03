@@ -11,7 +11,7 @@ enum PeripheralManagerError: Error {
 }
 
 extension PeripheralManagerError {
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
         case let .cbPeripheralError(error):
             return error.localizedDescription

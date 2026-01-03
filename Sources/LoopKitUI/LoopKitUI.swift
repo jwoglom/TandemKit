@@ -1,4 +1,5 @@
 import Foundation
+
 // This file is a shim for building on non-Apple platforms.
 #if os(Linux)
     import LoopKit

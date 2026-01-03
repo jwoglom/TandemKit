@@ -5,7 +5,7 @@ import TandemCore
 struct TandemKitFillCannulaView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
-    @ObservedObject var viewModel: TandemKitFillCannulaViewModel
+    @StateObject var viewModel: TandemKitFillCannulaViewModel
     @State private var didLoad = false
 
     let unitText = LocalizedString("U", comment: "Insulin unit")
@@ -46,17 +46,7 @@ struct TandemKitFillCannulaView: View {
                 )
             }
 
-            // Step 3: Filling
-            if viewModel.currentStep == .filling {
-                fillingSection
-            } else if viewModel.currentStep.rawValue > CannulaFillStep.filling.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 3: Filling", comment: "Step header"),
-                    message: LocalizedString("Cannula filled", comment: "Status text")
-                )
-            }
-
-            // Step 4: Done
+            // Step 3: Done
             if viewModel.currentStep == .done {
                 doneSection
             }
@@ -65,6 +55,7 @@ struct TandemKitFillCannulaView: View {
         .navigationBarTitle(LocalizedString("Fill Cannula", comment: "Title for fill cannula"))
         .navigationBarBackButtonHidden(viewModel.isProcessing)
         .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
+        .interactiveDismissDisabled(viewModel.isProcessing)
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -157,17 +148,6 @@ struct TandemKitFillCannulaView: View {
             }
         } header: {
             Text(LocalizedString("Step 2: Set Prime Amount", comment: "Step header"))
-        }
-    }
-
-    var fillingSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Delivering prime...", comment: "Status text"))
-                ProgressView()
-            }
-        } header: {
-            Text(LocalizedString("Step 3: Filling", comment: "Step header"))
         }
     }
 

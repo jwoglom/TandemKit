@@ -5,16 +5,13 @@ import TandemCore
 enum CannulaFillStep: Int {
     case suspend = 0
     case enterAmount = 1
-    case filling = 2
-    case done = 3
+    case done = 2
 
     func nextStep() -> CannulaFillStep? {
         switch self {
         case .suspend:
             return .enterAmount
         case .enterAmount:
-            return .filling
-        case .filling:
             return .done
         case .done:
             return nil
@@ -112,10 +109,9 @@ class TandemKitFillCannulaViewModel: ObservableObject {
             guard let self = self else { return }
 
             if let transport = self.pumpManager?.pairedTransport {
+                // This blocks until the prime completes and returns the response
                 let response = try? transport
                     .sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
-
-                Thread.sleep(forTimeInterval: Double(self.primeAmount) * 2.0) // Simulate delivery time
 
                 DispatchQueue.main.async {
                     self.loadingFill = false

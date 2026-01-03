@@ -293,7 +293,7 @@ public class IDPManager {
         }
 
         return profiles.count == profileStatus.numberOfProfiles &&
-            profiles.allSatisfy { $0.isComplete }
+            profiles.allSatisfy(\.isComplete)
     }
 
     /// Returns all loaded profiles. Only valid after `isComplete` is true.

@@ -36,6 +36,7 @@
             field.autocorrectionType = .no
             field.spellCheckingType = .no
             field.returnKeyType = .done
+            field.keyboardType = .numberPad
             field.clearButtonMode = .whileEditing
             field.addTarget(self, action: #selector(textDidChange), for: .editingChanged)
             field.delegate = self
