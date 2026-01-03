@@ -14,6 +14,7 @@ public class NotificationBundle {
     public var otherNotification2StatusResponse: OtherNotification2StatusResponse?
 
     private var lastUpdatedTimes: [String: Date] = [:]
+    private let lock = NSLock()
 
     public init() {}
 
@@ -59,6 +60,9 @@ public class NotificationBundle {
         let timestamp = Date()
         let typeName = String(describing: type(of: message))
 
+        lock.lock()
+        defer { lock.unlock() }
+
         if let response = message as? AlertStatusResponse {
             alertStatusResponse = response
             lastUpdatedTimes[typeName] = timestamp
@@ -85,6 +89,9 @@ public class NotificationBundle {
 
     /// Assembles all active notifications into a single sorted list.
     public func get() -> [NotificationItem] {
+        lock.lock()
+        defer { lock.unlock() }
+
         var items: [NotificationItem] = []
         let alarmAndAlerts: [NotificationMessage] = [alertStatusResponse as NotificationMessage?, alarmStatusResponse as NotificationMessage?].compactMap { $0 }
 
@@ -146,6 +153,9 @@ public class NotificationBundle {
 
     /// Calculates the total number of active notifications across all response types.
     public func getNotificationCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+
         var count = 0
         let alarmAndAlerts: [NotificationMessage] = [alarmStatusResponse as NotificationMessage?, alertStatusResponse as NotificationMessage?].compactMap { $0 }
 
@@ -179,6 +189,9 @@ public class NotificationBundle {
 
     /// Returns the last updated time for a specific response type.
     public func lastUpdatedTime(for type: Message.Type) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+
         let typeName = String(describing: type)
         return lastUpdatedTimes[typeName]
     }
