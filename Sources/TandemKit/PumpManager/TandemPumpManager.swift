@@ -611,6 +611,10 @@ private struct ActiveTempBasal {
         lockedState.value.connectionSharingEnabled
     }
 
+    public var autoAcknowledgeBasalAlerts: Bool {
+        lockedState.value.autoAcknowledgeBasalAlerts
+    }
+
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
         let percent = Double(response.batteryPercent) / 100.0
         let timestamp = Date()
@@ -648,11 +652,7 @@ private struct ActiveTempBasal {
         notifyDelegateStateUpdated()
     }
 
-    private func handleBasalResponse(
-        _ response: CurrentBasalStatusResponse,
-        _ responseTempBasal: TempRateResponse,
-        source: ResponseSource
-    ) {
+    private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
         let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
         let profileUnitsPerHour = Double(response.profileBasalRate) / 1000.0
         lockedCurrentBasalRate.value = profileUnitsPerHour
@@ -663,15 +663,14 @@ private struct ActiveTempBasal {
         let newBasalState: PumpManagerStatus.BasalDeliveryState
         if rateUnitsPerHour <= 0 {
             newBasalState = .suspended(timestamp)
-        } else if responseTempBasal.active {
+        } else if let tempBasal = activeTempBasal.value {
             let dose = DoseEntry.tempBasal(
                 absoluteUnit: rateUnitsPerHour,
-                duration: Double(responseTempBasal.duration),
+                duration: tempBasal.dose.endDate.timeIntervalSince(tempBasal.dose.startDate),
                 insulinType: lockedState.value.insulinType,
-                startDate: responseTempBasal.startTime
+                startDate: tempBasal.dose.startDate
             )
             newBasalState = .tempBasal(dose)
-            activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: profileUnitsPerHour)
         } else {
             newBasalState = .active(timestamp)
             activeTempBasal.value = nil
@@ -730,7 +729,10 @@ private struct ActiveTempBasal {
     }
 
     private func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
-        logger(for: source).debug("[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)")
+        logger(for: source)
+            .debug(
+                "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
+            )
 
         var managerState = lockedState.value
         managerState.controlIQEnabled = response.closedLoopEnabled
@@ -816,7 +818,10 @@ private struct ActiveTempBasal {
     private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
         let timestamp = Date()
 
-        logger(for: source).debug("[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)")
+        logger(for: source)
+            .debug(
+                "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
+            )
 
         if response.active {
             // Get the scheduled basal rate to calculate actual temp rate
@@ -1255,7 +1260,7 @@ private struct ActiveTempBasal {
     }
 
     func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
-        self.scanDeviceObservers.forEach { observer in
+        scanDeviceObservers.forEach { observer in
             observer.deviceScanDidUpdate(device)
         }
     }
@@ -1534,8 +1539,8 @@ private struct ActiveTempBasal {
     public func refreshAllStatus() {
         telemetryLogger.debug("UI-triggered full refresh: fetching all status")
 
-        // Trigger existing telemetry immediately
-        telemetryScheduler.triggerAll()
+        // TEMP
+        ensureCurrentPumpData { _ in }
 
         // Fetch UI-specific data on background queue
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -1882,7 +1887,6 @@ private struct ActiveTempBasal {
             return
         }
 
-
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -1928,15 +1932,11 @@ private struct ActiveTempBasal {
             completeTempBasal(.failure(.communication(error)), completion: completion)
             return
         }
-        
 
         let previousBasalState = lockedState.value.basalDeliveryState
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
-            let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-            
-            
+
             do {
                 var pumpEvents: [NewPumpEvent] = []
 
@@ -2595,7 +2595,13 @@ private struct ActiveTempBasal {
                     let metadata = MessageRegistry.metadata(for: response)
 
                     // Process the response through the normal notification handler
-                    pumpComm(pumpComm, didReceive: response, metadata: metadata, characteristic: .CURRENT_STATUS_CHARACTERISTICS, txId: 0)
+                    pumpComm(
+                        pumpComm,
+                        didReceive: response,
+                        metadata: metadata,
+                        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+                        txId: 0
+                    )
                 } catch {
                     notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
                 }

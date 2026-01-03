@@ -93,7 +93,10 @@ public class NotificationBundle {
         defer { lock.unlock() }
 
         var items: [NotificationItem] = []
-        let alarmAndAlerts: [NotificationMessage] = [alertStatusResponse as NotificationMessage?, alarmStatusResponse as NotificationMessage?].compactMap { $0 }
+        let alarmAndAlerts: [NotificationMessage] = [
+            alertStatusResponse as NotificationMessage?,
+            alarmStatusResponse as NotificationMessage?
+        ].compactMap { $0 }
 
         // Add alerts
         if let response = alertStatusResponse {
@@ -157,7 +160,10 @@ public class NotificationBundle {
         defer { lock.unlock() }
 
         var count = 0
-        let alarmAndAlerts: [NotificationMessage] = [alarmStatusResponse as NotificationMessage?, alertStatusResponse as NotificationMessage?].compactMap { $0 }
+        let alarmAndAlerts: [NotificationMessage] = [
+            alarmStatusResponse as NotificationMessage?,
+            alertStatusResponse as NotificationMessage?
+        ].compactMap { $0 }
 
         if let response = alarmStatusResponse {
             count += response.notificationCount
