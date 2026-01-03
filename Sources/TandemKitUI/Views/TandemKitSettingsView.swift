@@ -231,6 +231,10 @@ struct TandemKitSettingsView: View {
                 .popover(isPresented: $viewModel.showingDebugDetails) {
                     debugDetailsPopover
                 }
+
+                NavigationLink(destination: TandemKitDebugView(viewModel: viewModel.createDebugViewModel())) {
+                    Text(LocalizedString("View Debug Options", comment: "Label for button to open TandemKit debug options"))
+                }
             }
 
             Section(header: SectionHeader(label: LocalizedString(
