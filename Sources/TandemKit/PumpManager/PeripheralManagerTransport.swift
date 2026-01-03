@@ -33,7 +33,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         self.enableVerbosePacketLogging = enableVerbosePacketLogging
         let instanceId = ObjectIdentifier(self)
         log.info("PeripheralManagerTransport init: instance=%{public}@", String(describing: instanceId))
-        transportLogger.info("[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)")
+        transportLogger
+            .info(
+                "[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)"
+            )
     }
 
     @MainActor public func sendMessage(_ message: Message) throws -> Message {
@@ -63,7 +66,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         txIdLock.lock()
         let txIdForRequest = currentTxId
         if enableVerbosePacketLogging {
-            transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
+            transportLogger
+                .info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
         }
 
         // Create wrapper with current TxId while holding lock (we are on @MainActor)
@@ -299,10 +303,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     }
 
     // MARK: - Utilities
+
     /// Execute a closure synchronously on the main thread and return its value.
     /// This provides a cohesive solution to call @MainActor APIs from a synchronous context.
-    @inline(__always)
-    private func syncOnMain<T>(_ work: () -> T) -> T {
+    @inline(__always) private func syncOnMain<T>(_ work: () -> T) -> T {
         if Thread.isMainThread {
             return work()
         } else {
@@ -314,4 +318,3 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         }
     }
 }
-

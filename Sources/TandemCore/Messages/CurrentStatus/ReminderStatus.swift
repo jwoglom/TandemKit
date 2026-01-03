@@ -129,7 +129,7 @@ public class ReminderStatusResponse: Message, NotificationMessage {
 
     public var notificationCount: Int { reminders.count }
 
-    public var notificationIds: Set<Int> { Set(reminders.map { $0.rawValue }) }
+    public var notificationIds: Set<Int> { Set(reminders.map(\.rawValue)) }
 
     public var description: String {
         "ReminderStatusResponse(cargo=\(cargo.hexadecimalString), reminders=\(reminders), intMap=\(intMap))"
