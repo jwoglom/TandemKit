@@ -99,6 +99,7 @@ private struct ActiveTempBasal {
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
+    private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
     private let lastScheduledBasalRate = Locked<Double?>(nil)
     private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
@@ -319,6 +320,10 @@ private struct ActiveTempBasal {
     func setPumpCommForTesting(_ pumpComm: PumpComm) {
         pumpComm.delegate = self
         tandemPump.pumpComm = pumpComm
+    }
+
+    func setActiveHistoryFetchSession(_ session: HistoryFetchSession?) {
+        activeHistoryFetchSession.value = session
     }
 
     private enum ResponseSource {
@@ -2404,6 +2409,8 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
         case let tempRate as TempRateResponse:
             handleTempRateResponse(tempRate, source: .notification)
+        case let historyStream as HistoryLogStreamResponse:
+            activeHistoryFetchSession.value?.handleStreamResponse(historyStream)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")

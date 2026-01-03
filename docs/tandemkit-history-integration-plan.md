@@ -360,6 +360,11 @@ class HistoryFetchSession {
 - [ ] Retry transient BLE errors
 - [ ] Unit tests with mock transport
 
+**Progress (2026-01-05)**:
+- Added `HistoryFetchSession` to orchestrate status lookups, issue ranged history requests, and collect `HistoryLogStreamResponse` notifications until the expected number of records arrive or a timeout triggers.
+- Pump manager now forwards history stream notifications to the active fetch session helper.
+- Introduced unit tests for streamed collection, stream-id mismatch timeout handling, and start-range clamping.
+
 ---
 
 ### Phase 6: Manager-Level `fetchPumpHistory()` Integration
