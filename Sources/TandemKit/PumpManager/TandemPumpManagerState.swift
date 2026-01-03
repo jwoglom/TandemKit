@@ -80,6 +80,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     // Notification count
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
+    public var insulinType: InsulinType?
 
     public init(
         pumpState: PumpState?,
@@ -112,6 +113,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         cgmAlertIcon: HomeScreenCGMAlert? = nil,
         notificationCount: Int? = nil,
         lastNotificationUpdate: Date? = nil
+        insulinType: InsulinType? = nil
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -143,6 +145,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         self.cgmAlertIcon = cgmAlertIcon
         self.notificationCount = notificationCount
         self.lastNotificationUpdate = lastNotificationUpdate
+        self.insulinType = insulinType
     }
 
     public init?(rawValue: RawValue) {
@@ -355,6 +358,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             cgmAlertIcon = nil
             notificationCount = nil
             lastNotificationUpdate = nil
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
         }
     }
 
@@ -478,6 +485,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         if let lastNotificationUpdate = lastNotificationUpdate {
             raw["lastNotificationUpdate"] = lastNotificationUpdate.timeIntervalSinceReferenceDate
         }
+        raw["insulinType"] = insulinType
 
         return raw
     }
@@ -515,6 +523,7 @@ public extension TandemPumpManagerState {
             lhs.cgmAlertIcon == rhs.cgmAlertIcon &&
             lhs.notificationCount == rhs.notificationCount &&
             lhs.lastNotificationUpdate == rhs.lastNotificationUpdate
+            lhs.insulinType == rhs.insulinType
     }
 }
 
