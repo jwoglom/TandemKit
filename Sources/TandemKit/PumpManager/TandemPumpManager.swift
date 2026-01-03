@@ -87,6 +87,11 @@ private struct ActiveTempBasal {
     private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
     private let notificationLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Notifications")
+    private let historyFetchQueue = DispatchQueue(label: "com.loopkit.TandemKit.HistoryFetchQueue")
+    private let historyDeduplicator = HistoryDeduplicator()
+    private let historyTimestampReconciler = HistoryTimestampReconciler()
+    private let historyMapper = HistoryToDoseMapper()
+    private let historyReconciler = HistoryReconciler()
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -1112,6 +1117,35 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
+        if let lastSequence = lockedState.value.lastHistorySequenceNum {
+            return lastSequence &+ 1
+        }
+
+        if startDate == nil,
+           let delegate = pumpManagerDelegate
+        {
+            _ = delegate.startDateToFilterNewPumpEvents(for: self)
+        }
+
+        return nil
+    }
+
+    private func applyClockChanges(from logs: [HistoryLog]) {
+        logs.forEach { log in
+            switch log {
+            case let clockChange as DateChangeHistoryLog:
+                let delta = Int(clockChange.dateAfter) - Int(clockChange.datePrior)
+                historyTimestampReconciler.recordClockChange(at: clockChange.sequenceNum, deltaSec: delta)
+            case let clockChange as TimeChangedHistoryLog:
+                let delta = Int(clockChange.timeAfter) - Int(clockChange.timePrior)
+                historyTimestampReconciler.recordClockChange(at: clockChange.sequenceNum, deltaSec: delta)
+            default:
+                break
+            }
+        }
+    }
+
     private func notifyDelegateOfReservoir(_ value: ReservoirValue) {
         guard let delegate = pumpManagerDelegate else { return }
         pumpDelegate.queue.async { [weak self] in
@@ -1456,6 +1490,76 @@ private struct ActiveTempBasal {
             self?.fetchControlIQStatus()
             self?.fetchHomeScreenStatus()
             self?.fetchNotificationCount()
+        }
+    }
+
+    // MARK: - History Fetching
+
+    public func fetchPumpHistory(since startDate: Date? = nil, completion: @escaping (Error?) -> Void) {
+        guard let transport = transportLock.value else {
+            completion(PumpManagerError.connection(nil))
+            return
+        }
+
+        historyFetchQueue.async { [weak self] in
+            guard let self else { return }
+
+            let session = HistoryFetchSession(
+                transport: transport,
+                pumpComm: self.pumpComm,
+                startSequence: self.resolvedStartSequence(after: startDate),
+                maxEntries: 500
+            )
+
+            self.activeHistoryFetchSession.value = session
+
+            do {
+                let logs = try session.fetch()
+                self.activeHistoryFetchSession.value = nil
+
+                let unseen = self.historyDeduplicator.filterUnseen(logs)
+                self.applyClockChanges(from: unseen)
+
+                let events = self.historyMapper.mapToEvents(
+                    unseen,
+                    reconciler: self.historyTimestampReconciler,
+                    insulinType: self.lockedState.value.insulinType,
+                    timeZone: self.lockedStatus.value.timeZone
+                )
+
+                let (reconciledEvents, stillPending) = self.historyReconciler.reconcile(
+                    pendingDoses: self.lockedState.value.pendingDoses,
+                    historyEvents: events
+                )
+
+                var updatedState = self.lockedState.value
+                updatedState.pendingDoses = stillPending
+                updatedState.lastHistoryReconciliation = Date()
+                if let lastLog = unseen.last {
+                    updatedState.lastHistorySequenceNum = lastLog.sequenceNum
+                }
+                self.lockedState.value = updatedState
+
+                self.notifyPumpManagerDelegateDidUpdateState()
+
+                guard let delegate = self.pumpManagerDelegate, let queue = self.delegateQueue else {
+                    completion(nil)
+                    return
+                }
+
+                queue.async {
+                    delegate.pumpManager(
+                        self,
+                        hasNewPumpEvents: reconciledEvents,
+                        lastReconciliation: updatedState.lastHistoryReconciliation,
+                        replacePendingEvents: true,
+                        completion: completion
+                    )
+                }
+            } catch {
+                self.activeHistoryFetchSession.value = nil
+                completion(PumpManagerError.communication(error))
+            }
         }
     }
 

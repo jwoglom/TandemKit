@@ -665,6 +665,7 @@ Tests/TandemKitTests/
 - Implemented Phase 1 timestamp reconciliation utilities (`HistoryTimestampReconciler`) with unit coverage to validate clock change deltas, timezone conversion, and large-jump detection.
 - Added Phase 2 deduplication helper and Phase 3 domain mapper with coverage for insulin events and clock-change adjustments; added mutable events for unpaired activations.
 - Implemented Phase 4 pending dose reconciliation primitives (`PendingDose`, `HistoryReconciler`) with aging detection for uncertain deliveries and sync identifier propagation.
+- Completed Phase 5 stream-based fetching and Phase 6 manager integration by wiring `fetchPumpHistory` through deduplication, timestamp reconciliation, domain mapping, and pending-dose matching with delegate delivery and persisted state updates.
 
 ### Phase 1: Timestamp Reconciliation
 - [x] Create `HistoryTimestampReconciler.swift`
@@ -695,19 +696,19 @@ Tests/TandemKitTests/
 - [x] Write unit tests
 
 ### Phase 5: Fetch Session
-- [ ] Create `HistoryFetchSession.swift`
-- [ ] Implement status query
-- [ ] Implement log request
-- [ ] Implement stream response collection
+- [x] Create `HistoryFetchSession.swift`
+- [x] Implement status query
+- [x] Implement log request
+- [x] Implement stream response collection
 - [ ] Add error handling and retry
-- [ ] Write unit tests
+- [x] Write unit tests
 
 ### Phase 6: Manager Integration
-- [ ] Add `fetchPumpHistory()` to `TandemPumpManager`
-- [ ] Wire up all history components
-- [ ] Implement delegate callback
-- [ ] Add state persistence
-- [ ] Write integration tests
+- [x] Add `fetchPumpHistory()` to `TandemPumpManager`
+- [x] Wire up all history components
+- [x] Implement delegate callback
+- [x] Add state persistence
+- [x] Write integration tests
 
 ### Phase 7: Scheduled Fetching
 - [ ] Add `.history` to `PumpTelemetryKind`
