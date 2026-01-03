@@ -36,27 +36,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         transportLogger.info("[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)")
     }
 
-    private func withMainActor<T>(_ block: @MainActor @escaping () throws -> T) throws -> T {
-        if Thread.isMainThread {
-            return try MainActor.assumeIsolated { try block() }
-        }
-
-        var result: Result<T, Error>?
-        let semaphore = DispatchSemaphore(value: 0)
-        Task { @MainActor in
-            result = Result { try block() }
-            semaphore.signal()
-        }
-        semaphore.wait()
-
-        guard let unwrapped = result else {
-            fatalError("withMainActor completed without producing a result")
-        }
-
-        return try unwrapped.get()
-    }
-
-    public func sendMessage(_ message: Message) throws -> Message {
+    @MainActor public func sendMessage(_ message: Message) throws -> Message {
         let instanceId = ObjectIdentifier(self)
 
         // Apply request throttling to prevent BLE write queue saturation
@@ -86,16 +66,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             transportLogger.info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
         }
 
-        // Create wrapper with current TxId while holding lock
-        let wrapper: TronMessageWrapper
-        do {
-            wrapper = try withMainActor {
-                TronMessageWrapper(message: message, currentTxId: txIdForRequest)
-            }
-        } catch {
-            txIdLock.unlock()
-            throw error
-        }
+        // Create wrapper with current TxId while holding lock (we are on @MainActor)
+        let wrapper = TronMessageWrapper(message: message, currentTxId: txIdForRequest)
 
         // Increment after wrapper is created successfully
         currentTxId = currentTxId &+ 1 // Increment with overflow
@@ -183,7 +155,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         while parsedMessage == nil {
             let data = try peripheralManager.performSync { manager -> Data in
-                guard let responseData = try manager.readMessagePacket(for: characteristic, timeout: 15) else {
+                guard let responseData = try manager.readMessagePacket(for: characteristic, timeout: 5) else {
                     throw PumpCommError.noResponse
                 }
                 return responseData
@@ -215,9 +187,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
             let pumpResponse: PumpResponseMessage
             do {
-                pumpResponse = try withMainActor {
-                    try collector.ingest(data, characteristic: characteristic.cbUUID)
-                }
+                pumpResponse = try collector.ingest(data, characteristic: characteristic.cbUUID)
             } catch {
                 log.error("Failed to parse response chunk: %{public}@", String(describing: error))
                 throw PumpCommError.responseParsingFailed(underlying: error)
@@ -327,4 +297,21 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         defer { historyLock.unlock() }
         requestResponseHistory.removeAll()
     }
+
+    // MARK: - Utilities
+    /// Execute a closure synchronously on the main thread and return its value.
+    /// This provides a cohesive solution to call @MainActor APIs from a synchronous context.
+    @inline(__always)
+    private func syncOnMain<T>(_ work: () -> T) -> T {
+        if Thread.isMainThread {
+            return work()
+        } else {
+            var result: T!
+            DispatchQueue.main.sync {
+                result = work()
+            }
+            return result
+        }
+    }
 }
+

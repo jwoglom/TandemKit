@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftUICore
 
 struct ProgressBar: View {
     
