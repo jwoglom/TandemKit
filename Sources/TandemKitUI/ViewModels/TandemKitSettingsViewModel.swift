@@ -19,7 +19,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
-        self.autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
+        autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
         refreshPumpStatus()
@@ -104,7 +104,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func refreshNotificationCount() {
-        refreshPumpStatus()  // Notifications included in refreshAllStatus
+        refreshPumpStatus() // Notifications included in refreshAllStatus
     }
 
     func suspendResumeButtonPressed() {
@@ -291,6 +291,10 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func createCGMSettingsViewModel() -> TandemKitCGMSettingsViewModel {
         TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    func createDebugViewModel() -> TandemKitDebugViewModel {
+        TandemKitDebugViewModel(pumpManager: pumpManager)
     }
 
     func removePump() {

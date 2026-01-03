@@ -198,8 +198,8 @@ struct TandemKitChangeCartridgeView: View {
                     "1. Remove the old cartridge from the pump\n2. Insert a new cartridge\n3. Press the button below when complete",
                     comment: "Instructions"
                 ))
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, 4)
 

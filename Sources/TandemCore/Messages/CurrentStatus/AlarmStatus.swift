@@ -142,11 +142,19 @@ public class AlarmStatusResponse: Message, NotificationMessage {
 
         public var notificationDescription: String? {
             switch self {
-            case .CARTRIDGE_ALARM, .CARTRIDGE_ALARM2, .CARTRIDGE_ALARM3, .CARTRIDGE_ALARM4,
-                 .CARTRIDGE_ALARM5, .CARTRIDGE_ALARM6, .CARTRIDGE_ALARM7, .CARTRIDGE_ALARM10,
-                 .CARTRIDGE_ALARM11, .CARTRIDGE_ALARM12:
+            case .CARTRIDGE_ALARM,
+                 .CARTRIDGE_ALARM2,
+                 .CARTRIDGE_ALARM3,
+                 .CARTRIDGE_ALARM4,
+                 .CARTRIDGE_ALARM5,
+                 .CARTRIDGE_ALARM6,
+                 .CARTRIDGE_ALARM7,
+                 .CARTRIDGE_ALARM10,
+                 .CARTRIDGE_ALARM11,
+                 .CARTRIDGE_ALARM12:
                 return "There is an issue with the cartridge and it needs to be replaced."
-            case .OCCLUSION_ALARM, .OCCLUSION_ALARM2:
+            case .OCCLUSION_ALARM,
+                 .OCCLUSION_ALARM2:
                 return "An occlusion has occurred. Please check your pump site and tubing and restart insulin delivery."
             case .PUMP_RESET_ALARM:
                 return "The pump was reset. IOB has been reset to 0 and CGM may need to be re-activated."
@@ -154,13 +162,16 @@ public class AlarmStatusResponse: Message, NotificationMessage {
                 return "Pump will stop delivering insulin automatically soon because no user activity has occurred and the auto-off setting is enabled."
             case .EMPTY_CARTRIDGE_ALARM:
                 return "Cartridge is out of insulin and insulin delivery cannot occur. Please fill a new cartridge."
-            case .TEMPERATURE_ALARM, .TEMPERATURE_ALARM2, .TEMPERATURE_ALARM3:
+            case .TEMPERATURE_ALARM,
+                 .TEMPERATURE_ALARM2,
+                 .TEMPERATURE_ALARM3:
                 return "Pump temperature is out of range and insulin cannot be safely delivered."
             case .BATTERY_SHUTDOWN_ALARM:
                 return "Pump battery level is critically low and the device will shut down. Please charge pump immediately."
             case .INVALID_DATE_ALARM:
                 return "The pump's configured date is invalid."
-            case .RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2:
+            case .RESUME_PUMP_ALARM,
+                 .RESUME_PUMP_ALARM2:
                 return "Insulin delivery is currently off. Please restart insulin delivery soon."
             case .ALTITUDE_ALARM:
                 return "Pump altitude is out of range and insulin cannot be safely delivered."
@@ -179,7 +190,7 @@ public class AlarmStatusResponse: Message, NotificationMessage {
     public var notificationCount: Int { alarms.count }
 
     public var notificationIds: Set<Int> {
-        Set(alarms.filter { $0.isKnownAlarm }.map { $0.rawValue })
+        Set(alarms.filter { $0.isKnownAlarm }.map(\.rawValue))
     }
 
     public var description: String {

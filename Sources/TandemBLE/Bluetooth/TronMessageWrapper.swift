@@ -111,4 +111,3 @@ public struct TronMessageWrapper {
         message
     }
 }
-
