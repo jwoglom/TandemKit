@@ -293,6 +293,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
     }
 
+    func createDebugViewModel() -> TandemKitDebugViewModel {
+        TandemKitDebugViewModel(pumpManager: pumpManager)
+    }
+
     func removePump() {
         pumpManager?.notifyDelegateOfDeactivation {
             DispatchQueue.main.async {

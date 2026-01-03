@@ -2,7 +2,7 @@ import Foundation
 import LoopKit
 import TandemCore
 
-public struct TandemPumpManagerState: RawRepresentable, Equatable {
+public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugStringConvertible {
     public typealias RawValue = [String: Any]
 
     public struct BatteryReading: Equatable {
@@ -480,6 +480,42 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
 
         return raw
+    }
+
+    public var debugDescription: String {
+        [
+            "### TandemPumpManagerState",
+            "* pumpState: \(String(describing: pumpState?.debugDescription))",
+            "* lastReconciliation: \(String(describing: lastReconciliation))",
+            "* settings: \(settings)",
+            "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
+            "* lastReservoirReading: \(String(describing: lastReservoirReading))",
+            "* lastBatteryReading: \(String(describing: lastBatteryReading))",
+            "* basalDeliveryState: \(String(describing: basalDeliveryState))",
+            "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
+            "* bolusState: \(bolusState)",
+            "* deliveryIsUncertain: \(deliveryIsUncertain)",
+            "* basalRateSchedule: \(String(describing: basalRateSchedule))",
+            "* insulinDeliveryActionsEnabled: \(insulinDeliveryActionsEnabled)",
+            "* connectionSharingEnabled: \(connectionSharingEnabled)",
+            "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
+            "* controlIQEnabled: \(String(describing: controlIQEnabled))",
+            "* controlIQUserMode: \(String(describing: controlIQUserMode))",
+            "* controlIQWeight: \(String(describing: controlIQWeight))",
+            "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
+            "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
+            "* tempRateActive: \(String(describing: tempRateActive))",
+            "* tempRatePercentage: \(String(describing: tempRatePercentage))",
+            "* tempRateDuration: \(String(describing: tempRateDuration))",
+            "* lastTempRateUpdate: \(String(describing: lastTempRateUpdate))",
+            "* currentBasalRate: \(String(describing: currentBasalRate))",
+            "* lastBasalRateUpdate: \(String(describing: lastBasalRateUpdate))",
+            "* basalStatusIcon: \(String(describing: basalStatusIcon))",
+            "* bolusStatusIcon: \(String(describing: bolusStatusIcon))",
+            "* cgmAlertIcon: \(String(describing: cgmAlertIcon))",
+            "* notificationCount: \(String(describing: notificationCount))",
+            "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))"
+        ].joined(separator: "\n")
     }
 }
 
