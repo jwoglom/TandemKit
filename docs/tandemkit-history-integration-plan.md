@@ -181,7 +181,6 @@ class HistoryToDoseMapper {
     /// Pair multi-part events (bolus activated/completed, temp basal activated/completed)
     private func pairBolusEvents(_ logs: [HistoryLog]) -> [(activated: BolusActivatedHistoryLog, completed: BolusCompletedHistoryLog?)]
     private func pairTempBasalEvents(_ logs: [HistoryLog]) -> [(activated: TempRateActivatedHistoryLog, completed: TempRateCompletedHistoryLog?)]
-    private func pairSuspendResumeEvents(_ logs: [HistoryLog]) -> [(suspended: PumpingSuspendedHistoryLog, resumed: PumpingResumedHistoryLog?)]
 }
 ```
 
@@ -192,11 +191,10 @@ class HistoryToDoseMapper {
 | `BolusActivatedHistoryLog` + `BolusCompletedHistoryLog` | `DoseEntry(.bolus)` | Pair by `bolusId`, calculate duration from timestamps, use `insulinDelivered` if completed |
 | `TempRateActivatedHistoryLog` + `TempRateCompletedHistoryLog` | `DoseEntry(.tempBasal)` | Pair by `tempRateId`, duration from `duration` field or completion time |
 | `BasalRateChangeHistoryLog` | `DoseEntry(.basal)` | Scheduled basal rate change |
-| `PumpingSuspendedHistoryLog` | `DoseEntry(.suspend)` | Suspension event |
-| `PumpingResumedHistoryLog` | `DoseEntry(.resume)` | Resumption event |
-| `CartridgeFilledHistoryLog`, `CannulaFilledHistoryLog`, `TubingFilledHistoryLog` | `NewPumpEvent(.prime)` | Prime events, no dose |
 | `AlarmActivatedHistoryLog`, `AlertActivatedHistoryLog` | `NewPumpEvent(.alarm)` | Alert events, no dose |
 | `DateChangeHistoryLog`, `TimeChangedHistoryLog` | _(reconciler state)_ | Not surfaced as events, used for timestamp reconciliation |
+
+_Prime/fill actions (cartridge, cannula, tubing) and pump suspend/resume are injected directly by TandemKit UI flows when users perform those actions, rather than being synthesized from pump history logs._
 
 **Bolus Duration Calculation**:
 ```swift
@@ -229,12 +227,12 @@ DoseEntry(
 ```
 
 **Acceptance Criteria**:
-- [ ] Map all insulin-affecting events (bolus, temp basal, suspend/resume)
+- [ ] Map bolus and temp basal insulin-affecting events
 - [ ] Pair multi-part events by ID and validate pairing
 - [ ] Calculate durations correctly (bolus delivery time, temp basal runtime)
 - [ ] Set `isMutable=true` for activated events without completion
 - [ ] Annotate with `insulinType` when available
-- [ ] Tag prime/rewind events for reservoir continuity
+- [ ] Prime/rewind continuity handled by UI-sourced events
 - [ ] Unit tests with fixtures for each event type pairing
 
 ---
@@ -571,8 +569,7 @@ telemetryScheduler.schedule(kind: .history, interval: 300.0) { [weak self] in
    - [ ] Bolus activated only → DoseEntry with isMutable=true
    - [ ] Temp basal pairing by tempRateId
    - [ ] Temp basal percent calculation (150% = 1.5x scheduled)
-   - [ ] Suspend/resume pairing
-   - [ ] Prime events tagged correctly
+   - [ ] UI-sourced prime/fill events recorded correctly
    - [ ] Alarm events without dose
 
 4. **Reconciliation**:
@@ -598,11 +595,10 @@ telemetryScheduler.schedule(kind: .history, interval: 300.0) { [weak self] in
   - Complete bolus lifecycle (activated → completed)
   - Incomplete bolus (activated only)
   - Temp basal with completion
-  - Suspend/resume pair
   - Clock change event
-  - Cartridge fill + cannula fill
   - Alarm activation
   - Unknown event type (typeId not in parser)
+  - UI-triggered prime/fill event wiring (outside of history logs)
 
 **Manual Hardware Testing**:
 - [ ] Pair with real pump

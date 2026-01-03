@@ -75,51 +75,6 @@ class HistoryToDoseMapper {
                         type: .basal
                     )
                 )
-            case let suspend as PumpingSuspendedHistoryLog:
-                let suspendDate = reconciler.utcDate(
-                    pumpTimeSec: suspend.pumpTimeSec,
-                    sequenceNum: suspend.sequenceNum,
-                    timeZone: timeZone
-                )
-                let automatic = suspend.reason == .autoSuspendPredictiveLowGlucose
-                let dose = DoseEntry(
-                    suspendDate: suspendDate,
-                    automatic: automatic
-                )
-                events.append(
-                    NewPumpEvent(
-                        date: suspendDate,
-                        dose: dose,
-                        raw: suspend.cargo,
-                        title: "Suspend",
-                        type: .suspend
-                    )
-                )
-            case let resume as PumpingResumedHistoryLog:
-                let resumeDate = reconciler.utcDate(
-                    pumpTimeSec: resume.pumpTimeSec,
-                    sequenceNum: resume.sequenceNum,
-                    timeZone: timeZone
-                )
-                let dose = DoseEntry(
-                    resumeDate: resumeDate,
-                    insulinType: insulinType
-                )
-                events.append(
-                    NewPumpEvent(
-                        date: resumeDate,
-                        dose: dose,
-                        raw: resume.cargo,
-                        title: "Resume",
-                        type: .resume
-                    )
-                )
-            case let prime as CartridgeFilledHistoryLog:
-                events.append(makePrimeEvent(prime, reconciler: reconciler, timeZone: timeZone))
-            case let prime as CannulaFilledHistoryLog:
-                events.append(makePrimeEvent(prime, reconciler: reconciler, timeZone: timeZone))
-            case let prime as TubingFilledHistoryLog:
-                events.append(makePrimeEvent(prime, reconciler: reconciler, timeZone: timeZone))
             case let alarm as AlarmActivatedHistoryLog:
                 events.append(makeAlarmEvent(alarm, reconciler: reconciler, timeZone: timeZone))
             case let alert as AlertActivatedHistoryLog:
@@ -300,26 +255,6 @@ class HistoryToDoseMapper {
             unit: .unitsPerHour,
             description: "Basal profile \(basalChange.insulinDeliveryProfile)",
             insulinType: insulinType
-        )
-    }
-
-    private func makePrimeEvent(
-        _ log: HistoryLog,
-        reconciler: HistoryTimestampReconciler,
-        timeZone: TimeZone
-    ) -> NewPumpEvent {
-        let date = reconciler.utcDate(
-            pumpTimeSec: log.pumpTimeSec,
-            sequenceNum: log.sequenceNum,
-            timeZone: timeZone
-        )
-
-        return NewPumpEvent(
-            date: date,
-            dose: nil,
-            raw: log.cargo,
-            title: "Prime",
-            type: .prime
         )
     }
 

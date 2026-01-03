@@ -68,7 +68,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertEqual(dose.unit, .unitsPerHour)
     }
 
-    func testSuspendResumeMapping() {
+    func testIgnoresSuspendResumeHistoryLogs() {
         let mapper = HistoryToDoseMapper()
         let reconciler = HistoryTimestampReconciler()
         let timeZone = TimeZone(secondsFromGMT: 0)!
@@ -86,12 +86,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         )
 
         let events = mapper.mapToEvents([suspend, resume], reconciler: reconciler, insulinType: .ultraRapidActing, timeZone: timeZone)
-        XCTAssertEqual(events.map { $0.type }, [.suspend, .resume])
-
-        XCTAssertEqual(events[0].dose?.type, .suspend)
-        XCTAssertEqual(events[0].dose?.startDate, Date(timeIntervalSince1970: 20_000))
-        XCTAssertEqual(events[1].dose?.type, .resume)
-        XCTAssertEqual(events[1].dose?.startDate, Date(timeIntervalSince1970: 20_600))
+        XCTAssertTrue(events.isEmpty)
     }
 
     func testClockChangeAdjustsSubsequentEvents() {
