@@ -66,4 +66,29 @@ final class HistoryFetchSessionTests: XCTestCase {
         XCTAssertTrue(logs.isEmpty)
         XCTAssertEqual(peripheral.sentMessages.map { type(of: $0) }, [HistoryLogStatusRequest.self])
     }
+
+    func testRetriesAfterStreamTimeout() throws {
+        let peripheral = MockPeripheralManager()
+        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
+        let pumpComm = MockPumpComm(pumpState: nil)
+        let status = HistoryLogStatusResponse(numEntries: 1, firstSequenceNum: 7, lastSequenceNum: 7)
+        peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
+        peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 1))
+        peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
+        peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 2))
+
+        let session = HistoryFetchSession(transport: transport, pumpComm: pumpComm, startSequence: nil, maxEntries: 1, streamTimeout: 0.05)
+
+        let log = BolusActivatedHistoryLog(pumpTimeSec: 140, sequenceNum: 7, bolusId: 11, iob: 0, bolusSize: 0.25)
+        let successResponse = HistoryLogStreamResponse(numberOfHistoryLogs: 1, streamId: 2, historyLogStreamBytes: [log.cargo])
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.06) {
+            session.handleStreamResponse(successResponse)
+        }
+
+        let logs = try session.fetchWithRetry(retries: 1, retryDelay: 0.01)
+
+        XCTAssertEqual(logs.map(\.sequenceNum), [7])
+        XCTAssertEqual(peripheral.sentMessages.compactMap { $0 as? HistoryLogRequest }.count, 2)
+    }
 }

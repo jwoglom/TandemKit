@@ -1514,7 +1514,7 @@ private struct ActiveTempBasal {
             self.activeHistoryFetchSession.value = session
 
             do {
-                let logs = try session.fetch()
+                let logs = try session.fetchWithRetry()
                 self.activeHistoryFetchSession.value = nil
 
                 let unseen = self.historyDeduplicator.filterUnseen(logs)

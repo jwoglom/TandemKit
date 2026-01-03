@@ -7,6 +7,15 @@ enum HistoryFetchError: Error, Equatable {
     case invalidRange(start: UInt32, firstAvailable: UInt32, lastAvailable: UInt32)
     case responseStatus(Int)
     case streamTimeout(expected: Int, received: Int)
+
+    var isRetryable: Bool {
+        switch self {
+        case .streamTimeout:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 /// Orchestrates a single history fetch request/response sequence.
@@ -42,6 +51,35 @@ final class HistoryFetchSession {
         self.startSequence = startSequence
         self.maxEntries = maxEntries
         self.streamTimeout = streamTimeout
+    }
+
+    /// Execute the fetch flow with retry handling for transient failures.
+    /// - Parameters:
+    ///   - retries: The number of retry attempts to perform after the initial try.
+    ///   - retryDelay: Delay between retry attempts.
+    func fetchWithRetry(retries: Int = 2, retryDelay: TimeInterval = 1) throws -> [HistoryLog] {
+        var remainingRetries = retries
+        var lastError: Error?
+
+        while remainingRetries >= 0 {
+            do {
+                return try fetch()
+            } catch let error as HistoryFetchError {
+                lastError = error
+                guard remainingRetries > 0, error.isRetryable else { throw error }
+            } catch {
+                lastError = error
+                guard remainingRetries > 0 else { throw error }
+            }
+
+            remainingRetries -= 1
+
+            if retryDelay > 0 {
+                Thread.sleep(forTimeInterval: retryDelay)
+            }
+        }
+
+        throw lastError ?? HistoryFetchError.streamTimeout(expected: 0, received: 0)
     }
 
     /// Collect a streamed response emitted by the pump.

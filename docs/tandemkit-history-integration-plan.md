@@ -666,6 +666,7 @@ Tests/TandemKitTests/
 - Added Phase 2 deduplication helper and Phase 3 domain mapper with coverage for insulin events and clock-change adjustments; added mutable events for unpaired activations.
 - Implemented Phase 4 pending dose reconciliation primitives (`PendingDose`, `HistoryReconciler`) with aging detection for uncertain deliveries and sync identifier propagation.
 - Completed Phase 5 stream-based fetching and Phase 6 manager integration by wiring `fetchPumpHistory` through deduplication, timestamp reconciliation, domain mapping, and pending-dose matching with delegate delivery and persisted state updates.
+ - Added Phase 5 retry handling for stream timeouts so history fetches automatically retry transient failures before surfacing errors.
 
 ### Phase 1: Timestamp Reconciliation
 - [x] Create `HistoryTimestampReconciler.swift`
@@ -700,7 +701,7 @@ Tests/TandemKitTests/
 - [x] Implement status query
 - [x] Implement log request
 - [x] Implement stream response collection
-- [ ] Add error handling and retry
+- [x] Add error handling and retry
 - [x] Write unit tests
 
 ### Phase 6: Manager Integration
