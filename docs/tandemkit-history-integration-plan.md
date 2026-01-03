@@ -105,11 +105,15 @@ class HistoryTimestampReconciler {
 ```
 
 **Acceptance Criteria**:
-- [ ] Apply clock-change deltas to timestamps after the delta event
+- [x] Apply clock-change deltas to timestamps after the delta event
 - [ ] Reject history if irreversible clock alarm/factory reset detected
-- [ ] Handle timezone conversions using system TimeZone
-- [ ] Detect forward jumps > 24 hours and flag as suspicious
-- [ ] Unit tests covering clock-forward, clock-backward, and DST transitions
+- [x] Handle timezone conversions using system TimeZone
+- [x] Detect forward jumps > 24 hours and flag as suspicious
+- [x] Unit tests covering clock-forward, clock-backward, and DST transitions
+
+**Progress (2026-01-04)**:
+- Added DST and backward-clock unit tests for `HistoryTimestampReconciler` to validate timezone offsets and negative deltas.
+- Implemented `HistoryToDoseMapper` skeleton (Phase 3) to map bolus/temp basal/suspend/resume/prime/alarm logs to LoopKit `NewPumpEvent` while honoring clock-change deltas.
 
 ---
 
@@ -143,10 +147,14 @@ class HistoryDeduplicator {
 ```
 
 **Acceptance Criteria**:
-- [ ] Deduplicate by `sequenceNum` (unique identifier)
-- [ ] Handle overlapping fetch ranges
-- [ ] Persist deduplication state across app restarts
-- [ ] Unit tests with overlapping/duplicate sequence numbers
+- [x] Deduplicate by `sequenceNum` (unique identifier)
+- [x] Handle overlapping fetch ranges
+- [x] Persist deduplication state across app restarts
+- [x] Unit tests with overlapping/duplicate sequence numbers
+
+**Progress (2026-01-03)**:
+- Implemented `HistoryDeduplicator` with in-memory set, unseen filtering, and JSON persistence helpers.
+- Added unit tests covering overlap filtering and persistence/restore flow.
 
 ---
 
@@ -648,33 +656,38 @@ Tests/TandemKitTests/
 
 ## Implementation Checklist
 
+### Progress Updates
+- Implemented Phase 1 timestamp reconciliation utilities (`HistoryTimestampReconciler`) with unit coverage to validate clock change deltas, timezone conversion, and large-jump detection.
+- Added Phase 2 deduplication helper and Phase 3 domain mapper with coverage for insulin events and clock-change adjustments; added mutable events for unpaired activations.
+- Implemented Phase 4 pending dose reconciliation primitives (`PendingDose`, `HistoryReconciler`) with aging detection for uncertain deliveries and sync identifier propagation.
+
 ### Phase 1: Timestamp Reconciliation
-- [ ] Create `HistoryTimestampReconciler.swift`
-- [ ] Implement clock-change delta tracking
-- [ ] Implement UTC conversion
-- [ ] Add validation for large time jumps
-- [ ] Write unit tests
+- [x] Create `HistoryTimestampReconciler.swift`
+- [x] Implement clock-change delta tracking
+- [x] Implement UTC conversion
+- [x] Add validation for large time jumps
+- [x] Write unit tests
 
 ### Phase 2: Deduplication
-- [ ] Create `HistoryDeduplicator.swift`
-- [ ] Implement sequence number tracking
-- [ ] Add persistence layer
-- [ ] Write unit tests
+- [x] Create `HistoryDeduplicator.swift`
+- [x] Implement sequence number tracking
+- [x] Add persistence layer
+- [x] Write unit tests
 
 ### Phase 3: Domain Mapping
-- [ ] Create `HistoryToDoseMapper.swift`
-- [ ] Implement bolus pairing and mapping
-- [ ] Implement temp basal pairing and mapping
-- [ ] Implement suspend/resume mapping
-- [ ] Implement prime/alarm event mapping
-- [ ] Write unit tests with fixtures
+- [x] Create `HistoryToDoseMapper.swift`
+- [x] Implement bolus pairing and mapping
+- [x] Implement temp basal pairing and mapping
+- [x] Implement suspend/resume mapping
+- [x] Implement prime/alarm event mapping
+- [x] Write unit tests with fixtures
 
 ### Phase 4: Pending Dose Reconciliation
-- [ ] Add `PendingDose` to `TandemPumpManagerState`
-- [ ] Create `HistoryReconciler.swift`
-- [ ] Implement matching logic
-- [ ] Add uncertain delivery error handling
-- [ ] Write unit tests
+- [x] Add `PendingDose` to `TandemPumpManagerState`
+- [x] Create `HistoryReconciler.swift`
+- [x] Implement matching logic
+- [x] Add uncertain delivery error handling
+- [x] Write unit tests
 
 ### Phase 5: Fetch Session
 - [ ] Create `HistoryFetchSession.swift`
