@@ -453,6 +453,10 @@ private struct ActiveTempBasal {
         lockedState.value.rawValue
     }
 
+    public var state: TandemPumpManagerState {
+        lockedState.value
+    }
+
     public var debugDescription: String {
         "TandemPumpManager(state: \(lockedState.value))"
     }
@@ -592,6 +596,21 @@ private struct ActiveTempBasal {
             self?.fetchAlertAndAlarmStatus()
         }
 
+        // Control-IQ status (every 30 min - infrequent, changes slowly)
+        telemetryScheduler.schedule(kind: .controlIQ, interval: 30 * 60) { [weak self] in
+            self?.fetchControlIQStatus()
+        }
+
+        // Home screen mirror (every 5 min - more frequent, affects UI display)
+        telemetryScheduler.schedule(kind: .homeScreen, interval: 5 * 60) { [weak self] in
+            self?.fetchHomeScreenStatus()
+        }
+
+        // Notifications (every 2 min - user-facing)
+        telemetryScheduler.schedule(kind: .notifications, interval: 2 * 60) { [weak self] in
+            self?.fetchNotificationCount()
+        }
+
         // NOTE: TimeSinceResetRequest causes timeouts and disconnections on some pumps
         // Disabled for now - will use default value of 0
         // telemetryScheduler.schedule(kind: .timeSinceReset, interval: 5 * 60) { [weak self] in
@@ -657,6 +676,8 @@ private struct ActiveTempBasal {
         var managerState = lockedState.value
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
+        managerState.currentBasalRate = rateUnitsPerHour
+        managerState.lastBasalRateUpdate = timestamp
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -701,6 +722,23 @@ private struct ActiveTempBasal {
         var managerState = lockedState.value
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
+        managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus(rawValue: response.basalStatusIconId)
+        managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus(rawValue: response.bolusStatusIconId)
+        managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert(rawValue: response.cgmAlertIconId)
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
+    }
+
+    private func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
+        logger(for: source).debug("[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)")
+
+        var managerState = lockedState.value
+        managerState.controlIQEnabled = response.closedLoopEnabled
+        managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode(rawValue: response.currentUserModeTypeRaw)
+        managerState.controlIQWeight = response.weight
+        managerState.controlIQTotalDailyInsulin = response.totalDailyInsulin
+        managerState.lastControlIQUpdate = Date()
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -817,10 +855,22 @@ private struct ActiveTempBasal {
             var managerState = lockedState.value
             managerState.basalDeliveryState = .tempBasal(dose)
             managerState.lastBasalStatusDate = timestamp
+            managerState.tempRateActive = true
+            managerState.tempRatePercentage = response.percentage
+            managerState.tempRateDuration = response.duration
+            managerState.lastTempRateUpdate = timestamp
             lockedState.value = managerState
         } else {
             // No temp basal active - clear tracking
             activeTempBasal.value = nil
+
+            // Clear temp rate state
+            var managerState = lockedState.value
+            managerState.tempRateActive = false
+            managerState.tempRatePercentage = nil
+            managerState.tempRateDuration = nil
+            managerState.lastTempRateUpdate = timestamp
+            lockedState.value = managerState
 
             // Don't update basalDeliveryState here - let handleBasalResponse do it
             // This avoids a race where we clear temp basal but haven't gotten current basal status yet
@@ -1009,6 +1059,64 @@ private struct ActiveTempBasal {
         } catch {
             telemetryLogger.error("Alarm status telemetry request failed: \(error)")
         }
+    }
+
+    private func fetchControlIQStatus() {
+        guard let transport = telemetryTransportIfReady(for: .controlIQ) else {
+            return
+        }
+
+        do {
+            let response: ControlIQInfoV2Response = try pumpComm.sendMessage(
+                transport: transport,
+                message: ControlIQInfoV2Request(),
+                expecting: ControlIQInfoV2Response.self
+            )
+
+            handleControlIQResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("ControlIQ status telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchHomeScreenStatus() {
+        guard let transport = telemetryTransportIfReady(for: .homeScreen) else {
+            return
+        }
+
+        do {
+            let response: HomeScreenMirrorResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: HomeScreenMirrorRequest(),
+                expecting: HomeScreenMirrorResponse.self
+            )
+
+            handleHomeScreenMirrorResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("HomeScreen telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchNotificationCount() {
+        guard let transport = telemetryTransportIfReady(for: .notifications) else {
+            return
+        }
+
+        let bundle = NotificationBundle()
+        for request in NotificationBundle.allRequests() {
+            if let response = try? pumpComm.sendMessage(transport: transport, message: request),
+               NotificationBundle.isNotificationResponse(response)
+            {
+                bundle.add(response)
+            }
+        }
+
+        var managerState = lockedState.value
+        managerState.notificationCount = bundle.getNotificationCount()
+        managerState.lastNotificationUpdate = Date()
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
     }
 
     private func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse, transport: PumpMessageTransport) {
@@ -1301,6 +1409,27 @@ private struct ActiveTempBasal {
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         completion?(lockedState.value.lastReconciliation)
+    }
+
+    public func refreshAllStatus() {
+        telemetryLogger.debug("UI-triggered full refresh: fetching all status")
+
+        // Trigger existing telemetry immediately
+        telemetryScheduler.triggerAll()
+
+        // Fetch UI-specific data on background queue
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.fetchControlIQStatus()
+            self?.fetchHomeScreenStatus()
+            self?.fetchNotificationCount()
+        }
+    }
+
+    public func sendMessage(message: Message) -> Message? {
+        guard let transport = pairedTransport else {
+            return nil
+        }
+        return try? transport.sendMessage(message)
     }
 
     public func setMustProvideBLEHeartbeat(_: Bool) {
@@ -2513,6 +2642,12 @@ private extension PumpTelemetryKind {
             return "timeSinceReset"
         case .alerts:
             return "alerts"
+        case .controlIQ:
+            return "controlIQ"
+        case .homeScreen:
+            return "homeScreen"
+        case .notifications:
+            return "notifications"
         }
     }
 }

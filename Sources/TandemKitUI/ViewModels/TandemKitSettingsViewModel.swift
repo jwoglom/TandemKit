@@ -8,21 +8,12 @@ class TandemKitSettingsViewModel: ObservableObject {
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
 
-    @Published var mirrorDetail: HomeScreenMirrorResponse?
-    @Published var timeSinceReset: TimeSinceResetResponse?
-    @Published var controlIQInfo: ControlIQInfoV2Response?
-    @Published var insulinStatus: InsulinStatusResponse?
-    @Published var tempRateStatus: TempRateResponse?
-    @Published var currentBasalStatus: CurrentBasalStatusResponse?
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
-    @Published var isSuspended: Bool? = nil
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
-    @Published var notificationCount: Int = 0
     @Published var autoAcknowledgeBasalAlerts: Bool = false
 
-    private let notificationBundle = NotificationBundle()
     private var pendingRefreshOnReconnect = false
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
@@ -42,13 +33,59 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.tandemPump.pumpComm
     }
 
-    func sendMessage(message: Message) -> Message? {
-        guard let transport = pumpManager?.pairedTransport else {
-            return nil
-        }
+    // MARK: - Computed Properties from Manager State
 
-        return try? transport.sendMessage(message)
+    var controlIQEnabled: Bool {
+        pumpManager?.state.controlIQEnabled ?? false
     }
+
+    var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? {
+        pumpManager?.state.controlIQUserMode
+    }
+
+    var basalStatusIcon: TandemPumpManagerState.HomeScreenBasalStatus? {
+        pumpManager?.state.basalStatusIcon
+    }
+
+    var bolusStatusIcon: TandemPumpManagerState.HomeScreenBolusStatus? {
+        pumpManager?.state.bolusStatusIcon
+    }
+
+    var cgmAlertIcon: TandemPumpManagerState.HomeScreenCGMAlert? {
+        pumpManager?.state.cgmAlertIcon
+    }
+
+    var tempRateActive: Bool {
+        pumpManager?.state.tempRateActive ?? false
+    }
+
+    var tempRatePercentage: Int? {
+        pumpManager?.state.tempRatePercentage
+    }
+
+    var tempRateDuration: UInt32? {
+        pumpManager?.state.tempRateDuration
+    }
+
+    var currentBasalRate: Double? {
+        pumpManager?.state.currentBasalRate
+    }
+
+    var currentBasalRateForDisplay: String {
+        guard let rate = currentBasalRate else { return "" }
+        return String(format: "%.2f U/hr", rate)
+    }
+
+    var notificationCount: Int {
+        pumpManager?.state.notificationCount ?? 0
+    }
+
+    var isSuspended: Bool? {
+        guard let icon = basalStatusIcon else { return nil }
+        return icon == .suspended
+    }
+
+    // MARK: - Refresh Methods
 
     func refreshPumpStatus() {
         guard pumpManager?.connectedAndPaired == true else {
@@ -58,77 +95,16 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
 
         pendingRefreshOnReconnect = false
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let mirror = self.sendMessage(message: HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
-            let controlIQ = self.sendMessage(message: ControlIQInfoV2Request()) as? ControlIQInfoV2Response
-            let insulin = self.sendMessage(message: InsulinStatusRequest()) as? InsulinStatusResponse
-            let tempRate = self.sendMessage(message: TempRateRequest()) as? TempRateResponse
-            let currentBasal = self.sendMessage(message: CurrentBasalStatusRequest()) as? CurrentBasalStatusResponse
-
-            // Refresh notification count
-            for request in NotificationBundle.allRequests() {
-                if let response = self.sendMessage(message: request) {
-                    if NotificationBundle.isNotificationResponse(response) {
-                        self.notificationBundle.add(response)
-                    }
-                }
-            }
-            let notifCount = self.notificationBundle.getNotificationCount()
-
-            DispatchQueue.main.async {
-                self.mirrorDetail = mirror
-                self.controlIQInfo = controlIQ
-                self.insulinStatus = insulin
-                self.tempRateStatus = tempRate
-                self.currentBasalStatus = currentBasal
-                self.reservoirValue = self.pumpManager?.reservoirLevel
-                if let mirror = mirror {
-                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-                } else {
-                    self.isSuspended = nil
-                }
-                self.notificationCount = notifCount
-            }
-        }
+        pumpManager?.refreshAllStatus()
     }
 
     var reservoirUnitsText: String? {
-        if let reservoirValue {
-            return String(format: "%.1f", reservoirValue.unitVolume)
-        }
-        if let insulinStatus {
-            return String(format: "%.1f", Double(insulinStatus.currentInsulinAmount) / 1000.0)
-        }
-        return nil
+        guard let reservoirValue else { return nil }
+        return String(format: "%.1f", reservoirValue.unitVolume)
     }
 
     func refreshNotificationCount() {
-        guard pumpManager?.connectedAndPaired == true else {
-            log.debug("Skipping TandemPumpSettings notification refresh – pump not connected/paired")
-            pendingRefreshOnReconnect = true
-            return
-        }
-
-        pendingRefreshOnReconnect = false
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            // Refresh notification count
-            for request in NotificationBundle.allRequests() {
-                if let response = self.sendMessage(message: request) {
-                    if NotificationBundle.isNotificationResponse(response) {
-                        self.notificationBundle.add(response)
-                    }
-                }
-            }
-            let notifCount = self.notificationBundle.getNotificationCount()
-
-            DispatchQueue.main.async {
-                self.notificationCount = notifCount
-            }
-        }
+        refreshPumpStatus()  // Notifications included in refreshAllStatus
     }
 
     func suspendResumeButtonPressed() {
@@ -148,15 +124,15 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             if isSuspended {
-                _ = self.sendMessage(message: ResumePumpingRequest())
+                _ = self.pumpManager?.sendMessage(message: ResumePumpingRequest())
             } else {
-                _ = self.sendMessage(message: SuspendPumpingRequest())
+                _ = self.pumpManager?.sendMessage(message: SuspendPumpingRequest())
             }
 
             // Wait a moment for the pump to process
             Thread.sleep(forTimeInterval: 1.0)
 
-            self.refreshPumpStatus()
+            self.pumpManager?.refreshAllStatus()
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -175,22 +151,18 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            guard let controlIqInfo = self.controlIQInfo else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                }
-                return
-            }
+            let isPumpControlIqOn = self.controlIQEnabled
+            let weight = self.pumpManager?.state.controlIQWeight ?? 70
+            let tdi = self.pumpManager?.state.controlIQTotalDailyInsulin ?? 30
 
-            let isPumpControlIqOn = controlIqInfo.closedLoopEnabled == true
-            _ = self.sendMessage(message: ChangeControlIQSettingsRequest(
+            _ = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
                 enabled: !isPumpControlIqOn,
-                weightLbs: controlIqInfo.weight,
-                totalDailyInsulinUnits: controlIqInfo.totalDailyInsulin
+                weightLbs: weight,
+                totalDailyInsulinUnits: tdi
             ))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.refreshPumpStatus()
+            self.pumpManager?.refreshAllStatus()
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -208,12 +180,12 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            let isExerciseOn = self.controlIQInfo?.currentUserModeTypeRaw == 3
+            let isExerciseOn = self.controlIQUserMode?.rawValue == 3
             let command: SetModesRequest.ModeCommand = isExerciseOn ? .exerciseModeOff : .exerciseModeOn
-            _ = self.sendMessage(message: SetModesRequest(command: command))
+            _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.refreshPumpStatus()
+            self.pumpManager?.refreshAllStatus()
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -231,12 +203,12 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            let isSleepOn = self.controlIQInfo?.currentUserModeTypeRaw == 2
+            let isSleepOn = self.controlIQUserMode?.rawValue == 2
             let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
-            _ = self.sendMessage(message: SetModesRequest(command: command))
+            _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.refreshPumpStatus()
+            self.pumpManager?.refreshAllStatus()
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -254,10 +226,10 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            _ = self.sendMessage(message: StopTempRateRequest())
+            _ = self.pumpManager?.sendMessage(message: StopTempRateRequest())
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.refreshPumpStatus()
+            self.pumpManager?.refreshAllStatus()
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -280,21 +252,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var controlIqModeText: String {
-        if controlIQInfo?.closedLoopEnabled == true {
+        if controlIQEnabled {
             return "Disable ControlIQ"
         }
         return "Enable ControlIQ"
     }
 
     var exerciseModeText: String {
-        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == ControlIQInfoV2Response.UserModeType.exercise.rawValue {
+        if controlIQUserMode?.rawValue == 3 {
             return "Disable exercise mode"
         }
         return "Enable exercise mode"
     }
 
     var sleepModeText: String {
-        if let mode = controlIQInfo?.currentUserModeTypeRaw, mode == ControlIQInfoV2Response.UserModeType.sleep.rawValue {
+        if controlIQUserMode?.rawValue == 2 {
             return "Disable sleep mode"
         }
         return "Enable sleep mode"
@@ -349,6 +321,11 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         if pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
             pendingRefreshOnReconnect = false
             refreshPumpStatus()
+        }
+
+        // Force SwiftUI to re-evaluate computed properties
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
         }
     }
 }

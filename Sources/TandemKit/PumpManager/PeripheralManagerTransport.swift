@@ -145,8 +145,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
-            log.debug("  → Message sent (txId=%d)", txIdForRequest)
             if enableVerbosePacketLogging {
+                log.debug("  → Message sent (txId=%d)", txIdForRequest)
                 transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
             }
         }
@@ -166,8 +166,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
                 throw PumpCommError.noResponse
             }
 
-            log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
             if enableVerbosePacketLogging {
+                log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
                 let responseHex = data.map { String(format: "%02X", $0) }.joined()
                 transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
 

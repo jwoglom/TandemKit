@@ -29,13 +29,16 @@ struct TandemKitSettingsView: View {
     var debugDetailsPopover: some View {
         List {
             Section(header: SectionHeader(label: LocalizedString("State", comment: "Debug state header"))) {
-                Text("HomeScreenMirrorResponse: \(String(describing: viewModel.mirrorDetail))").font(.system(size: 12))
-
-                Text("TimeSinceReset: \(String(describing: viewModel.timeSinceReset))").font(.system(size: 12))
-
-                Text("TempRateStatus: \(String(describing: viewModel.tempRateStatus))").font(.system(size: 12))
-
-                Text("CurrentBasalStatus: \(String(describing: viewModel.currentBasalStatus))").font(.system(size: 12))
+                Text("Basal Icon: \(String(describing: viewModel.basalStatusIcon))").font(.system(size: 12))
+                Text("Bolus Icon: \(String(describing: viewModel.bolusStatusIcon))").font(.system(size: 12))
+                Text("CGM Alert Icon: \(String(describing: viewModel.cgmAlertIcon))").font(.system(size: 12))
+                Text("ControlIQ Enabled: \(viewModel.controlIQEnabled ? "Yes" : "No")").font(.system(size: 12))
+                Text("ControlIQ Mode: \(String(describing: viewModel.controlIQUserMode))").font(.system(size: 12))
+                Text("Temp Rate Active: \(viewModel.tempRateActive ? "Yes" : "No")").font(.system(size: 12))
+                if viewModel.tempRateActive {
+                    Text("Temp Rate: \(viewModel.tempRatePercentage ?? 0)% for \(viewModel.tempRateDuration ?? 0)s").font(.system(size: 12))
+                }
+                Text("Current Basal Rate: \(viewModel.currentBasalRateForDisplay)").font(.system(size: 12))
             }
 
             HStack {
@@ -104,7 +107,7 @@ struct TandemKitSettingsView: View {
                     }.disabled(true)
                 }
 
-                if let tempRate = viewModel.tempRateStatus, tempRate.active {
+                if viewModel.tempRateActive {
                     Button(action: {
                         viewModel.stopTempRate()
                     }) {
@@ -188,30 +191,32 @@ struct TandemKitSettingsView: View {
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
-                if let controlIQ = viewModel.controlIQInfo {
-                    HStack {
-                        Text(LocalizedString("Control-IQ", comment: "Text for Control-IQ status"))
-                            .foregroundColor(Color.primary)
-                        Spacer()
-                        Text(controlIQ.closedLoopEnabled ? "Enabled" : "Disabled")
-                            .foregroundColor(.secondary)
-                    }
+                HStack {
+                    Text(LocalizedString("Control-IQ", comment: "Text for Control-IQ status"))
+                        .foregroundColor(Color.primary)
+                    Spacer()
+                    Text(viewModel.controlIQEnabled ? "Enabled" : "Disabled")
+                        .foregroundColor(.secondary)
+                }
 
+                if let mode = viewModel.controlIQUserMode {
                     HStack {
                         Text(LocalizedString("User mode", comment: "Text for user mode"))
                             .foregroundColor(Color.primary)
                         Spacer()
-                        Text(userModeText(controlIQ.currentUserModeTypeRaw))
+                        Text(userModeText(mode.rawValue))
                             .foregroundColor(.secondary)
                     }
                 }
 
-                if let tempRate = viewModel.tempRateStatus, tempRate.active {
+                if viewModel.tempRateActive,
+                   let percentage = viewModel.tempRatePercentage,
+                   let duration = viewModel.tempRateDuration {
                     HStack {
                         Text(LocalizedString("Temp rate", comment: "Text for temp rate"))
                             .foregroundColor(Color.primary)
                         Spacer()
-                        Text("\(tempRate.percentage)% (\(formatDuration(tempRate.duration)))")
+                        Text("\(percentage)% (\(formatDuration(duration)))")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -280,7 +285,7 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUpdatingPumpState || viewModel.controlIQInfo?.closedLoopEnabled == false)
+                .disabled(viewModel.isUpdatingPumpState || !isControlIQClosedLoopEnabled)
 
                 Button(action: {
                     viewModel.toggleSleepMode()
@@ -293,35 +298,39 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUpdatingPumpState || viewModel.controlIQInfo?.closedLoopEnabled == false)
+                .disabled(viewModel.isUpdatingPumpState || !isControlIQClosedLoopEnabled)
             }
 
             Section(header: SectionHeader(label: LocalizedString(
                 "Pump Information",
                 comment: "The title of the pump information section in TandemKit settings"
             ))) {
-                if let mirror = viewModel.mirrorDetail {
+                if let basal = viewModel.basalStatusIcon {
                     HStack {
                         Text(LocalizedString("Basal status", comment: "Text for basal status"))
                             .foregroundColor(Color.primary)
                         Spacer()
-                        Text(basalStatusText(mirror.basalStatusIconId))
+                        Text(basalStatusText(basal))
                             .foregroundColor(.secondary)
                     }
+                }
 
+                if let bolus = viewModel.bolusStatusIcon {
                     HStack {
                         Text(LocalizedString("Bolus status", comment: "Text for bolus status"))
                             .foregroundColor(Color.primary)
                         Spacer()
-                        Text(bolusStatusText(mirror.bolusStatusIconId))
+                        Text(bolusStatusText(bolus))
                             .foregroundColor(.secondary)
                     }
+                }
 
+                if let cgm = viewModel.cgmAlertIcon {
                     HStack {
                         Text(LocalizedString("CGM status", comment: "Text for CGM status"))
                             .foregroundColor(Color.primary)
                         Spacer()
-                        Text(cgmStatusText(mirror.cgmAlertIconId))
+                        Text(cgmStatusText(cgm))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -408,20 +417,22 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(.accentColor)
-                    if viewModel.currentBasalStatus != nil {
+                    if viewModel.currentBasalRate != nil {
                         VStack(alignment: .center) {
-                            Text(viewModel.currentBasalStatus?.currentBasalRateForDisplay ?? "")
+                            Text(viewModel.currentBasalRateForDisplay)
                                 .fontWeight(.bold)
                                 .font(.system(size: 24))
-                            if let tempRate = viewModel.tempRateStatus, tempRate.active == true {
-                                Text("\(tempRate.percentage)% (\(formatDuration(tempRate.duration)))")
+                            if viewModel.tempRateActive,
+                               let percentage = viewModel.tempRatePercentage,
+                               let duration = viewModel.tempRateDuration {
+                                Text("\(percentage)% (\(formatDuration(duration)))")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
                             } else {
                                 Text("No Temp Rate")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
-                                
+
                             }
                         }
                     } else {
@@ -453,7 +464,7 @@ struct TandemKitSettingsView: View {
     var deliverySectionTitle: String {
         if viewModel.isSuspended == true {
             return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
-        } else if let tempRate = viewModel.tempRateStatus, tempRate.active {
+        } else if viewModel.tempRateActive {
             return LocalizedString("Temp Rate", comment: "Title for temp rate")
         } else {
             return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
@@ -475,36 +486,34 @@ struct TandemKitSettingsView: View {
         }
     }
 
-    private func basalStatusText(_ iconId: Int) -> String {
-        switch iconId {
-        case 12:
-            return "Suspended"
-        case 13:
-            return "Temp rate"
-        default:
+    private func basalStatusText(_ status: TandemPumpManagerState.HomeScreenBasalStatus) -> String {
+        switch status {
+        case .active:
             return "Active"
+        case .tempRate:
+            return "Temp rate"
+        case .suspended:
+            return "Suspended"
         }
     }
 
-    private func bolusStatusText(_ iconId: Int) -> String {
-        switch iconId {
-        case 0:
+    private func bolusStatusText(_ status: TandemPumpManagerState.HomeScreenBolusStatus) -> String {
+        switch status {
+        case .none:
             return "None"
-        case 11:
+        case .bolus:
             return "In progress"
-        default:
-            return "Unknown"
         }
     }
 
-    private func cgmStatusText(_ iconId: Int) -> String {
-        switch iconId {
-        case 0:
+    private func cgmStatusText(_ status: TandemPumpManagerState.HomeScreenCGMAlert) -> String {
+        switch status {
+        case .noError:
             return "OK"
-        case 1:
-            return "Alert"
-        default:
-            return "Unknown"
+        case .low:
+            return "Low"
+        case .high:
+            return "High"
         }
     }
 
@@ -519,53 +528,23 @@ struct TandemKitSettingsView: View {
             return "\(mins)m"
         }
     }
+    
+    private var isControlIQClosedLoopEnabled: Bool {
+        return viewModel.controlIQEnabled
+    }
 }
 
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
+        // TODO: Create mock TandemPumpManager with populated state for preview
         let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
-        viewModel.mirrorDetail = HomeScreenMirrorResponse(
-            cgmTrendIconId: HomeScreenMirrorResponse.CGMTrendIcon.up.rawValue,
-            cgmAlertIconId: HomeScreenMirrorResponse.CGMAlertIcon.noError.rawValue,
-            statusIcon0Id: HomeScreenMirrorResponse.StatusIcon0.cgmTransmitter.rawValue,
-            statusIcon1Id: HomeScreenMirrorResponse.StatusIcon1.bloodDrop.rawValue,
-            bolusStatusIconId: HomeScreenMirrorResponse.BolusStatusIcon.autoBolus.rawValue,
-            basalStatusIconId: HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue,
-            apControlStateIconId: HomeScreenMirrorResponse.ApControlStateIcon.stateGray.rawValue,
-            remainingInsulinPlusIcon: true,
-            cgmDisplayData: true
-        )
-        viewModel.controlIQInfo = ControlIQInfoV2Response(
-            closedLoopEnabled: true,
-            weight: 70,
-            weightUnit: ControlIQInfoAbstractResponse.WeightUnit.kilograms.rawValue,
-            totalDailyInsulin: 32,
-            currentUserModeType: ControlIQInfoAbstractResponse.UserModeType.exercise.rawValue,
-            byte6: 0,
-            byte7: 0,
-            byte8: 0,
-            controlStateType: 1,
-            exerciseChoice: 1,
-            exerciseDuration: 45
-        )
-        viewModel.insulinStatus = InsulinStatusResponse(
-            currentInsulinAmount: 180,
-            isEstimate: 0,
-            insulinLowAmount: 30
-        )
-        viewModel.tempRateStatus = TempRateResponse(
-            active: true,
-            percentage: 120,
-            startTimeRaw: 0,
-            duration: 1800
-        )
-        viewModel.isSuspended = false
-        viewModel.notificationCount = 3
+        viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         return viewModel
     }
 
     static var previewDataInProgress: TandemKitSettingsViewModel {
-        let viewModel = previewData
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
+        viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         viewModel.isUpdatingPumpState = true
         return viewModel
     }
@@ -590,3 +569,4 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
     }
     .environment(\.guidanceColors, GuidanceColors())
 }
+

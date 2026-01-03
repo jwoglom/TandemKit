@@ -94,6 +94,12 @@ public class PeripheralManager: NSObject {
         queue.setSpecific(key: queueSpecificKey, value: ())
         assertConfiguration()
     }
+    
+    func logTrace(_ message: @autoclosure () -> String) {
+        let msg = message()
+        logger.trace(msg)
+        // log.debug("%{public}@", msg)
+    }
 
     func logDebug(_ message: @autoclosure () -> String) {
         let msg = message()
@@ -701,13 +707,13 @@ extension PeripheralManager {
             let hex = value.map { String(format: "%02X", $0) }.joined()
             let truncated = value.count > 32
             let hexDisplay = truncated ? "\(value.prefix(32).map { String(format: "%02X", $0) }.joined())..." : hex
-            logDebug("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hexDisplay)")
+            logTrace("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hexDisplay)")
             if value.count <= 64 {
                 // For packets 64 bytes or less, also log the full hex
-                logDebug("[PeripheralManager]   full hex: \(hex)")
+                logTrace("[PeripheralManager]   full hex: \(hex)")
             }
         } else {
-            logDebug("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
+            logTrace("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
         }
         return cmd?.value
     }
