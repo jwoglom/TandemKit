@@ -1098,8 +1098,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func percentForTempBasal(requestedRate: Double, baseline: Double) -> Int {
         guard baseline > 0 else { return 0 }
         let percent = Int((requestedRate / baseline * 100.0).rounded())
-        let roundedPercent = Int((Double(percent) / 10.0).rounded()) * 10
-        return max(0, min(roundedPercent, 500))
+        return max(0, min(percent, 250))
     }
 
     // MARK: - Basic Pump Manager Interface
@@ -1552,7 +1551,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         throw PumpCommError.other
                     }
 
-                    var minutes = max(1, Int((duration / 60.0).rounded()))
+                    let minutes = max(1, Int((duration / 60.0).rounded()))
                     let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
 
                     log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(minutes), percent: \(percent)%")
@@ -1818,7 +1817,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             currentSegment.profileBasalRate != basalMilliunits
 
                         if needsUpdate {
-                            var segment = currentSegment
+                            let segment = currentSegment
                             segment.profileStartTime = startMinutes
                             segment.profileBasalRate = basalMilliunits
                             let request = activeProfile.modifySegmentMessage(segment: segment)
