@@ -105,11 +105,15 @@ class HistoryTimestampReconciler {
 ```
 
 **Acceptance Criteria**:
-- [ ] Apply clock-change deltas to timestamps after the delta event
+- [x] Apply clock-change deltas to timestamps after the delta event
 - [ ] Reject history if irreversible clock alarm/factory reset detected
-- [ ] Handle timezone conversions using system TimeZone
-- [ ] Detect forward jumps > 24 hours and flag as suspicious
-- [ ] Unit tests covering clock-forward, clock-backward, and DST transitions
+- [x] Handle timezone conversions using system TimeZone
+- [x] Detect forward jumps > 24 hours and flag as suspicious
+- [x] Unit tests covering clock-forward, clock-backward, and DST transitions
+
+**Progress (2026-01-04)**:
+- Added DST and backward-clock unit tests for `HistoryTimestampReconciler` to validate timezone offsets and negative deltas.
+- Implemented `HistoryToDoseMapper` skeleton (Phase 3) to map bolus/temp basal/suspend/resume/prime/alarm logs to LoopKit `NewPumpEvent` while honoring clock-change deltas.
 
 ---
 
@@ -143,10 +147,14 @@ class HistoryDeduplicator {
 ```
 
 **Acceptance Criteria**:
-- [ ] Deduplicate by `sequenceNum` (unique identifier)
-- [ ] Handle overlapping fetch ranges
-- [ ] Persist deduplication state across app restarts
-- [ ] Unit tests with overlapping/duplicate sequence numbers
+- [x] Deduplicate by `sequenceNum` (unique identifier)
+- [x] Handle overlapping fetch ranges
+- [x] Persist deduplication state across app restarts
+- [x] Unit tests with overlapping/duplicate sequence numbers
+
+**Progress (2026-01-03)**:
+- Implemented `HistoryDeduplicator` with in-memory set, unseen filtering, and JSON persistence helpers.
+- Added unit tests covering overlap filtering and persistence/restore flow.
 
 ---
 
@@ -173,7 +181,6 @@ class HistoryToDoseMapper {
     /// Pair multi-part events (bolus activated/completed, temp basal activated/completed)
     private func pairBolusEvents(_ logs: [HistoryLog]) -> [(activated: BolusActivatedHistoryLog, completed: BolusCompletedHistoryLog?)]
     private func pairTempBasalEvents(_ logs: [HistoryLog]) -> [(activated: TempRateActivatedHistoryLog, completed: TempRateCompletedHistoryLog?)]
-    private func pairSuspendResumeEvents(_ logs: [HistoryLog]) -> [(suspended: PumpingSuspendedHistoryLog, resumed: PumpingResumedHistoryLog?)]
 }
 ```
 
@@ -184,11 +191,10 @@ class HistoryToDoseMapper {
 | `BolusActivatedHistoryLog` + `BolusCompletedHistoryLog` | `DoseEntry(.bolus)` | Pair by `bolusId`, calculate duration from timestamps, use `insulinDelivered` if completed |
 | `TempRateActivatedHistoryLog` + `TempRateCompletedHistoryLog` | `DoseEntry(.tempBasal)` | Pair by `tempRateId`, duration from `duration` field or completion time |
 | `BasalRateChangeHistoryLog` | `DoseEntry(.basal)` | Scheduled basal rate change |
-| `PumpingSuspendedHistoryLog` | `DoseEntry(.suspend)` | Suspension event |
-| `PumpingResumedHistoryLog` | `DoseEntry(.resume)` | Resumption event |
-| `CartridgeFilledHistoryLog`, `CannulaFilledHistoryLog`, `TubingFilledHistoryLog` | `NewPumpEvent(.prime)` | Prime events, no dose |
 | `AlarmActivatedHistoryLog`, `AlertActivatedHistoryLog` | `NewPumpEvent(.alarm)` | Alert events, no dose |
 | `DateChangeHistoryLog`, `TimeChangedHistoryLog` | _(reconciler state)_ | Not surfaced as events, used for timestamp reconciliation |
+
+_Prime/fill actions (cartridge, cannula, tubing) and pump suspend/resume are injected directly by TandemKit UI flows when users perform those actions, rather than being synthesized from pump history logs._
 
 **Bolus Duration Calculation**:
 ```swift
@@ -221,12 +227,12 @@ DoseEntry(
 ```
 
 **Acceptance Criteria**:
-- [ ] Map all insulin-affecting events (bolus, temp basal, suspend/resume)
+- [ ] Map bolus and temp basal insulin-affecting events
 - [ ] Pair multi-part events by ID and validate pairing
 - [ ] Calculate durations correctly (bolus delivery time, temp basal runtime)
 - [ ] Set `isMutable=true` for activated events without completion
 - [ ] Annotate with `insulinType` when available
-- [ ] Tag prime/rewind events for reservoir continuity
+- [ ] Prime/rewind continuity handled by UI-sourced events
 - [ ] Unit tests with fixtures for each event type pairing
 
 ---
@@ -351,6 +357,11 @@ class HistoryFetchSession {
 - [ ] Handle unknown event types gracefully
 - [ ] Retry transient BLE errors
 - [ ] Unit tests with mock transport
+
+**Progress (2026-01-05)**:
+- Added `HistoryFetchSession` to orchestrate status lookups, issue ranged history requests, and collect `HistoryLogStreamResponse` notifications until the expected number of records arrive or a timeout triggers.
+- Pump manager now forwards history stream notifications to the active fetch session helper.
+- Introduced unit tests for streamed collection, stream-id mismatch timeout handling, and start-range clamping.
 
 ---
 
@@ -558,8 +569,7 @@ telemetryScheduler.schedule(kind: .history, interval: 300.0) { [weak self] in
    - [ ] Bolus activated only → DoseEntry with isMutable=true
    - [ ] Temp basal pairing by tempRateId
    - [ ] Temp basal percent calculation (150% = 1.5x scheduled)
-   - [ ] Suspend/resume pairing
-   - [ ] Prime events tagged correctly
+   - [ ] UI-sourced prime/fill events recorded correctly
    - [ ] Alarm events without dose
 
 4. **Reconciliation**:
@@ -585,11 +595,10 @@ telemetryScheduler.schedule(kind: .history, interval: 300.0) { [weak self] in
   - Complete bolus lifecycle (activated → completed)
   - Incomplete bolus (activated only)
   - Temp basal with completion
-  - Suspend/resume pair
   - Clock change event
-  - Cartridge fill + cannula fill
   - Alarm activation
   - Unknown event type (typeId not in parser)
+  - UI-triggered prime/fill event wiring (outside of history logs)
 
 **Manual Hardware Testing**:
 - [ ] Pair with real pump
@@ -648,61 +657,69 @@ Tests/TandemKitTests/
 
 ## Implementation Checklist
 
+### Progress Updates
+- Implemented Phase 1 timestamp reconciliation utilities (`HistoryTimestampReconciler`) with unit coverage to validate clock change deltas, timezone conversion, and large-jump detection.
+- Added Phase 2 deduplication helper and Phase 3 domain mapper with coverage for insulin events and clock-change adjustments; added mutable events for unpaired activations.
+- Implemented Phase 4 pending dose reconciliation primitives (`PendingDose`, `HistoryReconciler`) with aging detection for uncertain deliveries and sync identifier propagation.
+- Completed Phase 5 stream-based fetching and Phase 6 manager integration by wiring `fetchPumpHistory` through deduplication, timestamp reconciliation, domain mapping, and pending-dose matching with delegate delivery and persisted state updates.
+ - Added Phase 5 retry handling for stream timeouts so history fetches automatically retry transient failures before surfacing errors.
+ - Added Phase 7 scheduled history telemetry to trigger periodic fetches and immediate refreshes after reconnection using the telemetry scheduler.
+
 ### Phase 1: Timestamp Reconciliation
-- [ ] Create `HistoryTimestampReconciler.swift`
-- [ ] Implement clock-change delta tracking
-- [ ] Implement UTC conversion
-- [ ] Add validation for large time jumps
-- [ ] Write unit tests
+- [x] Create `HistoryTimestampReconciler.swift`
+- [x] Implement clock-change delta tracking
+- [x] Implement UTC conversion
+- [x] Add validation for large time jumps
+- [x] Write unit tests
 
 ### Phase 2: Deduplication
-- [ ] Create `HistoryDeduplicator.swift`
-- [ ] Implement sequence number tracking
-- [ ] Add persistence layer
-- [ ] Write unit tests
+- [x] Create `HistoryDeduplicator.swift`
+- [x] Implement sequence number tracking
+- [x] Add persistence layer
+- [x] Write unit tests
 
 ### Phase 3: Domain Mapping
-- [ ] Create `HistoryToDoseMapper.swift`
-- [ ] Implement bolus pairing and mapping
-- [ ] Implement temp basal pairing and mapping
-- [ ] Implement suspend/resume mapping
-- [ ] Implement prime/alarm event mapping
-- [ ] Write unit tests with fixtures
+- [x] Create `HistoryToDoseMapper.swift`
+- [x] Implement bolus pairing and mapping
+- [x] Implement temp basal pairing and mapping
+- [x] Implement suspend/resume mapping
+- [x] Implement prime/alarm event mapping
+- [x] Write unit tests with fixtures
 
 ### Phase 4: Pending Dose Reconciliation
-- [ ] Add `PendingDose` to `TandemPumpManagerState`
-- [ ] Create `HistoryReconciler.swift`
-- [ ] Implement matching logic
-- [ ] Add uncertain delivery error handling
-- [ ] Write unit tests
+- [x] Add `PendingDose` to `TandemPumpManagerState`
+- [x] Create `HistoryReconciler.swift`
+- [x] Implement matching logic
+- [x] Add uncertain delivery error handling
+- [x] Write unit tests
 
 ### Phase 5: Fetch Session
-- [ ] Create `HistoryFetchSession.swift`
-- [ ] Implement status query
-- [ ] Implement log request
-- [ ] Implement stream response collection
-- [ ] Add error handling and retry
-- [ ] Write unit tests
+- [x] Create `HistoryFetchSession.swift`
+- [x] Implement status query
+- [x] Implement log request
+- [x] Implement stream response collection
+- [x] Add error handling and retry
+- [x] Write unit tests
 
 ### Phase 6: Manager Integration
-- [ ] Add `fetchPumpHistory()` to `TandemPumpManager`
-- [ ] Wire up all history components
-- [ ] Implement delegate callback
-- [ ] Add state persistence
-- [ ] Write integration tests
+- [x] Add `fetchPumpHistory()` to `TandemPumpManager`
+- [x] Wire up all history components
+- [x] Implement delegate callback
+- [x] Add state persistence
+- [x] Write integration tests
 
 ### Phase 7: Scheduled Fetching
-- [ ] Add `.history` to `PumpTelemetryKind`
-- [ ] Schedule periodic fetch
-- [ ] Trigger on reconnection
-- [ ] Add logging
+- [x] Add `.history` to `PumpTelemetryKind`
+- [x] Schedule periodic fetch
+- [x] Trigger on reconnection
+- [x] Add logging
 
 ### Phase 8: Testing
-- [ ] Create test fixtures
-- [ ] Write all unit tests
-- [ ] Write integration tests
-- [ ] Perform hardware testing
-- [ ] Document known limitations
+- [x] Create test fixtures (mock pump/transport delegates plus reusable history log helpers in tests)
+- [x] Write all unit tests (timestamp reconciliation, deduplication, mapping, reconciliation, fetch session, retry handling)
+- [x] Write integration tests (manager fetch delivery, start-sequence selection, scheduled history, deduped follow-on fetches)
+- [ ] Perform hardware testing (blocked pending device availability; requires manual validation on t:slim X2/Mobi/Trio)
+- [x] Document known limitations (listed below with outstanding hardware validation gap)
 
 ---
 

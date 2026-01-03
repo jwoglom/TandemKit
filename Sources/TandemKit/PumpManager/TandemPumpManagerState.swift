@@ -2,6 +2,18 @@ import Foundation
 import LoopKit
 import TandemCore
 
+public struct PendingDose: Codable, Equatable {
+    public let syncIdentifier: String
+    public let dose: DoseEntry
+    public let requestedAt: Date
+
+    public init(syncIdentifier: String, dose: DoseEntry, requestedAt: Date) {
+        self.syncIdentifier = syncIdentifier
+        self.dose = dose
+        self.requestedAt = requestedAt
+    }
+}
+
 public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugStringConvertible {
     public typealias RawValue = [String: Any]
 
@@ -38,7 +50,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         case high = 17
     }
 
-    public static let version = 5
+    public static let version = 6
 
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
@@ -81,6 +93,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
     public var insulinType: InsulinType?
+    public var lastHistorySequenceNum: UInt32?
+    public var lastHistoryReconciliation: Date?
+    public var pendingDoses: [PendingDose]
 
     public init(
         pumpState: PumpState?,
@@ -113,7 +128,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         cgmAlertIcon: HomeScreenCGMAlert? = nil,
         notificationCount: Int? = nil,
         lastNotificationUpdate: Date? = nil,
-        insulinType: InsulinType? = nil
+        insulinType: InsulinType? = nil,
+        lastHistorySequenceNum: UInt32? = nil,
+        lastHistoryReconciliation: Date? = nil,
+        pendingDoses: [PendingDose] = []
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -146,6 +164,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.notificationCount = notificationCount
         self.lastNotificationUpdate = lastNotificationUpdate
         self.insulinType = insulinType
+        self.lastHistorySequenceNum = lastHistorySequenceNum
+        self.lastHistoryReconciliation = lastHistoryReconciliation
+        self.pendingDoses = pendingDoses
     }
 
     public init?(rawValue: RawValue) {
@@ -365,6 +386,38 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             notificationCount = nil
             lastNotificationUpdate = nil
         }
+
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
+        }
+
+        if version >= 6 {
+            if let lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32 {
+                self.lastHistorySequenceNum = lastHistorySequenceNum
+            } else {
+                lastHistorySequenceNum = nil
+            }
+
+            if let lastHistoryInterval = rawValue["lastHistoryReconciliation"] as? TimeInterval {
+                lastHistoryReconciliation = Date(timeIntervalSinceReferenceDate: lastHistoryInterval)
+            } else {
+                lastHistoryReconciliation = nil
+            }
+
+            if let pendingData = rawValue["pendingDoses"] as? Data,
+               let decoded = try? PropertyListDecoder().decode([PendingDose].self, from: pendingData)
+            {
+                pendingDoses = decoded
+            } else {
+                pendingDoses = []
+            }
+        } else {
+            lastHistorySequenceNum = nil
+            lastHistoryReconciliation = nil
+            pendingDoses = []
+        }
     }
 
     public var rawValue: RawValue {
@@ -489,6 +542,20 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         }
         raw["insulinType"] = insulinType
 
+        if let lastHistorySequenceNum = lastHistorySequenceNum {
+            raw["lastHistorySequenceNum"] = lastHistorySequenceNum
+        }
+
+        if let lastHistoryReconciliation = lastHistoryReconciliation {
+            raw["lastHistoryReconciliation"] = lastHistoryReconciliation.timeIntervalSinceReferenceDate
+        }
+
+        if !pendingDoses.isEmpty,
+           let encoded = try? PropertyListEncoder().encode(pendingDoses)
+        {
+            raw["pendingDoses"] = encoded
+        }
+
         return raw
     }
 
@@ -561,7 +628,10 @@ public extension TandemPumpManagerState {
             lhs.cgmAlertIcon == rhs.cgmAlertIcon &&
             lhs.notificationCount == rhs.notificationCount &&
             lhs.lastNotificationUpdate == rhs.lastNotificationUpdate &&
-            lhs.insulinType == rhs.insulinType
+            lhs.insulinType == rhs.insulinType &&
+            lhs.lastHistorySequenceNum == rhs.lastHistorySequenceNum &&
+            lhs.lastHistoryReconciliation == rhs.lastHistoryReconciliation &&
+            lhs.pendingDoses == rhs.pendingDoses
     }
 }
 
