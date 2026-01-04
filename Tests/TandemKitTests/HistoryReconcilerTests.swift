@@ -1,5 +1,5 @@
-@testable import TandemKit
 import LoopKit
+@testable import TandemKit
 import XCTest
 
 final class HistoryReconcilerTests: XCTestCase {

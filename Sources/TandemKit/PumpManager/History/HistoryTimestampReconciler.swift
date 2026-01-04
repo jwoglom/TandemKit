@@ -25,7 +25,7 @@ class HistoryTimestampReconciler {
         let adjustedPumpTimeSec = adjustedPumpTime(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum)
 
         if let lastAdjustedPumpTimeSec {
-            if adjustedPumpTimeSec - lastAdjustedPumpTimeSec > 86_400 {
+            if adjustedPumpTimeSec - lastAdjustedPumpTimeSec > 86400 {
                 return false
             }
         }

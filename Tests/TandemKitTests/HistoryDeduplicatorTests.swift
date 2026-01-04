@@ -1,5 +1,5 @@
-@testable import TandemKit
 import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class HistoryDeduplicatorTests: XCTestCase {
@@ -12,7 +12,7 @@ final class HistoryDeduplicatorTests: XCTestCase {
         ]
 
         let unseen = deduplicator.filterUnseen(logs)
-        XCTAssertEqual(unseen.map { $0.sequenceNum }, [1, 2, 3])
+        XCTAssertEqual(unseen.map(\.sequenceNum), [1, 2, 3])
 
         XCTAssertTrue(deduplicator.isSeen(1))
         XCTAssertTrue(deduplicator.isSeen(2))
@@ -30,7 +30,7 @@ final class HistoryDeduplicatorTests: XCTestCase {
         ]
 
         let unseen = deduplicator.filterUnseen(logs)
-        XCTAssertEqual(unseen.map { $0.sequenceNum }, [1, 3])
+        XCTAssertEqual(unseen.map(\.sequenceNum), [1, 3])
     }
 
     func testPersistAndRestore() throws {

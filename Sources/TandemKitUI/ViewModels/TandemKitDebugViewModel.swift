@@ -228,7 +228,12 @@ final class TandemKitDebugViewModel: ObservableObject {
                     metadata: metadata,
                     fields: [
                         ParameterField(id: "bg", label: "BG", placeholder: "0", type: .integer),
-                        ParameterField(id: "useForCalibration", label: "Use For Calibration (true/false)", placeholder: "false", type: .boolean),
+                        ParameterField(
+                            id: "useForCalibration",
+                            label: "Use For Calibration (true/false)",
+                            placeholder: "false",
+                            type: .boolean
+                        ),
                         ParameterField(id: "isAutopop", label: "Auto-pop BG (true/false)", placeholder: "false", type: .boolean),
                         ParameterField(id: "pumpTime", label: "Pump Time (seconds)", placeholder: "0", type: .unsigned),
                         ParameterField(id: "bolusId", label: "Bolus ID", placeholder: "0", type: .integer)

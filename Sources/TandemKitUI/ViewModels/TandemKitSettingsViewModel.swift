@@ -95,7 +95,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
 
         pendingRefreshOnReconnect = false
-        pumpManager?.refreshAllStatus()
+        pumpManager?.ensureCurrentPumpData { _ in }
     }
 
     var reservoirUnitsText: String? {
@@ -132,7 +132,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             // Wait a moment for the pump to process
             Thread.sleep(forTimeInterval: 1.0)
 
-            self.pumpManager?.refreshAllStatus()
+            self.pumpManager?.ensureCurrentPumpData { _ in }
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -162,7 +162,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             ))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.refreshAllStatus()
+            self.pumpManager?.ensureCurrentPumpData { _ in }
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -185,7 +185,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.refreshAllStatus()
+            self.pumpManager?.ensureCurrentPumpData { _ in }
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -208,7 +208,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.refreshAllStatus()
+            self.pumpManager?.ensureCurrentPumpData { _ in }
 
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
@@ -226,13 +226,13 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            _ = self.pumpManager?.sendMessage(message: StopTempRateRequest())
+            self.pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { _ in
+                Thread.sleep(forTimeInterval: 1.0)
+                self.pumpManager?.ensureCurrentPumpData { _ in }
 
-            Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.refreshAllStatus()
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
             }
         }
     }

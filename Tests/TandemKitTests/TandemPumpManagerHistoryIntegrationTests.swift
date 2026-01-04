@@ -337,7 +337,7 @@ import XCTest
     var onHasNewPumpEvents: (([NewPumpEvent], Date?, Bool, (_ completion: (Error?) -> Void) -> Void) -> Void)?
 
     override func pumpManager(
-        _ pumpManager: PumpManager,
+        _: PumpManager,
         hasNewPumpEvents events: [NewPumpEvent],
         lastReconciliation: Date?,
         replacePendingEvents: Bool,

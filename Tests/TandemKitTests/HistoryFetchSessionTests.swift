@@ -12,12 +12,22 @@ final class HistoryFetchSessionTests: XCTestCase {
         peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
         peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 7))
 
-        let session = HistoryFetchSession(transport: transport, pumpComm: pumpComm, startSequence: nil, maxEntries: 3, streamTimeout: 2)
+        let session = HistoryFetchSession(
+            transport: transport,
+            pumpComm: pumpComm,
+            startSequence: nil,
+            maxEntries: 3,
+            streamTimeout: 2
+        )
 
         let logA = BolusActivatedHistoryLog(pumpTimeSec: 100, sequenceNum: 10, bolusId: 1, iob: 0.5, bolusSize: 1.0)
         let logB = BolusActivatedHistoryLog(pumpTimeSec: 110, sequenceNum: 11, bolusId: 2, iob: 0.5, bolusSize: 1.0)
         let logC = BolusActivatedHistoryLog(pumpTimeSec: 120, sequenceNum: 12, bolusId: 3, iob: 0.5, bolusSize: 1.0)
-        let response1 = HistoryLogStreamResponse(numberOfHistoryLogs: 2, streamId: 7, historyLogStreamBytes: [logB.cargo, logA.cargo])
+        let response1 = HistoryLogStreamResponse(
+            numberOfHistoryLogs: 2,
+            streamId: 7,
+            historyLogStreamBytes: [logB.cargo, logA.cargo]
+        )
         let response2 = HistoryLogStreamResponse(numberOfHistoryLogs: 1, streamId: 7, historyLogStreamBytes: [logC.cargo])
 
         DispatchQueue.global().asyncAfter(deadline: .now() + 0.05) {
@@ -38,7 +48,13 @@ final class HistoryFetchSessionTests: XCTestCase {
         peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
         peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 2))
 
-        let session = HistoryFetchSession(transport: transport, pumpComm: pumpComm, startSequence: nil, maxEntries: 1, streamTimeout: 0.1)
+        let session = HistoryFetchSession(
+            transport: transport,
+            pumpComm: pumpComm,
+            startSequence: nil,
+            maxEntries: 1,
+            streamTimeout: 0.1
+        )
 
         let log = BolusActivatedHistoryLog(pumpTimeSec: 90, sequenceNum: 5, bolusId: 9, iob: 0, bolusSize: 0.5)
         let wrongStream = HistoryLogStreamResponse(numberOfHistoryLogs: 1, streamId: 3, historyLogStreamBytes: [log.cargo])
@@ -59,7 +75,13 @@ final class HistoryFetchSessionTests: XCTestCase {
         let status = HistoryLogStatusResponse(numEntries: 2, firstSequenceNum: 1, lastSequenceNum: 2)
         peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
 
-        let session = HistoryFetchSession(transport: transport, pumpComm: pumpComm, startSequence: 5, maxEntries: 2, streamTimeout: 0.1)
+        let session = HistoryFetchSession(
+            transport: transport,
+            pumpComm: pumpComm,
+            startSequence: 5,
+            maxEntries: 2,
+            streamTimeout: 0.1
+        )
 
         let logs = try session.fetch()
 
@@ -77,7 +99,13 @@ final class HistoryFetchSessionTests: XCTestCase {
         peripheral.enqueueResponse(for: HistoryLogStatusRequest.self, response: status)
         peripheral.enqueueResponse(for: HistoryLogRequest.self, response: HistoryLogResponse(status: 0, streamId: 2))
 
-        let session = HistoryFetchSession(transport: transport, pumpComm: pumpComm, startSequence: nil, maxEntries: 1, streamTimeout: 0.05)
+        let session = HistoryFetchSession(
+            transport: transport,
+            pumpComm: pumpComm,
+            startSequence: nil,
+            maxEntries: 1,
+            streamTimeout: 0.05
+        )
 
         let log = BolusActivatedHistoryLog(pumpTimeSec: 140, sequenceNum: 7, bolusId: 11, iob: 0, bolusSize: 0.25)
         let successResponse = HistoryLogStreamResponse(numberOfHistoryLogs: 1, streamId: 2, historyLogStreamBytes: [log.cargo])

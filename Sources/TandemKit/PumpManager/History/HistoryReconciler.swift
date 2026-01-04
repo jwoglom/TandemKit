@@ -89,7 +89,8 @@ class HistoryReconciler {
                 actual: eventDose.programmedUnits,
                 tolerance: basalTolerance
             )
-        case .suspend, .resume:
+        case .resume,
+             .suspend:
             return true
         default:
             return false

@@ -47,15 +47,17 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     init(
         pumpManager: TandemPumpManager? = nil,
         colorPalette: LoopUIColorPalette,
-        pumpManagerSettings _: PumpManagerSetupSettings? = nil,
+        pumpManagerSettings: PumpManagerSetupSettings? = nil,
         allowDebugFeatures: Bool,
         allowedInsulinTypes: [InsulinType] = []
     )
     {
         if pumpManager == nil {
-            self
-                .pumpManager =
-                TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]) ?? TandemPumpManagerState(pumpState: nil))
+            self.pumpManager =
+                TandemPumpManager(state: TandemPumpManagerState(
+                    pumpState: nil,
+                    basalRateSchedule: pumpManagerSettings?.basalSchedule
+                ))
         } else {
             self.pumpManager = pumpManager
         }

@@ -6,44 +6,44 @@ final class HistoryTimestampReconcilerTests: XCTestCase {
         let reconciler = HistoryTimestampReconciler()
         reconciler.recordClockChange(at: 5, deltaSec: 3600)
 
-        let baseDate = reconciler.utcDate(pumpTimeSec: 2_000, sequenceNum: 6, timeZone: TimeZone(secondsFromGMT: 0)!)
-        let expected = Date(timeIntervalSince1970: 2_000 + 3_600)
+        let baseDate = reconciler.utcDate(pumpTimeSec: 2000, sequenceNum: 6, timeZone: TimeZone(secondsFromGMT: 0)!)
+        let expected = Date(timeIntervalSince1970: 2000 + 3600)
 
         XCTAssertEqual(baseDate, expected)
     }
 
     func testClockChangeDoesNotAffectPriorSequences() {
         let reconciler = HistoryTimestampReconciler()
-        reconciler.recordClockChange(at: 10, deltaSec: -1_800)
+        reconciler.recordClockChange(at: 10, deltaSec: -1800)
 
-        let priorDate = reconciler.utcDate(pumpTimeSec: 5_000, sequenceNum: 9, timeZone: TimeZone(secondsFromGMT: 0)!)
-        let expected = Date(timeIntervalSince1970: 5_000)
+        let priorDate = reconciler.utcDate(pumpTimeSec: 5000, sequenceNum: 9, timeZone: TimeZone(secondsFromGMT: 0)!)
+        let expected = Date(timeIntervalSince1970: 5000)
 
         XCTAssertEqual(priorDate, expected)
     }
 
     func testUtcConversionRespectsTimeZoneOffset() {
         let reconciler = HistoryTimestampReconciler()
-        let timeZone = TimeZone(secondsFromGMT: 3_600)!
+        let timeZone = TimeZone(secondsFromGMT: 3600)!
 
-        let date = reconciler.utcDate(pumpTimeSec: 7_200, sequenceNum: 1, timeZone: timeZone)
-        let expected = Date(timeIntervalSince1970: 3_600)
+        let date = reconciler.utcDate(pumpTimeSec: 7200, sequenceNum: 1, timeZone: timeZone)
+        let expected = Date(timeIntervalSince1970: 3600)
 
         XCTAssertEqual(date, expected)
     }
 
     func testDetectsLargeForwardJumps() {
         let reconciler = HistoryTimestampReconciler()
-        XCTAssertTrue(reconciler.isValidTimestamp(1_000, sequenceNum: 1))
-        XCTAssertFalse(reconciler.isValidTimestamp(90_000, sequenceNum: 2))
+        XCTAssertTrue(reconciler.isValidTimestamp(1000, sequenceNum: 1))
+        XCTAssertFalse(reconciler.isValidTimestamp(90000, sequenceNum: 2))
     }
 
     func testBackwardClockChangeAdjustsTimestamps() {
         let reconciler = HistoryTimestampReconciler()
-        reconciler.recordClockChange(at: 5, deltaSec: -3_600)
+        reconciler.recordClockChange(at: 5, deltaSec: -3600)
 
-        let adjusted = reconciler.utcDate(pumpTimeSec: 10_000, sequenceNum: 6, timeZone: TimeZone(secondsFromGMT: 0)!)
-        XCTAssertEqual(adjusted, Date(timeIntervalSince1970: 6_400))
+        let adjusted = reconciler.utcDate(pumpTimeSec: 10000, sequenceNum: 6, timeZone: TimeZone(secondsFromGMT: 0)!)
+        XCTAssertEqual(adjusted, Date(timeIntervalSince1970: 6400))
     }
 
     func testDstTransitionUsesContemporaryOffset() throws {
