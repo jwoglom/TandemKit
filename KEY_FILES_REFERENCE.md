@@ -18,6 +18,14 @@
   - Manages session state on serial queue
   - Routes incoming and outgoing messages
 
+- **PumpCommRetryPolicy** `/Sources/TandemKit/PumpManager/PumpCommRetryPolicy.swift`
+  - Defines retry strategies for pump fault codes
+  - Default exponential policy caps attempts and spaces retries
+
+- **PumpCommFaultEvent** `/Sources/TandemKit/PumpManager/PumpCommFaultEvent.swift`
+  - Captures fault context (request, response, code, attempt, retry decision)
+  - Surfaces category, raw code, and retry delay helpers
+
 ### Bluetooth Layer
 - **BluetoothManager** `/Sources/TandemBLE/Bluetooth/BluetoothManager.swift`
   - Manages CBCentralManager
@@ -135,6 +143,17 @@
   - Stores pairing artifacts
   - Must be implemented by consumer
 
+### Telemetry
+- **PumpTelemetryScheduler** `/Sources/TandemKit/PumpManager/Telemetry/PumpTelemetryScheduler.swift`
+  - Timer-backed scheduler for reservoir, battery, basal, bolus, time-since-reset, alert/control IQ, home screen, notification count, and history fetch streams
+  - Provides immediate trigger/cancel helpers for all registered telemetry tasks
+
+### TODO – Accuracy Audit
+- [x] PumpComm retry policy entry aligns with `ExponentialPumpCommRetryPolicy` defaults (fault-aware exponential backoff with capped attempts)
+- [x] PumpComm fault event entry reflects captured request/response context plus helper accessors
+- [x] Telemetry scheduler entry matches the enumerated streams and trigger/cancel behavior
+- [x] History utilities entries match their implementations for fetching, deduplication, reconciliation, timestamp handling, and dose mapping
+
 ## Message Examples
 
 ### Status Messages
@@ -158,6 +177,26 @@
 - `/Sources/TandemCore/Messages/HistoryLog/`
   - HistoryLogRecord, HistoryLogStream
   - Various log types: BasalDelivery, BolusRequested, etc.
+
+- **HistoryFetchSession** `/Sources/TandemKit/PumpManager/History/HistoryFetchSession.swift`
+  - Coordinates ranged history requests, streaming collection, and retry of transient timeouts
+  - Validates available sequence ranges before fetching
+
+- **HistoryDeduplicator** `/Sources/TandemKit/PumpManager/History/HistoryDeduplicator.swift`
+  - Tracks seen sequence numbers across fetches
+  - Filters unseen logs and persists/restores dedup state
+
+- **HistoryReconciler** `/Sources/TandemKit/PumpManager/History/HistoryReconciler.swift`
+  - Matches pending doses to history-derived events within timing/amount tolerances
+  - Flags lingering pending doses that age into uncertainty windows
+
+- **HistoryTimestampReconciler** `/Sources/TandemKit/PumpManager/History/HistoryTimestampReconciler.swift`
+  - Records clock changes and converts pump timestamps to UTC
+  - Screens for large jumps that break chronological ordering
+
+- **HistoryToDoseMapper** `/Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift`
+  - Translates history logs into LoopKit NewPumpEvent/DoseEntry records
+  - Tracks activation/completion pairs and applies clock-change adjustments
 
 ### Device Information
 - `/Sources/TandemCore/CharacteristicUUID.swift`
