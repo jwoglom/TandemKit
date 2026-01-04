@@ -2,9 +2,6 @@ import CoreBluetooth
 import Foundation
 import TandemBLE
 import TandemCore
-#if canImport(os)
-    import os
-#endif
 
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
@@ -24,7 +21,7 @@ public extension TandemPumpDelegate {
 }
 
 public class TandemPump {
-    private let log = OSLog(category: "TandemPump")
+    private let log = TandemLogger(category: "TandemPump")
     private let bluetoothManager = BluetoothManager()
 
     public var state: PumpState?
@@ -117,7 +114,7 @@ public class TandemPump {
     }
 
     @MainActor private func sendDefaultStartupRequests(_ manager: PeripheralManager) {
-        log.default("Sending default startup requests")
+        log.info("Sending default startup requests")
 
         // Send initial status requests that Loop/Trio need
         let startupMessages: [Message] = [
@@ -147,11 +144,11 @@ public class TandemPump {
             let result = peripheralManager.sendMessagePackets(wrapper.packets, characteristic: targetCharacteristic)
             switch result {
             case .sentWithAcknowledgment:
-                self.log.default("Message sent successfully: %{public}@", String(describing: message))
+                self.log.info("Message sent successfully: \(message)")
             case let .sentWithError(error):
-                self.log.error("Message sent with error: %{public}@", String(describing: error))
+                self.log.error("Message sent with error: \(error)")
             case let .unsentWithError(error):
-                self.log.error("Message failed to send: %{public}@", String(describing: error))
+                self.log.error("Message failed to send: \(error)")
             }
         }
     }

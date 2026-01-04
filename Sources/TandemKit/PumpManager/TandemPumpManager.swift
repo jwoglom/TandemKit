@@ -4,9 +4,6 @@ import Foundation
 #if canImport(HealthKit)
     import HealthKit
 #endif
-#if canImport(os)
-    import os.log
-#endif
 import LoopKit
 import TandemBLE
 import TandemCore
@@ -83,10 +80,10 @@ private struct ActiveTempBasal {
     private let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     public let tandemPump: TandemPump
-    private let log = PumpLogger(label: "TandemPumpManager")
-    private let telemetryLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Telemetry")
+    private let log = TandemLogger(category: "TandemPumpManager")
+    private let telemetryLogger = TandemLogger(category: "TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
-    private let notificationLogger = PumpLogger(label: "TandemKit.TandemPumpManager.Notifications")
+    private let notificationLogger = TandemLogger(category: "TandemPumpManager.Notifications")
     private let historyFetchQueue = DispatchQueue(label: "com.loopkit.TandemKit.HistoryFetchQueue")
     private let historyDeduplicator = HistoryDeduplicator()
     private let historyTimestampReconciler = HistoryTimestampReconciler()
@@ -384,7 +381,7 @@ private struct ActiveTempBasal {
         }
     }
 
-    private func logger(for source: ResponseSource) -> PumpLogger {
+    private func logger(for source: ResponseSource) -> TandemLogger {
         switch source {
         case .telemetry:
             return telemetryLogger
@@ -425,9 +422,6 @@ private struct ActiveTempBasal {
     }
 
     public init(state: TandemPumpManagerState) {
-        // Configure logging - hide debug and trace logs
-        PumpLogging.setMinimumLevel(.info)
-
         lockedState = Locked(state)
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
@@ -451,9 +445,6 @@ private struct ActiveTempBasal {
         guard let state = TandemPumpManagerState(rawValue: rawState) else {
             return nil
         }
-
-        // Configure logging - hide debug and trace logs
-        PumpLogging.setMinimumLevel(.info)
 
         lockedState = Locked(state)
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))

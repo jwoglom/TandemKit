@@ -18,7 +18,7 @@ public class PumpCommSession {
     private let sessionQueue = DispatchQueue(label: "com.jwoglom.TandemKit.PumpCommSession.queue")
     private(set) var state: PumpState
     weak var delegate: PumpCommSessionDelegate?
-    private let logger = PumpLogger(label: "TandemKit.PumpCommSession")
+    private let logger = TandemLogger(category: "PumpCommSession")
     private static let fallbackPairingCode = "000000"
 
     #if DEBUG

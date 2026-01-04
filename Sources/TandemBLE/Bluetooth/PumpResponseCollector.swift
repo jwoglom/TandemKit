@@ -2,7 +2,7 @@ import CoreBluetooth
 import Foundation
 import TandemCore
 
-private let pumpCollectorLogger = PumpLogger(label: "TandemBLE.PumpResponseCollector")
+private let pumpCollectorLogger = TandemLogger(category: "PumpResponseCollector")
 
 public enum PumpResponseCollectorError: Error {
     case invalidResponse

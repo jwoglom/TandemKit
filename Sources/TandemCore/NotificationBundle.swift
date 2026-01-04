@@ -3,7 +3,7 @@ import Foundation
 /// Container for managing notification-related responses from the pump.
 /// Aggregates seven different status response types and tracks when each was last updated.
 public class NotificationBundle {
-    private let log = PumpLogger(label: "NotificationBundle")
+    private let log = TandemLogger(category: "NotificationBundle")
 
     public var alertStatusResponse: AlertStatusResponse?
     public var reminderStatusResponse: ReminderStatusResponse?

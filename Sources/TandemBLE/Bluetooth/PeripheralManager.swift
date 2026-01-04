@@ -1,13 +1,9 @@
 import CoreBluetooth
 import Foundation
 import TandemCore
-#if canImport(os)
-    import os
-#endif
 
 public class PeripheralManager: NSObject {
-    private let log = OSLog(category: "PeripheralManager")
-    private let logger = PumpLogger(label: "TandemBLE.PeripheralManager")
+    private let log = TandemLogger(category: "PeripheralManager")
 
     ///
     /// This is mutable, because CBPeripheral instances can seemingly become invalid, and need to be periodically re-fetched from
@@ -18,11 +14,7 @@ public class PeripheralManager: NSObject {
                 return
             }
 
-            log.error(
-                "Replacing peripheral reference %{public}@ -> %{public}@",
-                String(describing: oldValue),
-                String(describing: peripheral)
-            )
+            log.error("Replacing peripheral reference \(oldValue) -> \(peripheral)")
 
             oldValue.delegate = nil
             peripheral.delegate = self
@@ -96,28 +88,23 @@ public class PeripheralManager: NSObject {
     }
 
     func logTrace(_ message: @autoclosure () -> String) {
-        let msg = message()
-        logger.trace(msg)
+        log.trace(message())
     }
 
     func logDebug(_ message: @autoclosure () -> String) {
-        let msg = message()
-        logger.debug(msg)
+        log.debug(message())
     }
 
     func logInfo(_ message: @autoclosure () -> String) {
-        let msg = message()
-        logger.info(msg)
+        log.info(message())
     }
 
     func logWarning(_ message: @autoclosure () -> String) {
-        let msg = message()
-        logger.warning(msg)
+        log.warning(message())
     }
 
     func logError(_ message: @autoclosure () -> String) {
-        let msg = message()
-        logger.error(msg)
+        log.error(message())
     }
 }
 
@@ -157,21 +144,21 @@ extension PeripheralManager {
         dispatchPrecondition(condition: .onQueue(queue))
 
         if needsReconnection {
-            log.default("Triggering forceful reconnect")
+            log.info("Triggering forceful reconnect")
             do {
                 try reconnect(timeout: 5)
             } catch {
-                log.error("Error while forcing reconnection: %{public}@", String(describing: error))
+                log.error("Error while forcing reconnection: \(error)")
             }
         }
 
         if !needsConfiguration && peripheral.services == nil {
-            log.error("Configured peripheral has no services. Reconfiguring %{public}@", String(describing: peripheral))
+            log.error("Configured peripheral has no services. Reconfiguring \(peripheral)")
         }
 
         if needsConfiguration || peripheral.services == nil {
             do {
-                log.default("Applying configuration")
+                log.info("Applying configuration")
                 try applyConfiguration()
                 try performInitialSetupIfNeeded()
 
@@ -180,12 +167,12 @@ extension PeripheralManager {
                 if let delegate = delegate {
                     try delegate.completeConfiguration(for: self)
 
-                    log.default("Delegate configuration notified")
+                    log.info("Delegate configuration notified")
                 }
 
-                log.default("Peripheral configuration completed")
+                log.info("Peripheral configuration completed")
             } catch {
-                log.error("Error applying peripheral configuration: %{public}@", String(describing: error))
+                log.error("Error applying peripheral configuration: \(error)")
                 // Will retry
             }
         }
@@ -315,7 +302,7 @@ extension PeripheralManager {
         try discoverServices(configuration.serviceCharacteristics.keys.map { $0 }, timeout: discoveryTimeout)
 
         for service in peripheral.services ?? [] {
-            log.default("Discovered service: %{public}@", String(describing: service))
+            log.info("Discovered service: \(service)")
             guard let characteristics = configuration.serviceCharacteristics[service.uuid] else {
                 // Not all services may have characteristics
                 continue
@@ -333,10 +320,7 @@ extension PeripheralManager {
         // Prelude
         dispatchPrecondition(condition: .onQueue(queue))
         guard central?.state == .poweredOn, peripheral.state == .connected else {
-            log.info(
-                "runCommand guard failed - bluetooth not running or peripheral not connected: peripheral %@",
-                String(describing: peripheral)
-            )
+            log.info("runCommand guard failed - bluetooth not running or peripheral not connected: peripheral \(peripheral)")
             throw PeripheralManagerError.notReady
         }
 
@@ -460,7 +444,7 @@ extension PeripheralManager {
 
 extension PeripheralManager: CBPeripheralDelegate {
     public func peripheral(_: CBPeripheral, didDiscoverServices error: Error?) {
-        log.default("didDiscoverServices")
+        log.info("didDiscoverServices")
         commandLock.lock()
 
         if let index = commandConditions.firstIndex(where: { condition -> Bool in
@@ -583,10 +567,10 @@ extension PeripheralManager: CBPeripheralDelegate {
 
     public func peripheral(_: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
         guard error == nil else {
-            log.error("Error reading rssi: %{public}@", String(describing: RSSI))
+            log.error("Error reading rssi: \(RSSI)")
             return
         }
-        log.default("didReadRSSI: %{public}@", String(describing: RSSI))
+        log.info("didReadRSSI: \(RSSI)")
     }
 }
 
@@ -594,7 +578,7 @@ extension PeripheralManager {
     func clearCommsQueues() {
         queueLock.lock()
         if !cmdQueue.isEmpty {
-            log.default("Removing %{public}d leftover elements from command queue", cmdQueue.count)
+            log.info("Removing \(cmdQueue.count) leftover elements from command queue")
             cmdQueue.removeAll()
         }
         queueLock.unlock()
@@ -605,7 +589,7 @@ extension PeripheralManager {
     }
 
     func centralManager(_: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        log.debug("PeripheralManager - didConnect: %@", String(describing: peripheral))
+        log.debug("PeripheralManager - didConnect: \(peripheral)")
         switch peripheral.state {
         case .connected:
             clearCommsQueues()

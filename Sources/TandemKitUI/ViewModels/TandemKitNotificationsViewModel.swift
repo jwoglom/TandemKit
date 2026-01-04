@@ -4,7 +4,7 @@ import SwiftUI
 import TandemCore
 
 class TandemKitNotificationsViewModel: ObservableObject {
-    private let log = PumpLogger(label: "TandemKitNotificationsViewModel")
+    private let log = TandemLogger(category: "TandemKitNotificationsViewModel")
     private var pumpManager: TandemPumpManager?
 
     @Published var notifications: [NotificationItem] = []

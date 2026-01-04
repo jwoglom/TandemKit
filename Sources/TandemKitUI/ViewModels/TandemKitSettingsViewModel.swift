@@ -4,7 +4,7 @@ import SwiftUI
 import TandemCore
 
 class TandemKitSettingsViewModel: ObservableObject {
-    private let log = PumpLogger(label: "TandemKitSettingsViewModel")
+    private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
 

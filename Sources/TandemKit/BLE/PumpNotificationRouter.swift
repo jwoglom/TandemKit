@@ -15,7 +15,7 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
     }
 
     private let queue = DispatchQueue(label: "com.jwoglom.TandemKit.PumpNotificationRouter.queue", qos: .utility)
-    private let logger = PumpLogger(label: "TandemKit.PumpNotificationRouter")
+    private let logger = TandemLogger(category: "PumpNotificationRouter")
 
     private weak var session: PumpCommSession?
     private weak var peripheralManager: PeripheralManager?

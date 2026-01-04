@@ -1453,8 +1453,7 @@ private extension TandemCLIMain {
         private var transport: PeripheralManagerTransport?
         private let lineEditor: ConsoleLineEditor
         private var eventListenerTask: Task<Void, Never>?
-        private var previousLogHandler: PumpLogging.Handler?
-        private let logger = PumpLogger(label: "TandemCLI.Console")
+        private let logger = TandemLogger(category: "TandemCLI.Console")
 
         private var continuation: CheckedContinuation<Void, Error>?
         private let stateQueue = DispatchQueue(label: "com.jwoglom.TandemCLI.ConsoleCoordinator.state")
@@ -1475,36 +1474,11 @@ private extension TandemCLIMain {
 
             ConsoleCoordinator.activeCoordinator = self
             installSignalHandlerIfNeeded()
-
-            previousLogHandler = PumpLogging.setHandler { [weak lineEditor] level, label, message in
-                guard let lineEditor else { return false }
-                if message.isEmpty {
-                    lineEditor.prepareForExternalOutput()
-                    Swift.print("")
-                    lineEditor.externalOutputDidOccur()
-                    return true
-                }
-                let isConsoleLog = (label == "TandemCLI.Console")
-                let prefix = isConsoleLog ? "" : "[\(level.description)][\(label)] "
-                let lines = message.split(omittingEmptySubsequences: false, whereSeparator: { $0.isNewline })
-                lineEditor.prepareForExternalOutput()
-                if lines.isEmpty {
-                    Swift.print(prefix)
-                } else {
-                    for line in lines {
-                        Swift.print("\(prefix)\(String(line))")
-                    }
-                }
-                lineEditor.externalOutputDidOccur()
-                return true
-            }
         }
 
         deinit {
             bluetoothManager.delegate = nil
             eventListenerTask?.cancel()
-            _ = PumpLogging.setHandler(previousLogHandler)
-            previousLogHandler = nil
             lineEditor.shutdown()
             if ConsoleCoordinator.activeCoordinator === self {
                 ConsoleCoordinator.activeCoordinator = nil
@@ -1761,10 +1735,6 @@ private extension TandemCLIMain {
 
             cancelTimeout()
 
-            let priorHandler = previousLogHandler
-            previousLogHandler = nil
-            _ = PumpLogging.setHandler(priorHandler)
-
             lineEditor.shutdown()
 
             eventListenerTask?.cancel()
@@ -1933,8 +1903,14 @@ private extension TandemCLIMain {
     }
 
     private extension ConsoleCoordinator {
-        func consolePrint(_ text: String, level: PumpLogger.Level = .info) {
-            logger.log(level, text)
+        func consolePrint(_ text: String, level: TandemLogger.Level = .info) {
+            switch level {
+            case .trace: logger.trace(text)
+            case .debug: logger.debug(text)
+            case .info: logger.info(text)
+            case .warning: logger.warning(text)
+            case .error: logger.error(text)
+            }
         }
     }
 

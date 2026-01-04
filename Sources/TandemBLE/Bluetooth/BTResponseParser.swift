@@ -2,7 +2,7 @@ import CoreBluetooth
 import Foundation
 import TandemCore
 
-private let responseParserLogger = PumpLogger(label: "TandemBLE.BTResponseParser")
+private let responseParserLogger = TandemLogger(category: "BTResponseParser")
 
 /// Parses raw Bluetooth notification packets into pump messages.
 /// This is a minimal Swift port of PumpX2 `BTResponseParser` used for unit testing.

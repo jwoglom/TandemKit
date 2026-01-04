@@ -1,9 +1,6 @@
 import Foundation
 import LoopKit
 import TandemCore
-#if canImport(os)
-    import os
-#endif
 
 public protocol PumpCommDelegate: AnyObject {
     func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
@@ -23,7 +20,7 @@ public class PumpComm: CustomDebugStringConvertible {
 
     public weak var delegate: PumpCommDelegate?
 
-    public let log = OSLog(category: "PumpComm")
+    public let log = TandemLogger(category: "PumpComm")
 
     public var retryPolicy: PumpCommRetryPolicy
     private let delayHandler: (TimeInterval) -> Void
@@ -131,7 +128,7 @@ public class PumpComm: CustomDebugStringConvertible {
     /// - Returns: The response message from the pump
     /// - Throws: PumpCommError if communication fails or response is invalid
     public func sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
-        log.debug("sendMessage: attempting to send %@", String(describing: message))
+        log.debug("sendMessage: attempting to send \(message)")
 
         var attempt = 0
 
@@ -143,9 +140,7 @@ public class PumpComm: CustomDebugStringConvertible {
 
                 if let errorResponse = response as? ErrorResponse {
                     log.error(
-                        "sendMessage: pump returned error response (code=%{public}d) on attempt %{public}d",
-                        errorResponse.errorCodeId,
-                        attempt
+                        "sendMessage: pump returned error response (code=\(errorResponse.errorCodeId)) on attempt \(attempt)"
                     )
                     switch handleFault(for: message, response: errorResponse, attempt: attempt) {
                     case .retry:
@@ -157,10 +152,10 @@ public class PumpComm: CustomDebugStringConvertible {
 
                 return response
             } catch let error as PumpCommError {
-                log.error("sendMessage pump communication error: %{public}@", String(describing: error))
+                log.error("sendMessage pump communication error: \(error)")
                 throw error
             } catch {
-                log.error("sendMessage unexpected error: %{public}@", String(describing: error))
+                log.error("sendMessage unexpected error: \(error)")
                 throw PumpCommError.transportError(underlying: error)
             }
         }
@@ -185,11 +180,11 @@ public class PumpComm: CustomDebugStringConvertible {
 
         switch decision {
         case let .retry(delay):
-            log.debug("sendMessage: scheduling retry for fault code %{public}d after %{public}.2f s", response.errorCodeId, delay)
+            log.debug("sendMessage: scheduling retry for fault code \(response.errorCodeId) after \(String(format: "%.2f", delay)) s")
             delayHandler(delay)
             return .retry
         case .doNotRetry:
-            log.error("sendMessage: not retrying fault code %{public}d", response.errorCodeId)
+            log.error("sendMessage: not retrying fault code \(response.errorCodeId)")
             return .fail(event)
         }
     }
@@ -214,9 +209,7 @@ public class PumpComm: CustomDebugStringConvertible {
 
         guard let typedResponse = response as? T else {
             log.error(
-                "sendMessage unexpected response type: expected %@, got %@",
-                String(describing: expectedType),
-                String(describing: type(of: response))
+                "sendMessage unexpected response type: expected \(expectedType), got \(type(of: response))"
             )
             throw PumpCommError.errorResponse(response: response)
         }
