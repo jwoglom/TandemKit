@@ -90,7 +90,7 @@ class HistoryToDoseMapper {
                 sequenceNum: activation.sequenceNum,
                 timeZone: timeZone
             )
-            let dose = DoseEntry(
+            var dose = DoseEntry(
                 type: .bolus,
                 startDate: startDate,
                 value: Double(activation.bolusSize),
@@ -100,6 +100,7 @@ class HistoryToDoseMapper {
                 insulinType: insulinType,
                 isMutable: true
             )
+            dose.syncIdentifier = Self.bolusSyncIdentifier(activation.bolusId)
             events.append(
                 NewPumpEvent(
                     date: dose.startDate,
@@ -179,7 +180,7 @@ class HistoryToDoseMapper {
         let programmedUnits = activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested)
         let deliveredUnits = Double(completion.insulinDelivered)
 
-        return DoseEntry(
+        var dose = DoseEntry(
             type: .bolus,
             startDate: startDate,
             endDate: endDate,
@@ -189,6 +190,16 @@ class HistoryToDoseMapper {
             description: "Bolus #\(completion.bolusId)",
             insulinType: insulinType
         )
+        dose.syncIdentifier = Self.bolusSyncIdentifier(completion.bolusId)
+        return dose
+    }
+
+    static func bolusSyncIdentifier(_ bolusId: Int) -> String {
+        "bolus-\(bolusId)"
+    }
+
+    static func tempBasalSyncIdentifier(_ tempRateId: Int) -> String {
+        "tempBasal-\(tempRateId)"
     }
 
     private func buildTempBasalDose(
@@ -224,7 +235,7 @@ class HistoryToDoseMapper {
 
         let endDate = max(programmedEndDate, completionDate)
 
-        return DoseEntry(
+        var dose = DoseEntry(
             type: .tempBasal,
             startDate: startDate,
             endDate: endDate,
@@ -234,6 +245,8 @@ class HistoryToDoseMapper {
             insulinType: insulinType,
             isMutable: completion == nil
         )
+        dose.syncIdentifier = Self.tempBasalSyncIdentifier(activation.tempRateId)
+        return dose
     }
 
     private func buildBasalDose(

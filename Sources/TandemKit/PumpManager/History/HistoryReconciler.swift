@@ -49,6 +49,13 @@ class HistoryReconciler {
     }
 
     private func matches(_ pending: PendingDose, to eventDose: DoseEntry) -> Bool {
+        if let pendingSyncIdentifier = pending.dose.syncIdentifier,
+           let eventSyncIdentifier = eventDose.syncIdentifier,
+           pendingSyncIdentifier == eventSyncIdentifier
+        {
+            return true
+        }
+
         guard pending.dose.type == eventDose.type else {
             return false
         }
