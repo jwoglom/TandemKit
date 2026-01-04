@@ -26,19 +26,23 @@ struct TandemKitDebugView: View {
                 }
 
                 if !viewModel.parameterizedMessages.isEmpty {
-                    ForEach(viewModel.parameterizedMessages) { option in
-                        Button(action: {
-                            viewModel.parameterInput = [:]
-                            viewModel.cargoHexInput = ""
-                            showingParameterized = option
-                        }) {
-                            HStack {
-                                Text(option.metadata.name)
-                                Spacer()
-                                Image(systemName: "slider.horizontal.3")
-                                    .foregroundColor(.secondary)
+                    Menu {
+                        ForEach(viewModel.parameterizedMessages) { option in
+                            Button(action: {
+                                viewModel.parameterInput = [:]
+                                viewModel.cargoHexInput = ""
+                                showingParameterized = option
+                            }) {
+                                HStack {
+                                    Text(option.metadata.name)
+                                    Spacer()
+                                    Image(systemName: "slider.horizontal.3")
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
+                    } label: {
+                        Label("Send parameterized request", systemImage: "slider.horizontal.3")
                     }
                 }
 
@@ -70,7 +74,7 @@ struct TandemKitDebugView: View {
                     showingPumpState = true
                 }
                 .sheet(isPresented: $showingPumpState) {
-                    DebugTextView(title: "PumpState", contents: viewModel.pumpStateDebugDescription)
+                    DebugTextView(title: "PumpState", contents: viewModel.pumpStateJsonDebugDescription)
                 }
             }
 
@@ -79,7 +83,7 @@ struct TandemKitDebugView: View {
                     showingManagerState = true
                 }
                 .sheet(isPresented: $showingManagerState) {
-                    DebugTextView(title: "TandemPumpManagerState", contents: viewModel.managerStateDebugDescription)
+                    DebugTextView(title: "TandemPumpManagerState", contents: viewModel.managerStateJsonDebugDescription)
                 }
             }
         }

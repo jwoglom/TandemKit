@@ -43,6 +43,44 @@ final class TandemKitDebugViewModel: ObservableObject {
         pumpManager?.state.debugDescription ?? "No TandemPumpManagerState available"
     }
 
+    var pumpStateJsonDebugDescription: String {
+        guard let state = pumpManager?.tandemPump.state else {
+            return jsonString(from: ["error": "No PumpState available"])
+        }
+        return jsonString(from: state.rawValue)
+    }
+
+    var managerStateJsonDebugDescription: String {
+        guard let state = pumpManager?.state else {
+            return jsonString(from: ["error": "No TandemPumpManagerState available"])
+        }
+        return jsonString(from: state.rawValue)
+    }
+
+    private func jsonString(from dictionary: [String: Any]) -> String {
+        let jsonCompatible = makeJsonCompatible(dictionary)
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: jsonCompatible, options: [.prettyPrinted, .sortedKeys]),
+              let jsonString = String(data: jsonData, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return jsonString
+    }
+
+    private func makeJsonCompatible(_ value: Any) -> Any {
+        if let data = value as? Data {
+            return data.base64EncodedString()
+        } else if let dict = value as? [String: Any] {
+            return dict.mapValues { makeJsonCompatible($0) }
+        } else if let array = value as? [Any] {
+            return array.map { makeJsonCompatible($0) }
+        } else if let date = value as? Date {
+            return ISO8601DateFormatter().string(from: date)
+        } else {
+            return value
+        }
+    }
+
     var requestMessages: [MessageMetadata] {
         MessageRegistry.all
             .filter { $0.messageType == .Request && $0.size == 0 }
