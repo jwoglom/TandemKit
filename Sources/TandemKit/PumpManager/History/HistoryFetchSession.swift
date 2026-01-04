@@ -89,7 +89,8 @@ final class HistoryFetchSession {
             guard !self.finished,
                   let expected = self.expectedCount,
                   let streamId = self.activeStreamId,
-                  streamId == response.streamId else {
+                  streamId == response.streamId
+            else {
                 return
             }
 

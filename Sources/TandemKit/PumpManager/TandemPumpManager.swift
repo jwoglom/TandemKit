@@ -107,10 +107,9 @@ private struct ActiveTempBasal {
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
     private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
-    private let lastScheduledBasalRate = Locked<Double?>(nil)
     private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
-    private let lockedCurrentBasalRate = Locked<Double?>(nil)
+    private var bolusProgressReport: TandemDoseProgressReporter?
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
     private var targetPeripheralIdentifier: UUID?
@@ -159,8 +158,6 @@ private struct ActiveTempBasal {
 
         lockedBatteryChargeRemaining.value = nil
         lockedReservoirValue.value = nil
-        lockedCurrentBasalRate.value = nil
-        lastScheduledBasalRate.value = nil
         activeBolus.value = nil
         activeTempBasal.value = nil
 
@@ -639,7 +636,6 @@ private struct ActiveTempBasal {
     private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
         let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
         let profileUnitsPerHour = Double(response.profileBasalRate) / 1000.0
-        lockedCurrentBasalRate.value = profileUnitsPerHour
         let timestamp = Date()
 
         logger(for: source).debug("[\(source.label)] Basal updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
@@ -648,14 +644,7 @@ private struct ActiveTempBasal {
         if rateUnitsPerHour <= 0 {
             newBasalState = .suspended(timestamp)
         } else if let tempBasal = activeTempBasal.value {
-            let dose = DoseEntry.tempBasal(
-                absoluteUnit: rateUnitsPerHour,
-                duration: tempBasal.dose.endDate.timeIntervalSince(tempBasal.dose.startDate),
-                insulinType: lockedState.value.insulinType,
-                startDate: tempBasal.dose.startDate,
-                syncIdentifier: tempBasal.dose.syncIdentifier
-            )
-            newBasalState = .tempBasal(dose)
+            newBasalState = .tempBasal(tempBasal.dose)
         } else {
             newBasalState = .active(timestamp)
             activeTempBasal.value = nil
@@ -810,35 +799,21 @@ private struct ActiveTempBasal {
 
         if response.active {
             // Get the scheduled basal rate to calculate actual temp rate
-            let scheduledRate = scheduledBasalRateForTempBasal(requestedRate: 0)
+            let scheduledRate = getScheduledBasalRate()
             let tempRateUnitsPerHour = scheduledRate * Double(response.percentage) / 100.0
-            let durationSeconds = TimeInterval(response.duration * 60)
-
-            // Use the actual start time from the pump
-            let startDate = response.startTime
-            let endDate = startDate.addingTimeInterval(durationSeconds)
 
             let syncIdentifier = activeTempBasal.value?.dose.syncIdentifier
-                ?? "temp-\(Int(startDate.timeIntervalSince1970))"
+                ?? "temp-\(Int(response.startTime.timeIntervalSince1970))"
 
-            let scheduledQuantity = HKQuantity(
-                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
-                doubleValue: scheduledRate
-            )
-
-            let dose = DoseEntry(
-                type: .tempBasal,
-                startDate: startDate,
-                endDate: endDate,
-                value: tempRateUnitsPerHour,
-                unit: .unitsPerHour,
-                deliveredUnits: nil,
-                syncIdentifier: syncIdentifier,
-                scheduledBasalRate: scheduledQuantity
+            let dose = DoseEntry.tempBasal(
+                absoluteUnit: tempRateUnitsPerHour,
+                duration: TimeInterval(seconds: Double(response.duration)),
+                insulinType: lockedState.value.insulinType,
+                startDate: response.startTime,
+                syncIdentifier: syncIdentifier
             )
 
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: scheduledRate)
-            lastScheduledBasalRate.value = scheduledRate
 
             updateStatus { status in
                 status.basalDeliveryState = .tempBasal(dose)
@@ -1417,18 +1392,6 @@ private struct ActiveTempBasal {
         }
     }
 
-    private func scheduledBasalRateForTempBasal(requestedRate: Double) -> Double {
-        if let override = lastScheduledBasalRate.value, override > 0 {
-            return override
-        }
-
-        if let statusRate = lockedStatus.value.basalDeliveryState?.scheduledBasalRateValue, statusRate > 0 {
-            return statusRate
-        }
-
-        return max(requestedRate, 0.05)
-    }
-
     private func percentForTempBasal(requestedRate: Double, baseline: Double) -> Int {
         guard baseline > 0 else { return 0 }
         let percent = Int((requestedRate / baseline * 100.0).rounded())
@@ -1527,25 +1490,13 @@ private struct ActiveTempBasal {
         fetchReservoirStatus()
         fetchBatteryStatus()
         fetchBolusStatus()
+        fetchHomeScreenStatus()
         fetchControlIQStatus()
+        fetchNotificationCount()
 
         recordReconciliation(at: Date.now)
 
         completion?(lockedState.value.lastReconciliation)
-    }
-
-    public func refreshAllStatus() {
-        telemetryLogger.debug("UI-triggered full refresh: fetching all status")
-
-        // TEMP
-        ensureCurrentPumpData { _ in }
-
-        // Fetch UI-specific data on background queue
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.fetchControlIQStatus()
-            self?.fetchHomeScreenStatus()
-            self?.fetchNotificationCount()
-        }
     }
 
     // MARK: - History Fetching
@@ -1631,9 +1582,7 @@ private struct ActiveTempBasal {
     }
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
-        // This will be implemented when we support bolus delivery
-        // For now, return nil to indicate no active bolus
-        nil
+        bolusProgressReport
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
@@ -1808,16 +1757,6 @@ private struct ActiveTempBasal {
             status.bolusState = .initiating
         }
 
-        guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeBolus(.failure(.communication(error)), completion: completion)
-            return
-        }
-
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -1876,6 +1815,7 @@ private struct ActiveTempBasal {
 
                 let syncId = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
                 let doseEntry = dose.toDoseEntry(endDate: nil, syncIdentifier: syncId)
+                bolusProgressReport = TandemDoseProgressReporter(total: units)
 
                 shouldReleasePermissionOnFailure = false
 
@@ -1986,13 +1926,11 @@ private struct ActiveTempBasal {
             return
         }
 
-        let previousBasalState = lockedState.value.basalDeliveryState
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
+            var pumpEvents: [NewPumpEvent] = []
             do {
-                var pumpEvents: [NewPumpEvent] = []
-
                 // First cancel running temp basal before starting a new one
                 if let activeTempBasal = self.activeTempBasal.value {
                     updateStatus { status in
@@ -2020,22 +1958,21 @@ private struct ActiveTempBasal {
                         syncIdentifier: activeTempBasal.dose.syncIdentifier
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
+
+                    self.updateStatus { status in
+                        status.basalDeliveryState = .active(Date.now)
+                    }
                 }
 
                 if duration <= 0 {
                     // Loop wants us to only cancel the temp basal
                     let basalDose = DoseEntry.basal(
-                        rate: lockedCurrentBasalRate.value ?? 0,
+                        rate: getScheduledBasalRate(),
                         insulinType: lockedState.value.insulinType
                     )
                     pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
 
                     self.activeTempBasal.value = nil
-                    self.lastScheduledBasalRate.value = nil
-
-                    self.updateStatus { status in
-                        status.basalDeliveryState = .active(Date.now)
-                    }
 
                     self.recordReconciliation(at: Date.now)
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
@@ -2045,7 +1982,8 @@ private struct ActiveTempBasal {
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
-                    guard let baselineRate = lockedCurrentBasalRate.value else {
+                    let baselineRate = getScheduledBasalRate()
+                    guard baselineRate > 0 else {
                         log.error("No current basal rate available...")
                         throw PumpCommError.other
                     }
@@ -2055,7 +1993,10 @@ private struct ActiveTempBasal {
 
                     // If percent is exactly 100%, don't send a temp basal - just return to scheduled basal
                     if percent == 100 {
-                        log.info("Requested temp basal is 100% (\(unitsPerHour)U/hr equals scheduled rate) - returning to scheduled basal instead")
+                        log
+                            .info(
+                                "Requested temp basal is 100% (\(unitsPerHour)U/hr equals scheduled rate) - returning to scheduled basal instead"
+                            )
                         let basalDose = DoseEntry.basal(
                             rate: baselineRate,
                             insulinType: lockedState.value.insulinType
@@ -2063,7 +2004,6 @@ private struct ActiveTempBasal {
                         pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
 
                         self.activeTempBasal.value = nil
-                        self.lastScheduledBasalRate.value = nil
 
                         self.updateStatus { status in
                             status.basalDeliveryState = .active(Date.now)
@@ -2096,16 +2036,27 @@ private struct ActiveTempBasal {
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
                     self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
-                    self.lastScheduledBasalRate.value = baselineRate
 
                     self.recordReconciliation(at: Date.now)
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.basalDeliveryState = previousBasalState
+
+                if !pumpEvents.isEmpty {
+                    // Ensure all events are commited to Loopkit
+                    self.pumpDelegate.notify { delegate in
+                        guard let delegate = delegate else { return }
+                        delegate.pumpManager(
+                            self,
+                            hasNewPumpEvents: pumpEvents,
+                            lastReconciliation: self.lockedState.value.lastReconciliation,
+                            replacePendingEvents: true,
+                            completion: { _ in }
+                        )
+                    }
                 }
+
                 self.notifyPumpManagerDelegateOfError(pumpError)
                 self.completeTempBasal(.failure(.communication(pumpError)), completion: completion)
             }
@@ -2196,8 +2147,6 @@ private struct ActiveTempBasal {
                     self.activeTempBasal.value = nil
                 }
 
-                self.lastScheduledBasalRate.value = nil
-
                 self.updateStatus { status in
                     status.basalDeliveryState = .suspended(Date.now)
                     status.bolusState = .noBolus
@@ -2251,11 +2200,10 @@ private struct ActiveTempBasal {
                     NewPumpEvent
                         .basal(
                             dose: DoseEntry
-                                .basal(rate: lockedCurrentBasalRate.value ?? 0, insulinType: lockedState.value.insulinType)
+                                .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
                         )
                 ]
                 self.activeTempBasal.value = nil
-                self.lastScheduledBasalRate.value = nil
                 self.updateStatus { status in
                     status.basalDeliveryState = .active(Date.now)
                 }
@@ -2386,10 +2334,6 @@ private struct ActiveTempBasal {
                 managerState.basalRateSchedule = schedule
                 managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
                 self.lockedState.value = managerState
-
-                if let firstRate = sortedItems.first?.value {
-                    self.lastScheduledBasalRate.value = firstRate
-                }
 
                 self.notifyDelegateStateUpdated()
 
@@ -2704,6 +2648,18 @@ private struct ActiveTempBasal {
 }
 
 private extension TandemPumpManager {
+    func getScheduledBasalRate() -> Double {
+        guard let schedule = lockedState.value.basalRateSchedule, !schedule.items.isEmpty else {
+            return 0
+        }
+
+        let now = Date.now
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let nowTimeInterval = now.timeIntervalSince(startOfDay)
+
+        return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+    }
+
     func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(

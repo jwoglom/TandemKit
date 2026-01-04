@@ -114,17 +114,17 @@ private struct ParameterizedMessageSheet: View {
                                 get: { viewModel.parameterInput[field.id] ?? "" },
                                 set: { viewModel.parameterInput[field.id] = $0 }
                             ))
-                            .keyboardType(field.keyboard)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled(true)
-                            .overlay(alignment: .leading) {
-                                if (viewModel.parameterInput[field.id] ?? "").isEmpty {
-                                    Text(field.placeholder)
-                                        .foregroundColor(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .opacity(0.6)
+                                .keyboardType(field.keyboard)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled(true)
+                                .overlay(alignment: .leading) {
+                                    if (viewModel.parameterInput[field.id] ?? "").isEmpty {
+                                        Text(field.placeholder)
+                                            .foregroundColor(.secondary)
+                                            .padding(.horizontal, 8)
+                                            .opacity(0.6)
+                                    }
                                 }
-                            }
                         }
                     }
                 }
@@ -196,7 +196,8 @@ private struct DebugTextView: View {
 private extension TandemKitDebugViewModel.ParameterField {
     var keyboard: UIKeyboardType {
         switch type {
-        case .integer, .unsigned:
+        case .integer,
+             .unsigned:
             return .numberPad
         case .boolean:
             return .default

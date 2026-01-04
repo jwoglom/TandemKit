@@ -98,31 +98,26 @@ public class PeripheralManager: NSObject {
     func logTrace(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.trace(msg)
-        // log.debug("%{public}@", msg)
     }
 
     func logDebug(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.debug(msg)
-        log.debug("%{public}@", msg)
     }
 
     func logInfo(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.info(msg)
-        log.default("%{public}@", msg)
     }
 
     func logWarning(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.warning(msg)
-        log.info("%{public}@", msg)
     }
 
     func logError(_ message: @autoclosure () -> String) {
         let msg = message()
         logger.error(msg)
-        log.error("%{public}@", msg)
     }
 }
 

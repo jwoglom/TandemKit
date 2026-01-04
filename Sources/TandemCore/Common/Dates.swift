@@ -4,7 +4,8 @@ enum Dates {
     static let JANUARY_1_2008_UNIX_EPOCH: TimeInterval = 1_199_145_600
 
     static func fromJan12008ToUnixEpochSeconds(_ seconds: TimeInterval) -> TimeInterval {
-        seconds + JANUARY_1_2008_UNIX_EPOCH
+        // Date(timeIntervalSince1970 -> timezone is always UTC, thus we need to correct the local date from the pump to UTC
+        seconds + JANUARY_1_2008_UNIX_EPOCH - TimeInterval(seconds: Double(TimeZone.current.secondsFromGMT()))
     }
 
     static func fromJan12008EpochSecondsToDate(_ seconds: TimeInterval) -> Date {
