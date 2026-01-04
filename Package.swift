@@ -21,6 +21,10 @@ let package = Package(
             targets: ["TandemKit"]
         ),
         .library(
+            name: "TandemKitUI",
+            targets: ["TandemKitUI"]
+        ),
+        .library(
             name: "TandemKitPlugin",
             targets: ["TandemKitPlugin"]
         ),
@@ -90,6 +94,11 @@ let package = Package(
                 name: "TandemKit",
                 dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
                 path: "Sources/TandemKit"
+            ),
+            .target(
+                name: "TandemKitUI",
+                dependencies: ["TandemKit", "TandemCore", "LoopKitUI"],
+                path: "Sources/TandemKitUI"
             ),
             .target(
                 name: "TandemKitPlugin",

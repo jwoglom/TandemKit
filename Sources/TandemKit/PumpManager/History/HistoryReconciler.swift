@@ -27,12 +27,23 @@ class HistoryReconciler {
             }
 
             if let matchIndex = remainingPending.firstIndex(where: { matches($0, to: dose) }) {
-                dose.syncIdentifier = remainingPending[matchIndex].syncIdentifier
+                let syncId = remainingPending[matchIndex].syncIdentifier
                 remainingPending.remove(at: matchIndex)
+                // Create new dose with syncIdentifier
+                let updatedDose = DoseEntry(
+                    type: dose.type,
+                    startDate: dose.startDate,
+                    endDate: dose.endDate,
+                    value: dose.programmedUnits,
+                    unit: dose.unit,
+                    deliveredUnits: dose.deliveredUnits,
+                    description: dose.description,
+                    syncIdentifier: syncId,
+                    scheduledBasalRate: dose.scheduledBasalRate
+                )
                 let updatedEvent = NewPumpEvent(
                     date: event.date,
-                    dose: dose,
-                    isMutable: event.isMutable,
+                    dose: updatedDose,
                     raw: event.raw,
                     title: event.title,
                     type: event.type
@@ -68,14 +79,14 @@ class HistoryReconciler {
         switch pending.dose.type {
         case .bolus:
             return closeEnough(
-                expected: pending.dose.deliveredUnits ?? pending.dose.value,
-                actual: eventDose.deliveredUnits ?? eventDose.value,
+                expected: pending.dose.deliveredUnits ?? pending.dose.programmedUnits,
+                actual: eventDose.deliveredUnits ?? eventDose.programmedUnits,
                 tolerance: bolusTolerance
             )
         case .tempBasal:
             return closeEnough(
-                expected: pending.dose.value,
-                actual: eventDose.value,
+                expected: pending.dose.programmedUnits,
+                actual: eventDose.programmedUnits,
                 tolerance: basalTolerance
             )
         case .suspend, .resume:

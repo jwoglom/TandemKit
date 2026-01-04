@@ -200,7 +200,7 @@ private extension TandemKitDebugViewModel.ParameterField {
     }
 }
 
-private extension TandemKitDebugViewModel.ParameterizedOption: Identifiable {
+extension TandemKitDebugViewModel.ParameterizedOption: Identifiable {
     var id: String { metadata.name }
 }
 

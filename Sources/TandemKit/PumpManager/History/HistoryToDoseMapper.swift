@@ -90,22 +90,20 @@ class HistoryToDoseMapper {
                 sequenceNum: activation.sequenceNum,
                 timeZone: timeZone
             )
-            var dose = DoseEntry(
+            let dose = DoseEntry(
                 type: .bolus,
                 startDate: startDate,
                 value: Double(activation.bolusSize),
                 unit: .units,
                 deliveredUnits: nil,
                 description: "Bolus #\(activation.bolusId)",
-                insulinType: insulinType,
-                isMutable: true
+                syncIdentifier: Self.bolusSyncIdentifier(activation.bolusId),
+                insulinType: insulinType
             )
-            dose.syncIdentifier = Self.bolusSyncIdentifier(activation.bolusId)
             events.append(
                 NewPumpEvent(
                     date: dose.startDate,
                     dose: dose,
-                    isMutable: true,
                     raw: activation.cargo,
                     title: "Bolus",
                     type: .bolus
@@ -125,7 +123,6 @@ class HistoryToDoseMapper {
                     NewPumpEvent(
                         date: dose.startDate,
                         dose: dose,
-                        isMutable: true,
                         raw: activation.cargo,
                         title: "Temp Basal",
                         type: .tempBasal
@@ -180,7 +177,7 @@ class HistoryToDoseMapper {
         let programmedUnits = activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested)
         let deliveredUnits = Double(completion.insulinDelivered)
 
-        var dose = DoseEntry(
+        let dose = DoseEntry(
             type: .bolus,
             startDate: startDate,
             endDate: endDate,
@@ -188,9 +185,9 @@ class HistoryToDoseMapper {
             unit: .units,
             deliveredUnits: deliveredUnits,
             description: "Bolus #\(completion.bolusId)",
+            syncIdentifier: Self.bolusSyncIdentifier(completion.bolusId),
             insulinType: insulinType
         )
-        dose.syncIdentifier = Self.bolusSyncIdentifier(completion.bolusId)
         return dose
     }
 
@@ -235,17 +232,16 @@ class HistoryToDoseMapper {
 
         let endDate = max(programmedEndDate, completionDate)
 
-        var dose = DoseEntry(
+        let dose = DoseEntry(
             type: .tempBasal,
             startDate: startDate,
             endDate: endDate,
             value: Double(activation.percent) / 100.0,
             unit: .unitsPerHour,
             description: "Temp basal #\(activation.tempRateId) at \(activation.percent)%",
-            insulinType: insulinType,
-            isMutable: completion == nil
+            syncIdentifier: Self.tempBasalSyncIdentifier(activation.tempRateId),
+            insulinType: insulinType
         )
-        dose.syncIdentifier = Self.tempBasalSyncIdentifier(activation.tempRateId)
         return dose
     }
 

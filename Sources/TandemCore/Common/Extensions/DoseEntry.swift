@@ -45,7 +45,8 @@ public extension DoseEntry {
         duration: TimeInterval,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
-        endDate: Date? = nil
+        endDate: Date? = nil,
+        syncIdentifier: String? = nil
     ) -> DoseEntry {
         if let endDate = endDate {
             return DoseEntry(
@@ -54,8 +55,8 @@ public extension DoseEntry {
                 endDate: endDate,
                 value: absoluteUnit,
                 unit: .unitsPerHour,
-                insulinType: insulinType,
-                isMutable: false
+                syncIdentifier: syncIdentifier,
+                insulinType: insulinType
             )
         }
 
@@ -65,8 +66,8 @@ public extension DoseEntry {
             endDate: startDate + duration,
             value: absoluteUnit,
             unit: .unitsPerHour,
-            insulinType: insulinType,
-            isMutable: true
+            syncIdentifier: syncIdentifier,
+            insulinType: insulinType
         )
     }
 

@@ -648,13 +648,13 @@ private struct ActiveTempBasal {
         if rateUnitsPerHour <= 0 {
             newBasalState = .suspended(timestamp)
         } else if let tempBasal = activeTempBasal.value {
-            var dose = DoseEntry.tempBasal(
+            let dose = DoseEntry.tempBasal(
                 absoluteUnit: rateUnitsPerHour,
                 duration: tempBasal.dose.endDate.timeIntervalSince(tempBasal.dose.startDate),
                 insulinType: lockedState.value.insulinType,
-                startDate: tempBasal.dose.startDate
+                startDate: tempBasal.dose.startDate,
+                syncIdentifier: tempBasal.dose.syncIdentifier
             )
-            dose.syncIdentifier = tempBasal.dose.syncIdentifier
             newBasalState = .tempBasal(dose)
         } else {
             newBasalState = .active(timestamp)
@@ -1579,7 +1579,7 @@ private struct ActiveTempBasal {
                     timeZone: self.lockedStatus.value.timeZone
                 )
 
-                let (reconciledEvents, stillPending) = self.historyReconciler.reconcile(
+                let (reconciledEvents, stillPending, _) = self.historyReconciler.reconcile(
                     pendingDoses: self.lockedState.value.pendingDoses,
                     historyEvents: events
                 )
@@ -1610,7 +1610,7 @@ private struct ActiveTempBasal {
                 }
             } catch {
                 self.activeHistoryFetchSession.value = nil
-                completion(PumpManagerError.communication(error))
+                completion(error)
             }
         }
     }
@@ -1819,8 +1819,8 @@ private struct ActiveTempBasal {
                     insulinType: lockedState.value.insulinType
                 )
 
-                var doseEntry = dose.toDoseEntry(endDate: nil)
-                doseEntry.syncIdentifier = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
+                let syncId = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
+                let doseEntry = dose.toDoseEntry(endDate: nil, syncIdentifier: syncId)
 
                 shouldReleasePermissionOnFailure = false
 
@@ -1956,14 +1956,14 @@ private struct ActiveTempBasal {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    var cancelledDose = DoseEntry.tempBasal(
+                    let cancelledDose = DoseEntry.tempBasal(
                         absoluteUnit: activeTempBasal.scheduledRate,
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: activeTempBasal.dose.startDate,
-                        endDate: Date.now
+                        endDate: Date.now,
+                        syncIdentifier: activeTempBasal.dose.syncIdentifier
                     )
-                    cancelledDose.syncIdentifier = activeTempBasal.dose.syncIdentifier
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
                 }
 
@@ -2010,13 +2010,13 @@ private struct ActiveTempBasal {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    var dose = DoseEntry.tempBasal(
+                    let dose = DoseEntry.tempBasal(
                         absoluteUnit: baselineRate * (Double(percent) / 100),
                         duration: duration,
                         insulinType: lockedState.value.insulinType,
-                        startDate: Date.now
+                        startDate: Date.now,
+                        syncIdentifier: HistoryToDoseMapper.tempBasalSyncIdentifier(response.tempRateId)
                     )
-                    dose.syncIdentifier = HistoryToDoseMapper.tempBasalSyncIdentifier(response.tempRateId)
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
                     self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
@@ -2106,14 +2106,14 @@ private struct ActiveTempBasal {
                 ]
 
                 if let tempBasal = self.activeTempBasal.value {
-                    var tempBasalDose = DoseEntry.tempBasal(
+                    let tempBasalDose = DoseEntry.tempBasal(
                         absoluteUnit: tempBasal.dose.unitsPerHour,
                         duration: 0,
                         insulinType: lockedState.value.insulinType,
                         startDate: tempBasal.dose.startDate,
-                        endDate: Date.now
+                        endDate: Date.now,
+                        syncIdentifier: tempBasal.dose.syncIdentifier
                     )
-                    tempBasalDose.syncIdentifier = tempBasal.dose.syncIdentifier
                     doses.append(
                         NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
                     )
