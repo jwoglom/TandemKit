@@ -1650,6 +1650,58 @@ private struct ActiveTempBasal {
         inScanningMode.value = enabled
     }
 
+    private func handleUnsolicitedHistoryStream(_ response: HistoryLogStreamResponse) {
+        historyFetchQueue.async { [weak self] in
+            guard let self else { return }
+
+            let unseen = self.historyDeduplicator.filterUnseen(response.historyLogs)
+            guard !unseen.isEmpty else {
+                self.telemetryLogger.debug(
+                    "[history] Ignoring unsolicited streamId=\(response.streamId) with no new entries"
+                )
+                return
+            }
+
+            self.applyClockChanges(from: unseen)
+
+            let events = self.historyMapper.mapToEvents(
+                unseen,
+                reconciler: self.historyTimestampReconciler,
+                insulinType: self.lockedState.value.insulinType,
+                timeZone: self.lockedStatus.value.timeZone
+            )
+
+            let (reconciledEvents, stillPending, _) = self.historyReconciler.reconcile(
+                pendingDoses: self.lockedState.value.pendingDoses,
+                historyEvents: events
+            )
+
+            var updatedState = self.lockedState.value
+            updatedState.pendingDoses = stillPending
+            updatedState.lastHistoryReconciliation = Date()
+            if let maxSequence = unseen.map(\.sequenceNum).max() {
+                updatedState.lastHistorySequenceNum = maxSequence
+            }
+            self.lockedState.value = updatedState
+
+            self.notifyPumpManagerDelegateDidUpdateState()
+
+            guard let delegate = self.pumpManagerDelegate, let queue = self.delegateQueue else {
+                return
+            }
+
+            queue.async {
+                delegate.pumpManager(
+                    self,
+                    hasNewPumpEvents: reconciledEvents,
+                    lastReconciliation: updatedState.lastHistoryReconciliation,
+                    replacePendingEvents: true,
+                    completion: { _ in }
+                )
+            }
+        }
+    }
+
     public func pairPump(
         with pairingCode: String,
         peripheral: CBPeripheral,
@@ -2592,7 +2644,11 @@ private struct ActiveTempBasal {
         case let tempRate as TempRateResponse:
             handleTempRateResponse(tempRate, source: .notification)
         case let historyStream as HistoryLogStreamResponse:
-            activeHistoryFetchSession.value?.handleStreamResponse(historyStream)
+            if let session = activeHistoryFetchSession.value {
+                session.handleStreamResponse(historyStream)
+            } else {
+                handleUnsolicitedHistoryStream(historyStream)
+            }
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
