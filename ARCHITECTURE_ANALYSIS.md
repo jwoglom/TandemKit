@@ -590,6 +590,30 @@ After every reconnect (or app relaunch) the manager keeps the `needsSessionIniti
 
 ---
 
+## Telemetry Scheduling and History Retrieval (Current Implementation Audit)
+
+### PumpTelemetryScheduler wiring
+
+- **Scheduled kinds** – The scheduler defines `reservoir`, `battery`, `basal`, `bolus`, `timeSinceReset`, `alerts`, `controlIQ`, `homeScreen`, `notifications`, and `history`, but TandemPumpManager only attaches a repeating task for `history` today. Other telemetry fetches run opportunistically through `ensureCurrentPumpData()` rather than timers.
+- **Trigger behavior** – `ensureCurrentPumpData()` installs the history timer (default 30 min unless overridden by tests) and immediately performs single-shot fetches for basal, reservoir, battery, bolus, home screen, Control‑IQ, and notification counts. Session bootstrap completion also triggers an immediate history fetch, and unsolicited history streams flow through the same reconciliation path. The scheduler exposes `trigger`/`triggerAll`, but only the history path calls `trigger` in production code.
+- **Cancel/resume** – The scheduler supports `cancelAll()`, yet the manager currently leaves timers running across disconnects; safeguards inside `performScheduledHistoryFetch()` skip work when the pump is unpaired, offline, or already fetching.
+
+**TODOs from code/doc mismatch**
+- [ ] Add timer-backed scheduling for non-history telemetry kinds or explicitly document that they remain manual to avoid drift between expectations and implementation.
+- [ ] Invoke `cancelAll()` (or rebuild timers) on disconnect/reset flows so the documented pause/resume semantics match runtime behavior instead of relying solely on guard checks.
+
+### History fetch pipeline
+
+- **Request chain** – A history poll sends `HistoryLogStatusRequest` to learn the available sequence range, then issues `HistoryLogRequest` bounded by the desired slice, and finally waits for matching `HistoryLogStreamResponse` notifications to arrive before returning results. `HistoryFetchSession` tracks the active `streamId`, expected count, timeout, and retry policy.
+- **Manager integration** – TandemPumpManager schedules periodic history fetches once telemetry is configured, triggers ad-hoc fetches after session bootstrap, and routes streamed packets either into the active fetch session or through the unsolicited history handler (deduplication → clock reconciliation → mapping to events → delegate notification). The history path runs on a dedicated queue and uses `activeHistoryFetchSession` to coordinate in-flight work.
+- **Transport/session dependencies** – Both the polling flow and unsolicited stream handling rely on a live `PumpMessageTransport` plus authenticated `PumpComm` session; bootstrap gating and transport locks prevent signed requests until credentials refresh, and history telemetry simply returns early when those prerequisites are missing.
+
+**TODOs from code/doc mismatch**
+- [ ] Explicitly tie history timer setup/teardown to transport lifecycle so periodic polling does not fire while disconnected (even if guard clauses no-op).
+- [ ] Document and harden retry/backoff for history streams beyond `HistoryFetchSession`’s limited retry loop (e.g., integrate telemetryScheduler-driven retries when unsolicited streams stall).
+
+---
+
 ## Synchronization and Threading
 
 ### Queue Model

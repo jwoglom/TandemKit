@@ -29,6 +29,23 @@ This document provides a detailed, actionable plan for integrating pump-owned hi
 - `HistoryLogRequest/Response` (OpCode 60/61): Request history starting from sequence number
 - `HistoryLogStreamResponse` (OpCode -127): Stream-based delivery of parsed `[HistoryLog]` objects
 
+### Manager Wiring Overview
+
+**PumpTelemetryScheduler**:
+- Schedules the core telemetry kinds (`reservoir`, `battery`, `basal`, `bolus`, `timeSinceReset`, `alerts`, `controlIQ`, `homeScreen`, `notifications`, `history`).
+- Each kind is backed by a `DispatchSourceTimer` on a serial queue; rescheduling replaces and cancels the existing timer to avoid double-firing.
+- `trigger(kind:)` runs a single handler immediately, `triggerAll()` runs every handler, and `cancelAll()` tears down timers when transport is lost.
+- `TandemPumpManager` instantiates the scheduler and wires `.history` to `performScheduledHistoryFetch()` during the first `ensureCurrentPumpData` call, using `historyTelemetryInterval` (5m) and a 10s leeway. Successful authenticated reconnects call `trigger(kind: .history)` so a backfilled fetch fires as soon as the session is ready.
+
+**History fetch pipeline**:
+- `HistoryFetchSession.fetchWithRetry()` issues a `HistoryLogStatusRequest` to learn `firstSequenceNum`/`lastSequenceNum`, then submits a `HistoryLogRequest` using the resolved start sequence and waits for `HistoryLogResponse` to provide a `streamId`.
+- Incoming `HistoryLogStreamResponse` packets with the matching `streamId` are accumulated until the requested count arrives (or a timeout), then handed to the deduplicator, clock reconciler, mapper, and reconciler before being surfaced as `hasNewPumpEvents` updates.
+- The same mapping/deduplication path runs for unsolicited `HistoryLogStreamResponse` notifications, so streamed history delivered outside a fetch still updates state and delegates.
+
+**Transport/session threading**:
+- `updateTransport` installs the active `PumpMessageTransport` from `PeripheralManagerTransport` into `pumpComm`, then runs `bootstrapAuthenticatedSessionIfNeeded` once stored credentials exist; bootstrap confirms authentication and refreshes `TimeSinceReset` before triggering telemetry.
+- History fetches pull the live transport from `transportLock` and execute on a dedicated queue, while BLE notifications flow through `PumpNotificationRouter` into `handleUnsolicitedHistoryStream`, keeping the history path aligned with the session established by `pumpComm`.
+
 ### ❌ Missing: Manager Integration Layer
 
 **No TandemPumpManager Integration**:
