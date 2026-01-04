@@ -53,6 +53,7 @@ public enum PumpStateSupplier {
     static var pumpApiVersion: (() -> ApiVersion)?
     static var controlIQSupported: () -> Bool = { false }
     public static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
+    public static var currentBolusId: (() -> Int?)?
 
     // Flags mirroring PumpX2 PumpState fields
     static var tconnectAppConnectionSharing = false

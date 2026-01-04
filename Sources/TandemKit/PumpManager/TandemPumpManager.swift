@@ -128,6 +128,12 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func configureStateSuppliers() {
+        PumpStateSupplier.currentBolusId = { [weak self] in
+            self?.activeBolus.value?.id
+        }
+    }
+
     private func clearStalePairingArtifactsIfNeeded() {
         var currentState = lockedState.value
         guard var pumpState = currentState.pumpState,
@@ -437,6 +443,7 @@ private struct ActiveTempBasal {
         updatePairingArtifacts(with: state.pumpState)
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
+        configureStateSuppliers()
 
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
@@ -463,6 +470,7 @@ private struct ActiveTempBasal {
         updatePairingArtifacts(with: state.pumpState)
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
+        configureStateSuppliers()
 
         log.debug("Initialized TandemPumpManager: state=\(state)")
 

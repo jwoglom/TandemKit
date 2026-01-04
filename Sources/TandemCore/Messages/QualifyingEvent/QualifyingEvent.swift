@@ -176,7 +176,10 @@ public enum QualifyingEvent: CaseIterable {
         case .controlIQSleep:
             return [{ ControlIQSleepScheduleRequest() }]
         case .bolusPermissionRevoked:
-            return []
+            return [{
+                let bolusId = PumpStateSupplier.currentBolusId?() ?? 0
+                return BolusPermissionChangeReasonRequest(bolusId: bolusId)
+            }]
         }
     }
 
