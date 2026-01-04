@@ -1167,10 +1167,13 @@ private struct ActiveTempBasal {
             return lastSequence &+ 1
         }
 
-        if startDate == nil,
-           let delegate = pumpManagerDelegate
-        {
-            _ = delegate.startDateToFilterNewPumpEvents(for: self)
+        let effectiveStartDate = startDate ?? pumpManagerDelegate?.startDateToFilterNewPumpEvents(for: self)
+
+        // Without a known sequence number, fall back to the earliest available sequence number reported
+        // by `HistoryLogStatusResponse`. Returning UInt32.min ensures the history fetch session maps the
+        // start to `firstSequenceNum` when logs exist.
+        if effectiveStartDate != nil {
+            return UInt32.min
         }
 
         return nil
