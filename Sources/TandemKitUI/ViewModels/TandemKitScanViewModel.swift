@@ -21,7 +21,7 @@ class TandemKitScanViewModel: ObservableObject {
 
     @Published var devicePinCode = ""
 
-    private let log = PumpLogger(label: "TandemKitScanViewModel")
+    private let log = TandemLogger(category: "TandemKitScanViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
     private var foundDevices: [String: CBPeripheral] = [:]

@@ -1,7 +1,7 @@
 import Foundation
 
 public class JpakeAuthBuilder {
-    private let log = PumpLogger(label: "JpakeAuthBuilder")
+    private let log = TandemLogger(category: "JpakeAuthBuilder")
     private static var instance: JpakeAuthBuilder?
 
     public static var providerFactory: JpakeProviderFactory = DefaultJpakeProviderFactory()
@@ -250,7 +250,7 @@ public class JpakeAuthBuilder {
 }
 
 private final class NonBlockingRandom {
-    private let log = PumpLogger(label: "NonBlockingRandom")
+    private let log = TandemLogger(category: "NonBlockingRandom")
     static let shared = NonBlockingRandom()
 
     private let lock = NSLock()

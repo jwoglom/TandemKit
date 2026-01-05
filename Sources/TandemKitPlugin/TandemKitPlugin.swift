@@ -1,14 +1,11 @@
 import Foundation
-#if canImport(os)
-    import os.log
-#endif
 import LoopKit
 import LoopKitUI
 import TandemCore
 import TandemKit
 
 @available(macOS 13.0, iOS 14.0, *) public final class TandemKitPlugin: NSObject, PumpManagerUIPlugin {
-    private let log = OSLog(category: "TandemKitPlugin")
+    private let log = TandemLogger(category: "TandemKitPlugin")
 
     public var pumpManagerType: (any PumpManagerUI.Type)? {
         if #available(macOS 13.0, iOS 14.0, *) {
@@ -23,6 +20,6 @@ import TandemKit
 
     override public init() {
         super.init()
-        log.default("TandemKitPlugin instantiated")
+        log.info("TandemKitPlugin instantiated")
     }
 }

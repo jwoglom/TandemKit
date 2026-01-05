@@ -1,7 +1,7 @@
 import Foundation
 import TandemCore
 
-private let tronLogger = PumpLogger(label: "TandemBLE.TronMessageWrapper")
+private let tronLogger = TandemLogger(category: "TronMessageWrapper")
 
 /// Wraps a pump `Message` and provides the packetized data for transmission.
 /// Mirrors the behavior of PumpX2 `TronMessageWrapper`.

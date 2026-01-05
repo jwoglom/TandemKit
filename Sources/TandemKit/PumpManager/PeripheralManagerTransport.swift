@@ -2,17 +2,14 @@ import Dispatch
 import Foundation
 import TandemBLE
 import TandemCore
-#if canImport(os)
-    import os
-#endif
 
-private let transportLogger = PumpLogger(label: "TandemKit.PeripheralManagerTransport")
+private let transportLogger = TandemLogger(category: "PeripheralManagerTransport")
 
 /// Concrete implementation of PumpMessageTransport using PeripheralManager from TandemBLE
 public final class PeripheralManagerTransport: PumpMessageTransport {
     private let peripheralManager: PeripheralManager
     private var currentTxId: UInt8 = 0
-    private let log = OSLog(category: "PeripheralManagerTransport")
+    private let log = TandemLogger(category: "PeripheralManagerTransport")
     private var requestResponseHistory: [RequestResponsePair] = []
     private let maxHistorySize = 100 // Keep last 100 exchanges
     private let txIdLock = NSLock() // Protects currentTxId from concurrent access
@@ -32,11 +29,8 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         self.peripheralManager = peripheralManager
         self.enableVerbosePacketLogging = enableVerbosePacketLogging
         let instanceId = ObjectIdentifier(self)
-        log.info("PeripheralManagerTransport init: instance=%{public}@", String(describing: instanceId))
-        transportLogger
-            .info(
-                "[PeripheralManagerTransport] init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)"
-            )
+        log.info("PeripheralManagerTransport init: instance=\(instanceId)")
+        transportLogger.info("init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)")
     }
 
     @MainActor public func sendMessage(_ message: Message) throws -> Message {
@@ -96,13 +90,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         let requestDescription = String(describing: message)
         let requestCargo = message.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
-        log.info(
-            "  SENT-MESSAGE(txId=%-3d, %{public}@):\t%{public}@ [cargo={%{public}@}]",
-            txIdForRequest,
-            characteristic.prettyName,
-            requestDescription,
-            requestCargo
-        )
+        log.info("  SENT-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(requestDescription) [cargo={\(requestCargo)}]")
         if wrapper.packets.isEmpty {
             transportLogger.error("[PeripheralManagerTransport] no packets for message=\(message) txId=\(currentTxId &- 1)")
             throw PumpCommError.invalidPacket
@@ -141,17 +129,17 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         // Handle send errors
         switch sendResult {
         case let .unsentWithError(error):
-            log.error("Failed to send message: %{public}@", String(describing: error))
-            transportLogger.error("[PeripheralManagerTransport] sendResult=unsentWithError error=\(error)")
+            log.error("Failed to send message: \(error)")
+            transportLogger.error("sendResult=unsentWithError error=\(error)")
             throw error
         case let .sentWithError(error):
-            log.error("Message sent but pump returned error: %{public}@", String(describing: error))
-            transportLogger.error("[PeripheralManagerTransport] sendResult=sentWithError error=\(error)")
+            log.error("Message sent but pump returned error: \(error)")
+            transportLogger.error("sendResult=sentWithError error=\(error)")
             throw error
         case .sentWithAcknowledgment:
             if enableVerbosePacketLogging {
-                log.debug("  → Message sent (txId=%d)", txIdForRequest)
-                transportLogger.debug("[PeripheralManagerTransport] sendResult=sentWithAcknowledgment")
+                log.debug("  → Message sent (txId=\(txIdForRequest))")
+                transportLogger.debug("sendResult=sentWithAcknowledgment")
             }
         }
 
@@ -171,7 +159,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             }
 
             if enableVerbosePacketLogging {
-                log.debug("  ← Received %{public}@ bytes (txId=%d)", String(describing: data.count), txIdForRequest)
+                log.debug("  ← Received \(data.count) bytes (txId=\(txIdForRequest))")
                 let responseHex = data.map { String(format: "%02X", $0) }.joined()
                 transportLogger.debug("[PeripheralManagerTransport] received \(data.count) bytes hex=\(responseHex)")
 
@@ -193,7 +181,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
             do {
                 pumpResponse = try collector.ingest(data, characteristic: characteristic.cbUUID)
             } catch {
-                log.error("Failed to parse response chunk: %{public}@", String(describing: error))
+                log.error("Failed to parse response chunk: \(error)")
                 throw PumpCommError.responseParsingFailed(underlying: error)
             }
 
@@ -216,13 +204,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         let responseDescription = String(describing: finalMessage)
         let responseCargo = finalMessage.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
-        log.info(
-            "PARSED-MESSAGE(txId=%-3d, %{public}@):\t%{public}@ [cargo={%{public}@}]",
-            txIdForRequest,
-            characteristic.prettyName,
-            responseDescription,
-            responseCargo
-        )
+        log.info("PARSED-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(responseDescription) [cargo={\(responseCargo)}]")
 
         // Add completed pair to history (thread-safe)
         let completedPair = historyEntry.withResponse(finalMessage)

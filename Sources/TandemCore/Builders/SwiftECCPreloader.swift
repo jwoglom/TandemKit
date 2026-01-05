@@ -6,7 +6,7 @@ import Foundation
 
     /// Pre-loads SwiftECC resources to avoid first-use blocking
     public final class SwiftECCPreloader {
-        private let log = PumpLogger(label: "SwiftECCPreloader")
+        private let log = TandemLogger(category: "SwiftECCPreloader")
 
         public static let shared = SwiftECCPreloader()
 

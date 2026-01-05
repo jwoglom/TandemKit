@@ -2,9 +2,6 @@ import CoreBluetooth
 import Foundation
 import LoopKit
 import TandemCore
-#if canImport(os)
-    import os
-#endif
 
 public protocol BluetoothManagerDelegate: AnyObject {
     /**
@@ -92,7 +89,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
 
     public weak var delegate: BluetoothManagerDelegate?
 
-    private let log = OSLog(category: "BluetoothManager")
+    private let log = TandemLogger(category: "BluetoothManager")
 
     private let concurrentReconnectSemaphore = DispatchSemaphore(value: 1)
 
@@ -212,7 +209,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         let currentState = peripheral?.state ?? .disconnected
         guard currentState != .connected else {
             if let p = peripheral {
-                log.debug("reconnectPeripheral error - peripheral is already connected %{public}@", String(describing: p))
+                log.debug("reconnectPeripheral error - peripheral is already connected \(p)")
             }
             concurrentReconnectSemaphore.signal()
             return
@@ -222,10 +219,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         // We guard against connected earlier and in case of connecting we only need to wait for the semaphore
         if currentState == .disconnected {
             if let p = peripheral {
-                log.debug(
-                    "reconnectPeripheral running managerQueue_scanForPeripheral for peripheral %{public}@",
-                    String(describing: p)
-                )
+                log.debug("reconnectPeripheral running managerQueue_scanForPeripheral for peripheral \(p)")
             }
             managerQueue.sync {
                 log.debug("reconnectPeripheral - in managerQueue.sync")
@@ -258,7 +252,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         if let peripheral = manager.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE.cbUUID]).first,
            delegate == nil || delegate!.bluetoothManager(self, shouldConnectPeripheral: peripheral, advertisementData: nil)
         {
-            log.debug("Found system-connected peripheral: %{public}@", peripheral.identifier.uuidString)
+            log.debug("Found system-connected peripheral: \(peripheral.identifier.uuidString)")
             self.peripheral = peripheral
             manager.connect(peripheral)
         } else {
@@ -268,7 +262,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
             if let peripheralID = peripheralIdentifier,
                let peripheral = manager.retrievePeripherals(withIdentifiers: [peripheralID]).first
             {
-                log.debug("Re-connecting to known peripheral %{public}@", peripheral.identifier.uuidString)
+                log.debug("Re-connecting to known peripheral \(peripheral.identifier.uuidString)")
                 self.peripheral = peripheral
                 manager.connect(peripheral)
             } else {
@@ -309,10 +303,10 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
 
     /// Determines if the discovered peripheral appears to be a Tandem pump by looking at the available bluetooth service UUIDs.
     private func isTandemPeripheral(_ cbPeripheral: CBPeripheral, advertisementData _: [String: Any]?) -> Bool {
-        log.info("isTandemPeripheral? cbPeripheral.name: %s", cbPeripheral.name ?? "")
+        log.info("isTandemPeripheral? cbPeripheral.name: \(cbPeripheral.name ?? "")")
         return cbPeripheral.services?.contains { btService in
             if btService.uuid == ServiceUUID.PUMP_SERVICE.cbUUID {
-                log.info("isTandemPeripheral? cbPeripheral.name: %s btService.uuid: %s", cbPeripheral.name ?? "", btService.uuid)
+                log.info("isTandemPeripheral? cbPeripheral.name: \(cbPeripheral.name ?? "") btService.uuid: \(btService.uuid)")
                 return true
             }
 
@@ -344,11 +338,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.default(
-            "[centralManagerDidUpdateState] %{public}@: %{public}@",
-            #function,
-            String(describing: central.state.rawValue)
-        )
+        log.info("[centralManagerDidUpdateState] \(#function): \(central.state.rawValue)")
 
         switch central.state {
         case .poweredOn:
@@ -370,7 +360,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     public func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
-        log.info("[centralManager willRestoreState] %{public}@: %{public}@", #function, String(describing: dict))
+        log.info("[centralManager willRestoreState] \(#function): \(dict)")
 
         if let peripherals = dict["peripherals"] as? [CBPeripheral] {
             for peripheral in peripherals {
@@ -379,7 +369,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
                     shouldConnectPeripheral: peripheral,
                     advertisementData: nil
                 ) {
-                    log.default("Restoring peripheral from state: %{public}@", peripheral.identifier.uuidString)
+                    log.info("Restoring peripheral from state: \(peripheral.identifier.uuidString)")
                     self.peripheral = peripheral
                     // TODO: Maybe connect to peripheral if its state is disconnected?
                 }
@@ -395,7 +385,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     ) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.info("[centralManager] peripheral: %{public}@", String(describing: peripheral))
+        log.info("[centralManager] peripheral: \(peripheral)")
 
         // Notify delegate about discovered device
         delegate?.bluetoothManager(self, didDiscoverDevice: peripheral, advertisementData: advertisementData, rssi: rssi)
@@ -410,16 +400,12 @@ extension BluetoothManager: CBCentralManagerDelegate {
         } else {
             shouldConnect = isTandemPeripheral(peripheral, advertisementData: advertisementData)
         }
-        log.info(
-            "[centralManager] shouldConnect: delegate=%{public}@ shouldConnect=%s",
-            String(describing: delegate),
-            String(describing: shouldConnect)
-        )
+        log.info("[centralManager] shouldConnect: delegate=\(String(describing: delegate)) shouldConnect=\(shouldConnect)")
 
         if shouldConnect {
             self.peripheral = peripheral
 
-            log.debug("[centralManager] connecting to peripheral %{public}@", String(describing: peripheral))
+            log.debug("[centralManager] connecting to peripheral \(peripheral)")
             central.connect(peripheral, options: nil)
         }
     }
@@ -427,7 +413,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.default("%{public}@: %{public}@", #function, String(describing: peripheral))
+        log.info("\(#function): \(peripheral)")
         if central.isScanning {
             central.stopScan()
         }
@@ -441,9 +427,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     public func centralManager(_: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
-        log.default("%{public}@: %{public}@", #function, String(describing: peripheral))
+        log.info("\(#function): \(peripheral)")
         if let error = error {
-            log.error("%{public}@: %{public}@", #function, String(describing: error))
+            log.error("\(#function): \(error)")
             if let peripheralManager = peripheralManager {
                 delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: error)
             }
@@ -471,7 +457,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
         peripheralManager?.centralManager(central, didDisconnect: peripheral, error: error)
 
-        log.error("%{public}@: %{public}@", #function, String(describing: error))
+        log.error("\(#function): \(String(describing: error))")
         if let error = error, let peripheralManager = peripheralManager {
             delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: error)
         }

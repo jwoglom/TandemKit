@@ -1,7 +1,7 @@
 import Foundation
 import TandemCore
 
-private let packetArrayLogger = PumpLogger(label: "TandemBLE.PacketArrayList")
+private let packetArrayLogger = TandemLogger(category: "PacketArrayList")
 
 /// Parses incoming packets from the pump and validates them.
 /// This mirrors the behaviour of PumpX2 `PacketArrayList`.

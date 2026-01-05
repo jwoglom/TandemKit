@@ -6,7 +6,7 @@ import Foundation
         let pairingCode: String
 
         private let adapter: MbedTLSJpakeAdapter
-        private let log = PumpLogger(label: "MbedTLSJpakeProvider")
+        private let log = TandemLogger(category: "MbedTLSJpakeProvider")
 
         init(
             pairingCode: String,

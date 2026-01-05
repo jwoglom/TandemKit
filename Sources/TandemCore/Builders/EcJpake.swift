@@ -4,7 +4,7 @@ import BigInt
 import SwiftECC
 
 public final class EcJpake {
-    private let log = PumpLogger(label: "EcJpake")
+    private let log = TandemLogger(category: "EcJpake")
 
     public enum Role {
         case client

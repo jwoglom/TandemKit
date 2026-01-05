@@ -1,6 +1,6 @@
 import Foundation
 
-private let pumpChallengeLog = PumpLogger(label: "PumpChallengeRequestBuilder")
+private let pumpChallengeLog = TandemLogger(category: "PumpChallengeRequestBuilder")
 
 public enum PumpChallengeRequestBuilder {
     #if DEBUG
