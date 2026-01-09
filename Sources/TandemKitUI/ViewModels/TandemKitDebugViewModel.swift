@@ -36,7 +36,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     }
 
     var pumpStateDebugDescription: String {
-        pumpManager?.tandemPump.state?.debugDescription ?? "No PumpState available"
+        pumpManager?.state.pumpState?.debugDescription ?? "No PumpState available"
     }
 
     var managerStateDebugDescription: String {
@@ -44,7 +44,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     }
 
     var pumpStateJsonDebugDescription: String {
-        guard let state = pumpManager?.tandemPump.state else {
+        guard let state = pumpManager?.state.pumpState else {
             return jsonString(from: ["error": "No PumpState available"])
         }
         return jsonString(from: state.rawValue)

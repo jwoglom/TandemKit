@@ -175,13 +175,12 @@ private struct DebugTextView: View {
 
     var body: some View {
         NavigationView {
-            VStack(alignment: .leading, spacing: 12) {
-                TextEditor(text: .constant(contents))
-                    .frame(minHeight: 240)
+            ScrollView {
+                Text(contents)
                     .font(.system(.footnote, design: .monospaced))
-                    .disabled(true)
-                    .padding([.leading, .trailing])
-                Spacer()
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding([.leading, .trailing, .top])
             }
             .navigationTitle(title)
             .toolbar {

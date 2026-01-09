@@ -24,7 +24,6 @@ public class TandemPump {
     private let log = TandemLogger(category: "TandemPump")
     private let bluetoothManager = BluetoothManager()
 
-    public var state: PumpState?
     private var appInstanceId = 1
     private var currentTxId: UInt8 = 0
 
@@ -32,9 +31,8 @@ public class TandemPump {
 
     var pumpComm: PumpComm
 
-    init(_ state: PumpState?) {
-        self.state = state
-        pumpComm = PumpComm(pumpState: state)
+    init(pumpState: PumpState?) {
+        pumpComm = PumpComm(pumpState: pumpState)
         bluetoothManager.delegate = self
     }
 
@@ -95,21 +93,8 @@ public class TandemPump {
 
     // when we have connected via bluetooth LE transport to the pump but we are not necessarily paired
     @MainActor func onPumpConnected(_ manager: PeripheralManager) {
-        // Check if we have authentication artifacts
-        guard let pumpState = state,
-              pumpState.derivedSecret != nil,
-              pumpState.serverNonce != nil
-        else {
-            // Not authenticated yet - this happens during initial pairing
-            // The pairing flow will handle authentication via pairPump()
-            log.info("Pump connected but not authenticated yet - waiting for pairing flow")
-            delegate?.tandemPump(self, didCompleteConfiguration: manager)
-            return
-        }
-
-        // Already authenticated - proceed with configuration
-        // Note: Startup requests are now handled via the transport to maintain proper txId sequencing
-        log.info("Pump connected and authenticated - completing configuration")
+        // Startup requests are now handled via the transport to maintain proper txId sequencing.
+        log.info("Pump connected - completing configuration")
         delegate?.tandemPump(self, didCompleteConfiguration: manager)
     }
 

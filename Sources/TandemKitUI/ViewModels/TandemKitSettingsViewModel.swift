@@ -26,7 +26,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var pumpState: PumpState? {
-        pumpManager?.tandemPump.state
+        pumpManager?.state.pumpState
     }
 
     var pumpComm: PumpComm? {

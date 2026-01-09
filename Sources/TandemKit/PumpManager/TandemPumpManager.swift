@@ -174,7 +174,6 @@ private struct ActiveTempBasal {
         managerState.basalRateSchedule = nil
         lockedState.value = managerState
 
-        tandemPump.state = nil
         needsSessionInitialization.value = false
 
         #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -196,7 +195,7 @@ private struct ActiveTempBasal {
     }
 
     private func performScheduledHistoryFetch() {
-        guard pumpComm.isDevicePaired else {
+        guard hasPairedPumpState else {
             telemetryLogger.debug("Skipping history telemetry – pump not paired")
             return
         }
@@ -426,7 +425,7 @@ private struct ActiveTempBasal {
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
-        tandemPump = TandemPump(state.pumpState)
+        tandemPump = TandemPump(pumpState: state.pumpState)
         needsSessionInitialization.value = state.pumpState?.valid == true
 
         tandemPump.delegate = self
@@ -450,7 +449,7 @@ private struct ActiveTempBasal {
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
         lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
-        tandemPump = TandemPump(state.pumpState)
+        tandemPump = TandemPump(pumpState: state.pumpState)
         needsSessionInitialization.value = state.pumpState?.valid == true
 
         tandemPump.delegate = self
@@ -489,18 +488,15 @@ private struct ActiveTempBasal {
         lockedState.value.pumpState != nil
     }
 
+    private var hasPairedPumpState: Bool {
+        lockedState.value.pumpState?.valid == true
+    }
+
     public var connectedAndPaired: Bool {
         guard let _ = transportLock.value else {
             return false
         }
-        guard pumpComm.isDevicePaired else {
-            return false
-        }
-        if lockedState.value.pumpState == nil {
-            return false
-        }
-
-        return true
+        return hasPairedPumpState
     }
 
     public var pairedTransport: PumpMessageTransport? {
