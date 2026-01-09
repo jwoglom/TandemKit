@@ -30,6 +30,7 @@ final class TandemKitDebugViewModel: ObservableObject {
     @Published var cargoHexInput: String = ""
 
     private let pumpManager: TandemPumpManager?
+    private var lastRequestMessage: Message?
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
@@ -335,6 +336,14 @@ final class TandemKitDebugViewModel: ObservableObject {
         send(message)
     }
 
+    func resendLastMessage() {
+        guard let lastRequestMessage else {
+            lastSendError = "No previous request to resend"
+            return
+        }
+        send(lastRequestMessage)
+    }
+
     private func messageFromHex(_ metadata: MessageMetadata) -> Message? {
         let cleaned = cargoHexInput.replacingOccurrences(of: " ", with: "")
         guard !cleaned.isEmpty,
@@ -351,6 +360,7 @@ final class TandemKitDebugViewModel: ObservableObject {
             return
         }
 
+        lastRequestMessage = message
         isSending = true
         lastSendError = nil
         lastResponseDescription = nil

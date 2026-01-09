@@ -59,6 +59,10 @@ struct TandemKitDebugView: View {
                             .disabled(true)
                             .font(.system(.footnote, design: .monospaced))
                             .accessibilityLabel("Pump response")
+                        Button("Resend") {
+                            viewModel.resendLastMessage()
+                        }
+                        .disabled(viewModel.isSending)
                     }
                 }
 
@@ -143,6 +147,10 @@ private struct ParameterizedMessageSheet: View {
                             .frame(minHeight: 140)
                             .disabled(true)
                             .font(.system(.footnote, design: .monospaced))
+                        Button("Resend") {
+                            viewModel.resendLastMessage()
+                        }
+                        .disabled(viewModel.isSending)
                     }
                 }
 
