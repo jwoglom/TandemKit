@@ -107,7 +107,7 @@
 		3EE345382EC91299008A07F6 /* ErrorResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3450E2EC91299008A07F6 /* ErrorResponse.swift */; };
 		3EE345392EC91299008A07F6 /* CGMRateAlertSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3449B2EC91299008A07F6 /* CGMRateAlertSettings.swift */; };
 		3EE3453A2EC91299008A07F6 /* HmacSha256.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443D2EC91299008A07F6 /* HmacSha256.swift */; };
-		3EE3453B2EC91299008A07F6 /* PumpLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344512EC91299008A07F6 /* PumpLogger.swift */; };
+		3EE3453B2EC91299008A07F6 /* TandemLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344512EC91299008A07F6 /* TandemLogger.swift */; };
 		3EE3453C2EC91299008A07F6 /* EnterFillTubingMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3446A2EC91299008A07F6 /* EnterFillTubingMode.swift */; };
 		3EE3453D2EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344872EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift */; };
 		3EE3453E2EC91299008A07F6 /* IDPSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344B02EC91299008A07F6 /* IDPSegment.swift */; };
@@ -164,7 +164,6 @@
 		3EE345712EC91299008A07F6 /* ControlIQPcmChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344E32EC91299008A07F6 /* ControlIQPcmChangeHistoryLog.swift */; };
 		3EE345722EC91299008A07F6 /* CorrectionDeclinedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344E52EC91299008A07F6 /* CorrectionDeclinedHistoryLog.swift */; };
 		3EE345732EC91299008A07F6 /* BolusRequestedMsg3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344DA2EC91299008A07F6 /* BolusRequestedMsg3HistoryLog.swift */; };
-		3EE345742EC91299008A07F6 /* OSLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344502EC91299008A07F6 /* OSLog.swift */; };
 		3EE345752EC91299008A07F6 /* StatusMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345092EC91299008A07F6 /* StatusMessage.swift */; };
 		3EE345762EC91299008A07F6 /* IdpBolusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344F12EC91299008A07F6 /* IdpBolusHistoryLog.swift */; };
 		3EE345772EC91299008A07F6 /* UsbConnectedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345012EC91299008A07F6 /* UsbConnectedHistoryLog.swift */; };
@@ -484,8 +483,7 @@
 		3EE3444D2EC91299008A07F6 /* Dates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dates.swift; sourceTree = "<group>"; };
 		3EE3444E2EC91299008A07F6 /* HmacSha1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HmacSha1.swift; sourceTree = "<group>"; };
 		3EE3444F2EC91299008A07F6 /* LocalizedString.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedString.swift; sourceTree = "<group>"; };
-		3EE344502EC91299008A07F6 /* OSLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OSLog.swift; sourceTree = "<group>"; };
-		3EE344512EC91299008A07F6 /* PumpLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpLogger.swift; sourceTree = "<group>"; };
+		3EE344512EC91299008A07F6 /* TandemLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemLogger.swift; sourceTree = "<group>"; };
 		3EE344522EC91299008A07F6 /* SHA1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHA1.swift; sourceTree = "<group>"; };
 		3EE344532EC91299008A07F6 /* SHA256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHA256.swift; sourceTree = "<group>"; };
 		3EE344552EC91299008A07F6 /* AbstractCentralChallengeRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AbstractCentralChallengeRequest.swift; sourceTree = "<group>"; };
@@ -956,8 +954,7 @@
 				3EE3444D2EC91299008A07F6 /* Dates.swift */,
 				3EE3444E2EC91299008A07F6 /* HmacSha1.swift */,
 				3EE3444F2EC91299008A07F6 /* LocalizedString.swift */,
-				3EE344502EC91299008A07F6 /* OSLog.swift */,
-				3EE344512EC91299008A07F6 /* PumpLogger.swift */,
+				3EE344512EC91299008A07F6 /* TandemLogger.swift */,
 				3EE344522EC91299008A07F6 /* SHA1.swift */,
 				3EE344532EC91299008A07F6 /* SHA256.swift */,
 				3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */,
@@ -1638,7 +1635,7 @@
 				3EE345382EC91299008A07F6 /* ErrorResponse.swift in Sources */,
 				3EE345392EC91299008A07F6 /* CGMRateAlertSettings.swift in Sources */,
 				3EE3453A2EC91299008A07F6 /* HmacSha256.swift in Sources */,
-				3EE3453B2EC91299008A07F6 /* PumpLogger.swift in Sources */,
+				3EE3453B2EC91299008A07F6 /* TandemLogger.swift in Sources */,
 				3EE3453C2EC91299008A07F6 /* EnterFillTubingMode.swift in Sources */,
 				3EE3453D2EC91299008A07F6 /* NonexistentDetectingCartridgeStateStream.swift in Sources */,
 				3EE3453E2EC91299008A07F6 /* IDPSegment.swift in Sources */,
@@ -1696,7 +1693,6 @@
 				3EE345712EC91299008A07F6 /* ControlIQPcmChangeHistoryLog.swift in Sources */,
 				3EE345722EC91299008A07F6 /* CorrectionDeclinedHistoryLog.swift in Sources */,
 				3EE345732EC91299008A07F6 /* BolusRequestedMsg3HistoryLog.swift in Sources */,
-				3EE345742EC91299008A07F6 /* OSLog.swift in Sources */,
 				3EE345752EC91299008A07F6 /* StatusMessage.swift in Sources */,
 				3EE345762EC91299008A07F6 /* IdpBolusHistoryLog.swift in Sources */,
 				3EE345772EC91299008A07F6 /* UsbConnectedHistoryLog.swift in Sources */,
