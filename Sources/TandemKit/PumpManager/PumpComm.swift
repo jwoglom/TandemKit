@@ -28,12 +28,12 @@ public class PumpComm: CustomDebugStringConvertible {
     private var session: PumpCommSession?
 
     // Only valid to access on the session serial queue
-    private var pumpState: PumpState? {
-        didSet {
-            if let newValue = pumpState, newValue != oldValue {
-                delegate?.pumpComm(self, didChange: newValue)
-            }
-        }
+    private var pumpState: PumpState?
+
+    func syncPumpState(_ pumpState: PumpState?) {
+        self.pumpState = pumpState
+        let sessionState = pumpState ?? PumpState()
+        session?.updateState(sessionState)
     }
 
     public var isDevicePaired: Bool {
@@ -232,7 +232,7 @@ public class PumpComm: CustomDebugStringConvertible {
 extension PumpComm: PumpCommSessionDelegate {
     public func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState) {
         pumpCommSession.assertOnSessionQueue()
-        pumpState = state
+        delegate?.pumpComm(self, didChange: state)
     }
 
     public func pumpCommSession(

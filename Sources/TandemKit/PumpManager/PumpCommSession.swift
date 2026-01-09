@@ -15,6 +15,7 @@ protocol PumpCommSessionDelegate: AnyObject {
 }
 
 public class PumpCommSession {
+    private static let sessionQueueKey = DispatchSpecificKey<Void>()
     private let sessionQueue = DispatchQueue(label: "com.jwoglom.TandemKit.PumpCommSession.queue")
     private(set) var state: PumpState
     weak var delegate: PumpCommSessionDelegate?
@@ -28,6 +29,7 @@ public class PumpCommSession {
     init(pumpState: PumpState, delegate: PumpCommSessionDelegate? = nil) {
         state = pumpState
         self.delegate = delegate
+        sessionQueue.setSpecific(key: Self.sessionQueueKey, value: ())
     }
 
     public func runSession(withName _: String, _ block: @escaping @Sendable() -> Void) {
@@ -42,6 +44,20 @@ public class PumpCommSession {
 
     public func assertOnSessionQueue() {
         dispatchPrecondition(condition: .onQueue(sessionQueue))
+    }
+
+    private var isOnSessionQueue: Bool {
+        DispatchQueue.getSpecific(key: Self.sessionQueueKey) != nil
+    }
+
+    func updateState(_ pumpState: PumpState) {
+        if isOnSessionQueue {
+            state = pumpState
+        } else {
+            sessionQueue.sync {
+                state = pumpState
+            }
+        }
     }
 
     func handleIncoming(

@@ -146,6 +146,7 @@ private struct ActiveTempBasal {
         pumpState.timeSinceReset = nil
         currentState.pumpState = pumpState
         lockedState.value = currentState
+        pumpComm.syncPumpState(currentState.pumpState)
         updatePairingArtifacts(with: pumpState)
     }
 
@@ -775,6 +776,7 @@ private struct ActiveTempBasal {
             pumpState.timeSinceReset = timeSinceReset
             managerState.pumpState = pumpState
             lockedState.value = managerState
+            pumpComm.syncPumpState(pumpState)
             needsSessionInitialization.value = false
 
             // Update the PumpStateSupplier with the new value
@@ -2542,6 +2544,7 @@ private struct ActiveTempBasal {
         var currentState = lockedState.value
         currentState.pumpState = pumpState
         lockedState.value = currentState
+        pumpComm.syncPumpState(pumpState)
         if pumpState.valid {
             needsSessionInitialization.value = false
         }
