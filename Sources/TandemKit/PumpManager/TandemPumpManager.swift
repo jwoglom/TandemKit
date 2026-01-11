@@ -949,7 +949,6 @@ private struct ActiveTempBasal {
     }
 
     func fetchBolusStatus() {
-        log.info("Fetch bolus status")
         guard let transport = telemetryTransportIfReady(for: .bolus) else {
             return
         }
