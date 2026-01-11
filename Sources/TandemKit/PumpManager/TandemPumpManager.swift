@@ -26,7 +26,7 @@ public protocol StateObserver: AnyObject {
 }
 
 // Simple Locked wrapper
-private class Locked<Value> {
+public class Locked<Value> {
     private var _value: Value
     private let lock = NSLock()
 
@@ -77,7 +77,7 @@ private struct ActiveTempBasal {
     public static var onboardingSupportedMaximumBolusVolumes: [Double] = Array(stride(from: 0.05, through: 25.0, by: 0.01))
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
-    private let lockedState: Locked<TandemPumpManagerState>
+    public let lockedState: Locked<TandemPumpManagerState>
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     public let tandemPump: TandemPump
     private let log = TandemLogger(category: "TandemPumpManager")
@@ -715,57 +715,6 @@ private struct ActiveTempBasal {
         notifyDelegateStateUpdated()
     }
 
-    private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
-        logger(for: source)
-            .debug("[\(source.label)] Bolus status response received statusId=\(response.statusId) bolusId=\(response.bolusId)")
-
-        guard response.isValid else {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            notifyDelegateStateUpdated()
-            return
-        }
-
-        let requestedUnits = Double(response.requestedVolume) / 1000.0
-        let bolusDate = response.timestampDate
-        let dose = DoseEntry(
-            type: .bolus,
-            startDate: bolusDate,
-            endDate: bolusDate,
-            value: requestedUnits,
-            unit: .units,
-            deliveredUnits: nil,
-            description: "Bolus \(response.bolusId)",
-            syncIdentifier: "bolus-\(response.bolusId)",
-            scheduledBasalRate: nil,
-            insulinType: nil,
-            automatic: nil,
-            manuallyEntered: false,
-            isMutable: true,
-            wasProgrammedByPumpUI: false
-        )
-
-        let newBolusState: PumpManagerStatus.BolusState
-        if let status = response.status {
-            switch status {
-            case .alreadyDeliveredOrInvalid:
-                newBolusState = .noBolus
-            case .delivering,
-                 .requesting:
-                newBolusState = .inProgress(dose)
-            }
-        } else {
-            newBolusState = .noBolus
-        }
-
-        updateStatus { status in
-            status.bolusState = newBolusState
-        }
-
-        notifyDelegateStateUpdated()
-    }
-
     private func handleTimeSinceResetResponse(_ response: TimeSinceResetResponse, source: ResponseSource) {
         let timeSinceReset = response.pumpTimeSinceReset
 
@@ -783,6 +732,67 @@ private struct ActiveTempBasal {
             updatePairingArtifacts(with: pumpState)
 
             notifyDelegateStateUpdated()
+        }
+    }
+
+    private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
+        logger(for: source)
+            .debug(
+                "[\(source.label)] Bolus updated - status: \(response.status) id: \(response.bolusId)"
+            )
+
+        // Normal CurrentBolusStatus fetch
+        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
+            updateStatus { status in
+                status.bolusState = .noBolus
+            }
+            return
+        }
+
+        guard let progressReport = bolusProgressReport else {
+            return
+        }
+
+        if response.status == .delivering {
+            if status.bolusState == .initiating, let bolusState = activeBolus.value {
+                updateStatus { status in
+                    status.bolusState = .inProgress(bolusState.dose.toDoseEntry(endDate: nil))
+                }
+            }
+
+            progressReport.notify()
+            return
+        }
+
+        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
+            // Bolus is finished
+            telemetryScheduler.cancelAll()
+
+            updateStatus { status in
+                status.bolusState = .noBolus
+            }
+
+            var events = [progressReport.getPumpEvent()]
+            bolusProgressReport = nil
+
+            if let tempBasal = activeTempBasal.value {
+                events.append(
+                    NewPumpEvent.tempBasal(dose: tempBasal.dose, date: tempBasal.dose.startDate)
+                )
+            }
+
+            recordReconciliation(at: Date.now)
+
+            pumpDelegate.notify { delegate in
+                guard let delegate = delegate else { return }
+                delegate.pumpManager(
+                    self,
+                    hasNewPumpEvents: events,
+                    lastReconciliation: self.lockedState.value.lastReconciliation,
+                    replacePendingEvents: true,
+                    completion: { _ in }
+                )
+            }
         }
     }
 
@@ -919,11 +929,6 @@ private struct ActiveTempBasal {
                 message: TempRateRequest(),
                 expecting: TempRateResponse.self
             )
-            let responseTempBasal = try pumpComm.sendMessage(
-                transport: transport,
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            )
 
             handleTempRateResponse(tempRateResponse, source: .telemetry)
 
@@ -942,7 +947,7 @@ private struct ActiveTempBasal {
         }
     }
 
-    private func fetchBolusStatus() {
+    func fetchBolusStatus() {
         guard let transport = telemetryTransportIfReady(for: .bolus) else {
             return
         }
@@ -1257,7 +1262,7 @@ private struct ActiveTempBasal {
         notifyPumpManagerDelegateDidUpdateState()
     }
 
-    private func notifyPumpManagerDelegateDidUpdateState() {
+    func notifyPumpManagerDelegateDidUpdateState() {
         guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
         queue.async {
             delegate.pumpManagerDidUpdateState(self)
@@ -1273,7 +1278,7 @@ private struct ActiveTempBasal {
                     guard let delegate = delegate else { return }
                     delegate.pumpManager(
                         self,
-                        hasNewPumpEvents: [NewPumpEvent.bolus(dose: dose, units: dose.programmedUnits)],
+                        hasNewPumpEvents: [NewPumpEvent.bolus(dose: dose, units: dose.programmedUnits, date: dose.startDate)],
                         lastReconciliation: self.lockedState.value.lastReconciliation,
                         replacePendingEvents: false, // Do not replace pending events while bolus is running
                         completion: { _ in }
@@ -1295,7 +1300,7 @@ private struct ActiveTempBasal {
         queue.async {
             if case let .success(dose) = result, let dose = dose {
                 var events = [
-                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0)
+                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
                 ]
 
                 if let tempBasal = self.activeTempBasal.value {
@@ -1812,7 +1817,9 @@ private struct ActiveTempBasal {
 
                 let syncId = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
                 let doseEntry = dose.toDoseEntry(endDate: nil, syncIdentifier: syncId)
-                bolusProgressReport = TandemDoseProgressReporter(total: units)
+
+                bolusProgressReport = TandemDoseProgressReporter(dose: doseEntry, activationType: activationType)
+                telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5), handler: fetchBolusStatus)
 
                 shouldReleasePermissionOnFailure = false
 
@@ -1822,7 +1829,7 @@ private struct ActiveTempBasal {
                 )
 
                 self.updateStatus { status in
-                    status.bolusState = .inProgress(doseEntry)
+                    status.bolusState = .initiating
                 }
 
                 self.recordReconciliation(at: Date.now)

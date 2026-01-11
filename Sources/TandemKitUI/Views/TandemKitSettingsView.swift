@@ -5,6 +5,8 @@ import TandemCore
 struct TandemKitSettingsView: View {
     @Environment(\.dismissAction) private var dismiss
     @Environment(\.guidanceColors) private var guidanceColors
+
+    @State var isSharePresented: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -177,18 +179,6 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
-                "CGM Configuration",
-                comment: "The title of the CGM configuration section in TandemKit settings"
-            ))) {
-                NavigationLink(destination: TandemKitCGMSettingsView(
-                    viewModel: viewModel.createCGMSettingsViewModel()
-                )) {
-                    Text(LocalizedString("CGM Settings", comment: "Label for CGM settings"))
-                        .foregroundColor(Color.primary)
-                }
-            }
-
-            Section(header: SectionHeader(label: LocalizedString(
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
@@ -224,10 +214,26 @@ struct TandemKitSettingsView: View {
                 }
 
                 Button(action: {
+                    viewModel.openInsulinType()
+                }) {
+                    Text(LocalizedString("Insulin type", comment: "Label for button to view insulin type of pump"))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: UIFont.systemFontSize, weight: .medium))
+                        .opacity(0.35)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
                     viewModel.showingDebugDetails = true
                 }) {
                     Text(LocalizedString("View Debug Status", comment: "Label for button to view debug status of the pump"))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: UIFont.systemFontSize, weight: .medium))
+                        .opacity(0.35)
                 }
+                .buttonStyle(.plain)
                 .popover(isPresented: $viewModel.showingDebugDetails) {
                     debugDetailsPopover
                 }
@@ -343,6 +349,12 @@ struct TandemKitSettingsView: View {
             }
 
             Section {
+                Button(LocalizedString("Share Tandem pump logs", comment: "TandemKit share logs")) {
+                    self.isSharePresented = true
+                }
+                .sheet(isPresented: $isSharePresented, onDismiss: {}, content: {
+                    ActivityViewController(activityItems: viewModel.getLogs())
+                })
                 Button(action: {
                     viewModel.showingDeleteConfirmation = true
                 }) {
@@ -357,9 +369,6 @@ struct TandemKitSettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationBarItems(trailing: doneButton)
         .navigationBarTitle("Tandem pump")
-        .onAppear {
-            viewModel.refreshNotificationCount()
-        }
     }
 
     private var doneButton: some View {
@@ -542,13 +551,13 @@ struct TandemKitSettingsView: View {
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
         // TODO: Create mock TandemPumpManager with populated state for preview
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {})
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         return viewModel
     }
 
     static var previewDataInProgress: TandemKitSettingsViewModel {
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {})
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         viewModel.isUpdatingPumpState = true
         return viewModel

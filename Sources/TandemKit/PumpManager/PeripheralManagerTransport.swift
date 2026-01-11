@@ -90,7 +90,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         let requestDescription = String(describing: message)
         let requestCargo = message.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
-        log.info("  SENT-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(requestDescription) [cargo={\(requestCargo)}]")
+        log
+            .info(
+                "  SENT-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(requestDescription) [cargo={\(requestCargo)}]"
+            )
         if wrapper.packets.isEmpty {
             transportLogger.error("[PeripheralManagerTransport] no packets for message=\(message) txId=\(currentTxId &- 1)")
             throw PumpCommError.invalidPacket
@@ -204,7 +207,10 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
 
         let responseDescription = String(describing: finalMessage)
         let responseCargo = finalMessage.cargo.map { String(format: "%d", Int8(bitPattern: $0)) }.joined(separator: ",")
-        log.info("PARSED-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(responseDescription) [cargo={\(responseCargo)}]")
+        log
+            .info(
+                "PARSED-MESSAGE(txId=\(txIdForRequest), \(characteristic.prettyName)):\t\(responseDescription) [cargo={\(responseCargo)}]"
+            )
 
         // Add completed pair to history (thread-safe)
         let completedPair = historyEntry.withResponse(finalMessage)

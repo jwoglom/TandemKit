@@ -7,6 +7,7 @@ enum TandemScreen {
     case deviceScanning
     case setupComplete
     case pumpSettings
+    case insulinType
 
     func next() -> TandemScreen? {
         switch self {
@@ -110,9 +111,22 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
             let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
             return hostingController(rootView: view)
+        case .insulinType:
+            let view = TandemKitInsulinType(
+                initialValue: pumpManager?.state.insulinType ?? allowedInsulinTypes.first,
+                supportedInsulinTypes: allowedInsulinTypes,
+                didConfirm: { type in
+                    guard let pumpManager = self.pumpManager else { return }
+
+                    pumpManager.lockedState.value.insulinType = type
+                    pumpManager.notifyPumpManagerDelegateDidUpdateState()
+                }
+            )
+            return hostingController(rootView: view)
         case .pumpSettings:
             // next step = deactivate the pump
-            let viewModel = TandemKitSettingsViewModel(pumpManager, nextStep: stepFinished)
+            let openInsulinType = { self.navigateTo(.insulinType) }
+            let viewModel = TandemKitSettingsViewModel(pumpManager, nextStep: stepFinished, openInsulinType: openInsulinType)
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
         }

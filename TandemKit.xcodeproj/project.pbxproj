@@ -48,9 +48,11 @@
 		22EC259598464105BFD8C1D1 /* HistoryFetchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD8951E3191413C8074A6A4 /* HistoryFetchSession.swift */; };
 		2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */; };
 		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
+		3E53DB842F13E81800D84398 /* TandemKitInsulinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */; };
 		3E59CA1A2F002E0E00D78697 /* NewPumpEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */; };
 		3E59CA1C2F002F7F00D78697 /* DoseEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */; };
 		3E59CD342F0171A700D78697 /* UnfinalizedDose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */; };
+		3ECD42E22F142F92007ADED9 /* ActivityViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */; };
 		3EE344242EC91286008A07F6 /* BluetoothCmd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3440F2EC91286008A07F6 /* BluetoothCmd.swift */; };
 		3EE344252EC91286008A07F6 /* Locked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344162EC91286008A07F6 /* Locked.swift */; };
 		3EE344262EC91286008A07F6 /* Packet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344172EC91286008A07F6 /* Packet.swift */; };
@@ -437,9 +439,11 @@
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3985D174060F4E25BCB8CC31 /* SaveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveButton.swift; sourceTree = "<group>"; };
+		3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitInsulinType.swift; sourceTree = "<group>"; };
 		3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPumpEvent.swift; sourceTree = "<group>"; };
 		3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseEntry.swift; sourceTree = "<group>"; };
 		3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnfinalizedDose.swift; sourceTree = "<group>"; };
+		3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityViewController.swift; sourceTree = "<group>"; };
 		3EE344082EC9125A008A07F6 /* TandemCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EE3440F2EC91286008A07F6 /* BluetoothCmd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothCmd.swift; sourceTree = "<group>"; };
 		3EE344102EC91286008A07F6 /* BluetoothConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothConstants.swift; sourceTree = "<group>"; };
@@ -870,6 +874,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		3ECD42E32F142F9F007ADED9 /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */,
+				3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */,
+				3EE346162EC9274E008A07F6 /* Bundle.swift */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
 		3EE344212EC91286008A07F6 /* Bluetooth */ = {
 			isa = PBXGroup;
 			children = (
@@ -1248,6 +1262,7 @@
 				139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */,
 				3985D174060F4E25BCB8CC31 /* SaveButton.swift */,
 				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
+				3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1255,10 +1270,9 @@
 		3EEECBC52EC9008E0063D7BC /* TandemKitUI */ = {
 			isa = PBXGroup;
 			children = (
-				1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */,
 				1A55E0E62EC92914006E651D /* ViewModels */,
-				3EE346162EC9274E008A07F6 /* Bundle.swift */,
 				3EE346132EC92709008A07F6 /* Views */,
+				3ECD42E32F142F9F007ADED9 /* Utils */,
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
 				3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */,
 				1A55E0F52EC9686A006E651D /* Media.xcassets */,
@@ -1545,6 +1559,7 @@
 				3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */,
 				3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */,
 				3EE3461C2EC92804008A07F6 /* TandemKitScanView.swift in Sources */,
+				3E53DB842F13E81800D84398 /* TandemKitInsulinType.swift in Sources */,
 				3EE3461D2EC92805008A07F6 /* TandemKitSetupCompleteView.swift in Sources */,
 				3EE3461F2EC92807008A07F6 /* ContinueButton.swift in Sources */,
 				1A2FA9672EC8FD0800DF080F /* TandemPumpManager.swift in Sources */,
@@ -1554,6 +1569,7 @@
 				1A2FA96A2EC8FD0800DF080F /* PumpCommError.swift in Sources */,
 				1A9E00D02F009A840096E8EB /* ProgressBar.swift in Sources */,
 				1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */,
+				3ECD42E22F142F92007ADED9 /* ActivityViewController.swift in Sources */,
 				1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */,
 				1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */,
 				1A2FA9BB2EC8FD0800DF080F /* SimpleReservoirValue.swift in Sources */,

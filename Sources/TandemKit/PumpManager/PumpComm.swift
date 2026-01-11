@@ -180,7 +180,10 @@ public class PumpComm: CustomDebugStringConvertible {
 
         switch decision {
         case let .retry(delay):
-            log.debug("sendMessage: scheduling retry for fault code \(response.errorCodeId) after \(String(format: "%.2f", delay)) s")
+            log
+                .debug(
+                    "sendMessage: scheduling retry for fault code \(response.errorCodeId) after \(String(format: "%.2f", delay)) s"
+                )
             delayHandler(delay)
             return .retry
         case .doNotRetry:
