@@ -741,7 +741,6 @@ private struct ActiveTempBasal {
                 "[\(source.label)] Bolus updated - status: \(response.status) id: \(response.bolusId)"
             )
 
-
         // Normal CurrentBolusStatus fetch
         if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
             updateStatus { status in
@@ -760,7 +759,7 @@ private struct ActiveTempBasal {
                     status.bolusState = .inProgress(bolusState.dose.toDoseEntry(endDate: nil))
                 }
             }
-            
+
             progressReport.notify()
             return
         }
@@ -775,8 +774,8 @@ private struct ActiveTempBasal {
 
             var events = [progressReport.getPumpEvent()]
             bolusProgressReport = nil
-            
-            if let tempBasal = self.activeTempBasal.value {
+
+            if let tempBasal = activeTempBasal.value {
                 events.append(
                     NewPumpEvent.tempBasal(dose: tempBasal.dose, date: tempBasal.dose.startDate)
                 )

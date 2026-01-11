@@ -28,20 +28,8 @@ public enum BTResponseParser {
         } catch {
             return PumpResponseMessage(data: output)
         }
-        let needsMore = packetArrayList.needsMorePacket()
 
-        // Enhanced logging with request context
-        if let reqMeta = packetArrayList.requestMetadata {
-            responseParserLogger
-                .debug("[BTResponseParser] request=\(reqMeta.name) needsMore=\(needsMore) opCode=\(packetArrayList.opCode)")
-            if let respMeta = packetArrayList.responseMetadata {
-                responseParserLogger.debug("[BTResponseParser]   expecting response=\(respMeta.name) opCode=\(respMeta.opCode)")
-            }
-        } else {
-            responseParserLogger.debug("[BTResponseParser] needsMorePacket=\(needsMore) opCode=\(packetArrayList.opCode)")
-        }
-
-        if needsMore {
+        if packetArrayList.needsMorePacket() {
             return PumpResponseMessage(data: output)
         }
 

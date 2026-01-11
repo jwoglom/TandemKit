@@ -683,18 +683,14 @@ extension PeripheralManager {
         let cmd = index.flatMap { cmdQueue.remove(at: $0) }
         queueLock.unlock()
         if let value = cmd?.value {
-            let hex = value.map { String(format: "%02X", $0) }.joined()
-            let truncated = value.count > 32
-            let hexDisplay = truncated ? "\(value.prefix(32).map { String(format: "%02X", $0) }.joined())..." : hex
-            logTrace("[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(hexDisplay)")
-            if value.count <= 64 {
-                // For packets 64 bytes or less, also log the full hex
-                logTrace("[PeripheralManager]   full hex: \(hex)")
-            }
+            logTrace(
+                "[PeripheralManager] read packet len=\(value.count) characteristic=\(uuid.prettyName) hex=\(value.hexadecimalString)"
+            )
+            return value
         } else {
             logTrace("[PeripheralManager] read packet nil characteristic=\(uuid.prettyName)")
+            return nil
         }
-        return cmd?.value
     }
 
     /// Convenience wrapper for sending a single message packet on a specific characteristic.

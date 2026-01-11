@@ -24,7 +24,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
-        refreshPumpStatus()
     }
 
     var pumpState: PumpState? {
@@ -103,10 +102,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     var reservoirUnitsText: String? {
         guard let reservoirValue else { return nil }
         return String(format: "%.1f", reservoirValue.unitVolume)
-    }
-
-    func refreshNotificationCount() {
-        refreshPumpStatus() // Notifications included in refreshAllStatus
     }
 
     func suspendResumeButtonPressed() {
@@ -237,6 +232,10 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func getLogs() -> [URL] {
+        TandemLogger.getDebugLogs()
     }
 
     func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {

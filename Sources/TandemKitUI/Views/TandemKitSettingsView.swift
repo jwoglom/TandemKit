@@ -5,6 +5,8 @@ import TandemCore
 struct TandemKitSettingsView: View {
     @Environment(\.dismissAction) private var dismiss
     @Environment(\.guidanceColors) private var guidanceColors
+
+    @State var isSharePresented: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -347,6 +349,12 @@ struct TandemKitSettingsView: View {
             }
 
             Section {
+                Button(LocalizedString("Share Tandem pump logs", comment: "TandemKit share logs")) {
+                    self.isSharePresented = true
+                }
+                .sheet(isPresented: $isSharePresented, onDismiss: {}, content: {
+                    ActivityViewController(activityItems: viewModel.getLogs())
+                })
                 Button(action: {
                     viewModel.showingDeleteConfirmation = true
                 }) {
@@ -361,9 +369,6 @@ struct TandemKitSettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationBarItems(trailing: doneButton)
         .navigationBarTitle("Tandem pump")
-        .onAppear {
-            viewModel.refreshNotificationCount()
-        }
     }
 
     private var doneButton: some View {
