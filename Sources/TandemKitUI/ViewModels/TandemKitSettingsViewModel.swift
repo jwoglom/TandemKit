@@ -7,6 +7,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
+    var openInsulinType: () -> Void
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
@@ -16,9 +17,10 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     private var pendingRefreshOnReconnect = false
 
-    init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
+    init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void, openInsulinType: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
+        self.openInsulinType = openInsulinType
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)

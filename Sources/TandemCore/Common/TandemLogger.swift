@@ -1,6 +1,6 @@
 import Foundation
 #if canImport(os)
-import os.log
+    import os.log
 #endif
 
 /// Unified logging system for TandemKit with file persistence.
@@ -10,7 +10,7 @@ public final class TandemLogger {
     private static let subsystem = "com.jwoglom.TandemKit"
 
     #if canImport(os)
-    private let osLog: os.Logger
+        private let osLog: os.Logger
     #endif
 
     private static let dateFormatter: DateFormatter = {
@@ -40,15 +40,15 @@ public final class TandemLogger {
         }
 
         #if canImport(os)
-        var osLogType: OSLogType {
-            switch self {
-            case .trace: return .debug
-            case .debug: return .debug
-            case .info: return .info
-            case .warning: return .default
-            case .error: return .error
+            var osLogType: OSLogType {
+                switch self {
+                case .trace: return .debug
+                case .debug: return .debug
+                case .info: return .info
+                case .warning: return .default
+                case .error: return .error
+                }
             }
-        }
         #endif
 
         public static func < (lhs: Level, rhs: Level) -> Bool {
@@ -59,7 +59,7 @@ public final class TandemLogger {
     public init(category: String) {
         self.category = category
         #if canImport(os)
-        self.osLog = os.Logger(subsystem: TandemLogger.subsystem, category: category)
+            osLog = os.Logger(subsystem: TandemLogger.subsystem, category: category)
         #endif
     }
 
@@ -130,9 +130,9 @@ public final class TandemLogger {
         // Write to console (OSLog) - except for trace level
         if level != .trace {
             #if canImport(os)
-            osLog.log(level: level.osLogType, "\(formattedMessage, privacy: .public)")
+                osLog.log(level: level.osLogType, "\(formattedMessage, privacy: .public)")
             #else
-            print("[\(level.description)] \(formattedMessage)")
+                print("[\(level.description)] \(formattedMessage)")
             #endif
         }
 
@@ -176,7 +176,8 @@ public final class TandemLogger {
                 if fileManager.fileExists(atPath: logFileURL.path) {
                     if let attrs = try? fileManager.attributesOfItem(atPath: logFileURL.path),
                        let creationDate = attrs[.creationDate] as? Date,
-                       !Calendar.current.isDateInToday(creationDate) {
+                       !Calendar.current.isDateInToday(creationDate)
+                    {
                         // Rotate: move current to prev
                         let prevURL = prevLogFile
                         if fileManager.fileExists(atPath: prevURL.path) {
@@ -199,7 +200,7 @@ public final class TandemLogger {
             } catch {
                 // Silently fail - don't want logging to crash the app
                 #if DEBUG
-                print("TandemLogger file write error: \(error)")
+                    print("TandemLogger file write error: \(error)")
                 #endif
             }
         }
@@ -222,7 +223,8 @@ public final class TandemLogger {
         var content = ""
         for url in getDebugLogs() {
             if let data = try? Data(contentsOf: url),
-               let text = String(data: data, encoding: .utf8) {
+               let text = String(data: data, encoding: .utf8)
+            {
                 content += text
                 content += "\n--- End of \(url.lastPathComponent) ---\n\n"
             }

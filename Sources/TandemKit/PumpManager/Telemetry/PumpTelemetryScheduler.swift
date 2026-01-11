@@ -74,11 +74,11 @@ final class PumpTelemetryScheduler {
 
     /// Cancel all timers.
     func cancelAll() {
-        queue.sync {
-            for task in tasks.values {
+        queue.async {
+            for task in self.tasks.values {
                 task.timer.cancel()
             }
-            tasks.removeAll()
+            self.tasks.removeAll()
         }
     }
 }
