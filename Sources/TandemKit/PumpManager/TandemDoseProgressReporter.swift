@@ -50,6 +50,8 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     public func notify() {
         guard let bolusStatedOn else {
+            // First time pump switched to delivering state
+            // Just record the timestamp for now
             bolusStatedOn = Date.now
             return
         }
