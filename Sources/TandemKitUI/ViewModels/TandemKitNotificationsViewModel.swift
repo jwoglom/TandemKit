@@ -12,10 +12,17 @@ class TandemKitNotificationsViewModel: ObservableObject {
     @Published var lastRefreshTime: Date?
     @Published var errorMessage: String?
 
-    private let notificationBundle = NotificationBundle()
+    /// Uses a local bundle for fetching, then syncs to the pump manager's shared bundle
+    private var notificationBundle = NotificationBundle()
 
     init(_ pumpManager: TandemPumpManager? = nil) {
         self.pumpManager = pumpManager
+
+        // Initialize with current notifications from the pump manager's shared bundle
+        if let manager = pumpManager {
+            let items = manager.notificationBundle.get()
+            notifications = items
+        }
     }
 
     var pumpComm: PumpComm? {
@@ -37,14 +44,24 @@ class TandemKitNotificationsViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
+            // Create a fresh bundle for this fetch
+            let freshBundle = NotificationBundle()
+
             // Send all notification status requests
             for request in NotificationBundle.allRequests() {
                 if let response = self.sendMessage(message: request) {
                     if NotificationBundle.isNotificationResponse(response) {
-                        self.notificationBundle.add(response)
+                        freshBundle.add(response)
                     }
                 }
             }
+
+            // Update our local reference
+            self.notificationBundle = freshBundle
+
+            // Sync the fresh bundle to the pump manager's shared state
+            // This ensures the badge count in settings stays in sync with the list here
+            self.pumpManager?.updateNotificationBundle(freshBundle)
 
             // Auto-acknowledge basal alerts if enabled
             if self.pumpManager?.autoAcknowledgeBasalAlerts == true {
@@ -52,7 +69,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
             }
 
             // Get all active notifications
-            let items = self.notificationBundle.get()
+            let items = freshBundle.get()
 
             DispatchQueue.main.async {
                 self.notifications = items
