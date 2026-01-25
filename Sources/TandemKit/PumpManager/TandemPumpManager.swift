@@ -2354,7 +2354,52 @@ private struct ActiveTempBasal {
                         idpManager.processMessage(response)
                     }
                 }
+                
+                if idpManager.getProfiles().isEmpty == true {
+                    self.telemetryLogger.info("No profiles in IDPManager, creating initial profile for Trio")
+                    // TODO(jwoglom): read correct profile defaults
+                    let message = idpManager.createNewProfileMessage(
+                        profileName: "TandemKitProfile",
+                        defaultCarbRatio: 10,
+                        defaultBasalRateUnits: scheduleItems.first?.value ?? 0,
+                        defaultTargetBG: 110,
+                        defaultISF: 40,
+                        defaultInsulinDurationMinutes: 240,
+                        profileCarbEntryEnabled: false
+                    )
+                    let newlyCreatedProfile = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: message
+                    )
+                    
+                    guard let newlyCreatedProfile = newlyCreatedProfile as? CreateIDPResponse else {
+                        throw PumpCommError.requestConstructionFailed(reason: "No active profile found and got unexpected response creating initial profile")
+                    }
+                    
+                    guard newlyCreatedProfile.isStatusOK else {
+                        throw PumpCommError.requestConstructionFailed(reason: "No active profile found and failed to create initial profile")
+                    }
+                    
+                    self.telemetryLogger.info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
+                    
+                    
+                    // Return to step 1: Reset idpManager
+                    idpManager.clear()
 
+                    // Fetch all IDP data until complete
+                    while !idpManager.isComplete {
+                        let messages = idpManager.nextMessages()
+                        for message in messages {
+                            let response = try self.pumpComm.sendMessage(
+                                transport: transport,
+                                message: message
+                            )
+                            idpManager.processMessage(response)
+                        }
+                    }
+                }
+                
+                
                 // Step 2: Get the active profile
                 guard let activeProfile = idpManager.getActiveProfile() else {
                     throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
