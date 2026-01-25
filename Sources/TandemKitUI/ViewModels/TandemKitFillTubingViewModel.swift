@@ -196,6 +196,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
     }
 
     func tubingFilled() {
+        // Advance to exiting step to show loading screen
         currentStep = currentStep.nextStep() ?? .done
         exitFillTubingMode()
     }
@@ -218,7 +219,9 @@ class TandemKitFillTubingViewModel: ObservableObject {
                         self.exitState = .tubingFilled
                         self.currentStep = self.currentStep.nextStep() ?? .done
                     } else {
+                        // Exit failed - go back to filling step and show error
                         self.failedExitMode = true
+                        self.currentStep = .filling
                     }
                 }
             } else {
@@ -226,6 +229,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
                     self.loadingExitMode = false
                     self.failedExitMode = true
                     self.isProcessing = false
+                    // No transport - go back to filling step
+                    self.currentStep = .filling
                 }
             }
         }
