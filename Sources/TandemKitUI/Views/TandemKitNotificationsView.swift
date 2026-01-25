@@ -114,6 +114,7 @@ struct TandemKitNotificationsView: View {
 struct NotificationRow: View {
     let item: NotificationItem
     let onDismiss: () -> Void
+    var backgroundColor: Color = Color(UIColor.systemBackground)
 
     @State private var offset: CGFloat = 0
     @State private var isDismissing = false
@@ -136,6 +137,7 @@ struct NotificationRow: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(item.canDismiss ? Color.red : Color.clear)
+            .cornerRadius(8)
 
             // Notification content
             HStack {
@@ -155,8 +157,10 @@ struct NotificationRow: View {
                 }
             }
             .padding(.vertical, 8)
+            .padding(.horizontal, 12)
             .contentShape(Rectangle())
-            .background(Color(UIColor.systemBackground))
+            .background(backgroundColor)
+            .cornerRadius(8)
             .offset(x: offset)
             .gesture(
                 item.canDismiss ?

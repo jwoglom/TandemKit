@@ -47,8 +47,16 @@ class TandemKitFillTubingViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.tubing.processQueue")
 
+    // Notifications
+    @Published var notificationsViewModel: TandemKitNotificationsViewModel
+
+    var hasActiveNotifications: Bool {
+        !notificationsViewModel.notifications.isEmpty
+    }
+
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+        self.notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
     }
 
     func checkSuspendedStatus() {

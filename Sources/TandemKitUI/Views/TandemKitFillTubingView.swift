@@ -133,16 +133,97 @@ struct TandemKitFillTubingView: View {
                 Text(LocalizedString("Step 2: Prepare Pump", comment: "Step header"))
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Start tubing fill mode on the pump", comment: "Step description"))
+                Text(LocalizedString("Clear all pump notifications before continuing", comment: "Step description"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
+            // Embedded notifications check
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                        .font(.headline)
+                    Spacer()
+                    Button(action: {
+                        viewModel.notificationsViewModel.refreshNotifications()
+                    }) {
+                        if viewModel.notificationsViewModel.isRefreshing {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(viewModel.notificationsViewModel.isRefreshing)
+                }
+
+                if viewModel.notificationsViewModel.isRefreshing && viewModel.notificationsViewModel.notifications.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                            Text(LocalizedString("Checking notifications...", comment: "Loading notifications message"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                } else if viewModel.notificationsViewModel.notifications.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.green)
+                            Text(LocalizedString("No active notifications", comment: "No notifications message"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                            NotificationRow(
+                                item: item,
+                                onDismiss: {
+                                    viewModel.notificationsViewModel.dismissNotification(item)
+                                },
+                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                            )
+                        }
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.secondarySystemGroupedBackground))
+            .cornerRadius(12)
+
             SaveButton(
                 text: LocalizedString("Start tubing fill", comment: "Button text"),
-                loading: $viewModel.loadingEnterMode
+                loading: $viewModel.loadingEnterMode,
+                disabled: Binding(
+                    get: { viewModel.hasActiveNotifications },
+                    set: { _ in }
+                )
             ) {
                 viewModel.enterFillTubingMode()
+            }
+
+            if viewModel.hasActiveNotifications {
+                Label(
+                    LocalizedString(
+                        "Clear all notifications before starting tubing fill",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
             }
 
             if viewModel.failedEnterMode {
@@ -159,6 +240,10 @@ struct TandemKitFillTubingView: View {
                 .background(guidanceColors.critical.opacity(0.1))
                 .cornerRadius(12)
             }
+        }
+        .task {
+            // Auto-refresh notifications when this step appears
+            viewModel.notificationsViewModel.refreshNotifications()
         }
     }
 
