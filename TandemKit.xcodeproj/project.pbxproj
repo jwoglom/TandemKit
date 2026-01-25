@@ -300,6 +300,7 @@
 		3EE3461C2EC92804008A07F6 /* TandemKitScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346192EC92801008A07F6 /* TandemKitScanView.swift */; };
 		3EE3461D2EC92805008A07F6 /* TandemKitSetupCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3461A2EC92802008A07F6 /* TandemKitSetupCompleteView.swift */; };
 		3EE3461F2EC92807008A07F6 /* ContinueButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3461E2EC92806008A07F6 /* ContinueButton.swift */; };
+		3EEF3B9E2F0A123400ABCD12 /* ModalInPresentationSetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */; };
 		3EE346AB2EC91299008A07F6 /* JpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */; };
 		3EE346AD2EC91299008A07F6 /* SwiftECCJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */; };
 		3EE346AF2EC91299008A07F6 /* MbedTLSJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */; };
@@ -685,6 +686,7 @@
 		3EE346192EC92801008A07F6 /* TandemKitScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitScanView.swift; sourceTree = "<group>"; };
 		3EE3461A2EC92802008A07F6 /* TandemKitSetupCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSetupCompleteView.swift; sourceTree = "<group>"; };
 		3EE3461E2EC92806008A07F6 /* ContinueButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueButton.swift; sourceTree = "<group>"; };
+		3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalInPresentationSetter.swift; sourceTree = "<group>"; };
 		3EE346AA2EC91299008A07F6 /* JpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeProvider.swift; sourceTree = "<group>"; };
 		3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftECCJpakeProvider.swift; sourceTree = "<group>"; };
 		3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MbedTLSJpakeProvider.swift; sourceTree = "<group>"; };
@@ -1263,6 +1265,7 @@
 				B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */,
 				139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */,
 				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
+				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
 				B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */,
 				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
 				3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */,
@@ -1566,6 +1569,7 @@
 				3E53DB842F13E81800D84398 /* TandemKitInsulinType.swift in Sources */,
 				3EE3461D2EC92805008A07F6 /* TandemKitSetupCompleteView.swift in Sources */,
 				3EE3461F2EC92807008A07F6 /* ContinueButton.swift in Sources */,
+				3EEF3B9E2F0A123400ABCD12 /* ModalInPresentationSetter.swift in Sources */,
 				1A2FA9672EC8FD0800DF080F /* TandemPumpManager.swift in Sources */,
 				1A2FA9682EC8FD0800DF080F /* TandemPumpManagerState.swift in Sources */,
 				1A2FA9692EC8FD0800DF080F /* TandemKit.docc in Sources */,

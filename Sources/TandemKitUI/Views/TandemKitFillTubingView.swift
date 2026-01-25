@@ -14,6 +14,8 @@ struct TandemKitFillTubingView: View {
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 5,
             canCancel: !viewModel.isProcessing,
+            disableInteractiveDismiss: true,
+            lockModalWhenCantCancel: true,
             onCancel: handleCancel
         ) {
             currentStepView
