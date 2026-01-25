@@ -2047,7 +2047,7 @@ private struct ActiveTempBasal {
                     }
 
                     let cancelledDose = DoseEntry.tempBasal(
-                        absoluteUnit: activeTempBasal.scheduledRate,
+                        absoluteUnit: activeTempBasal.dose.unitsPerHour,
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: activeTempBasal.dose.startDate,
@@ -2061,7 +2061,15 @@ private struct ActiveTempBasal {
                     }
                 }
 
-                if duration <= 0 {
+                let baselineRate = getScheduledBasalRate()
+                guard baselineRate > 0 else {
+                    log.error("No current basal rate available...")
+                    throw PumpCommError.other
+                }
+
+                let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+
+                if duration <= 0 || percent == 100 {
                     // Loop wants us to only cancel the temp basal
                     let basalDose = DoseEntry.basal(
                         rate: getScheduledBasalRate(),
@@ -2079,40 +2087,8 @@ private struct ActiveTempBasal {
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
-                    let baselineRate = getScheduledBasalRate()
-                    guard baselineRate > 0 else {
-                        log.error("No current basal rate available...")
-                        throw PumpCommError.other
-                    }
-
-                    let minutes = max(1, Int((duration / 60.0).rounded()))
-                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-
-                    // If percent is exactly 100%, don't send a temp basal - just return to scheduled basal
-                    if percent == 100 {
-                        log
-                            .info(
-                                "Requested temp basal is 100% (\(unitsPerHour)U/hr equals scheduled rate) - returning to scheduled basal instead"
-                            )
-                        let basalDose = DoseEntry.basal(
-                            rate: baselineRate,
-                            insulinType: lockedState.value.insulinType
-                        )
-                        pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
-
-                        self.activeTempBasal.value = nil
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                        return
-                    }
-
-                    log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(minutes), percent: \(percent)%")
-                    let request = SetTempRateRequest(minutes: minutes, percent: percent)
+                    log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(duration.minutes), percent: \(percent)%")
+                    let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
                     let response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
