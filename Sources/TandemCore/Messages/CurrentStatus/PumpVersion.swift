@@ -94,6 +94,10 @@ public class PumpVersionResponse: Message {
         self.pcbaRev = pcbaRev
         self.modelNum = modelNum
     }
+    
+    public var pumpModel: PumpModel? {
+        return PumpModel(rawValue: self.modelNum)
+    }
 
     public var pumpModel: PumpModel? {
         PumpModel(rawValue: modelNum)

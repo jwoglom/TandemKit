@@ -55,7 +55,6 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         derivedSecret = rawValue["derivedSecret"] as? Data
         serverNonce = rawValue["serverNonce"] as? Data
         timeSinceReset = rawValue["timeSinceReset"] as? UInt32
-
         if let apiVersionRaw = rawValue["apiVersion"] as? ApiVersion.RawValue {
             apiVersion = ApiVersion(rawValue: apiVersionRaw)
         }
