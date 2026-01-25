@@ -64,7 +64,7 @@ struct TandemKitFillTubingView: View {
                     }
                 }
             } else {
-                SaveButton(
+                ContinueButton(
                     text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
@@ -75,7 +75,7 @@ struct TandemKitFillTubingView: View {
                 }
             }
         case .enterMode:
-            SaveButton(
+            ContinueButton(
                 text: LocalizedString("Start tubing fill", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
@@ -91,7 +91,7 @@ struct TandemKitFillTubingView: View {
                     InsulinFlowIndicator()
                         .transition(.opacity)
                 } else if viewModel.hasDisplayedFlow {
-                    SaveButton(
+                    ContinueButton(
                         text: LocalizedString("Complete tubing fill", comment: "Button text"),
                         loading: $viewModel.loadingExitMode,
                         disabled: Binding(

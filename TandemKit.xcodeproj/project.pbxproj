@@ -11,7 +11,6 @@
 		0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */; };
 		12018CC4322E499F883569C8 /* TandemKitDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92675FC239FB4E9FB2B7BD84 /* TandemKitDebugView.swift */; };
 		16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */; };
-		16F139E6E72E42DAAAE08DCF /* SaveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3985D174060F4E25BCB8CC31 /* SaveButton.swift */; };
 		2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */; };
 		FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */; };
 		1A0E17272ED105CC00E75219 /* NotificationBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E17262ED105CC00E75219 /* NotificationBundle.swift */; };
@@ -440,7 +439,6 @@
 		1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBar.swift; sourceTree = "<group>"; };
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		3985D174060F4E25BCB8CC31 /* SaveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveButton.swift; sourceTree = "<group>"; };
 		B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStepContainer.swift; sourceTree = "<group>"; };
 		9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardProgressBar.swift; sourceTree = "<group>"; };
 		3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitInsulinType.swift; sourceTree = "<group>"; };
@@ -1264,7 +1262,6 @@
 				98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */,
 				B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */,
 				139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */,
-				3985D174060F4E25BCB8CC31 /* SaveButton.swift */,
 				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
 				B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */,
 				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
@@ -1561,7 +1558,6 @@
 				02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */,
 				CFD999683FF946ABAB42D13B /* TandemKitFillTubingView.swift in Sources */,
 				0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */,
-				16F139E6E72E42DAAAE08DCF /* SaveButton.swift in Sources */,
 				2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */,
 				FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */,
 				3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */,

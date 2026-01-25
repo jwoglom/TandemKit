@@ -67,7 +67,7 @@ struct TandemKitFillCannulaView: View {
                     }
                 }
             } else {
-                SaveButton(
+                ContinueButton(
                     text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
@@ -78,7 +78,7 @@ struct TandemKitFillCannulaView: View {
                 }
             }
         case .enterAmount:
-            SaveButton(
+            ContinueButton(
                 text: LocalizedString("Fill cannula", comment: "Button text"),
                 loading: $viewModel.loadingFill
             ) {
@@ -86,7 +86,7 @@ struct TandemKitFillCannulaView: View {
             }
         case .done:
             VStack(spacing: 12) {
-                SaveButton(
+                ContinueButton(
                     text: LocalizedString("Resume insulin delivery", comment: "Button text"),
                     loading: $viewModel.loadingResume
                 ) {

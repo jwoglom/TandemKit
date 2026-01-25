@@ -71,7 +71,7 @@ struct TandemKitChangeCartridgeView: View {
                     }
                 }
             } else {
-                SaveButton(
+                ContinueButton(
                     text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
@@ -82,7 +82,7 @@ struct TandemKitChangeCartridgeView: View {
                 }
             }
         case .enterMode:
-            SaveButton(
+            ContinueButton(
                 text: LocalizedString("Start cartridge change", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
@@ -108,7 +108,7 @@ struct TandemKitChangeCartridgeView: View {
             .disabled(viewModel.hasActiveNotifications)
         case .detecting:
             if viewModel.failedExitMode {
-                SaveButton(
+                ContinueButton(
                     text: LocalizedString("Retry", comment: "Retry button"),
                     loading: $viewModel.loadingExitMode
                 ) {

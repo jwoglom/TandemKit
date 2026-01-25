@@ -8,26 +8,23 @@ struct ContinueButton: View {
     let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            Button(action: action) {
-                ZStack {
-                    if loading.wrappedValue {
-                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    } else {
-                        Text(text)
-                    }
+        Button(action: action) {
+            ZStack {
+                if loading.wrappedValue {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                } else {
+                    Text(text)
                 }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(ActionButtonStyle())
-            .padding([.bottom, .horizontal])
-            .disabled(loading.wrappedValue || disabled.wrappedValue)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 10)
-        .background(
-            Color(.secondarySystemGroupedBackground)
-                .shadow(radius: 5)
-        )
+        .disabled(loading.wrappedValue || disabled.wrappedValue)
+        .buttonStyle(.plain)
     }
 }
 
