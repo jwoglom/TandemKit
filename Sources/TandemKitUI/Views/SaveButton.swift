@@ -9,13 +9,22 @@ struct SaveButton: View {
 
     var body: some View {
         Button(action: action) {
-            if loading.wrappedValue {
-                ActivityIndicator(isAnimating: .constant(true), style: .medium)
-            } else {
-                Text(text)
+            ZStack {
+                if loading.wrappedValue {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                } else {
+                    Text(text)
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(Color.blue)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .contentShape(Rectangle())
         }
         .disabled(loading.wrappedValue || disabled.wrappedValue)
+        .buttonStyle(.plain)
     }
 }
 

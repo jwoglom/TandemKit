@@ -1,3 +1,4 @@
+import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
@@ -84,6 +85,7 @@ private struct ActiveTempBasal {
     private let telemetryLogger = TandemLogger(category: "TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
     private let notificationLogger = TandemLogger(category: "TandemPumpManager.Notifications")
+    private let lockedNotificationBundle = Locked<NotificationBundle>(NotificationBundle())
     private let historyFetchQueue = DispatchQueue(label: "com.loopkit.TandemKit.HistoryFetchQueue")
     private let historyDeduplicator = HistoryDeduplicator()
     private let historyTimestampReconciler = HistoryTimestampReconciler()
@@ -97,6 +99,9 @@ private struct ActiveTempBasal {
     private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
     private let inScanningMode = Locked<Bool>(false)
     private let lockedStatus: Locked<PumpManagerStatus>
+
+    // Stream message publishers
+    public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
     private let needsSessionInitialization = Locked<Bool>(false)
     private let sessionBootstrapInProgress = Locked<Bool>(false)
@@ -592,6 +597,25 @@ private struct ActiveTempBasal {
         lockedState.value.autoAcknowledgeBasalAlerts
     }
 
+    /// The shared notification bundle that aggregates all notification status responses.
+    /// UI components should use this bundle to ensure the badge count and list stay in sync.
+    public var notificationBundle: NotificationBundle {
+        lockedNotificationBundle.value
+    }
+
+    /// Updates the shared notification bundle and syncs the notification count to manager state.
+    /// Call this after fetching fresh notification data to keep the badge count accurate.
+    public func updateNotificationBundle(_ bundle: NotificationBundle) {
+        lockedNotificationBundle.value = bundle
+
+        var managerState = lockedState.value
+        managerState.notificationCount = bundle.getNotificationCount()
+        managerState.lastNotificationUpdate = Date()
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
+    }
+
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
         let percent = Double(response.batteryPercent) / 100.0
         let timestamp = Date()
@@ -658,6 +682,11 @@ private struct ActiveTempBasal {
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
+    }
+
+    private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
+        notificationLogger.debug("[notification] Fill tubing button state: \(response.buttonDown)")
+        fillTubingStateStream.send(response)
     }
 
     private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
@@ -1088,12 +1117,8 @@ private struct ActiveTempBasal {
             }
         }
 
-        var managerState = lockedState.value
-        managerState.notificationCount = bundle.getNotificationCount()
-        managerState.lastNotificationUpdate = Date()
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
+        // Use the shared update method to keep the notification bundle and count in sync
+        updateNotificationBundle(bundle)
     }
 
     private func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse, transport: PumpMessageTransport) {
@@ -2586,6 +2611,8 @@ private struct ActiveTempBasal {
             } else {
                 handleUnsolicitedHistoryStream(historyStream)
             }
+        case let fillTubingState as FillTubingStateStreamResponse:
+            handleFillTubingStateStream(fillTubingState)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")

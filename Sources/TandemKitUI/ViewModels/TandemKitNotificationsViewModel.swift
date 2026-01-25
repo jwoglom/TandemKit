@@ -12,10 +12,17 @@ class TandemKitNotificationsViewModel: ObservableObject {
     @Published var lastRefreshTime: Date?
     @Published var errorMessage: String?
 
-    private let notificationBundle = NotificationBundle()
+    /// Uses a local bundle for fetching, then syncs to the pump manager's shared bundle
+    private var notificationBundle = NotificationBundle()
 
     init(_ pumpManager: TandemPumpManager? = nil) {
         self.pumpManager = pumpManager
+
+        // Initialize with current notifications from the pump manager's shared bundle
+        if let manager = pumpManager {
+            let items = manager.notificationBundle.get()
+            notifications = items
+        }
     }
 
     var pumpComm: PumpComm? {
@@ -31,20 +38,66 @@ class TandemKitNotificationsViewModel: ObservableObject {
     }
 
     func refreshNotifications() {
+        log.info("[TIMING] refreshNotifications() called, isRefreshing=\(isRefreshing)")
+
+        guard !isRefreshing else {
+            log.info("[TIMING] Already refreshing notifications, skipping duplicate request")
+            return
+        }
+
+        let startTime = Date()
+        log.info("[TIMING] refreshNotifications() started, setting isRefreshing=true")
         isRefreshing = true
         errorMessage = nil
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self else {
+                return
+            }
+
+            let asyncStartTime = Date()
+            self.log.info("[TIMING] Background thread started after \(asyncStartTime.timeIntervalSince(startTime) * 1000)ms")
+
+            // Check if we have a transport available
+            guard self.pumpManager?.pairedTransport != nil else {
+                self.log.info("[TIMING] No transport available")
+                DispatchQueue.main.async {
+                    self.errorMessage = "Pump not connected"
+                    self.isRefreshing = false
+                }
+                return
+            }
+
+            // Create a fresh bundle for this fetch
+            let freshBundle = NotificationBundle()
+            var successCount = 0
+            var failureCount = 0
 
             // Send all notification status requests
-            for request in NotificationBundle.allRequests() {
+            let allRequests = NotificationBundle.allRequests()
+            let beforeRequests = Date()
+            self.log.info("[TIMING] Sending \(allRequests.count) notification status requests")
+
+            for request in allRequests {
                 if let response = self.sendMessage(message: request) {
                     if NotificationBundle.isNotificationResponse(response) {
-                        self.notificationBundle.add(response)
+                        freshBundle.add(response)
+                        successCount += 1
                     }
+                } else {
+                    failureCount += 1
                 }
             }
+
+            let afterRequests = Date()
+            self.log.info("[TIMING] All requests completed in \(afterRequests.timeIntervalSince(beforeRequests) * 1000)ms: \(successCount) succeeded, \(failureCount) failed")
+
+            // Update our local reference
+            self.notificationBundle = freshBundle
+
+            // Sync the fresh bundle to the pump manager's shared state
+            // This ensures the badge count in settings stays in sync with the list here
+            self.pumpManager?.updateNotificationBundle(freshBundle)
 
             // Auto-acknowledge basal alerts if enabled
             if self.pumpManager?.autoAcknowledgeBasalAlerts == true {
@@ -52,12 +105,27 @@ class TandemKitNotificationsViewModel: ObservableObject {
             }
 
             // Get all active notifications
-            let items = self.notificationBundle.get()
+            let beforeGet = Date()
+            let items = freshBundle.get()
+            let afterGet = Date()
+            self.log.info("[TIMING] Retrieved \(items.count) active notification(s) from bundle in \(afterGet.timeIntervalSince(beforeGet) * 1000)ms")
 
-            DispatchQueue.main.async {
+            let beforeMainDispatch = Date()
+            self.log.info("[TIMING] About to dispatch to main thread")
+
+            // Use Task with @MainActor for higher priority UI update
+            Task { @MainActor in
+                let mainThreadTime = Date()
+                self.log.info("[TIMING] Main thread update executing after \(mainThreadTime.timeIntervalSince(beforeMainDispatch) * 1000)ms delay")
+
+                // Force UI update by sending objectWillChange before setting properties
+                self.objectWillChange.send()
                 self.notifications = items
-                self.isRefreshing = false
                 self.lastRefreshTime = Date()
+                self.isRefreshing = false
+
+                let totalTime = Date().timeIntervalSince(startTime) * 1000
+                self.log.info("[TIMING] Total refresh completed in \(totalTime)ms, isRefreshing=\(self.isRefreshing)")
             }
         }
     }

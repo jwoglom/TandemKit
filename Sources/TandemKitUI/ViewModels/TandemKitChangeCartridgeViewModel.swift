@@ -1,3 +1,4 @@
+import Combine
 import LoopKit
 import SwiftUI
 import TandemCore
@@ -8,8 +9,7 @@ enum CartridgeChangeStep: Int {
     case waitingForReady = 2
     case physicalChange = 3
     case detecting = 4
-    case completing = 5
-    case done = 6
+    case done = 5
 
     func nextStep() -> CartridgeChangeStep? {
         switch self {
@@ -22,8 +22,6 @@ enum CartridgeChangeStep: Int {
         case .physicalChange:
             return .detecting
         case .detecting:
-            return .completing
-        case .completing:
             return .done
         case .done:
             return nil
@@ -54,8 +52,59 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.cartridge.processQueue")
 
+    // Notifications
+    @Published var notificationsViewModel: TandemKitNotificationsViewModel
+    private var notificationCheckTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+
+    var hasActiveNotifications: Bool {
+        !notificationsViewModel.notifications.isEmpty
+    }
+
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+        self.notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
+
+        // Forward child ViewModel changes to parent
+        notificationsViewModel.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+
+    deinit {
+        notificationCheckTask?.cancel()
+    }
+
+    func startPeriodicNotificationCheck() async {
+        // Cancel any existing task
+        notificationCheckTask?.cancel()
+
+        // Create a new task that checks every 15 seconds
+        notificationCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { return }
+
+                // Refresh notifications
+                await MainActor.run {
+                    self.notificationsViewModel.refreshNotifications()
+                }
+
+                // Wait 15 seconds before next check
+                do {
+                    try await Task.sleep(nanoseconds: 15_000_000_000) // 15 seconds
+                } catch {
+                    // Task was cancelled
+                    break
+                }
+            }
+        }
+    }
+
+    func stopPeriodicNotificationCheck() {
+        notificationCheckTask?.cancel()
+        notificationCheckTask = nil
     }
 
     func checkSuspendedStatus() {
@@ -190,6 +239,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func startDetectingCartridge() {
         isDetecting = true
         detectingProgress = 0
+        failedExitMode = false
 
         // Monitor detection progress
         // In a real implementation, this would subscribe to DetectingCartridgeStateStreamResponse
@@ -206,10 +256,16 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                 if self.detectingProgress >= 100 {
                     timer.invalidate()
                     self.isDetecting = false
-                    self.currentStep = self.currentStep.nextStep() ?? .done
+                    // Exit change cartridge mode before completing
+                    self.exitChangeCartridgeMode()
                 }
             }
         }
+    }
+
+    func retryExitCartridgeMode() {
+        failedExitMode = false
+        exitChangeCartridgeMode()
     }
 
     func exitChangeCartridgeMode() {
@@ -229,7 +285,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                         self.failedExitMode = false
                         self.currentStep = self.currentStep.nextStep() ?? .done
                     } else {
+                        // Exit failed - go back to detecting step and show error
                         self.failedExitMode = true
+                        self.currentStep = .detecting
                     }
                 }
             } else {
@@ -237,6 +295,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                     self.loadingExitMode = false
                     self.failedExitMode = true
                     self.isProcessing = false
+                    // No transport - go back to detecting step
+                    self.currentStep = .detecting
                 }
             }
         }

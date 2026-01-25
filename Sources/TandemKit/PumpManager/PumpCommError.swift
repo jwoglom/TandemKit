@@ -14,7 +14,8 @@ public enum PumpCommError: Error {
     case requestConstructionFailed(reason: String)
     case unexpectedResponse(expected: String, actual: String)
     case invalidPumpChallengeResponse
-    case timeSyncFailed
+    case initialStateMessagesFailed
+    case pumpModelUnsupported(modelNum: UInt32)
     case noActiveBolus
     case responseParsingFailed(underlying: Error)
     case transportError(underlying: Error)
@@ -72,10 +73,18 @@ extension PumpCommError: LocalizedError {
                 "Pump challenge response invalid",
                 comment: "Error when pump challenge response contents were not valid"
             )
-        case .timeSyncFailed:
+        case .initialStateMessagesFailed:
             return LocalizedString(
-                "Unable to read pump time",
-                comment: "Error shown when time-since-reset request fails"
+                "Initial state messages failed, please retry pairing",
+                comment: "Error shown when initial pump requests after auth fail"
+            )
+        case let .pumpModelUnsupported(modelNum):
+            return String(
+                format: LocalizedString(
+                    "Tandem pump model unknown or unsupported (received %@)",
+                    comment: "Error shown when pump model is not known"
+                ),
+                modelNum
             )
         case .noActiveBolus:
             return LocalizedString(
@@ -118,7 +127,7 @@ extension PumpCommError: LocalizedError {
             )
         case .jpakeUnavailable:
             return LocalizedString(
-                "This build does not include secure pairing. Update the app or use a long pairing code.",
+                "This build was unable to initialize the cryptography components. Please reinstall the application.",
                 comment: "Recovery suggestion when JPake is unavailable"
             )
         case .requestConstructionFailed:
@@ -128,11 +137,11 @@ extension PumpCommError: LocalizedError {
             )
         case .invalidPumpChallengeResponse,
              .responseParsingFailed,
-             .timeSyncFailed,
+             .initialStateMessagesFailed,
              .transportError,
              .unexpectedResponse:
             return LocalizedString(
-                "Ensure your pump is awake and retry.",
+                "Please retry pairing and check your pairing code.",
                 comment: "Recovery suggestion for transport/response failures"
             )
         case .noActiveBolus:

@@ -9,91 +9,29 @@ struct TandemKitChangeCartridgeView: View {
     @State private var didLoad = false
 
     var body: some View {
-        List {
-            // Warning section
-            Section {
-                Text(LocalizedString(
-                    "Changing your cartridge will require suspending insulin delivery.",
-                    comment: "Warning message for cartridge change"
+        WizardStepContainer(
+            title: LocalizedString("Change Cartridge", comment: "Title for change cartridge"),
+            currentStep: viewModel.currentStep.rawValue + 1,
+            totalSteps: 6,
+            canCancel: !viewModel.isProcessing,
+            disableInteractiveDismiss: true,
+            lockModalWhenCantCancel: true,
+            onCancel: handleCancel
+        ) {
+            currentStepView
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing),
+                    removal: .move(edge: .leading)
                 ))
-            } header: {
-                Label(
-                    LocalizedString("Important", comment: "Important section header"),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundColor(guidanceColors.warning)
-            }
-
-            // Step 1: Suspend Insulin
-            if viewModel.currentStep == .suspend {
-                suspendSection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.suspend.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 1: Suspend Insulin", comment: "Step header"),
-                    message: LocalizedString("Insulin suspended", comment: "Status text")
-                )
-            }
-
-            // Step 2: Enter Change Mode
-            if viewModel.currentStep == .enterMode {
-                enterModeSection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.enterMode.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 2: Prepare Pump", comment: "Step header"),
-                    message: LocalizedString("Cartridge change mode started", comment: "Status text")
-                )
-            }
-
-            // Step 3: Waiting for Ready
-            if viewModel.currentStep == .waitingForReady {
-                waitingForReadySection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.waitingForReady.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Waiting for Pump", comment: "Step header"),
-                    message: LocalizedString("Pump ready", comment: "Status text")
-                )
-            }
-
-            // Step 4: Physical Change
-            if viewModel.currentStep == .physicalChange {
-                physicalChangeSection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.physicalChange.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 3: Replace Cartridge", comment: "Step header"),
-                    message: LocalizedString("Cartridge replaced", comment: "Status text")
-                )
-            }
-
-            // Step 5: Detecting
-            if viewModel.currentStep == .detecting {
-                detectingSection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.detecting.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 4: Detection", comment: "Step header"),
-                    message: LocalizedString("Cartridge detected", comment: "Status text")
-                )
-            }
-
-            // Step 6: Completing
-            if viewModel.currentStep == .completing {
-                completingSection
-            } else if viewModel.currentStep.rawValue > CartridgeChangeStep.completing.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 5: Finalize", comment: "Step header"),
-                    message: LocalizedString("Change completed", comment: "Status text")
-                )
-            }
-
-            // Step 7: Done
-            if viewModel.currentStep == .done {
-                doneSection
-            }
+                .id(viewModel.currentStep)
         }
-        .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle(LocalizedString("Change Cartridge", comment: "Title for change cartridge"))
-        .navigationBarBackButtonHidden(viewModel.isProcessing)
-        .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
-        .interactiveDismissDisabled(viewModel.isProcessing)
+        .safeAreaInset(edge: .bottom) {
+            bottomActionView
+                .padding()
+        }
+        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
+            cancelOperationSheet
+        }
         .task {
             print("TandemKit Change Cartridge: .task called, didLoad=\(didLoad)")
             guard !didLoad else {
@@ -106,54 +44,243 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    var suspendSection: some View {
-        Section {
+    @ViewBuilder
+    private var currentStepView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
+            suspendStepContent
+        case .enterMode:
+            enterModeStepContent
+        case .waitingForReady:
+            waitingForReadyStepContent
+        case .physicalChange:
+            physicalChangeStepContent
+        case .detecting:
+            detectingStepContent
+        case .done:
+            doneStepContent
+        }
+    }
+
+    @ViewBuilder
+    private var bottomActionView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
             if viewModel.isSuspended == true {
-                HStack {
-                    Label(
-                        LocalizedString("Insulin suspended", comment: "Status text"),
-                        systemImage: "checkmark.circle.fill"
-                    )
-                    .foregroundColor(.green)
-                    Spacer()
-                }
-            } else {
-                Button(action: {
-                    viewModel.showingSuspendConfirmation = true
-                }) {
-                    HStack {
-                        Text(LocalizedString("Suspend insulin delivery", comment: "Button to suspend"))
-                        Spacer()
-                        if viewModel.loadingSuspend {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
+                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                    withAnimation {
+                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
                     }
                 }
-                .disabled(viewModel.loadingSuspend)
+            } else {
+                ContinueButton(
+                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    loading: $viewModel.loadingSuspend
+                ) {
+                    viewModel.showingSuspendConfirmation = true
+                }
                 .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
                     suspendInsulinSheet
                 }
+            }
+        case .enterMode:
+            ContinueButton(
+                text: LocalizedString("Start cartridge change", comment: "Button text"),
+                loading: $viewModel.loadingEnterMode,
+                disabled: Binding(
+                    get: { viewModel.hasActiveNotifications },
+                    set: { _ in }
+                )
+            ) {
+                viewModel.enterChangeCartridgeMode()
+            }
+        case .waitingForReady:
+            EmptyView()
+        case .physicalChange:
+            Button(action: {
+                viewModel.cartridgeInserted()
+            }) {
+                Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(viewModel.hasActiveNotifications ? Color.gray : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .disabled(viewModel.hasActiveNotifications)
+        case .detecting:
+            if viewModel.failedExitMode {
+                ContinueButton(
+                    text: LocalizedString("Retry", comment: "Retry button"),
+                    loading: $viewModel.loadingExitMode
+                ) {
+                    viewModel.retryExitCartridgeMode()
+                }
+            } else {
+                EmptyView()
+            }
+        case .done:
+            Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Text(LocalizedString("Done", comment: "Button text"))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+        }
+    }
 
+    // MARK: - Step Content Views
+
+    private var suspendStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Warning banner
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(guidanceColors.warning)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(LocalizedString("Important", comment: "Important section header"))
+                        .font(.headline)
+                        .foregroundColor(guidanceColors.warning)
+                    Text(LocalizedString(
+                        "Changing your cartridge will require suspending insulin delivery.",
+                        comment: "Warning message for cartridge change"
+                    ))
+                    .font(.subheadline)
+                }
+            }
+            .padding()
+            .background(guidanceColors.warning.opacity(0.1))
+            .cornerRadius(12)
+
+            // Step header
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("First, suspend insulin delivery", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            // Step content
+            if viewModel.isSuspended == true {
+                Label(
+                    LocalizedString("Insulin suspended", comment: "Status text"),
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundColor(.green)
+                .font(.headline)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+            } else {
                 if viewModel.failedSuspend {
                     Label(
                         LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(guidanceColors.critical.opacity(0.1))
+                    .cornerRadius(12)
                 }
             }
-        } header: {
-            Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
         }
     }
 
-    var enterModeSection: some View {
-        Section {
-            SaveButton(
-                text: LocalizedString("Start cartridge change", comment: "Button text"),
-                loading: $viewModel.loadingEnterMode
-            ) {
-                viewModel.enterChangeCartridgeMode()
+    private var enterModeStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Step 2: Prepare Pump", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("Swipe away any active pump notifications below", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            // Embedded notifications check
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                        .font(.headline)
+                    Spacer()
+                    Button(action: {
+                        viewModel.notificationsViewModel.refreshNotifications()
+                    }) {
+                        if viewModel.notificationsViewModel.isRefreshing {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(viewModel.notificationsViewModel.isRefreshing)
+                }
+
+                if viewModel.notificationsViewModel.isRefreshing && viewModel.notificationsViewModel.notifications.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                            Text(LocalizedString("Checking notifications...", comment: "Loading notifications message"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                } else if viewModel.notificationsViewModel.notifications.isEmpty {
+                    HStack {
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.green)
+                            Text(LocalizedString("No active notifications", comment: "No notifications message"))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding()
+                } else {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                            NotificationRow(
+                                item: item,
+                                onDismiss: {
+                                    viewModel.notificationsViewModel.dismissNotification(item)
+                                },
+                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                            )
+                        }
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.secondarySystemGroupedBackground))
+            .cornerRadius(12)
+
+            if viewModel.hasActiveNotifications {
+                Label(
+                    LocalizedString(
+                        "Clear all notifications before starting cartridge change",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
             }
 
             if viewModel.failedEnterMode {
@@ -165,130 +292,231 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
             }
-        } header: {
-            Text(LocalizedString("Step 2: Prepare Pump", comment: "Step header"))
+        }
+        .task {
+            // Auto-refresh notifications when this step appears
+            viewModel.notificationsViewModel.refreshNotifications()
         }
     }
 
-    var waitingForReadySection: some View {
-        Section {
+    private var waitingForReadyStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Waiting for Pump", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("The pump is preparing for cartridge change", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
             if viewModel.changeCartridgeState == .readyToChange {
                 Label(
                     LocalizedString("Pump is ready", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
+                .font(.headline)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
             } else {
-                HStack {
-                    Text(LocalizedString("Preparing pump...", comment: "Status text"))
-                    Spacer()
+                HStack(spacing: 12) {
                     ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text(LocalizedString("Preparing pump...", comment: "Status text"))
+                        .font(.headline)
                 }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
             }
-        } header: {
-            Text(LocalizedString("Waiting for Pump", comment: "Step header"))
         }
     }
 
-    var physicalChangeSection: some View {
-        Section {
+    private var physicalChangeStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString(
-                    "1. Remove the old cartridge from the pump\n2. Insert a new cartridge\n3. Press the button below when complete",
-                    comment: "Instructions"
+                Text(LocalizedString("Step 3: Replace Cartridge", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("Follow these steps to replace your cartridge", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                instructionRow(number: 1, text: LocalizedString(
+                    "Remove the old cartridge from the pump by twisting it off",
+                    comment: "Instruction"
                 ))
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                instructionRow(number: 2, text: LocalizedString(
+                    "Insert a new cartridge and ensure it is securely in place",
+                    comment: "Instruction"
+                ))
+                instructionRow(number: 3, text: LocalizedString(
+                    "Press the button below when complete",
+                    comment: "Instruction"
+                ))
             }
-            .padding(.vertical, 4)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color(.secondarySystemGroupedBackground))
+            .cornerRadius(12)
 
-            Button(action: {
-                viewModel.cartridgeInserted()
-            }) {
-                Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
-            }
-        } header: {
-            Text(LocalizedString("Step 3: Replace Cartridge", comment: "Step header"))
-        }
-    }
+            // Show active notifications warning during cartridge change
+            if viewModel.hasActiveNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                            .font(.headline)
+                        Spacer()
+                    }
 
-    var detectingSection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Detecting insulin in cartridge...", comment: "Status text"))
-                ProgressView(value: Double(viewModel.detectingProgress) / 100.0) {
-                    Text("\(viewModel.detectingProgress)%")
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                            NotificationRow(
+                                item: item,
+                                onDismiss: {
+                                    viewModel.notificationsViewModel.dismissNotification(item)
+                                },
+                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                            )
+                        }
+                    }
                 }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                Label(
+                    LocalizedString(
+                        "Clear all notifications before continuing",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
             }
-        } header: {
-            Text(LocalizedString("Step 4: Detection", comment: "Step header"))
+        }
+        .task {
+            // Start periodic notification checking when this step appears
+            await viewModel.startPeriodicNotificationCheck()
+        }
+        .onDisappear {
+            // Stop checking when leaving this step
+            viewModel.stopPeriodicNotificationCheck()
         }
     }
 
-    var completingSection: some View {
-        Section {
-            SaveButton(
-                text: LocalizedString("Complete cartridge change", comment: "Button text"),
-                loading: $viewModel.loadingExitMode
-            ) {
-                viewModel.exitChangeCartridgeMode()
+    private var detectingStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Step 4: Detection", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("The pump is detecting insulin in the cartridge", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            if viewModel.loadingExitMode {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        Text(LocalizedString("Completing cartridge change...", comment: "Status text"))
+                            .font(.headline)
+                    }
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(LocalizedString("Detecting insulin in cartridge...", comment: "Status text"))
+                        .font(.headline)
+                    ProgressView(value: Double(viewModel.detectingProgress) / 100.0)
+                        .progressViewStyle(LinearProgressViewStyle())
+                    Text("\(viewModel.detectingProgress)%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
             }
 
             if viewModel.failedExitMode {
                 Label(
-                    LocalizedString("Failed to complete. Please try again.", comment: "Error message"),
+                    LocalizedString("Failed to complete cartridge change. Please try again.", comment: "Error message"),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-            }
-        } header: {
-            Text(LocalizedString("Step 5: Finalize", comment: "Step header"))
-        }
-    }
-
-    var doneSection: some View {
-        Section {
-            Label(
-                LocalizedString("Cartridge change complete!", comment: "Success message"),
-                systemImage: "checkmark.circle.fill"
-            )
-            .foregroundColor(.green)
-            .font(.headline)
-
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
             }
         }
     }
 
-    var cancelButton: some View {
-        Button(LocalizedString("Cancel", comment: "Cancel button")) {
-            if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
-                presentationMode.wrappedValue.dismiss()
-            } else {
-                viewModel.showingCancelConfirmation = true
-            }
-        }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-    }
-
-    func completedStepSection(title: String, message: String) -> some View {
-        Section {
-            HStack {
-                Label(message, systemImage: "checkmark.circle.fill")
+    private var doneStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
                     .foregroundColor(.green)
-                Spacer()
+
+                VStack(spacing: 8) {
+                    Text(LocalizedString("Cartridge change complete!", comment: "Success message"))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .multilineTextAlignment(.center)
+
+                    Text(LocalizedString("You can now fill your tubing and cannula", comment: "Success description"))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
-        } header: {
-            Text(title)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         }
     }
+
+    // MARK: - Helper Views
+
+    private func instructionRow(number: Int, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number).")
+                .font(.headline)
+                .foregroundColor(.blue)
+            Text(text)
+                .font(.body)
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleCancel() {
+        if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
+            presentationMode.wrappedValue.dismiss()
+        } else {
+            viewModel.showingCancelConfirmation = true
+        }
+    }
+
+    // MARK: - Action Sheets
 
     var suspendInsulinSheet: ActionSheet {
         ActionSheet(
@@ -323,6 +551,8 @@ struct TandemKitChangeCartridgeView: View {
         )
     }
 }
+
+// MARK: - Preview Helpers
 
 private extension TandemKitChangeCartridgeViewModel {
     static func preview(step: CartridgeChangeStep, configure: (TandemKitChangeCartridgeViewModel) -> Void = { _ in
@@ -365,14 +595,6 @@ private extension TandemKitChangeCartridgeViewModel {
             $0.isProcessing = true
             $0.isDetecting = true
             $0.detectingProgress = 45
-        }
-    }
-
-    static var previewCompleting: TandemKitChangeCartridgeViewModel {
-        preview(step: .completing) {
-            $0.isSuspended = true
-            $0.isProcessing = true
-            $0.loadingExitMode = false
         }
     }
 
@@ -419,14 +641,7 @@ private extension TandemKitChangeCartridgeViewModel {
     .environment(\.guidanceColors, GuidanceColors())
 }
 
-#Preview("Step 6 – Completing") {
-    NavigationView {
-        TandemKitChangeCartridgeView(viewModel: .previewCompleting)
-    }
-    .environment(\.guidanceColors, GuidanceColors())
-}
-
-#Preview("Step 7 – Done") {
+#Preview("Step 6 – Done") {
     NavigationView {
         TandemKitChangeCartridgeView(viewModel: .previewCompleted)
     }

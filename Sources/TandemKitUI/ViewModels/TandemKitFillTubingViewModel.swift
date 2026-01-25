@@ -1,3 +1,4 @@
+import Combine
 import LoopKit
 import SwiftUI
 import TandemCore
@@ -39,6 +40,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var failedExitMode = false
 
     @Published var buttonDown = false
+    @Published var hasDisplayedFlow = false
     @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
 
     @Published var showingSuspendConfirmation = false
@@ -47,8 +49,59 @@ class TandemKitFillTubingViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.tubing.processQueue")
 
+    // Notifications
+    @Published var notificationsViewModel: TandemKitNotificationsViewModel
+    private var notificationCheckTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+
+    var hasActiveNotifications: Bool {
+        !notificationsViewModel.notifications.isEmpty
+    }
+
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+        self.notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
+
+        // Forward child ViewModel changes to parent
+        notificationsViewModel.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+    }
+
+    deinit {
+        notificationCheckTask?.cancel()
+    }
+
+    func startPeriodicNotificationCheck() async {
+        // Cancel any existing task
+        notificationCheckTask?.cancel()
+
+        // Create a new task that checks every 15 seconds
+        notificationCheckTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self = self else { return }
+
+                // Refresh notifications
+                await MainActor.run {
+                    self.notificationsViewModel.refreshNotifications()
+                }
+
+                // Wait 15 seconds before next check
+                do {
+                    try await Task.sleep(nanoseconds: 15_000_000_000) // 15 seconds
+                } catch {
+                    // Task was cancelled
+                    break
+                }
+            }
+        }
+    }
+
+    func stopPeriodicNotificationCheck() {
+        notificationCheckTask?.cancel()
+        notificationCheckTask = nil
     }
 
     func checkSuspendedStatus() {
@@ -138,12 +191,31 @@ class TandemKitFillTubingViewModel: ObservableObject {
     }
 
     func startMonitoringButtonState() {
-        // Monitor for button press state
-        // In a real implementation, this would subscribe to FillTubingStateStreamResponse
-        // For now, simulate monitoring
+        // Subscribe to FillTubingStateStreamResponse from the pump manager
+        guard let pumpManager = pumpManager else { return }
+
+        pumpManager.fillTubingStateStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                self?.buttonDown = response.buttonDown
+                if response.buttonDown {
+                    self?.hasDisplayedFlow = true
+                } else {
+                    self?.requestAlertStatus()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func requestAlertStatus() {
+        processQueue.async { [weak self] in
+            guard let transport = self?.pumpManager?.pairedTransport else { return }
+            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
+        }
     }
 
     func tubingFilled() {
+        // Advance to exiting step to show loading screen
         currentStep = currentStep.nextStep() ?? .done
         exitFillTubingMode()
     }
@@ -166,7 +238,9 @@ class TandemKitFillTubingViewModel: ObservableObject {
                         self.exitState = .tubingFilled
                         self.currentStep = self.currentStep.nextStep() ?? .done
                     } else {
+                        // Exit failed - go back to filling step and show error
                         self.failedExitMode = true
+                        self.currentStep = .filling
                     }
                 }
             } else {
@@ -174,6 +248,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
                     self.loadingExitMode = false
                     self.failedExitMode = true
                     self.isProcessing = false
+                    // No transport - go back to filling step
+                    self.currentStep = .filling
                 }
             }
         }

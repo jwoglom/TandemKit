@@ -155,37 +155,10 @@ public class NotificationBundle {
     }
 
     /// Calculates the total number of active notifications across all response types.
+    /// This count is derived directly from `get()` to ensure consistency between
+    /// the displayed count and the actual items list.
     public func getNotificationCount() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-
-        var count = 0
-        let alarmAndAlerts: [NotificationMessage] = [
-            alarmStatusResponse as NotificationMessage?,
-            alertStatusResponse as NotificationMessage?
-        ].compactMap { $0 }
-
-        if let response = alarmStatusResponse {
-            count += response.notificationCount
-        }
-
-        if let response = alertStatusResponse {
-            count += response.notificationCount
-        }
-
-        if let response = reminderStatusResponse {
-            count += response.notificationCount
-        }
-
-        if let response = cgmAlertStatusResponse {
-            count += response.notificationCount
-        }
-
-        if let response = malfunctionStatusResponse, response.hasMalfunction(alarmAndAlerts) {
-            count += response.notificationCount
-        }
-
-        return count
+        return get().count
     }
 
     /// Boolean check for whether any notifications exist.

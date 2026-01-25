@@ -11,129 +11,210 @@ struct TandemKitFillCannulaView: View {
     let unitText = LocalizedString("U", comment: "Insulin unit")
 
     var body: some View {
-        List {
-            // Warning section
-            Section {
-                Text(LocalizedString(
-                    "Filling cannula requires suspending insulin delivery. Select the prime amount carefully.",
-                    comment: "Warning message for cannula fill"
+        WizardStepContainer(
+            title: LocalizedString("Fill Cannula", comment: "Title for fill cannula"),
+            currentStep: viewModel.currentStep.rawValue + 1,
+            totalSteps: 3,
+            canCancel: !viewModel.isProcessing,
+            disableInteractiveDismiss: true,
+            lockModalWhenCantCancel: true,
+            onCancel: handleCancel
+        ) {
+            currentStepView
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing),
+                    removal: .move(edge: .leading)
                 ))
-            } header: {
-                Label(
-                    LocalizedString("Important", comment: "Important section header"),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundColor(guidanceColors.warning)
-            }
-
-            // Step 1: Suspend Insulin
-            if viewModel.currentStep == .suspend {
-                suspendSection
-            } else if viewModel.currentStep.rawValue > CannulaFillStep.suspend.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 1: Suspend Insulin", comment: "Step header"),
-                    message: LocalizedString("Insulin suspended", comment: "Status text")
-                )
-            }
-
-            // Step 2: Enter Amount
-            if viewModel.currentStep == .enterAmount {
-                enterAmountSection
-            } else if viewModel.currentStep.rawValue > CannulaFillStep.enterAmount.rawValue {
-                completedStepSection(
-                    title: LocalizedString("Step 2: Set Prime Amount", comment: "Step header"),
-                    message: String(format: LocalizedString("%.1f U primed", comment: "Status text"), viewModel.primeAmount)
-                )
-            }
-
-            // Step 3: Done
-            if viewModel.currentStep == .done {
-                doneSection
-            }
+                .id(viewModel.currentStep)
         }
-        .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle(LocalizedString("Fill Cannula", comment: "Title for fill cannula"))
-        .navigationBarBackButtonHidden(viewModel.isProcessing)
-        .navigationBarItems(trailing: viewModel.isProcessing ? nil : cancelButton)
-        .interactiveDismissDisabled(viewModel.isProcessing)
+        .safeAreaInset(edge: .bottom) {
+            bottomActionView
+                .padding()
+        }
+        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
+            cancelOperationSheet
+        }
         .task {
             guard !didLoad else { return }
             didLoad = true
             viewModel.checkSuspendedStatus()
         }
+        .onChange(of: viewModel.resumeSucceeded) { succeeded in
+            if succeeded {
+                presentationMode.wrappedValue.dismiss()
+            }
+        }
     }
 
-    var suspendSection: some View {
-        Section {
+    @ViewBuilder
+    private var currentStepView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
+            suspendStepContent
+        case .enterAmount:
+            enterAmountStepContent
+        case .done:
+            doneStepContent
+        }
+    }
+
+    @ViewBuilder
+    private var bottomActionView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
             if viewModel.isSuspended == true {
-                HStack {
-                    Label(
-                        LocalizedString("Insulin suspended", comment: "Status text"),
-                        systemImage: "checkmark.circle.fill"
-                    )
-                    .foregroundColor(.green)
-                    Spacer()
-                }
-            } else {
-                Button(action: {
-                    viewModel.showingSuspendConfirmation = true
-                }) {
-                    HStack {
-                        Text(LocalizedString("Suspend insulin delivery", comment: "Button to suspend"))
-                        Spacer()
-                        if viewModel.loadingSuspend {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
+                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                    withAnimation {
+                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
                     }
                 }
-                .disabled(viewModel.loadingSuspend)
+            } else {
+                ContinueButton(
+                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    loading: $viewModel.loadingSuspend
+                ) {
+                    viewModel.showingSuspendConfirmation = true
+                }
                 .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
                     suspendInsulinSheet
                 }
+            }
+        case .enterAmount:
+            ContinueButton(
+                text: LocalizedString("Fill cannula", comment: "Button text"),
+                loading: $viewModel.loadingFill
+            ) {
+                viewModel.fillCannula()
+            }
+        case .done:
+            VStack(spacing: 12) {
+                ContinueButton(
+                    text: LocalizedString("Resume insulin delivery", comment: "Button text"),
+                    loading: $viewModel.loadingResume
+                ) {
+                    viewModel.showingResumeConfirmation = true
+                }
+                .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
+                    resumeInsulinSheet
+                }
 
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    Text(LocalizedString("Done", comment: "Button text"))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+            }
+        }
+    }
+
+    // MARK: - Step Content Views
+
+    private var suspendStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Warning banner
+            HStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(guidanceColors.warning)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(LocalizedString("Important", comment: "Important section header"))
+                        .font(.headline)
+                        .foregroundColor(guidanceColors.warning)
+                    Text(LocalizedString(
+                        "Filling cannula requires suspending insulin delivery. Select the prime amount carefully.",
+                        comment: "Warning message for cannula fill"
+                    ))
+                    .font(.subheadline)
+                }
+            }
+            .padding()
+            .background(guidanceColors.warning.opacity(0.1))
+            .cornerRadius(12)
+
+            // Step header
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("First, suspend insulin delivery", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            // Step content
+            if viewModel.isSuspended == true {
+                Label(
+                    LocalizedString("Insulin suspended", comment: "Status text"),
+                    systemImage: "checkmark.circle.fill"
+                )
+                .foregroundColor(.green)
+                .font(.headline)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(12)
+            } else {
                 if viewModel.failedSuspend {
                     Label(
                         LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(guidanceColors.critical.opacity(0.1))
+                    .cornerRadius(12)
                 }
             }
-        } header: {
-            Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
         }
     }
 
-    var enterAmountSection: some View {
-        Section {
-            HStack {
-                Text(LocalizedString("Prime amount", comment: "Label for prime amount"))
-                    .foregroundColor(Color.primary)
-                Spacer()
-                Text(String(format: "%.1f", viewModel.primeAmount) + self.unitText)
-            }
-            .foregroundColor(viewModel.isEditingAmount ? Color.blue : Color.primary)
-            .onTapGesture {
-                withAnimation {
-                    viewModel.isEditingAmount.toggle()
-                }
+    private var enterAmountStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedString("Step 2: Set Prime Amount", comment: "Step header"))
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Text(LocalizedString("Select how much insulin to prime the cannula", comment: "Step description"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
 
-            if viewModel.isEditingAmount {
-                Picker("Amount", selection: $viewModel.primeAmount) {
-                    ForEach(Array(stride(from: 0.1, through: 2.0, by: 0.1)), id: \.self) { amount in
-                        Text(String(format: "%.1f", amount) + self.unitText).tag(amount)
+            VStack(spacing: 16) {
+                HStack {
+                    Text(LocalizedString("Prime amount", comment: "Label for prime amount"))
+                        .font(.headline)
+                        .foregroundColor(Color.primary)
+                    Spacer()
+                    Text(String(format: "%.1f", viewModel.primeAmount) + self.unitText)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(viewModel.isEditingAmount ? Color.blue : Color.primary)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+                .onTapGesture {
+                    withAnimation {
+                        viewModel.isEditingAmount.toggle()
                     }
                 }
-                .pickerStyle(WheelPickerStyle())
-                .padding(.horizontal)
-            }
 
-            SaveButton(
-                text: LocalizedString("Fill cannula", comment: "Button text"),
-                loading: $viewModel.loadingFill
-            ) {
-                viewModel.fillCannula()
+                if viewModel.isEditingAmount {
+                    Picker("Amount", selection: $viewModel.primeAmount) {
+                        ForEach(Array(stride(from: 0.1, through: 2.0, by: 0.1)), id: \.self) { amount in
+                            Text(String(format: "%.1f", amount) + self.unitText).tag(amount)
+                        }
+                    }
+                    .pickerStyle(WheelPickerStyle())
+                    .frame(height: 150)
+                    .clipped()
+                }
             }
 
             if viewModel.failedFill {
@@ -145,63 +226,61 @@ struct TandemKitFillCannulaView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-            }
-        } header: {
-            Text(LocalizedString("Step 2: Set Prime Amount", comment: "Step header"))
-        }
-    }
-
-    var doneSection: some View {
-        Section {
-            Label(
-                LocalizedString("Cannula fill complete!", comment: "Success message"),
-                systemImage: "checkmark.circle.fill"
-            )
-            .foregroundColor(.green)
-            .font(.headline)
-
-            Button(action: {
-                viewModel.showingResumeConfirmation = true
-            }) {
-                Text(LocalizedString("Resume insulin delivery", comment: "Button text"))
-            }
-            .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-                resumeInsulinSheet
-            }
-
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
             }
         }
     }
 
-    var cancelButton: some View {
-        Button(LocalizedString("Cancel", comment: "Cancel button")) {
-            if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
-                presentationMode.wrappedValue.dismiss()
-            } else {
-                viewModel.showingCancelConfirmation = true
-            }
-        }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-    }
-
-    func completedStepSection(title: String, message: String) -> some View {
-        Section {
-            HStack {
-                Label(message, systemImage: "checkmark.circle.fill")
+    private var doneStepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
                     .foregroundColor(.green)
-                Spacer()
+
+                VStack(spacing: 8) {
+                    Text(LocalizedString("Cannula fill complete!", comment: "Success message"))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .multilineTextAlignment(.center)
+
+                    Text(String(format: LocalizedString("%.1f U primed", comment: "Status text"), viewModel.primeAmount))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
-        } header: {
-            Text(title)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+
+            if viewModel.failedResume {
+                Label(
+                    LocalizedString("Failed to resume insulin. Please try again.", comment: "Error message"),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
+            }
         }
     }
+
+    // MARK: - Actions
+
+    private func handleCancel() {
+        if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
+            presentationMode.wrappedValue.dismiss()
+        } else {
+            viewModel.showingCancelConfirmation = true
+        }
+    }
+
+    // MARK: - Action Sheets
 
     var suspendInsulinSheet: ActionSheet {
         ActionSheet(
@@ -229,7 +308,6 @@ struct TandemKitFillCannulaView: View {
             buttons: [
                 .default(Text(LocalizedString("Yes, Resume Insulin", comment: "Confirm button"))) {
                     viewModel.resumePumping()
-                    presentationMode.wrappedValue.dismiss()
                 },
                 .cancel(Text(LocalizedString("Not Yet", comment: "Cancel button")))
             ]
@@ -253,19 +331,7 @@ struct TandemKitFillCannulaView: View {
     }
 }
 
-#Preview("Enter Amount") {
-    NavigationView {
-        TandemKitFillCannulaView(viewModel: .previewEnteringAmount)
-    }
-    .environment(\.guidanceColors, GuidanceColors())
-}
-
-#Preview("Completed") {
-    NavigationView {
-        TandemKitFillCannulaView(viewModel: .previewCompleted)
-    }
-    .environment(\.guidanceColors, GuidanceColors())
-}
+// MARK: - Preview Helpers
 
 private extension TandemKitFillCannulaViewModel {
     static var previewEnteringAmount: TandemKitFillCannulaViewModel {
@@ -283,4 +349,18 @@ private extension TandemKitFillCannulaViewModel {
         viewModel.currentStep = .done
         return viewModel
     }
+}
+
+#Preview("Enter Amount") {
+    NavigationView {
+        TandemKitFillCannulaView(viewModel: .previewEnteringAmount)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Completed") {
+    NavigationView {
+        TandemKitFillCannulaView(viewModel: .previewCompleted)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
 }
