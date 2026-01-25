@@ -276,16 +276,8 @@ struct TandemKitFillTubingView: View {
             .cornerRadius(12)
 
             if viewModel.buttonDown {
-                HStack(spacing: 12) {
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Text(LocalizedString("Filling tubing...", comment: "Status text"))
-                        .font(.headline)
-                }
-                .foregroundColor(.accentColor)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.accentColor.opacity(0.1))
-                .cornerRadius(12)
+                InsulinFlowIndicator()
+                    .transition(.opacity)
             }
 
             // Show active notifications warning during fill
@@ -461,6 +453,65 @@ struct TandemKitFillTubingView: View {
                 .cancel(Text(LocalizedString("No, Continue", comment: "Cancel button")))
             ]
         )
+    }
+}
+
+// MARK: - Insulin Flow Indicator
+
+struct InsulinFlowIndicator: View {
+    @State private var animationPhase: CGFloat = 0
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Animated flow visualization
+            ZStack {
+                // Background tube
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(height: 60)
+
+                // Animated insulin droplets
+                HStack(spacing: 0) {
+                    ForEach(0..<5) { index in
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 12, height: 12)
+                            .opacity(dropletOpacity(for: index))
+                            .scaleEffect(dropletScale(for: index))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+
+            // Status text
+            HStack(spacing: 12) {
+                Image(systemName: "drop.fill")
+                    .foregroundColor(.blue)
+                    .font(.title3)
+                Text(LocalizedString("Insulin flowing through tubing", comment: "Status text"))
+                    .font(.headline)
+                    .foregroundColor(.blue)
+            }
+        }
+        .padding()
+        .background(Color.blue.opacity(0.05))
+        .cornerRadius(12)
+        .onAppear {
+            withAnimation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                animationPhase = 1
+            }
+        }
+    }
+
+    private func dropletOpacity(for index: Int) -> Double {
+        let phase = (animationPhase + CGFloat(index) * 0.2).truncatingRemainder(dividingBy: 1.0)
+        return phase < 0.5 ? 0.3 : 1.0
+    }
+
+    private func dropletScale(for index: Int) -> CGFloat {
+        let phase = (animationPhase + CGFloat(index) * 0.2).truncatingRemainder(dividingBy: 1.0)
+        return phase < 0.5 ? 0.6 : 1.0
     }
 }
 

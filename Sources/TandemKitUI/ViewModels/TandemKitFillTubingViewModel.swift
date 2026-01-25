@@ -190,9 +190,15 @@ class TandemKitFillTubingViewModel: ObservableObject {
     }
 
     func startMonitoringButtonState() {
-        // Monitor for button press state
-        // In a real implementation, this would subscribe to FillTubingStateStreamResponse
-        // For now, simulate monitoring
+        // Subscribe to FillTubingStateStreamResponse from the pump manager
+        guard let pumpManager = pumpManager else { return }
+
+        pumpManager.fillTubingStateStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                self?.buttonDown = response.buttonDown
+            }
+            .store(in: &cancellables)
     }
 
     func tubingFilled() {
