@@ -275,7 +275,7 @@ struct TandemKitSettingsView: View {
                     viewModel.toggleSilentMode()
                 }) {
                     HStack {
-                        Text(LocalizedString("Silent mode", comment: "Label for silent mode"))
+                        Text(LocalizedString("Silent Tones", comment: "Label for silent tones"))
                             .foregroundColor(.primary)
                         Spacer()
                         Text(viewModel.useSilentMode ? "Enabled" : "Disabled")
