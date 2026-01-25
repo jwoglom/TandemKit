@@ -2,15 +2,11 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-#if canImport(HealthKit)
-    import HealthKit
-#endif
+import HealthKit
 import LoopKit
 import TandemBLE
 import TandemCore
-#if canImport(UIKit)
-    import UIKit
-#endif
+import UIKit
 
 // MARK: - Scan Device Observer Protocol
 
@@ -115,6 +111,18 @@ private struct ActiveTempBasal {
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
     private var targetPeripheralIdentifier: UUID?
+    private let silentToneManager = TandemSilentToneManager()
+
+    @objc func appMovedToBackground() {
+        if state.useSilentTones {
+            log.info("Starting silent tones")
+            silentToneManager.startBackgroundTask()
+        }
+    }
+
+    @objc func appMovedToForeground() {
+        silentToneManager.stopBackgroundTask()
+    }
 
     private func updatePairingArtifacts(with pumpState: PumpState?) {
         #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -444,6 +452,20 @@ private struct ActiveTempBasal {
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
+
+        let nc = NotificationCenter.default
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     public required init?(rawState: RawStateValue) {
@@ -475,6 +497,20 @@ private struct ActiveTempBasal {
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
+
+        let nc = NotificationCenter.default
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     public var rawState: RawStateValue {
@@ -655,7 +691,6 @@ private struct ActiveTempBasal {
 
     private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
         let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
-        let profileUnitsPerHour = Double(response.profileBasalRate) / 1000.0
         let timestamp = Date()
 
         logger(for: source).debug("[\(source.label)] Basal updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
@@ -764,10 +799,26 @@ private struct ActiveTempBasal {
         }
     }
 
+    private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
+        logger(for: source).debug("[\(source.label)] Pump Global updated")
+
+        var managerState = lockedState.value
+        managerState.buttonAnnun = response.buttonAnnouncement
+        managerState.quickBolusAnnun = response.quickBolusAnnouncement
+        managerState.bolusAnnun = response.bolusAnnouncement
+        managerState.reminderAnnun = response.reminderAnnouncement
+        managerState.alarmAnnun = response.alarmAnnouncement
+        managerState.alertAnnun = response.alertAnnouncement
+        managerState.fillTubingAnnun = response.fillTubingAnnouncement
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
+    }
+
     private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
         logger(for: source)
             .debug(
-                "[\(source.label)] Bolus updated - status: \(response.status) id: \(response.bolusId)"
+                "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
             )
 
         // Normal CurrentBolusStatus fetch
@@ -1503,6 +1554,16 @@ private struct ActiveTempBasal {
         notifyDelegateStateUpdated()
     }
 
+    public func configureSilentMode(_ enabled: Bool) {
+        var state = lockedState.value
+        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
+        state.useSilentTones = enabled
+        lockedState.value = state
+
+        telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
+        notifyDelegateStateUpdated()
+    }
+
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
@@ -1596,6 +1657,25 @@ private struct ActiveTempBasal {
         }
     }
 
+    public func fetchGlobalPumpSettings() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.error("Transport not available for pump global telemetry")
+            return
+        }
+
+        do {
+            let response: PumpGlobalsResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: PumpGlobalsRequest(),
+                expecting: PumpGlobalsResponse.self
+            )
+
+            handleGlobalPumpSettingsResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Pump global telemetry request failed: \(error)")
+        }
+    }
+
     public func sendMessage(message: Message) -> Message? {
         guard let transport = pairedTransport else {
             return nil
@@ -1613,9 +1693,7 @@ private struct ActiveTempBasal {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        // Tandem pumps typically deliver at up to 1 unit every 5 seconds.
-        // Use a conservative estimate of 30 seconds per unit for now.
-        max(units, 0) * 30.0
+        units * TandemDoseProgressReporter.BOLUS_SPEED
     }
 
     public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {
@@ -1835,7 +1913,7 @@ private struct ActiveTempBasal {
 
                 let dose = UnfinalizedDose(
                     units: units,
-                    duration: getBolusDuration(units),
+                    duration: estimatedDuration(toBolus: units),
                     activationType: activationType,
                     insulinType: lockedState.value.insulinType
                 )
@@ -1872,16 +1950,6 @@ private struct ActiveTempBasal {
                 self.completeBolus(.failure(.communication(pumpError)), completion: completion)
             }
         }
-    }
-
-    private func getBolusDuration(_ units: Double) -> TimeInterval {
-        if units <= 10 {
-            // < 10 units == 0.15u/s
-            return TimeInterval(units / 0.15)
-        }
-
-        // <10 units == 0.15u/s & => 10units == 0.075u/s
-        return TimeInterval(10 / 0.15) + TimeInterval((units - 10) / 0.075)
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
@@ -1979,7 +2047,7 @@ private struct ActiveTempBasal {
                     }
 
                     let cancelledDose = DoseEntry.tempBasal(
-                        absoluteUnit: activeTempBasal.scheduledRate,
+                        absoluteUnit: activeTempBasal.dose.unitsPerHour,
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: activeTempBasal.dose.startDate,
@@ -1993,7 +2061,15 @@ private struct ActiveTempBasal {
                     }
                 }
 
-                if duration <= 0 {
+                let baselineRate = getScheduledBasalRate()
+                guard baselineRate > 0 else {
+                    log.error("No current basal rate available...")
+                    throw PumpCommError.other
+                }
+
+                let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+
+                if duration <= 0 || percent == 100 {
                     // Loop wants us to only cancel the temp basal
                     let basalDose = DoseEntry.basal(
                         rate: getScheduledBasalRate(),
@@ -2011,40 +2087,8 @@ private struct ActiveTempBasal {
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
-                    let baselineRate = getScheduledBasalRate()
-                    guard baselineRate > 0 else {
-                        log.error("No current basal rate available...")
-                        throw PumpCommError.other
-                    }
-
-                    let minutes = max(1, Int((duration / 60.0).rounded()))
-                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-
-                    // If percent is exactly 100%, don't send a temp basal - just return to scheduled basal
-                    if percent == 100 {
-                        log
-                            .info(
-                                "Requested temp basal is 100% (\(unitsPerHour)U/hr equals scheduled rate) - returning to scheduled basal instead"
-                            )
-                        let basalDose = DoseEntry.basal(
-                            rate: baselineRate,
-                            insulinType: lockedState.value.insulinType
-                        )
-                        pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
-
-                        self.activeTempBasal.value = nil
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                        return
-                    }
-
-                    log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(minutes), percent: \(percent)%")
-                    let request = SetTempRateRequest(minutes: minutes, percent: percent)
+                    log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(duration.minutes), percent: \(percent)%")
+                    let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
                     let response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
@@ -2617,6 +2661,8 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
         case let tempRate as TempRateResponse:
             handleTempRateResponse(tempRate, source: .notification)
+        case let pumpGlobal as PumpGlobalsResponse:
+            handleGlobalPumpSettingsResponse(pumpGlobal, source: .notification)
         case let historyStream as HistoryLogStreamResponse:
             if let session = activeHistoryFetchSession.value {
                 session.handleStreamResponse(historyStream)

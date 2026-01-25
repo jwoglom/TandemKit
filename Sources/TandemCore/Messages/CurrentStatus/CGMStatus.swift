@@ -97,6 +97,6 @@ public class CGMStatusResponse: Message {
     }
 
     public var description: String {
-        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionState=\(sessionState), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(transmitterBatteryStatus), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
+        "CGMStatusResponse(cargo=\(cargo.hexadecimalString), sessionState=\(String(describing: sessionState)), sessionStateId=\(sessionStateId), lastCalibrationTimestamp=\(lastCalibrationTimestamp), sensorStartedTimestamp=\(sensorStartedTimestamp), transmitterBatteryStatus=\(String(describing: transmitterBatteryStatus)), transmitterBatteryStatusId=\(transmitterBatteryStatusId))"
     }
 }

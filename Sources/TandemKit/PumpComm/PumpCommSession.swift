@@ -206,10 +206,10 @@ public class PumpCommSession {
             logger.error("[PumpCommSession] Failed to get PumpVersionResponse")
             throw PumpCommError.initialStateMessagesFailed
         }
-        
+
         state.pumpSerial = pumpVersionResponse.serialNum
         state.pumpModel = pumpVersionResponse.pumpModel
-        
+
         guard let model = state.pumpModel, model.isClosedLoopSupported else {
             logger.error("[PumpCommSession] PumpVersionResponse does not indicate closed-loop supported")
             throw PumpCommError.pumpModelUnsupported(modelNum: pumpVersionResponse.modelNum)

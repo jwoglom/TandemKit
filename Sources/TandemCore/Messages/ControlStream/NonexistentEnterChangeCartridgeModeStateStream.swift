@@ -65,6 +65,6 @@ public class EnterChangeCartridgeModeStateStreamResponse: Message {
     }
 
     public var description: String {
-        "EnterChangeCartridgeModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
+        "EnterChangeCartridgeModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(String(describing: state)), stateId=\(stateId))"
     }
 }

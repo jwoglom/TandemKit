@@ -85,6 +85,6 @@ public class CancelBolusResponse: Message {
     }
 
     public var description: String {
-        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), reason=\(reason), reasonId=\(reasonId))"
+        "CancelBolusResponse(cargo=\(cargo.hexadecimalString), status=\(String(describing: status)), statusId=\(statusId), bolusId=\(bolusId), reason=\(String(describing: reason)), reasonId=\(reasonId))"
     }
 }

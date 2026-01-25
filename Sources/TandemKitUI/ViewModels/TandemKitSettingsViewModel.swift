@@ -8,20 +8,30 @@ class TandemKitSettingsViewModel: ObservableObject {
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
     var openInsulinType: () -> Void
+    var openSoundSettings: () -> Void
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
+    @Published var useSilentMode: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
-    init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void, openInsulinType: @escaping () -> Void) {
+    init(
+        _ pumpManager: TandemPumpManager? = nil,
+        nextStep: @escaping () -> Void,
+        openInsulinType: @escaping () -> Void,
+        openSoundSettings: @escaping () -> Void
+    ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
         self.openInsulinType = openInsulinType
+        self.openSoundSettings = openSoundSettings
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
+        useSilentMode = pumpManager?.state.useSilentTones ?? false
+        reservoirValue = pumpManager?.reservoirLevel
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
     }
@@ -42,18 +52,6 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? {
         pumpManager?.state.controlIQUserMode
-    }
-
-    var basalStatusIcon: TandemPumpManagerState.HomeScreenBasalStatus? {
-        pumpManager?.state.basalStatusIcon
-    }
-
-    var bolusStatusIcon: TandemPumpManagerState.HomeScreenBolusStatus? {
-        pumpManager?.state.bolusStatusIcon
-    }
-
-    var cgmAlertIcon: TandemPumpManagerState.HomeScreenCGMAlert? {
-        pumpManager?.state.cgmAlertIcon
     }
 
     var tempRateActive: Bool {
@@ -82,7 +80,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var isSuspended: Bool? {
-        guard let icon = basalStatusIcon else { return nil }
+        guard let icon = pumpManager?.state.basalStatusIcon else { return nil }
         return icon == .suspended
     }
 
@@ -232,6 +230,11 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func toggleSilentMode() {
+        pumpManager?.configureSilentMode(!useSilentMode)
+        useSilentMode = !useSilentMode
     }
 
     func getLogs() -> [URL] {

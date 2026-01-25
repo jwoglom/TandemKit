@@ -158,7 +158,7 @@ public class NotificationBundle {
     /// This count is derived directly from `get()` to ensure consistency between
     /// the displayed count and the actual items list.
     public func getNotificationCount() -> Int {
-        return get().count
+        get().count
     }
 
     /// Boolean check for whether any notifications exist.

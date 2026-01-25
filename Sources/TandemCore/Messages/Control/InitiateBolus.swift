@@ -161,6 +161,6 @@ public class InitiateBolusResponse: Message, StatusMessage {
     public var statusType: BolusResponseStatus? { BolusResponseStatus(rawValue: statusTypeId) }
     public var wasBolusInitiated: Bool { status == 0 && statusType == .success }
     public var description: String {
-        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusType=\(statusType), statusTypeId=\(statusTypeId))"
+        "InitiateBolusResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), statusType=\(String(describing: statusType)), statusTypeId=\(statusTypeId))"
     }
 }

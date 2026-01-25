@@ -50,8 +50,7 @@ struct WizardStepContainer<Content: View>: View {
         .interactiveDismissDisabled(disableInteractiveDismiss || !canCancel)
     }
 
-    @ViewBuilder
-    private var modalLocker: some View {
+    @ViewBuilder private var modalLocker: some View {
         if lockModalWhenCantCancel {
             ModalInPresentationSetter(isModalInPresentation: !canCancel)
         }

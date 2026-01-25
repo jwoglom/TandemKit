@@ -61,6 +61,6 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
 
     public var releaseStatus: ReleaseStatus? { ReleaseStatus(rawValue: status) }
     public var description: String {
-        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), status=\(status), releaseStatus=\(releaseStatus))"
+        "BolusPermissionReleaseResponse(cargo=\(cargo.hexadecimalString), status=\(status), releaseStatus=\(String(describing: releaseStatus)))"
     }
 }

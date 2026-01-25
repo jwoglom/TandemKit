@@ -68,6 +68,6 @@ public class BasalIQStatusResponse: Message {
     }
 
     public var description: String {
-        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusState=\(basalIQStatusState), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
+        "BasalIQStatusResponse(cargo=\(cargo.hexadecimalString), basalIQStatusState=\(String(describing: basalIQStatusState)), basalIQStatusStateId=\(basalIQStatusStateId), deliveringTherapy=\(deliveringTherapy))"
     }
 }

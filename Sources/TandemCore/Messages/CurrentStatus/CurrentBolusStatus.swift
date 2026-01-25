@@ -104,6 +104,6 @@ public class CurrentBolusStatusResponse: Message {
     }
 
     public var description: String {
-        "CurrentBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(status), statusId=\(statusId), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSource=\(bolusSource), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
+        "CurrentBolusStatusResponse(cargo=\(cargo.hexadecimalString), status=\(String(describing: status)), statusId=\(statusId), bolusId=\(bolusId), timestamp=\(timestamp), requestedVolume=\(requestedVolume), bolusSource=\(String(describing: bolusSource)), bolusSourceId=\(bolusSourceId), bolusTypeBitmask=\(bolusTypeBitmask))"
     }
 }

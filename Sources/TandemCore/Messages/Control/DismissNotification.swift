@@ -41,7 +41,7 @@ public class DismissNotificationRequest: Message {
     }
 
     public var description: String {
-        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(notificationType), notificationTypeId=\(notificationTypeId))"
+        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(String(describing: notificationType)), notificationTypeId=\(notificationTypeId))"
     }
 }
 

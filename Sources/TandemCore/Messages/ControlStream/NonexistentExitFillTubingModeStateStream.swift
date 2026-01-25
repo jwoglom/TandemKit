@@ -65,6 +65,6 @@ public class ExitFillTubingModeStateStreamResponse: Message {
     }
 
     public var description: String {
-        "ExitFillTubingModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(state), stateId=\(stateId))"
+        "ExitFillTubingModeStateStreamResponse(cargo=\(cargo.hexadecimalString), state=\(String(describing: state)), stateId=\(stateId))"
     }
 }

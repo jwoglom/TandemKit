@@ -110,6 +110,34 @@ public class PumpGlobalsResponse: Message {
         quickBolusEnabledRaw == 1
     }
 
+    public var buttonAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: buttonAnnun)
+    }
+
+    public var quickBolusAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: quickBolusAnnun)
+    }
+
+    public var bolusAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: bolusAnnun)
+    }
+
+    public var reminderAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: reminderAnnun)
+    }
+
+    public var alertAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: alertAnnun)
+    }
+
+    public var alarmAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: alarmAnnun)
+    }
+
+    public var fillTubingAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: fillTubingAnnun)
+    }
+
     /// Annunciation types for pump feedback.
     public enum AnnunciationEnum: Int {
         case audioHigh = 0

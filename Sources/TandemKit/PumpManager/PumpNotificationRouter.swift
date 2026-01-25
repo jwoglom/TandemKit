@@ -124,7 +124,7 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
         if let existing = perCharacteristic[txId] {
             collector = existing
         } else {
-            var packetArray = PacketArrayList(
+            let packetArray = PacketArrayList(
                 expectedOpCode: opCode,
                 expectedCargoSize: expectedSize,
                 expectedTxId: txId,

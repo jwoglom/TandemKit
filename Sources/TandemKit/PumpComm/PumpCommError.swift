@@ -135,9 +135,9 @@ extension PumpCommError: LocalizedError {
                 "Please try again. If the problem persists, re-pair your pump.",
                 comment: "Recovery suggestion when building a request failed"
             )
-        case .invalidPumpChallengeResponse,
+        case .initialStateMessagesFailed,
+             .invalidPumpChallengeResponse,
              .responseParsingFailed,
-             .initialStateMessagesFailed,
              .transportError,
              .unexpectedResponse:
             return LocalizedString(

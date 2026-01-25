@@ -107,7 +107,7 @@ public class SetIDPSegmentRequest: Message {
     }
 
     public var description: String {
-        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(operation), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(String(describing: operation)), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }
 }
 

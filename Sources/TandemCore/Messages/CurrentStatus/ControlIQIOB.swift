@@ -87,6 +87,6 @@ public class ControlIQIOBResponse: Message {
     }
 
     public var description: String {
-        "ControlIQIOBResponse(cargo=\(cargo.hexadecimalString), mudaliarIOB=\(mudaliarIOB), timeRemainingSeconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(type), iobType=\(iobType))"
+        "ControlIQIOBResponse(cargo=\(cargo.hexadecimalString), mudaliarIOB=\(mudaliarIOB), timeRemainingSeconds=\(timeRemainingSeconds), mudaliarTotalIOB=\(mudaliarTotalIOB), swan6hrIOB=\(swan6hrIOB), type=\(String(describing: type)), iobType=\(iobType))"
     }
 }

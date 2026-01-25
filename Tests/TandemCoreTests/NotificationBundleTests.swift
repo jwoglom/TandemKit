@@ -2,7 +2,6 @@
 import XCTest
 
 final class NotificationBundleTests: XCTestCase {
-
     // MARK: - Helper functions to create bitmasks
 
     /// Creates a bitmask from the given bit positions (raw values)
@@ -194,7 +193,7 @@ final class NotificationBundleTests: XCTestCase {
         let expectation = XCTestExpectation(description: "Concurrent operations complete")
         expectation.expectedFulfillmentCount = 100
 
-        for i in 0..<100 {
+        for i in 0 ..< 100 {
             DispatchQueue.global().async {
                 // Alternate between adding and reading
                 if i % 2 == 0 {

@@ -90,7 +90,10 @@ class TandemKitNotificationsViewModel: ObservableObject {
             }
 
             let afterRequests = Date()
-            self.log.info("[TIMING] All requests completed in \(afterRequests.timeIntervalSince(beforeRequests) * 1000)ms: \(successCount) succeeded, \(failureCount) failed")
+            self.log
+                .info(
+                    "[TIMING] All requests completed in \(afterRequests.timeIntervalSince(beforeRequests) * 1000)ms: \(successCount) succeeded, \(failureCount) failed"
+                )
 
             // Update our local reference
             self.notificationBundle = freshBundle
@@ -108,7 +111,10 @@ class TandemKitNotificationsViewModel: ObservableObject {
             let beforeGet = Date()
             let items = freshBundle.get()
             let afterGet = Date()
-            self.log.info("[TIMING] Retrieved \(items.count) active notification(s) from bundle in \(afterGet.timeIntervalSince(beforeGet) * 1000)ms")
+            self.log
+                .info(
+                    "[TIMING] Retrieved \(items.count) active notification(s) from bundle in \(afterGet.timeIntervalSince(beforeGet) * 1000)ms"
+                )
 
             let beforeMainDispatch = Date()
             self.log.info("[TIMING] About to dispatch to main thread")
@@ -116,7 +122,10 @@ class TandemKitNotificationsViewModel: ObservableObject {
             // Use Task with @MainActor for higher priority UI update
             Task { @MainActor in
                 let mainThreadTime = Date()
-                self.log.info("[TIMING] Main thread update executing after \(mainThreadTime.timeIntervalSince(beforeMainDispatch) * 1000)ms delay")
+                self.log
+                    .info(
+                        "[TIMING] Main thread update executing after \(mainThreadTime.timeIntervalSince(beforeMainDispatch) * 1000)ms delay"
+                    )
 
                 // Force UI update by sending objectWillChange before setting properties
                 self.objectWillChange.send()

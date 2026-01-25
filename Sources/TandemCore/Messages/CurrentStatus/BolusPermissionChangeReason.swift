@@ -83,6 +83,6 @@ public class BolusPermissionChangeReasonResponse: Message {
     }
 
     public var description: String {
-        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(lastChangeReason), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
+        "BolusPermissionChangeReasonResponse(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), isAcked=\(isAcked), lastChangeReason=\(String(describing: lastChangeReason)), lastChangeReasonId=\(lastChangeReasonId), currentPermissionHolder=\(currentPermissionHolder))"
     }
 }

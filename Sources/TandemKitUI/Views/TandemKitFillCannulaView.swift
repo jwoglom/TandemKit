@@ -46,8 +46,7 @@ struct TandemKitFillCannulaView: View {
         }
     }
 
-    @ViewBuilder
-    private var currentStepView: some View {
+    @ViewBuilder private var currentStepView: some View {
         switch viewModel.currentStep {
         case .suspend:
             suspendStepContent
@@ -58,8 +57,7 @@ struct TandemKitFillCannulaView: View {
         }
     }
 
-    @ViewBuilder
-    private var bottomActionView: some View {
+    @ViewBuilder private var bottomActionView: some View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
@@ -129,7 +127,7 @@ struct TandemKitFillCannulaView: View {
                         "Filling cannula requires suspending insulin delivery. Select the prime amount carefully.",
                         comment: "Warning message for cannula fill"
                     ))
-                    .font(.subheadline)
+                        .font(.subheadline)
                 }
             }
             .padding()

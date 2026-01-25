@@ -1,7 +1,6 @@
 /// Represents an API version with major and minor components.
 public struct ApiVersion: Sendable, RawRepresentable, Equatable {
     public typealias RawValue = [String: Any]
-    
     public let major: Int
     public let minor: Int
 
@@ -9,18 +8,18 @@ public struct ApiVersion: Sendable, RawRepresentable, Equatable {
         self.major = major
         self.minor = minor
     }
-    
-    public init?(rawValue: [String : Any]) {
-        self.major = rawValue["major"] as! Int
-        self.minor = rawValue["minor"] as! Int
+
+    public init?(rawValue: [String: Any]) {
+        major = rawValue["major"] as! Int
+        minor = rawValue["minor"] as! Int
     }
-    
+
     public var rawValue: RawValue {
         var rawValue: RawValue = [:]
-        
+
         rawValue["major"] = major
         rawValue["minor"] = minor
-        
+
         return rawValue
     }
 }

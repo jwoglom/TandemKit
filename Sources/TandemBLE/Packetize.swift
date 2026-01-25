@@ -67,8 +67,8 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
         packet.replaceSubrange(hmacStartIndex ..< hmacStartIndex + hmacedOutput.count, with: hmacedOutput)
     }
 
-    var crc = CalculateCRC16(packet)
-    var packetWithCrc = Bytes.combine(packet, crc)
+    let crc = CalculateCRC16(packet)
+    let packetWithCrc = Bytes.combine(packet, crc)
 
     var packets: [Packet] = []
     let chunked = packetWithCrc.chunked(into: chunkSize)

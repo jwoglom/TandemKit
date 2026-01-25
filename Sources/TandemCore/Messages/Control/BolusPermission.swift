@@ -77,6 +77,6 @@ public class BolusPermissionResponse: Message, StatusMessage {
     }
 
     public var description: String {
-        "BolusPermissionResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), nackReason=\(nackReason), nackReasonId=\(nackReasonId))"
+        "BolusPermissionResponse(cargo=\(cargo.hexadecimalString), status=\(status), bolusId=\(bolusId), nackReason=\(String(describing: nackReason)), nackReasonId=\(nackReasonId))"
     }
 }
