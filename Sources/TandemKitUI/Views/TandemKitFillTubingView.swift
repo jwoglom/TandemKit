@@ -288,9 +288,52 @@ struct TandemKitFillTubingView: View {
                 .cornerRadius(12)
             }
 
+            // Show active notifications warning during fill
+            if viewModel.hasActiveNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                            .font(.headline)
+                        Spacer()
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                            NotificationRow(
+                                item: item,
+                                onDismiss: {
+                                    viewModel.notificationsViewModel.dismissNotification(item)
+                                },
+                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                            )
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                Label(
+                    LocalizedString(
+                        "Clear all notifications before completing tubing fill",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
+            }
+
             SaveButton(
                 text: LocalizedString("Tubing filled", comment: "Button text"),
-                loading: $viewModel.loadingExitMode
+                loading: $viewModel.loadingExitMode,
+                disabled: Binding(
+                    get: { viewModel.hasActiveNotifications },
+                    set: { _ in }
+                )
             ) {
                 viewModel.tubingFilled()
             }
@@ -306,6 +349,14 @@ struct TandemKitFillTubingView: View {
                 .background(guidanceColors.critical.opacity(0.1))
                 .cornerRadius(12)
             }
+        }
+        .task {
+            // Start periodic notification checking when this step appears
+            await viewModel.startPeriodicNotificationCheck()
+        }
+        .onDisappear {
+            // Stop checking when leaving this step
+            viewModel.stopPeriodicNotificationCheck()
         }
     }
 
@@ -345,7 +396,7 @@ struct TandemKitFillTubingView: View {
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text(LocalizedString("You can now use your pump normally", comment: "Success description"))
+                    Text(LocalizedString("You can now fill your cannula and resume insulin", comment: "Success description"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
