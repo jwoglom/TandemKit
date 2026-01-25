@@ -23,6 +23,10 @@ struct TandemKitChangeCartridgeView: View {
                 ))
                 .id(viewModel.currentStep)
         }
+        .safeAreaInset(edge: .bottom) {
+            bottomActionView
+                .padding()
+        }
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
@@ -53,6 +57,77 @@ struct TandemKitChangeCartridgeView: View {
             detectingStepContent
         case .done:
             doneStepContent
+        }
+    }
+
+    @ViewBuilder
+    private var bottomActionView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
+            if viewModel.isSuspended == true {
+                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                    withAnimation {
+                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
+                    }
+                }
+            } else {
+                SaveButton(
+                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    loading: $viewModel.loadingSuspend
+                ) {
+                    viewModel.showingSuspendConfirmation = true
+                }
+                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+                    suspendInsulinSheet
+                }
+            }
+        case .enterMode:
+            SaveButton(
+                text: LocalizedString("Start cartridge change", comment: "Button text"),
+                loading: $viewModel.loadingEnterMode,
+                disabled: Binding(
+                    get: { viewModel.hasActiveNotifications },
+                    set: { _ in }
+                )
+            ) {
+                viewModel.enterChangeCartridgeMode()
+            }
+        case .waitingForReady:
+            EmptyView()
+        case .physicalChange:
+            Button(action: {
+                viewModel.cartridgeInserted()
+            }) {
+                Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(viewModel.hasActiveNotifications ? Color.gray : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .disabled(viewModel.hasActiveNotifications)
+        case .detecting:
+            if viewModel.failedExitMode {
+                SaveButton(
+                    text: LocalizedString("Retry", comment: "Retry button"),
+                    loading: $viewModel.loadingExitMode
+                ) {
+                    viewModel.retryExitCartridgeMode()
+                }
+            } else {
+                EmptyView()
+            }
+        case .done:
+            Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Text(LocalizedString("Done", comment: "Button text"))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
         }
     }
 
@@ -102,23 +177,7 @@ struct TandemKitChangeCartridgeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(12)
-
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
-                    withAnimation {
-                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
-                    }
-                }
             } else {
-                SaveButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
-                    loading: $viewModel.loadingSuspend
-                ) {
-                    viewModel.showingSuspendConfirmation = true
-                }
-                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-                    suspendInsulinSheet
-                }
-
                 if viewModel.failedSuspend {
                     Label(
                         LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
@@ -206,17 +265,6 @@ struct TandemKitChangeCartridgeView: View {
             .padding()
             .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(12)
-
-            SaveButton(
-                text: LocalizedString("Start cartridge change", comment: "Button text"),
-                loading: $viewModel.loadingEnterMode,
-                disabled: Binding(
-                    get: { viewModel.hasActiveNotifications },
-                    set: { _ in }
-                )
-            ) {
-                viewModel.enterChangeCartridgeMode()
-            }
 
             if viewModel.hasActiveNotifications {
                 Label(
@@ -358,18 +406,6 @@ struct TandemKitChangeCartridgeView: View {
                 .background(guidanceColors.warning.opacity(0.1))
                 .cornerRadius(12)
             }
-
-            Button(action: {
-                viewModel.cartridgeInserted()
-            }) {
-                Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(viewModel.hasActiveNotifications ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-            .disabled(viewModel.hasActiveNotifications)
         }
         .task {
             // Start periodic notification checking when this step appears
@@ -428,13 +464,6 @@ struct TandemKitChangeCartridgeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.critical.opacity(0.1))
                 .cornerRadius(12)
-
-                SaveButton(
-                    text: LocalizedString("Retry", comment: "Retry button"),
-                    loading: $viewModel.loadingExitMode
-                ) {
-                    viewModel.retryExitCartridgeMode()
-                }
             }
         }
     }
@@ -460,17 +489,6 @@ struct TandemKitChangeCartridgeView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
         }
     }
 

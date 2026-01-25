@@ -25,6 +25,10 @@ struct TandemKitFillCannulaView: View {
                 ))
                 .id(viewModel.currentStep)
         }
+        .safeAreaInset(edge: .bottom) {
+            bottomActionView
+                .padding()
+        }
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
@@ -49,6 +53,60 @@ struct TandemKitFillCannulaView: View {
             enterAmountStepContent
         case .done:
             doneStepContent
+        }
+    }
+
+    @ViewBuilder
+    private var bottomActionView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
+            if viewModel.isSuspended == true {
+                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                    withAnimation {
+                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
+                    }
+                }
+            } else {
+                SaveButton(
+                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    loading: $viewModel.loadingSuspend
+                ) {
+                    viewModel.showingSuspendConfirmation = true
+                }
+                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+                    suspendInsulinSheet
+                }
+            }
+        case .enterAmount:
+            SaveButton(
+                text: LocalizedString("Fill cannula", comment: "Button text"),
+                loading: $viewModel.loadingFill
+            ) {
+                viewModel.fillCannula()
+            }
+        case .done:
+            VStack(spacing: 12) {
+                SaveButton(
+                    text: LocalizedString("Resume insulin delivery", comment: "Button text"),
+                    loading: $viewModel.loadingResume
+                ) {
+                    viewModel.showingResumeConfirmation = true
+                }
+                .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
+                    resumeInsulinSheet
+                }
+
+                Button(action: {
+                    presentationMode.wrappedValue.dismiss()
+                }) {
+                    Text(LocalizedString("Done", comment: "Button text"))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+            }
         }
     }
 
@@ -98,23 +156,7 @@ struct TandemKitFillCannulaView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(12)
-
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
-                    withAnimation {
-                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
-                    }
-                }
             } else {
-                SaveButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
-                    loading: $viewModel.loadingSuspend
-                ) {
-                    viewModel.showingSuspendConfirmation = true
-                }
-                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-                    suspendInsulinSheet
-                }
-
                 if viewModel.failedSuspend {
                     Label(
                         LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
@@ -173,13 +215,6 @@ struct TandemKitFillCannulaView: View {
                 }
             }
 
-            SaveButton(
-                text: LocalizedString("Fill cannula", comment: "Button text"),
-                loading: $viewModel.loadingFill
-            ) {
-                viewModel.fillCannula()
-            }
-
             if viewModel.failedFill {
                 Label(
                     LocalizedString(
@@ -219,16 +254,6 @@ struct TandemKitFillCannulaView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
 
-            SaveButton(
-                text: LocalizedString("Resume insulin delivery", comment: "Button text"),
-                loading: $viewModel.loadingResume
-            ) {
-                viewModel.showingResumeConfirmation = true
-            }
-            .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-                resumeInsulinSheet
-            }
-
             if viewModel.failedResume {
                 Label(
                     LocalizedString("Failed to resume insulin. Please try again.", comment: "Error message"),
@@ -239,17 +264,6 @@ struct TandemKitFillCannulaView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.critical.opacity(0.1))
                 .cornerRadius(12)
-            }
-
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
             }
         }
     }

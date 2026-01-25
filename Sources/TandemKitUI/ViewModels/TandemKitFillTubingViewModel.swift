@@ -200,9 +200,18 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 self?.buttonDown = response.buttonDown
                 if response.buttonDown {
                     self?.hasDisplayedFlow = true
+                } else {
+                    self?.requestAlertStatus()
                 }
             }
             .store(in: &cancellables)
+    }
+
+    private func requestAlertStatus() {
+        processQueue.async { [weak self] in
+            guard let transport = self?.pumpManager?.pairedTransport else { return }
+            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
+        }
     }
 
     func tubingFilled() {

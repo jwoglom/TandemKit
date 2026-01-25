@@ -23,6 +23,10 @@ struct TandemKitFillTubingView: View {
                 ))
                 .id(viewModel.currentStep)
         }
+        .safeAreaInset(edge: .bottom) {
+            bottomActionView
+                .padding()
+        }
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
@@ -46,6 +50,75 @@ struct TandemKitFillTubingView: View {
             exitingStepContent
         case .done:
             doneStepContent
+        }
+    }
+
+    @ViewBuilder
+    private var bottomActionView: some View {
+        switch viewModel.currentStep {
+        case .suspend:
+            if viewModel.isSuspended == true {
+                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                    withAnimation {
+                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
+                    }
+                }
+            } else {
+                SaveButton(
+                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    loading: $viewModel.loadingSuspend
+                ) {
+                    viewModel.showingSuspendConfirmation = true
+                }
+                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+                    suspendInsulinSheet
+                }
+            }
+        case .enterMode:
+            SaveButton(
+                text: LocalizedString("Start tubing fill", comment: "Button text"),
+                loading: $viewModel.loadingEnterMode,
+                disabled: Binding(
+                    get: { viewModel.hasActiveNotifications },
+                    set: { _ in }
+                )
+            ) {
+                viewModel.enterFillTubingMode()
+            }
+        case .filling:
+            ZStack {
+                if viewModel.buttonDown {
+                    InsulinFlowIndicator()
+                        .transition(.opacity)
+                } else if viewModel.hasDisplayedFlow {
+                    SaveButton(
+                        text: LocalizedString("Complete tubing fill", comment: "Button text"),
+                        loading: $viewModel.loadingExitMode,
+                        disabled: Binding(
+                            get: { viewModel.hasActiveNotifications },
+                            set: { _ in }
+                        )
+                    ) {
+                        viewModel.tubingFilled()
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.3), value: viewModel.buttonDown)
+            .frame(maxWidth: .infinity)
+        case .exiting:
+            EmptyView()
+        case .done:
+            Button(action: {
+                presentationMode.wrappedValue.dismiss()
+            }) {
+                Text(LocalizedString("Done", comment: "Button text"))
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
         }
     }
 
@@ -95,23 +168,7 @@ struct TandemKitFillTubingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(12)
-
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
-                    withAnimation {
-                        viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
-                    }
-                }
             } else {
-                SaveButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
-                    loading: $viewModel.loadingSuspend
-                ) {
-                    viewModel.showingSuspendConfirmation = true
-                }
-                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-                    suspendInsulinSheet
-                }
-
                 if viewModel.failedSuspend {
                     Label(
                         LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
@@ -200,17 +257,6 @@ struct TandemKitFillTubingView: View {
             .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(12)
 
-            SaveButton(
-                text: LocalizedString("Start tubing fill", comment: "Button text"),
-                loading: $viewModel.loadingEnterMode,
-                disabled: Binding(
-                    get: { viewModel.hasActiveNotifications },
-                    set: { _ in }
-                )
-            ) {
-                viewModel.enterFillTubingMode()
-            }
-
             if viewModel.hasActiveNotifications {
                 Label(
                     LocalizedString(
@@ -276,27 +322,6 @@ struct TandemKitFillTubingView: View {
                 .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(12)
             }
-
-            // Animated droplet or button - same space
-            ZStack {
-                if viewModel.buttonDown {
-                    InsulinFlowIndicator()
-                        .transition(.opacity)
-                } else if viewModel.hasDisplayedFlow {
-                    SaveButton(
-                        text: LocalizedString("Complete tubing fill", comment: "Button text"),
-                        loading: $viewModel.loadingExitMode,
-                        disabled: Binding(
-                            get: { viewModel.hasActiveNotifications },
-                            set: { _ in }
-                        )
-                    ) {
-                        viewModel.tubingFilled()
-                    }
-                    .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.3), value: viewModel.buttonDown)
 
             // Show active notifications warning during fill
             if viewModel.hasActiveNotifications {
@@ -403,17 +428,6 @@ struct TandemKitFillTubingView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
         }
     }
 
