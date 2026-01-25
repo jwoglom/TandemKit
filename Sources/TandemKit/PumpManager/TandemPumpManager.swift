@@ -2,15 +2,11 @@ import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
-#if canImport(HealthKit)
-    import HealthKit
-#endif
+import HealthKit
 import LoopKit
 import TandemBLE
 import TandemCore
-#if canImport(UIKit)
-    import UIKit
-#endif
+import UIKit
 
 // MARK: - Scan Device Observer Protocol
 
@@ -115,6 +111,18 @@ private struct ActiveTempBasal {
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
     private var targetPeripheralIdentifier: UUID?
+    private let silentToneManager = TandemSilentToneManager()
+
+    @objc func appMovedToBackground() {
+        if state.useSilentTones {
+            log.info("Starting silent tones")
+            silentToneManager.startBackgroundTask()
+        }
+    }
+
+    @objc func appMovedToForeground() {
+        silentToneManager.stopBackgroundTask()
+    }
 
     private func updatePairingArtifacts(with pumpState: PumpState?) {
         #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -444,6 +452,20 @@ private struct ActiveTempBasal {
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
+
+        let nc = NotificationCenter.default
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     public required init?(rawState: RawStateValue) {
@@ -475,6 +497,20 @@ private struct ActiveTempBasal {
         if case let .tempBasal(dose: dose) = state.basalDeliveryState {
             activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
+
+        let nc = NotificationCenter.default
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        nc.addObserver(
+            self,
+            selector: #selector(appMovedToForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
     }
 
     public var rawState: RawStateValue {
@@ -761,6 +797,22 @@ private struct ActiveTempBasal {
 
             notifyDelegateStateUpdated()
         }
+    }
+
+    private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
+        logger(for: source).debug("[\(source.label)] Pump Global updated")
+
+        var managerState = lockedState.value
+        managerState.buttonAnnun = response.buttonAnnouncement
+        managerState.quickBolusAnnun = response.quickBolusAnnouncement
+        managerState.bolusAnnun = response.bolusAnnouncement
+        managerState.reminderAnnun = response.reminderAnnouncement
+        managerState.alarmAnnun = response.alarmAnnouncement
+        managerState.alertAnnun = response.alertAnnouncement
+        managerState.fillTubingAnnun = response.fillTubingAnnouncement
+        lockedState.value = managerState
+
+        notifyDelegateStateUpdated()
     }
 
     private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
@@ -1502,6 +1554,16 @@ private struct ActiveTempBasal {
         notifyDelegateStateUpdated()
     }
 
+    public func configureSilentMode(_ enabled: Bool) {
+        var state = lockedState.value
+        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
+        state.useSilentTones = enabled
+        lockedState.value = state
+
+        telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
+        notifyDelegateStateUpdated()
+    }
+
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
@@ -1592,6 +1654,25 @@ private struct ActiveTempBasal {
                 self.activeHistoryFetchSession.value = nil
                 completion(error)
             }
+        }
+    }
+
+    public func fetchGlobalPumpSettings() {
+        guard let transport = transportLock.value else {
+            telemetryLogger.error("Transport not available for pump global telemetry")
+            return
+        }
+
+        do {
+            let response: PumpGlobalsResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: PumpGlobalsRequest(),
+                expecting: PumpGlobalsResponse.self
+            )
+
+            handleGlobalPumpSettingsResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Pump global telemetry request failed: \(error)")
         }
     }
 
@@ -2604,6 +2685,8 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
         case let tempRate as TempRateResponse:
             handleTempRateResponse(tempRate, source: .notification)
+        case let pumpGlobal as PumpGlobalsResponse:
+            handleGlobalPumpSettingsResponse(pumpGlobal, source: .notification)
         case let historyStream as HistoryLogStreamResponse:
             if let session = activeHistoryFetchSession.value {
                 session.handleStreamResponse(historyStream)

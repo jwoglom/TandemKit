@@ -18,7 +18,6 @@
 		1A2FA9602EC8FD0800DF080F /* MessageTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA94B2EC8FD0800DF080F /* MessageTransport.swift */; };
 		1A2FA9612EC8FD0800DF080F /* TandemPumpPairingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA95A2EC8FD0800DF080F /* TandemPumpPairingViewController.swift */; };
 		1A2FA9622EC8FD0800DF080F /* PumpTelemetryScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9492EC8FD0800DF080F /* PumpTelemetryScheduler.swift */; };
-		1A2FA9632EC8FD0800DF080F /* TandemKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA95D2EC8FD0800DF080F /* TandemKit.swift */; };
 		1A2FA9642EC8FD0800DF080F /* PumpCommSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9522EC8FD0800DF080F /* PumpCommSession.swift */; };
 		1A2FA9652EC8FD0800DF080F /* PumpNotificationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9472EC8FD0800DF080F /* PumpNotificationRouter.swift */; };
 		1A2FA9662EC8FD0800DF080F /* PumpMessageTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9532EC8FD0800DF080F /* PumpMessageTransport.swift */; };
@@ -47,6 +46,11 @@
 		2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */; };
 		2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */; };
 		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
+		3E0F4D3C2F265A64008290A3 /* LocalizedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444F2EC91299008A07F6 /* LocalizedString.swift */; };
+		3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */; };
+		3E0F4D422F265C25008290A3 /* blank.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3E0F4D412F265C25008290A3 /* blank.wav */; };
+		3E0F4D442F2662B3008290A3 /* TandemKitSoundSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */; };
+		3E0F4D462F2662BC008290A3 /* TandemKitSoundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */; };
 		3E53DB842F13E81800D84398 /* TandemKitInsulinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */; };
 		3E59CA1A2F002E0E00D78697 /* NewPumpEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */; };
 		3E59CA1C2F002F7F00D78697 /* DoseEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */; };
@@ -421,7 +425,6 @@
 		1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerSettings.swift; sourceTree = "<group>"; };
 		1A2FA9592EC8FD0800DF080F /* TandemPumpManagerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerState.swift; sourceTree = "<group>"; };
 		1A2FA95A2EC8FD0800DF080F /* TandemPumpPairingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpPairingViewController.swift; sourceTree = "<group>"; };
-		1A2FA95D2EC8FD0800DF080F /* TandemKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKit.swift; sourceTree = "<group>"; };
 		1A2FA9AA2EC8FD0800DF080F /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
 		1A55E0E72EC9291B006E651D /* TandemKitScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitScanViewModel.swift; sourceTree = "<group>"; };
 		1A55E0F12EC9666F006E651D /* TandemKitSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSettingsView.swift; sourceTree = "<group>"; };
@@ -437,6 +440,10 @@
 		1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBar.swift; sourceTree = "<group>"; };
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemSilentToneManager.swift; sourceTree = "<group>"; };
+		3E0F4D412F265C25008290A3 /* blank.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = blank.wav; sourceTree = "<group>"; };
+		3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsViewModel.swift; sourceTree = "<group>"; };
+		3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsView.swift; sourceTree = "<group>"; };
 		3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitInsulinType.swift; sourceTree = "<group>"; };
 		3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPumpEvent.swift; sourceTree = "<group>"; };
 		3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseEntry.swift; sourceTree = "<group>"; };
@@ -761,35 +768,12 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1A2FA9482EC8FD0800DF080F /* BLE */ = {
-			isa = PBXGroup;
-			children = (
-				1A2FA9472EC8FD0800DF080F /* PumpNotificationRouter.swift */,
-			);
-			path = BLE;
-			sourceTree = "<group>";
-		};
-		1A2FA94A2EC8FD0800DF080F /* Telemetry */ = {
-			isa = PBXGroup;
-			children = (
-				1A2FA9492EC8FD0800DF080F /* PumpTelemetryScheduler.swift */,
-			);
-			path = Telemetry;
-			sourceTree = "<group>";
-		};
 		1A2FA95B2EC8FD0800DF080F /* PumpManager */ = {
 			isa = PBXGroup;
 			children = (
 				93C45EB5470A4139895A9E31 /* History */,
-				1A2FA94A2EC8FD0800DF080F /* Telemetry */,
 				1A2FA94B2EC8FD0800DF080F /* MessageTransport.swift */,
 				1A2FA94C2EC8FD0800DF080F /* PeripheralManagerTransport.swift */,
-				1A2FA94D2EC8FD0800DF080F /* PumpComm.swift */,
-				1A2FA94E2EC8FD0800DF080F /* PumpCommError.swift */,
-				1A2FA94F2EC8FD0800DF080F /* PumpCommFaultEvent.swift */,
-				1A2FA9502EC8FD0800DF080F /* PumpCommRetryPolicy.swift */,
-				1A2FA9512EC8FD0800DF080F /* PumpCommsError.swift */,
-				1A2FA9522EC8FD0800DF080F /* PumpCommSession.swift */,
 				1A2FA9532EC8FD0800DF080F /* PumpMessageTransport.swift */,
 				1A2FA9542EC8FD0800DF080F /* PumpProtocolError.swift */,
 				1A2FA9552EC8FD0800DF080F /* PumpState.swift */,
@@ -799,6 +783,9 @@
 				1A2FA9572EC8FD0800DF080F /* TandemPumpManager.swift */,
 				1A2FA9582EC8FD0800DF080F /* TandemPumpManagerSettings.swift */,
 				1A2FA9592EC8FD0800DF080F /* TandemPumpManagerState.swift */,
+				3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */,
+				1A2FA9492EC8FD0800DF080F /* PumpTelemetryScheduler.swift */,
+				1A2FA9472EC8FD0800DF080F /* PumpNotificationRouter.swift */,
 			);
 			path = PumpManager;
 			sourceTree = "<group>";
@@ -806,9 +793,8 @@
 		1A2FA95E2EC8FD0800DF080F /* TandemKit */ = {
 			isa = PBXGroup;
 			children = (
-				1A2FA9482EC8FD0800DF080F /* BLE */,
+				3E0F4D3D2F265B6B008290A3 /* PumpComm */,
 				1A2FA95B2EC8FD0800DF080F /* PumpManager */,
-				1A2FA95D2EC8FD0800DF080F /* TandemKit.swift */,
 				3EEECBD02EC902B50063D7BC /* Info.plist */,
 			);
 			name = TandemKit;
@@ -818,6 +804,7 @@
 		1A55E0E62EC92914006E651D /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */,
 				67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */,
 				02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */,
 				8D2464522A674D05B5968DE6 /* TandemKitFillTubingViewModel.swift */,
@@ -872,12 +859,30 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		3E0F4D3D2F265B6B008290A3 /* PumpComm */ = {
+			isa = PBXGroup;
+			children = (
+				1A2FA94D2EC8FD0800DF080F /* PumpComm.swift */,
+				1A2FA94E2EC8FD0800DF080F /* PumpCommError.swift */,
+				1A2FA94F2EC8FD0800DF080F /* PumpCommFaultEvent.swift */,
+				1A2FA9502EC8FD0800DF080F /* PumpCommRetryPolicy.swift */,
+				1A2FA9512EC8FD0800DF080F /* PumpCommsError.swift */,
+				1A2FA9522EC8FD0800DF080F /* PumpCommSession.swift */,
+			);
+			path = PumpComm;
+			sourceTree = "<group>";
+		};
 		3ECD42E32F142F9F007ADED9 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
 				1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */,
 				3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */,
 				3EE346162EC9274E008A07F6 /* Bundle.swift */,
+				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
+				B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */,
+				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
+				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
+				1A55E0F32EC967E5006E651D /* Image.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -1239,7 +1244,6 @@
 		3EE346132EC92709008A07F6 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				1A55E0F32EC967E5006E651D /* Image.swift */,
 				3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */,
 				3EE346192EC92801008A07F6 /* TandemKitScanView.swift */,
 				3EE3461A2EC92802008A07F6 /* TandemKitSetupCompleteView.swift */,
@@ -1250,11 +1254,8 @@
 				98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */,
 				B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */,
 				139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */,
-				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
-				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
-				B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */,
-				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
 				3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */,
+				3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1267,6 +1268,7 @@
 				3ECD42E32F142F9F007ADED9 /* Utils */,
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
 				3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */,
+				3E0F4D412F265C25008290A3 /* blank.wav */,
 				1A55E0F52EC9686A006E651D /* Media.xcassets */,
 			);
 			name = TandemKitUI;
@@ -1491,6 +1493,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A55E0F62EC9686A006E651D /* Media.xcassets in Resources */,
+				3E0F4D422F265C25008290A3 /* blank.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1532,14 +1535,15 @@
 			files = (
 				1A2FA95F2EC8FD0800DF080F /* PumpState.swift in Sources */,
 				3EE346172EC92751008A07F6 /* Bundle.swift in Sources */,
+				3E0F4D462F2662BC008290A3 /* TandemKitSoundSettingsView.swift in Sources */,
 				1A2FA9602EC8FD0800DF080F /* MessageTransport.swift in Sources */,
 				1A2FA9612EC8FD0800DF080F /* TandemPumpPairingViewController.swift in Sources */,
 				1A2FA9622EC8FD0800DF080F /* PumpTelemetryScheduler.swift in Sources */,
-				1A2FA9632EC8FD0800DF080F /* TandemKit.swift in Sources */,
 				1A2FA9642EC8FD0800DF080F /* PumpCommSession.swift in Sources */,
 				1A2FA9652EC8FD0800DF080F /* PumpNotificationRouter.swift in Sources */,
 				1A2FA9662EC8FD0800DF080F /* PumpMessageTransport.swift in Sources */,
 				3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */,
+				3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */,
 				3EF00DDA2F0AAFB600776DCD /* TandemDoseProgressReporter.swift in Sources */,
 				1A55E0F22EC9666F006E651D /* TandemKitSettingsView.swift in Sources */,
 				WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */,
@@ -1566,6 +1570,7 @@
 				1A2FA96C2EC8FD0800DF080F /* PumpCommFaultEvent.swift in Sources */,
 				1A2FA96D2EC8FD0800DF080F /* TandemPump.swift in Sources */,
 				1A2FA9BB2EC8FD0800DF080F /* SimpleReservoirValue.swift in Sources */,
+				3E0F4D3C2F265A64008290A3 /* LocalizedString.swift in Sources */,
 				1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */,
 				16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */,
 				D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */,
@@ -1573,6 +1578,7 @@
 				1A0E172A2ED1069F00E75219 /* TandemKitCGMSettingsViewModel.swift in Sources */,
 				1A0E172B2ED1069F00E75219 /* TandemKitNotificationsViewModel.swift in Sources */,
 				1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */,
+				3E0F4D442F2662B3008290A3 /* TandemKitSoundSettingsViewModel.swift in Sources */,
 				1A2FA96E2EC8FD0800DF080F /* PeripheralManagerTransport.swift in Sources */,
 				1A2FA96F2EC8FD0800DF080F /* PumpCommsError.swift in Sources */,
 				1A2FA9702EC8FD0800DF080F /* PumpCommRetryPolicy.swift in Sources */,

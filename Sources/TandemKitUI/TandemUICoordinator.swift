@@ -8,6 +8,7 @@ enum TandemScreen {
     case setupComplete
     case pumpSettings
     case insulinType
+    case soundSettings
 
     func next() -> TandemScreen? {
         switch self {
@@ -126,9 +127,18 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .pumpSettings:
             // next step = deactivate the pump
             let openInsulinType = { self.navigateTo(.insulinType) }
-            let viewModel = TandemKitSettingsViewModel(pumpManager, nextStep: stepFinished, openInsulinType: openInsulinType)
+            let openSoundSettings = { self.navigateTo(.soundSettings) }
+            let viewModel = TandemKitSettingsViewModel(
+                pumpManager,
+                nextStep: stepFinished,
+                openInsulinType: openInsulinType,
+                openSoundSettings: openSoundSettings
+            )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
+        case .soundSettings:
+            let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitSoundSettingsView(viewModel: viewModel))
         }
     }
 

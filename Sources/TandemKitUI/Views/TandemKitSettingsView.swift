@@ -28,42 +28,6 @@ struct TandemKitSettingsView: View {
         )
     }
 
-    var debugDetailsPopover: some View {
-        List {
-            Section(header: SectionHeader(label: LocalizedString("State", comment: "Debug state header"))) {
-                Text("Basal Icon: \(String(describing: viewModel.basalStatusIcon))").font(.system(size: 12))
-                Text("Bolus Icon: \(String(describing: viewModel.bolusStatusIcon))").font(.system(size: 12))
-                Text("CGM Alert Icon: \(String(describing: viewModel.cgmAlertIcon))").font(.system(size: 12))
-                Text("ControlIQ Enabled: \(viewModel.controlIQEnabled ? "Yes" : "No")").font(.system(size: 12))
-                Text("ControlIQ Mode: \(String(describing: viewModel.controlIQUserMode))").font(.system(size: 12))
-                Text("Temp Rate Active: \(viewModel.tempRateActive ? "Yes" : "No")").font(.system(size: 12))
-                if viewModel.tempRateActive {
-                    Text("Temp Rate: \(viewModel.tempRatePercentage ?? 0)% for \(viewModel.tempRateDuration ?? 0)s")
-                        .font(.system(size: 12))
-                }
-                Text("Current Basal Rate: \(viewModel.currentBasalRateForDisplay)").font(.system(size: 12))
-            }
-
-            HStack {
-                Text("Peripheral UUID")
-                    .foregroundColor(Color.primary)
-                Spacer()
-                Text(viewModel.pumpState?.peripheralUuid ?? "N/A")
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            HStack {
-                Text("PumpState Valid")
-                    .foregroundColor(Color.primary)
-                Spacer()
-                Text(String(describing: viewModel.pumpState?.valid ?? false))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
     var body: some View {
         List {
             Section {
@@ -144,7 +108,7 @@ struct TandemKitSettingsView: View {
                 )) {
                     HStack {
                         Text(LocalizedString("View Notifications", comment: "Label for viewing notifications"))
-                            .foregroundColor(Color.primary)
+                            .foregroundColor(.primary)
                         Spacer()
                         if viewModel.notificationCount > 0 {
                             ZStack {
@@ -184,7 +148,7 @@ struct TandemKitSettingsView: View {
             ))) {
                 HStack {
                     Text(LocalizedString("Control-IQ", comment: "Text for Control-IQ status"))
-                        .foregroundColor(Color.primary)
+                        .foregroundColor(.primary)
                     Spacer()
                     Text(viewModel.controlIQEnabled ? "Enabled" : "Disabled")
                         .foregroundColor(.secondary)
@@ -193,7 +157,7 @@ struct TandemKitSettingsView: View {
                 if let mode = viewModel.controlIQUserMode {
                     HStack {
                         Text(LocalizedString("User mode", comment: "Text for user mode"))
-                            .foregroundColor(Color.primary)
+                            .foregroundColor(.primary)
                         Spacer()
                         Text(userModeText(mode.rawValue))
                             .foregroundColor(.secondary)
@@ -206,7 +170,7 @@ struct TandemKitSettingsView: View {
                 {
                     HStack {
                         Text(LocalizedString("Temp rate", comment: "Text for temp rate"))
-                            .foregroundColor(Color.primary)
+                            .foregroundColor(.primary)
                         Spacer()
                         Text("\(percentage)% (\(formatDuration(duration)))")
                             .foregroundColor(.secondary)
@@ -225,22 +189,15 @@ struct TandemKitSettingsView: View {
                 .buttonStyle(.plain)
 
                 Button(action: {
-                    viewModel.showingDebugDetails = true
+                    viewModel.openSoundSettings()
                 }) {
-                    Text(LocalizedString("View Debug Status", comment: "Label for button to view debug status of the pump"))
+                    Text(LocalizedString("Sound settings", comment: "Label for button to view sound settings of pump"))
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: UIFont.systemFontSize, weight: .medium))
                         .opacity(0.35)
                 }
                 .buttonStyle(.plain)
-                .popover(isPresented: $viewModel.showingDebugDetails) {
-                    debugDetailsPopover
-                }
-
-                NavigationLink(destination: TandemKitDebugView(viewModel: viewModel.createDebugViewModel())) {
-                    Text(LocalizedString("View Debug Options", comment: "Label for button to open TandemKit debug options"))
-                }
             }
 
             Section(header: SectionHeader(label: LocalizedString(
@@ -251,21 +208,21 @@ struct TandemKitSettingsView: View {
                     viewModel: viewModel.createChangeCartridgeViewModel()
                 )) {
                     Text(LocalizedString("Change Cartridge", comment: "Label for change cartridge"))
-                        .foregroundColor(Color.primary)
+                        .foregroundColor(.primary)
                 }
 
                 NavigationLink(destination: TandemKitFillTubingView(
                     viewModel: viewModel.createFillTubingViewModel()
                 )) {
                     Text(LocalizedString("Fill Tubing", comment: "Label for fill tubing"))
-                        .foregroundColor(Color.primary)
+                        .foregroundColor(.primary)
                 }
 
                 NavigationLink(destination: TandemKitFillCannulaView(
                     viewModel: viewModel.createFillCannulaViewModel()
                 )) {
                     Text(LocalizedString("Fill Cannula", comment: "Label for fill cannula"))
-                        .foregroundColor(Color.primary)
+                        .foregroundColor(.primary)
                 }
             }
 
@@ -313,42 +270,19 @@ struct TandemKitSettingsView: View {
                 .disabled(viewModel.isUpdatingPumpState || !isControlIQClosedLoopEnabled)
             }
 
-            Section(header: SectionHeader(label: LocalizedString(
-                "Pump Information",
-                comment: "The title of the pump information section in TandemKit settings"
-            ))) {
-                if let basal = viewModel.basalStatusIcon {
-                    HStack {
-                        Text(LocalizedString("Basal status", comment: "Text for basal status"))
-                            .foregroundColor(Color.primary)
-                        Spacer()
-                        Text(basalStatusText(basal))
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if let bolus = viewModel.bolusStatusIcon {
-                    HStack {
-                        Text(LocalizedString("Bolus status", comment: "Text for bolus status"))
-                            .foregroundColor(Color.primary)
-                        Spacer()
-                        Text(bolusStatusText(bolus))
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if let cgm = viewModel.cgmAlertIcon {
-                    HStack {
-                        Text(LocalizedString("CGM status", comment: "Text for CGM status"))
-                            .foregroundColor(Color.primary)
-                        Spacer()
-                        Text(cgmStatusText(cgm))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-
             Section {
+                Button(action: {
+                    viewModel.toggleSilentMode()
+                }) {
+                    HStack {
+                        Text(LocalizedString("Silent mode", comment: "Label for silent mode"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(viewModel.useSilentMode ? "Enabled" : "Disabled")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
                 Button(LocalizedString("Share Tandem pump logs", comment: "TandemKit share logs")) {
                     self.isSharePresented = true
                 }
@@ -516,37 +450,6 @@ struct TandemKitSettingsView: View {
         }
     }
 
-    private func basalStatusText(_ status: TandemPumpManagerState.HomeScreenBasalStatus) -> String {
-        switch status {
-        case .active:
-            return "Active"
-        case .tempRate:
-            return "Temp rate"
-        case .suspended:
-            return "Suspended"
-        }
-    }
-
-    private func bolusStatusText(_ status: TandemPumpManagerState.HomeScreenBolusStatus) -> String {
-        switch status {
-        case .none:
-            return "None"
-        case .bolus:
-            return "In progress"
-        }
-    }
-
-    private func cgmStatusText(_ status: TandemPumpManagerState.HomeScreenCGMAlert) -> String {
-        switch status {
-        case .noError:
-            return "OK"
-        case .low:
-            return "Low"
-        case .high:
-            return "High"
-        }
-    }
-
     private func formatDuration(_ seconds: UInt32) -> String {
         let minutes = Int(seconds) / 60
         let hours = minutes / 60
@@ -567,13 +470,13 @@ struct TandemKitSettingsView: View {
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
         // TODO: Create mock TandemPumpManager with populated state for preview
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {}, openSoundSettings: {})
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         return viewModel
     }
 
     static var previewDataInProgress: TandemKitSettingsViewModel {
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {}, openSoundSettings: {})
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         viewModel.isUpdatingPumpState = true
         return viewModel
