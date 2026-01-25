@@ -6,8 +6,30 @@ struct WizardStepContainer<Content: View>: View {
     let currentStep: Int
     let totalSteps: Int
     let canCancel: Bool
+    let disableInteractiveDismiss: Bool
+    let lockModalWhenCantCancel: Bool
     let onCancel: () -> Void
     @ViewBuilder let content: () -> Content
+
+    init(
+        title: String,
+        currentStep: Int,
+        totalSteps: Int,
+        canCancel: Bool,
+        disableInteractiveDismiss: Bool = false,
+        lockModalWhenCantCancel: Bool = false,
+        onCancel: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.currentStep = currentStep
+        self.totalSteps = totalSteps
+        self.canCancel = canCancel
+        self.disableInteractiveDismiss = disableInteractiveDismiss
+        self.lockModalWhenCantCancel = lockModalWhenCantCancel
+        self.onCancel = onCancel
+        self.content = content
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,10 +43,18 @@ struct WizardStepContainer<Content: View>: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(modalLocker)
         .navigationBarTitle(title, displayMode: .inline)
         .navigationBarBackButtonHidden(!canCancel)
         .navigationBarItems(trailing: canCancel ? cancelButton : nil)
-        .interactiveDismissDisabled(!canCancel)
+        .interactiveDismissDisabled(disableInteractiveDismiss || !canCancel)
+    }
+
+    @ViewBuilder
+    private var modalLocker: some View {
+        if lockModalWhenCantCancel {
+            ModalInPresentationSetter(isModalInPresentation: !canCancel)
+        }
     }
 
     private var cancelButton: some View {
