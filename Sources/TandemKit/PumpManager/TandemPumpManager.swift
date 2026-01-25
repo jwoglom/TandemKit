@@ -1588,9 +1588,7 @@ private struct ActiveTempBasal {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        // Tandem pumps typically deliver at up to 1 unit every 5 seconds.
-        // Use a conservative estimate of 30 seconds per unit for now.
-        max(units, 0) * 30.0
+        return units * TandemDoseProgressReporter.BOLUS_SPEED
     }
 
     public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {
@@ -1810,7 +1808,7 @@ private struct ActiveTempBasal {
 
                 let dose = UnfinalizedDose(
                     units: units,
-                    duration: getBolusDuration(units),
+                    duration: estimatedDuration(toBolus: units),
                     activationType: activationType,
                     insulinType: lockedState.value.insulinType
                 )
@@ -1847,16 +1845,6 @@ private struct ActiveTempBasal {
                 self.completeBolus(.failure(.communication(pumpError)), completion: completion)
             }
         }
-    }
-
-    private func getBolusDuration(_ units: Double) -> TimeInterval {
-        if units <= 10 {
-            // < 10 units == 0.15u/s
-            return TimeInterval(units / 0.15)
-        }
-
-        // <10 units == 0.15u/s & => 10units == 0.075u/s
-        return TimeInterval(10 / 0.15) + TimeInterval((units - 10) / 0.075)
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {

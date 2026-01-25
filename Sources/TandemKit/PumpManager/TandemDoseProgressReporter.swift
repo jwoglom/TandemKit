@@ -8,9 +8,8 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     private var observers = WeakSet<DoseProgressObserver>()
 
-    private let FAST_INSULIN_SPEED = 0.15
-    private let SLOW_INSULIN_SPEED = 0.075
-    private let FAST_INSULIN_DELIVERY = TimeInterval(seconds: 10 / 0.15)
+    // Based on Android APS implementation: https://github.com/andyrozman/AndroidAPS/blob/andy_tandem/pump/tandem/src/main/kotlin/app/aaps/pump/tandem/common/driver/connector/TandemPumpConnector.kt#L525-L534
+    public static let BOLUS_SPEED = 0.035714286
 
     private let dose: DoseEntry
     private let activationType: BolusActivationType
@@ -57,14 +56,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         }
 
         let runningFor = TimeInterval(seconds: Date.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
-
-        // units < 10 -> bolus speed = 0.15 u/s
-        // units > 10 -> bolus speed = first 10 units == 0.15 u/s, then == 0.075 u/s
-        if runningFor < FAST_INSULIN_DELIVERY {
-            deliveredUnits = min(runningFor * FAST_INSULIN_SPEED, total)
-        } else {
-            deliveredUnits = min(10 + (runningFor - FAST_INSULIN_DELIVERY) * SLOW_INSULIN_SPEED, total)
-        }
+        deliveredUnits = runningFor * TandemDoseProgressReporter.BOLUS_SPEED
 
         DispatchQueue.main.async {
             for observer in self.observers {
