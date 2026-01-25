@@ -368,7 +368,21 @@ struct TandemKitSettingsView: View {
         }
         .listStyle(InsetGroupedListStyle())
         .navigationBarItems(trailing: doneButton)
-        .navigationBarTitle("Tandem pump")
+        .navigationBarTitle(navigationTitle)
+    }
+
+    private var navigationTitle: String {
+        guard let pumpState = viewModel.pumpState, pumpState.pumpModel == .MOBI else {
+            return "Tandem pump"
+        }
+
+        guard let serial = pumpState.pumpSerial else {
+            return "Tandem pump"
+        }
+
+        let serialString = String(serial)
+        let serialSuffix = String(serialString.suffix(3))
+        return serialSuffix.isEmpty ? "Tandem pump" : "Tandem Mobi \(serialSuffix)"
     }
 
     private var doneButton: some View {

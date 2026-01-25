@@ -94,8 +94,23 @@ public class PumpVersionResponse: Message {
         self.pcbaRev = pcbaRev
         self.modelNum = modelNum
     }
+    
+    public var pumpModel: PumpModel? {
+        return PumpModel(rawValue: self.modelNum)
+    }
 
     public var description: String {
         "PumpVersionResponse(cargo=\(cargo.hexadecimalString), armSwVer=\(armSwVer), mspSwVer=\(mspSwVer), configABits=\(configABits), configBBits=\(configBBits), serialNum=\(serialNum), partNum=\(partNum), pumpRev=\(pumpRev), pcbaSN=\(pcbaSN), pcbaRev=\(pcbaRev), modelNum=\(modelNum))"
+    }
+}
+
+public enum PumpModel: UInt32, CaseIterable, RawRepresentable, Equatable {
+    case TSLIM_X2 = 1000354
+    case MOBI = 1004000
+
+    public var id: UInt32 { rawValue }
+    
+    public var isClosedLoopSupported: Bool {
+        self == .MOBI
     }
 }

@@ -190,15 +190,30 @@ public class PumpCommSession {
         let timeSinceResetResponse = try transport.sendMessage(TimeSinceResetRequest())
         guard let response = timeSinceResetResponse as? TimeSinceResetResponse else {
             logger.error("[PumpCommSession] Failed to get timeSinceReset response")
-            throw PumpCommError.timeSyncFailed
+            throw PumpCommError.initialStateMessagesFailed
         }
 
         // Fetch API version and pump version for session initialization
         logger.info("[PumpCommSession] Fetching API version")
-        _ = try transport.sendMessage(ApiVersionRequest())
+        guard let apiVersionResponse = try transport.sendMessage(ApiVersionRequest()) as? ApiVersionResponse else {
+            logger.error("[PumpCommSession] Failed to get ApiVersionResponse")
+            throw PumpCommError.initialStateMessagesFailed
+        }
+        state.apiVersion = apiVersionResponse.getApiVersion()
 
         logger.info("[PumpCommSession] Fetching pump version")
-        _ = try transport.sendMessage(PumpVersionRequest())
+        guard let pumpVersionResponse = try transport.sendMessage(PumpVersionRequest()) as? PumpVersionResponse else {
+            logger.error("[PumpCommSession] Failed to get PumpVersionResponse")
+            throw PumpCommError.initialStateMessagesFailed
+        }
+        
+        state.pumpSerial = pumpVersionResponse.serialNum
+        state.pumpModel = pumpVersionResponse.pumpModel
+        
+        guard let model = state.pumpModel, model.isClosedLoopSupported else {
+            logger.error("[PumpCommSession] PumpVersionResponse does not indicate closed-loop supported")
+            throw PumpCommError.pumpModelUnsupported(modelNum: pumpVersionResponse.modelNum)
+        }
 
         logger.info("[PumpCommSession] Session fully authenticated with timeSinceReset: \(response.pumpTimeSinceReset)")
 
