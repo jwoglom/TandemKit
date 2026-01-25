@@ -239,6 +239,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func startDetectingCartridge() {
         isDetecting = true
         detectingProgress = 0
+        failedExitMode = false
 
         // Monitor detection progress
         // In a real implementation, this would subscribe to DetectingCartridgeStateStreamResponse
@@ -255,10 +256,16 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                 if self.detectingProgress >= 100 {
                     timer.invalidate()
                     self.isDetecting = false
-                    self.currentStep = self.currentStep.nextStep() ?? .done
+                    // Exit change cartridge mode before completing
+                    self.exitChangeCartridgeMode()
                 }
             }
         }
+    }
+
+    func retryExitCartridgeMode() {
+        failedExitMode = false
+        exitChangeCartridgeMode()
     }
 
     func exitChangeCartridgeMode() {
@@ -278,7 +285,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                         self.failedExitMode = false
                         self.currentStep = self.currentStep.nextStep() ?? .done
                     } else {
+                        // Exit failed - go back to detecting step and show error
                         self.failedExitMode = true
+                        self.currentStep = .detecting
                     }
                 }
             } else {
@@ -286,6 +295,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                     self.loadingExitMode = false
                     self.failedExitMode = true
                     self.isProcessing = false
+                    // No transport - go back to detecting step
+                    self.currentStep = .detecting
                 }
             }
         }

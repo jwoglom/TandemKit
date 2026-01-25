@@ -1,3 +1,4 @@
+import Combine
 import CoreBluetooth
 import Dispatch
 import Foundation
@@ -98,6 +99,9 @@ private struct ActiveTempBasal {
     private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
     private let inScanningMode = Locked<Bool>(false)
     private let lockedStatus: Locked<PumpManagerStatus>
+
+    // Stream message publishers
+    public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
     private let needsSessionInitialization = Locked<Bool>(false)
     private let sessionBootstrapInProgress = Locked<Bool>(false)
@@ -678,6 +682,11 @@ private struct ActiveTempBasal {
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
+    }
+
+    private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
+        notificationLogger.debug("[notification] Fill tubing button state: \(response.buttonDown)")
+        fillTubingStateStream.send(response)
     }
 
     private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
@@ -2614,6 +2623,8 @@ private struct ActiveTempBasal {
             } else {
                 handleUnsolicitedHistoryStream(historyStream)
             }
+        case let fillTubingState as FillTubingStateStreamResponse:
+            handleFillTubingStateStream(fillTubingState)
         default:
             if let meta = metadata {
                 notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")

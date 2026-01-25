@@ -392,18 +392,50 @@ struct TandemKitChangeCartridgeView: View {
                     .foregroundColor(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(LocalizedString("Detecting insulin in cartridge...", comment: "Status text"))
-                    .font(.headline)
-                ProgressView(value: Double(viewModel.detectingProgress) / 100.0)
-                    .progressViewStyle(LinearProgressViewStyle())
-                Text("\(viewModel.detectingProgress)%")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            if viewModel.loadingExitMode {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        Text(LocalizedString("Completing cartridge change...", comment: "Status text"))
+                            .font(.headline)
+                    }
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(LocalizedString("Detecting insulin in cartridge...", comment: "Status text"))
+                        .font(.headline)
+                    ProgressView(value: Double(viewModel.detectingProgress) / 100.0)
+                        .progressViewStyle(LinearProgressViewStyle())
+                    Text("\(viewModel.detectingProgress)%")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(12)
             }
-            .padding()
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(12)
+
+            if viewModel.failedExitMode {
+                Label(
+                    LocalizedString("Failed to complete cartridge change. Please try again.", comment: "Error message"),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
+
+                SaveButton(
+                    text: LocalizedString("Retry", comment: "Retry button"),
+                    loading: $viewModel.loadingExitMode
+                ) {
+                    viewModel.retryExitCartridgeMode()
+                }
+            }
         }
     }
 
