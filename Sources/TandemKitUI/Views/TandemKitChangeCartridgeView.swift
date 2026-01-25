@@ -12,7 +12,7 @@ struct TandemKitChangeCartridgeView: View {
         WizardStepContainer(
             title: LocalizedString("Change Cartridge", comment: "Title for change cartridge"),
             currentStep: viewModel.currentStep.rawValue + 1,
-            totalSteps: 7,
+            totalSteps: 6,
             canCancel: !viewModel.isProcessing,
             onCancel: handleCancel
         ) {
@@ -51,8 +51,6 @@ struct TandemKitChangeCartridgeView: View {
             physicalChangeStepContent
         case .detecting:
             detectingStepContent
-        case .completing:
-            completingStepContent
         case .done:
             doneStepContent
         }
@@ -305,11 +303,11 @@ struct TandemKitChangeCartridgeView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 instructionRow(number: 1, text: LocalizedString(
-                    "Remove the old cartridge from the pump",
+                    "Remove the old cartridge from the pump by twisting it off",
                     comment: "Instruction"
                 ))
                 instructionRow(number: 2, text: LocalizedString(
-                    "Insert a new cartridge",
+                    "Insert a new cartridge and ensure it is securely in place",
                     comment: "Instruction"
                 ))
                 instructionRow(number: 3, text: LocalizedString(
@@ -318,8 +316,48 @@ struct TandemKitChangeCartridgeView: View {
                 ))
             }
             .padding()
+            .frame(maxWidth: .infinity)
             .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(12)
+
+            // Show active notifications warning during cartridge change
+            if viewModel.hasActiveNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                            .font(.headline)
+                        Spacer()
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                            NotificationRow(
+                                item: item,
+                                onDismiss: {
+                                    viewModel.notificationsViewModel.dismissNotification(item)
+                                },
+                                backgroundColor: Color(UIColor.tertiarySystemGroupedBackground)
+                            )
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+
+                Label(
+                    LocalizedString(
+                        "Clear all notifications before continuing",
+                        comment: "Warning message"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
+            }
 
             Button(action: {
                 viewModel.cartridgeInserted()
@@ -327,10 +365,19 @@ struct TandemKitChangeCartridgeView: View {
                 Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.blue)
+                    .background(viewModel.hasActiveNotifications ? Color.gray : Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(12)
             }
+            .disabled(viewModel.hasActiveNotifications)
+        }
+        .task {
+            // Start periodic notification checking when this step appears
+            await viewModel.startPeriodicNotificationCheck()
+        }
+        .onDisappear {
+            // Stop checking when leaving this step
+            viewModel.stopPeriodicNotificationCheck()
         }
     }
 
@@ -360,38 +407,6 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    private var completingStepContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 5: Finalize", comment: "Step header"))
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Text(LocalizedString("Complete the cartridge change process", comment: "Step description"))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-
-            SaveButton(
-                text: LocalizedString("Complete cartridge change", comment: "Button text"),
-                loading: $viewModel.loadingExitMode
-            ) {
-                viewModel.exitChangeCartridgeMode()
-            }
-
-            if viewModel.failedExitMode {
-                Label(
-                    LocalizedString("Failed to complete. Please try again.", comment: "Error message"),
-                    systemImage: "exclamationmark.circle.fill"
-                )
-                .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
-            }
-        }
-    }
-
     private var doneStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(spacing: 20) {
@@ -405,7 +420,7 @@ struct TandemKitChangeCartridgeView: View {
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text(LocalizedString("You can now use your pump normally", comment: "Success description"))
+                    Text(LocalizedString("You can now fill your tubing and cannula", comment: "Success description"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -531,14 +546,6 @@ private extension TandemKitChangeCartridgeViewModel {
         }
     }
 
-    static var previewCompleting: TandemKitChangeCartridgeViewModel {
-        preview(step: .completing) {
-            $0.isSuspended = true
-            $0.isProcessing = true
-            $0.loadingExitMode = false
-        }
-    }
-
     static var previewCompleted: TandemKitChangeCartridgeViewModel {
         preview(step: .done) {
             $0.isSuspended = true
@@ -582,14 +589,7 @@ private extension TandemKitChangeCartridgeViewModel {
     .environment(\.guidanceColors, GuidanceColors())
 }
 
-#Preview("Step 6 – Completing") {
-    NavigationView {
-        TandemKitChangeCartridgeView(viewModel: .previewCompleting)
-    }
-    .environment(\.guidanceColors, GuidanceColors())
-}
-
-#Preview("Step 7 – Done") {
+#Preview("Step 6 – Done") {
     NavigationView {
         TandemKitChangeCartridgeView(viewModel: .previewCompleted)
     }

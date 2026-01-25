@@ -33,6 +33,11 @@ struct TandemKitFillCannulaView: View {
             didLoad = true
             viewModel.checkSuspendedStatus()
         }
+        .onChange(of: viewModel.resumeSucceeded) { succeeded in
+            if succeeded {
+                presentationMode.wrappedValue.dismiss()
+            }
+        }
     }
 
     @ViewBuilder
@@ -214,18 +219,26 @@ struct TandemKitFillCannulaView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
 
-            Button(action: {
+            SaveButton(
+                text: LocalizedString("Resume insulin delivery", comment: "Button text"),
+                loading: $viewModel.loadingResume
+            ) {
                 viewModel.showingResumeConfirmation = true
-            }) {
-                Text(LocalizedString("Resume insulin delivery", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
             }
             .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
                 resumeInsulinSheet
+            }
+
+            if viewModel.failedResume {
+                Label(
+                    LocalizedString("Failed to resume insulin. Please try again.", comment: "Error message"),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
             }
 
             Button(action: {
@@ -279,7 +292,6 @@ struct TandemKitFillCannulaView: View {
             buttons: [
                 .default(Text(LocalizedString("Yes, Resume Insulin", comment: "Confirm button"))) {
                     viewModel.resumePumping()
-                    presentationMode.wrappedValue.dismiss()
                 },
                 .cancel(Text(LocalizedString("Not Yet", comment: "Cancel button")))
             ]

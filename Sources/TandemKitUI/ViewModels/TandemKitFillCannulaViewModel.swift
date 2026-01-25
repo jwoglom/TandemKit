@@ -29,9 +29,12 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
     @Published var loadingSuspend = false
     @Published var loadingFill = false
+    @Published var loadingResume = false
 
     @Published var failedSuspend = false
     @Published var failedFill = false
+    @Published var failedResume = false
+    @Published var resumeSucceeded = false
 
     @Published var showingSuspendConfirmation = false
     @Published var showingCancelConfirmation = false
@@ -134,14 +137,33 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     }
 
     func resumePumping() {
+        loadingResume = true
+        failedResume = false
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
             if let transport = self.pumpManager?.pairedTransport {
-                _ = try? transport.sendMessage(ResumePumpingRequest())
+                let response = try? transport.sendMessage(ResumePumpingRequest())
 
                 Thread.sleep(forTimeInterval: 1.0)
                 self.checkSuspendedStatus()
+
+                DispatchQueue.main.async {
+                    self.loadingResume = false
+                    if let _ = response {
+                        self.failedResume = false
+                        self.isSuspended = false
+                        self.resumeSucceeded = true
+                    } else {
+                        self.failedResume = true
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.loadingResume = false
+                    self.failedResume = true
+                }
             }
         }
     }
