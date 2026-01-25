@@ -151,8 +151,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastTempRateUpdate: Date?
 
     // Current basal rate for display
-    public var currentBasalRate: Double?
-    public var lastBasalRateUpdate: Date?
+    public var currentProfileBaseBasalRate: Double? // TODO(jwoglom): this does not get updated for temp basals, it's the base basal rate
+    public var lastProfileBasalRateUpdate: Date?
 
     // Status icons from HomeScreenMirror
     public var basalStatusIcon: HomeScreenBasalStatus?
@@ -242,8 +242,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.tempRatePercentage = tempRatePercentage
         self.tempRateDuration = tempRateDuration
         self.lastTempRateUpdate = lastTempRateUpdate
-        self.currentBasalRate = currentBasalRate
-        self.lastBasalRateUpdate = lastBasalRateUpdate
+        self.currentProfileBaseBasalRate = currentBasalRate
+        self.lastProfileBasalRateUpdate = lastBasalRateUpdate
         self.basalStatusIcon = basalStatusIcon
         self.bolusStatusIcon = bolusStatusIcon
         self.cgmAlertIcon = cgmAlertIcon
@@ -268,7 +268,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateActive = rawValue["tempRateActive"] as? Bool
         tempRatePercentage = rawValue["tempRatePercentage"] as? Int
         tempRateDuration = rawValue["tempRateDuration"] as? UInt32
-        currentBasalRate = rawValue["currentBasalRate"] as? Double
+        currentProfileBaseBasalRate = rawValue["currentProfileBaseBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
 
@@ -397,9 +397,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         }
 
         if let lastBasalRateInterval = rawValue["lastBasalRateUpdate"] as? TimeInterval {
-            lastBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
+            lastProfileBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
         } else {
-            lastBasalRateUpdate = nil
+            lastProfileBasalRateUpdate = nil
         }
 
         if let basalIconRaw = rawValue["basalStatusIcon"] as? Int {
@@ -473,8 +473,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["tempRatePercentage"] = tempRatePercentage
         raw["tempRateDuration"] = tempRateDuration
         raw["lastTempRateUpdate"] = lastTempRateUpdate?.timeIntervalSinceReferenceDate
-        raw["currentBasalRate"] = currentBasalRate
-        raw["lastBasalRateUpdate"] = lastBasalRateUpdate?.timeIntervalSinceReferenceDate
+        raw["currentProfileBaseBasalRate"] = currentProfileBaseBasalRate
+        raw["lastProfileBasalRateUpdate"] = lastProfileBasalRateUpdate?.timeIntervalSinceReferenceDate
         raw["basalStatusIcon"] = basalStatusIcon?.rawValue
         raw["bolusStatusIcon"] = bolusStatusIcon?.rawValue
         raw["cgmAlertIcon"] = cgmAlertIcon?.rawValue
@@ -561,8 +561,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* tempRatePercentage: \(String(describing: tempRatePercentage))",
             "* tempRateDuration: \(String(describing: tempRateDuration))",
             "* lastTempRateUpdate: \(String(describing: lastTempRateUpdate))",
-            "* currentBasalRate: \(String(describing: currentBasalRate))",
-            "* lastBasalRateUpdate: \(String(describing: lastBasalRateUpdate))",
+            "* currentProfileBaseBasalRate: \(String(describing: currentProfileBaseBasalRate))",
+            "* lastProfileBasalRateUpdate: \(String(describing: lastProfileBasalRateUpdate))",
             "* basalStatusIcon: \(String(describing: basalStatusIcon))",
             "* bolusStatusIcon: \(String(describing: bolusStatusIcon))",
             "* cgmAlertIcon: \(String(describing: cgmAlertIcon))",
@@ -605,8 +605,8 @@ public extension TandemPumpManagerState {
             lhs.tempRatePercentage == rhs.tempRatePercentage &&
             lhs.tempRateDuration == rhs.tempRateDuration &&
             lhs.lastTempRateUpdate == rhs.lastTempRateUpdate &&
-            lhs.currentBasalRate == rhs.currentBasalRate &&
-            lhs.lastBasalRateUpdate == rhs.lastBasalRateUpdate &&
+            lhs.currentProfileBaseBasalRate == rhs.currentProfileBaseBasalRate &&
+            lhs.lastProfileBasalRateUpdate == rhs.lastProfileBasalRateUpdate &&
             lhs.basalStatusIcon == rhs.basalStatusIcon &&
             lhs.bolusStatusIcon == rhs.bolusStatusIcon &&
             lhs.cgmAlertIcon == rhs.cgmAlertIcon &&

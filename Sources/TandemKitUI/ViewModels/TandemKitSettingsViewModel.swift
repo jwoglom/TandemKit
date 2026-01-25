@@ -66,12 +66,12 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.state.tempRateDuration
     }
 
-    var currentBasalRate: Double? {
-        pumpManager?.state.currentBasalRate
+    var currentProfileBaseBasalRate: Double? {
+        pumpManager?.state.currentProfileBaseBasalRate
     }
 
     var currentBasalRateForDisplay: String {
-        guard let rate = currentBasalRate else { return "" }
+        guard let rate = currentProfileBaseBasalRate else { return "" }
         return String(format: "%.2f U/hr", rate)
     }
 

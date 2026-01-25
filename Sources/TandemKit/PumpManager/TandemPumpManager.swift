@@ -712,8 +712,8 @@ private struct ActiveTempBasal {
         var managerState = lockedState.value
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
-        managerState.currentBasalRate = rateUnitsPerHour
-        managerState.lastBasalRateUpdate = timestamp
+        managerState.currentProfileBaseBasalRate = rateUnitsPerHour
+        managerState.lastProfileBasalRateUpdate = timestamp
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()

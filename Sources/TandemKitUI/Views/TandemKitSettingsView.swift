@@ -381,19 +381,25 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(.accentColor)
-                    if viewModel.currentBasalRate != nil {
+                    // NOTE(jwoglom): intentionally not relying on the pumpmanager temp rate state for this,
+                    // so that we query the current state reported by the pump (base basal rate and current temp basal)
+                    if let baseBasalRate = viewModel.currentProfileBaseBasalRate {
                         VStack(alignment: .center) {
-                            Text(viewModel.currentBasalRateForDisplay)
-                                .fontWeight(.bold)
-                                .font(.system(size: 24))
                             if viewModel.tempRateActive,
                                let percentage = viewModel.tempRatePercentage,
                                let duration = viewModel.tempRateDuration
                             {
-                                Text("\(percentage)% (\(formatDuration(duration)))")
+                                let currentBasalRate = baseBasalRate * (Double(percentage) / 100.0)
+                                Text(String(format: "%.2f U/hr", currentBasalRate))
+                                    .fontWeight(.bold)
+                                    .font(.system(size: 24))
+                                Text("\(percentage)% (for \(formatDuration(duration)))")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
                             } else {
+                                Text(viewModel.currentBasalRateForDisplay)
+                                    .fontWeight(.bold)
+                                    .font(.system(size: 24))
                                 Text("No Temp Rate")
                                     .foregroundColor(.secondary)
                                     .font(.system(size: 16))
