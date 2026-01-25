@@ -754,9 +754,25 @@ private struct ActiveTempBasal {
         var managerState = lockedState.value
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
-        managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus(rawValue: response.basalStatusIconId)
-        managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus(rawValue: response.bolusStatusIconId)
-        managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert(rawValue: response.cgmAlertIconId)
+        
+        if let basalStatusIcon = response.basalStatusIcon {
+            managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus.fromBasalStatusIcon(basalStatusIcon)
+        } else {
+            managerState.basalStatusIcon = nil
+        }
+        
+        if let bolusStatusIcon = response.bolusStatusIcon {
+            managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus.fromBolusStatusIcon(bolusStatusIcon)
+        } else {
+            managerState.bolusStatusIcon = nil
+        }
+        
+        if let cgmAlertIcon = response.cgmAlertIcon {
+            managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert.fromCGMAlertIcon(cgmAlertIcon)
+        } else {
+            managerState.cgmAlertIcon = nil
+        }
+        
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -770,7 +786,11 @@ private struct ActiveTempBasal {
 
         var managerState = lockedState.value
         managerState.controlIQEnabled = response.closedLoopEnabled
-        managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode(rawValue: response.currentUserModeTypeRaw)
+        if let userMode = response.currentUserModeType {
+            managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
+        } else {
+            managerState.controlIQUserMode = nil
+        }
         managerState.controlIQWeight = response.weight
         managerState.controlIQTotalDailyInsulin = response.totalDailyInsulin
         managerState.lastControlIQUpdate = Date()

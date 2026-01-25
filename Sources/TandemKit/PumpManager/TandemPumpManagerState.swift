@@ -29,25 +29,87 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
 
     public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
         case standard = 0
-        case sleep = 2
-        case exercise = 3
+        case sleep = 1
+        case exercise = 2
+        
+        public static func fromUserModeType(_ userModeType: ControlIQInfoAbstractResponse.UserModeType) -> ControlIQUserMode? {
+            switch userModeType {
+            case .standard:
+                return .standard
+            case .sleep:
+                return .sleep
+            case .exercise:
+                return .exercise
+            default:
+                return nil as ControlIQUserMode?
+            }
+        }
     }
 
     public enum HomeScreenBasalStatus: Int, RawRepresentable, Equatable {
         case active = 0
         case tempRate = 2
         case suspended = 4
+        
+        public static func fromBasalStatusIcon(_ basalStatusIcon: HomeScreenMirrorResponse.BasalStatusIcon) -> HomeScreenBasalStatus? {
+            switch basalStatusIcon {
+            case .basal:
+                return .active
+            case .zeroBasal, .tempRate, .zeroTempRate:
+                return .tempRate
+            case .suspend, .hypoSuspendBasalIQ:
+                return .suspended
+            default:
+                return nil as HomeScreenBasalStatus?
+            }
+        }
     }
 
     public enum HomeScreenBolusStatus: Int, RawRepresentable, Equatable {
         case none = 200
         case bolus = 0
+        
+        public static func fromBolusStatusIcon(_ bolusStatusIcon: HomeScreenMirrorResponse.BolusStatusIcon) -> HomeScreenBolusStatus? {
+            switch bolusStatusIcon {
+            case .bolus, .autoBolus:
+                return .bolus
+            default:
+                return TandemPumpManagerState.HomeScreenBolusStatus.none
+            }
+        }
     }
 
     public enum HomeScreenCGMAlert: Int, RawRepresentable, Equatable {
-        case noError = 255
+        case startup = 0
+        case calibrate = 4
+        case outOfRange = 13
         case low = 16
         case high = 17
+        case disconnected = 253
+        case error = 254
+        case noError = 255
+        
+        
+        public static func fromCGMAlertIcon(_ cgmAlertIcon: HomeScreenMirrorResponse.CGMAlertIcon) -> HomeScreenCGMAlert? {
+            switch cgmAlertIcon {
+            case .noError:
+                return .noError
+            case .low:
+                return .low
+            case .high:
+                return .high
+            case .startup1, .startup2, .startup3, .startup4:
+                return .startup
+            case .calibrate, .startupCalibrate:
+                return .calibrate
+            case .errorLowWedge, .errorHighWedge, .replaceSensor, .replaceTransmitter, .failedSensor, .tripleDashes:
+                return .error
+            case .outOfRange:
+                return .outOfRange
+            default:
+                return nil as HomeScreenCGMAlert?
+            }
+        }
     }
 
     public var pumpState: PumpState?
