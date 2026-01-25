@@ -10,11 +10,14 @@ struct ContinueButton: View {
     var body: some View {
         VStack(spacing: 0) {
             Button(action: action) {
-                if loading.wrappedValue {
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                } else {
-                    Text(text)
+                ZStack {
+                    if loading.wrappedValue {
+                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    } else {
+                        Text(text)
+                    }
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(ActionButtonStyle())
             .padding([.bottom, .horizontal])

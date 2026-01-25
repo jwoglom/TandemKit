@@ -258,27 +258,45 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(LocalizedString(
-                    "Press and hold the button on your pump to fill tubing.",
-                    comment: "Instructions"
-                ))
-                .font(.body)
+            if !viewModel.hasActiveNotifications {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(LocalizedString(
+                        "Press and hold the button on your pump to fill tubing.",
+                        comment: "Instructions"
+                    ))
+                    .font(.body)
 
-                Text(LocalizedString(
-                    "Watch the tubing for insulin and release the button when you see it.",
-                    comment: "Instructions"
-                ))
-                .font(.body)
+                    Text(LocalizedString(
+                        "Watch the tubing for insulin and release the button when you see it.",
+                        comment: "Instructions"
+                    ))
+                    .font(.body)
+                }
+                .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
             }
-            .padding()
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
 
-            if viewModel.buttonDown {
-                InsulinFlowIndicator()
+            // Animated droplet or button - same space
+            ZStack {
+                if viewModel.buttonDown {
+                    InsulinFlowIndicator()
+                        .transition(.opacity)
+                } else if viewModel.hasDisplayedFlow {
+                    SaveButton(
+                        text: LocalizedString("Complete tubing fill", comment: "Button text"),
+                        loading: $viewModel.loadingExitMode,
+                        disabled: Binding(
+                            get: { viewModel.hasActiveNotifications },
+                            set: { _ in }
+                        )
+                    ) {
+                        viewModel.tubingFilled()
+                    }
                     .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.3), value: viewModel.buttonDown)
 
             // Show active notifications warning during fill
             if viewModel.hasActiveNotifications {
@@ -317,17 +335,6 @@ struct TandemKitFillTubingView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.warning.opacity(0.1))
                 .cornerRadius(12)
-            }
-
-            SaveButton(
-                text: LocalizedString("Tubing filled", comment: "Button text"),
-                loading: $viewModel.loadingExitMode,
-                disabled: Binding(
-                    get: { viewModel.hasActiveNotifications },
-                    set: { _ in }
-                )
-            ) {
-                viewModel.tubingFilled()
             }
 
             if viewModel.failedExitMode {
@@ -459,59 +466,54 @@ struct TandemKitFillTubingView: View {
 // MARK: - Insulin Flow Indicator
 
 struct InsulinFlowIndicator: View {
-    @State private var animationPhase: CGFloat = 0
+    @State private var heldSeconds: CGFloat = 0
+    @State private var repetitionCount: Int = 0
+    @State private var animationStart: Date = .init()
+    private let baseDropletWidth: CGFloat = 200
+    private let dropletHeight: CGFloat = 50
+    private let animationDuration: TimeInterval = 2.0
+    private let widthIncreasePerRepetition: CGFloat = 25
 
     var body: some View {
-        VStack(spacing: 16) {
-            // Animated flow visualization
-            ZStack {
-                // Background tube
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(height: 60)
+        TimelineView(.animation) { context in
+            GeometryReader { geometry in
+                let elapsed = context.date.timeIntervalSince(animationStart)
+                let repetitions = max(0, Int(elapsed / animationDuration))
+                let progress = (elapsed.truncatingRemainder(dividingBy: animationDuration)) / animationDuration
+                let currentDropletWidth = baseDropletWidth + CGFloat(repetitions) * widthIncreasePerRepetition
+                let travelDistance = geometry.size.width + currentDropletWidth
+                let offsetX = progress * travelDistance - currentDropletWidth
+                let opacity = 1.0
 
-                // Animated insulin droplets
-                HStack(spacing: 0) {
-                    ForEach(0..<5) { index in
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 12, height: 12)
-                            .opacity(dropletOpacity(for: index))
-                            .scaleEffect(dropletScale(for: index))
-                            .frame(maxWidth: .infinity)
-                    }
+                ZStack(alignment: .leading) {
+                    // Background - matches blue button style
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white)
+
+                    // Animated insulin droplet
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue.opacity(0.7), Color.blue.opacity(1)]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: currentDropletWidth, height: dropletHeight)
+                        .opacity(opacity)
+                        .offset(x: offsetX)
                 }
-                .padding(.horizontal, 20)
-            }
-
-            // Status text
-            HStack(spacing: 12) {
-                Image(systemName: "drop.fill")
-                    .foregroundColor(.blue)
-                    .font(.title3)
-                Text(LocalizedString("Insulin flowing through tubing", comment: "Status text"))
-                    .font(.headline)
-                    .foregroundColor(.blue)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .onChange(of: repetitions) { newValue in
+                    repetitionCount = newValue
+                }
             }
         }
-        .padding()
-        .background(Color.blue.opacity(0.05))
-        .cornerRadius(12)
+        .frame(height: dropletHeight)
         .onAppear {
-            withAnimation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                animationPhase = 1
-            }
+            animationStart = Date()
+            repetitionCount = 0
         }
-    }
-
-    private func dropletOpacity(for index: Int) -> Double {
-        let phase = (animationPhase + CGFloat(index) * 0.2).truncatingRemainder(dividingBy: 1.0)
-        return phase < 0.5 ? 0.3 : 1.0
-    }
-
-    private func dropletScale(for index: Int) -> CGFloat {
-        let phase = (animationPhase + CGFloat(index) * 0.2).truncatingRemainder(dividingBy: 1.0)
-        return phase < 0.5 ? 0.6 : 1.0
     }
 }
 
@@ -524,6 +526,7 @@ private extension TandemKitFillTubingViewModel {
         viewModel.isSuspended = true
         viewModel.isProcessing = true
         viewModel.buttonDown = true
+        viewModel.hasDisplayedFlow = true
         return viewModel
     }
 

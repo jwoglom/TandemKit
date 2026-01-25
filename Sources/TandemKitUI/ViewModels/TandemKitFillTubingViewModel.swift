@@ -40,6 +40,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var failedExitMode = false
 
     @Published var buttonDown = false
+    @Published var hasDisplayedFlow = false
     @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
 
     @Published var showingSuspendConfirmation = false
@@ -197,6 +198,9 @@ class TandemKitFillTubingViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] response in
                 self?.buttonDown = response.buttonDown
+                if response.buttonDown {
+                    self?.hasDisplayedFlow = true
+                }
             }
             .store(in: &cancellables)
     }
