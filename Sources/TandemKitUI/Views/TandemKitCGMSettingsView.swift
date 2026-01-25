@@ -97,7 +97,7 @@ struct TandemKitCGMSettingsView: View {
                     .autocapitalization(.allCharacters)
                     .disableAutocorrection(true)
 
-                    SaveButton(
+                    ContinueButton(
                         text: LocalizedString("Set Transmitter ID", comment: "Button to set transmitter ID"),
                         loading: $viewModel.isSettingG6Transmitter
                     ) {
@@ -151,7 +151,7 @@ struct TandemKitCGMSettingsView: View {
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .keyboardType(.numberPad)
 
-                        SaveButton(
+                        ContinueButton(
                             text: LocalizedString("Start G6 Sensor", comment: "Button to start G6 sensor"),
                             loading: $viewModel.isStartingG6Session
                         ) {
@@ -209,7 +209,7 @@ struct TandemKitCGMSettingsView: View {
                         .keyboardType(.numberPad)
 
                         HStack(spacing: 8) {
-                            SaveButton(
+                            ContinueButton(
                                 text: LocalizedString("Start G7 Sensor", comment: "Button to start G7 sensor"),
                                 loading: $viewModel.isSettingG7PairingCode
                             ) {
