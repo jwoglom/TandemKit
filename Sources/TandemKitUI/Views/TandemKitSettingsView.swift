@@ -379,28 +379,30 @@ struct TandemKitSettingsView: View {
 
     var reservoirStatus: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
                     .foregroundColor(Color(UIColor.secondaryLabel))
-                if let unitsText = viewModel.reservoirUnitsText {
-                    HStack(alignment: .lastTextBaseline, spacing: 3) {
-                        Text(unitsText)
+                VStack(alignment: .center, spacing: 4) {
+                    if let unitsText = viewModel.reservoirUnitsText {
+                        HStack(alignment: .lastTextBaseline, spacing: 3) {
+                            Text(unitsText)
+                                .font(.system(size: 28))
+                                .fontWeight(.heavy)
+                                .fixedSize()
+                            Text("U")
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Text("--")
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
-                            .fixedSize()
-                        Text("U")
-                            .foregroundColor(.secondary)
                     }
-                } else {
-                    Text("--")
-                        .font(.system(size: 28))
-                        .fontWeight(.heavy)
+                    
+                    // fixed cartridge size for Mobi
+                    ProgressBar(value: viewModel.reservoirValue?.unitVolume ?? 0, total: 200)
+                        .frame(maxWidth: 128)
+                        .frame(height: 12)
                 }
-
-                // fixed cartridge size for Mobi
-                ProgressBar(value: viewModel.reservoirValue?.unitVolume ?? 0, total: 200)
-                    .frame(maxWidth: 128)
-                    .frame(height: 12)
             }
         }
     }
