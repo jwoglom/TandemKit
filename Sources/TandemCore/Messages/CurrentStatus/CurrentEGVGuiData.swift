@@ -73,6 +73,6 @@ public class CurrentEGVGuiDataResponse: Message {
     }
 
     public var description: String {
-        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(egvStatus), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
+        "CurrentEGVGuiDataResponse(cargo=\(cargo.hexadecimalString), bgReadingTimestampSeconds=\(bgReadingTimestampSeconds), cgmReading=\(cgmReading), egvStatus=\(String(describing: egvStatus)), egvStatusId=\(egvStatusId), trendRate=\(trendRate))"
     }
 }

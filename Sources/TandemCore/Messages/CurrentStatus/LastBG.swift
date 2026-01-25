@@ -70,6 +70,6 @@ public class LastBGResponse: Message {
     }
 
     public var description: String {
-        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSource=\(bgSource), bgSourceId=\(bgSourceId))"
+        "LastBGResponse(cargo=\(cargo.hexadecimalString), bgTimestamp=\(bgTimestamp), bgValue=\(bgValue), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId))"
     }
 }

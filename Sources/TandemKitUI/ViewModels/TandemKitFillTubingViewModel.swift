@@ -60,7 +60,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
-        self.notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
+        notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
 
         // Forward child ViewModel changes to parent
         notificationsViewModel.objectWillChange

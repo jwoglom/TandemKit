@@ -11,7 +11,6 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     public var apiVersion: ApiVersion?
     public var pumpSerial: UInt32?
     public var pumpModel: PumpModel?
-    
 
     // other fields are technically not required by other parts of the driver
     public var valid: Bool {
@@ -37,7 +36,15 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     }
 
     public init() {
-        self.init(peripheralUuid: nil, derivedSecret: nil, serverNonce: nil, timeSinceReset: nil, apiVersion: nil, pumpSerial: nil, pumpModel: nil)
+        self.init(
+            peripheralUuid: nil,
+            derivedSecret: nil,
+            serverNonce: nil,
+            timeSinceReset: nil,
+            apiVersion: nil,
+            pumpSerial: nil,
+            pumpModel: nil
+        )
     }
 
     public init?(rawValue: RawValue) {
@@ -48,7 +55,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         derivedSecret = rawValue["derivedSecret"] as? Data
         serverNonce = rawValue["serverNonce"] as? Data
         timeSinceReset = rawValue["timeSinceReset"] as? UInt32
-        
+
         if let apiVersionRaw = rawValue["apiVersion"] as? ApiVersion.RawValue {
             apiVersion = ApiVersion(rawValue: apiVersionRaw)
         }
@@ -89,7 +96,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
             "* timeSinceReset: \(String(describing: timeSinceReset))",
             "* apiVersion: \(String(describing: apiVersion))",
             "* pumpSerial: \(String(describing: pumpSerial))",
-            "* pumpModel: \(String(describing: pumpModel))",
+            "* pumpModel: \(String(describing: pumpModel))"
         ].joined(separator: "\n")
     }
 }

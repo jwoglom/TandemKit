@@ -114,7 +114,7 @@ struct TandemKitNotificationsView: View {
 struct NotificationRow: View {
     let item: NotificationItem
     let onDismiss: () -> Void
-    var backgroundColor: Color = Color(UIColor.systemBackground)
+    var backgroundColor = Color(UIColor.systemBackground)
 
     @State private var offset: CGFloat = 0
     @State private var isDismissing = false

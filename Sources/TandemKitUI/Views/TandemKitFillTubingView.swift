@@ -39,8 +39,7 @@ struct TandemKitFillTubingView: View {
         }
     }
 
-    @ViewBuilder
-    private var currentStepView: some View {
+    @ViewBuilder private var currentStepView: some View {
         switch viewModel.currentStep {
         case .suspend:
             suspendStepContent
@@ -55,8 +54,7 @@ struct TandemKitFillTubingView: View {
         }
     }
 
-    @ViewBuilder
-    private var bottomActionView: some View {
+    @ViewBuilder private var bottomActionView: some View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
@@ -141,7 +139,7 @@ struct TandemKitFillTubingView: View {
                         "Filling tubing requires suspending insulin delivery. You will use the pump button to fill.",
                         comment: "Warning message for tubing fill"
                     ))
-                    .font(.subheadline)
+                        .font(.subheadline)
                 }
             }
             .padding()
@@ -312,13 +310,13 @@ struct TandemKitFillTubingView: View {
                         "Press and hold the button on your pump to fill tubing.",
                         comment: "Instructions"
                     ))
-                    .font(.body)
+                        .font(.body)
 
                     Text(LocalizedString(
                         "Watch the tubing for insulin and release the button when you see it.",
                         comment: "Instructions"
                     ))
-                    .font(.body)
+                        .font(.body)
                 }
                 .padding()
                 .background(Color(.secondarySystemGroupedBackground))
@@ -495,7 +493,7 @@ struct InsulinFlowIndicator: View {
             GeometryReader { geometry in
                 let elapsed = context.date.timeIntervalSince(animationStart)
                 let repetitions = max(0, Int(elapsed / animationDuration))
-                let progress = (elapsed.truncatingRemainder(dividingBy: animationDuration)) / animationDuration
+                let progress = elapsed.truncatingRemainder(dividingBy: animationDuration) / animationDuration
                 let currentDropletWidth = baseDropletWidth + CGFloat(repetitions) * widthIncreasePerRepetition
                 let travelDistance = geometry.size.width + currentDropletWidth
                 let offsetX = progress * travelDistance - currentDropletWidth

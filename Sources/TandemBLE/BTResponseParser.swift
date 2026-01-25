@@ -77,7 +77,7 @@ public enum BTResponseParser {
 
     public static func decodeMessage(opCode: UInt8, characteristic: CBUUID, payload: Data) -> Message? {
         let charEnum = CharacteristicUUID(rawValue: characteristic.uuidString.uppercased())
-        var candidates = MessageRegistry.bestMatches(
+        let candidates = MessageRegistry.bestMatches(
             opCode: opCode,
             characteristic: charEnum,
             payloadLength: payload.count

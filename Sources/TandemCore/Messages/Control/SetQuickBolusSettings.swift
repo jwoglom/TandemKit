@@ -41,7 +41,7 @@ public class SetQuickBolusSettingsRequest: Message {
     public var increment: QuickBolusIncrement? { QuickBolusIncrement.forMagic(magic) }
 
     public var description: String {
-        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(mode), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(String(describing: mode)), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
     }
 }
 

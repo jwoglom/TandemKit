@@ -655,7 +655,6 @@ private struct ActiveTempBasal {
 
     private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
         let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
-        let profileUnitsPerHour = Double(response.profileBasalRate) / 1000.0
         let timestamp = Date()
 
         logger(for: source).debug("[\(source.label)] Basal updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
@@ -767,7 +766,7 @@ private struct ActiveTempBasal {
     private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
         logger(for: source)
             .debug(
-                "[\(source.label)] Bolus updated - status: \(response.status) id: \(response.bolusId)"
+                "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
             )
 
         // Normal CurrentBolusStatus fetch
@@ -1613,7 +1612,7 @@ private struct ActiveTempBasal {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        return units * TandemDoseProgressReporter.BOLUS_SPEED
+        units * TandemDoseProgressReporter.BOLUS_SPEED
     }
 
     public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {

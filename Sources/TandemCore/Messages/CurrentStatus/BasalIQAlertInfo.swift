@@ -60,6 +60,6 @@ public class BasalIQAlertInfoResponse: Message {
     }
 
     public var description: String {
-        "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alert=\(alert), alertId=\(alertId))"
+        "BasalIQAlertInfoResponse(cargo=\(cargo.hexadecimalString), alert=\(String(describing: alert)), alertId=\(alertId))"
     }
 }

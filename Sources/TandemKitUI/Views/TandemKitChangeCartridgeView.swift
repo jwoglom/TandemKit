@@ -44,8 +44,7 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    @ViewBuilder
-    private var currentStepView: some View {
+    @ViewBuilder private var currentStepView: some View {
         switch viewModel.currentStep {
         case .suspend:
             suspendStepContent
@@ -62,8 +61,7 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    @ViewBuilder
-    private var bottomActionView: some View {
+    @ViewBuilder private var bottomActionView: some View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
@@ -150,7 +148,7 @@ struct TandemKitChangeCartridgeView: View {
                         "Changing your cartridge will require suspending insulin delivery.",
                         comment: "Warning message for cartridge change"
                     ))
-                    .font(.subheadline)
+                        .font(.subheadline)
                 }
             }
             .padding()

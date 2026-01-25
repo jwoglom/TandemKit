@@ -411,7 +411,7 @@ struct TandemKitSettingsView: View {
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
                     }
-                    
+
                     // fixed cartridge size for Mobi
                     ProgressBar(value: viewModel.reservoirValue?.unitVolume ?? 0, total: 200)
                         .frame(maxWidth: 128)

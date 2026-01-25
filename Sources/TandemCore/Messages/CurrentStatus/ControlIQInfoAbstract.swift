@@ -45,6 +45,6 @@ public class ControlIQInfoAbstractResponse: Message {
     }
 
     open var description: String {
-        "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(currentUserModeType), weightUnit=\(weightUnit))"
+        "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(String(describing: currentUserModeType)), weightUnit=\(String(describing: weightUnit)))"
     }
 }

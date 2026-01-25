@@ -41,7 +41,7 @@ public class SetModesRequest: Message {
     }
 
     public var description: String {
-        "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(command), bitmap=\(bitmap))"
+        "SetModesRequest(cargo=\(cargo.hexadecimalString), command=\(String(describing: command)), bitmap=\(bitmap))"
     }
 }
 

@@ -94,9 +94,9 @@ public class PumpVersionResponse: Message {
         self.pcbaRev = pcbaRev
         self.modelNum = modelNum
     }
-    
+
     public var pumpModel: PumpModel? {
-        return PumpModel(rawValue: self.modelNum)
+        PumpModel(rawValue: modelNum)
     }
 
     public var description: String {
@@ -105,11 +105,11 @@ public class PumpVersionResponse: Message {
 }
 
 public enum PumpModel: UInt32, CaseIterable, RawRepresentable, Equatable {
-    case TSLIM_X2 = 1000354
-    case MOBI = 1004000
+    case TSLIM_X2 = 1_000_354
+    case MOBI = 1_004_000
 
     public var id: UInt32 { rawValue }
-    
+
     public var isClosedLoopSupported: Bool {
         self == .MOBI
     }

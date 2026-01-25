@@ -53,7 +53,7 @@ public class SetIDPSettingsRequest: Message {
     public var changeType: ChangeType? { ChangeType(rawValue: changeTypeId) }
 
     public var description: String {
-        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(changeType), changeTypeId=\(changeTypeId))"
+        "SetIDPSettingsRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), changeType=\(String(describing: changeType)), changeTypeId=\(changeTypeId))"
     }
 }
 

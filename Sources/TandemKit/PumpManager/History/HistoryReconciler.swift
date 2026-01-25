@@ -21,7 +21,7 @@ class HistoryReconciler {
         var reconciledEvents: [NewPumpEvent] = []
 
         for event in historyEvents {
-            guard var dose = event.dose else {
+            guard let dose = event.dose else {
                 reconciledEvents.append(event)
                 continue
             }

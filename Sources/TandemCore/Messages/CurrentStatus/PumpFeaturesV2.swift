@@ -76,6 +76,6 @@ public class PumpFeaturesV2Response: Message {
     }
 
     public var description: String {
-        "PumpFeaturesV2Response(cargo=\(cargo.hexadecimalString), status=\(status), supportedFeatureIndex=\(supportedFeatureIndex), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
+        "PumpFeaturesV2Response(cargo=\(cargo.hexadecimalString), status=\(status), supportedFeatureIndex=\(String(describing: supportedFeatureIndex)), supportedFeatureIndexId=\(supportedFeatureIndexId), pumpFeaturesBitmask=\(pumpFeaturesBitmask))"
     }
 }

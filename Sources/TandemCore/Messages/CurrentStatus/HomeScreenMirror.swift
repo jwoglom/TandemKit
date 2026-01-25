@@ -91,7 +91,7 @@ public class HomeScreenMirrorResponse: Message {
     }
 
     public var description: String {
-        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(cgmTrendIcon), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(cgmAlertIcon), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(statusIcon0), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(statusIcon1), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(bolusStatusIcon), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(basalStatusIcon), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(apControlStateIcon), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
+        "HomeScreenMirrorResponse(cargo=\(cargo.hexadecimalString), cgmTrendIcon=\(String(describing: cgmTrendIcon)), cgmTrendIconId=\(cgmTrendIconId), cgmAlertIcon=\(String(describing: cgmAlertIcon)), cgmAlertIconId=\(cgmAlertIconId), statusIcon0=\(String(describing: statusIcon0)), statusIcon0Id=\(statusIcon0Id), statusIcon1=\(String(describing: statusIcon1)), statusIcon1Id=\(statusIcon1Id), bolusStatusIcon=\(String(describing: bolusStatusIcon)), bolusStatusIconId=\(bolusStatusIconId), basalStatusIcon=\(String(describing: basalStatusIcon)), basalStatusIconId=\(basalStatusIconId), apControlStateIcon=\(String(describing: apControlStateIcon)), apControlStateIconId=\(apControlStateIconId), remainingInsulinPlusIcon=\(remainingInsulinPlusIcon), cgmDisplayData=\(cgmDisplayData))"
     }
 }
 

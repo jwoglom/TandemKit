@@ -110,7 +110,7 @@ public struct PacketArrayList {
     }
 
     private mutating func createMessageData() {
-        var header = Data([expectedOpCode, expectedTxId, expectedCargoSize])
+        let header = Data([expectedOpCode, expectedTxId, expectedCargoSize])
         messageDataBuffer = header + fullCargo.dropLast(2)
     }
 

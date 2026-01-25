@@ -95,7 +95,7 @@ public class SetPumpSoundsRequest: Message {
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw) }
 
     public var description: String {
-        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(quickBolusAnnun), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(generalAnnun), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(reminderAnnun), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(alertAnnun), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(alarmAnnun), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(String(describing: quickBolusAnnun)), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(String(describing: generalAnnun)), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(String(describing: reminderAnnun)), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(String(describing: alertAnnun)), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(String(describing: alarmAnnun)), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
     }
 }
 
