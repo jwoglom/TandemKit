@@ -58,7 +58,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             self.pumpManager =
                 TandemPumpManager(state: TandemPumpManagerState(
                     pumpState: nil,
-                    basalRateSchedule: pumpManagerSettings?.basalSchedule
+                    basalDeliveryState: .active(Date.now),
+                    basalRateSchedule: pumpManagerSettings?.basalSchedule,
                 ))
         } else {
             self.pumpManager = pumpManager
