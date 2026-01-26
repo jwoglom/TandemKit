@@ -58,6 +58,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.state.tempRateAbsolute != nil
     }
 
+    var tempRateAbsolute: Double? {
+        pumpManager?.state.tempRateAbsolute
+    }
+
     var tempRatePercentage: Int? {
         pumpManager?.state.tempRatePercentage
     }
@@ -67,7 +71,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var currentProfileBaseBasalRate: Double? {
-        pumpManager?.state.currentProfileBaseBasalRate
+        pumpManager?.getScheduledBasalRate()
     }
 
     var currentBasalRateForDisplay: String {

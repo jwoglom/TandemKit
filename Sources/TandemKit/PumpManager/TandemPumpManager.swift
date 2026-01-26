@@ -2703,14 +2703,14 @@ private struct ActiveBolus {
             }
         }
     }
-    
+
     public func stopTempBasal() {
         guard let transport = pairedTransport else {
             return
         }
-        
+
         do {
-            let _ = try pumpComm.sendMessage(transport: transport, message: StopTempRateRequest())
+            _ = try pumpComm.sendMessage(transport: transport, message: StopTempRateRequest())
         } catch {
             // ignore any errors
         }
@@ -2726,9 +2726,7 @@ private struct ActiveBolus {
             notifyPumpManagerDelegateOfError(.pumpFault(event: event))
         }
     }
-}
 
-private extension TandemPumpManager {
     func getScheduledBasalRate() -> Double {
         guard let schedule = lockedState.value.basalRateSchedule, !schedule.items.isEmpty else {
             return 0
@@ -2740,7 +2738,9 @@ private extension TandemPumpManager {
 
         return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
     }
+}
 
+private extension TandemPumpManager {
     func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
