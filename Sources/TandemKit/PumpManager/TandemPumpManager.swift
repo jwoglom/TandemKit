@@ -50,11 +50,6 @@ private struct ActiveBolus {
     let dose: UnfinalizedDose
 }
 
-private struct ActiveTempBasal {
-    let dose: DoseEntry
-    let scheduledRate: Double
-}
-
 @available(macOS 13.0, iOS 14.0, *) public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
@@ -103,7 +98,6 @@ private struct ActiveTempBasal {
     private let sessionBootstrapInProgress = Locked<Bool>(false)
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
-    private let activeTempBasal = Locked<ActiveTempBasal?>(nil)
     private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
     private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
@@ -176,7 +170,6 @@ private struct ActiveTempBasal {
         lockedBatteryChargeRemaining.value = nil
         lockedReservoirValue.value = nil
         activeBolus.value = nil
-        activeTempBasal.value = nil
 
         var managerState = lockedState.value
         managerState.pumpState = nil
@@ -449,10 +442,6 @@ private struct ActiveTempBasal {
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         configureStateSuppliers()
 
-        if case let .tempBasal(dose: dose) = state.basalDeliveryState {
-            activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
-        }
-
         let nc = NotificationCenter.default
         nc.addObserver(
             self,
@@ -492,10 +481,6 @@ private struct ActiveTempBasal {
         if state.pumpState?.valid == true {
             // start connection
             tandemPump.startScanning()
-        }
-
-        if case let .tempBasal(dose: dose) = state.basalDeliveryState {
-            activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: dose.unitsPerHour)
         }
 
         let nc = NotificationCenter.default
@@ -689,36 +674,6 @@ private struct ActiveTempBasal {
         notifyDelegateStateUpdated()
     }
 
-    private func handleBasalResponse(_ response: CurrentBasalStatusResponse, source: ResponseSource) {
-        let rateUnitsPerHour = Double(response.currentBasalRate) / 1000.0
-        let timestamp = Date()
-
-        logger(for: source).debug("[\(source.label)] Basal updated: \(String(format: "%.3f", rateUnitsPerHour)) U/hr")
-
-        let newBasalState: PumpManagerStatus.BasalDeliveryState
-        if rateUnitsPerHour <= 0 {
-            newBasalState = .suspended(timestamp)
-        } else if let tempBasal = activeTempBasal.value {
-            newBasalState = .tempBasal(tempBasal.dose)
-        } else {
-            newBasalState = .active(timestamp)
-            activeTempBasal.value = nil
-        }
-
-        updateStatus { status in
-            status.basalDeliveryState = newBasalState
-        }
-
-        var managerState = lockedState.value
-        managerState.basalDeliveryState = newBasalState
-        managerState.lastBasalStatusDate = timestamp
-        managerState.currentBasalRate = rateUnitsPerHour
-        managerState.lastBasalRateUpdate = timestamp
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
     private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
         notificationLogger.debug("[notification] Fill tubing button state: \(response.buttonDown)")
         fillTubingStateStream.send(response)
@@ -855,9 +810,19 @@ private struct ActiveTempBasal {
             var events = [progressReport.getPumpEvent()]
             bolusProgressReport = nil
 
-            if let tempBasal = activeTempBasal.value {
+            if let tempRateAbsolute = state.tempRateAbsolute, let tempRateDuration = state.tempRateDuration,
+               let tempRateStart = state.tempRateStart
+            {
                 events.append(
-                    NewPumpEvent.tempBasal(dose: tempBasal.dose, date: tempBasal.dose.startDate)
+                    NewPumpEvent.tempBasal(
+                        dose: DoseEntry.tempBasal(
+                            absoluteUnit: tempRateAbsolute,
+                            duration: tempRateDuration,
+                            insulinType: state.insulinType,
+                            startDate: tempRateStart
+                        ),
+                        date: tempRateStart
+                    )
                 )
             }
 
@@ -874,64 +839,6 @@ private struct ActiveTempBasal {
                 )
             }
         }
-    }
-
-    private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
-        let timestamp = Date()
-
-        logger(for: source)
-            .debug(
-                "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
-            )
-
-        if response.active {
-            // Get the scheduled basal rate to calculate actual temp rate
-            let scheduledRate = getScheduledBasalRate()
-            let tempRateUnitsPerHour = scheduledRate * Double(response.percentage) / 100.0
-
-            let syncIdentifier = activeTempBasal.value?.dose.syncIdentifier
-                ?? "temp-\(Int(response.startTime.timeIntervalSince1970))"
-
-            let dose = DoseEntry.tempBasal(
-                absoluteUnit: tempRateUnitsPerHour,
-                duration: TimeInterval(seconds: Double(response.duration)),
-                insulinType: lockedState.value.insulinType,
-                startDate: response.startTime,
-                syncIdentifier: syncIdentifier
-            )
-
-            activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: scheduledRate)
-
-            updateStatus { status in
-                status.basalDeliveryState = .tempBasal(dose)
-            }
-
-            var managerState = lockedState.value
-            managerState.basalDeliveryState = .tempBasal(dose)
-            managerState.lastBasalStatusDate = timestamp
-            managerState.tempRateActive = true
-            managerState.tempRatePercentage = response.percentage
-            managerState.tempRateDuration = response.duration
-            managerState.lastTempRateUpdate = timestamp
-            lockedState.value = managerState
-        } else {
-            // No temp basal active - clear tracking
-            activeTempBasal.value = nil
-
-            // Clear temp rate state
-            var managerState = lockedState.value
-            managerState.tempRateActive = false
-            managerState.tempRatePercentage = nil
-            managerState.tempRateDuration = nil
-            managerState.lastTempRateUpdate = timestamp
-            lockedState.value = managerState
-
-            // Don't update basalDeliveryState here - let handleBasalResponse do it
-            // This avoids a race where we clear temp basal but haven't gotten current basal status yet
-            logger(for: source).debug("[\(source.label)] TempRate inactive - clearing activeTempBasal tracking")
-        }
-
-        notifyDelegateStateUpdated()
     }
 
     private func makeBatteryRequest() -> Message {
@@ -994,39 +901,6 @@ private struct ActiveTempBasal {
         }
     }
 
-    private func fetchBasalStatus() {
-        guard let transport = telemetryTransportIfReady(for: .basal) else {
-            telemetryLogger.error("Transport not available for basal telemetry")
-            return
-        }
-
-        do {
-            telemetryLogger.debug("Requesting message fetchBasalStatus")
-
-            // First check if a temp basal is active
-            let tempRateResponse: TempRateResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            )
-
-            handleTempRateResponse(tempRateResponse, source: .telemetry)
-
-            // If no temp basal is active, get current basal rate to ensure we're showing scheduled
-            if !tempRateResponse.active {
-                let basalResponse = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: CurrentBasalStatusRequest(),
-                    expecting: CurrentBasalStatusResponse.self
-                )
-
-                handleBasalResponse(basalResponse, source: .telemetry)
-            }
-        } catch {
-            telemetryLogger.error("Basal telemetry request failed: \(error)")
-        }
-    }
-
     func fetchBolusStatus() {
         guard let transport = telemetryTransportIfReady(for: .bolus) else {
             return
@@ -1060,24 +934,6 @@ private struct ActiveTempBasal {
             handleTimeSinceResetResponse(response, source: .telemetry)
         } catch {
             telemetryLogger.error("TimeSinceReset telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchTempRateStatus() {
-        guard let transport = telemetryTransportIfReady(for: .basal) else {
-            return
-        }
-
-        do {
-            let response: TempRateResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            )
-
-            handleTempRateResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("TempRate telemetry request failed: \(error)")
         }
     }
 
@@ -1379,9 +1235,19 @@ private struct ActiveTempBasal {
                     NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
                 ]
 
-                if let tempBasal = self.activeTempBasal.value {
+                if let tempRateAbsolute = self.state.tempRateAbsolute, let tempRateDuration = self.state.tempRateDuration,
+                   let tempRateStart = self.state.tempRateStart
+                {
                     events.append(
-                        NewPumpEvent.tempBasal(dose: tempBasal.dose, date: tempBasal.dose.startDate)
+                        NewPumpEvent.tempBasal(
+                            dose: DoseEntry.tempBasal(
+                                absoluteUnit: tempRateAbsolute,
+                                duration: tempRateDuration,
+                                insulinType: self.state.insulinType,
+                                startDate: tempRateStart
+                            ),
+                            date: tempRateStart
+                        )
                     )
                 }
 
@@ -1556,7 +1422,6 @@ private struct ActiveTempBasal {
 
     public func configureSilentMode(_ enabled: Bool) {
         var state = lockedState.value
-        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
         state.useSilentTones = enabled
         lockedState.value = state
 
@@ -1567,14 +1432,13 @@ private struct ActiveTempBasal {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-        if !telemetryConfigured {
-            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
-                self?.performScheduledHistoryFetch()
-            }
-            telemetryConfigured = true
-        }
+//        if !telemetryConfigured {
+//            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+//                self?.performScheduledHistoryFetch()
+//            }
+//            telemetryConfigured = true
+//        }
 
-        fetchBasalStatus()
         fetchReservoirStatus()
         fetchBatteryStatus()
         fetchBolusStatus()
@@ -2029,7 +1893,7 @@ private struct ActiveTempBasal {
             var pumpEvents: [NewPumpEvent] = []
             do {
                 // First cancel running temp basal before starting a new one
-                if let activeTempBasal = self.activeTempBasal.value {
+                if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
                     updateStatus { status in
                         status.basalDeliveryState = .cancelingTempBasal
                     }
@@ -2047,14 +1911,20 @@ private struct ActiveTempBasal {
                     }
 
                     let cancelledDose = DoseEntry.tempBasal(
-                        absoluteUnit: activeTempBasal.dose.unitsPerHour,
+                        absoluteUnit: tempRateAbsolute,
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
-                        startDate: activeTempBasal.dose.startDate,
-                        endDate: Date.now,
-                        syncIdentifier: activeTempBasal.dose.syncIdentifier
+                        startDate: tempRateStart,
+                        endDate: Date.now
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
+
+                    var state = lockedState.value
+                    state.tempRatePercentage = nil
+                    state.tempRateAbsolute = nil
+                    state.tempRateStart = nil
+                    state.tempRateDuration = nil
+                    lockedState.value = state
 
                     self.updateStatus { status in
                         status.basalDeliveryState = .active(Date.now)
@@ -2077,8 +1947,6 @@ private struct ActiveTempBasal {
                     )
                     pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
 
-                    self.activeTempBasal.value = nil
-
                     self.recordReconciliation(at: Date.now)
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
                 } else {
@@ -2099,16 +1967,23 @@ private struct ActiveTempBasal {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
+                    let startTime = Date.now
+                    let absoluteRate = Double(baselineRate * (Double(percent) / 100))
                     let dose = DoseEntry.tempBasal(
-                        absoluteUnit: baselineRate * (Double(percent) / 100),
+                        absoluteUnit: absoluteRate,
                         duration: duration,
                         insulinType: lockedState.value.insulinType,
-                        startDate: Date.now,
+                        startDate: startTime,
                         syncIdentifier: HistoryToDoseMapper.tempBasalSyncIdentifier(response.tempRateId)
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
-                    self.activeTempBasal.value = ActiveTempBasal(dose: dose, scheduledRate: baselineRate)
+                    var state = lockedState.value
+                    state.tempRatePercentage = percent
+                    state.tempRateAbsolute = absoluteRate
+                    state.tempRateStart = startTime
+                    state.tempRateDuration = duration
+                    lockedState.value = state
 
                     self.recordReconciliation(at: Date.now)
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
@@ -2205,19 +2080,24 @@ private struct ActiveTempBasal {
                     NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now))
                 ]
 
-                if let tempBasal = self.activeTempBasal.value {
+                if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
                     let tempBasalDose = DoseEntry.tempBasal(
-                        absoluteUnit: tempBasal.dose.unitsPerHour,
+                        absoluteUnit: tempRateAbsolute,
                         duration: 0,
                         insulinType: lockedState.value.insulinType,
-                        startDate: tempBasal.dose.startDate,
-                        endDate: Date.now,
-                        syncIdentifier: tempBasal.dose.syncIdentifier
+                        startDate: tempRateStart,
+                        endDate: Date.now
                     )
                     doses.append(
                         NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
                     )
-                    self.activeTempBasal.value = nil
+
+                    var state = lockedState.value
+                    state.tempRatePercentage = nil
+                    state.tempRateAbsolute = nil
+                    state.tempRateStart = nil
+                    state.tempRateDuration = nil
+                    lockedState.value = state
                 }
 
                 self.updateStatus { status in
@@ -2276,7 +2156,14 @@ private struct ActiveTempBasal {
                                 .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
                         )
                 ]
-                self.activeTempBasal.value = nil
+
+                var state = lockedState.value
+                state.tempRatePercentage = nil
+                state.tempRateAbsolute = nil
+                state.tempRateStart = nil
+                state.tempRateDuration = nil
+                lockedState.value = state
+
                 self.updateStatus { status in
                     status.basalDeliveryState = .active(Date.now)
                 }
@@ -2332,6 +2219,54 @@ private struct ActiveTempBasal {
                             message: message
                         )
                         idpManager.processMessage(response)
+                    }
+                }
+
+                if idpManager.getProfiles().isEmpty == true {
+                    self.telemetryLogger.info("No profiles in IDPManager, creating initial profile for Trio")
+                    // TODO(jwoglom): read correct profile defaults
+                    let message = idpManager.createNewProfileMessage(
+                        profileName: "TandemKitProfile",
+                        defaultCarbRatio: 10,
+                        defaultBasalRateUnits: scheduleItems.first?.value ?? 0,
+                        defaultTargetBG: 110,
+                        defaultISF: 40,
+                        defaultInsulinDurationMinutes: 240,
+                        profileCarbEntryEnabled: false
+                    )
+                    let newlyCreatedProfile = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: message
+                    )
+
+                    guard let newlyCreatedProfile = newlyCreatedProfile as? CreateIDPResponse else {
+                        throw PumpCommError
+                            .requestConstructionFailed(
+                                reason: "No active profile found and got unexpected response creating initial profile"
+                            )
+                    }
+
+                    guard newlyCreatedProfile.isStatusOK else {
+                        throw PumpCommError
+                            .requestConstructionFailed(reason: "No active profile found and failed to create initial profile")
+                    }
+
+                    self.telemetryLogger
+                        .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
+
+                    // Return to step 1: Reset idpManager
+                    idpManager.clear()
+
+                    // Fetch all IDP data until complete
+                    while !idpManager.isComplete {
+                        let messages = idpManager.nextMessages()
+                        for message in messages {
+                            let response = try self.pumpComm.sendMessage(
+                                transport: transport,
+                                message: message
+                            )
+                            idpManager.processMessage(response)
+                        }
                     }
                 }
 
@@ -2651,16 +2586,12 @@ private struct ActiveTempBasal {
             handleBatteryResponse(battery, source: .notification)
         case let insulin as InsulinStatusResponse:
             handleReservoirResponse(insulin, source: .notification)
-        case let basal as CurrentBasalStatusResponse:
-            handleBasalResponse(basal, source: .notification)
         case let homeScreenResponse as HomeScreenMirrorResponse:
             handleHomeScreenMirrorResponse(homeScreenResponse, source: .notification)
         case let bolus as CurrentBolusStatusResponse:
             handleBolusResponse(bolus, source: .notification)
         case let timeSinceReset as TimeSinceResetResponse:
             handleTimeSinceResetResponse(timeSinceReset, source: .notification)
-        case let tempRate as TempRateResponse:
-            handleTempRateResponse(tempRate, source: .notification)
         case let pumpGlobal as PumpGlobalsResponse:
             handleGlobalPumpSettingsResponse(pumpGlobal, source: .notification)
         case let historyStream as HistoryLogStreamResponse:
@@ -2755,20 +2686,6 @@ private extension TandemPumpManager {
     }
 }
 
-private extension PumpManagerStatus.BasalDeliveryState {
-    var scheduledBasalRateValue: Double? {
-        switch self {
-        case let .tempBasal(dose):
-            if let quantity = dose.scheduledBasalRate {
-                return quantity.doubleValue(for: HKUnit.internationalUnit().unitDivided(by: .hour()))
-            }
-            return dose.programmedUnits
-        default:
-            return nil
-        }
-    }
-}
-
 extension TandemPumpManager: AlertResponder, AlertSoundVendor {
     public func getSoundBaseURL() -> URL? {
         nil
@@ -2783,29 +2700,3 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
     }
 }
 
-private extension PumpTelemetryKind {
-    var logDescription: String {
-        switch self {
-        case .reservoir:
-            return "reservoir"
-        case .battery:
-            return "battery"
-        case .basal:
-            return "basal"
-        case .bolus:
-            return "bolus"
-        case .timeSinceReset:
-            return "timeSinceReset"
-        case .alerts:
-            return "alerts"
-        case .controlIQ:
-            return "controlIQ"
-        case .homeScreen:
-            return "homeScreen"
-        case .notifications:
-            return "notifications"
-        case .history:
-            return "history"
-        }
-    }
-}

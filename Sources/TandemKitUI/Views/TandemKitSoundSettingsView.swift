@@ -30,127 +30,133 @@ struct TandemKitSoundSettingsView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                sectionItem(
-                    title: LocalizedString("Button sound", comment: "Label for button sound"),
-                    isEditing: isEditingButtonAnnun,
-                    value: $viewModel.buttonAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun.toggle()
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun = false
+        VStack {
+            List {
+                Section {
+                    sectionItem(
+                        title: LocalizedString("Button sound", comment: "Label for button sound"),
+                        isEditing: isEditingButtonAnnun,
+                        value: $viewModel.buttonAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun.toggle()
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Quick bolus sound", comment: "Label for quick bolus sound"),
-                    isEditing: isEditingQuickBolusAnnun,
-                    value: $viewModel.quickBolusAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun.toggle()
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun = false
+                    
+                    sectionItem(
+                        title: LocalizedString("Quick bolus sound", comment: "Label for quick bolus sound"),
+                        isEditing: isEditingQuickBolusAnnun,
+                        value: $viewModel.quickBolusAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun.toggle()
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Bolus sound", comment: "Label for bolus sound"),
-                    isEditing: isEditingBolusAnnun,
-                    value: $viewModel.bolusAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun.toggle()
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun = false
+                    
+                    sectionItem(
+                        title: LocalizedString("Bolus sound", comment: "Label for bolus sound"),
+                        isEditing: isEditingBolusAnnun,
+                        value: $viewModel.bolusAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun.toggle()
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Reminder sound", comment: "Label for reminder sound"),
-                    isEditing: isEditingReminderAnnun,
-                    value: $viewModel.reminderAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun.toggle()
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun = false
+                    
+                    sectionItem(
+                        title: LocalizedString("Reminder sound", comment: "Label for reminder sound"),
+                        isEditing: isEditingReminderAnnun,
+                        value: $viewModel.reminderAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun.toggle()
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Alarm sound", comment: "Label for alarm sound"),
-                    isEditing: isEditingAlarmAnnun,
-                    value: $viewModel.alarmAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun.toggle()
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun = false
+                    
+                    sectionItem(
+                        title: LocalizedString("Alarm sound", comment: "Label for alarm sound"),
+                        isEditing: isEditingAlarmAnnun,
+                        value: $viewModel.alarmAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun.toggle()
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Alert sound", comment: "Label for alert sound"),
-                    isEditing: isEditingAlertAnnun,
-                    value: $viewModel.alertAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun.toggle()
-                        self.isEditingFillingTubeAnnun = false
+                    
+                    sectionItem(
+                        title: LocalizedString("Alert sound", comment: "Label for alert sound"),
+                        isEditing: isEditingAlertAnnun,
+                        value: $viewModel.alertAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun.toggle()
+                            self.isEditingFillingTubeAnnun = false
+                        }
                     }
-                }
-
-                sectionItem(
-                    title: LocalizedString("Tube filling sound", comment: "Label for tube filling sound"),
-                    isEditing: isEditingAlertAnnun,
-                    value: $viewModel.alertAnnun
-                )
-                .onTapGesture {
-                    withAnimation {
-                        self.isEditingButtonAnnun = false
-                        self.isEditingQuickBolusAnnun = false
-                        self.isEditingBolusAnnun = false
-                        self.isEditingReminderAnnun = false
-                        self.isEditingAlarmAnnun = false
-                        self.isEditingAlertAnnun = false
-                        self.isEditingFillingTubeAnnun.toggle()
+                    
+                    sectionItem(
+                        title: LocalizedString("Tube filling sound", comment: "Label for tube filling sound"),
+                        isEditing: isEditingAlertAnnun,
+                        value: $viewModel.alertAnnun
+                    )
+                    .onTapGesture {
+                        withAnimation {
+                            self.isEditingButtonAnnun = false
+                            self.isEditingQuickBolusAnnun = false
+                            self.isEditingBolusAnnun = false
+                            self.isEditingReminderAnnun = false
+                            self.isEditingAlarmAnnun = false
+                            self.isEditingAlertAnnun = false
+                            self.isEditingFillingTubeAnnun.toggle()
+                        }
                     }
                 }
             }
+            
+            Spacer()
+
+            ContinueButton(text: LocalizedString("Save", comment: "label for save"), action: {})
         }
         .listStyle(InsetGroupedListStyle())
         .navigationBarTitle(LocalizedString("Sound settings", comment: "Sound view title"))

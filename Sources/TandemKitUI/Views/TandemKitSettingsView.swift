@@ -449,7 +449,7 @@ struct TandemKitSettingsView: View {
         }
     }
 
-    private func formatDuration(_ seconds: UInt32) -> String {
+    private func formatDuration(_ seconds: Double) -> String {
         let minutes = Int(seconds) / 60
         let hours = minutes / 60
         let mins = minutes % 60
