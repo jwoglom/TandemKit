@@ -87,6 +87,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var tempRateAbsolute: Double?
     public var tempRateStart: Date?
     public var tempRateDuration: Double?
+    public var tempRateSyncIdentifier: String?
 
     // Current basal rate for display
     public var currentBasalRate: Double?
@@ -137,6 +138,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateAbsolute: Double? = nil,
         tempRateDuration: Double? = nil,
         tempRateStart: Date? = nil,
+        tempRateSyncIdentifier: String? = nil,
         currentBasalRate: Double? = nil,
         lastBasalRateUpdate: Date? = nil,
         basalStatusIcon: HomeScreenBasalStatus? = nil,
@@ -180,6 +182,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.tempRateAbsolute = tempRateAbsolute
         self.tempRateStart = tempRateStart
         self.tempRateDuration = tempRateDuration
+        self.tempRateSyncIdentifier = tempRateSyncIdentifier
         self.currentBasalRate = currentBasalRate
         self.lastBasalRateUpdate = lastBasalRateUpdate
         self.basalStatusIcon = basalStatusIcon
@@ -207,6 +210,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateAbsolute = rawValue["tempRateAbsolute"] as? Double
         tempRateStart = rawValue["tempRateStart"] as? Date
         tempRateDuration = rawValue["tempRateDuration"] as? Double
+        tempRateSyncIdentifier = rawValue["tempRateSyncIdentifier"] as? String
         currentBasalRate = rawValue["currentBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
@@ -406,6 +410,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["tempRateAbsolute"] = tempRateAbsolute
         raw["tempRateStart"] = tempRateStart
         raw["tempRateDuration"] = tempRateDuration
+        raw["tempRateSyncIdentifier"] = tempRateSyncIdentifier
         raw["currentBasalRate"] = currentBasalRate
         raw["lastBasalRateUpdate"] = lastBasalRateUpdate?.timeIntervalSinceReferenceDate
         raw["basalStatusIcon"] = basalStatusIcon?.rawValue
@@ -494,6 +499,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* tempRateAbsolute: \(String(describing: tempRateAbsolute))",
             "* tempRateStart: \(String(describing: tempRateStart))",
             "* tempRateDuration: \(String(describing: tempRateDuration))",
+            "* tempRateSyncIdentifier: \(String(describing: tempRateSyncIdentifier))",
             "* currentBasalRate: \(String(describing: currentBasalRate))",
             "* lastBasalRateUpdate: \(String(describing: lastBasalRateUpdate))",
             "* basalStatusIcon: \(String(describing: basalStatusIcon))",
@@ -538,6 +544,7 @@ public extension TandemPumpManagerState {
             lhs.tempRateAbsolute == rhs.tempRateAbsolute &&
             lhs.tempRateStart == rhs.tempRateStart &&
             lhs.tempRateDuration == rhs.tempRateDuration &&
+            lhs.tempRateSyncIdentifier == rhs.tempRateSyncIdentifier &&
             lhs.currentBasalRate == rhs.currentBasalRate &&
             lhs.lastBasalRateUpdate == rhs.lastBasalRateUpdate &&
             lhs.basalStatusIcon == rhs.basalStatusIcon &&

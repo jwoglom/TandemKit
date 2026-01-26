@@ -819,7 +819,8 @@ private struct ActiveBolus {
                             absoluteUnit: tempRateAbsolute,
                             duration: tempRateDuration,
                             insulinType: state.insulinType,
-                            startDate: tempRateStart
+                            startDate: tempRateStart,
+                            syncIdentifier: state.tempRateSyncIdentifier
                         ),
                         date: tempRateStart
                     )
@@ -1244,7 +1245,8 @@ private struct ActiveBolus {
                                 absoluteUnit: tempRateAbsolute,
                                 duration: tempRateDuration,
                                 insulinType: self.state.insulinType,
-                                startDate: tempRateStart
+                                startDate: tempRateStart,
+                                syncIdentifier: self.state.tempRateSyncIdentifier
                             ),
                             date: tempRateStart
                         )
@@ -1432,12 +1434,12 @@ private struct ActiveBolus {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-//        if !telemetryConfigured {
-//            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
-//                self?.performScheduledHistoryFetch()
-//            }
-//            telemetryConfigured = true
-//        }
+        if !telemetryConfigured {
+            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+                self?.performScheduledHistoryFetch()
+            }
+            telemetryConfigured = true
+        }
 
         fetchReservoirStatus()
         fetchBatteryStatus()
@@ -1915,7 +1917,8 @@ private struct ActiveBolus {
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now
+                        endDate: Date.now,
+                        syncIdentifier: state.tempRateSyncIdentifier
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
 
@@ -1983,6 +1986,7 @@ private struct ActiveBolus {
                     state.tempRateAbsolute = absoluteRate
                     state.tempRateStart = startTime
                     state.tempRateDuration = duration
+                    state.tempRateSyncIdentifier = dose.syncIdentifier
                     lockedState.value = state
 
                     self.recordReconciliation(at: Date.now)
@@ -2086,7 +2090,8 @@ private struct ActiveBolus {
                         duration: 0,
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now
+                        endDate: Date.now,
+                        syncIdentifier: state.tempRateSyncIdentifier
                     )
                     doses.append(
                         NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
