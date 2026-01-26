@@ -107,6 +107,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
             let returnToMainScreen: () -> Void = {
+                self.pumpManager?.stopTempBasal()
                 self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager!)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }

@@ -2703,6 +2703,18 @@ private struct ActiveBolus {
             }
         }
     }
+    
+    public func stopTempBasal() {
+        guard let transport = pairedTransport else {
+            return
+        }
+        
+        do {
+            let _ = try pumpComm.sendMessage(transport: transport, message: StopTempRateRequest())
+        } catch {
+            // ignore any errors
+        }
+    }
 
     public func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
         telemetryLogger
