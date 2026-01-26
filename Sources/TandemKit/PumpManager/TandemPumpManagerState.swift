@@ -29,25 +29,105 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
 
     public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
         case standard = 0
-        case sleep = 2
-        case exercise = 3
+        case sleep = 1
+        case exercise = 2
+
+        public static func fromUserModeType(_ userModeType: ControlIQInfoAbstractResponse.UserModeType) -> ControlIQUserMode? {
+            switch userModeType {
+            case .standard:
+                return .standard
+            case .sleep:
+                return .sleep
+            case .exercise:
+                return .exercise
+            default:
+                return nil as ControlIQUserMode?
+            }
+        }
     }
 
     public enum HomeScreenBasalStatus: Int, RawRepresentable, Equatable {
         case active = 0
         case tempRate = 2
         case suspended = 4
+
+        public static func fromBasalStatusIcon(
+            _ basalStatusIcon: HomeScreenMirrorResponse
+                .BasalStatusIcon
+        ) -> HomeScreenBasalStatus? {
+            switch basalStatusIcon {
+            case .basal:
+                return .active
+            case .tempRate,
+                 .zeroBasal,
+                 .zeroTempRate:
+                return .tempRate
+            case .hypoSuspendBasalIQ,
+                 .suspend:
+                return .suspended
+            default:
+                return nil as HomeScreenBasalStatus?
+            }
+        }
     }
 
     public enum HomeScreenBolusStatus: Int, RawRepresentable, Equatable {
         case none = 200
         case bolus = 0
+
+        public static func fromBolusStatusIcon(
+            _ bolusStatusIcon: HomeScreenMirrorResponse
+                .BolusStatusIcon
+        ) -> HomeScreenBolusStatus? {
+            switch bolusStatusIcon {
+            case .autoBolus,
+                 .bolus:
+                return .bolus
+            default:
+                return TandemPumpManagerState.HomeScreenBolusStatus.none
+            }
+        }
     }
 
     public enum HomeScreenCGMAlert: Int, RawRepresentable, Equatable {
-        case noError = 255
+        case startup = 0
+        case calibrate = 4
+        case outOfRange = 13
         case low = 16
         case high = 17
+        case disconnected = 253
+        case error = 254
+        case noError = 255
+
+        public static func fromCGMAlertIcon(_ cgmAlertIcon: HomeScreenMirrorResponse.CGMAlertIcon) -> HomeScreenCGMAlert? {
+            switch cgmAlertIcon {
+            case .noError:
+                return .noError
+            case .low:
+                return .low
+            case .high:
+                return .high
+            case .startup1,
+                 .startup2,
+                 .startup3,
+                 .startup4:
+                return .startup
+            case .calibrate,
+                 .startupCalibrate:
+                return .calibrate
+            case .errorHighWedge,
+                 .errorLowWedge,
+                 .failedSensor,
+                 .replaceSensor,
+                 .replaceTransmitter,
+                 .tripleDashes:
+                return .error
+            case .outOfRange:
+                return .outOfRange
+            default:
+                return nil as HomeScreenCGMAlert?
+            }
+        }
     }
 
     public var pumpState: PumpState?
@@ -90,8 +170,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var tempRateSyncIdentifier: String?
 
     // Current basal rate for display
-    public var currentBasalRate: Double?
-    public var lastBasalRateUpdate: Date?
+    public var currentProfileBaseBasalRate: Double? // TODO(jwoglom): this does not get updated for temp basals, it's the base basal rate
+    public var lastProfileBasalRateUpdate: Date?
 
     // Status icons from HomeScreenMirror
     public var basalStatusIcon: HomeScreenBasalStatus?
@@ -183,8 +263,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.tempRateStart = tempRateStart
         self.tempRateDuration = tempRateDuration
         self.tempRateSyncIdentifier = tempRateSyncIdentifier
-        self.currentBasalRate = currentBasalRate
-        self.lastBasalRateUpdate = lastBasalRateUpdate
+        currentProfileBaseBasalRate = currentBasalRate
+        lastProfileBasalRateUpdate = lastBasalRateUpdate
         self.basalStatusIcon = basalStatusIcon
         self.bolusStatusIcon = bolusStatusIcon
         self.cgmAlertIcon = cgmAlertIcon
@@ -211,7 +291,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateStart = rawValue["tempRateStart"] as? Date
         tempRateDuration = rawValue["tempRateDuration"] as? Double
         tempRateSyncIdentifier = rawValue["tempRateSyncIdentifier"] as? String
-        currentBasalRate = rawValue["currentBasalRate"] as? Double
+        currentProfileBaseBasalRate = rawValue["currentProfileBaseBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
 
@@ -334,9 +414,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         }
 
         if let lastBasalRateInterval = rawValue["lastBasalRateUpdate"] as? TimeInterval {
-            lastBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
+            lastProfileBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
         } else {
-            lastBasalRateUpdate = nil
+            lastProfileBasalRateUpdate = nil
         }
 
         if let basalIconRaw = rawValue["basalStatusIcon"] as? Int {
@@ -411,8 +491,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["tempRateStart"] = tempRateStart
         raw["tempRateDuration"] = tempRateDuration
         raw["tempRateSyncIdentifier"] = tempRateSyncIdentifier
-        raw["currentBasalRate"] = currentBasalRate
-        raw["lastBasalRateUpdate"] = lastBasalRateUpdate?.timeIntervalSinceReferenceDate
+        raw["currentProfileBaseBasalRate"] = currentProfileBaseBasalRate
+        raw["lastProfileBasalRateUpdate"] = lastProfileBasalRateUpdate?.timeIntervalSinceReferenceDate
         raw["basalStatusIcon"] = basalStatusIcon?.rawValue
         raw["bolusStatusIcon"] = bolusStatusIcon?.rawValue
         raw["cgmAlertIcon"] = cgmAlertIcon?.rawValue
@@ -500,8 +580,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* tempRateStart: \(String(describing: tempRateStart))",
             "* tempRateDuration: \(String(describing: tempRateDuration))",
             "* tempRateSyncIdentifier: \(String(describing: tempRateSyncIdentifier))",
-            "* currentBasalRate: \(String(describing: currentBasalRate))",
-            "* lastBasalRateUpdate: \(String(describing: lastBasalRateUpdate))",
+            "* currentProfileBaseBasalRate: \(String(describing: currentProfileBaseBasalRate))",
+            "* lastProfileBasalRateUpdate: \(String(describing: lastProfileBasalRateUpdate))",
             "* basalStatusIcon: \(String(describing: basalStatusIcon))",
             "* bolusStatusIcon: \(String(describing: bolusStatusIcon))",
             "* cgmAlertIcon: \(String(describing: cgmAlertIcon))",
@@ -545,8 +625,8 @@ public extension TandemPumpManagerState {
             lhs.tempRateStart == rhs.tempRateStart &&
             lhs.tempRateDuration == rhs.tempRateDuration &&
             lhs.tempRateSyncIdentifier == rhs.tempRateSyncIdentifier &&
-            lhs.currentBasalRate == rhs.currentBasalRate &&
-            lhs.lastBasalRateUpdate == rhs.lastBasalRateUpdate &&
+            lhs.currentProfileBaseBasalRate == rhs.currentProfileBaseBasalRate &&
+            lhs.lastProfileBasalRateUpdate == rhs.lastProfileBasalRateUpdate &&
             lhs.basalStatusIcon == rhs.basalStatusIcon &&
             lhs.bolusStatusIcon == rhs.bolusStatusIcon &&
             lhs.cgmAlertIcon == rhs.cgmAlertIcon &&

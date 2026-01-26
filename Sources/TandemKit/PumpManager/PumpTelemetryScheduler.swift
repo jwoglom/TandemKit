@@ -12,7 +12,7 @@ enum PumpTelemetryKind: CaseIterable {
     case homeScreen
     case notifications
     case history
-    
+
     var logDescription: String {
         switch self {
         case .reservoir:

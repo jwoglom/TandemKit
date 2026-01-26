@@ -31,7 +31,7 @@ public class ControlIQInfoAbstractResponse: Message {
     public var weightUnit: WeightUnit? { WeightUnit(rawValue: getWeightUnitId()) }
 
     /// ControlIQ user modes.
-    public enum UserModeType: Int {
+    public enum UserModeType: Int, RawRepresentable {
         case standard = 0
         case sleep = 1
         case exercise = 2

@@ -709,9 +709,25 @@ private struct ActiveBolus {
         var managerState = lockedState.value
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
-        managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus(rawValue: response.basalStatusIconId)
-        managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus(rawValue: response.bolusStatusIconId)
-        managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert(rawValue: response.cgmAlertIconId)
+
+        if let basalStatusIcon = response.basalStatusIcon {
+            managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus.fromBasalStatusIcon(basalStatusIcon)
+        } else {
+            managerState.basalStatusIcon = nil
+        }
+
+        if let bolusStatusIcon = response.bolusStatusIcon {
+            managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus.fromBolusStatusIcon(bolusStatusIcon)
+        } else {
+            managerState.bolusStatusIcon = nil
+        }
+
+        if let cgmAlertIcon = response.cgmAlertIcon {
+            managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert.fromCGMAlertIcon(cgmAlertIcon)
+        } else {
+            managerState.cgmAlertIcon = nil
+        }
+
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -725,7 +741,11 @@ private struct ActiveBolus {
 
         var managerState = lockedState.value
         managerState.controlIQEnabled = response.closedLoopEnabled
-        managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode(rawValue: response.currentUserModeTypeRaw)
+        if let userMode = response.currentUserModeType {
+            managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
+        } else {
+            managerState.controlIQUserMode = nil
+        }
         managerState.controlIQWeight = response.weight
         managerState.controlIQTotalDailyInsulin = response.totalDailyInsulin
         managerState.lastControlIQUpdate = Date()
@@ -2262,107 +2282,142 @@ private struct ActiveBolus {
                     // Return to step 1: Reset idpManager
                     idpManager.clear()
 
-                    // Fetch all IDP data until complete
-                    while !idpManager.isComplete {
-                        let messages = idpManager.nextMessages()
-                        for message in messages {
-                            let response = try self.pumpComm.sendMessage(
-                                transport: transport,
-                                message: message
-                            )
-                            idpManager.processMessage(response)
+                    if idpManager.getProfiles().isEmpty == true {
+                        self.telemetryLogger.info("No profiles in IDPManager, creating initial profile for Trio")
+                        // TODO(jwoglom): read correct profile defaults
+                        let message = idpManager.createNewProfileMessage(
+                            profileName: "TandemKitProfile",
+                            defaultCarbRatio: 10,
+                            defaultBasalRateUnits: scheduleItems.first?.value ?? 0,
+                            defaultTargetBG: 110,
+                            defaultISF: 40,
+                            defaultInsulinDurationMinutes: 240,
+                            profileCarbEntryEnabled: false
+                        )
+                        let newlyCreatedProfile = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: message
+                        )
+
+                        guard let newlyCreatedProfile = newlyCreatedProfile as? CreateIDPResponse else {
+                            throw PumpCommError
+                                .requestConstructionFailed(
+                                    reason: "No active profile found and got unexpected response creating initial profile"
+                                )
+                        }
+
+                        guard newlyCreatedProfile.isStatusOK else {
+                            throw PumpCommError
+                                .requestConstructionFailed(reason: "No active profile found and failed to create initial profile")
+                        }
+
+                        self.telemetryLogger
+                            .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
+
+                        // Return to step 1: Reset idpManager
+                        idpManager.clear()
+
+                        // Fetch all IDP data until complete
+                        while !idpManager.isComplete {
+                            let messages = idpManager.nextMessages()
+                            for message in messages {
+                                let response = try self.pumpComm.sendMessage(
+                                    transport: transport,
+                                    message: message
+                                )
+                                idpManager.processMessage(response)
+                            }
                         }
                     }
-                }
+                    // Step 2: Get the active profile
+                    guard let activeProfile = idpManager.getActiveProfile() else {
+                        throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
+                    }
 
-                // Step 2: Get the active profile
-                guard let activeProfile = idpManager.getActiveProfile() else {
-                    throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
-                }
+                    // Step 3: Get current segments to preserve non-basal fields
+                    let currentSegments = activeProfile.getSegments()
 
-                // Step 3: Get current segments to preserve non-basal fields
-                let currentSegments = activeProfile.getSegments()
+                    // Step 4: Build modify requests for each new basal schedule item
+                    var modifyRequests: [SetIDPSegmentRequest] = []
 
-                // Step 4: Build modify requests for each new basal schedule item
-                var modifyRequests: [SetIDPSegmentRequest] = []
+                    for (index, scheduleItem) in sortedItems.enumerated() {
+                        let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
+                        let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
 
-                for (index, scheduleItem) in sortedItems.enumerated() {
-                    let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
-                    let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
+                        if index < currentSegments.count {
+                            // Check if existing segment needs modification
+                            let currentSegment = currentSegments[index]
+                            let needsUpdate = currentSegment.profileStartTime != startMinutes ||
+                                currentSegment.profileBasalRate != basalMilliunits
 
-                    if index < currentSegments.count {
-                        // Check if existing segment needs modification
-                        let currentSegment = currentSegments[index]
-                        let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-                            currentSegment.profileBasalRate != basalMilliunits
-
-                        if needsUpdate {
-                            let segment = currentSegment
-                            segment.profileStartTime = startMinutes
-                            segment.profileBasalRate = basalMilliunits
-                            let request = activeProfile.modifySegmentMessage(segment: segment)
+                            if needsUpdate {
+                                let segment = currentSegment
+                                segment.profileStartTime = startMinutes
+                                segment.profileBasalRate = basalMilliunits
+                                let request = activeProfile.modifySegmentMessage(segment: segment)
+                                modifyRequests.append(request)
+                            }
+                        } else {
+                            // Create new segment with default values from first segment
+                            let firstSegment = currentSegments.first!
+                            let request = activeProfile.createSegmentMessage(
+                                profileStartTime: startMinutes,
+                                profileBasalRate: basalMilliunits,
+                                profileCarbRatio: firstSegment.profileCarbRatio,
+                                profileTargetBG: Int(firstSegment.profileTargetBG),
+                                profileISF: firstSegment.profileISF
+                            )
                             modifyRequests.append(request)
                         }
-                    } else {
-                        // Create new segment with default values from first segment
-                        let firstSegment = currentSegments.first!
-                        let request = activeProfile.createSegmentMessage(
-                            profileStartTime: startMinutes,
-                            profileBasalRate: basalMilliunits,
-                            profileCarbRatio: firstSegment.profileCarbRatio,
-                            profileTargetBG: Int(firstSegment.profileTargetBG),
-                            profileISF: firstSegment.profileISF
-                        )
-                        modifyRequests.append(request)
                     }
-                }
 
-                // Step 5: If we have fewer items than current segments, delete extra segments
-                if sortedItems.count < currentSegments.count {
-                    for i in sortedItems.count ..< currentSegments.count {
-                        if i > 0 { // Can't delete segment 0
-                            let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
-                            modifyRequests.append(deleteRequest)
+                    // Step 5: If we have fewer items than current segments, delete extra segments
+                    if sortedItems.count < currentSegments.count {
+                        for i in sortedItems.count ..< currentSegments.count {
+                            if i > 0 { // Can't delete segment 0
+                                let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
+                                modifyRequests.append(deleteRequest)
+                            }
                         }
                     }
-                }
 
-                // Step 6: Send all modification requests
-                for request in modifyRequests {
-                    let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: SetIDPSegmentResponse.self
-                    )
+                    // Step 6: Send all modification requests
+                    for request in modifyRequests {
+                        let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: request,
+                            expecting: SetIDPSegmentResponse.self
+                        )
 
-                    guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(response: response)
+                        guard response.status == 0 else {
+                            throw PumpCommError.errorResponse(response: response)
+                        }
                     }
-                }
 
-                // Step 7: Update local state
-                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
+                    // Step 7: Update local state
+                    let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
 
-                var managerState = self.lockedState.value
-                managerState.basalRateSchedule = schedule
-                managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
-                self.lockedState.value = managerState
+                    var managerState = self.lockedState.value
+                    managerState.basalRateSchedule = schedule
+                    managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
+                    self.lockedState.value = managerState
 
-                self.notifyDelegateStateUpdated()
+                    self.notifyDelegateStateUpdated()
 
-                if let schedule = schedule {
-                    self.delegateQueue.async {
-                        completion(.success(schedule))
-                    }
-                } else {
-                    self.delegateQueue.async {
-                        completion(
-                            .failure(
-                                PumpManagerError.communication(
-                                    PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
+                    if let schedule = schedule {
+                        self.delegateQueue.async {
+                            completion(.success(schedule))
+                        }
+                    } else {
+                        self.delegateQueue.async {
+                            completion(
+                                .failure(
+                                    PumpManagerError.communication(
+                                        PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
+                                    )
                                 )
                             )
-                        )
+                        }
                     }
                 }
             } catch {
@@ -2704,4 +2759,3 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
         completion(nil)
     }
 }
-

@@ -49,7 +49,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Quick bolus sound", comment: "Label for quick bolus sound"),
                         isEditing: isEditingQuickBolusAnnun,
@@ -66,7 +66,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Bolus sound", comment: "Label for bolus sound"),
                         isEditing: isEditingBolusAnnun,
@@ -83,7 +83,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Reminder sound", comment: "Label for reminder sound"),
                         isEditing: isEditingReminderAnnun,
@@ -100,7 +100,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Alarm sound", comment: "Label for alarm sound"),
                         isEditing: isEditingAlarmAnnun,
@@ -117,7 +117,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Alert sound", comment: "Label for alert sound"),
                         isEditing: isEditingAlertAnnun,
@@ -134,7 +134,7 @@ struct TandemKitSoundSettingsView: View {
                             self.isEditingFillingTubeAnnun = false
                         }
                     }
-                    
+
                     sectionItem(
                         title: LocalizedString("Tube filling sound", comment: "Label for tube filling sound"),
                         isEditing: isEditingAlertAnnun,
@@ -153,7 +153,7 @@ struct TandemKitSoundSettingsView: View {
                     }
                 }
             }
-            
+
             Spacer()
 
             ContinueButton(text: LocalizedString("Save", comment: "label for save"), action: {})
