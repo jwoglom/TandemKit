@@ -1736,7 +1736,11 @@ private struct ActiveBolus {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        units * TandemDoseProgressReporter.BOLUS_SPEED
+        if (units < 10) {
+            units * TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
+        } else {
+            units * TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
+        }
     }
 
     public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {
