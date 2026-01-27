@@ -862,6 +862,78 @@ private struct ActiveBolus {
         }
     }
 
+    private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
+        logger(for: source)
+            .debug(
+                "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
+            )
+
+        var pumpEvents: [NewPumpEvent] = []
+        if !response.active, let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
+            let now = Date.now
+            let cancelledDose = DoseEntry.tempBasal(
+                absoluteUnit: tempRateAbsolute,
+                duration: 0, // Ignored when a dose is finished
+                insulinType: lockedState.value.insulinType,
+                startDate: tempRateStart,
+                endDate: now,
+                syncIdentifier: state.tempRateSyncIdentifier
+            )
+
+            updateStatus { status in
+                status.basalDeliveryState = .active(now)
+            }
+
+            var managerState = lockedState.value
+            managerState.basalDeliveryState = .active(now)
+            managerState.lastBasalStatusDate = now
+            managerState.tempRateAbsolute = nil
+            managerState.tempRatePercentage = nil
+            managerState.tempRateStart = nil
+            managerState.tempRateDuration = nil
+            managerState.tempRateSyncIdentifier = nil
+            lockedState.value = managerState
+
+        } else if response.active, state.tempRateAbsolute == nil {
+            let now = Date.now
+            let absolute = getScheduledBasalRate() * (Double(response.percentage) / 100)
+            let dose = DoseEntry.tempBasal(
+                absoluteUnit: absolute,
+                duration: Double(response.duration),
+                insulinType: state.insulinType,
+                startDate: response.startTime
+            )
+
+            var managerState = lockedState.value
+            managerState.basalDeliveryState = .tempBasal(dose)
+            managerState.lastBasalStatusDate = now
+            managerState.tempRateAbsolute = absolute
+            managerState.tempRatePercentage = response.percentage
+            managerState.tempRateStart = response.startTime
+            managerState.tempRateDuration = Double(response.duration)
+            managerState.tempRateSyncIdentifier = nil // No history id available...
+            lockedState.value = managerState
+        }
+
+        if pumpEvents.isEmpty {
+            return
+        }
+
+        recordReconciliation(at: Date.now)
+        pumpDelegate.notify { delegate in
+            guard let delegate = delegate else { return }
+            delegate.pumpManager(
+                self,
+                hasNewPumpEvents: pumpEvents,
+                lastReconciliation: self.lockedState.value.lastReconciliation,
+                replacePendingEvents: true,
+                completion: { _ in }
+            )
+        }
+
+        notifyDelegateStateUpdated()
+    }
+
     private func makeBatteryRequest() -> Message {
         let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
         return CurrentBatteryRequestBuilder.create(apiVersion: apiVersion)
@@ -919,6 +991,25 @@ private struct ActiveBolus {
             handleReservoirResponse(response, source: .telemetry)
         } catch {
             telemetryLogger.error("Reservoir telemetry request failed: \(error)")
+        }
+    }
+
+    private func fetchBasalStatus() {
+        guard let transport = telemetryTransportIfReady(for: .basal) else {
+            telemetryLogger.error("Transport not available for basal telemetry")
+            return
+        }
+
+        do {
+            let response: TempRateResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: TempRateRequest(),
+                expecting: TempRateResponse.self
+            )
+
+            handleTempRateResponse(response, source: .telemetry)
+        } catch {
+            telemetryLogger.error("Temp basal telemetry request failed: \(error)")
         }
     }
 
@@ -1461,6 +1552,7 @@ private struct ActiveBolus {
             telemetryConfigured = true
         }
 
+        fetchBasalStatus()
         fetchReservoirStatus()
         fetchBatteryStatus()
         fetchBolusStatus()
