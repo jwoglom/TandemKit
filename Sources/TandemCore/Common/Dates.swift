@@ -1,24 +1,25 @@
 import Foundation
 
-enum Dates {
+public enum Dates {
+    // Tandem pump epoch
     static let JANUARY_1_2008_UNIX_EPOCH: TimeInterval = 1_199_145_600
 
-    static func fromJan12008ToUnixEpochSeconds(_ seconds: TimeInterval) -> TimeInterval {
+    public static func fromJan12008ToUnixEpochSeconds(_ seconds: TimeInterval) -> TimeInterval {
         // Date(timeIntervalSince1970 -> timezone is always UTC, thus we need to correct the local date from the pump to UTC
         seconds + JANUARY_1_2008_UNIX_EPOCH - TimeInterval(seconds: Double(TimeZone.current.secondsFromGMT()))
     }
 
-    static func fromJan12008EpochSecondsToDate(_ seconds: TimeInterval) -> Date {
+    public static func fromJan12008EpochSecondsToDate(_ seconds: TimeInterval) -> Date {
         Date(timeIntervalSince1970: fromJan12008ToUnixEpochSeconds(seconds))
     }
 
-    static func fromInstantToJan12008EpochSeconds(_ date: Date) -> TimeInterval {
+    public static func fromInstantToJan12008EpochSeconds(_ date: Date) -> TimeInterval {
         date.timeIntervalSince1970 - JANUARY_1_2008_UNIX_EPOCH
     }
 
     private static let SECONDS_IN_DAY: TimeInterval = 60 * 60 * 24
 
-    static func fromJan12008EpochDaysToDate(_ days: TimeInterval) -> Date {
+    public static func fromJan12008EpochDaysToDate(_ days: TimeInterval) -> Date {
         Date(timeIntervalSince1970: fromJan12008ToUnixEpochSeconds(days * SECONDS_IN_DAY))
     }
 }
