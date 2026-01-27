@@ -216,7 +216,8 @@ class HistoryToDoseMapper {
             timeZone: timeZone
         )
 
-        let durationSeconds = TimeInterval(activation.duration * 60)
+        // Convert duration from milliseconds to seconds (TimeInterval)
+        let durationSeconds = TimeInterval(activation.durationMilliseconds / 1000)
         let programmedEndDate = startDate.addingTimeInterval(durationSeconds)
 
         let completionDate: Date
