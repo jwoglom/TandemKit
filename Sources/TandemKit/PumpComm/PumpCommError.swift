@@ -178,7 +178,7 @@ extension PumpCommError: LocalizedError {
                     comment: "Recovery suggestion when pump fault is unknown"
                 )
             }
-            
+
         case .invalidScheduledBasalRate:
             return LocalizedString(
                 "Temp basal cannot be performed while scheduled basal rate is 0 or no basal profile exists",

@@ -86,7 +86,6 @@ final class HistoryFetchSession {
         throw lastError ?? HistoryFetchError.streamTimeout(expected: 0, received: 0)
     }
 
-
     /// Execute the fetch flow with chunked backward iteration and return sorted history logs.
     func fetch() throws -> [HistoryLog] {
         let status: HistoryLogStatusResponse = try pumpComm.sendMessage(
@@ -113,7 +112,7 @@ final class HistoryFetchSession {
         // Iterate backwards from END to START (like ControlX2 lines 64-96)
         var currentEnd = status.lastSequenceNum
 
-        while currentEnd >= start && allLogs.count < totalToFetch {
+        while currentEnd >= start, allLogs.count < totalToFetch {
             let remainingCount = totalToFetch - allLogs.count
             let chunkCount = min(chunkSize, remainingCount, Int(currentEnd - start + 1))
             let chunkStart = currentEnd - UInt32(chunkCount - 1)
@@ -126,19 +125,19 @@ final class HistoryFetchSession {
                 }
 
                 let result = try fetchChunk(
-                    startSequence: currentEnd,  // Request from END
+                    startSequence: currentEnd, // Request from END
                     count: chunkCount,
                     collector: collector
                 )
 
                 switch result {
-                case .complete(let logs):
+                case let .complete(logs):
                     allLogs.append(contentsOf: logs)
                     log.debug("Chunk [\(chunkStart), \(currentEnd)] complete: \(logs.count) logs")
-                case .partial(let logs, let received, let expected):
+                case let .partial(logs, received, expected):
                     allLogs.append(contentsOf: logs)
                     log.warning("Chunk [\(chunkStart), \(currentEnd)] partial: \(received)/\(expected) logs")
-                case .timeout(let logs, let received, let expected):
+                case let .timeout(logs, received, expected):
                     allLogs.append(contentsOf: logs)
                     log.warning("Chunk [\(chunkStart), \(currentEnd)] timeout: \(received)/\(expected) logs")
                 }
@@ -196,5 +195,4 @@ final class HistoryFetchSession {
 
         return first
     }
-
 }

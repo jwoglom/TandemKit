@@ -42,4 +42,3 @@ class HistoryTimestampReconciler {
         return Int(pumpTimeSec) + cumulativeDelta
     }
 }
-

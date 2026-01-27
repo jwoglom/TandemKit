@@ -10,7 +10,7 @@ internal final class HistoryRangeTracker {
     /// Initialize with existing fetched ranges.
     internal init(fetchedRanges: [FetchedRange]) {
         self.fetchedRanges = fetchedRanges
-        self.mergeOverlappingRanges()
+        mergeOverlappingRanges()
     }
 
     /// Record a newly fetched range of sequence numbers.
@@ -28,12 +28,12 @@ internal final class HistoryRangeTracker {
 
     /// Export current ranges for persistence.
     internal func export() -> [FetchedRange] {
-        return fetchedRanges
+        fetchedRanges
     }
 
     /// Check if a specific sequence number has been fetched.
     internal func hasFetched(_ sequenceNum: UInt32) -> Bool {
-        return fetchedRanges.contains { $0.contains(sequenceNum) }
+        fetchedRanges.contains { $0.contains(sequenceNum) }
     }
 
     /// Find missing ranges within the specified range.
@@ -46,29 +46,29 @@ internal final class HistoryRangeTracker {
         let fetched = getAllFetchedSequences(in: range).sorted()
 
         if fetched.isEmpty {
-            return [min...max]
+            return [min ... max]
         }
 
         var missing: [ClosedRange<UInt32>] = []
 
         // Check for gap before first fetched sequence
         if fetched[0] > min {
-            missing.append(min...(fetched[0] - 1))
+            missing.append(min ... (fetched[0] - 1))
         }
 
         // Find gaps between consecutive fetched sequences
         var prev = fetched[0]
-        for i in 1..<fetched.count {
+        for i in 1 ..< fetched.count {
             let current = fetched[i]
             if current > prev + 1 {
-                missing.append((prev + 1)...(current - 1))
+                missing.append((prev + 1) ... (current - 1))
             }
             prev = current
         }
 
         // Check for gap after last fetched sequence
         if prev < max {
-            missing.append((prev + 1)...max)
+            missing.append((prev + 1) ... max)
         }
 
         return missing
@@ -83,7 +83,7 @@ internal final class HistoryRangeTracker {
             let rangeEnd = min(fetchedRange.end, range.upperBound)
 
             if rangeStart <= rangeEnd {
-                for seq in rangeStart...rangeEnd {
+                for seq in rangeStart ... rangeEnd {
                     sequences.append(seq)
                 }
             }
@@ -102,7 +102,7 @@ internal final class HistoryRangeTracker {
         var merged: [FetchedRange] = []
         var current = fetchedRanges[0]
 
-        for i in 1..<fetchedRanges.count {
+        for i in 1 ..< fetchedRanges.count {
             let next = fetchedRanges[i]
 
             if let mergedRange = current.merge(with: next) {

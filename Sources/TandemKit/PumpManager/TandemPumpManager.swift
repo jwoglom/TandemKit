@@ -2720,6 +2720,23 @@ private struct ActiveBolus {
             completion(nil)
         }
     }
+    
+    func setPumpSound(request: SetPumpSoundsRequest) {
+        guard let transport = telemetryTransportIfReady(for: .sounds) else {
+            telemetryLogger.error("Transport not available for sound telemetry")
+            return
+        }
+        
+        do {
+            let _ = try pumpComm.sendMessage(
+                transport: transport,
+                message: request,
+                expecting: SetPumpSoundsResponse.self
+            )
+        } catch {
+            telemetryLogger.error("Failed to pump sounds: \(error.localizedDescription)")
+        }
+    }
 }
 
 // MARK: - TandemPumpDelegate Conformance
