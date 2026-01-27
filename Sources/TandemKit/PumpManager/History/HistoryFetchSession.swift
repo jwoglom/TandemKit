@@ -2,6 +2,11 @@ import Dispatch
 import Foundation
 import TandemCore
 
+// History fetch configuration matching ControlX2
+private let TandemHistoryChunkSize: Int = 32
+private let TandemHistoryChunkTimeout: TimeInterval = 2.5
+private let TandemHistoryPollInterval: TimeInterval = 0.25
+
 /// Errors that can occur during a history fetch session.
 enum HistoryFetchError: Error, Equatable {
     case invalidRange(start: UInt32, firstAvailable: UInt32, lastAvailable: UInt32)
@@ -29,28 +34,27 @@ final class HistoryFetchSession {
     private let pumpComm: PumpComm
     private let startSequence: UInt32?
     private let maxEntries: Int
-    private let streamTimeout: TimeInterval
-
-    private let queue = DispatchQueue(label: "com.loopkit.TandemKit.HistoryFetchSession")
-
-    private var activeStreamId: Int?
-    private var expectedCount: Int?
-    private var collected: [HistoryLog] = []
-    private var finished = false
-    private var semaphore: DispatchSemaphore?
+    private let chunkSize = TandemHistoryChunkSize
+    private let chunkTimeout = TandemHistoryChunkTimeout
+    private let log = TandemLogger(category: "HistoryFetchSession")
+    private var activeCollector: ChunkedStreamCollector?
 
     init(
         transport: PumpMessageTransport,
         pumpComm: PumpComm,
         startSequence: UInt32?,
-        maxEntries: Int = 100,
-        streamTimeout: TimeInterval = 10
+        maxEntries: Int = 500
     ) {
         self.transport = transport
         self.pumpComm = pumpComm
         self.startSequence = startSequence
         self.maxEntries = maxEntries
-        self.streamTimeout = streamTimeout
+    }
+
+    /// Route incoming stream responses to the active collector.
+    /// Called from TandemPumpManager when HistoryLogStreamResponse is received.
+    func handleStreamResponse(_ response: HistoryLogStreamResponse) {
+        activeCollector?.handleStreamResponse(response)
     }
 
     /// Execute the fetch flow with retry handling for transient failures.
@@ -82,28 +86,8 @@ final class HistoryFetchSession {
         throw lastError ?? HistoryFetchError.streamTimeout(expected: 0, received: 0)
     }
 
-    /// Collect a streamed response emitted by the pump.
-    func handleStreamResponse(_ response: HistoryLogStreamResponse) {
-        queue.async { [weak self] in
-            guard let self else { return }
-            guard !self.finished,
-                  let expected = self.expectedCount,
-                  let streamId = self.activeStreamId,
-                  streamId == response.streamId
-            else {
-                return
-            }
 
-            self.collected.append(contentsOf: response.historyLogs)
-
-            if self.collected.count >= expected {
-                self.finished = true
-                self.semaphore?.signal()
-            }
-        }
-    }
-
-    /// Execute the fetch flow and return sorted history logs.
+    /// Execute the fetch flow with chunked backward iteration and return sorted history logs.
     func fetch() throws -> [HistoryLog] {
         let status: HistoryLogStatusResponse = try pumpComm.sendMessage(
             transport: transport,
@@ -117,11 +101,68 @@ final class HistoryFetchSession {
         }
 
         let availableCount = Int(status.lastSequenceNum &- start + 1)
-        let requestCount = max(0, min(maxEntries, availableCount))
+        let totalToFetch = max(0, min(maxEntries, availableCount))
 
+        if totalToFetch == 0 {
+            return []
+        }
+
+        var allLogs: [HistoryLog] = []
+        activeCollector = ChunkedStreamCollector()
+
+        // Iterate backwards from END to START (like ControlX2 lines 64-96)
+        var currentEnd = status.lastSequenceNum
+
+        while currentEnd >= start && allLogs.count < totalToFetch {
+            let remainingCount = totalToFetch - allLogs.count
+            let chunkCount = min(chunkSize, remainingCount, Int(currentEnd - start + 1))
+            let chunkStart = currentEnd - UInt32(chunkCount - 1)
+
+            log.debug("Fetching chunk [\(chunkStart), \(currentEnd)] count=\(chunkCount)")
+
+            do {
+                guard let collector = activeCollector else {
+                    throw HistoryFetchError.streamTimeout(expected: chunkCount, received: 0)
+                }
+
+                let result = try fetchChunk(
+                    startSequence: currentEnd,  // Request from END
+                    count: chunkCount,
+                    collector: collector
+                )
+
+                switch result {
+                case .complete(let logs):
+                    allLogs.append(contentsOf: logs)
+                    log.debug("Chunk [\(chunkStart), \(currentEnd)] complete: \(logs.count) logs")
+                case .partial(let logs, let received, let expected):
+                    allLogs.append(contentsOf: logs)
+                    log.warning("Chunk [\(chunkStart), \(currentEnd)] partial: \(received)/\(expected) logs")
+                case .timeout(let logs, let received, let expected):
+                    allLogs.append(contentsOf: logs)
+                    log.warning("Chunk [\(chunkStart), \(currentEnd)] timeout: \(received)/\(expected) logs")
+                }
+            } catch {
+                // Log error but continue to next chunk for resilience (like ControlX2 line 90-91)
+                log.error("Chunk [\(chunkStart), \(currentEnd)] failed: \(error)")
+            }
+
+            currentEnd = chunkStart - 1
+        }
+
+        activeCollector = nil
+        return allLogs.sorted { $0.sequenceNum < $1.sequenceNum }
+    }
+
+    /// Fetch a single chunk of history logs.
+    private func fetchChunk(
+        startSequence: UInt32,
+        count: Int,
+        collector: ChunkedStreamCollector
+    ) throws -> ChunkResult {
         let response: HistoryLogResponse = try pumpComm.sendMessage(
             transport: transport,
-            message: HistoryLogRequest(startLog: start, numberOfLogs: requestCount),
+            message: HistoryLogRequest(startLog: startSequence, numberOfLogs: count),
             expecting: HistoryLogResponse.self
         )
 
@@ -129,7 +170,8 @@ final class HistoryFetchSession {
             throw HistoryFetchError.responseStatus(response.status)
         }
 
-        return try awaitStreamedLogs(streamId: response.streamId, expected: requestCount)
+        collector.startCollecting(streamId: response.streamId, expectedCount: count)
+        return try collector.pollForCompletion(timeout: chunkTimeout, pollInterval: TandemHistoryPollInterval)
     }
 
     private func resolvedStartSequence(from status: HistoryLogStatusResponse) -> UInt32? {
@@ -155,33 +197,4 @@ final class HistoryFetchSession {
         return first
     }
 
-    private func awaitStreamedLogs(streamId: Int, expected: Int) throws -> [HistoryLog] {
-        if expected == 0 {
-            return []
-        }
-
-        let semaphore = DispatchSemaphore(value: 0)
-
-        queue.sync {
-            activeStreamId = streamId
-            expectedCount = expected
-            collected = []
-            finished = false
-            self.semaphore = semaphore
-        }
-
-        let waitResult = semaphore.wait(timeout: .now() + streamTimeout)
-
-        let results = queue.sync { () -> [HistoryLog] in
-            finished = true
-            semaphore.signal()
-            return collected.sorted { $0.sequenceNum < $1.sequenceNum }
-        }
-
-        guard waitResult == .success else {
-            throw HistoryFetchError.streamTimeout(expected: expected, received: results.count)
-        }
-
-        return results
-    }
 }

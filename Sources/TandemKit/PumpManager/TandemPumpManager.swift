@@ -82,6 +82,7 @@ private struct ActiveBolus {
     private let historyTimestampReconciler = HistoryTimestampReconciler()
     private let historyMapper = HistoryToDoseMapper()
     private let historyReconciler = HistoryReconciler()
+    private let historyRangeTracker = HistoryRangeTracker()
     private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
     private var historyTelemetryInterval: TimeInterval = 5 * 60
 
@@ -441,6 +442,7 @@ private struct ActiveBolus {
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         configureStateSuppliers()
+        historyRangeTracker.restore(from: state.fetchedRanges)
 
         let nc = NotificationCenter.default
         nc.addObserver(
@@ -475,6 +477,7 @@ private struct ActiveBolus {
         tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
         tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
         configureStateSuppliers()
+        historyRangeTracker.restore(from: state.fetchedRanges)
 
         log.debug("Initialized TandemPumpManager: state=\(state)")
 
@@ -1576,42 +1579,101 @@ private struct ActiveBolus {
         historyFetchQueue.async { [weak self] in
             guard let self else { return }
 
-            let session = HistoryFetchSession(
-                transport: transport,
-                pumpComm: self.pumpComm,
-                startSequence: self.resolvedStartSequence(after: startDate),
-                maxEntries: 500
-            )
-
-            self.activeHistoryFetchSession.value = session
-
             do {
-                let logs = try session.fetchWithRetry()
-                self.activeHistoryFetchSession.value = nil
-
-                let unseen = self.historyDeduplicator.filterUnseen(logs)
-                self.applyClockChanges(from: unseen)
-
-                let events = self.historyMapper.mapToEvents(
-                    unseen,
-                    reconciler: self.historyTimestampReconciler,
-                    insulinType: self.lockedState.value.insulinType,
-                    timeZone: self.lockedStatus.value.timeZone
+                // Query pump for available history range
+                let status: HistoryLogStatusResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: HistoryLogStatusRequest(),
+                    expecting: HistoryLogStatusResponse.self
                 )
 
-                let (reconciledEvents, stillPending, _) = self.historyReconciler.reconcile(
-                    pendingDoses: self.lockedState.value.pendingDoses,
-                    historyEvents: events
-                )
-
-                var updatedState = self.lockedState.value
-                updatedState.pendingDoses = stillPending
-                updatedState.lastHistoryReconciliation = Date()
-                if let lastLog = unseen.last {
-                    updatedState.lastHistorySequenceNum = lastLog.sequenceNum
+                guard status.numEntries > 0 else {
+                    self.telemetryLogger.debug("[history] No history entries available on pump")
+                    completion(nil)
+                    return
                 }
-                self.lockedState.value = updatedState
 
+                let pumpRange = status.firstSequenceNum...status.lastSequenceNum
+
+                // Find missing ranges using range tracker
+                let missingRanges = self.historyRangeTracker.getMissingRanges(in: pumpRange)
+
+                if missingRanges.isEmpty {
+                    self.telemetryLogger.debug("[history] No missing ranges to fetch")
+                    completion(nil)
+                    return
+                }
+
+                self.telemetryLogger.debug("[history] Found \(missingRanges.count) gap(s) to fetch: \(missingRanges)")
+
+                var allReconciledEvents: [NewPumpEvent] = []
+
+                // Fetch each missing range in reverse order (newest first)
+                for range in missingRanges.reversed() {
+                    let rangeSize = Int(range.upperBound - range.lowerBound + 1)
+                    self.telemetryLogger.debug("[history] Fetching range [\(range.lowerBound), \(range.upperBound)] size=\(rangeSize)")
+
+                    let session = HistoryFetchSession(
+                        transport: transport,
+                        pumpComm: self.pumpComm,
+                        startSequence: range.lowerBound,
+                        maxEntries: rangeSize
+                    )
+
+                    self.activeHistoryFetchSession.value = session
+
+                    do {
+                        let logs = try session.fetchWithRetry()
+                        self.activeHistoryFetchSession.value = nil
+
+                        // Record fetched range
+                        if let first = logs.first, let last = logs.last {
+                            let actualStart = min(first.sequenceNum, last.sequenceNum)
+                            let actualEnd = max(first.sequenceNum, last.sequenceNum)
+                            self.historyRangeTracker.recordFetched(start: actualStart, end: actualEnd)
+                            self.telemetryLogger.debug("[history] Recorded fetched range [\(actualStart), \(actualEnd)]")
+                        }
+
+                        // Process logs
+                        let unseen = self.historyDeduplicator.filterUnseen(logs)
+                        self.applyClockChanges(from: unseen)
+
+                        let events = self.historyMapper.mapToEvents(
+                            unseen,
+                            reconciler: self.historyTimestampReconciler,
+                            insulinType: self.lockedState.value.insulinType,
+                            timeZone: self.lockedStatus.value.timeZone
+                        )
+
+                        let (reconciledEvents, stillPending, _) = self.historyReconciler.reconcile(
+                            pendingDoses: self.lockedState.value.pendingDoses,
+                            historyEvents: events
+                        )
+
+                        // Accumulate events from all ranges
+                        allReconciledEvents.append(contentsOf: reconciledEvents)
+
+                        // Update state after each range
+                        var updatedState = self.lockedState.value
+                        updatedState.pendingDoses = stillPending
+                        updatedState.fetchedRanges = self.historyRangeTracker.export()
+                        updatedState.lastHistoryReconciliation = Date()
+                        if let lastLog = logs.max(by: { $0.sequenceNum < $1.sequenceNum }) {
+                            updatedState.lastHistorySequenceNum = max(
+                                updatedState.lastHistorySequenceNum ?? 0,
+                                lastLog.sequenceNum
+                            )
+                        }
+                        self.lockedState.value = updatedState
+
+                        self.telemetryLogger.debug("[history] Range complete: \(logs.count) logs, \(reconciledEvents.count) events")
+                    } catch {
+                        self.telemetryLogger.error("[history] Failed to fetch range \(range): \(error)")
+                        // Continue to next range instead of failing completely
+                    }
+                }
+
+                self.activeHistoryFetchSession.value = nil
                 self.notifyPumpManagerDelegateDidUpdateState()
 
                 guard let delegate = self.pumpManagerDelegate, let queue = self.delegateQueue else {
@@ -1619,17 +1681,19 @@ private struct ActiveBolus {
                     return
                 }
 
+                // Notify delegate with all accumulated events
                 queue.async {
                     delegate.pumpManager(
                         self,
-                        hasNewPumpEvents: reconciledEvents,
-                        lastReconciliation: updatedState.lastHistoryReconciliation,
+                        hasNewPumpEvents: allReconciledEvents,
+                        lastReconciliation: self.lockedState.value.lastHistoryReconciliation,
                         replacePendingEvents: true,
                         completion: completion
                     )
                 }
             } catch {
                 self.activeHistoryFetchSession.value = nil
+                self.telemetryLogger.error("[history] Fetch failed: \(error)")
                 completion(error)
             }
         }

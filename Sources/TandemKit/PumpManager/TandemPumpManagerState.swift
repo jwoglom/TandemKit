@@ -185,6 +185,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastHistorySequenceNum: UInt32?
     public var lastHistoryReconciliation: Date?
     public var pendingDoses: [PendingDose]
+    public var fetchedRanges: [FetchedRange]
 
     public init(
         pumpState: PumpState?,
@@ -229,7 +230,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         insulinType: InsulinType? = nil,
         lastHistorySequenceNum: UInt32? = nil,
         lastHistoryReconciliation: Date? = nil,
-        pendingDoses: [PendingDose] = []
+        pendingDoses: [PendingDose] = [],
+        fetchedRanges: [FetchedRange] = []
     ) {
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
@@ -274,6 +276,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.lastHistorySequenceNum = lastHistorySequenceNum
         self.lastHistoryReconciliation = lastHistoryReconciliation
         self.pendingDoses = pendingDoses
+        self.fetchedRanges = fetchedRanges
     }
 
     public init?(rawValue: RawValue) {
@@ -462,6 +465,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         } else {
             pendingDoses = []
         }
+
+        if let rangesData = rawValue["fetchedRanges"] as? Data,
+           let decoded = try? PropertyListDecoder().decode([FetchedRange].self, from: rangesData)
+        {
+            fetchedRanges = decoded
+        } else {
+            fetchedRanges = []
+        }
     }
 
     public var rawValue: RawValue {
@@ -540,6 +551,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
            let encoded = try? PropertyListEncoder().encode(pendingDoses)
         {
             raw["pendingDoses"] = encoded
+        }
+
+        if !fetchedRanges.isEmpty,
+           let encoded = try? PropertyListEncoder().encode(fetchedRanges)
+        {
+            raw["fetchedRanges"] = encoded
         }
 
         return raw
@@ -635,7 +652,8 @@ public extension TandemPumpManagerState {
             lhs.insulinType == rhs.insulinType &&
             lhs.lastHistorySequenceNum == rhs.lastHistorySequenceNum &&
             lhs.lastHistoryReconciliation == rhs.lastHistoryReconciliation &&
-            lhs.pendingDoses == rhs.pendingDoses
+            lhs.pendingDoses == rhs.pendingDoses &&
+            lhs.fetchedRanges == rhs.fetchedRanges
     }
 }
 

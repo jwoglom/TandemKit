@@ -46,6 +46,9 @@
 		2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */; };
 		2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */; };
 		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
+		FC04B4C4270427042704B4C4 /* ChunkedStreamCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01A1B1270127012701A1B1 /* ChunkedStreamCollector.swift */; };
+		FC05B5C5270527052705B5C5 /* FetchedRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC02A2B2270227022702A2B2 /* FetchedRange.swift */; };
+		FC06B6C6270627062706B6C6 /* HistoryRangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */; };
 		3E0F4D3C2F265A64008290A3 /* LocalizedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444F2EC91299008A07F6 /* LocalizedString.swift */; };
 		3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */; };
 		3E0F4D422F265C25008290A3 /* blank.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3E0F4D412F265C25008290A3 /* blank.wav */; };
@@ -719,6 +722,9 @@
 		DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitNotificationsView.swift; sourceTree = "<group>"; };
 		E2SINS7XKJISFVQ0JL6JW1QA /* TandemKitCGMSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitCGMSettingsView.swift; sourceTree = "<group>"; };
 		E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDeduplicator.swift; sourceTree = "<group>"; };
+		FC01A1B1270127012701A1B1 /* ChunkedStreamCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkedStreamCollector.swift; sourceTree = "<group>"; };
+		FC02A2B2270227022702A2B2 /* FetchedRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FetchedRange.swift; sourceTree = "<group>"; };
+		FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryRangeTracker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1280,8 +1286,11 @@
 		93C45EB5470A4139895A9E31 /* History */ = {
 			isa = PBXGroup;
 			children = (
+				FC01A1B1270127012701A1B1 /* ChunkedStreamCollector.swift */,
+				FC02A2B2270227022702A2B2 /* FetchedRange.swift */,
 				E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */,
 				4CD8951E3191413C8074A6A4 /* HistoryFetchSession.swift */,
+				FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */,
 				913C81067F9341F1B4E27A04 /* HistoryReconciler.swift */,
 				4530C85FF45849B7AA2960FD /* HistoryTimestampReconciler.swift */,
 				D1ECC52D7C7D4542BF3BDA72 /* HistoryToDoseMapper.swift */,
@@ -1586,8 +1595,11 @@
 				1A2FA9702EC8FD0800DF080F /* PumpCommRetryPolicy.swift in Sources */,
 				1A2FA9712EC8FD0800DF080F /* PumpProtocolError.swift in Sources */,
 				1A2FA9722EC8FD0800DF080F /* PumpComm.swift in Sources */,
+				FC04B4C4270427042704B4C4 /* ChunkedStreamCollector.swift in Sources */,
+				FC05B5C5270527052705B5C5 /* FetchedRange.swift in Sources */,
 				2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */,
 				22EC259598464105BFD8C1D1 /* HistoryFetchSession.swift in Sources */,
+				FC06B6C6270627062706B6C6 /* HistoryRangeTracker.swift in Sources */,
 				C287E57A93E74DAEA0A9E84E /* HistoryTimestampReconciler.swift in Sources */,
 				E782A9293A03493E8DF467C9 /* HistoryToDoseMapper.swift in Sources */,
 				74F710225EEC427D90574E55 /* HistoryReconciler.swift in Sources */,
