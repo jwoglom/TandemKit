@@ -250,6 +250,11 @@ class TandemKitSettingsViewModel: ObservableObject {
         autoAcknowledgeBasalAlerts = enabled
     }
 
+    func setSilentMode(_ enabled: Bool) {
+        pumpManager?.configureSilentMode(enabled)
+        useSilentMode = enabled
+    }
+
     var suspendResumeText: String? {
         if isSuspended == true {
             return "Resume insulin delivery"

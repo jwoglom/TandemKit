@@ -271,18 +271,12 @@ struct TandemKitSettingsView: View {
             }
 
             Section {
-                Button(action: {
-                    viewModel.toggleSilentMode()
-                }) {
-                    HStack {
-                        Text(LocalizedString("Silent Tones", comment: "Label for silent tones"))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text(viewModel.useSilentMode ? "Enabled" : "Disabled")
-                            .foregroundStyle(.secondary)
-                    }
+                Toggle(isOn: Binding(
+                    get: { viewModel.useSilentMode },
+                    set: { viewModel.setSilentMode($0) }
+                )) {
+                    Text(LocalizedString("Silent Tones", comment: "Label for silent tones"))
                 }
-                .buttonStyle(.plain)
                 Button(LocalizedString("Share Tandem pump logs", comment: "TandemKit share logs")) {
                     self.isSharePresented = true
                 }

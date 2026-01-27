@@ -1538,6 +1538,7 @@ private struct ActiveBolus {
 
     public func configureSilentMode(_ enabled: Bool) {
         var state = lockedState.value
+        guard state.useSilentTones != enabled else { return }
         state.useSilentTones = enabled
         lockedState.value = state
 
