@@ -55,19 +55,23 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var tempRateActive: Bool {
-        pumpManager?.state.tempRateActive ?? false
+        pumpManager?.state.tempRateAbsolute != nil
+    }
+
+    var tempRateAbsolute: Double? {
+        pumpManager?.state.tempRateAbsolute
     }
 
     var tempRatePercentage: Int? {
         pumpManager?.state.tempRatePercentage
     }
 
-    var tempRateDuration: UInt32? {
+    var tempRateDuration: Double? {
         pumpManager?.state.tempRateDuration
     }
 
     var currentProfileBaseBasalRate: Double? {
-        pumpManager?.state.currentProfileBaseBasalRate
+        pumpManager?.getScheduledBasalRate()
     }
 
     var currentBasalRateForDisplay: String {

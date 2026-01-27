@@ -12,6 +12,31 @@ enum PumpTelemetryKind: CaseIterable {
     case homeScreen
     case notifications
     case history
+
+    var logDescription: String {
+        switch self {
+        case .reservoir:
+            return "reservoir"
+        case .battery:
+            return "battery"
+        case .basal:
+            return "basal"
+        case .bolus:
+            return "bolus"
+        case .timeSinceReset:
+            return "timeSinceReset"
+        case .alerts:
+            return "alerts"
+        case .controlIQ:
+            return "controlIQ"
+        case .homeScreen:
+            return "homeScreen"
+        case .notifications:
+            return "notifications"
+        case .history:
+            return "history"
+        }
+    }
 }
 
 /// Simple timer-backed scheduler that executes telemetry fetch handlers on a serial queue.

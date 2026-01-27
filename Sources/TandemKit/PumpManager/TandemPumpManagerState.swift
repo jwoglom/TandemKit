@@ -31,7 +31,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         case standard = 0
         case sleep = 1
         case exercise = 2
-        
+
         public static func fromUserModeType(_ userModeType: ControlIQInfoAbstractResponse.UserModeType) -> ControlIQUserMode? {
             switch userModeType {
             case .standard:
@@ -50,14 +50,20 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         case active = 0
         case tempRate = 2
         case suspended = 4
-        
-        public static func fromBasalStatusIcon(_ basalStatusIcon: HomeScreenMirrorResponse.BasalStatusIcon) -> HomeScreenBasalStatus? {
+
+        public static func fromBasalStatusIcon(
+            _ basalStatusIcon: HomeScreenMirrorResponse
+                .BasalStatusIcon
+        ) -> HomeScreenBasalStatus? {
             switch basalStatusIcon {
             case .basal:
                 return .active
-            case .zeroBasal, .tempRate, .zeroTempRate:
+            case .tempRate,
+                 .zeroBasal,
+                 .zeroTempRate:
                 return .tempRate
-            case .suspend, .hypoSuspendBasalIQ:
+            case .hypoSuspendBasalIQ,
+                 .suspend:
                 return .suspended
             default:
                 return nil as HomeScreenBasalStatus?
@@ -68,10 +74,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public enum HomeScreenBolusStatus: Int, RawRepresentable, Equatable {
         case none = 200
         case bolus = 0
-        
-        public static func fromBolusStatusIcon(_ bolusStatusIcon: HomeScreenMirrorResponse.BolusStatusIcon) -> HomeScreenBolusStatus? {
+
+        public static func fromBolusStatusIcon(
+            _ bolusStatusIcon: HomeScreenMirrorResponse
+                .BolusStatusIcon
+        ) -> HomeScreenBolusStatus? {
             switch bolusStatusIcon {
-            case .bolus, .autoBolus:
+            case .autoBolus,
+                 .bolus:
                 return .bolus
             default:
                 return TandemPumpManagerState.HomeScreenBolusStatus.none
@@ -88,8 +98,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         case disconnected = 253
         case error = 254
         case noError = 255
-        
-        
+
         public static func fromCGMAlertIcon(_ cgmAlertIcon: HomeScreenMirrorResponse.CGMAlertIcon) -> HomeScreenCGMAlert? {
             switch cgmAlertIcon {
             case .noError:
@@ -98,11 +107,20 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
                 return .low
             case .high:
                 return .high
-            case .startup1, .startup2, .startup3, .startup4:
+            case .startup1,
+                 .startup2,
+                 .startup3,
+                 .startup4:
                 return .startup
-            case .calibrate, .startupCalibrate:
+            case .calibrate,
+                 .startupCalibrate:
                 return .calibrate
-            case .errorLowWedge, .errorHighWedge, .replaceSensor, .replaceTransmitter, .failedSensor, .tripleDashes:
+            case .errorHighWedge,
+                 .errorLowWedge,
+                 .failedSensor,
+                 .replaceSensor,
+                 .replaceTransmitter,
+                 .tripleDashes:
                 return .error
             case .outOfRange:
                 return .outOfRange
@@ -145,10 +163,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastControlIQUpdate: Date?
 
     // Temp rate (additional detail beyond existing basal state)
-    public var tempRateActive: Bool?
     public var tempRatePercentage: Int?
-    public var tempRateDuration: UInt32?
-    public var lastTempRateUpdate: Date?
+    public var tempRateAbsolute: Double?
+    public var tempRateStart: Date?
+    public var tempRateDuration: Double?
+    public var tempRateSyncIdentifier: String?
 
     // Current basal rate for display
     public var currentProfileBaseBasalRate: Double? // TODO(jwoglom): this does not get updated for temp basals, it's the base basal rate
@@ -195,10 +214,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         controlIQWeight: Int? = nil,
         controlIQTotalDailyInsulin: Int? = nil,
         lastControlIQUpdate: Date? = nil,
-        tempRateActive: Bool? = nil,
         tempRatePercentage: Int? = nil,
-        tempRateDuration: UInt32? = nil,
-        lastTempRateUpdate: Date? = nil,
+        tempRateAbsolute: Double? = nil,
+        tempRateDuration: Double? = nil,
+        tempRateStart: Date? = nil,
+        tempRateSyncIdentifier: String? = nil,
         currentBasalRate: Double? = nil,
         lastBasalRateUpdate: Date? = nil,
         basalStatusIcon: HomeScreenBasalStatus? = nil,
@@ -238,12 +258,13 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.controlIQWeight = controlIQWeight
         self.controlIQTotalDailyInsulin = controlIQTotalDailyInsulin
         self.lastControlIQUpdate = lastControlIQUpdate
-        self.tempRateActive = tempRateActive
         self.tempRatePercentage = tempRatePercentage
+        self.tempRateAbsolute = tempRateAbsolute
+        self.tempRateStart = tempRateStart
         self.tempRateDuration = tempRateDuration
-        self.lastTempRateUpdate = lastTempRateUpdate
-        self.currentProfileBaseBasalRate = currentBasalRate
-        self.lastProfileBasalRateUpdate = lastBasalRateUpdate
+        self.tempRateSyncIdentifier = tempRateSyncIdentifier
+        currentProfileBaseBasalRate = currentBasalRate
+        lastProfileBasalRateUpdate = lastBasalRateUpdate
         self.basalStatusIcon = basalStatusIcon
         self.bolusStatusIcon = bolusStatusIcon
         self.cgmAlertIcon = cgmAlertIcon
@@ -265,9 +286,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
         controlIQWeight = rawValue["controlIQWeight"] as? Int
         controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
-        tempRateActive = rawValue["tempRateActive"] as? Bool
         tempRatePercentage = rawValue["tempRatePercentage"] as? Int
-        tempRateDuration = rawValue["tempRateDuration"] as? UInt32
+        tempRateAbsolute = rawValue["tempRateAbsolute"] as? Double
+        tempRateStart = rawValue["tempRateStart"] as? Date
+        tempRateDuration = rawValue["tempRateDuration"] as? Double
+        tempRateSyncIdentifier = rawValue["tempRateSyncIdentifier"] as? String
         currentProfileBaseBasalRate = rawValue["currentProfileBaseBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
@@ -390,12 +413,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             lastControlIQUpdate = nil
         }
 
-        if let lastTempRateInterval = rawValue["lastTempRateUpdate"] as? TimeInterval {
-            lastTempRateUpdate = Date(timeIntervalSinceReferenceDate: lastTempRateInterval)
-        } else {
-            lastTempRateUpdate = nil
-        }
-
         if let lastBasalRateInterval = rawValue["lastBasalRateUpdate"] as? TimeInterval {
             lastProfileBasalRateUpdate = Date(timeIntervalSinceReferenceDate: lastBasalRateInterval)
         } else {
@@ -469,10 +486,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["controlIQWeight"] = controlIQWeight
         raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
-        raw["tempRateActive"] = tempRateActive
         raw["tempRatePercentage"] = tempRatePercentage
+        raw["tempRateAbsolute"] = tempRateAbsolute
+        raw["tempRateStart"] = tempRateStart
         raw["tempRateDuration"] = tempRateDuration
-        raw["lastTempRateUpdate"] = lastTempRateUpdate?.timeIntervalSinceReferenceDate
+        raw["tempRateSyncIdentifier"] = tempRateSyncIdentifier
         raw["currentProfileBaseBasalRate"] = currentProfileBaseBasalRate
         raw["lastProfileBasalRateUpdate"] = lastProfileBasalRateUpdate?.timeIntervalSinceReferenceDate
         raw["basalStatusIcon"] = basalStatusIcon?.rawValue
@@ -557,10 +575,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* controlIQWeight: \(String(describing: controlIQWeight))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
-            "* tempRateActive: \(String(describing: tempRateActive))",
             "* tempRatePercentage: \(String(describing: tempRatePercentage))",
+            "* tempRateAbsolute: \(String(describing: tempRateAbsolute))",
+            "* tempRateStart: \(String(describing: tempRateStart))",
             "* tempRateDuration: \(String(describing: tempRateDuration))",
-            "* lastTempRateUpdate: \(String(describing: lastTempRateUpdate))",
+            "* tempRateSyncIdentifier: \(String(describing: tempRateSyncIdentifier))",
             "* currentProfileBaseBasalRate: \(String(describing: currentProfileBaseBasalRate))",
             "* lastProfileBasalRateUpdate: \(String(describing: lastProfileBasalRateUpdate))",
             "* basalStatusIcon: \(String(describing: basalStatusIcon))",
@@ -601,10 +620,11 @@ public extension TandemPumpManagerState {
             lhs.controlIQWeight == rhs.controlIQWeight &&
             lhs.controlIQTotalDailyInsulin == rhs.controlIQTotalDailyInsulin &&
             lhs.lastControlIQUpdate == rhs.lastControlIQUpdate &&
-            lhs.tempRateActive == rhs.tempRateActive &&
             lhs.tempRatePercentage == rhs.tempRatePercentage &&
+            lhs.tempRateAbsolute == rhs.tempRateAbsolute &&
+            lhs.tempRateStart == rhs.tempRateStart &&
             lhs.tempRateDuration == rhs.tempRateDuration &&
-            lhs.lastTempRateUpdate == rhs.lastTempRateUpdate &&
+            lhs.tempRateSyncIdentifier == rhs.tempRateSyncIdentifier &&
             lhs.currentProfileBaseBasalRate == rhs.currentProfileBaseBasalRate &&
             lhs.lastProfileBasalRateUpdate == rhs.lastProfileBasalRateUpdate &&
             lhs.basalStatusIcon == rhs.basalStatusIcon &&

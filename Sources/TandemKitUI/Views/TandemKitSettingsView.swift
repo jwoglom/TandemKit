@@ -381,35 +381,21 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(.accentColor)
-                    // NOTE(jwoglom): intentionally not relying on the pumpmanager temp rate state for this,
-                    // so that we query the current state reported by the pump (base basal rate and current temp basal)
-                    if let baseBasalRate = viewModel.currentProfileBaseBasalRate {
-                        VStack(alignment: .center) {
-                            if viewModel.tempRateActive,
-                               let percentage = viewModel.tempRatePercentage,
-                               let duration = viewModel.tempRateDuration
-                            {
-                                let currentBasalRate = baseBasalRate * (Double(percentage) / 100.0)
-                                Text(String(format: "%.2f U/hr", currentBasalRate))
-                                    .fontWeight(.bold)
-                                    .font(.system(size: 24))
-                                Text("\(percentage)% (for \(formatDuration(duration)))")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 16))
-                            } else {
-                                Text(viewModel.currentBasalRateForDisplay)
-                                    .fontWeight(.bold)
-                                    .font(.system(size: 24))
-                                Text("No Temp Rate")
-                                    .foregroundColor(.secondary)
-                                    .font(.system(size: 16))
-                            }
-                        }
-                    } else {
-                        VStack(alignment: .center) {
-                            Text(LocalizedString("Unknown", comment: "Text shown when insulin active"))
+                    VStack(alignment: .center) {
+                        if let percentage = viewModel.tempRatePercentage,
+                           let rate = viewModel.tempRateAbsolute,
+                           let duration = viewModel.tempRateDuration
+                        {
+                            Text(String(format: "%.2f U/hr", rate))
                                 .fontWeight(.bold)
-                                .fixedSize()
+                                .font(.system(size: 24))
+                            Text("\(percentage)% (for \(formatDuration(duration)))")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 16))
+                        } else {
+                            Text(viewModel.currentBasalRateForDisplay)
+                                .fontWeight(.bold)
+                                .font(.system(size: 24))
                             Text("No Temp Rate")
                                 .foregroundColor(.secondary)
                                 .font(.system(size: 16))
@@ -455,7 +441,7 @@ struct TandemKitSettingsView: View {
         }
     }
 
-    private func formatDuration(_ seconds: UInt32) -> String {
+    private func formatDuration(_ seconds: Double) -> String {
         let minutes = Int(seconds) / 60
         let hours = minutes / 60
         let mins = minutes % 60

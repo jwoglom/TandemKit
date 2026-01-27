@@ -58,7 +58,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             self.pumpManager =
                 TandemPumpManager(state: TandemPumpManagerState(
                     pumpState: nil,
-                    basalRateSchedule: pumpManagerSettings?.basalSchedule
+                    basalDeliveryState: .active(Date.now),
+                    basalRateSchedule: pumpManagerSettings?.basalSchedule,
                 ))
         } else {
             self.pumpManager = pumpManager
@@ -106,6 +107,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
             let returnToMainScreen: () -> Void = {
+                self.pumpManager?.stopTempBasal()
                 self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager!)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }
