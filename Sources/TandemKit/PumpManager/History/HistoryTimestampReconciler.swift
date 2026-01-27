@@ -15,9 +15,10 @@ class HistoryTimestampReconciler {
     /// Convert pump timestamp to UTC accounting for recorded clock changes and the pump time zone.
     func utcDate(pumpTimeSec: UInt32, sequenceNum: UInt32, timeZone: TimeZone) -> Date {
         let adjustedPumpTimeSec = adjustedPumpTime(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum)
-        let localDate = Date(timeIntervalSince1970: TimeInterval(adjustedPumpTimeSec))
+        // Convert from Tandem epoch (Jan 1, 2008) to Unix epoch (Jan 1, 1970)
+        let localDate = Dates.fromJan12008EpochSecondsToDate(TimeInterval(adjustedPumpTimeSec))
         let offset = timeZone.secondsFromGMT(for: localDate)
-        return Date(timeIntervalSince1970: TimeInterval(adjustedPumpTimeSec - offset))
+        return Date(timeIntervalSince1970: localDate.timeIntervalSince1970 - TimeInterval(offset))
     }
 
     /// Detect large forward jumps that invalidate chronological ordering (> 24 hours).

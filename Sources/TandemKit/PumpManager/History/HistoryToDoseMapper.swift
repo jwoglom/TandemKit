@@ -230,7 +230,8 @@ class HistoryToDoseMapper {
             completionDate = programmedEndDate
         }
 
-        let endDate = max(programmedEndDate, completionDate)
+        // Use min() not max() - if temp basal completes early, use the actual completion time
+        let endDate = min(programmedEndDate, completionDate)
 
         let dose = DoseEntry(
             type: .tempBasal,
