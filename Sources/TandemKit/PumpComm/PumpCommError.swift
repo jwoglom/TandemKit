@@ -19,6 +19,7 @@ public enum PumpCommError: Error {
     case noActiveBolus
     case responseParsingFailed(underlying: Error)
     case transportError(underlying: Error)
+    case invalidScheduledBasalRate
     case other
 }
 
@@ -107,6 +108,11 @@ extension PumpCommError: LocalizedError {
                 ),
                 String(describing: underlying)
             )
+        case .invalidScheduledBasalRate:
+            return LocalizedString(
+                "Invalid scheduled basal rate",
+                comment: "Error when scheduled basal rate is invalid"
+            )
         default:
             return "Other PumpCommError: \(String(describing: self))"
         }
@@ -172,6 +178,12 @@ extension PumpCommError: LocalizedError {
                     comment: "Recovery suggestion when pump fault is unknown"
                 )
             }
+            
+        case .invalidScheduledBasalRate:
+            return LocalizedString(
+                "Temp basal cannot be performed while scheduled basal rate is 0 or no basal profile exists",
+                comment: "Recovery suggestion when scheduled basal rate is invalid"
+            )
         default:
             return nil
         }

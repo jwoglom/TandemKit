@@ -2075,13 +2075,23 @@ private struct ActiveBolus {
 
             var pumpEvents: [NewPumpEvent] = []
             do {
-                // First cancel running temp basal before starting a new one
-                if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
+                // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
+                log.info("Querying pump temp basal state before enacting new temp basal...")
+                let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: TempRateRequest(),
+                    expecting: TempRateResponse.self
+                )
+
+                log.info("Pump temp basal state: active=\(currentTempRate.active), percent=\(currentTempRate.percentage)%")
+
+                // Cancel any active temp basal on the pump (whether we know about it or not)
+                if currentTempRate.active {
                     updateStatus { status in
                         status.basalDeliveryState = .cancelingTempBasal
                     }
 
-                    log.info("Cancelling temp basal...")
+                    log.info("Cancelling active temp basal on pump (percent=\(currentTempRate.percentage)%)...")
                     let response: StopTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: StopTempRateRequest(),
@@ -2093,6 +2103,9 @@ private struct ActiveBolus {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
+                    // Create cancellation event using either local state or pump-reported values
+                    let tempRateAbsolute = state.tempRateAbsolute ?? (getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
+                    let tempRateStart = state.tempRateStart ?? currentTempRate.startTime
                     let cancelledDose = DoseEntry.tempBasal(
                         absoluteUnit: tempRateAbsolute,
                         duration: 0, // Ignored when a dose is finished
@@ -2103,11 +2116,13 @@ private struct ActiveBolus {
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
 
+                    // Clear local temp basal state
                     var state = lockedState.value
                     state.tempRatePercentage = nil
                     state.tempRateAbsolute = nil
                     state.tempRateStart = nil
                     state.tempRateDuration = nil
+                    state.tempRateSyncIdentifier = nil
                     lockedState.value = state
 
                     self.updateStatus { status in
@@ -2117,8 +2132,8 @@ private struct ActiveBolus {
 
                 let baselineRate = getScheduledBasalRate()
                 guard baselineRate > 0 else {
-                    log.error("No current basal rate available...")
-                    throw PumpCommError.other
+                    log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+                    throw PumpCommError.invalidScheduledBasalRate
                 }
 
                 let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
@@ -2139,15 +2154,47 @@ private struct ActiveBolus {
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
-                    log.info("Enact temp basal - units: \(unitsPerHour)U/hr, minutes: \(duration.minutes), percent: \(percent)%")
+                    log.info("ENACT-TEMP-BASAL(units: \(unitsPerHour)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
                     let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
-                    let response: SetTempRateResponse = try self.pumpComm.sendMessage(
+                    var response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
                         expecting: SetTempRateResponse.self
                     )
 
-                    guard response.isStatusOK else {
+                    // Fallback: If pump fails to set temp rate, try to stop temp rate and then re-set temp rate
+                    if !response.isStatusOK && response.status == 1 {
+                        log.error("enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Retrying...")
+
+                        // Cancel the temp basal
+                        let stopResponse: StopTempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: StopTempRateRequest(),
+                            expecting: StopTempRateResponse.self
+                        )
+
+                        guard stopResponse.isStatusOK else {
+                            log.error("enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)")
+                            throw PumpCommError.errorResponse(response: stopResponse)
+                        }
+
+                        log.info("enactTempBasal fallback: successfully cancelled temp basal, retrying SetTempRateRequest...")
+
+                        // Retry the temp basal request
+                        response = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: request,
+                            expecting: SetTempRateResponse.self
+                        )
+
+                        if !response.isStatusOK {
+                            log.error("enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)")
+                            throw PumpCommError.errorResponse(response: response)
+                        }
+
+                        log.info("enactTempBasal fallback success: temp basal enacted after cancellation and retry")
+                    } else if !response.isStatusOK {
+                        log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                         throw PumpCommError.errorResponse(response: response)
                     }
 
