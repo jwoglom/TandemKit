@@ -147,13 +147,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var useSilentTones: Bool
 
     // Pump global settings
-    public var buttonAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
-    public var bolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum?
-    public var fillTubingAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum?
 
     // Control-IQ state
     public var controlIQEnabled: Bool?
@@ -203,13 +201,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         connectionSharingEnabled: Bool = false,
         autoAcknowledgeBasalAlerts: Bool = false,
         useSilentTones: Bool = false,
-        buttonAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
-        bolusAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         reminderAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         alertAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
-        fillTubingAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
+        generalAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         controlIQEnabled: Bool? = nil,
         controlIQUserMode: ControlIQUserMode? = nil,
         controlIQWeight: Int? = nil,
@@ -248,13 +244,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.connectionSharingEnabled = connectionSharingEnabled
         self.autoAcknowledgeBasalAlerts = autoAcknowledgeBasalAlerts
         self.useSilentTones = useSilentTones
-        self.buttonAnnun = buttonAnnun
         self.quickBolusAnnun = quickBolusAnnun
-        self.bolusAnnun = bolusAnnun
         self.reminderAnnun = reminderAnnun
         self.alertAnnun = alertAnnun
         self.alarmAnnun = alarmAnnun
-        self.fillTubingAnnun = fillTubingAnnun
+        self.generalAnnun = generalAnnun
         self.controlIQEnabled = controlIQEnabled
         self.controlIQUserMode = controlIQUserMode
         self.controlIQWeight = controlIQWeight
@@ -368,22 +362,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             controlIQUserMode = nil
         }
 
-        if let buttonAnnunRaw = rawValue["buttonAnnun"] as? Int {
-            buttonAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: buttonAnnunRaw)
-        } else {
-            buttonAnnun = nil
-        }
-
         if let quickBolusAnnunRaw = rawValue["quickBolusAnnun"] as? Int {
             quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnunRaw)
         } else {
             quickBolusAnnun = nil
-        }
-
-        if let bolusAnnunRaw = rawValue["bolusAnnun"] as? Int {
-            bolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: bolusAnnunRaw)
-        } else {
-            bolusAnnun = nil
         }
 
         if let reminderAnnunRaw = rawValue["reminderAnnun"] as? Int {
@@ -404,10 +386,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             alarmAnnun = nil
         }
 
-        if let fillTubingAnnunRaw = rawValue["fillTubingAnnun"] as? Int {
-            fillTubingAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: fillTubingAnnunRaw)
+        if let generalAnnunRaw = rawValue["generalAnnun"] as? Int {
+            generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnunRaw)
         } else {
-            fillTubingAnnun = nil
+            generalAnnun = nil
         }
 
         if let lastControlIQInterval = rawValue["lastControlIQUpdate"] as? TimeInterval {
@@ -485,13 +467,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
         raw["connectionSharingEnabled"] = connectionSharingEnabled
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
-        raw["buttonAnnun"] = buttonAnnun?.rawValue
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
-        raw["bolusAnnun"] = bolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
         raw["alarmAnnun"] = alarmAnnun?.rawValue
-        raw["fillTubingAnnun"] = fillTubingAnnun?.rawValue
+        raw["generalAnnun"] = generalAnnun?.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
         raw["controlIQWeight"] = controlIQWeight
@@ -580,13 +560,11 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* connectionSharingEnabled: \(connectionSharingEnabled)",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",
-            "* buttonAnnun: \(String(describing: buttonAnnun))",
-            "* bolusAnnun: \(String(describing: bolusAnnun))",
             "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
             "* reminderAnnun: \(String(describing: reminderAnnun))",
             "* alertAnnun: \(String(describing: alertAnnun))",
             "* alarmAnnun: \(String(describing: alarmAnnun))",
-            "* fillTubingAnnun: \(String(describing: fillTubingAnnun))",
+            "* generalAnnun: \(String(describing: generalAnnun))",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",
             "* controlIQWeight: \(String(describing: controlIQWeight))",
@@ -625,13 +603,11 @@ public extension TandemPumpManagerState {
             lhs.connectionSharingEnabled == rhs.connectionSharingEnabled &&
             lhs.autoAcknowledgeBasalAlerts == rhs.autoAcknowledgeBasalAlerts &&
             lhs.useSilentTones == rhs.useSilentTones &&
-            lhs.buttonAnnun == rhs.buttonAnnun &&
             lhs.quickBolusAnnun == rhs.quickBolusAnnun &&
-            lhs.bolusAnnun == rhs.bolusAnnun &&
             lhs.reminderAnnun == rhs.reminderAnnun &&
             lhs.alertAnnun == rhs.alertAnnun &&
             lhs.alarmAnnun == rhs.alarmAnnun &&
-            lhs.fillTubingAnnun == rhs.fillTubingAnnun &&
+            lhs.generalAnnun == rhs.generalAnnun &&
             lhs.controlIQEnabled == rhs.controlIQEnabled &&
             lhs.controlIQUserMode == rhs.controlIQUserMode &&
             lhs.controlIQWeight == rhs.controlIQWeight &&

@@ -16,8 +16,7 @@ public class SetPumpSoundsRequest: Message {
     public var reminderAnnunRaw: Int
     public var alertAnnunRaw: Int
     public var alarmAnnunRaw: Int
-    public var cgmAlertAnnunA: Int
-    public var cgmAlertAnnunB: Int
+    public var cgmAlertAnnun: Int
     public var changeBitmask: Int
 
     public required init(cargo: Data) {
@@ -27,8 +26,7 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw = Int(cargo[3])
         alertAnnunRaw = Int(cargo[4])
         alarmAnnunRaw = Int(cargo[5])
-        cgmAlertAnnunA = Int(cargo[6])
-        cgmAlertAnnunB = Int(cargo[7])
+        cgmAlertAnnun = Int(cargo[6]) | (Int(cargo[7]) << 8)
         changeBitmask = Int(cargo[8])
     }
 
@@ -38,8 +36,7 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw: Int,
         alertAnnunRaw: Int,
         alarmAnnunRaw: Int,
-        cgmAlertAnnunA: Int,
-        cgmAlertAnnunB: Int,
+        cgmAlertAnnun: Int,
         changeBitmask: Int
     ) {
         cargo = SetPumpSoundsRequest.buildCargo(
@@ -48,8 +45,7 @@ public class SetPumpSoundsRequest: Message {
             reminderAnnunRaw: reminderAnnunRaw,
             alertAnnunRaw: alertAnnunRaw,
             alarmAnnunRaw: alarmAnnunRaw,
-            cgmAlertAnnunA: cgmAlertAnnunA,
-            cgmAlertAnnunB: cgmAlertAnnunB,
+            cgmAlertAnnun: cgmAlertAnnun,
             changeBitmask: changeBitmask
         )
         self.quickBolusAnnunRaw = quickBolusAnnunRaw
@@ -57,8 +53,7 @@ public class SetPumpSoundsRequest: Message {
         self.reminderAnnunRaw = reminderAnnunRaw
         self.alertAnnunRaw = alertAnnunRaw
         self.alarmAnnunRaw = alarmAnnunRaw
-        self.cgmAlertAnnunA = cgmAlertAnnunA
-        self.cgmAlertAnnunB = cgmAlertAnnunB
+        self.cgmAlertAnnun = cgmAlertAnnun
         self.changeBitmask = changeBitmask
     }
 
@@ -68,8 +63,7 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw: Int,
         alertAnnunRaw: Int,
         alarmAnnunRaw: Int,
-        cgmAlertAnnunA: Int,
-        cgmAlertAnnunB: Int,
+        cgmAlertAnnun: Int,
         changeBitmask: Int
     ) -> Data {
         Bytes.combine(
@@ -79,8 +73,8 @@ public class SetPumpSoundsRequest: Message {
             Data([UInt8(reminderAnnunRaw & 0xFF)]),
             Data([UInt8(alertAnnunRaw & 0xFF)]),
             Data([UInt8(alarmAnnunRaw & 0xFF)]),
-            Data([UInt8(cgmAlertAnnunA & 0xFF)]),
-            Data([UInt8(cgmAlertAnnunB & 0xFF)]),
+            Data([UInt8((cgmAlertAnnun >> 8) & 0xFF)]),
+            Data([UInt8(cgmAlertAnnun & 0xFF)]),
             Data([UInt8(changeBitmask & 0xFF)])
         )
     }
@@ -95,7 +89,7 @@ public class SetPumpSoundsRequest: Message {
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw) }
 
     public var description: String {
-        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(String(describing: quickBolusAnnun)), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(String(describing: generalAnnun)), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(String(describing: reminderAnnun)), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(String(describing: alertAnnun)), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(String(describing: alarmAnnun)), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmask=\(changeBitmask))"
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(String(describing: quickBolusAnnun)), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(String(describing: generalAnnun)), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(String(describing: reminderAnnun)), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(String(describing: alertAnnun)), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(String(describing: alarmAnnun)), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnun=\(cgmAlertAnnun), changeBitmask=\(changeBitmask))"
     }
 }
 
@@ -129,13 +123,12 @@ public class SetPumpSoundsResponse: Message, StatusMessage {
 
 /// Bitmask fields indicating which annunciation settings changed.
 public enum PumpSoundChangeBitmask: Int, CaseIterable {
-    case quickBolusAnnun = 1
-    case generalAnnun = 2
-    case reminderAnnun = 4
-    case alertAnnun = 8
-    case alarmAnnun = 16
-    case cgmAlertAnnunA = 32
-    case cgmAlertAnnunB = 64
+    case quickBolusAnnun = 2
+    case generalAnnun = 4
+    case reminderAnnun = 8
+    case alertAnnun = 16
+    case alarmAnnun = 32
+    case cgmAlert = 64
 
     public static func fromBitmask(_ bitmask: Int) -> Set<PumpSoundChangeBitmask> {
         var set = Set<PumpSoundChangeBitmask>()

@@ -7,21 +7,15 @@ struct TandemKitSoundSettingsView: View {
 
     @State var isEditingGeneralAnnun: Bool = false
     @State var isEditingQuickBolusAnnun: Bool = false
-    @State var isEditingBolusAnnun: Bool = false
     @State var isEditingReminderAnnun: Bool = false
     @State var isEditingAlarmAnnun: Bool = false
     @State var isEditingAlertAnnun: Bool = false
-    @State var isEditingFillingTubeAnnun: Bool = false
 
-    private let soundValueRange = Array(0 ... 3)
+    private let soundValueRange = [0, 3]
     private func soundSettingFormatter(_ value: Int) -> String {
         switch value {
         case 0:
-            return LocalizedString("Audio high", comment: "sound setting audioHigh")
-        case 1:
-            return LocalizedString("Audio medium", comment: "sound setting audioMedium")
-        case 2:
-            return LocalizedString("Audio low", comment: "sound setting audioLow")
+            return LocalizedString("Beep", comment: "sound setting audioHigh")
         case 3:
             return LocalizedString("Vibrate", comment: "sound setting vibrate")
         default:
@@ -40,7 +34,7 @@ struct TandemKitSoundSettingsView: View {
                     )
                     .onTapGesture {
                         withAnimation {
-                            toggleEditors(item: $isEditingGeneralAnnun)
+                            toggleEditors(propertyName: "generalAnnun")
                         }
                     }
 
@@ -51,18 +45,7 @@ struct TandemKitSoundSettingsView: View {
                     )
                     .onTapGesture {
                         withAnimation {
-                            toggleEditors(item: $isEditingQuickBolusAnnun)
-                        }
-                    }
-
-                    sectionItem(
-                        title: LocalizedString("Bolus sound", comment: "Label for bolus sound"),
-                        isEditing: isEditingBolusAnnun,
-                        value: $viewModel.bolusAnnun
-                    )
-                    .onTapGesture {
-                        withAnimation {
-                            toggleEditors(item: $isEditingBolusAnnun)
+                            toggleEditors(propertyName: "quickBolusAnnun")
                         }
                     }
 
@@ -73,7 +56,7 @@ struct TandemKitSoundSettingsView: View {
                     )
                     .onTapGesture {
                         withAnimation {
-                            toggleEditors(item: $isEditingReminderAnnun)
+                            toggleEditors(propertyName: "reminderAnnun")
                         }
                     }
 
@@ -84,7 +67,7 @@ struct TandemKitSoundSettingsView: View {
                     )
                     .onTapGesture {
                         withAnimation {
-                            toggleEditors(item: $isEditingAlarmAnnun)
+                            toggleEditors(propertyName: "alarmAnnun")
                         }
                     }
 
@@ -95,18 +78,7 @@ struct TandemKitSoundSettingsView: View {
                     )
                     .onTapGesture {
                         withAnimation {
-                            toggleEditors(item: $isEditingAlertAnnun)
-                        }
-                    }
-
-                    sectionItem(
-                        title: LocalizedString("Tube filling sound", comment: "Label for tube filling sound"),
-                        isEditing: isEditingFillingTubeAnnun,
-                        value: $viewModel.alertAnnun
-                    )
-                    .onTapGesture {
-                        withAnimation {
-                            toggleEditors(item: $isEditingFillingTubeAnnun)
+                            toggleEditors(propertyName: "alertAnnun")
                         }
                     }
                 }
@@ -116,6 +88,7 @@ struct TandemKitSoundSettingsView: View {
 
             ContinueButton(
                 text: LocalizedString("Save", comment: "label for save"),
+                loading: $viewModel.isLoading,
                 disabled: $viewModel.isDisabled
             ) { viewModel.submit() }
         }
@@ -123,16 +96,36 @@ struct TandemKitSoundSettingsView: View {
         .navigationBarTitle(LocalizedString("Sound settings", comment: "Sound view title"))
     }
 
-    func toggleEditors(item: Binding<Bool>) {
-        isEditingGeneralAnnun = false
-        isEditingQuickBolusAnnun = false
-        isEditingBolusAnnun = false
-        isEditingReminderAnnun = false
-        isEditingAlarmAnnun = false
-        isEditingAlertAnnun = false
-        isEditingFillingTubeAnnun = false
+    func toggleEditors(propertyName: String) {
+        if propertyName == "generalAnnun" {
+            isEditingGeneralAnnun.toggle()
+        } else {
+            isEditingGeneralAnnun = false
+        }
 
-        item.wrappedValue.toggle()
+        if propertyName == "quickBolusAnnun" {
+            isEditingQuickBolusAnnun.toggle()
+        } else {
+            isEditingQuickBolusAnnun = false
+        }
+
+        if propertyName == "reminderAnnun" {
+            isEditingReminderAnnun.toggle()
+        } else {
+            isEditingReminderAnnun = false
+        }
+
+        if propertyName == "alarmAnnun" {
+            isEditingAlarmAnnun.toggle()
+        } else {
+            isEditingAlarmAnnun = false
+        }
+
+        if propertyName == "alertAnnun" {
+            isEditingAlertAnnun.toggle()
+        } else {
+            isEditingAlertAnnun = false
+        }
     }
 
     @ViewBuilder func sectionItem(

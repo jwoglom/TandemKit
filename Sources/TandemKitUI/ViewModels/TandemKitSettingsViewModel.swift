@@ -333,16 +333,13 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             return
         }
 
-        reservoirValue = pumpManager.reservoirLevel
+        DispatchQueue.main.async {
+            self.reservoirValue = pumpManager.reservoirLevel
 
-        if pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
-            pendingRefreshOnReconnect = false
-            refreshPumpStatus()
-        }
-
-        // Force SwiftUI to re-evaluate computed properties
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
+            if self.pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
+                self.pendingRefreshOnReconnect = false
+                self.refreshPumpStatus()
+            }
         }
     }
 }

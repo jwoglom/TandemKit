@@ -9,8 +9,8 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
     @Published var reminderAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var alertAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var alarmAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var fillTubingAnnun: Int = 0 { didSet { checkDirtyState() } } // <--- Incorrect naming
 
+    @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
     @Published var isDisabled: Bool = false
 
@@ -35,6 +35,10 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
         pumpManager.addStatusObserver(self, queue: DispatchQueue.main)
     }
 
+    deinit {
+        pumpManager?.removeStatusObserver(self)
+    }
+
     func submit() {
         var changedBits: [PumpSoundChangeBitmask] = []
         if originalQuickBolusAnnun != quickBolusAnnun { changedBits.append(.quickBolusAnnun) }
@@ -42,8 +46,6 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
         if originalReminderAnnun != reminderAnnun { changedBits.append(.reminderAnnun) }
         if originalAlertAnnun != alertAnnun { changedBits.append(.alertAnnun) }
         if originalAlarmAnnun != alarmAnnun { changedBits.append(.alarmAnnun) }
-//        if buttonAnnun != fillTubingAnnun { changedBits.append(.cgmAlertAnnunA) }
-//        if originalFillTubingAnnun != fillTubingAnnun { changedBits.append(.cgmAlertAnnunB) }
 
         guard !changedBits.isEmpty else {
             return
@@ -55,14 +57,17 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             reminderAnnunRaw: reminderAnnun,
             alertAnnunRaw: alertAnnun,
             alarmAnnunRaw: alarmAnnun,
-            cgmAlertAnnunA: fillTubingAnnun, // Hardcoded
-            cgmAlertAnnunB: fillTubingAnnun, // Hardcoded
+            cgmAlertAnnun: 0x0000, // Hardcoded
             changeBitmask: PumpSoundChangeBitmask.toBitmask(changedBits)
         )
-        
+
         print(request.description)
 
+        isDirty = false
+        isLoading = true
         pumpManager?.setPumpSound(request: request)
+
+        isLoading = false
 
         originalGeneralAnnun = generalAnnun
         originalQuickBolusAnnun = quickBolusAnnun
@@ -70,7 +75,6 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
         originalReminderAnnun = reminderAnnun
         originalAlertAnnun = alertAnnun
         originalAlarmAnnun = alarmAnnun
-        originalFillTubingAnnun = fillTubingAnnun
     }
 
     func checkDirtyState() {
@@ -80,8 +84,7 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
                     self.originalGeneralAnnun != self.generalAnnun ||
                     self.originalReminderAnnun != self.reminderAnnun ||
                     self.originalAlertAnnun != self.alertAnnun ||
-                    self.originalAlarmAnnun != self.alarmAnnun ||
-                    self.originalFillTubingAnnun != self.fillTubingAnnun
+                    self.originalAlarmAnnun != self.alarmAnnun
             )
 
             self.isDisabled = !self.isDirty
@@ -100,13 +103,11 @@ extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
-            self.generalAnnun = pumpManager.state.buttonAnnun?.rawValue ?? 0
             self.quickBolusAnnun = pumpManager.state.quickBolusAnnun?.rawValue ?? 0
-            self.bolusAnnun = pumpManager.state.bolusAnnun?.rawValue ?? 0
+            self.generalAnnun = pumpManager.state.generalAnnun?.rawValue ?? 0
             self.reminderAnnun = pumpManager.state.reminderAnnun?.rawValue ?? 0
             self.alertAnnun = pumpManager.state.alertAnnun?.rawValue ?? 0
             self.alarmAnnun = pumpManager.state.alarmAnnun?.rawValue ?? 0
-            self.fillTubingAnnun = pumpManager.state.fillTubingAnnun?.rawValue ?? 0
 
             self.originalGeneralAnnun = self.generalAnnun
             self.originalQuickBolusAnnun = self.quickBolusAnnun
@@ -114,7 +115,6 @@ extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
             self.originalReminderAnnun = self.reminderAnnun
             self.originalAlertAnnun = self.alertAnnun
             self.originalAlarmAnnun = self.alarmAnnun
-            self.originalFillTubingAnnun = self.fillTubingAnnun
         }
     }
 }
