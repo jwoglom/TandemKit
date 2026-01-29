@@ -5,7 +5,6 @@ import TandemCore
 class TandemKitSoundSettingsViewModel: ObservableObject {
     @Published var generalAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var quickBolusAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var bolusAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var reminderAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var alertAnnun: Int = 0 { didSet { checkDirtyState() } }
     @Published var alarmAnnun: Int = 0 { didSet { checkDirtyState() } }
@@ -23,8 +22,10 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
     var originalFillTubingAnnun: Int = 0
 
     private let pumpManager: TandemPumpManager?
-    init(pumpManager: TandemPumpManager?) {
+    let onSubmit: (() -> Void)?
+    init(pumpManager: TandemPumpManager?, onSubmit: (() -> Void)?) {
         self.pumpManager = pumpManager
+        self.onSubmit = onSubmit
 
         guard let pumpManager = pumpManager else {
             return
@@ -40,6 +41,24 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
     }
 
     func submit() {
+        if let onSubmit = onSubmit {
+            guard let pumpManager = self.pumpManager else {
+                onSubmit()
+                return
+            }
+
+            var state = pumpManager.state
+            state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? .audioHigh
+            state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? .audioHigh
+            state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? .audioHigh
+            state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? .audioHigh
+            state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? .audioHigh
+            pumpManager.lockedState.value = state
+
+            onSubmit()
+            return
+        }
+
         var changedBits: [PumpSoundChangeBitmask] = []
         if originalQuickBolusAnnun != quickBolusAnnun { changedBits.append(.quickBolusAnnun) }
         if originalGeneralAnnun != generalAnnun { changedBits.append(.generalAnnun) }
@@ -61,8 +80,6 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             changeBitmask: PumpSoundChangeBitmask.toBitmask(changedBits)
         )
 
-        print(request.description)
-
         isDirty = false
         isLoading = true
         pumpManager?.setPumpSound(request: request)
@@ -71,7 +88,6 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
 
         originalGeneralAnnun = generalAnnun
         originalQuickBolusAnnun = quickBolusAnnun
-        originalBolusAnnun = bolusAnnun
         originalReminderAnnun = reminderAnnun
         originalAlertAnnun = alertAnnun
         originalAlarmAnnun = alarmAnnun
@@ -87,7 +103,7 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
                     self.originalAlarmAnnun != self.alarmAnnun
             )
 
-            self.isDisabled = !self.isDirty
+            self.isDisabled = !self.isDirty && self.onSubmit == nil
         }
     }
 }
@@ -111,7 +127,6 @@ extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
 
             self.originalGeneralAnnun = self.generalAnnun
             self.originalQuickBolusAnnun = self.quickBolusAnnun
-            self.originalBolusAnnun = self.bolusAnnun
             self.originalReminderAnnun = self.reminderAnnun
             self.originalAlertAnnun = self.alertAnnun
             self.originalAlarmAnnun = self.alarmAnnun

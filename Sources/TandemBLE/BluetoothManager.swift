@@ -269,7 +269,7 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
                 log.debug("Scanning for peripherals")
                 manager.scanForPeripherals(
                     withServices: [ServiceUUID.PUMP_SERVICE.cbUUID],
-                    options: nil
+                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
                 )
             }
         }
@@ -385,8 +385,6 @@ extension BluetoothManager: CBCentralManagerDelegate {
     ) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.info("[centralManager] peripheral: \(peripheral)")
-
         // Notify delegate about discovered device
         delegate?.bluetoothManager(self, didDiscoverDevice: peripheral, advertisementData: advertisementData, rssi: rssi)
 
@@ -400,7 +398,6 @@ extension BluetoothManager: CBCentralManagerDelegate {
         } else {
             shouldConnect = isTandemPeripheral(peripheral, advertisementData: advertisementData)
         }
-        log.info("[centralManager] shouldConnect: delegate=\(String(describing: delegate)) shouldConnect=\(shouldConnect)")
 
         if shouldConnect {
             self.peripheral = peripheral

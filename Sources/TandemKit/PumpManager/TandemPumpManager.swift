@@ -1832,9 +1832,8 @@ private struct ActiveBolus {
 
                     if tries >= 50 {
                         completion(.failure(NSError(
-                            domain: "TandemPumpManager",
-                            code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "Gave up waiting for peripheral to connect"]
+                            domain: "Gave up waiting for peripheral to connect",
+                            code: -1
                         )))
                         return
                     }
@@ -1849,40 +1848,26 @@ private struct ActiveBolus {
 
                     if tries >= 50 {
                         completion(.failure(NSError(
-                            domain: "TandemPumpManager",
-                            code: -2,
-                            userInfo: [NSLocalizedDescriptionKey: "Gave up waiting for transport initialization"]
+                            domain: "Gave up waiting for transport initialization",
+                            code: -2
                         )))
                         return
                     }
                 }
 
                 guard let transport = transportLock.value else {
+                    log.error("pumpNotConnected during pairing")
                     completion(.failure(PumpCommError.pumpNotConnected))
                     return
                 }
 
-                #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-                    DispatchQueue.global(qos: .userInitiated).async { [pumpComm, weak self] in
-                        do {
-                            // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
-                            try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
+                // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
+                try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
 
-                            // After successful pairing and session initialization, trigger initial telemetry refresh
-                            DispatchQueue.main.async {
-                                self?.telemetryLogger.debug("Pairing complete – triggering initial telemetry refresh")
-                                self?.ensureCurrentPumpData { _ in }
-                            }
-
-                            completion(.success(()))
-                        } catch {
-                            completion(.failure(error))
-                        }
-                    }
-                #else
-                    completion(.failure(PumpCommError.pumpChallengeError))
-                #endif
+                log.info("Succesfully paired!")
+                completion(.success(()))
             } catch {
+                log.error("Failed to pair: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }
@@ -2443,9 +2428,7 @@ private struct ActiveBolus {
         guard let transport = pairedTransport else {
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)
-            delegateQueue.async {
-                completion(.failure(PumpManagerError.communication(error)))
-            }
+            completion(.failure(PumpManagerError.communication(error)))
             return
         }
 
@@ -2632,23 +2615,20 @@ private struct ActiveBolus {
                             completion(.success(schedule))
                         }
                     } else {
-                        self.delegateQueue.async {
-                            completion(
-                                .failure(
-                                    PumpManagerError.communication(
-                                        PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
-                                    )
+                        completion(
+                            .failure(
+                                PumpManagerError.communication(
+                                    PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
                                 )
                             )
-                        }
+                        )
                     }
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.notifyPumpManagerDelegateOfError(pumpError)
-                self.delegateQueue.async {
-                    completion(.failure(PumpManagerError.communication(pumpError)))
-                }
+                log.error("Received error during basal sync: \(pumpError.errorDescription ?? "")")
+                completion(.failure(PumpManagerError.communication(pumpError)))
             }
         }
     }
@@ -2800,10 +2780,6 @@ private struct ActiveBolus {
         advertisementData: [String: Any]?,
         rssi: NSNumber
     ) {
-        log
-            .info(
-                "[tandemPump didDiscoverDevice] inScanningMode=\(String(describing: inScanningMode.value)) peripheral=\(String(describing: peripheral))"
-            )
         if inScanningMode.value == true {
             let device = TandemPumpScan(
                 bleIdentifier: peripheral.identifier.uuidString,
@@ -2812,6 +2788,7 @@ private struct ActiveBolus {
                 advertisementData: advertisementData,
                 rssi: rssi
             )
+
             notifyScanDeviceDidChange(device)
         } else if inScanningMode.value == false {
             configureDeliveryActions(true)

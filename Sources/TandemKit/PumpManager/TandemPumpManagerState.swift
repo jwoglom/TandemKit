@@ -130,6 +130,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         }
     }
 
+    public var onboarded: Bool
     public var pumpState: PumpState?
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings
@@ -186,6 +187,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var fetchedRanges: [FetchedRange]
 
     public init(
+        onboarded: Bool = false,
         pumpState: PumpState?,
         lastReconciliation: Date? = nil,
         settings: TandemPumpManagerSettings = .default,
@@ -229,6 +231,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         pendingDoses: [PendingDose] = [],
         fetchedRanges: [FetchedRange] = []
     ) {
+        self.onboarded = onboarded
         self.pumpState = pumpState
         self.lastReconciliation = lastReconciliation
         self.settings = settings
@@ -274,6 +277,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     }
 
     public init?(rawValue: RawValue) {
+        onboarded = rawValue["onboarded"] as? Bool ?? false
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
         deliveryIsUncertain = rawValue["deliveryIsUncertain"] as? Bool ?? false
@@ -460,6 +464,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var rawValue: RawValue {
         var raw: RawValue = [:]
 
+        raw["onboarded"] = onboarded
         raw["pumpState"] = pumpState?.rawValue
         raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
         raw["latestInsulinOnBoard"] = latestInsulinOnBoard
@@ -545,6 +550,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var debugDescription: String {
         [
             "### TandemPumpManagerState",
+            "* onboarded: \(onboarded)",
             "* pumpState: \(String(describing: pumpState?.debugDescription))",
             "* lastReconciliation: \(String(describing: lastReconciliation))",
             "* settings: \(settings)",
@@ -588,7 +594,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
 
 public extension TandemPumpManagerState {
     static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
-        lhs.pumpState == rhs.pumpState &&
+        lhs.onboarded == rhs.onboarded &&
+            lhs.pumpState == rhs.pumpState &&
             lhs.lastReconciliation == rhs.lastReconciliation &&
             lhs.settings == rhs.settings &&
             lhs.latestInsulinOnBoard == rhs.latestInsulinOnBoard &&
