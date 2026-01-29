@@ -40,9 +40,7 @@ struct WizardStepContainer<Content: View>: View {
                     content()
                 }
                 .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(modalLocker)
         .navigationBarTitle(title, displayMode: .inline)
