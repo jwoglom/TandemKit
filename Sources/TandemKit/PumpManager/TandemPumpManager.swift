@@ -778,16 +778,14 @@ private struct ActiveBolus {
     }
 
     private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
-        logger(for: source).debug("[\(source.label)] Pump Global updated")
+        logger(for: source).debug("[\(source.label)] Pump Global updated -> \(response.description)")
 
         var managerState = lockedState.value
-        managerState.buttonAnnun = response.buttonAnnouncement
         managerState.quickBolusAnnun = response.quickBolusAnnouncement
-        managerState.bolusAnnun = response.bolusAnnouncement
         managerState.reminderAnnun = response.reminderAnnouncement
         managerState.alarmAnnun = response.alarmAnnouncement
         managerState.alertAnnun = response.alertAnnouncement
-        managerState.fillTubingAnnun = response.fillTubingAnnouncement
+        managerState.generalAnnun = response.generalAnnouncement
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -1184,6 +1182,11 @@ private struct ActiveBolus {
             guard let self = self else { return }
             delegate.pumpManagerDidUpdateState(self)
         }
+
+        let status = status
+        for (_, statusObserver) in statusObservers.value {
+            statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
+        }
     }
 
     private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
@@ -1571,7 +1574,7 @@ private struct ActiveBolus {
 
     // MARK: - History Fetching
 
-    public func fetchPumpHistory(since startDate: Date? = nil, completion: @escaping (Error?) -> Void) {
+    public func fetchPumpHistory(since _: Date? = nil, completion: @escaping (Error?) -> Void) {
         guard let transport = transportLock.value else {
             completion(PumpManagerError.connection(nil))
             return
@@ -1594,7 +1597,7 @@ private struct ActiveBolus {
                     return
                 }
 
-                let pumpRange = status.firstSequenceNum...status.lastSequenceNum
+                let pumpRange = status.firstSequenceNum ... status.lastSequenceNum
 
                 // Find missing ranges using range tracker
                 let missingRanges = self.historyRangeTracker.getMissingRanges(in: pumpRange)
@@ -1612,7 +1615,8 @@ private struct ActiveBolus {
                 // Fetch each missing range in reverse order (newest first)
                 for range in missingRanges.reversed() {
                     let rangeSize = Int(range.upperBound - range.lowerBound + 1)
-                    self.telemetryLogger.debug("[history] Fetching range [\(range.lowerBound), \(range.upperBound)] size=\(rangeSize)")
+                    self.telemetryLogger
+                        .debug("[history] Fetching range [\(range.lowerBound), \(range.upperBound)] size=\(rangeSize)")
 
                     let session = HistoryFetchSession(
                         transport: transport,
@@ -1667,7 +1671,8 @@ private struct ActiveBolus {
                         }
                         self.lockedState.value = updatedState
 
-                        self.telemetryLogger.debug("[history] Range complete: \(logs.count) logs, \(reconciledEvents.count) events")
+                        self.telemetryLogger
+                            .debug("[history] Range complete: \(logs.count) logs, \(reconciledEvents.count) events")
                     } catch {
                         self.telemetryLogger.error("[history] Failed to fetch range \(range): \(error)")
                         // Continue to next range instead of failing completely
@@ -1736,7 +1741,7 @@ private struct ActiveBolus {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        if (units < 10) {
+        if units < 10 {
             units * TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
         } else {
             units * TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
@@ -2104,7 +2109,8 @@ private struct ActiveBolus {
                     }
 
                     // Create cancellation event using either local state or pump-reported values
-                    let tempRateAbsolute = state.tempRateAbsolute ?? (getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
+                    let tempRateAbsolute = state
+                        .tempRateAbsolute ?? (getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
                     let tempRateStart = state.tempRateStart ?? currentTempRate.startTime
                     let cancelledDose = DoseEntry.tempBasal(
                         absoluteUnit: tempRateAbsolute,
@@ -2163,8 +2169,11 @@ private struct ActiveBolus {
                     )
 
                     // Fallback: If pump fails to set temp rate, try to stop temp rate and then re-set temp rate
-                    if !response.isStatusOK && response.status == 1 {
-                        log.error("enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Retrying...")
+                    if !response.isStatusOK, response.status == 1 {
+                        log
+                            .error(
+                                "enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Retrying..."
+                            )
 
                         // Cancel the temp basal
                         let stopResponse: StopTempRateResponse = try self.pumpComm.sendMessage(
@@ -2174,7 +2183,10 @@ private struct ActiveBolus {
                         )
 
                         guard stopResponse.isStatusOK else {
-                            log.error("enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)")
+                            log
+                                .error(
+                                    "enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)"
+                                )
                             throw PumpCommError.errorResponse(response: stopResponse)
                         }
 
@@ -2188,7 +2200,10 @@ private struct ActiveBolus {
                         )
 
                         if !response.isStatusOK {
-                            log.error("enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)")
+                            log
+                                .error(
+                                    "enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)"
+                                )
                             throw PumpCommError.errorResponse(response: response)
                         }
 
@@ -2718,6 +2733,27 @@ private struct ActiveBolus {
 
         notifyDelegateOfDeactivation {
             completion(nil)
+        }
+    }
+
+    func setPumpSound(request: SetPumpSoundsRequest) {
+        guard let transport = telemetryTransportIfReady(for: .sounds) else {
+            telemetryLogger.error("Transport not available for sound telemetry")
+            return
+        }
+
+        do {
+            _ = try pumpComm.sendMessage(
+                transport: transport,
+                message: request,
+                expecting: SetPumpSoundsResponse.self
+            )
+
+            // Allow the patch to set values
+            Thread.sleep(forTimeInterval: .seconds(1))
+            fetchGlobalPumpSettings()
+        } catch {
+            telemetryLogger.error("Failed to pump sounds: \(error.localizedDescription)")
         }
     }
 }

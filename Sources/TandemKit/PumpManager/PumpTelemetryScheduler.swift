@@ -7,6 +7,7 @@ enum PumpTelemetryKind: CaseIterable {
     case basal
     case bolus
     case timeSinceReset
+    case sounds
     case alerts
     case controlIQ
     case homeScreen
@@ -25,6 +26,8 @@ enum PumpTelemetryKind: CaseIterable {
             return "bolus"
         case .timeSinceReset:
             return "timeSinceReset"
+        case .sounds:
+            return "Sounds"
         case .alerts:
             return "alerts"
         case .controlIQ:

@@ -15,17 +15,17 @@ public struct FetchedRange: Codable, Equatable {
 
     /// Check if a sequence number falls within this range.
     public func contains(_ sequenceNum: UInt32) -> Bool {
-        return sequenceNum >= start && sequenceNum <= end
+        sequenceNum >= start && sequenceNum <= end
     }
 
     /// Check if this range overlaps with another range.
     public func overlaps(_ other: FetchedRange) -> Bool {
-        return !(end < other.start || start > other.end)
+        !(end < other.start || start > other.end)
     }
 
     /// Check if this range is adjacent to another range (can be merged).
     public func isAdjacent(to other: FetchedRange) -> Bool {
-        return end + 1 == other.start || other.end + 1 == start
+        end + 1 == other.start || other.end + 1 == start
     }
 
     /// Merge this range with another overlapping or adjacent range.
@@ -44,6 +44,6 @@ public struct FetchedRange: Codable, Equatable {
 
     /// Returns the count of sequence numbers in this range.
     public var count: Int {
-        return Int(end - start) + 1
+        Int(end - start) + 1
     }
 }

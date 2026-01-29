@@ -41,7 +41,7 @@ public class PumpGlobalsResponse: Message {
     public var quickBolusStatus: Int
     public var buttonAnnun: Int
     public var quickBolusAnnun: Int
-    public var bolusAnnun: Int
+    public var generalAnnun: Int
     public var reminderAnnun: Int
     public var alertAnnun: Int
     public var alarmAnnun: Int
@@ -56,7 +56,7 @@ public class PumpGlobalsResponse: Message {
         quickBolusStatus = Int(cargo[6])
         buttonAnnun = Int(cargo[7])
         quickBolusAnnun = Int(cargo[8])
-        bolusAnnun = Int(cargo[9])
+        generalAnnun = Int(cargo[9])
         reminderAnnun = Int(cargo[10])
         alertAnnun = Int(cargo[11])
         alarmAnnun = Int(cargo[12])
@@ -71,7 +71,7 @@ public class PumpGlobalsResponse: Message {
         quickBolusStatus: Int,
         buttonAnnun: Int,
         quickBolusAnnun: Int,
-        bolusAnnun: Int,
+        generalAnnun: Int,
         reminderAnnun: Int,
         alertAnnun: Int,
         alarmAnnun: Int,
@@ -85,7 +85,7 @@ public class PumpGlobalsResponse: Message {
             Bytes.firstByteLittleEndian(quickBolusStatus),
             Bytes.firstByteLittleEndian(buttonAnnun),
             Bytes.firstByteLittleEndian(quickBolusAnnun),
-            Bytes.firstByteLittleEndian(bolusAnnun),
+            Bytes.firstByteLittleEndian(generalAnnun),
             Bytes.firstByteLittleEndian(reminderAnnun),
             Bytes.firstByteLittleEndian(alertAnnun),
             Bytes.firstByteLittleEndian(alarmAnnun),
@@ -98,7 +98,7 @@ public class PumpGlobalsResponse: Message {
         self.quickBolusStatus = quickBolusStatus
         self.buttonAnnun = buttonAnnun
         self.quickBolusAnnun = quickBolusAnnun
-        self.bolusAnnun = bolusAnnun
+        self.generalAnnun = generalAnnun
         self.reminderAnnun = reminderAnnun
         self.alertAnnun = alertAnnun
         self.alarmAnnun = alarmAnnun
@@ -118,8 +118,8 @@ public class PumpGlobalsResponse: Message {
         AnnunciationEnum(rawValue: quickBolusAnnun)
     }
 
-    public var bolusAnnouncement: AnnunciationEnum? {
-        AnnunciationEnum(rawValue: bolusAnnun)
+    public var generalAnnouncement: AnnunciationEnum? {
+        AnnunciationEnum(rawValue: generalAnnun)
     }
 
     public var reminderAnnouncement: AnnunciationEnum? {
@@ -146,7 +146,13 @@ public class PumpGlobalsResponse: Message {
         case vibrate = 3
     }
 
+    public enum CgmAlertAnnunciationEnum: Int {
+        case vibrate = 0x0000
+        case audioHigh = 0x0002
+        case hypoRepeat = 0x0003
+    }
+
     public var description: String {
-        "PumpGlobalsResponse(cargo=\(cargo.hexadecimalString), quickBolusEnabledRaw=\(quickBolusEnabledRaw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), bolusAnnun=\(bolusAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
+        "PumpGlobalsResponse(cargo=\(cargo.hexadecimalString), quickBolusEnabledRaw=\(quickBolusEnabledRaw), quickBolusIncrementUnits=\(quickBolusIncrementUnits), quickBolusIncrementCarbs=\(quickBolusIncrementCarbs), quickBolusEntryType=\(quickBolusEntryType), quickBolusStatus=\(quickBolusStatus), buttonAnnun=\(buttonAnnun), quickBolusAnnun=\(quickBolusAnnun), generalAnnun=\(generalAnnun), reminderAnnun=\(reminderAnnun), alertAnnun=\(alertAnnun), alarmAnnun=\(alarmAnnun), fillTubingAnnun=\(fillTubingAnnun))"
     }
 }
