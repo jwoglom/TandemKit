@@ -494,7 +494,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["cgmAlertIcon"] = cgmAlertIcon?.rawValue
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
-        raw["insulinType"] = insulinType
+        raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["lastHistorySequenceNum"] = lastHistorySequenceNum
         raw["lastHistoryReconciliation"] = lastHistoryReconciliation?.timeIntervalSinceReferenceDate
