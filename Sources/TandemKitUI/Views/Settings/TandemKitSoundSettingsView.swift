@@ -30,7 +30,7 @@ struct TandemKitSoundSettingsView: View {
             List {
                 Section {
                     sectionItem(
-                        title: LocalizedString("General sound", comment: "Label for button sound"),
+                        title: LocalizedString("General (Temp Basal and Bolus)", comment: "Label for general category button sound"),
                         isEditing: isEditingGeneralAnnun,
                         value: $viewModel.generalAnnun
                     )
@@ -41,7 +41,7 @@ struct TandemKitSoundSettingsView: View {
                     }
 
                     sectionItem(
-                        title: LocalizedString("Quick bolus sound", comment: "Label for quick bolus sound"),
+                        title: LocalizedString("Quick Bolus", comment: "Label for quick bolus sound"),
                         isEditing: isEditingQuickBolusAnnun,
                         value: $viewModel.quickBolusAnnun
                     )
@@ -52,7 +52,7 @@ struct TandemKitSoundSettingsView: View {
                     }
 
                     sectionItem(
-                        title: LocalizedString("Reminder sound", comment: "Label for reminder sound"),
+                        title: LocalizedString("Reminders", comment: "Label for reminder sound"),
                         isEditing: isEditingReminderAnnun,
                         value: $viewModel.reminderAnnun
                     )
@@ -63,7 +63,7 @@ struct TandemKitSoundSettingsView: View {
                     }
 
                     sectionItem(
-                        title: LocalizedString("Alarm sound", comment: "Label for alarm sound"),
+                        title: LocalizedString("Alarms", comment: "Label for alarm sound"),
                         isEditing: isEditingAlarmAnnun,
                         value: $viewModel.alarmAnnun
                     )
@@ -74,7 +74,7 @@ struct TandemKitSoundSettingsView: View {
                     }
 
                     sectionItem(
-                        title: LocalizedString("Alert sound", comment: "Label for alert sound"),
+                        title: LocalizedString("Alerts", comment: "Label for alert sound"),
                         isEditing: isEditingAlertAnnun,
                         value: $viewModel.alertAnnun
                     )
@@ -84,6 +84,15 @@ struct TandemKitSoundSettingsView: View {
                         }
                     }
                 }
+
+                Spacer()
+
+                Text(LocalizedString(
+                    "Please note that this build of TandemKit does not support silent operation for Temp Basal and Bolus commands on this pump.",
+                    comment: "Silent operation limitation notice for TandemKit"
+                ))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal)
             }
 
             Spacer()
@@ -163,11 +172,11 @@ struct TandemKitSoundSettingsView: View {
             .padding(.horizontal)
 
         Text(LocalizedString(
-            "You can configure if your Tandem Mobi should Beep or Vibrate per category",
+            "You can configure which actions cause your pump to beep or vibrate",
             comment: "Title text for insulin type confirmation page"
         ))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal)
 
         Divider()
             .padding(.vertical)

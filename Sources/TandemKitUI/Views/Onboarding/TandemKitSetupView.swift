@@ -9,6 +9,7 @@ struct TandemKitSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
+            title
             List {
                 Section {
                     HStack {
@@ -23,11 +24,17 @@ struct TandemKitSetupView: View {
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(LocalizedString(
-                            "You will start by setting up your insulin type and pump settings before pairing your pump.",
+                            "Ready to connect your Tandem Mobi?",
                             comment: "welcome to TandemKit1"
                         ))
+                        Spacer()
                         Text(LocalizedString(
-                            "Make sure you have your Tandem Mobi, charging pad and PIN ready for getting started",
+                            "In the first step you will configure your insulin type and pump settings.",
+                            comment: "welcome to TandemKit2"
+                        ))
+                        Spacer()
+                        Text(LocalizedString(
+                            "Before getting started, make sure to un-pair your pump from all other applications, remove it from your Bluetooth saved devices list, and have a plugged-in charging pad available.",
                             comment: "welcome to TandemKit2"
                         ))
                     }

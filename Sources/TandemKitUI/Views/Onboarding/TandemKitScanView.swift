@@ -9,7 +9,7 @@ struct TandemKitScanView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Tandem Mobi Pairing", comment: "Title for fill tubing"),
+            title: LocalizedString("Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
             currentStep: viewModel.currentPhase.rawValue + 1,
             totalSteps: 3,
             canCancel: false,
@@ -31,12 +31,20 @@ struct TandemKitScanView: View {
             VStack {
                 if viewModel.currentPhase == .mobiOnPad {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(LocalizedString("Troubles detecting your Tandem Mobi?", comment: ""))
+                        Text(LocalizedString("If your pump is not being detected:", comment: "If pump not detected help"))
                             .bold()
                         Text(
                             LocalizedString(
-                                "Try to forget the mobi in your Bluetooth settings and make sure the Tandem Mobi app is closed.",
-                                comment: ""
+                                "Make sure you've unpaired the pump from any other apps, removed it from your saved Bluetooth device list, and placed it on the charging pad.",
+                                comment: "If pump not detected instruction 1"
+                            )
+                        )
+                        .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(
+                            LocalizedString(
+                                "If the charging pad and pump don't light up, try a different USB cord or charger. If the pump is off, hold down the T button while placed on the pad to wake it up.",
+                                comment: "If pump not detected instruction 2"
                             )
                         )
                         .foregroundStyle(.secondary)
@@ -71,7 +79,7 @@ struct TandemKitScanView: View {
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
-            LocalizedString("Enter Pairing code", comment: "Tandem pump found"),
+            LocalizedString("Enter Pairing code", comment: "Enter Pairing code instruction"),
             isPresented: $viewModel.isPromptingPincode
         ) {
             Button(LocalizedString("Cancel", comment: "Cancel button title"), role: .cancel) {
@@ -90,7 +98,7 @@ struct TandemKitScanView: View {
                     }
                 }
         } message: {
-            if let message = $viewModel.pinCodePromptError.wrappedValue {
+            if let message = $viewModel.pinCodePromptError.wrappedValue, !message.isEmpty {
                 Text(message)
             } else {
                 VStack {
@@ -117,7 +125,7 @@ struct TandemKitScanView: View {
 
     @ViewBuilder var PlaceMobiOnPadView: some View {
         VStack(alignment: .center, spacing: 20) {
-            Text(LocalizedString("Place your Tandem Mobi on the chargerpad", comment: ""))
+            Text(LocalizedString("Place your Mobi on the charging pad", comment: "Place on charging pad explanation"))
                 .font(.headline)
                 .bold()
 
@@ -133,13 +141,13 @@ struct TandemKitScanView: View {
         VStack(alignment: .center, spacing: 40) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(LocalizedString(
-                    "Remove your Tandem Mobi from the pad, wait a second, then double press the T-button",
-                    comment: ""
+                    "Pick up your pump, wait a second, then double-press the T button",
+                    comment: "Double-tap explanation"
                 ))
-                    .font(.headline)
-                    .bold()
+                .font(.headline)
+                .bold()
 
-                Text(LocalizedString("Found the ", comment: "") + (viewModel.connectingTo ?? ""))
+                Text(LocalizedString("Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
             }
 
@@ -148,19 +156,29 @@ struct TandemKitScanView: View {
                 .scaledToFit()
                 .padding(.horizontal)
                 .frame(height: 150)
+
+            Spacer()
+
+            Text(LocalizedString("You should hear two beeps after double-pressing the button.", comment: "Beep explanation"))
+                .foregroundStyle(.secondary)
         }
     }
 
     @ViewBuilder var AuthenticatingView: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(LocalizedString(
-                "Authenticating your Tandem Mobi...",
-                comment: ""
-            ))
+                "Pairing with ",
+                comment: "Pairing with device prefix text"
+            ) + (viewModel.connectingTo ?? "Tandem Mobi"))
                 .font(.headline)
                 .bold()
 
-            Text(LocalizedString("Please be patient while your Tandem Mobi is being configured", comment: ""))
+            Text(LocalizedString("Please be patient while we authenticate with the pump.", comment: "Pump authenticating explanation"))
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(LocalizedString("This can take up to 60 seconds to complete.", comment: "Pump authenticating wait message"))
                 .foregroundStyle(.secondary)
         }
     }
