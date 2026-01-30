@@ -1207,7 +1207,7 @@ private struct ActiveBolus {
     }
 
     private func applyClockChanges(from logs: [HistoryLog]) {
-        logs.forEach { log in
+        for log in logs {
             switch log {
             case let clockChange as DateChangeHistoryLog:
                 let delta = Int(clockChange.dateAfter) - Int(clockChange.datePrior)
@@ -1278,7 +1278,7 @@ private struct ActiveBolus {
     }
 
     func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
-        scanDeviceObservers.forEach { observer in
+        for observer in scanDeviceObservers {
             observer.deviceScanDidUpdate(device)
         }
     }
@@ -1350,7 +1350,7 @@ private struct ActiveBolus {
         queue.async {
             if case let .success(dose) = result, let dose = dose {
                 var events = [
-                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
+                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate),
                 ]
 
                 if let tempRateAbsolute = self.state.tempRateAbsolute, let tempRateDuration = self.state.tempRateDuration,
@@ -2309,7 +2309,7 @@ private struct ActiveBolus {
                 }
 
                 var doses = [
-                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now))
+                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now)),
                 ]
 
                 if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
@@ -2387,7 +2387,7 @@ private struct ActiveBolus {
                         .basal(
                             dose: DoseEntry
                                 .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
-                        )
+                        ),
                 ]
 
                 var state = lockedState.value
@@ -2444,6 +2444,11 @@ private struct ActiveBolus {
                 // Fetch all IDP data until complete
                 while !idpManager.isComplete {
                     let messages = idpManager.nextMessages()
+                    if messages.isEmpty, !idpManager.isComplete {
+                        throw PumpCommError.requestConstructionFailed(
+                            reason: "Invalid IDPManager state in syncBasalRateSchedule"
+                        )
+                    }
                     for message in messages {
                         let response = try self.pumpComm.sendMessage(
                             transport: transport,
@@ -2535,94 +2540,94 @@ private struct ActiveBolus {
                             }
                         }
                     }
-                    // Step 2: Get the active profile
-                    guard let activeProfile = idpManager.getActiveProfile() else {
-                        throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
-                    }
+                }
+                // Step 2: Get the active profile
+                guard let activeProfile = idpManager.getActiveProfile() else {
+                    throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
+                }
 
-                    // Step 3: Get current segments to preserve non-basal fields
-                    let currentSegments = activeProfile.getSegments()
+                // Step 3: Get current segments to preserve non-basal fields
+                let currentSegments = activeProfile.getSegments()
 
-                    // Step 4: Build modify requests for each new basal schedule item
-                    var modifyRequests: [SetIDPSegmentRequest] = []
+                // Step 4: Build modify requests for each new basal schedule item
+                var modifyRequests: [SetIDPSegmentRequest] = []
 
-                    for (index, scheduleItem) in sortedItems.enumerated() {
-                        let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
-                        let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
+                for (index, scheduleItem) in sortedItems.enumerated() {
+                    let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
+                    let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
 
-                        if index < currentSegments.count {
-                            // Check if existing segment needs modification
-                            let currentSegment = currentSegments[index]
-                            let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-                                currentSegment.profileBasalRate != basalMilliunits
+                    if index < currentSegments.count {
+                        // Check if existing segment needs modification
+                        let currentSegment = currentSegments[index]
+                        let needsUpdate = currentSegment.profileStartTime != startMinutes ||
+                            currentSegment.profileBasalRate != basalMilliunits
 
-                            if needsUpdate {
-                                let segment = currentSegment
-                                segment.profileStartTime = startMinutes
-                                segment.profileBasalRate = basalMilliunits
-                                let request = activeProfile.modifySegmentMessage(segment: segment)
-                                modifyRequests.append(request)
-                            }
-                        } else {
-                            // Create new segment with default values from first segment
-                            let firstSegment = currentSegments.first!
-                            let request = activeProfile.createSegmentMessage(
-                                profileStartTime: startMinutes,
-                                profileBasalRate: basalMilliunits,
-                                profileCarbRatio: firstSegment.profileCarbRatio,
-                                profileTargetBG: Int(firstSegment.profileTargetBG),
-                                profileISF: firstSegment.profileISF
-                            )
+                        if needsUpdate {
+                            let segment = currentSegment
+                            segment.profileStartTime = startMinutes
+                            segment.profileBasalRate = basalMilliunits
+                            let request = activeProfile.modifySegmentMessage(segment: segment)
                             modifyRequests.append(request)
                         }
-                    }
-
-                    // Step 5: If we have fewer items than current segments, delete extra segments
-                    if sortedItems.count < currentSegments.count {
-                        for i in sortedItems.count ..< currentSegments.count {
-                            if i > 0 { // Can't delete segment 0
-                                let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
-                                modifyRequests.append(deleteRequest)
-                            }
-                        }
-                    }
-
-                    // Step 6: Send all modification requests
-                    for request in modifyRequests {
-                        let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: request,
-                            expecting: SetIDPSegmentResponse.self
-                        )
-
-                        guard response.status == 0 else {
-                            throw PumpCommError.errorResponse(response: response)
-                        }
-                    }
-
-                    // Step 7: Update local state
-                    let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
-
-                    var managerState = self.lockedState.value
-                    managerState.basalRateSchedule = schedule
-                    managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
-                    self.lockedState.value = managerState
-
-                    self.notifyDelegateStateUpdated()
-
-                    if let schedule = schedule {
-                        self.delegateQueue.async {
-                            completion(.success(schedule))
-                        }
                     } else {
-                        completion(
-                            .failure(
-                                PumpManagerError.communication(
-                                    PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
-                                )
+                        // Create new segment with default values from first segment
+                        let firstSegment = currentSegments.first!
+                        let request = activeProfile.createSegmentMessage(
+                            profileStartTime: startMinutes,
+                            profileBasalRate: basalMilliunits,
+                            profileCarbRatio: firstSegment.profileCarbRatio,
+                            profileTargetBG: Int(firstSegment.profileTargetBG),
+                            profileISF: firstSegment.profileISF
+                        )
+                        modifyRequests.append(request)
+                    }
+                }
+
+                // Step 5: If we have fewer items than current segments, delete extra segments
+                if sortedItems.count < currentSegments.count {
+                    for i in sortedItems.count ..< currentSegments.count {
+                        if i > 0 { // Can't delete segment 0
+                            let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
+                            modifyRequests.append(deleteRequest)
+                        }
+                    }
+                }
+
+                // Step 6: Send all modification requests
+                for request in modifyRequests {
+                    let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: request,
+                        expecting: SetIDPSegmentResponse.self
+                    )
+
+                    guard response.status == 0 else {
+                        throw PumpCommError.errorResponse(response: response)
+                    }
+                }
+
+                // Step 7: Update local state
+                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
+
+                var managerState = self.lockedState.value
+                managerState.basalRateSchedule = schedule
+                managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
+                self.lockedState.value = managerState
+
+                self.notifyDelegateStateUpdated()
+
+                if let schedule = schedule {
+                    self.delegateQueue.async {
+                        completion(.success(schedule))
+                    }
+                } else {
+                    completion(
+                        .failure(
+                            PumpManagerError.communication(
+                                PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
                             )
                         )
-                    }
+                    )
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -2665,7 +2670,7 @@ private struct ActiveBolus {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    appliedLimits.maximumBasalRate = HKQuantity.init(unit: hkUnit, doubleValue: maxBasal)
+                    appliedLimits.maximumBasalRate = HKQuantity(unit: hkUnit, doubleValue: maxBasal)
                 }
 
                 if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
@@ -2680,7 +2685,7 @@ private struct ActiveBolus {
                         throw PumpCommError.errorResponse(response: response)
                     }
 
-                    appliedLimits.maximumBolus = HKQuantity.init(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
+                    appliedLimits.maximumBolus = HKQuantity(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
                 }
 
                 var managerState = self.lockedState.value
