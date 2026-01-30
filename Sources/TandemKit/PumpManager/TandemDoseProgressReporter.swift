@@ -24,18 +24,22 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         total = dose.programmedUnits
     }
 
-    func getPumpEvent() -> NewPumpEvent {
-        NewPumpEvent.bolus(
+    /// Creates a finalized pump event for this bolus.
+    /// - Parameter actualDeliveredUnits: The pump-reported delivered volume. When nil,
+    ///   falls back to the programmed total (assumes full delivery).
+    func getPumpEvent(actualDeliveredUnits: Double? = nil) -> NewPumpEvent {
+        let delivered = actualDeliveredUnits ?? total
+        return NewPumpEvent.bolus(
             dose: DoseEntry.bolus(
                 units: total,
-                deliveredUnits: total,
+                deliveredUnits: delivered,
                 duration: 0, // Ignored if endDate is available
                 activationType: activationType,
                 insulinType: dose.insulinType,
                 startDate: dose.startDate,
                 endDate: Date.now
             ),
-            units: total,
+            units: delivered,
             date: dose.startDate
         )
     }
