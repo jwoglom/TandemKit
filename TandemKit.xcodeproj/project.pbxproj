@@ -10,6 +10,7 @@
 		02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */; };
 		0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */; };
 		16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */; };
+		1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A02E3ED2F2C949900203519 /* ErrorSheet.swift */; };
 		1A0E17272ED105CC00E75219 /* NotificationBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E17262ED105CC00E75219 /* NotificationBundle.swift */; };
 		1A0E172B2ED1069F00E75219 /* TandemKitNotificationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E17292ED1069F00E75219 /* TandemKitNotificationsViewModel.swift */; };
 		1A2FA95F2EC8FD0800DF080F /* PumpState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2FA9552EC8FD0800DF080F /* PumpState.swift */; };
@@ -403,6 +404,7 @@
 		02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillCannulaViewModel.swift; sourceTree = "<group>"; };
 		066632B7C69B4CEFB5782A14 /* IDPManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IDPManager.swift; sourceTree = "<group>"; };
 		139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillCannulaView.swift; sourceTree = "<group>"; };
+		1A02E3ED2F2C949900203519 /* ErrorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSheet.swift; sourceTree = "<group>"; };
 		1A0E17262ED105CC00E75219 /* NotificationBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBundle.swift; sourceTree = "<group>"; };
 		1A0E17292ED1069F00E75219 /* TandemKitNotificationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitNotificationsViewModel.swift; sourceTree = "<group>"; };
 		1A2FA9472EC8FD0800DF080F /* PumpNotificationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpNotificationRouter.swift; sourceTree = "<group>"; };
@@ -903,6 +905,7 @@
 				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
 				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
 				1A55E0F32EC967E5006E651D /* Image.swift */,
+				1A02E3ED2F2C949900203519 /* ErrorSheet.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -1562,6 +1565,7 @@
 				WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */,
 				02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */,
 				CFD999683FF946ABAB42D13B /* TandemKitFillTubingView.swift in Sources */,
+				1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */,
 				0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */,
 				2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */,
 				FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */,

@@ -11,9 +11,10 @@ struct TandemKitSettingsView: View {
 
     var removePumpManagerActionSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")),
+            title: Text(LocalizedString("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet."))
+                .font(.headline),
             message: Text(LocalizedString(
-                "Are you sure you want to remove the pump from Trio? You will need to re-pair the device.",
+                "Are you sure you want to remove the pump from this app? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
                 comment: "Message for Tandem PumpManager deletion action sheet"
             )),
             buttons: [
@@ -26,6 +27,79 @@ struct TandemKitSettingsView: View {
                 .cancel(),
             ]
         )
+    }
+
+    private func errorSheetView(for failure: TandemKitSettingsViewModel.CommandFailure) -> some View {
+        let content: ErrorSheetContent
+        switch failure {
+        case .resume:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not resume insulin delivery",
+                    comment: "Title for failure to resume insulin delivery"
+                ),
+                message: LocalizedString(
+                    "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
+                    comment: "Message for failed to resume insulin delivery"
+                )
+            )
+        case .suspend:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not suspend insulin delivery",
+                    comment: "Title for failure to suspend insulin delivery"
+                ),
+                message: LocalizedString(
+                    "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
+                    comment: "Message for failed to suspend insulin delivery"
+                )
+            )
+        case .controlIQ:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not change Control-IQ setting",
+                    comment: "Title for failure to toggle Control-IQ"
+                ),
+                message: LocalizedString(
+                    "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to toggle Control-IQ"
+                )
+            )
+        case .exerciseMode:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not change exercise mode",
+                    comment: "Title for failure to toggle exercise mode"
+                ),
+                message: LocalizedString(
+                    "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to toggle exercise mode"
+                )
+            )
+        case .sleepMode:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not change sleep mode",
+                    comment: "Title for failure to toggle sleep mode"
+                ),
+                message: LocalizedString(
+                    "The pump rejected the sleep mode change. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to toggle sleep mode"
+                )
+            )
+        case .stopTempRate:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not stop temp rate",
+                    comment: "Title for failure to stop temp rate"
+                ),
+                message: LocalizedString(
+                    "The pump rejected stopping the temp rate. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to stop temp rate"
+                )
+            )
+        }
+        return ErrorSheetView(content: content, tint: guidanceColors.critical)
     }
 
     var body: some View {
@@ -99,7 +173,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
             }
-
             Section(header: SectionHeader(label: LocalizedString(
                 "Notifications",
                 comment: "The title of the notifications section in TandemKit settings"
@@ -296,6 +369,9 @@ struct TandemKitSettingsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
+        .sheet(item: $viewModel.commandFailure) { failure in
+            errorSheetView(for: failure)
+        }
         .navigationBarItems(trailing: doneButton)
         .navigationBarTitle(navigationTitle)
     }

@@ -218,7 +218,7 @@ struct TandemKitFillCannulaView: View {
             if viewModel.failedFill {
                 Label(
                     LocalizedString(
-                        "Failed to fill cannula. Ensure insulin delivery is suspended and check pump notifications.",
+                        "Failed to fill cannula. Ensure insulin delivery is suspended, the active cartridge contains insulin, the tubing has been filled, and check pump notifications.",
                         comment: "Error message"
                     ),
                     systemImage: "exclamationmark.circle.fill"

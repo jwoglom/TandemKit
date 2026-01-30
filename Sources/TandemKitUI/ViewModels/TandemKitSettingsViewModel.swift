@@ -12,6 +12,21 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
+    
+    
+    enum CommandFailure: Int, Identifiable {
+        case resume
+        case suspend
+        case controlIQ
+        case exerciseMode
+        case sleepMode
+        case stopTempRate
+
+        var id: Int { rawValue }
+    }
+
+    @Published var commandFailure: CommandFailure?
+    
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
@@ -123,13 +138,26 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             if isSuspended {
-                _ = self.pumpManager?.sendMessage(message: ResumePumpingRequest())
+                let response = self.pumpManager?.sendMessage(message: ResumePumpingRequest()) as? ResumePumpingResponse
+                
+                guard response?.isStatusOK == true else {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.commandFailure = .resume
+                    }
+                    return
+                }
             } else {
-                _ = self.pumpManager?.sendMessage(message: SuspendPumpingRequest())
+                let response = self.pumpManager?.sendMessage(message: SuspendPumpingRequest()) as? SuspendPumpingResponse
+                
+                guard response?.isStatusOK == true else {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.commandFailure = .suspend
+                    }
+                    return
+                }
             }
-
-            // Wait a moment for the pump to process
-            Thread.sleep(forTimeInterval: 1.0)
 
             self.pumpManager?.ensureCurrentPumpData { _ in }
 
@@ -154,11 +182,19 @@ class TandemKitSettingsViewModel: ObservableObject {
             let weight = self.pumpManager?.state.controlIQWeight ?? 70
             let tdi = self.pumpManager?.state.controlIQTotalDailyInsulin ?? 30
 
-            _ = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
+            let response = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
                 enabled: !isPumpControlIqOn,
                 weightLbs: weight,
                 totalDailyInsulinUnits: tdi
-            ))
+            )) as? ChangeControlIQSettingsResponse
+
+            guard response?.isStatusOK == true else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .controlIQ
+                }
+                return
+            }
 
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in }
@@ -181,7 +217,15 @@ class TandemKitSettingsViewModel: ObservableObject {
 
             let isExerciseOn = self.controlIQUserMode?.rawValue == 3
             let command: SetModesRequest.ModeCommand = isExerciseOn ? .exerciseModeOff : .exerciseModeOn
-            _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
+            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
+
+            guard response?.isStatusOK == true else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .exerciseMode
+                }
+                return
+            }
 
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in }
@@ -204,7 +248,15 @@ class TandemKitSettingsViewModel: ObservableObject {
 
             let isSleepOn = self.controlIQUserMode?.rawValue == 2
             let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
-            _ = self.pumpManager?.sendMessage(message: SetModesRequest(command: command))
+            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
+
+            guard response?.isStatusOK == true else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .sleepMode
+                }
+                return
+            }
 
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in }
@@ -225,7 +277,14 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
 
-            self.pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { _ in
+            self.pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { error in
+                if error != nil {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.commandFailure = .stopTempRate
+                    }
+                    return
+                }
                 Thread.sleep(forTimeInterval: 1.0)
                 self.pumpManager?.ensureCurrentPumpData { _ in }
 

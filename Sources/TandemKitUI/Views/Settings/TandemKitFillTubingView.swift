@@ -275,7 +275,7 @@ struct TandemKitFillTubingView: View {
             if viewModel.failedEnterMode {
                 Label(
                     LocalizedString(
-                        "Failed to enter fill mode. Ensure insulin delivery is suspended and check pump notifications.",
+                        "Failed to enter fill mode. Ensure insulin delivery is suspended, the active cartridge contains insulin, and check pump notifications.",
                         comment: "Error message"
                     ),
                     systemImage: "exclamationmark.circle.fill"
