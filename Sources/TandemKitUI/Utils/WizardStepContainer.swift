@@ -41,13 +41,13 @@ struct WizardStepContainer<Content: View>: View {
                 }
                 .padding()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(modalLocker)
         .navigationBarTitle(title, displayMode: .inline)
         .navigationBarBackButtonHidden(!canCancel)
         .navigationBarItems(trailing: canCancel ? cancelButton : nil)
         .interactiveDismissDisabled(disableInteractiveDismiss || !canCancel)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder private var modalLocker: some View {

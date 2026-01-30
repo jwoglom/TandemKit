@@ -9,36 +9,39 @@ struct TandemKitSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            title
+            List {
+                Section {
+                    HStack {
+                        Spacer()
+                        Image(imageName: "tandem_mobi")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(.horizontal)
+                            .frame(height: 200)
+                        Spacer()
+                    }
 
-            VStack(alignment: .leading, spacing: 20) {
-                Spacer()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(LocalizedString("Before you begin:", comment: "Setup instructions header"))
-                        .font(.headline)
-
-                    Text(LocalizedString("• Ensure your pump is nearby", comment: "Setup instruction 1"))
-                    Text(LocalizedString(
-                        "• Plug in the Mobi wireless charger, which is required to pair the pump",
-                        comment: "Setup instruction 2"
-                    ))
-                    Text(LocalizedString(
-                        "• Have your pump PIN code ready, which is written on the inside of the cartridge area",
-                        comment: "Setup instruction 3"
-                    ))
-                    Text(LocalizedString("• Make sure Bluetooth is enabled", comment: "Setup instruction 4"))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(LocalizedString(
+                            "You will start by setting up your insulin type and pump settings before pairing your pump.",
+                            comment: "welcome to TandemKit1"
+                        ))
+                        Text(LocalizedString(
+                            "Make sure you have your Tandem Mobi, charging pad and PIN ready for getting started",
+                            comment: "welcome to TandemKit2"
+                        ))
+                    }
                 }
-                .padding(.horizontal)
-
-                Spacer()
             }
-            .padding(.horizontal)
+
+            Spacer()
 
             ContinueButton(action: nextAction)
+                .padding(.horizontal)
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
+        .navigationBarTitle("Tandem Mobi")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(LocalizedString("Cancel", comment: "Cancel button title"), action: {

@@ -13,6 +13,10 @@ enum TandemScreen {
     func next() -> TandemScreen? {
         switch self {
         case .setup:
+            return .insulinType
+        case .insulinType:
+            return .soundSettings
+        case .soundSettings:
             return .deviceScanning
         case .deviceScanning:
             return .setupComplete
@@ -102,12 +106,22 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(rootView: view)
         case .deviceScanning:
             pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager!)
+            let nextStep = {
+                self.resetNavigationTo([.setupComplete])
+            }
 
-            let viewModel = TandemKitScanViewModel(pumpManager, nextStep: stepFinished)
+            let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
             let returnToMainScreen: () -> Void = {
-                self.pumpManager?.stopTempBasal()
+                guard let pumpManager = self.pumpManager else {
+                    return
+                }
+
+                var state = pumpManager.state
+                state.onboarded = true
+                pumpManager.lockedState.value = state
+
                 self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager!)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }
@@ -115,14 +129,20 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
             return hostingController(rootView: view)
         case .insulinType:
+            let isOnboarded = pumpManager?.isOnboarded ?? false
             let view = TandemKitInsulinType(
                 initialValue: pumpManager?.state.insulinType ?? allowedInsulinTypes.first,
                 supportedInsulinTypes: allowedInsulinTypes,
+                label: !isOnboarded ? LocalizedString("Continue", comment: "continue") : LocalizedString("Save", comment: "save"),
                 didConfirm: { type in
                     guard let pumpManager = self.pumpManager else { return }
 
                     pumpManager.lockedState.value.insulinType = type
                     pumpManager.notifyPumpManagerDelegateDidUpdateState()
+
+                    if !isOnboarded {
+                        self.navigateTo(.soundSettings)
+                    }
                 }
             )
             return hostingController(rootView: view)
@@ -139,7 +159,12 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
         case .soundSettings:
-            let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager)
+            let isOnboarded = pumpManager?.isOnboarded ?? false
+            let onSubmit = !isOnboarded ? {
+                self.navigateTo(.deviceScanning)
+            } : nil
+
+            let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager, onSubmit: onSubmit)
             return hostingController(rootView: TandemKitSoundSettingsView(viewModel: viewModel))
         }
     }
@@ -177,5 +202,17 @@ extension TandemUICoordinator: TandemUINavigator {
         viewController.isModalInPresentation = false
         pushViewController(viewController, animated: true)
         viewController.view.layoutSubviews()
+    }
+
+    func resetNavigationTo(_ screens: [TandemScreen]) {
+        screenStack = screens
+        let viewControllers = screenStack.map {
+            let viewController = viewControllerForScreen($0)
+            viewController.isModalInPresentation = false
+            viewController.view.layoutSubviews()
+            return viewController
+        }
+
+        setViewControllers(viewControllers, animated: true)
     }
 }

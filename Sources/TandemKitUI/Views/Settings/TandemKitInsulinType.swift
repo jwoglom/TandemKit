@@ -6,12 +6,19 @@ struct TandemKitInsulinType: View {
     @Environment(\.dismissAction) private var dismiss
 
     @State private var insulinType: InsulinType?
+    private var label: String
     private var supportedInsulinTypes: [InsulinType]
     private var didConfirm: (InsulinType) -> Void
 
-    init(initialValue: InsulinType?, supportedInsulinTypes: [InsulinType], didConfirm: @escaping (InsulinType) -> Void) {
+    init(
+        initialValue: InsulinType?,
+        supportedInsulinTypes: [InsulinType],
+        label: String,
+        didConfirm: @escaping (InsulinType) -> Void
+    ) {
         insulinType = initialValue
         self.supportedInsulinTypes = supportedInsulinTypes
+        self.label = label
         self.didConfirm = didConfirm
     }
 
@@ -34,7 +41,10 @@ struct TandemKitInsulinType: View {
 
             Spacer()
 
-            ContinueButton(action: { self.continueWithType(insulinType) })
+            ContinueButton(text: label) {
+                self.continueWithType(insulinType)
+            }
+            .padding(.horizontal)
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)

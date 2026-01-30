@@ -24,7 +24,9 @@ struct TandemKitSoundSettingsView: View {
     }
 
     var body: some View {
-        VStack {
+        VStack(alignment: .leading) {
+            title
+
             List {
                 Section {
                     sectionItem(
@@ -87,13 +89,17 @@ struct TandemKitSoundSettingsView: View {
             Spacer()
 
             ContinueButton(
-                text: LocalizedString("Save", comment: "label for save"),
+                text: viewModel
+                    .onSubmit == nil ? LocalizedString("Save", comment: "label for save") :
+                    LocalizedString("Continue", comment: "continue"),
                 loading: $viewModel.isLoading,
                 disabled: $viewModel.isDisabled
-            ) { viewModel.submit() }
+            ) {
+                viewModel.submit()
+            }
+            .padding(.horizontal)
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle(LocalizedString("Sound settings", comment: "Sound view title"))
     }
 
     func toggleEditors(propertyName: String) {
@@ -148,5 +154,22 @@ struct TandemKitSoundSettingsView: View {
             )
             .padding(.horizontal)
         }
+    }
+
+    @ViewBuilder private var title: some View {
+        Text(LocalizedString("Sound Settings", comment: "Title for insulin type"))
+            .font(.title)
+            .bold()
+            .padding(.horizontal)
+
+        Text(LocalizedString(
+            "You can configure if your Tandem Mobi should Beep or Vibrate per category",
+            comment: "Title text for insulin type confirmation page"
+        ))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
+
+        Divider()
+            .padding(.vertical)
     }
 }

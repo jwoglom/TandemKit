@@ -130,6 +130,17 @@ public enum PumpSoundChangeBitmask: Int, CaseIterable {
     case alarmAnnun = 32
     case cgmAlert = 64
 
+    public static func all() -> Int {
+        toBitmask([
+            .quickBolusAnnun,
+            .generalAnnun,
+            .reminderAnnun,
+            .alertAnnun,
+            .alarmAnnun,
+            .cgmAlert
+        ])
+    }
+
     public static func fromBitmask(_ bitmask: Int) -> Set<PumpSoundChangeBitmask> {
         var set = Set<PumpSoundChangeBitmask>()
         for field in PumpSoundChangeBitmask.allCases {

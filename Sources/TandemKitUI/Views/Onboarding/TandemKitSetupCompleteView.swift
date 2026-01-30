@@ -26,9 +26,11 @@ struct TandemKitSetupCompleteView: View {
             Spacer()
 
             ContinueButton(
-                text: LocalizedString("Finish", comment: "Text for finish button"),
-                action: { finish?() }
-            )
+                text: LocalizedString("Finish", comment: "Text for finish button")
+            ) {
+                finish?()
+            }
+            .padding(.horizontal)
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
