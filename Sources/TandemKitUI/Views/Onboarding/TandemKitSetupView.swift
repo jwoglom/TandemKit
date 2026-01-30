@@ -16,6 +16,7 @@ struct TandemKitSetupView: View {
                         Spacer()
                         Image(imageName: "tandem_mobi")
                             .resizable()
+                            .rotationEffect(.degrees(90))
                             .scaledToFit()
                             .padding(.horizontal)
                             .frame(height: 200)
@@ -23,25 +24,20 @@ struct TandemKitSetupView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
+                        Spacer()
                         Text(LocalizedString(
-                            "Ready to connect your Tandem Mobi?",
+                            "In the first step you will configure your insulin type and pump settings.",
                             comment: "welcome to TandemKit1"
                         ))
                         Spacer()
                         Text(LocalizedString(
-                            "In the first step you will configure your insulin type and pump settings.",
+                            "Before getting started, make sure to have the charging pad available.",
                             comment: "welcome to TandemKit2"
                         ))
                         Spacer()
-                        Text(LocalizedString(
-                            "Before getting started, make sure to un-pair your pump from all other applications, remove it from your Bluetooth saved devices list, and have a plugged-in charging pad available.",
-                            comment: "welcome to TandemKit2"
-                        ))
                     }
                 }
             }
-
-            Spacer()
 
             ContinueButton(action: nextAction)
                 .padding(.horizontal)
@@ -63,7 +59,7 @@ struct TandemKitSetupView: View {
             .font(.largeTitle)
             .bold()
             .padding(.horizontal)
-        Text(LocalizedString("Scan for your pump", comment: "Subtitle for TandemKitSetupView"))
+        Text(LocalizedString("Ready to connect your Tandem Mobi?", comment: "Subtitle for TandemKitSetupView"))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal)
 

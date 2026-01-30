@@ -23,7 +23,7 @@ struct TandemKitSettingsView: View {
                 ))) {
                     viewModel.removePump()
                 },
-                .cancel()
+                .cancel(),
             ]
         )
     }
@@ -35,6 +35,7 @@ struct TandemKitSettingsView: View {
                     Spacer()
                     Image(imageName: "tandem_mobi")
                         .resizable()
+                        .rotationEffect(.degrees(90))
                         .scaledToFit()
                         .padding(.horizontal)
                         .frame(height: 200)
@@ -136,8 +137,8 @@ struct TandemKitSettingsView: View {
                             "Automatically dismiss min/max basal rate alerts during looping",
                             comment: "Description for auto-acknowledge basal alerts toggle"
                         ))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     }
                 }
             }

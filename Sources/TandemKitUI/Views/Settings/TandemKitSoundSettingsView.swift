@@ -84,16 +84,16 @@ struct TandemKitSoundSettingsView: View {
                         }
                     }
                 }
-
-                Spacer()
-
-                Text(LocalizedString(
-                    "Please note that this build of TandemKit does not support silent operation for Temp Basal and Bolus commands on this pump.",
-                    comment: "Silent operation limitation notice for TandemKit"
-                ))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal)
             }
+
+            Spacer()
+
+            Text(LocalizedString(
+                "This build of TandemKit does not support silent operation for Temp Basal and Bolus commands on this pump.",
+                comment: "Silent operation limitation notice for TandemKit"
+            ))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
 
             Spacer()
 

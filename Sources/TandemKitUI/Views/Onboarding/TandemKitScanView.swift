@@ -7,6 +7,8 @@ struct TandemKitScanView: View {
 
     @StateObject var viewModel: TandemKitScanViewModel
 
+    @State var isHelpSheetPresented: Bool = false
+
     var body: some View {
         WizardStepContainer(
             title: LocalizedString("Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
@@ -31,23 +33,12 @@ struct TandemKitScanView: View {
             VStack {
                 if viewModel.currentPhase == .mobiOnPad {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text(LocalizedString("If your pump is not being detected:", comment: "If pump not detected help"))
-                            .bold()
-                        Text(
-                            LocalizedString(
-                                "Make sure you've unpaired the pump from any other apps, removed it from your saved Bluetooth device list, and placed it on the charging pad.",
-                                comment: "If pump not detected instruction 1"
-                            )
+                        Button(
+                            LocalizedString("Pump not detected?", comment: "Button text for help when pump not found"),
+                            action: {
+                                isHelpSheetPresented = true
+                            }
                         )
-                        .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(
-                            LocalizedString(
-                                "If the charging pad and pump don't light up, try a different USB cord or charger. If the pump is off, hold down the T button while placed on the pad to wake it up.",
-                                comment: "If pump not detected instruction 2"
-                            )
-                        )
-                        .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal)
                 }
@@ -110,6 +101,47 @@ struct TandemKitScanView: View {
                 }
             }
         }
+        .sheet(isPresented: $isHelpSheetPresented, onDismiss: {}, content: {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(LocalizedString("If your pump is not being detected, make sure you've:", comment: "If pump not detected help"))
+                    .bold()
+                    .padding(EdgeInsets(top: 0, leading: 0, bottom: 5, trailing: 0))
+
+                Text(
+                    LocalizedString("Unpaired the pump from any other apps",
+                                    comment: "Pump not detected tip 1")
+                ).foregroundStyle(.secondary)
+
+                Text(
+                    LocalizedString("Removed the pump from your saved Bluetooth device list",
+                                    comment: "Pump not detected tip 2")
+                ).foregroundStyle(.secondary)
+
+                Text(
+                    LocalizedString("Placed the pump on the center of the charging pad",
+                                    comment: "Pump not detected tip 3")
+                ).foregroundStyle(.secondary)
+
+                Text(LocalizedString(
+                    "If the charging pad and pump don't light up, try a different USB cord or charger. Don't use a USB-C to USB-C cable or high-wattage charger.",
+                    comment: "Pump not detected tip 4"
+                )
+                ).foregroundStyle(.secondary)
+
+                Text(LocalizedString(
+                    "If the pump is off or out of battery, hold down the T button while placed on the pad for 30 seconds to wake it up.",
+                    comment: "Pump not detected tip 5"
+                )
+                ).foregroundStyle(.secondary)
+            }
+            .padding(.all)
+
+            Spacer()
+
+            ContinueButton(text: LocalizedString("OK", comment: "OK button title")) {
+                isHelpSheetPresented = false
+            }
+        })
     }
 
     @ViewBuilder var currentStepView: some View {
