@@ -329,50 +329,6 @@ struct TandemKitSettingsView: View {
             }
 
             Section(header: SectionHeader(label: LocalizedString(
-                "ControlIQ Settings",
-                comment: "The title of the ControlIQ settings section in TandemKit settings"
-            ))) {
-                Button(action: {
-                    viewModel.toggleControlIQMode()
-                }) {
-                    HStack {
-                        Text(viewModel.controlIqModeText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime)
-
-                Button(action: {
-                    viewModel.toggleExerciseMode()
-                }) {
-                    HStack {
-                        Text(viewModel.exerciseModeText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime || !isControlIQClosedLoopEnabled)
-
-                Button(action: {
-                    viewModel.toggleSleepMode()
-                }) {
-                    HStack {
-                        Text(viewModel.sleepModeText)
-                        Spacer()
-                        if viewModel.isUpdatingPumpState {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime || !isControlIQClosedLoopEnabled)
-            }
-
-            Section(header: SectionHeader(label: LocalizedString(
                 "Pump time",
                 comment: "The title of the pump time section in DanaKit settings"
             ))) {
