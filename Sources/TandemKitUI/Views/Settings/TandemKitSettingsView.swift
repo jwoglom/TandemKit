@@ -138,7 +138,7 @@ struct TandemKitSettingsView: View {
                     reservoirStatus
                 }
                 .padding(.bottom, 5)
-                
+
                 if viewModel.showPumpTimeSyncWarning {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(LocalizedString("Time Change Detected", comment: "title for time change detected notice"))

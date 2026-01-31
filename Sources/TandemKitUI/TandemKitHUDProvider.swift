@@ -96,7 +96,7 @@ internal class TandemKitHUDProvider: NSObject, HUDProvider {
 }
 
 extension TandemKitHUDProvider: PumpManagerStatusObserver {
-    func pumpManager(_ pumpManager: any LoopKit.PumpManager, didUpdate status: LoopKit.PumpManagerStatus, oldStatus: LoopKit.PumpManagerStatus) {
+    func pumpManager(_: any LoopKit.PumpManager, didUpdate _: LoopKit.PumpManagerStatus, oldStatus _: LoopKit.PumpManagerStatus) {
         DispatchQueue.main.async {
             self.updateReservoirView()
         }

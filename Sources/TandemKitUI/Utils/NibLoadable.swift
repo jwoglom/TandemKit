@@ -8,8 +8,6 @@ protocol IdentifiableClass: AnyObject {
     static var className: String { get }
 }
 
-
-
 extension NibLoadable {
     static func nib() -> UINib {
         UINib(nibName: className, bundle: Bundle(for: self))

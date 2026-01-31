@@ -106,7 +106,7 @@ extension TandemPumpManager {
             }
         }
     }
-    
+
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
         if let reservoirLevel = reservoirLevel, reservoirLevel.unitVolume < 1 {
             return PumpStatusHighlight(
@@ -115,7 +115,7 @@ extension TandemPumpManager {
                 state: .critical
             )
         }
-        
+
         return nil
     }
 }
