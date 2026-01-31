@@ -1,14 +1,6 @@
-//
-//  ErrorSheet.swift
-//  TandemKit
-//
-//  Created by James Woglom on 1/30/26.
-//
-
 import Foundation
-import UIKit
 import SwiftUI
-
+import UIKit
 
 struct ErrorSheetContent: Identifiable {
     let id = UUID()

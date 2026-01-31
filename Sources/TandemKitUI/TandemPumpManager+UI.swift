@@ -42,27 +42,40 @@ extension TandemPumpManager: PumpManagerUI {
     }
 
     public func hudProvider(
-        bluetoothProvider _: BluetoothProvider,
-        colorPalette _: LoopUIColorPalette,
-        allowedInsulinTypes _: [InsulinType]
+        bluetoothProvider: BluetoothProvider,
+        colorPalette: LoopUIColorPalette,
+        allowedInsulinTypes: [InsulinType]
     ) -> HUDProvider? {
-        nil
+        TandemKitHUDProvider(
+            pumpManager: self,
+            bluetoothProvider: bluetoothProvider,
+            colorPalette: colorPalette,
+            allowedInsulinTypes: allowedInsulinTypes
+        )
     }
 
-    public static func createHUDView(rawValue _: [String: Any]) -> BaseHUDView? {
-        nil
+    public static func createHUDView(rawValue: [String: Any]) -> BaseHUDView? {
+        TandemKitHUDProvider.createHUDView(rawValue: rawValue)
     }
 
     public static var onboardingImage: UIImage? {
-        nil
+        UIImage(
+            named: "tandem_mobi",
+            in: Bundle(for: TandemUICoordinator.self),
+            compatibleWith: nil
+        )
     }
 
     public var smallImage: UIImage? {
-        nil
+        UIImage(
+            named: "tandem_mobi",
+            in: Bundle(for: TandemUICoordinator.self),
+            compatibleWith: nil
+        )
     }
 
     public var pumpStatusHighlight: DeviceStatusHighlight? {
-        nil
+        buildPumpStatusHighlight()
     }
 
     // Not needed
@@ -71,12 +84,38 @@ extension TandemPumpManager: PumpManagerUI {
     }
 
     public var pumpStatusBadge: DeviceStatusBadge? {
-        nil
+        state.showPumpTimeSyncWarning ? TandemKitStatusBadge.timeSyncNeeded : nil
     }
 }
 
 extension TandemPumpManager {
+    private enum TandemKitStatusBadge: DeviceStatusBadge {
+        case timeSyncNeeded
+
+        public var image: UIImage? {
+            switch self {
+            case .timeSyncNeeded:
+                return UIImage(systemName: "clock.fill")
+            }
+        }
+
+        public var state: DeviceStatusBadgeState {
+            switch self {
+            case .timeSyncNeeded:
+                return .warning
+            }
+        }
+    }
+    
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
-        nil
+        if let reservoirLevel = reservoirLevel, reservoirLevel.unitVolume < 1 {
+            return PumpStatusHighlight(
+                localizedMessage: LocalizedString("No Insulin", comment: "Status highlight that a pump is out of insulin."),
+                imageName: "exclamationmark.circle.fill",
+                state: .critical
+            )
+        }
+        
+        return nil
     }
 }

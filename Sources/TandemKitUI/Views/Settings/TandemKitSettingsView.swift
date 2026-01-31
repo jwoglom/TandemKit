@@ -24,12 +24,28 @@ struct TandemKitSettingsView: View {
                 ))) {
                     viewModel.removePump()
                 },
-                .cancel(),
+                .cancel()
             ]
         )
     }
 
-    private func errorSheetView(for failure: TandemKitSettingsViewModel.CommandFailure) -> some View {
+    var syncPumpTime: ActionSheet {
+        ActionSheet(
+            title: Text(LocalizedString("Time Change Detected", comment: "Title for pod sync time action sheet.")),
+            message: Text(LocalizedString(
+                "The time on your pump is different from the current time. Do you want to update the time on your pump to the current time?",
+                comment: "Message for pod sync time action sheet"
+            )),
+            buttons: [
+                .default(Text(LocalizedString("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync"))) {
+                    self.viewModel.syncPumpTime()
+                },
+                .cancel(Text(LocalizedString("No, Keep Pump As Is", comment: "Button text to cancel pump time sync")))
+            ]
+        )
+    }
+
+    private func errorSheetView(for failure: CommandFailure) -> some View {
         let content: ErrorSheetContent
         switch failure {
         case .resume:
@@ -122,6 +138,18 @@ struct TandemKitSettingsView: View {
                     reservoirStatus
                 }
                 .padding(.bottom, 5)
+                
+                if viewModel.showPumpTimeSyncWarning {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(LocalizedString("Time Change Detected", comment: "title for time change detected notice"))
+                            .font(Font.subheadline.weight(.bold))
+                        Text(LocalizedString(
+                            "The time on your pump is different from the current time. Your pump’s time controls your scheduled therapy settings. Scroll down to Pump Time row to review the time difference and configure your pump.",
+                            comment: "description for time change detected notice"
+                        ))
+                            .font(Font.footnote.weight(.semibold))
+                    }.padding(.vertical, 8)
+                }
             }
 
             Section(header: SectionHeader(label: LocalizedString(
@@ -140,7 +168,7 @@ struct TandemKitSettingsView: View {
                             }
                         }
                     }
-                    .disabled(viewModel.isUpdatingPumpState)
+                    .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime)
                 } else {
                     Button(action: {}) {
                         HStack {
@@ -161,7 +189,7 @@ struct TandemKitSettingsView: View {
                             }
                         }
                     }
-                    .disabled(viewModel.isUpdatingPumpState)
+                    .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime)
                 }
 
                 Button(action: {
@@ -210,8 +238,8 @@ struct TandemKitSettingsView: View {
                             "Automatically dismiss min/max basal rate alerts during looping",
                             comment: "Description for auto-acknowledge basal alerts toggle"
                         ))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -315,7 +343,7 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUpdatingPumpState)
+                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime)
 
                 Button(action: {
                     viewModel.toggleExerciseMode()
@@ -328,7 +356,7 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUpdatingPumpState || !isControlIQClosedLoopEnabled)
+                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime || !isControlIQClosedLoopEnabled)
 
                 Button(action: {
                     viewModel.toggleSleepMode()
@@ -341,7 +369,42 @@ struct TandemKitSettingsView: View {
                         }
                     }
                 }
-                .disabled(viewModel.isUpdatingPumpState || !isControlIQClosedLoopEnabled)
+                .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime || !isControlIQClosedLoopEnabled)
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
+                "Pump time",
+                comment: "The title of the pump time section in DanaKit settings"
+            ))) {
+                HStack {
+                    Text(LocalizedString("Pump time", comment: "Text for pump time"))
+                        .foregroundColor(Color.primary)
+                    Spacer()
+                    if viewModel.showPumpTimeSyncWarning {
+                        Image(systemName: "clock.fill")
+                            .foregroundColor(guidanceColors.warning)
+                    }
+                    Text(viewModel.currentPumpTime)
+                        .foregroundColor(viewModel.showPumpTimeSyncWarning ? guidanceColors.warning : .secondary)
+                }
+                HStack {
+                    Text(LocalizedString("Checked at", comment: "Text for pump time synced at"))
+                        .foregroundColor(Color.primary)
+                    Spacer()
+                    Text(viewModel.pumpTimeCheckedAt)
+                        .foregroundColor(.secondary)
+                }
+
+                Button(action: {
+                    viewModel.showingTimeSyncConfirmation = true
+                }) {
+                    Text(LocalizedString("Manually sync Pump time", comment: "Label for syncing the time on the pump"))
+                        .foregroundColor(.accentColor)
+                }
+                .disabled(viewModel.isUpdatingTime)
+                .actionSheet(isPresented: $viewModel.showingTimeSyncConfirmation) {
+                    syncPumpTime
+                }
             }
 
             Section {
