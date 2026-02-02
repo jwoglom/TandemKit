@@ -14,7 +14,7 @@ public enum Dates {
     }
 
     public static func fromInstantToJan12008EpochSeconds(_ date: Date) -> TimeInterval {
-        date.timeIntervalSince1970 - JANUARY_1_2008_UNIX_EPOCH
+        date.timeIntervalSince1970 - JANUARY_1_2008_UNIX_EPOCH + TimeInterval(seconds: Double(TimeZone.current.secondsFromGMT()))
     }
 
     private static let SECONDS_IN_DAY: TimeInterval = 60 * 60 * 24

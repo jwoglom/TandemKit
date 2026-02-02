@@ -30,7 +30,10 @@ struct TandemKitSoundSettingsView: View {
             List {
                 Section {
                     sectionItem(
-                        title: LocalizedString("General (Temp Basal and Bolus)", comment: "Label for general category button sound"),
+                        title: LocalizedString(
+                            "General (Temp Basal and Bolus)",
+                            comment: "Label for general category button sound"
+                        ),
                         isEditing: isEditingGeneralAnnun,
                         value: $viewModel.generalAnnun
                     )
@@ -92,8 +95,8 @@ struct TandemKitSoundSettingsView: View {
                 "This build of TandemKit does not support silent operation for Temp Basal and Bolus commands on this pump.",
                 comment: "Silent operation limitation notice for TandemKit"
             ))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal)
 
             Spacer()
 
@@ -175,8 +178,8 @@ struct TandemKitSoundSettingsView: View {
             "You can configure which actions cause your pump to beep or vibrate",
             comment: "Title text for insulin type confirmation page"
         ))
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
 
         Divider()
             .padding(.vertical)

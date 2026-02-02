@@ -103,35 +103,46 @@ struct TandemKitScanView: View {
         }
         .sheet(isPresented: $isHelpSheetPresented, onDismiss: {}, content: {
             VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizedString("If your pump is not being detected, make sure you've:", comment: "If pump not detected help"))
+                Text(LocalizedString(
+                    "If your pump is not being detected, make sure you've:",
+                    comment: "If pump not detected help"
+                ))
                     .bold()
                     .padding(EdgeInsets(top: 0, leading: 0, bottom: 5, trailing: 0))
 
                 Text(
-                    LocalizedString("Unpaired the pump from any other apps",
-                                    comment: "Pump not detected tip 1")
+                    LocalizedString(
+                        "Unpaired the pump from any other apps",
+                        comment: "Pump not detected tip 1"
+                    )
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString("Removed the pump from your saved Bluetooth device list",
-                                    comment: "Pump not detected tip 2")
+                    LocalizedString(
+                        "Removed the pump from your saved Bluetooth device list",
+                        comment: "Pump not detected tip 2"
+                    )
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString("Placed the pump on the center of the charging pad",
-                                    comment: "Pump not detected tip 3")
+                    LocalizedString(
+                        "Placed the pump on the center of the charging pad",
+                        comment: "Pump not detected tip 3"
+                    )
                 ).foregroundStyle(.secondary)
 
-                Text(LocalizedString(
-                    "If the charging pad and pump don't light up, try a different USB cord or charger. Don't use a USB-C to USB-C cable or high-wattage charger.",
-                    comment: "Pump not detected tip 4"
-                )
+                Text(
+                    LocalizedString(
+                        "If the charging pad and pump don't light up, try a different USB cord or charger. Don't use a USB-C to USB-C cable or high-wattage charger.",
+                        comment: "Pump not detected tip 4"
+                    )
                 ).foregroundStyle(.secondary)
 
-                Text(LocalizedString(
-                    "If the pump is off or out of battery, hold down the T button while placed on the pad for 30 seconds to wake it up.",
-                    comment: "Pump not detected tip 5"
-                )
+                Text(
+                    LocalizedString(
+                        "If the pump is off or out of battery, hold down the T button while placed on the pad for 30 seconds to wake it up.",
+                        comment: "Pump not detected tip 5"
+                    )
                 ).foregroundStyle(.secondary)
             }
             .padding(.all)
@@ -176,8 +187,8 @@ struct TandemKitScanView: View {
                     "Pick up your pump, wait a second, then double-press the T button",
                     comment: "Double-tap explanation"
                 ))
-                .font(.headline)
-                .bold()
+                    .font(.headline)
+                    .bold()
 
                 Text(LocalizedString("Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
@@ -205,7 +216,10 @@ struct TandemKitScanView: View {
                 .font(.headline)
                 .bold()
 
-            Text(LocalizedString("Please be patient while we authenticate with the pump.", comment: "Pump authenticating explanation"))
+            Text(LocalizedString(
+                "Please be patient while we authenticate with the pump.",
+                comment: "Pump authenticating explanation"
+            ))
                 .foregroundStyle(.secondary)
 
             Spacer()
