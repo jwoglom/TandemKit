@@ -284,7 +284,6 @@
 		3EE345E72EC91299008A07F6 /* CgmCalibrationHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344DF2EC91299008A07F6 /* CgmCalibrationHistoryLog.swift */; };
 		3EE345E82EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344392EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift */; };
 		3EE345ED2EC912AE008A07F6 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */; };
-		3EE345EE2EC912AE008A07F6 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3EE345E92EC912AE008A07F6 /* Info.plist */; };
 		3EE345EF2EC912AE008A07F6 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */; };
 		3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; platformFilter = ios; };
 		3EE345F62EC9130B008A07F6 /* TandemKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -696,7 +695,7 @@
 		3EEECBC92EC9023C0063D7BC /* LoopKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LoopKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEECBCD2EC902420063D7BC /* LoopKitUI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LoopKitUI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEECBD02EC902B50063D7BC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		3EEECBD72EC902F90063D7BC /* TandemKitPlugin.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKitPlugin.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		3EEECBD72EC902F90063D7BC /* TandemKitPlugin.loopplugin */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKitPlugin.loopplugin; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEECBE52EC904E80063D7BC /* TandemBLE.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemBLE.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModalInPresentationSetter.swift; sourceTree = "<group>"; };
 		3EF00DD52F0AAF8F00776DCD /* Double.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Double.swift; sourceTree = "<group>"; };
@@ -850,7 +849,7 @@
 			children = (
 				1AAA186E2D2B1E060061C043 /* TandemKit.framework */,
 				1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */,
-				3EEECBD72EC902F90063D7BC /* TandemKitPlugin.framework */,
+				3EEECBD72EC902F90063D7BC /* TandemKitPlugin.loopplugin */,
 				3EEECBE52EC904E80063D7BC /* TandemBLE.framework */,
 				3EE344082EC9125A008A07F6 /* TandemCore.framework */,
 			);
@@ -1422,7 +1421,7 @@
 			packageProductDependencies = (
 			);
 			productName = TandemKitPlugin;
-			productReference = 3EEECBD72EC902F90063D7BC /* TandemKitPlugin.framework */;
+			productReference = 3EEECBD72EC902F90063D7BC /* TandemKitPlugin.loopplugin */;
 			productType = "com.apple.product-type.framework";
 		};
 		3EEECBE42EC904E80063D7BC /* TandemBLE */ = {
@@ -1531,7 +1530,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3EE345EE2EC912AE008A07F6 /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2248,7 +2246,7 @@
 		3EEECBDC2EC902F90063D7BC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DYLIB_COMPATIBILITY_VERSION = 1;
@@ -2283,13 +2281,14 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+				WRAPPER_EXTENSION = loopplugin;
 			};
 			name = Debug;
 		};
 		3EEECBDD2EC902F90063D7BC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DYLIB_COMPATIBILITY_VERSION = 1;
@@ -2325,6 +2324,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
+				WRAPPER_EXTENSION = loopplugin;
 			};
 			name = Release;
 		};
