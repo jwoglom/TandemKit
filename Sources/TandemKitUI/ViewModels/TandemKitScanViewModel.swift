@@ -116,12 +116,12 @@ class TandemKitScanViewModel: ObservableObject {
 //        }
 //
 //        pumpManager.syncBasalRateSchedule(items: basalSchedule.items) { _ in
-//            self.log.info("Done syncing basal!")
 //            pumpManager.setPumpSound(request: soundRequest)
-//            self.log.info("Done syncing sound!")
-//            DispatchQueue.main.async {
-//                self.log.info("Pairing successful")
-//                self.nextStep()
+//            pumpManager.syncPumpTime { _ in
+//                DispatchQueue.main.async {
+//                    self.log.info("Pairing successful")
+//                    self.nextStep()
+//                }
 //            }
 //        }
     }

@@ -3,6 +3,17 @@ import LoopKit
 import SwiftUI
 import TandemCore
 
+enum CommandFailure: Int, Identifiable {
+    case resume
+    case suspend
+    case controlIQ
+    case exerciseMode
+    case sleepMode
+    case stopTempRate
+
+    var id: Int { rawValue }
+}
+
 class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
@@ -12,27 +23,22 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
-    
-    
-    enum CommandFailure: Int, Identifiable {
-        case resume
-        case suspend
-        case controlIQ
-        case exerciseMode
-        case sleepMode
-        case stopTempRate
-
-        var id: Int { rawValue }
-    }
-
+    @Published var showPumpTimeSyncWarning = false
+    @Published var isUpdatingTime = false
+    @Published var showingTimeSyncConfirmation = false
     @Published var commandFailure: CommandFailure?
-    
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var useSilentMode: Bool = false
 
     private var pendingRefreshOnReconnect = false
+
+    private let dateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 
     init(
         _ pumpManager: TandemPumpManager? = nil,
@@ -47,8 +53,25 @@ class TandemKitSettingsViewModel: ObservableObject {
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         reservoirValue = pumpManager?.reservoirLevel
+        showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
+    }
+
+    var currentPumpTime: String {
+        guard let currentPumpTime = pumpManager?.state.currentPumpTime else {
+            return ""
+        }
+
+        return dateFormatter.string(from: currentPumpTime)
+    }
+
+    var pumpTimeCheckedAt: String {
+        guard let lastPumpTimeCheckDate = pumpManager?.state.lastPumpTimeCheckDate else {
+            return ""
+        }
+
+        return dateFormatter.string(from: lastPumpTimeCheckDate)
     }
 
     var pumpState: PumpState? {
@@ -139,7 +162,7 @@ class TandemKitSettingsViewModel: ObservableObject {
 
             if isSuspended {
                 let response = self.pumpManager?.sendMessage(message: ResumePumpingRequest()) as? ResumePumpingResponse
-                
+
                 guard response?.isStatusOK == true else {
                     DispatchQueue.main.async {
                         self.isUpdatingPumpState = false
@@ -149,7 +172,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
             } else {
                 let response = self.pumpManager?.sendMessage(message: SuspendPumpingRequest()) as? SuspendPumpingResponse
-                
+
                 guard response?.isStatusOK == true else {
                     DispatchQueue.main.async {
                         self.isUpdatingPumpState = false
@@ -300,6 +323,19 @@ class TandemKitSettingsViewModel: ObservableObject {
         useSilentMode = !useSilentMode
     }
 
+    func syncPumpTime() {
+        guard let pumpManager = pumpManager else {
+            return
+        }
+
+        isUpdatingTime = true
+        pumpManager.syncPumpTime { _ in
+            DispatchQueue.main.async {
+                self.isUpdatingTime = false
+            }
+        }
+    }
+
     func getLogs() -> [URL] {
         TandemLogger.getDebugLogs()
     }
@@ -386,6 +422,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
 
         DispatchQueue.main.async {
             self.reservoirValue = pumpManager.reservoirLevel
+            self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
 
             if self.pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
                 self.pendingRefreshOnReconnect = false

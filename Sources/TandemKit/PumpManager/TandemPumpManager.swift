@@ -759,6 +759,8 @@ private struct ActiveBolus {
 
     private func handleTimeSinceResetResponse(_ response: TimeSinceResetResponse, source: ResponseSource) {
         let timeSinceReset = response.pumpTimeSinceReset
+        let currentPumpTime = response.currentTimeDate
+        let checkedAt = Date.now
 
         logger(for: source).debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
 
@@ -766,6 +768,8 @@ private struct ActiveBolus {
         if var pumpState = managerState.pumpState {
             pumpState.timeSinceReset = timeSinceReset
             managerState.pumpState = pumpState
+            managerState.currentPumpTime = currentPumpTime
+            managerState.lastPumpTimeCheckDate = checkedAt
             lockedState.value = managerState
             pumpComm.syncPumpState(pumpState)
             needsSessionInitialization.value = false
@@ -1399,7 +1403,7 @@ private struct ActiveBolus {
         queue.async {
             if case let .success(dose) = result, let dose = dose {
                 var events = [
-                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate),
+                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
                 ]
 
                 if let tempRateAbsolute = self.state.tempRateAbsolute, let tempRateDuration = self.state.tempRateDuration,
@@ -1615,6 +1619,7 @@ private struct ActiveBolus {
         fetchHomeScreenStatus()
         fetchControlIQStatus()
         fetchNotificationCount()
+        fetchTimeSinceReset()
 
         recordReconciliation(at: Date.now)
 
@@ -2380,7 +2385,7 @@ private struct ActiveBolus {
                 }
 
                 var doses = [
-                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now)),
+                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now))
                 ]
 
                 if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
@@ -2458,7 +2463,7 @@ private struct ActiveBolus {
                         .basal(
                             dose: DoseEntry
                                 .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
-                        ),
+                        )
                 ]
 
                 var state = lockedState.value
@@ -2740,6 +2745,47 @@ private struct ActiveBolus {
                 self.delegateQueue.async {
                     completion(.failure(PumpManagerError.communication(pumpError)))
                 }
+            }
+        }
+    }
+
+    public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
+        log.info("Syncing pump time")
+
+        guard let transport = pairedTransport else {
+            log.error("Pump not connected...")
+            let error = PumpCommError.pumpNotConnected
+            notifyPumpManagerDelegateOfError(error)
+            delegateQueue.async {
+                completion(.failure(PumpManagerError.communication(error)))
+            }
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            do {
+                let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
+                let response: ChangeTimeDateResponse = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch)),
+                    expecting: ChangeTimeDateResponse.self
+                )
+
+                if !response.isStatusOK {
+                    log.error("Pump time sync failed, status NOK!")
+
+                    let error = PumpCommError.errorResponse(response: response)
+                    completion(.failure(PumpManagerError.communication(error)))
+                } else {
+                    completion(.success(()))
+                }
+            } catch {
+                log.error("Failed to sync pump time: \(error.localizedDescription)")
+
+                let pumpError = PumpCommError.other
+                completion(.failure(PumpManagerError.communication(pumpError)))
             }
         }
     }

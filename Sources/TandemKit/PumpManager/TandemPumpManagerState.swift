@@ -147,6 +147,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var autoAcknowledgeBasalAlerts: Bool
     public var useSilentTones: Bool
 
+    // Pump time
+    public var currentPumpTime: Date?
+    public var lastPumpTimeCheckDate: Date?
+
     // Pump global settings
     public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum?
@@ -203,6 +207,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         connectionSharingEnabled: Bool = false,
         autoAcknowledgeBasalAlerts: Bool = false,
         useSilentTones: Bool = false,
+        currentPumpTime: Date? = nil,
+        lastPumpTimeCheckDate: Date? = nil,
         quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         reminderAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         alertAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
@@ -247,6 +253,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.connectionSharingEnabled = connectionSharingEnabled
         self.autoAcknowledgeBasalAlerts = autoAcknowledgeBasalAlerts
         self.useSilentTones = useSilentTones
+        self.currentPumpTime = currentPumpTime
+        self.lastPumpTimeCheckDate = lastPumpTimeCheckDate
         self.quickBolusAnnun = quickBolusAnnun
         self.reminderAnnun = reminderAnnun
         self.alertAnnun = alertAnnun
@@ -295,6 +303,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         currentProfileBaseBasalRate = rawValue["currentProfileBaseBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
+        currentPumpTime = rawValue["currentPumpTime"] as? Date
+        lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -472,6 +482,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
         raw["connectionSharingEnabled"] = connectionSharingEnabled
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
+        raw["currentPumpTime"] = currentPumpTime
+        raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -547,6 +559,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         return raw
     }
 
+    public var showPumpTimeSyncWarning: Bool {
+        guard let currentPumpTime, let lastPumpTimeCheckDate else {
+            return false
+        }
+
+        // Allow 10s time drift
+        return abs(currentPumpTime.timeIntervalSince1970 - lastPumpTimeCheckDate.timeIntervalSince1970) > .seconds(10)
+    }
+
     public var debugDescription: String {
         [
             "### TandemPumpManagerState",
@@ -566,6 +587,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* connectionSharingEnabled: \(connectionSharingEnabled)",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",
+            "* currentPumpTime: \(String(describing: currentPumpTime))",
+            "* lastPumpTimeCheckDate: \(String(describing: lastPumpTimeCheckDate))",
             "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
             "* reminderAnnun: \(String(describing: reminderAnnun))",
             "* alertAnnun: \(String(describing: alertAnnun))",
@@ -610,6 +633,8 @@ public extension TandemPumpManagerState {
             lhs.connectionSharingEnabled == rhs.connectionSharingEnabled &&
             lhs.autoAcknowledgeBasalAlerts == rhs.autoAcknowledgeBasalAlerts &&
             lhs.useSilentTones == rhs.useSilentTones &&
+            lhs.currentPumpTime == rhs.lastPumpTimeCheckDate &&
+            lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate &&
             lhs.quickBolusAnnun == rhs.quickBolusAnnun &&
             lhs.reminderAnnun == rhs.reminderAnnun &&
             lhs.alertAnnun == rhs.alertAnnun &&

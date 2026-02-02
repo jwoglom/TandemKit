@@ -60,8 +60,8 @@ struct TandemKitInsulinType: View {
             "Select the type of insulin used in this pump",
             comment: "Title text for insulin type confirmation page"
         ))
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
 
         Divider()
             .padding(.vertical)
