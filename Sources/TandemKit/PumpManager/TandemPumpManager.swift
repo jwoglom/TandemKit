@@ -790,6 +790,11 @@ private struct ActiveBolus {
         managerState.alarmAnnun = response.alarmAnnouncement
         managerState.alertAnnun = response.alertAnnouncement
         managerState.generalAnnun = response.generalAnnouncement
+        managerState.quickBolusEnabled = response.isQuickBolusEnabled()
+        managerState.quickBolusEntryType = response.quickBolusEntryType
+        managerState.quickBolusIncrementUnits = response.quickBolusIncrementUnits
+        managerState.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
+        managerState.quickBolusStatus = response.quickBolusStatus
         lockedState.value = managerState
 
         notifyDelegateStateUpdated()
@@ -1551,6 +1556,19 @@ private struct ActiveBolus {
     }
 
     public func disconnect() {
+        // Send graceful disconnect to pump before tearing down BLE
+        if let transport = pairedTransport {
+            do {
+                _ = try pumpComm.sendMessage(
+                    transport: transport,
+                    message: DisconnectPumpRequest(),
+                    expecting: DisconnectPumpResponse.self
+                )
+            } catch {
+                log.debug("Graceful disconnect request failed (non-fatal): \(error.localizedDescription)")
+            }
+        }
+
         if let manager = activePeripheralManager {
             notificationRouter.stop(with: manager)
             activePeripheralManager = nil
@@ -2821,6 +2839,164 @@ private struct ActiveBolus {
             fetchGlobalPumpSettings()
         } catch {
             telemetryLogger.error("Failed to pump sounds: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Play Sound
+
+    func playSound() {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for play sound")
+            return
+        }
+
+        do {
+            _ = try pumpComm.sendMessage(
+                transport: transport,
+                message: PlaySoundRequest(),
+                expecting: PlaySoundResponse.self
+            )
+        } catch {
+            telemetryLogger.error("Failed to play sound: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Alert Snooze
+
+    func setAlertSnooze(enabled: Bool, durationMins: Int) {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for alert snooze")
+            return
+        }
+
+        do {
+            let response: SetPumpAlertSnoozeResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: SetPumpAlertSnoozeRequest(snoozeEnabled: enabled, snoozeDurationMins: durationMins),
+                expecting: SetPumpAlertSnoozeResponse.self
+            )
+
+            guard response.isStatusOK else {
+                telemetryLogger.error("Failed to set alert snooze: status \(response.status)")
+                return
+            }
+
+            telemetryLogger.info("Alert snooze set: enabled=\(enabled), duration=\(durationMins)m")
+        } catch {
+            telemetryLogger.error("Failed to set alert snooze: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Quick Bolus Settings
+
+    func setQuickBolusSettings(enabled: Bool, mode: QuickBolusMode, increment: QuickBolusIncrement) {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for quick bolus settings")
+            return
+        }
+
+        do {
+            let response: SetQuickBolusSettingsResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment),
+                expecting: SetQuickBolusSettingsResponse.self
+            )
+
+            guard response.isStatusOK else {
+                telemetryLogger.error("Failed to set quick bolus settings: status \(response.status)")
+                return
+            }
+
+            Thread.sleep(forTimeInterval: .seconds(1))
+            fetchGlobalPumpSettings()
+        } catch {
+            telemetryLogger.error("Failed to set quick bolus settings: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Delivery Limits (Standalone)
+
+    func fetchDeliveryLimits() {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for delivery limits fetch")
+            return
+        }
+
+        do {
+            let basalResponse: BasalLimitSettingsResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: BasalLimitSettingsRequest(),
+                expecting: BasalLimitSettingsResponse.self
+            )
+
+            let bolusResponse: GlobalMaxBolusSettingsResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: GlobalMaxBolusSettingsRequest(),
+                expecting: GlobalMaxBolusSettingsResponse.self
+            )
+
+            var managerState = lockedState.value
+            managerState.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
+            managerState.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
+            managerState.maxBolusLimitMilliunits = bolusResponse.maxBolus
+            managerState.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
+            lockedState.value = managerState
+
+            notifyDelegateStateUpdated()
+        } catch {
+            telemetryLogger.error("Failed to fetch delivery limits: \(error.localizedDescription)")
+        }
+    }
+
+    func setMaxBasalLimit(milliunits: Int) -> Bool {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for set max basal limit")
+            return false
+        }
+
+        do {
+            let response: SetMaxBasalLimitResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits),
+                expecting: SetMaxBasalLimitResponse.self
+            )
+
+            guard response.isStatusOK else {
+                telemetryLogger.error("Failed to set max basal limit: status \(response.status)")
+                return false
+            }
+
+            fetchDeliveryLimits()
+            return true
+        } catch {
+            telemetryLogger.error("Failed to set max basal limit: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func setMaxBolusLimit(milliunits: Int) -> Bool {
+        guard let transport = pairedTransport else {
+            telemetryLogger.error("Transport not available for set max bolus limit")
+            return false
+        }
+
+        do {
+            let response: SetMaxBolusLimitResponse = try pumpComm.sendMessage(
+                transport: transport,
+                message: SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits),
+                expecting: SetMaxBolusLimitResponse.self
+            )
+
+            guard response.isStatusOK else {
+                telemetryLogger.error("Failed to set max bolus limit: status \(response.status)")
+                return false
+            }
+
+            fetchDeliveryLimits()
+            return true
+        } catch {
+            telemetryLogger.error("Failed to set max bolus limit: \(error.localizedDescription)")
+            return false
         }
     }
 }
