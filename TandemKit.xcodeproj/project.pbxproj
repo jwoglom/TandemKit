@@ -54,6 +54,10 @@
 		3E59CA1A2F002E0E00D78697 /* NewPumpEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */; };
 		3E59CA1C2F002F7F00D78697 /* DoseEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */; };
 		3E59CD342F0171A700D78697 /* UnfinalizedDose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */; };
+		3E68DB712F38BF6500232E59 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
+		3E68DB722F38BF6500232E59 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3E68DB732F38BFC100232E59 /* TandemBLE.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; };
+		3E68DB742F38BFC100232E59 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3E945F012F2E0FBE00F38431 /* TandemKitReservoirView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */; };
 		3E945F032F2E0FCC00F38431 /* TandemKitReservoirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */; };
 		3E945F052F2E103300F38431 /* NibLoadable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F042F2E103200F38431 /* NibLoadable.swift */; };
@@ -289,14 +293,14 @@
 		3EE345E82EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344392EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift */; };
 		3EE345ED2EC912AE008A07F6 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */; };
 		3EE345EF2EC912AE008A07F6 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */; };
-		3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; platformFilter = ios; };
+		3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
 		3EE345F62EC9130B008A07F6 /* TandemKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE345FA2EC91326008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
 		3EE345FB2EC91326008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3EE345FF2EC9132D008A07F6 /* TandemBLE.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; };
-		3EE346002EC9132D008A07F6 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3EE346002EC9132D008A07F6 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE346042EC91332008A07F6 /* TandemCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; };
-		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3EE346052EC91332008A07F6 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3EE346102EC91B3D008A07F6 /* LoopKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBC92EC9023C0063D7BC /* LoopKit.framework */; };
 		3EE346172EC92751008A07F6 /* Bundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346162EC9274E008A07F6 /* Bundle.swift */; };
 		3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346182EC92800008A07F6 /* TandemKitSetupView.swift */; };
@@ -336,6 +340,20 @@
 			remoteGlobalIDString = 1AAA186D2D2B1E060061C043;
 			remoteInfo = TandemKit;
 		};
+		3E68DB6F2F38BEFC00232E59 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1AAA18652D2B1E060061C043 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3EE344072EC9125A008A07F6;
+			remoteInfo = TandemCore;
+		};
+		3E68DB752F38BFC100232E59 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1AAA18652D2B1E060061C043 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3EEECBE42EC904E80063D7BC;
+			remoteInfo = TandemBLE;
+		};
 		3EE345F72EC9130B008A07F6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1AAA18652D2B1E060061C043 /* Project object */;
@@ -373,7 +391,9 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				3E68DB722F38BF6500232E59 /* TandemCore.framework in Embed Frameworks */,
 				3EE345F62EC9130B008A07F6 /* TandemKit.framework in Embed Frameworks */,
+				3E68DB742F38BFC100232E59 /* TandemBLE.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -760,7 +780,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E68DB712F38BF6500232E59 /* TandemCore.framework in Frameworks */,
 				3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */,
+				3E68DB732F38BFC100232E59 /* TandemBLE.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1428,6 +1450,8 @@
 			);
 			dependencies = (
 				3EE345F82EC9130B008A07F6 /* PBXTargetDependency */,
+				3E68DB702F38BEFC00232E59 /* PBXTargetDependency */,
+				3E68DB762F38BFC100232E59 /* PBXTargetDependency */,
 			);
 			name = TandemKitPlugin;
 			packageProductDependencies = (
@@ -1900,9 +1924,18 @@
 			target = 1AAA186D2D2B1E060061C043 /* TandemKit */;
 			targetProxy = 1AAA187A2D2B1E060061C043 /* PBXContainerItemProxy */;
 		};
+		3E68DB702F38BEFC00232E59 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3EE344072EC9125A008A07F6 /* TandemCore */;
+			targetProxy = 3E68DB6F2F38BEFC00232E59 /* PBXContainerItemProxy */;
+		};
+		3E68DB762F38BFC100232E59 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3EEECBE42EC904E80063D7BC /* TandemBLE */;
+			targetProxy = 3E68DB752F38BFC100232E59 /* PBXContainerItemProxy */;
+		};
 		3EE345F82EC9130B008A07F6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			platformFilter = ios;
 			target = 1AAA186D2D2B1E060061C043 /* TandemKit */;
 			targetProxy = 3EE345F72EC9130B008A07F6 /* PBXContainerItemProxy */;
 		};
