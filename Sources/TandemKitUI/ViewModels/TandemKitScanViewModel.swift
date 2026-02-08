@@ -88,21 +88,20 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func onPairSuccess() {
-        DispatchQueue.main.async {
-            self.log.info("Pairing successful")
-            self.nextStep()
-        }
-
         // TODO: Uncomment after syncBasal is fixed...
         guard let pumpManager = self.pumpManager else {
-            log.error("No pumpManager")
-            nextStep()
+            DispatchQueue.main.async {
+                self.log.error("No pumpManager")
+                self.nextStep()
+            }
             return
         }
         
         pumpManager.ensureCurrentPumpData { _ in
-            self.log.info("Pairing successful")
-            self.nextStep()
+            DispatchQueue.main.async {
+                self.log.info("Pairing successful")
+                self.nextStep()
+            }
         }
         
 //        let soundRequest = SetPumpSoundsRequest(
