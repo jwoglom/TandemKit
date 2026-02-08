@@ -50,7 +50,7 @@ private struct ActiveBolus {
     let dose: UnfinalizedDose
 }
 
-@available(macOS 13.0, iOS 14.0, *) public class TandemPumpManager: PumpManager, Pluggable {
+public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
     public var localizedTitle: String = "TandemPumpManager"
@@ -330,25 +330,21 @@ private struct ActiveBolus {
     }
 
     private func reauthenticateIfNeeded(on transport: PumpMessageTransport) throws {
-        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-            guard let pumpState = lockedState.value.pumpState,
-                  let derivedSecret = pumpState.derivedSecret,
-                  let peripheralUuid = pumpState.peripheralUuid
-            else {
-                telemetryLogger
-                    .error("Stored pump state missing authentication artifacts; cannot reauthenticate before telemetry")
-                throw PumpCommError.missingAuthenticationKey
-            }
+        guard let pumpState = lockedState.value.pumpState,
+              let derivedSecret = pumpState.derivedSecret,
+              let peripheralUuid = pumpState.peripheralUuid
+        else {
+            telemetryLogger
+                .error("Stored pump state missing authentication artifacts; cannot reauthenticate before telemetry")
+            throw PumpCommError.missingAuthenticationKey
+        }
 
-            telemetryLogger.debug("Authenticating reconnect session using stored derived secret")
-            try pumpComm.confirmAuthentication(
-                transport: transport,
-                peripheralUuid: peripheralUuid,
-                derivedSecret: derivedSecret
-            )
-        #else
-            telemetryLogger.debug("Skipping stored-credential authentication – JPake unavailable in this build")
-        #endif
+        telemetryLogger.debug("Authenticating reconnect session using stored derived secret")
+        try pumpComm.confirmAuthentication(
+            transport: transport,
+            peripheralUuid: peripheralUuid,
+            derivedSecret: derivedSecret
+        )
     }
 
     private func scheduleBootstrapRetry(afterFailureWith _: PumpCommError, transport: PumpMessageTransport) {
@@ -586,7 +582,16 @@ private struct ActiveBolus {
     }
 
     public var pumpReservoirCapacity: Double {
-        250 // Tandem mobi reservoir capacity in units. t:slim X2 is 300
+        200 // Tandem mobi reservoir capacity in units. t:slim X2 is 300
+    }
+    
+    public func roundToSupportedBolusVolume(units: Double) -> Double {
+        // We do support rounding a 0 U volume to 0
+        supportedBolusVolumes.last(where: { $0 <= units }) ?? 0
+    }
+
+    public func roundToSupportedBasalRate(unitsPerHour: Double) -> Double {
+        supportedBasalRates.last(where: { $0 <= unitsPerHour }) ?? 0
     }
 
     public var lastSync: Date? {
@@ -1238,7 +1243,9 @@ private struct ActiveBolus {
 
         let status = status
         for (_, statusObserver) in statusObservers.value {
-            statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
+            statusObserver.queue.async {
+                statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
+            }
         }
     }
 

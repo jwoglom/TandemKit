@@ -105,7 +105,6 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitSetupView(nextAction: stepFinished)
             return hostingController(rootView: view)
         case .deviceScanning:
-            pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager!)
             let nextStep = {
                 self.resetNavigationTo([.setupComplete])
             }
@@ -113,6 +112,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
+            pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager!)
             let returnToMainScreen: () -> Void = {
                 guard let pumpManager = self.pumpManager else {
                     return
@@ -122,7 +122,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 state.onboarded = true
                 pumpManager.lockedState.value = state
 
-                self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager!)
+                self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: pumpManager)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }
 
