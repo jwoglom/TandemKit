@@ -584,7 +584,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public var pumpReservoirCapacity: Double {
         200 // Tandem mobi reservoir capacity in units. t:slim X2 is 300
     }
-    
+
     public func roundToSupportedBolusVolume(units: Double) -> Double {
         // We do support rounding a 0 U volume to 0
         supportedBolusVolumes.last(where: { $0 <= units }) ?? 0
