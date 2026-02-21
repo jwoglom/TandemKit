@@ -279,6 +279,16 @@ struct TandemKitSettingsView: View {
                     }
                 }
 
+                if let battery = viewModel.batteryPercentage {
+                    HStack {
+                        Text(LocalizedString("Battery percentage", comment: "Text for battery"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text("\(battery)")
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Button(action: {
                     viewModel.openInsulinType()
                 }) {
@@ -417,10 +427,10 @@ struct TandemKitSettingsView: View {
 
     var reservoirStatus: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .trailing, spacing: 0) {
                 Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
                     .foregroundColor(Color(UIColor.secondaryLabel))
-                VStack(alignment: .center, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 4) {
                     if let unitsText = viewModel.reservoirUnitsText {
                         HStack(alignment: .lastTextBaseline, spacing: 3) {
                             Text(unitsText)

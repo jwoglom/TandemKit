@@ -82,8 +82,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        delegate = self
+
+        navigationBar.prefersLargeTitles = true // Ensure nav bar text is displayed correctly
 
         if screenStack.isEmpty {
             screenStack = [getInitialScreen()]
