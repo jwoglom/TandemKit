@@ -39,7 +39,7 @@ public final class TandemKitReservoirView: LevelHUDView, NibLoadable {
 
     private func updateViews() {
         if let reservoirLevel = reservoirLevel, let date = lastUpdateDate {
-            level = reservoirLevel / 300
+            level = reservoirLevel / 200
             let units = NSString(format: "%.0f", reservoirLevel)
 
             let time = timeFormatter.string(from: date)
