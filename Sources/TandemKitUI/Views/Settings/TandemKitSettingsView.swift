@@ -5,6 +5,7 @@ import TandemCore
 struct TandemKitSettingsView: View {
     @Environment(\.dismissAction) private var dismiss
     @Environment(\.guidanceColors) private var guidanceColors
+    @Environment(\.insulinTintColor) var insulinTintColor
 
     @State var isSharePresented: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
@@ -426,30 +427,28 @@ struct TandemKitSettingsView: View {
     }
 
     var reservoirStatus: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
-                    .foregroundColor(Color(UIColor.secondaryLabel))
-                VStack(alignment: .trailing, spacing: 4) {
-                    if let unitsText = viewModel.reservoirUnitsText {
-                        HStack(alignment: .lastTextBaseline, spacing: 3) {
-                            Text(unitsText)
-                                .font(.system(size: 28))
-                                .fontWeight(.heavy)
-                                .fixedSize()
-                            Text("U")
-                                .foregroundColor(.secondary)
-                        }
-                    } else {
-                        Text("--")
+        VStack(alignment: .trailing, spacing: 5) {
+            Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
+                .foregroundColor(Color(UIColor.secondaryLabel))
+
+            if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
+                HStack(alignment: .center, spacing: 5) {
+                    ReservoirView(reservoirLevel: reservoirLevel, fillColor: reservoirColor(reservoirLevel))
+                        .frame(width: 19, height: 26)
+
+                    HStack(alignment: .lastTextBaseline, spacing: 3) {
+                        Text(unitsText)
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
+                            .fixedSize()
+                        Text("U")
+                            .foregroundColor(.secondary)
                     }
-                    // fixed cartridge size for Mobi
-                    ProgressBar(value: viewModel.reservoirValue?.unitVolume ?? 0, total: 200)
-                        .frame(maxWidth: 128)
-                        .frame(height: 12)
                 }
+            } else {
+                Text("--")
+                    .font(.system(size: 28))
+                    .fontWeight(.heavy)
             }
         }
     }
@@ -476,31 +475,19 @@ struct TandemKitSettingsView: View {
                         .fixedSize()
                 }
             } else if viewModel.isSuspended == false {
-                HStack(alignment: .center) {
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 34))
-                        .fixedSize()
-                        .foregroundColor(.accentColor)
-                    VStack(alignment: .center) {
-                        if let percentage = viewModel.tempRatePercentage,
-                           let rate = viewModel.tempRateAbsolute,
-                           let duration = viewModel.tempRateDuration
-                        {
-                            Text(String(format: "%.2f U/hr", rate))
-                                .fontWeight(.bold)
-                                .font(.system(size: 24))
-                            Text("\(percentage)% (for \(formatDuration(duration)))")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 16))
-                        } else {
-                            Text(viewModel.currentBasalRateForDisplay)
-                                .fontWeight(.bold)
-                                .font(.system(size: 24))
-                            Text("No Temp Rate")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 16))
-                        }
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    if let rate = viewModel.tempRateAbsolute {
+                        Text(String(format: "%.2f", rate))
+                            .fontWeight(.bold)
+                            .font(.system(size: 24))
+                    } else {
+                        Text(viewModel.currentBasalRateForDisplay)
+                            .fontWeight(.bold)
+                            .font(.system(size: 24))
                     }
+
+                    Text("U/hr")
+                        .foregroundColor(.secondary)
                 }
             } else {
                 HStack(alignment: .center) {
@@ -520,10 +507,22 @@ struct TandemKitSettingsView: View {
         if viewModel.isSuspended == true {
             return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
         } else if viewModel.tempRateActive {
-            return LocalizedString("Temp Rate", comment: "Title for temp rate")
+            return LocalizedString("Temp Basal", comment: "Title for temp rate")
         } else {
-            return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
+            return LocalizedString("Scheduled Basal", comment: "Title of insulin delivery section")
         }
+    }
+
+    private func reservoirColor(_ reservoirLevel: Double) -> Color {
+        if reservoirLevel > 25 {
+            return insulinTintColor
+        }
+
+        if reservoirLevel > 0 {
+            return guidanceColors.warning
+        }
+
+        return guidanceColors.critical
     }
 
     // TODO(jwoglom): replace with consts from TandemCore

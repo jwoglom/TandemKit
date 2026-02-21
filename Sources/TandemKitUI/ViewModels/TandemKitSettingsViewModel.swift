@@ -129,7 +129,7 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var currentBasalRateForDisplay: String {
         guard let rate = currentProfileBaseBasalRate else { return "" }
-        return String(format: "%.2f U/hr", rate)
+        return String(format: "%.2f", rate)
     }
 
     var notificationCount: Int {
