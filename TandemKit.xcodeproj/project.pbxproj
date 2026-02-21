@@ -58,6 +58,7 @@
 		3E68DB722F38BF6500232E59 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3E68DB732F38BFC100232E59 /* TandemBLE.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; };
 		3E68DB742F38BFC100232E59 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3E7EC31A2F49E5B8005157EB /* ReservoirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7EC3192F49E5B8005157EB /* ReservoirView.swift */; };
 		3E945F012F2E0FBE00F38431 /* TandemKitReservoirView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */; };
 		3E945F032F2E0FCC00F38431 /* TandemKitReservoirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */; };
 		3E945F052F2E103300F38431 /* NibLoadable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F042F2E103200F38431 /* NibLoadable.swift */; };
@@ -471,6 +472,7 @@
 		3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPumpEvent.swift; sourceTree = "<group>"; };
 		3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseEntry.swift; sourceTree = "<group>"; };
 		3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnfinalizedDose.swift; sourceTree = "<group>"; };
+		3E7EC3192F49E5B8005157EB /* ReservoirView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReservoirView.swift; sourceTree = "<group>"; };
 		3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = TandemKitReservoirView.xib; sourceTree = "<group>"; };
 		3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitReservoirView.swift; sourceTree = "<group>"; };
 		3E945F042F2E103200F38431 /* NibLoadable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NibLoadable.swift; sourceTree = "<group>"; };
@@ -926,6 +928,7 @@
 		3ECD42E32F142F9F007ADED9 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				3E7EC3192F49E5B8005157EB /* ReservoirView.swift */,
 				3E945F042F2E103200F38431 /* NibLoadable.swift */,
 				3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */,
 				3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */,
@@ -1600,6 +1603,7 @@
 				WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */,
 				02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */,
 				CFD999683FF946ABAB42D13B /* TandemKitFillTubingView.swift in Sources */,
+				3E7EC31A2F49E5B8005157EB /* ReservoirView.swift in Sources */,
 				1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */,
 				0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */,
 				2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */,

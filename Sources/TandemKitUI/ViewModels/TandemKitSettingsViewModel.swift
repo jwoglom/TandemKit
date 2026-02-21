@@ -34,6 +34,13 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     private var pendingRefreshOnReconnect = false
 
+    private var numberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 0
+        formatter.positiveSuffix = "%"
+        return formatter
+    }()
+
     private let dateFormatter = {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
@@ -108,13 +115,21 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.state.tempRateDuration
     }
 
+    var batteryPercentage: String? {
+        guard let battery = pumpManager?.state.lastBatteryReading?.chargeRemaining else {
+            return nil
+        }
+
+        return numberFormatter.string(from: (battery * 100) as NSNumber)
+    }
+
     var currentProfileBaseBasalRate: Double? {
         pumpManager?.getScheduledBasalRate()
     }
 
     var currentBasalRateForDisplay: String {
         guard let rate = currentProfileBaseBasalRate else { return "" }
-        return String(format: "%.2f U/hr", rate)
+        return String(format: "%.2f", rate)
     }
 
     var notificationCount: Int {

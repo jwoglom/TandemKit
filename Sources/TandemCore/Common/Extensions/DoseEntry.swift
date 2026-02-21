@@ -45,18 +45,20 @@ public extension DoseEntry {
         duration: TimeInterval,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
-        endDate: Date? = nil,
-        syncIdentifier: String? = nil
+        endDate: Date? = nil
     ) -> DoseEntry {
         if let endDate = endDate {
+            let duration = endDate.timeIntervalSince(startDate)
             return DoseEntry(
                 type: .tempBasal,
                 startDate: startDate,
                 endDate: endDate,
                 value: absoluteUnit,
                 unit: .unitsPerHour,
-                syncIdentifier: syncIdentifier,
-                insulinType: insulinType
+                deliveredUnits: roundBasalRate(absoluteUnit * (duration / .hours(1))),
+                insulinType: insulinType,
+                automatic: true,
+                isMutable: false
             )
         }
 
@@ -66,8 +68,9 @@ public extension DoseEntry {
             endDate: startDate + duration,
             value: absoluteUnit,
             unit: .unitsPerHour,
-            syncIdentifier: syncIdentifier,
-            insulinType: insulinType
+            insulinType: insulinType,
+            automatic: true,
+            isMutable: true
         )
     }
 
@@ -90,5 +93,9 @@ public extension DoseEntry {
 
     static func suspend(suspendDate: Date = Date.now) -> DoseEntry {
         DoseEntry(suspendDate: suspendDate)
+    }
+
+    private static func roundBasalRate(_ rate: Double) -> Double {
+        Array(stride(from: 0.01, through: 15.0, by: 0.01)).last(where: { $0 <= rate }) ?? 0
     }
 }

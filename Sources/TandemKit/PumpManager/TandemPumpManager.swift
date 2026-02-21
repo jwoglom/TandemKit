@@ -584,7 +584,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public var pumpReservoirCapacity: Double {
         200 // Tandem mobi reservoir capacity in units. t:slim X2 is 300
     }
-    
+
     public func roundToSupportedBolusVolume(units: Double) -> Double {
         // We do support rounding a 0 U volume to 0
         supportedBolusVolumes.last(where: { $0 <= units }) ?? 0
@@ -856,8 +856,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             absoluteUnit: tempRateAbsolute,
                             duration: tempRateDuration,
                             insulinType: state.insulinType,
-                            startDate: tempRateStart,
-                            syncIdentifier: state.tempRateSyncIdentifier
+                            startDate: tempRateStart
                         ),
                         date: tempRateStart
                     )
@@ -893,8 +892,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 duration: 0, // Ignored when a dose is finished
                 insulinType: lockedState.value.insulinType,
                 startDate: tempRateStart,
-                endDate: now,
-                syncIdentifier: state.tempRateSyncIdentifier
+                endDate: now
             )
 
             updateStatus { status in
@@ -1413,7 +1411,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
                 ]
 
-                if let tempRateAbsolute = self.state.tempRateAbsolute, let tempRateDuration = self.state.tempRateDuration,
+                if let tempRateAbsolute = self.state.tempRateAbsolute,
+                   let tempRateDuration = self.state.tempRateDuration,
                    let tempRateStart = self.state.tempRateStart
                 {
                     events.append(
@@ -1422,8 +1421,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                 absoluteUnit: tempRateAbsolute,
                                 duration: tempRateDuration,
                                 insulinType: self.state.insulinType,
-                                startDate: tempRateStart,
-                                syncIdentifier: self.state.tempRateSyncIdentifier
+                                startDate: tempRateStart
                             ),
                             date: tempRateStart
                         )
@@ -1612,12 +1610,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-        if !telemetryConfigured {
-            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
-                self?.performScheduledHistoryFetch()
-            }
-            telemetryConfigured = true
-        }
+//        if !telemetryConfigured {
+//            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+//                self?.performScheduledHistoryFetch()
+//            }
+//            telemetryConfigured = true
+//        }
 
         fetchBasalStatus()
         fetchReservoirStatus()
@@ -2185,8 +2183,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now,
-                        syncIdentifier: state.tempRateSyncIdentifier
+                        endDate: Date.now
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
 
@@ -2282,13 +2279,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
 
                     let startTime = Date.now
-                    let absoluteRate = Double(baselineRate * (Double(percent) / 100))
+                    let absoluteRate = roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
                     let dose = DoseEntry.tempBasal(
                         absoluteUnit: absoluteRate,
                         duration: duration,
                         insulinType: lockedState.value.insulinType,
-                        startDate: startTime,
-                        syncIdentifier: HistoryToDoseMapper.tempBasalSyncIdentifier(response.tempRateId)
+                        startDate: startTime
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
@@ -2401,8 +2397,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         duration: 0,
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now,
-                        syncIdentifier: state.tempRateSyncIdentifier
+                        endDate: Date.now
                     )
                     doses.append(
                         NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
@@ -3016,18 +3011,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
                 }
             }
-        }
-    }
-
-    public func stopTempBasal() {
-        guard let transport = pairedTransport else {
-            return
-        }
-
-        do {
-            _ = try pumpComm.sendMessage(transport: transport, message: StopTempRateRequest())
-        } catch {
-            // ignore any errors
         }
     }
 
