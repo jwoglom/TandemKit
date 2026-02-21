@@ -851,8 +851,7 @@ private struct ActiveBolus {
                             absoluteUnit: tempRateAbsolute,
                             duration: tempRateDuration,
                             insulinType: state.insulinType,
-                            startDate: tempRateStart,
-                            syncIdentifier: state.tempRateSyncIdentifier
+                            startDate: tempRateStart
                         ),
                         date: tempRateStart
                     )
@@ -888,8 +887,7 @@ private struct ActiveBolus {
                 duration: 0, // Ignored when a dose is finished
                 insulinType: lockedState.value.insulinType,
                 startDate: tempRateStart,
-                endDate: now,
-                syncIdentifier: state.tempRateSyncIdentifier
+                endDate: now
             )
 
             updateStatus { status in
@@ -1406,7 +1404,8 @@ private struct ActiveBolus {
                     NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
                 ]
 
-                if let tempRateAbsolute = self.state.tempRateAbsolute, let tempRateDuration = self.state.tempRateDuration,
+                if let tempRateAbsolute = self.state.tempRateAbsolute,
+                   let tempRateDuration = self.state.tempRateDuration,
                    let tempRateStart = self.state.tempRateStart
                 {
                     events.append(
@@ -1415,8 +1414,7 @@ private struct ActiveBolus {
                                 absoluteUnit: tempRateAbsolute,
                                 duration: tempRateDuration,
                                 insulinType: self.state.insulinType,
-                                startDate: tempRateStart,
-                                syncIdentifier: self.state.tempRateSyncIdentifier
+                                startDate: tempRateStart
                             ),
                             date: tempRateStart
                         )
@@ -1605,12 +1603,12 @@ private struct ActiveBolus {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-        if !telemetryConfigured {
-            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
-                self?.performScheduledHistoryFetch()
-            }
-            telemetryConfigured = true
-        }
+//        if !telemetryConfigured {
+//            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
+//                self?.performScheduledHistoryFetch()
+//            }
+//            telemetryConfigured = true
+//        }
 
         fetchBasalStatus()
         fetchReservoirStatus()
@@ -2178,8 +2176,7 @@ private struct ActiveBolus {
                         duration: 0, // Ignored when a dose is finished
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now,
-                        syncIdentifier: state.tempRateSyncIdentifier
+                        endDate: Date.now
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
 
@@ -2275,13 +2272,12 @@ private struct ActiveBolus {
                     }
 
                     let startTime = Date.now
-                    let absoluteRate = Double(baselineRate * (Double(percent) / 100))
+                    let absoluteRate = roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
                     let dose = DoseEntry.tempBasal(
                         absoluteUnit: absoluteRate,
                         duration: duration,
                         insulinType: lockedState.value.insulinType,
-                        startDate: startTime,
-                        syncIdentifier: HistoryToDoseMapper.tempBasalSyncIdentifier(response.tempRateId)
+                        startDate: startTime
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
@@ -2394,8 +2390,7 @@ private struct ActiveBolus {
                         duration: 0,
                         insulinType: lockedState.value.insulinType,
                         startDate: tempRateStart,
-                        endDate: Date.now,
-                        syncIdentifier: state.tempRateSyncIdentifier
+                        endDate: Date.now
                     )
                     doses.append(
                         NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
