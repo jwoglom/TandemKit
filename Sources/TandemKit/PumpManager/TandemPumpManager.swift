@@ -3014,18 +3014,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func stopTempBasal() {
-        guard let transport = pairedTransport else {
-            return
-        }
-
-        do {
-            _ = try pumpComm.sendMessage(transport: transport, message: StopTempRateRequest())
-        } catch {
-            // ignore any errors
-        }
-    }
-
     public func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
         telemetryLogger
             .error(

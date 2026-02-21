@@ -70,9 +70,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         }
 
         self.colorPalette = colorPalette
-
         self.allowDebugFeatures = allowDebugFeatures
-
         self.allowedInsulinTypes = allowedInsulinTypes
 
         super.init(navigationBarClass: UINavigationBar.self, toolbarClass: UIToolbar.self)
