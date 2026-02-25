@@ -1106,43 +1106,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchAlertAndAlarmStatus() {
-        guard let transport = telemetryTransportIfReady(for: .alerts) else {
-            return
-        }
-
-        // Fetch alert status
-        do {
-            let alertResponse: AlertStatusResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: AlertStatusRequest(),
-                expecting: AlertStatusResponse.self
-            )
-
-            telemetryLogger.debug("[telemetry] Alert status: \(alertResponse.alerts)")
-
-            // Auto-acknowledge basal alerts if enabled
-            if lockedState.value.autoAcknowledgeBasalAlerts {
-                autoAcknowledgeBasalAlertsIfNeeded(alertResponse: alertResponse, transport: transport)
-            }
-        } catch {
-            telemetryLogger.error("Alert status telemetry request failed: \(error)")
-        }
-
-        // Fetch alarm status (no auto-ack for alarms)
-        do {
-            let alarmResponse: AlarmStatusResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: AlarmStatusRequest(),
-                expecting: AlarmStatusResponse.self
-            )
-
-            telemetryLogger.debug("[telemetry] Alarm status: \(alarmResponse.alarms)")
-        } catch {
-            telemetryLogger.error("Alarm status telemetry request failed: \(error)")
-        }
-    }
-
     private func fetchControlIQStatus() {
         guard let transport = telemetryTransportIfReady(for: .controlIQ) else {
             return
@@ -1813,6 +1776,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func setScanningMode(_ enabled: Bool) {
         inScanningMode.value = enabled
+    }
+    
+    private func handleAlertResponse(_ alertResponse: AlertStatusResponse) {
+        guard let transport = telemetryTransportIfReady(for: .alerts) else {
+            return
+        }
+
+        // Auto-acknowledge basal alerts if enabled
+        if lockedState.value.autoAcknowledgeBasalAlerts {
+            autoAcknowledgeBasalAlertsIfNeeded(alertResponse: alertResponse, transport: transport)
+        }
     }
 
     private func handleUnsolicitedHistoryStream(_ response: HistoryLogStreamResponse) {
@@ -2970,6 +2944,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             } else {
                 handleUnsolicitedHistoryStream(historyStream)
             }
+        case let alertResponse as AlertStatusResponse:
+            handleAlertResponse(alertResponse)
         case let fillTubingState as FillTubingStateStreamResponse:
             handleFillTubingStateStream(fillTubingState)
         default:
