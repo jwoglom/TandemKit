@@ -169,10 +169,10 @@ jobs:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/Build
             ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved', 'tandemkit/Package.swift', 'tandemkit/Sources/**', 'tandemkit/Tests/**', 'trio/**/*.xcodeproj/**', 'trio/**/*.xcworkspace/**') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
           restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved') }}-
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
 
       - name: Boot selected simulator
         run: |
@@ -206,7 +206,6 @@ jobs:
             -resultBundlePath "TrioTests.xcresult" \
             ${XCODEBUILD_COMMON_FLAGS} \
             -retry-tests-on-failure \
-            -test-iterations 2 \
             -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-test.log"

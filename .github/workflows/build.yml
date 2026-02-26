@@ -162,10 +162,10 @@ jobs:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/Build
             ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-build-${{ hashFiles('trio/**/Package.resolved', 'tandemkit/Package.swift', 'tandemkit/Sources/**', 'trio/**/*.xcodeproj/**', 'trio/**/*.xcworkspace/**') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
           restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-build-${{ hashFiles('trio/**/Package.resolved') }}-
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-build-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
 
       - name: Build Trio (iOS Simulator)
         run: |
