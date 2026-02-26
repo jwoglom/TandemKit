@@ -1,8 +1,21 @@
 name: Test Trio (with TandemKit under test)
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main ]
+    paths:
+      - '.github/workflows/build.yml'
+      - '.github/workflows/test.yml'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '*.xcodeproj/**'
+      - '*.xcworkspace/**'
   pull_request_target:
     types: [ labeled ]
     branches: [ main ]
@@ -23,12 +36,17 @@ jobs:
       github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
     runs-on: macos-latest
+    timeout-minutes: 25
     environment: ${{ github.event_name == 'pull_request_target' && 'pr-testing' || '' }}
     env:
       TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
       TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
       DERIVED_DATA_PATH: DerivedData
+      SPM_CACHE_PATH: .spm
       TRIO_REPO_TOKEN: ${{ secrets.TRIO_REPO_TOKEN }}
+      XCODEBUILD_COMMON_FLAGS: >-
+        -skipMacroValidation
+        -skipPackagePluginValidation
     steps:
       - name: Checkout TandemKit (this repo)
         uses: actions/checkout@v4
@@ -40,6 +58,12 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
 
       - name: Select an available iPhone simulator
         run: |
@@ -134,28 +158,56 @@ jobs:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/SourcePackages
             ~/.swiftpm
-          key: ${{ runner.os }}-spm-${{ hashFiles('trio/**/Package.resolved') }}
+            ${{ env.SPM_CACHE_PATH }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-${{ hashFiles('trio/**/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-
 
-      - name: Resolve packages
+      - name: Cache Xcode DerivedData intermediates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/Build
+            ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved', 'tandemkit/Package.swift', 'tandemkit/Sources/**', 'tandemkit/Tests/**', 'trio/**/*.xcodeproj/**', 'trio/**/*.xcworkspace/**') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-
+
+      - name: Boot selected simulator
         run: |
           set -euo pipefail
-          xcodebuild -resolvePackageDependencies \
-            -workspace "trio/Trio.xcworkspace" \
-            -scheme "Trio" \
-            -derivedDataPath "${DERIVED_DATA_PATH}"
+          UDID="${SIMULATOR_DESTINATION##*id=}"
+          xcrun simctl bootstatus "${UDID}" -b || true
 
-      - name: Run Trio tests (iOS Simulator)
+      - name: Build Trio tests for execution (no test run)
         run: |
           set -o pipefail
-          xcodebuild test \
+          xcodebuild build-for-testing \
+            -workspace "trio/Trio.xcworkspace" \
+            -scheme "Trio Tests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Run Trio tests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
             -workspace "trio/Trio.xcworkspace" \
             -scheme "Trio Tests" \
             -configuration Debug \
             -destination "${SIMULATOR_DESTINATION}" \
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             -resultBundlePath "TrioTests.xcresult" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -retry-tests-on-failure \
+            -test-iterations 2 \
+            -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-test.log"
 
@@ -165,5 +217,6 @@ jobs:
         with:
           name: trio-test-artifacts
           path: |
+            xcodebuild-build-for-testing.log
             xcodebuild-test.log
             TrioTests.xcresult
