@@ -45,7 +45,7 @@ public struct PacketArrayList {
     }
 
     var debugFirstByteMod15: Int { firstByteMod15 }
-    var expectedOpCodeValue: UInt8 { expectedOpCode }
+    public var expectedOpCodeValue: UInt8 { expectedOpCode }
 
     private mutating func parse(_ packet: Data) throws {
         let opCode = packet[2]
@@ -83,6 +83,10 @@ public struct PacketArrayList {
         if txId != expectedTxId {
             if PacketArrayList.ignoreInvalidTxId { return }
             throw UnexpectedTransactionIdError(expected: expectedTxId, actual: txId)
+        }
+
+        if !empty, opCode != expectedOpCode {
+            throw UnexpectedOpCodeError(expected: expectedOpCode, actual: opCode)
         }
 
         if empty {

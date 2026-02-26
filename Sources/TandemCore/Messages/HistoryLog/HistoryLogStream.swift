@@ -41,10 +41,30 @@ public class HistoryLogStreamResponse: Message {
     public var historyLogStreamBytes: [Data]
     public var historyLogs: [HistoryLog]
 
+    /// PumpX2 stream framing expects: 1 byte count + 1 byte streamId + N*26-byte history logs.
+    public var hasExpectedLength: Bool {
+        cargo.count == 2 + (numberOfHistoryLogs * HistoryLog.length)
+    }
+
     public required init(cargo: Data) {
         self.cargo = cargo
+
+        guard cargo.count >= 2 else {
+            numberOfHistoryLogs = 0
+            streamId = 0
+            historyLogStreamBytes = []
+            historyLogs = []
+            return
+        }
+
         numberOfHistoryLogs = Int(cargo[0])
         streamId = Int(cargo[1])
+
+        guard hasExpectedLength else {
+            historyLogStreamBytes = []
+            historyLogs = []
+            return
+        }
 
         var list: [Data] = []
         var idx = 2
