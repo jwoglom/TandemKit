@@ -57,16 +57,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
 
-    // Tandem Mobi and t:slim X2: max 16 basal segments
+    // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
-    // Tandem Mobi and t:slim X2: 0.01 - 15.00u/hr
-    public static var onboardingSupportedBasalRates: [Double] = Array(stride(from: 0.01, through: 15.0, by: 0.01))
+    // Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
+    public static var onboardingSupportedBasalRates: [Double] = [0.0] + strideRange(from: 0.1, through: 15.0, by: 0.01)
 
-    // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus
-    public static var onboardingSupportedBolusVolumes: [Double] = Array(stride(from: 0.05, through: 25.0, by: 0.01))
+    // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus in 0.01u chunks
+    public static var onboardingSupportedBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
-    public static var onboardingSupportedMaximumBolusVolumes: [Double] = Array(stride(from: 0.05, through: 25.0, by: 0.01))
+    public static var onboardingSupportedMaximumBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     public let lockedState: Locked<TandemPumpManagerState>
@@ -3128,5 +3128,23 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
 
     public func acknowledgeAlert(alertIdentifier _: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
         completion(nil)
+    }
+}
+
+extension TandemPumpManager {
+    private static func strideRange(
+        from start: Double,
+        through end: Double,
+        by step: Double
+    ) -> [Double] {
+        let multiplier = 1000.0
+
+        let startInt = Int(round(start * multiplier))
+        let endInt   = Int(round(end * multiplier))
+        let stepInt  = Int(round(step * multiplier))
+
+        return stride(from: startInt, through: endInt, by: stepInt).map {
+            Double($0) / multiplier
+        }
     }
 }
