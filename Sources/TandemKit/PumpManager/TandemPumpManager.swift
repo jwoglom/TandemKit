@@ -2230,6 +2230,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+                let absoluteRate = roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
 
                 if duration <= 0 || percent == 100 {
                     // Loop wants us to only cancel the temp basal
@@ -2247,7 +2248,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
-                    log.info("ENACT-TEMP-BASAL(units: \(unitsPerHour)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
+                    if absoluteRate < unitsPerHour {
+                        log.warning("Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr")
+                    }
+
+                    log.info("ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
                     let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
                     var response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -2330,7 +2335,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
 
                     let startTime = Date.now
-                    let absoluteRate = roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
                     let dose = DoseEntry.tempBasal(
                         absoluteUnit: absoluteRate,
                         duration: duration,
