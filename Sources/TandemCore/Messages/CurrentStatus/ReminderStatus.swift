@@ -125,6 +125,11 @@ public class ReminderStatusResponse: Message, NotificationMessage {
         }
 
         public var id: Int { rawValue }
+
+        public var notificationDescription: String? {
+            let rawName = String(describing: self)
+            return rawName.hasPrefix("DEFAULT_REMINDER") ? nil : rawName
+        }
     }
 
     public var notificationCount: Int { reminders.count }

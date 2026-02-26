@@ -56,26 +56,26 @@ public class AlarmStatusResponse: Message, NotificationMessage {
     /// Alarm types encoded in the response bitmask.
     public enum AlarmResponseType: Int, CaseIterable, Comparable, NotificationEnum {
         case CARTRIDGE_ALARM = 0
-        case CARTRIDGE_ALARM2 = 1
+        case CARTRIDGE_ALARM_2 = 1
         case OCCLUSION_ALARM = 2
         case PUMP_RESET_ALARM = 3
         case DEFAULT_ALARM_4 = 4
-        case CARTRIDGE_ALARM3 = 5
-        case CARTRIDGE_ALARM4 = 6
+        case CARTRIDGE_ALARM_3 = 5
+        case CARTRIDGE_ALARM_4 = 6
         case AUTO_OFF_ALARM = 7
         case EMPTY_CARTRIDGE_ALARM = 8
-        case CARTRIDGE_ALARM5 = 9
+        case CARTRIDGE_ALARM_5 = 9
         case TEMPERATURE_ALARM = 10
         case TEMPERATURE_ALARM2 = 11
         case BATTERY_SHUTDOWN_ALARM = 12
         case DEFAULT_ALARM_13 = 13
         case INVALID_DATE_ALARM = 14
         case TEMPERATURE_ALARM3 = 15
-        case CARTRIDGE_ALARM6 = 16
+        case CARTRIDGE_ALARM_6 = 16
         case DEFAULT_ALARM_17 = 17
         case RESUME_PUMP_ALARM = 18
         case DEFAULT_ALARM_19 = 19
-        case CARTRIDGE_ALARM7 = 20
+        case CARTRIDGE_ALARM_7 = 20
         case ALTITUDE_ALARM = 21
         case STUCK_BUTTON_ALARM = 22
         case RESUME_PUMP_ALARM2 = 23
@@ -84,12 +84,12 @@ public class AlarmStatusResponse: Message, NotificationMessage {
         case OCCLUSION_ALARM2 = 26
         case DEFAULT_ALARM_27 = 27
         case DEFAULT_ALARM_28 = 28
-        case CARTRIDGE_ALARM10 = 29
-        case CARTRIDGE_ALARM11 = 30
-        case CARTRIDGE_ALARM12 = 31
+        case CARTRIDGE_ALARM_10 = 29
+        case CARTRIDGE_ALARM_11 = 30
+        case CARTRIDGE_ALARM_12 = 31
         case DEFAULT_ALARM_32 = 32
         case DEFAULT_ALARM_33 = 33
-        case DEFAULT_ALARM_34 = 34
+        case CARTRIDGE_ALARM_34 = 34
         case DEFAULT_ALARM_35 = 35
         case DEFAULT_ALARM_36 = 36
         case DEFAULT_ALARM_37 = 37
@@ -143,15 +143,16 @@ public class AlarmStatusResponse: Message, NotificationMessage {
         public var notificationDescription: String? {
             switch self {
             case .CARTRIDGE_ALARM,
-                 .CARTRIDGE_ALARM2,
-                 .CARTRIDGE_ALARM3,
-                 .CARTRIDGE_ALARM4,
-                 .CARTRIDGE_ALARM5,
-                 .CARTRIDGE_ALARM6,
-                 .CARTRIDGE_ALARM7,
-                 .CARTRIDGE_ALARM10,
-                 .CARTRIDGE_ALARM11,
-                 .CARTRIDGE_ALARM12:
+                 .CARTRIDGE_ALARM_2,
+                 .CARTRIDGE_ALARM_3,
+                 .CARTRIDGE_ALARM_4,
+                 .CARTRIDGE_ALARM_5,
+                 .CARTRIDGE_ALARM_6,
+                 .CARTRIDGE_ALARM_7,
+                 .CARTRIDGE_ALARM_10,
+                 .CARTRIDGE_ALARM_11,
+                 .CARTRIDGE_ALARM_12,
+                 .CARTRIDGE_ALARM_34:
                 return "There is an issue with the cartridge and it needs to be replaced."
             case .OCCLUSION_ALARM,
                  .OCCLUSION_ALARM2:

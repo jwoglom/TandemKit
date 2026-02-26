@@ -93,9 +93,11 @@ public class NotificationBundle {
         defer { lock.unlock() }
 
         var items: [NotificationItem] = []
-        let alarmAndAlerts: [NotificationMessage] = [
+        let notificationMessages: [NotificationMessage] = [
             alertStatusResponse as NotificationMessage?,
-            alarmStatusResponse as NotificationMessage?
+            alarmStatusResponse as NotificationMessage?,
+            reminderStatusResponse as NotificationMessage?,
+            cgmAlertStatusResponse as NotificationMessage?
         ].compactMap { $0 }
 
         // Add alerts
@@ -104,18 +106,8 @@ public class NotificationBundle {
                 items.append(NotificationItem(
                     type: .alert,
                     id: UInt32(alert.rawValue),
-                    name: String(describing: alert)
-                ))
-            }
-        }
-
-        // Add reminders
-        if let response = reminderStatusResponse {
-            for reminder in response.reminders.sorted(by: { $0.rawValue < $1.rawValue }) {
-                items.append(NotificationItem(
-                    type: .reminder,
-                    id: UInt32(reminder.rawValue),
-                    name: String(describing: reminder)
+                    name: String(describing: alert),
+                    notificationDescription: alert.notificationDescription
                 ))
             }
         }
@@ -126,7 +118,20 @@ public class NotificationBundle {
                 items.append(NotificationItem(
                     type: .alarm,
                     id: UInt32(alarm.rawValue),
-                    name: String(describing: alarm)
+                    name: String(describing: alarm),
+                    notificationDescription: alarm.notificationDescription
+                ))
+            }
+        }
+
+        // Add reminders
+        if let response = reminderStatusResponse {
+            for reminder in response.reminders.sorted(by: { $0.rawValue < $1.rawValue }) {
+                items.append(NotificationItem(
+                    type: .reminder,
+                    id: UInt32(reminder.rawValue),
+                    name: String(describing: reminder),
+                    notificationDescription: reminder.notificationDescription
                 ))
             }
         }
@@ -137,17 +142,19 @@ public class NotificationBundle {
                 items.append(NotificationItem(
                     type: .cgmAlert,
                     id: UInt32(alert.rawValue),
-                    name: String(describing: alert)
+                    name: String(describing: alert),
+                    notificationDescription: alert.notificationDescription
                 ))
             }
         }
 
         // Add malfunction if present
-        if let response = malfunctionStatusResponse, response.hasMalfunction(alarmAndAlerts) {
+        if let response = malfunctionStatusResponse, response.hasMalfunction(notificationMessages) {
             items.append(NotificationItem(
                 type: .malfunction,
                 id: UInt32(response.codeA),
-                name: response.errorString
+                name: response.errorString,
+                notificationDescription: response.notificationDescription
             ))
         }
 
@@ -182,12 +189,14 @@ public struct NotificationItem: Identifiable, Hashable {
     public let type: NotificationType
     public let notificationId: UInt32
     public let name: String
+    public let notificationDescription: String?
 
-    public init(type: NotificationType, id: UInt32, name: String) {
+    public init(type: NotificationType, id notificationId: UInt32, name: String, notificationDescription: String? = nil) {
         self.id = UUID()
         self.type = type
-        notificationId = id
+        self.notificationId = notificationId
         self.name = name
+        self.notificationDescription = notificationDescription
     }
 
     public enum NotificationType {
@@ -197,7 +206,7 @@ public struct NotificationItem: Identifiable, Hashable {
         case cgmAlert
         case malfunction
 
-        public var displayName: String {
+        public var title: String {
             switch self {
             case .alert: return "Alert"
             case .reminder: return "Reminder"
@@ -219,7 +228,7 @@ public struct NotificationItem: Identifiable, Hashable {
     }
 
     /// Format the notification name for display.
-    public var displayName: String {
+    public var title: String {
         // Convert enum case names to readable format
         // e.g., "LOW_INSULIN_ALERT" -> "Low Insulin Alert"
         name
@@ -239,6 +248,6 @@ public struct NotificationItem: Identifiable, Hashable {
 public extension NotificationBundle {
     var description: String {
         let count = getNotificationCount()
-        return "NotificationBundle(count=\(count), isEmpty=\(isEmpty))"
+        return "NotificationBundle(count=\(count), bundle=\(get().debugDescription))"
     }
 }

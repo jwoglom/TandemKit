@@ -140,6 +140,80 @@ public class AlertStatusResponse: Message, NotificationMessage {
         }
 
         public var id: Int { rawValue }
+
+        public var notificationDescription: String? {
+            switch self {
+            case .LOW_INSULIN_ALERT,
+                 .LOW_INSULIN_ALERT2:
+                return "Low amount of insulin remaining in the cartridge."
+            case .USB_CONNECTION_ALERT:
+                return "Pump is not charging over USB."
+            case .LOW_POWER_ALERT,
+                 .LOW_POWER_ALERT2:
+                return "Power level is low and the pump needs to be charged."
+            case .AUTO_OFF_ALERT:
+                return "The pump is about to turn off due to the configured auto-off interval."
+            case .MAX_BASAL_RATE_ALERT:
+                return "The pump is delivering at the maximum allowed basal rate."
+            case .POWER_SOURCE_ALERT:
+                return "The power source provided is not able to charge the pump."
+            case .MIN_BASAL_ALERT,
+                 .MIN_BASAL_ALERT2:
+                return "The pump is delivering at the minimum allowed basal rate."
+            case .INCOMPLETE_BOLUS_ALERT:
+                return "The bolus window was opened but a bolus was not started."
+            case .INCOMPLETE_TEMP_RATE_ALERT:
+                return "The temp rate window was opened but the temp rate was not started."
+            case .INCOMPLETE_CARTRIDGE_CHANGE_ALERT:
+                return "The cartridge change was started but not completed."
+            case .INCOMPLETE_FILL_TUBING_ALERT:
+                return "Fill tubing was started but not completed."
+            case .INCOMPLETE_FILL_CANNULA_ALERT:
+                return "Fill cannula was started but not completed."
+            case .MAX_BASAL_ALERT:
+                return "The maxmium basal was reached."
+            case .LOW_TRANSMITTER_ALERT:
+                return "The CGM transmitter battery is low."
+            case .TRANSMITTER_ALERT:
+                return "There is an alert from the CGM transmitter."
+            case .SENSOR_EXPIRING_ALERT:
+                return "The CGM sensor is expiring soon."
+            case .PUMP_REBOOTING_ALERT:
+                return "The pump is rebooting."
+            case .CGM_GRAPH_REMOVED:
+                return "It has been 24 hours since your last sensor session ended, so your current glucose reading now displays the last glucose value entered in the bolus calculator."
+            case .INCOMPLETE_CALIBRATION:
+                return "The CGM calibration was incomplete."
+            case .CALIBRATION_TIMEOUT:
+                return "The timeout was reached for CGM calibration."
+            case .INVALID_TRANSMITTER_ID:
+                return "The Dexcom G6 or G7 transmitter ID is invalid."
+            case .BUTTON_ALERT:
+                return "The pump button was held down for too long and is temporarily disabled to avoid accidental delivery of insulin."
+            case .QUICK_BOLUS_ALERT:
+                return "Quick bolus mode was entered but no bolus was started."
+            case .BASAL_IQ_ALERT:
+                return "BasalIQ has reduced basal insulin to avoid a low."
+            case .TRANSMITTER_END_OF_LIFE:
+                return "The CGM transmitter is reaching its end of life and cannot be used."
+            case .CGM_ERROR,
+                 .CGM_ERROR2,
+                 .CGM_ERROR3:
+                return "CGM error reported"
+            case .TRANSMITTER_EXPIRING_ALERT,
+                 .TRANSMITTER_EXPIRING_ALERT2,
+                 .TRANSMITTER_EXPIRING_ALERT3:
+                return "The CGM transmitter is expiring soon."
+            case .CGM_UNAVAILABLE:
+                return "The CGM is unavailable due to a problem with the sensor."
+            case .FILL_TUBING_STILL_IN_PROGRESS:
+                return "The fill tubing process is still in progress and was not completed."
+            case .DEVICE_PAIRED:
+                return "The pump was paired successfully to a Bluetooth device."
+            default:
+                return nil
+            }
+        }
     }
 
     public var notificationCount: Int { alerts.count }

@@ -77,8 +77,8 @@ public class CGMAlertStatusResponse: Message, NotificationMessage {
         case DEFAULT_CGM_ALERT_23 = 23
         case DEFAULT_CGM_ALERT_24 = 24
         case SENSOR_REUSE = 25
-        case DEFAULT_CGM_ALERT_26 = 26
-        case DEFAULT_CGM_ALERT_27 = 27
+        case TEMPERATURE_CGM_ALERT = 26
+        case FAILED_CONNECTION_CGM_ALERT = 27
         case DEFAULT_CGM_ALERT_28 = 28
         case DEFAULT_CGM_ALERT_29 = 29
         case DEFAULT_CGM_ALERT_30 = 30
@@ -90,8 +90,8 @@ public class CGMAlertStatusResponse: Message, NotificationMessage {
         case DEFAULT_CGM_ALERT_36 = 36
         case DEFAULT_CGM_ALERT_37 = 37
         case DEFAULT_CGM_ALERT_38 = 38
-        case DEFAULT_CGM_ALERT_39 = 39
-        case DEFAULT_CGM_ALERT_40 = 40
+        case TRANSMITTER_EXPIRED_CGM_ALERT = 39
+        case PUMP_BLUETOOTH_ERROR_CGM_ALERT = 40
         case DEFAULT_CGM_ALERT_41 = 41
         case DEFAULT_CGM_ALERT_42 = 42
         case DEFAULT_CGM_ALERT_43 = 43
@@ -131,6 +131,11 @@ public class CGMAlertStatusResponse: Message, NotificationMessage {
         }
 
         public var id: Int { rawValue }
+
+        public var notificationDescription: String? {
+            let rawName = String(describing: self)
+            return rawName.hasPrefix("DEFAULT_CGM_ALERT") ? nil : rawName
+        }
     }
 
     public var notificationCount: Int { alerts.count }
