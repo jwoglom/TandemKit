@@ -5,7 +5,7 @@ public enum PumpCommError: Error {
     case pumpNotConnected
     case noResponse
     case missingAuthenticationKey
-    case errorResponse(response: any Message)
+    case errorResponse(context: String? = nil, request: (any Message)? = nil, response: (any Message)? = nil)
     case pumpFault(event: PumpCommFaultEvent)
     case notImplemented
     case pumpChallengeError
@@ -33,8 +33,25 @@ extension PumpCommError: LocalizedError {
             )
         case .noResponse:
             return LocalizedString("No response from pump", comment: "Error message shown when no pump response was received")
-        case .errorResponse:
-            return LocalizedString("Pump Error", comment: "Error response")
+        case let .errorResponse(context, request, response):
+            if let context = context {
+                return String(
+                    format: LocalizedString("Pump Error: %@", comment: "Error message shown when pump returns an error for a command"),
+                    context
+                )
+            } else if let request = request {
+                return String(
+                    format: LocalizedString("Pump Error: Error sending %@", comment: "Error message shown when pump returns an error for a command"),
+                    String("\(type(of: request))")
+                )
+            } else if let response = response {
+                return String(
+                    format: LocalizedString("Pump Error: Error sending %@", comment: "Error message shown when pump returns an error for a command"),
+                    String("\(type(of: response))")
+                )
+            } else {
+                return LocalizedString("Pump Error: unknown", comment: "Error message shown when pump returns an error for a command")
+            }
         case let .pumpFault(event):
             return String(
                 format: LocalizedString("Pump fault: %@", comment: "Error shown when pump returns a fault code"),

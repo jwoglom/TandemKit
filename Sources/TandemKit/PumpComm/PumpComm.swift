@@ -214,7 +214,10 @@ public class PumpComm: CustomDebugStringConvertible {
             log.error(
                 "sendMessage unexpected response type: expected \(expectedType), got \(type(of: response))"
             )
-            throw PumpCommError.errorResponse(response: response)
+            throw PumpCommError.unexpectedResponse(
+                expected: String("\(type(of: expectedType))"),
+                actual: String("\(type(of: response))")
+            )
         }
 
         return typedResponse

@@ -1972,7 +1972,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard permissionResponse.isPermissionGranted else {
-                    throw PumpCommError.errorResponse(response: permissionResponse)
+                    throw PumpCommError.errorResponse(
+                        context: LocalizedString(
+                            "Pump rejected bolus permission request",
+                            comment: "Message when pump disallows bolus from occurring"
+                        ),
+                        request: BolusPermissionRequest(),
+                        response: permissionResponse
+                    )
                 }
 
                 permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
@@ -2002,7 +2009,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard initiateResponse.wasBolusInitiated else {
                     telemetryLogger.info("[enactBolus] bolus not initiated")
-                    throw PumpCommError.errorResponse(response: initiateResponse)
+                    throw PumpCommError.errorResponse(
+                        context: LocalizedString(
+                            "Pump rejected bolus initiate request",
+                            comment: "Message when pump disallows bolus from occurring"
+                        ),
+                        request: bolusRequest,
+                        response: initiateResponse
+                    )
                 }
 
                 telemetryLogger.info("[enactBolus] bolus started")
@@ -2085,7 +2099,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.wasCancelled else {
-                    throw PumpCommError.errorResponse(response: response)
+                    throw PumpCommError.errorResponse(
+                        context: LocalizedString("Pump failed to cancel bolus", comment: "Message when bolus could not be cancelled"),
+                        request: request,
+                        response: response
+                    )
                 }
 
                 // Query the pump for the actual delivered volume before clearing state
@@ -2171,7 +2189,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     guard response.isStatusOK else {
                         log.error("Failed to cancel temp basal - status: \(response.status)")
-                        throw PumpCommError.errorResponse(response: response)
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                            request: StopTempRateRequest(),
+                            response: response
+                        )
                     }
 
                     // Create cancellation event using either local state or pump-reported values
@@ -2252,7 +2274,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                 .error(
                                     "enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)"
                                 )
-                            throw PumpCommError.errorResponse(response: stopResponse)
+                            throw PumpCommError.errorResponse(
+                                context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                                request: StopTempRateRequest(),
+                                response: stopResponse
+                            )
                         }
 
                         log.info("enactTempBasal fallback: successfully cancelled temp basal, retrying SetTempRateRequest...")
@@ -2269,13 +2295,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                 .error(
                                     "enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)"
                                 )
-                            throw PumpCommError.errorResponse(response: response)
+                            throw PumpCommError.errorResponse(
+                                context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                                request: request,
+                                response: response
+                            )
                         }
 
                         log.info("enactTempBasal fallback success: temp basal enacted after cancellation and retry")
                     } else if !response.isStatusOK {
                         log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
-                        throw PumpCommError.errorResponse(response: response)
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                            request: request,
+                            response: response
+                        )
                     }
 
                     let startTime = Date.now
@@ -2384,7 +2418,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
-                    throw PumpCommError.errorResponse(response: response)
+                    throw PumpCommError.errorResponse(
+                        context: LocalizedString("Pump failed to suspend delivery", comment: "Message when pump rejects request to suspend insulin delivery"),
+                        request: SuspendPumpingRequest(),
+                        response: response
+                    )
                 }
 
                 var doses = [
@@ -2456,7 +2494,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
-                    throw PumpCommError.errorResponse(response: response)
+                    throw PumpCommError.errorResponse(
+                        context: LocalizedString("Pump failed to resume delivery", comment: "Message when pump rejects request to resume insulin delivery"),
+                        request: ResumePumpingRequest(),
+                        response: response
+                    )
                 }
 
                 let events = [
@@ -2645,7 +2687,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
 
                     guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(response: response)
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString("Error syncing basal rates: Pump rejected SetIDPSegment", comment: "Message when pump rejects SetIDPSegment"),
+                            request: request,
+                            response: response
+                        )
                     }
                 }
 
@@ -2703,14 +2749,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
                     let milliunits = Int((maxBasal * 1000.0).rounded())
+                    let request: SetMaxBasalLimitRequest = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
                     let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
-                        message: SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits),
+                        message: request,
                         expecting: SetMaxBasalLimitResponse.self
                     )
 
                     guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(response: response)
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString("Error setting max basal limit", comment: "Message when pump rejects SetMaxBasalLimit"),
+                            request: request,
+                            response: response
+                        )
                     }
 
                     appliedLimits.maximumBasalRate = HKQuantity(unit: hkUnit, doubleValue: maxBasal)
@@ -2718,14 +2769,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
                     let milliunits = Int((maxBolus * 1000.0).rounded())
+                    let request = SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)
                     let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
-                        message: SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits),
+                        message: request,
                         expecting: SetMaxBolusLimitResponse.self
                     )
 
                     guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(response: response)
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString("Error setting max bolus limit", comment: "Message when pump rejects SetMaxBolusLimit"),
+                            request: request,
+                            response: response
+                        )
                     }
 
                     appliedLimits.maximumBolus = HKQuantity(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
@@ -2769,16 +2825,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             do {
                 let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
+                let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
                 let response: ChangeTimeDateResponse = try pumpComm.sendMessage(
                     transport: transport,
-                    message: ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch)),
+                    message: request,
                     expecting: ChangeTimeDateResponse.self
                 )
 
                 if !response.isStatusOK {
                     log.error("Pump time sync failed, status NOK!")
 
-                    let error = PumpCommError.errorResponse(response: response)
+                    let error = PumpCommError.errorResponse(
+                        context: LocalizedString("Error syncing time with pump", comment: "Message when pump rejects ChangeTimeDateRequest"),
+                        request: request,
+                        response: response
+                    )
                     completion(.failure(PumpManagerError.communication(error)))
                 } else {
                     completion(.success(()))
