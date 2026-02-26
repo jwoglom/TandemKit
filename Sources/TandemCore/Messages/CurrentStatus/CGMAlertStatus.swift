@@ -140,7 +140,12 @@ public class CGMAlertStatusResponse: Message, NotificationMessage {
 
     public var notificationCount: Int { alerts.count }
 
-    public var notificationIds: Set<Int> { Set(alerts.map(\.rawValue)) }
+    public var notificationIds: Set<Int> {
+        Set(alerts.filter {
+            let description = $0.notificationDescription ?? ""
+            return !description.isEmpty
+        }.map(\.rawValue))
+    }
 
     public var description: String {
         "CGMAlertStatusResponse(cargo=\(cargo.hexadecimalString), alerts=\(alerts), intMap=\(intMap))"

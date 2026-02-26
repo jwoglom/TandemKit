@@ -68,43 +68,158 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionNotificationCounting() {
         let bundle = NotificationBundle()
 
-        // Add a malfunction with non-ignorable codes
-        let malfunctionResponse = MalfunctionStatusResponse(codeA: 100, codeB: 200)
+        // PumpX2 test payload: 12-0x2071 (stuck vibrator motor), non-ignorable
+        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+            "000779070b0c0000007120000004ffffd6a6",
+            7,
+            1,
+            .CURRENT_STATUS_CHARACTERISTICS,
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
+        XCTAssertEqual(12, malfunctionResponse.codeA)
+        XCTAssertEqual(0x2071, malfunctionResponse.codeB)
         bundle.add(malfunctionResponse)
 
         // Malfunction should be counted since codes are not in IGNORABLE_CODES
-        XCTAssertEqual(bundle.getNotificationCount(), bundle.get().count)
         XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
     }
 
     /// Verifies that ignorable malfunctions are not counted
     func testIgnorableMalfunctionNotCounted() {
         let bundle = NotificationBundle()
 
-        // Add a malfunction with ignorable codes (0, 0)
-        let malfunctionResponse = MalfunctionStatusResponse(codeA: 0, codeB: 0)
+        // PumpX2 test payload: 3-0x2026 (ignorable)
+        let expected = MalfunctionStatusResponse(codeA: 3, codeB: 0x2026, remaining: Data([2, 0xFF, 0xFF]))
+        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+            "001079100b030000002620000002ffff2ab0",
+            16,
+            1,
+            .CURRENT_STATUS_CHARACTERISTICS,
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
+        XCTAssertEqual(3, malfunctionResponse.codeA)
+        XCTAssertEqual(0x2026, malfunctionResponse.codeB)
         bundle.add(malfunctionResponse)
 
-        XCTAssertEqual(bundle.getNotificationCount(), bundle.get().count)
         XCTAssertEqual(bundle.getNotificationCount(), 0)
+        XCTAssertEqual(bundle.get().count, 0)
     }
 
     /// Verifies that malfunction is suppressed when its ID matches an alarm
     func testMalfunctionSuppressedByMatchingAlarm() {
         let bundle = NotificationBundle()
 
-        // Add an alarm (bit 2 = OCCLUSION_ALARM, rawValue 2)
-        let alarmResponse = AlarmStatusResponse(intMap: bitmask(2))
+        // PumpX2 test payload: codeA 12, and alarm bit 12 is BATTERY_SHUTDOWN_ALARM (known)
+        let alarmResponse = AlarmStatusResponse(intMap: bitmask(12))
         bundle.add(alarmResponse)
 
-        // Add a malfunction with codeA that matches the alarm's raw value (2)
-        let malfunctionResponse = MalfunctionStatusResponse(codeA: 2, codeB: 200)
+        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+            "000779070b0c0000007120000004ffffd6a6",
+            7,
+            1,
+            .CURRENT_STATUS_CHARACTERISTICS,
+            expected
+        )
         bundle.add(malfunctionResponse)
 
-        // Malfunction should be suppressed because codeA matches the alarm ID
-        // Count should be 1 (just the alarm, not the malfunction)
-        XCTAssertEqual(bundle.getNotificationCount(), bundle.get().count)
+        // Malfunction should be suppressed because codeA (12) matches BATTERY_SHUTDOWN_ALARM
         XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
+    }
+
+    /// Verifies that malfunction is suppressed when its ID matches a known alert
+    func testMalfunctionSuppressedByMatchingKnownAlert() {
+        let bundle = NotificationBundle()
+
+        // PumpX2 test payload: codeA 12, and alert bit 12 is a known alert
+        bundle.add(AlertStatusResponse(intMap: bitmask(12)))
+        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+            "000779070b0c0000007120000004ffffd6a6",
+            7,
+            1,
+            .CURRENT_STATUS_CHARACTERISTICS,
+            expected
+        )
+        bundle.add(malfunctionResponse)
+
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
+    }
+
+    /// Verifies that malfunction is NOT suppressed by a default/unknown reminder ID
+    func testMalfunctionNotSuppressedByDefaultReminder() {
+        let bundle = NotificationBundle()
+
+        // PumpX2 comment payload: codeA 23, and reminder bit 23 is DEFAULT_REMINDER_23
+        bundle.add(ReminderStatusResponse(intMap: bitmask(23)))
+        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
+        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
+        XCTAssertEqual(23, malfunctionResponse.codeA)
+        XCTAssertEqual(0x20a7, malfunctionResponse.codeB)
+        bundle.add(malfunctionResponse)
+
+        XCTAssertEqual(bundle.getNotificationCount(), 2)
+        XCTAssertEqual(bundle.get().count, 2)
+    }
+
+    /// Verifies that malfunction is suppressed when its ID matches a known CGM alert
+    func testMalfunctionSuppressedByMatchingKnownCGMAlert() {
+        let bundle = NotificationBundle()
+
+        // PumpX2 test payload: codeA 12, and CGM alert bit 12 is known
+        bundle.add(CGMAlertStatusResponse(intMap: bitmask(12)))
+        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+            "000779070b0c0000007120000004ffffd6a6",
+            7,
+            1,
+            .CURRENT_STATUS_CHARACTERISTICS,
+            expected
+        )
+        bundle.add(malfunctionResponse)
+
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
+    }
+
+    /// Verifies that malfunction is NOT suppressed by a default/unknown CGM alert ID
+    func testMalfunctionNotSuppressedByDefaultCGMAlert() {
+        let bundle = NotificationBundle()
+
+        // PumpX2 comment payload: codeA 23, and CGM alert bit 23 is DEFAULT_CGM_ALERT_23
+        bundle.add(CGMAlertStatusResponse(intMap: bitmask(23)))
+        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
+        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
+        XCTAssertEqual(23, malfunctionResponse.codeA)
+        XCTAssertEqual(0x20a7, malfunctionResponse.codeB)
+        bundle.add(malfunctionResponse)
+
+        XCTAssertEqual(bundle.getNotificationCount(), 2)
+        XCTAssertEqual(bundle.get().count, 2)
+    }
+
+    /// Verifies alert `notificationIds` excludes default/unknown alert IDs (no matching PumpX2 malfunction payload for a default alert ID in the referenced test file).
+    func testAlertNotificationIdsExcludeDefaultAlerts() {
+        let response = AlertStatusResponse(intMap: bitmask(21, 22))
+
+        XCTAssertFalse(response.notificationIds.contains(21)) // DEFAULT_ALERT_21
+        XCTAssertTrue(response.notificationIds.contains(22)) // SENSOR_EXPIRING_ALERT
+    }
+
+    /// Verifies reminder `notificationIds` excludes default/unknown reminder IDs while keeping known IDs.
+    func testReminderNotificationIdsExcludeDefaultReminders() {
+        let response = ReminderStatusResponse(intMap: bitmask(3, 23))
+
+        XCTAssertTrue(response.notificationIds.contains(3)) // MISSED_MEAL_REMINDER
+        XCTAssertFalse(response.notificationIds.contains(23)) // DEFAULT_REMINDER_23
     }
 
     // MARK: - Response Addition Tests
