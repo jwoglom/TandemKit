@@ -3,7 +3,8 @@ name: Build Trio (with TandemKit under test)
 on:
   push:
     branches: [ main ]
-  pull_request:
+  pull_request_target:
+    types: [ labeled ]
     branches: [ main ]
   workflow_dispatch:
     inputs:
@@ -18,6 +19,9 @@ on:
 
 jobs:
   build-trio:
+    if: >
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
     runs-on: macos-latest
     env:
       TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
@@ -29,6 +33,7 @@ jobs:
       - name: Checkout TandemKit (this repo)
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
           path: tandemkit
 
       - name: Set up Xcode
