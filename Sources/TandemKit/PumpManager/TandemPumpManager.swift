@@ -2259,8 +2259,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     if !response.isStatusOK, response.status == 1 {
                         log
                             .error(
-                                "enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Retrying..."
+                                "enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Checking temp basal state..."
                             )
+
+                        let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: TempRateRequest(),
+                            expecting: TempRateResponse.self
+                        )
+
+                        guard currentTempRate.active else {
+                            // There isn't an active temp rate (second check), so there is something wrong with the SetTempRate construction itself
+                            throw PumpCommError.errorResponse(
+                                context: LocalizedString("Pump failed to set temp basal", comment: "Message when pump rejects request to set temp rate"),
+                                request: request,
+                                response: response
+                            )
+                        }
+
+                        log.info("enactTempBasal fallback: stopping current temp rate since one is active: \(currentTempRate)")
 
                         // Cancel the temp basal
                         let stopResponse: StopTempRateResponse = try self.pumpComm.sendMessage(
