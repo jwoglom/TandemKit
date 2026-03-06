@@ -57,6 +57,7 @@ public class PumpFeaturesV1Response: Message {
         case CONTROL_IQ_SUPPORTED = 1024
         case WOMBAT_SUPPORTED = 65536
         case BASAL_LIMIT_SUPPORTED = 262_144
+        case CONTROL_IQ_PRO_SUPPORTED = 8_388_608
         case AUTO_POP_SUPPORTED = 33_554_432
         case BLE_PUMP_CONTROL_SUPPORTED = 268_435_456
         case PUMP_SETTINGS_IN_IDP_GUI_SUPPORTED = 536_870_912
