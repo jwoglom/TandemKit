@@ -1892,11 +1892,16 @@ private extension TandemCLIMain {
             case .battery: return "Battery"
             case .basalIQ: return "Basal-IQ"
             case .remainingInsulin: return "Remaining Insulin"
-            case .suspendComm: return "Suspend Comm"
-            case .activeSegmentChange: return "Active Segment Change"
+            case .pumpCommunicationsSuspended: return "Pump Communications Suspended"
+            case .activeProfileSegmentChange: return "Active Profile Segment Change"
             case .basalIQStatus: return "Basal-IQ Status"
             case .controlIQInfo: return "Control-IQ Info"
             case .controlIQSleep: return "Control-IQ Sleep"
+            case .globalPumpSettings: return "Global Pump Settings"
+            case .snoozeStatus: return "Snooze Status"
+            case .pumpingStatus: return "Pumping Status"
+            case .pumpReset: return "Pump Reset"
+            case .heartbeat: return "Heartbeat"
             case .bolusPermissionRevoked: return "Bolus Permission Revoked"
             }
         }

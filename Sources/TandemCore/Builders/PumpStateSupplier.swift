@@ -148,6 +148,10 @@ public enum PumpStateSupplier {
         withLock { onlySnoopBluetooth = false }
     }
 
+    public static func isOnlySnoopBluetoothEnabled() -> Bool {
+        withLock { onlySnoopBluetooth }
+    }
+
     public static func setConnectionSharingEnabled(_ enabled: Bool) {
         if enabled {
             enableTconnectAppConnectionSharing()

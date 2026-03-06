@@ -83,6 +83,8 @@ public enum MessageRegistry {
     private static let allTypes: [Message.Type] = [
         ErrorResponse.self,
         NonexistentErrorRequest.self,
+        ActiveAamBitsRequest.self,
+        ActiveAamBitsResponse.self,
         AlarmStatusRequest.self,
         AlarmStatusResponse.self,
         AlertStatusRequest.self,
@@ -177,6 +179,8 @@ public enum MessageRegistry {
         GetSavedG7PairingCodeResponse.self,
         GlobalMaxBolusSettingsRequest.self,
         GlobalMaxBolusSettingsResponse.self,
+        HighestAamRequest.self,
+        HighestAamResponse.self,
         HistoryLogRequest.self,
         HistoryLogResponse.self,
         HistoryLogStatusRequest.self,
