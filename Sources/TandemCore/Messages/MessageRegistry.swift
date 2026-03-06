@@ -215,7 +215,7 @@ public enum MessageRegistry {
         LocalizationRequest.self,
         LocalizationResponse.self,
         MalfunctionStatusRequest.self,
-        MalfunctionStatusResponse.self,
+        MalfunctionBitmaskStatusResponse.self,
         NonControlIQIOBRequest.self,
         NonControlIQIOBResponse.self,
         NonexistentDetectingCartridgeStateStreamRequest.self,
