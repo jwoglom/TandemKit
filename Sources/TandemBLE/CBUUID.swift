@@ -125,6 +125,8 @@ extension CBPeripheral {
             return getManufacturerNameCharacteristic()
         case .DIS_MODEL_NUMBER:
             return getModelNumberCharacteristic()
+        case .TDU_FILE_POINT_CHARACTERISTICS, .TDU_CONTROL_POINT_CHARACTERISTICS:
+            return nil
         }
     }
 }
