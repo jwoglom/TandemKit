@@ -7,7 +7,8 @@ public class CommonSoftwareInfoRequest: Message {
         size: 0,
         type: .Request,
         characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        variableSize: true
+        variableSize: true,
+        minApi: .apiFuture
     )
 
     public var cargo: Data
@@ -32,7 +33,8 @@ public class CommonSoftwareInfoResponse: Message {
         size: 60,
         type: .Response,
         characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        variableSize: true
+        variableSize: true,
+        minApi: .apiFuture
     )
 
     public var cargo: Data

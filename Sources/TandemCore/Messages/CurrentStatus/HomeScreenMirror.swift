@@ -164,6 +164,8 @@ public extension HomeScreenMirrorResponse {
         case stateGray = 0
         case stateGrayRedBasalSuspended = 1
         case stateGrayBlueIncreaseBasal = 2
+        case stateGrayOrangeCiqAttenuationBasal = 3
+        case hideIcon = 200
     }
 
     var cgmTrendIcon: CGMTrendIcon? { CGMTrendIcon(rawValue: cgmTrendIconId) }

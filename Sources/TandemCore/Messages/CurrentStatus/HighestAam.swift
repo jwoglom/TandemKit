@@ -105,6 +105,24 @@ public class HighestAamResponse: Message, NotificationMessage, NotificationEnum 
 
     public var notificationDescription: String? { errorString }
 
+    /// Cross-references with ActiveAamBits and MalfunctionBitmaskStatus to confirm
+    /// whether the reported malfunction is genuine.
+    public func matchesActiveMalfunction(
+        activeMalfunctionBits: ActiveAamBitsResponse?,
+        malfunctionBitmaskStatusResponse: MalfunctionBitmaskStatusResponse?
+    ) -> Bool {
+        if let bits = activeMalfunctionBits,
+           bits.aamType == .malfunction {
+            return bits.hasActiveBit(Int(aamId))
+        }
+
+        if let malfStatus = malfunctionBitmaskStatusResponse {
+            return malfStatus.hasMalfunctionBit(Int(aamId))
+        }
+
+        return true
+    }
+
     public var description: String {
         "HighestAamResponse(cargo=\(cargo.hexadecimalString), aamId=\(aamId), faultId=\(faultId), remaining=\(remaining.hexadecimalString))"
     }

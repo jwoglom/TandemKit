@@ -53,6 +53,11 @@ public class MalfunctionBitmaskStatusResponse: Message {
         (bitmask & type.rawValue) != 0
     }
 
+    /// Check by raw bit position (used by HighestAamResponse.matchesActiveMalfunction).
+    public func hasMalfunctionBit(_ bit: Int) -> Bool {
+        (bitmask & (1 << bit)) != 0
+    }
+
     /// Malfunction subsystem types encoded as bit positions in the bitmask.
     public enum MalfunctionType: UInt64, CaseIterable {
         case software       = 1

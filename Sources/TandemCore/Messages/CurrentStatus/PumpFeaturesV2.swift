@@ -20,6 +20,10 @@ public class PumpFeaturesV2Request: Message {
         cargo = Bytes.firstByteLittleEndian(input)
     }
 
+    public init(supportedFeature: PumpFeaturesV2Response.SupportedFeatureIndex) {
+        cargo = Bytes.firstByteLittleEndian(supportedFeature.rawValue)
+    }
+
     public var description: String {
         "PumpFeaturesV2Request(cargo=\(cargo.hexadecimalString))"
     }
