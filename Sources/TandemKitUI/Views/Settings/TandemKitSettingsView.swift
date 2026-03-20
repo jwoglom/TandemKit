@@ -115,6 +115,28 @@ struct TandemKitSettingsView: View {
                     comment: "Message for failed to stop temp rate"
                 )
             )
+        case .playSound:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not play sound",
+                    comment: "Title for failure to play pump sound"
+                ),
+                message: LocalizedString(
+                    "The pump did not respond to the sound request. Check your pump connection.",
+                    comment: "Message for failed to play pump sound"
+                )
+            )
+        case .alertSnooze:
+            content = ErrorSheetContent(
+                title: LocalizedString(
+                    "Could not update alert snooze",
+                    comment: "Title for failure to set alert snooze"
+                ),
+                message: LocalizedString(
+                    "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status.",
+                    comment: "Message for failed to set alert snooze"
+                )
+            )
         }
         return ErrorSheetView(content: content, tint: guidanceColors.critical)
     }
@@ -194,6 +216,19 @@ struct TandemKitSettingsView: View {
                 }
 
                 Button(action: {
+                    viewModel.playSound()
+                }) {
+                    HStack {
+                        Text(LocalizedString("Find My Pump", comment: "Tandem find my pump"))
+                        Spacer()
+                        if viewModel.isPlayingSound {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        }
+                    }
+                }
+                .disabled(viewModel.isPlayingSound)
+
+                Button(action: {
                     viewModel.refreshPumpStatus()
                 }) {
                     HStack {
@@ -241,6 +276,41 @@ struct TandemKitSettingsView: View {
                         ))
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+                }
+
+                Toggle(isOn: Binding(
+                    get: { viewModel.alertSnoozeEnabled },
+                    set: { enabled in
+                        viewModel.setAlertSnooze(enabled: enabled, durationMins: viewModel.alertSnoozeDurationMins)
+                    }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(LocalizedString(
+                            "Alert Snooze",
+                            comment: "Label for alert snooze toggle"
+                        ))
+                        Text(LocalizedString(
+                            "Allow snoozing alerts via triple-press on pump button",
+                            comment: "Description for alert snooze toggle"
+                        ))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if viewModel.alertSnoozeEnabled {
+                    Picker(
+                        LocalizedString("Snooze Duration", comment: "Label for snooze duration picker"),
+                        selection: Binding(
+                            get: { viewModel.alertSnoozeDurationMins },
+                            set: { mins in
+                                viewModel.setAlertSnooze(enabled: true, durationMins: mins)
+                            }
+                        )
+                    ) {
+                        Text("10 min").tag(10)
+                        Text("20 min").tag(20)
                     }
                 }
             }
@@ -311,6 +381,53 @@ struct TandemKitSettingsView: View {
                         .opacity(0.35)
                 }
                 .buttonStyle(.plain)
+
+                NavigationLink(destination: TandemKitQuickBolusSettingsView(
+                    viewModel: viewModel.createQuickBolusSettingsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("Quick Bolus settings", comment: "Label for quick bolus settings"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if let summary = viewModel.quickBolusSummary {
+                            Text(summary)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+
+            Section(header: SectionHeader(label: LocalizedString(
+                "Delivery Limits",
+                comment: "The title of the delivery limits section in TandemKit settings"
+            ))) {
+                NavigationLink(destination: TandemKitDeliveryLimitsView(
+                    viewModel: viewModel.createDeliveryLimitsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("Max Basal Rate", comment: "Label for max basal rate"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if let text = viewModel.maxBasalRateText {
+                            Text(text)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                NavigationLink(destination: TandemKitDeliveryLimitsView(
+                    viewModel: viewModel.createDeliveryLimitsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("Max Bolus", comment: "Label for max bolus"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if let text = viewModel.maxBolusText {
+                            Text(text)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
             }
 
             Section(header: SectionHeader(label: LocalizedString(

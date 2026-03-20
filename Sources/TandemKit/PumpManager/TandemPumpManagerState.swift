@@ -158,6 +158,19 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum?
 
+    // Quick bolus settings (from PumpGlobalsResponse)
+    public var quickBolusEnabled: Bool?
+    public var quickBolusEntryType: Int?
+    public var quickBolusIncrementUnits: Int?
+    public var quickBolusIncrementCarbs: Int?
+    public var quickBolusStatus: Int?
+
+    // Delivery limits (from BasalLimitSettingsResponse / GlobalMaxBolusSettingsResponse)
+    public var maxBasalLimitMilliunits: Int?
+    public var maxBasalLimitDefaultMilliunits: Int?
+    public var maxBolusLimitMilliunits: Int?
+    public var maxBolusLimitDefaultMilliunits: Int?
+
     // Control-IQ state
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
@@ -214,6 +227,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         alertAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
         generalAnnun: PumpGlobalsResponse.AnnunciationEnum? = nil,
+        quickBolusEnabled: Bool? = nil,
+        quickBolusEntryType: Int? = nil,
+        quickBolusIncrementUnits: Int? = nil,
+        quickBolusIncrementCarbs: Int? = nil,
+        quickBolusStatus: Int? = nil,
+        maxBasalLimitMilliunits: Int? = nil,
+        maxBasalLimitDefaultMilliunits: Int? = nil,
+        maxBolusLimitMilliunits: Int? = nil,
+        maxBolusLimitDefaultMilliunits: Int? = nil,
         controlIQEnabled: Bool? = nil,
         controlIQUserMode: ControlIQUserMode? = nil,
         controlIQWeight: Int? = nil,
@@ -260,6 +282,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.alertAnnun = alertAnnun
         self.alarmAnnun = alarmAnnun
         self.generalAnnun = generalAnnun
+        self.quickBolusEnabled = quickBolusEnabled
+        self.quickBolusEntryType = quickBolusEntryType
+        self.quickBolusIncrementUnits = quickBolusIncrementUnits
+        self.quickBolusIncrementCarbs = quickBolusIncrementCarbs
+        self.quickBolusStatus = quickBolusStatus
+        self.maxBasalLimitMilliunits = maxBasalLimitMilliunits
+        self.maxBasalLimitDefaultMilliunits = maxBasalLimitDefaultMilliunits
+        self.maxBolusLimitMilliunits = maxBolusLimitMilliunits
+        self.maxBolusLimitDefaultMilliunits = maxBolusLimitDefaultMilliunits
         self.controlIQEnabled = controlIQEnabled
         self.controlIQUserMode = controlIQUserMode
         self.controlIQWeight = controlIQWeight
@@ -406,6 +437,16 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             generalAnnun = nil
         }
 
+        quickBolusEnabled = rawValue["quickBolusEnabled"] as? Bool
+        quickBolusEntryType = rawValue["quickBolusEntryType"] as? Int
+        quickBolusIncrementUnits = rawValue["quickBolusIncrementUnits"] as? Int
+        quickBolusIncrementCarbs = rawValue["quickBolusIncrementCarbs"] as? Int
+        quickBolusStatus = rawValue["quickBolusStatus"] as? Int
+        maxBasalLimitMilliunits = rawValue["maxBasalLimitMilliunits"] as? Int
+        maxBasalLimitDefaultMilliunits = rawValue["maxBasalLimitDefaultMilliunits"] as? Int
+        maxBolusLimitMilliunits = rawValue["maxBolusLimitMilliunits"] as? Int
+        maxBolusLimitDefaultMilliunits = rawValue["maxBolusLimitDefaultMilliunits"] as? Int
+
         if let lastControlIQInterval = rawValue["lastControlIQUpdate"] as? TimeInterval {
             lastControlIQUpdate = Date(timeIntervalSinceReferenceDate: lastControlIQInterval)
         } else {
@@ -489,6 +530,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["alertAnnun"] = alertAnnun?.rawValue
         raw["alarmAnnun"] = alarmAnnun?.rawValue
         raw["generalAnnun"] = generalAnnun?.rawValue
+        raw["quickBolusEnabled"] = quickBolusEnabled
+        raw["quickBolusEntryType"] = quickBolusEntryType
+        raw["quickBolusIncrementUnits"] = quickBolusIncrementUnits
+        raw["quickBolusIncrementCarbs"] = quickBolusIncrementCarbs
+        raw["quickBolusStatus"] = quickBolusStatus
+        raw["maxBasalLimitMilliunits"] = maxBasalLimitMilliunits
+        raw["maxBasalLimitDefaultMilliunits"] = maxBasalLimitDefaultMilliunits
+        raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
+        raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
         raw["controlIQWeight"] = controlIQWeight
@@ -610,7 +660,13 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* bolusStatusIcon: \(String(describing: bolusStatusIcon))",
             "* cgmAlertIcon: \(String(describing: cgmAlertIcon))",
             "* notificationCount: \(String(describing: notificationCount))",
-            "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))"
+            "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
+            "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
+            "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
+            "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",
+            "* quickBolusIncrementCarbs: \(String(describing: quickBolusIncrementCarbs))",
+            "* maxBasalLimitMilliunits: \(String(describing: maxBasalLimitMilliunits))",
+            "* maxBolusLimitMilliunits: \(String(describing: maxBolusLimitMilliunits))"
         ].joined(separator: "\n")
     }
 }
@@ -661,7 +717,16 @@ public extension TandemPumpManagerState {
             lhs.lastHistorySequenceNum == rhs.lastHistorySequenceNum &&
             lhs.lastHistoryReconciliation == rhs.lastHistoryReconciliation &&
             lhs.pendingDoses == rhs.pendingDoses &&
-            lhs.fetchedRanges == rhs.fetchedRanges
+            lhs.fetchedRanges == rhs.fetchedRanges &&
+            lhs.quickBolusEnabled == rhs.quickBolusEnabled &&
+            lhs.quickBolusEntryType == rhs.quickBolusEntryType &&
+            lhs.quickBolusIncrementUnits == rhs.quickBolusIncrementUnits &&
+            lhs.quickBolusIncrementCarbs == rhs.quickBolusIncrementCarbs &&
+            lhs.quickBolusStatus == rhs.quickBolusStatus &&
+            lhs.maxBasalLimitMilliunits == rhs.maxBasalLimitMilliunits &&
+            lhs.maxBasalLimitDefaultMilliunits == rhs.maxBasalLimitDefaultMilliunits &&
+            lhs.maxBolusLimitMilliunits == rhs.maxBolusLimitMilliunits &&
+            lhs.maxBolusLimitDefaultMilliunits == rhs.maxBolusLimitDefaultMilliunits
     }
 }
 

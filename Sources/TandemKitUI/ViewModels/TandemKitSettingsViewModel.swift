@@ -10,6 +10,8 @@ enum CommandFailure: Int, Identifiable {
     case exerciseMode
     case sleepMode
     case stopTempRate
+    case playSound
+    case alertSnooze
 
     var id: Int { rawValue }
 }
@@ -31,6 +33,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var useSilentMode: Bool = false
+    @Published var alertSnoozeEnabled: Bool = false
+    @Published var alertSnoozeDurationMins: Int = 10
+    @Published var isPlayingSound: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -393,6 +398,74 @@ class TandemKitSettingsViewModel: ObservableObject {
             return "Disable sleep mode"
         }
         return "Enable sleep mode"
+    }
+
+    // MARK: - Find My Pump
+
+    func playSound() {
+        isPlayingSound = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.pumpManager?.playSound()
+            DispatchQueue.main.async {
+                self?.isPlayingSound = false
+            }
+        }
+    }
+
+    // MARK: - Alert Snooze
+
+    func setAlertSnooze(enabled: Bool, durationMins: Int) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
+            DispatchQueue.main.async {
+                self?.alertSnoozeEnabled = enabled
+                self?.alertSnoozeDurationMins = durationMins
+            }
+        }
+    }
+
+    // MARK: - Delivery Limits
+
+    var maxBasalRateText: String? {
+        guard let milliunits = pumpManager?.state.maxBasalLimitMilliunits else { return nil }
+        return String(format: "%.2f U/hr", Double(milliunits) / 1000.0)
+    }
+
+    var maxBolusText: String? {
+        guard let milliunits = pumpManager?.state.maxBolusLimitMilliunits else { return nil }
+        return String(format: "%.1f U", Double(milliunits) / 1000.0)
+    }
+
+    // MARK: - Quick Bolus
+
+    var quickBolusEnabled: Bool? {
+        pumpManager?.state.quickBolusEnabled
+    }
+
+    var quickBolusSummary: String? {
+        guard let enabled = pumpManager?.state.quickBolusEnabled else { return nil }
+        if !enabled { return "Disabled" }
+
+        let entryType = pumpManager?.state.quickBolusEntryType ?? 0
+        if entryType == 1 {
+            let carbsMilliunits = pumpManager?.state.quickBolusIncrementCarbs ?? 0
+            let carbs = Double(carbsMilliunits) / 1000.0
+            return String(format: "Carbs, %.0f g", carbs)
+        } else {
+            let unitsMilliunits = pumpManager?.state.quickBolusIncrementUnits ?? 0
+            let units = Double(unitsMilliunits) / 1000.0
+            return String(format: "Units, %.1f U", units)
+        }
+    }
+
+    // MARK: - Factory Methods
+
+    func createQuickBolusSettingsViewModel() -> TandemKitQuickBolusSettingsViewModel {
+        TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    func createDeliveryLimitsViewModel() -> TandemKitDeliveryLimitsViewModel {
+        TandemKitDeliveryLimitsViewModel(pumpManager: pumpManager)
     }
 
     // Cartridge operations
