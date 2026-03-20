@@ -15,10 +15,18 @@ end
 
 DEFAULTS = {
   project: "TandemKit.xcodeproj",
-  target: "TandemCore",
-  source_root: "Sources/TandemCore",
+  target: nil,
+  source_root: nil,
   mode: :check
 }.freeze
+
+# When no --target/--source-root given, check all of these.
+ALL_TARGET_SOURCE_PAIRS = [
+  { target: "TandemCore",  source_root: "Sources/TandemCore" },
+  { target: "TandemKit",   source_root: "Sources/TandemKit" },
+  { target: "TandemKit",   source_root: "Sources/TandemKitUI" },
+  { target: "TandemBLE",   source_root: "Sources/TandemBLE" },
+].freeze
 
 def repo_root
   Pathname.new(__dir__).join("..").realpath
@@ -230,80 +238,102 @@ def parse_args
   opts
 end
 
+def check_or_fix_pair(project, project_path, root, target_name, source_root_rel, mode)
+  source_root = root.join(source_root_rel)
+  return nil unless source_root.directory?
+
+  target = find_target!(project, target_name)
+
+  disk_files = source_file_paths_under(source_root)
+  disk_set = disk_files.to_set
+  project_set = project_file_refs_under_source_root(project, source_root.to_s)
+  target_set = target_source_file_refs_under_source_root(target, source_root.to_s)
+
+  missing_project_refs = (disk_set - project_set).to_a.sort
+  missing_target_membership = (disk_set - target_set).to_a.sort
+  stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
+  orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
+
+  puts "Target: #{target_name}  Source root: #{source_root_rel}  Swift files: #{disk_files.length}"
+
+  if mode == :fix && (!missing_project_refs.empty? || !missing_target_membership.empty? || !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty?)
+    changed = false
+
+    missing_target_membership.each do |abs|
+      file_ref = ensure_file_ref!(project, abs)
+      next if target_has_source_build_file?(target, file_ref)
+
+      target.source_build_phase.add_file_reference(file_ref, true)
+      changed = true
+    end
+
+    stale_broken_duplicate_swift_source_entries(target).each do |entry|
+      entry[:build_file].remove_from_project
+      changed = true
+    end
+
+    orphan_broken_duplicate_swift_file_refs(project).each do |entry|
+      entry[:file_ref].remove_from_project
+      changed = true
+    end
+
+    if changed
+      project.save
+      project = Xcodeproj::Project.open(project_path.to_s)
+      target = find_target!(project, target_name)
+      project_set = project_file_refs_under_source_root(project, source_root.to_s)
+      target_set = target_source_file_refs_under_source_root(target, source_root.to_s)
+      missing_project_refs = (disk_set - project_set).to_a.sort
+      missing_target_membership = (disk_set - target_set).to_a.sort
+      stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
+      orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
+      puts "  Applied fixes"
+    end
+  end
+
+  ok = missing_project_refs.empty? && missing_target_membership.empty? && stale_broken_duplicates.empty? && orphan_broken_file_refs.empty?
+
+  if ok
+    puts "  Status: OK"
+  else
+    puts "  Status: DRIFT DETECTED"
+    print_missing("Missing file references in project", missing_project_refs)
+    print_missing("Missing target source membership in #{target_name}", missing_target_membership)
+    print_stale_broken_duplicates(target_name, stale_broken_duplicates)
+    print_orphan_broken_file_refs(orphan_broken_file_refs)
+  end
+
+  { ok: ok, project: project }
+end
+
 opts = parse_args
 root = repo_root
 project_path = root.join(opts[:project])
-source_root = root.join(opts[:source_root])
 
 abort("Project not found: #{project_path}") unless project_path.exist?
-abort("Source root not found: #{source_root}") unless source_root.directory?
 
 project = Xcodeproj::Project.open(project_path.to_s)
-target = find_target!(project, opts[:target])
 
-disk_files = source_file_paths_under(source_root)
-disk_set = disk_files.to_set
-project_set = project_file_refs_under_source_root(project, source_root.to_s)
-target_set = target_source_file_refs_under_source_root(target, source_root.to_s)
-
-missing_project_refs = (disk_set - project_set).to_a.sort
-missing_target_membership = (disk_set - target_set).to_a.sort
-stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
-orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
+pairs = if opts[:target] && opts[:source_root]
+          [{ target: opts[:target], source_root: opts[:source_root] }]
+        else
+          ALL_TARGET_SOURCE_PAIRS
+        end
 
 puts "Project: #{opts[:project]}"
-puts "Target: #{opts[:target]}"
-puts "Source root: #{opts[:source_root]}"
-puts "Swift files on disk: #{disk_files.length}"
+any_failed = false
 
-if opts[:mode] == :fix && (!missing_project_refs.empty? || !missing_target_membership.empty? || !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty?)
-  changed = false
+pairs.each do |pair|
+  result = check_or_fix_pair(project, project_path, root, pair[:target], pair[:source_root], opts[:mode])
+  next unless result
 
-  missing_target_membership.each do |abs|
-    file_ref = ensure_file_ref!(project, abs)
-    next if target_has_source_build_file?(target, file_ref)
-
-    target.source_build_phase.add_file_reference(file_ref, true)
-    changed = true
-  end
-
-  stale_broken_duplicate_swift_source_entries(target).each do |entry|
-    entry[:build_file].remove_from_project
-    changed = true
-  end
-
-  orphan_broken_duplicate_swift_file_refs(project).each do |entry|
-    entry[:file_ref].remove_from_project
-    changed = true
-  end
-
-  if changed
-    project.save
-    project = Xcodeproj::Project.open(project_path.to_s)
-    target = find_target!(project, opts[:target])
-    project_set = project_file_refs_under_source_root(project, source_root.to_s)
-    target_set = target_source_file_refs_under_source_root(target, source_root.to_s)
-    missing_project_refs = (disk_set - project_set).to_a.sort
-    missing_target_membership = (disk_set - target_set).to_a.sort
-    stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
-    orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
-    puts "Applied fixes to #{opts[:project]}"
-  else
-    puts "No changes applied (already in sync)"
-  end
+  project = result[:project]
+  any_failed = true unless result[:ok]
 end
 
-if missing_project_refs.empty? && missing_target_membership.empty? && stale_broken_duplicates.empty? && orphan_broken_file_refs.empty?
-  puts "Status: OK"
-  exit 0
+if any_failed
+  puts
+  puts "Remediation:"
+  puts "  ruby scripts/check_xcodeproj_source_membership.rb --fix"
+  exit 1
 end
-
-puts "Status: DRIFT DETECTED"
-print_missing("Missing file references in project", missing_project_refs)
-print_missing("Missing target source membership in #{opts[:target]}", missing_target_membership)
-print_stale_broken_duplicates(opts[:target], stale_broken_duplicates)
-print_orphan_broken_file_refs(orphan_broken_file_refs)
-puts
-puts "Remediation:"
-puts "  ruby scripts/check_xcodeproj_source_membership.rb --fix"
-exit 1
