@@ -46,9 +46,15 @@ public class TandemPump {
         bluetoothManager.stopScan()
     }
 
-    /// Permanently disconnect from the pump.
+    /// Permanently disconnect from the pump. No reconnection will occur.
     public func disconnect() {
         bluetoothManager.permanentDisconnect()
+    }
+
+    /// Disconnect from the pump but allow automatic reconnection.
+    /// Use for recoverable faults (stuck init, transport errors).
+    public func softDisconnect() {
+        bluetoothManager.softDisconnect()
     }
 
     // MARK: - Configuration helpers

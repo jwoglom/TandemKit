@@ -192,6 +192,20 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Cancel the active peripheral connection but keep `stayConnected = true`
+    /// so that `didDisconnectPeripheral` will automatically call `scanAfterDelay()`
+    /// and reconnect. Use this for recoverable fault handling (e.g. stuck init).
+    public func softDisconnect() {
+        dispatchPrecondition(condition: .notOnQueue(managerQueue))
+        log.debug("softDisconnect called")
+        managerQueue.sync {
+            if let peripheral = peripheral {
+                log.debug("softDisconnect - cancelling peripheral connection (will auto-reconnect)")
+                manager.cancelPeripheralConnection(peripheral)
+            }
+        }
+    }
+
     func reconnectPeripheral() {
         dispatchPrecondition(condition: .notOnQueue(managerQueue))
 
