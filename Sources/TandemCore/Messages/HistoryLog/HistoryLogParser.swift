@@ -211,6 +211,10 @@ public enum HistoryLogParser {
             return WumpCartridgeRemovedHistoryLog(cargo: raw)
         case AaTdiEstChangeHistoryLog.typeId:
             return AaTdiEstChangeHistoryLog(cargo: raw)
+        case AaExerciseTimeChangeHistoryLog.typeId:
+            return AaExerciseTimeChangeHistoryLog(cargo: raw)
+        case AaExerciseChoiceChangeHistoryLog.typeId:
+            return AaExerciseChoiceChangeHistoryLog(cargo: raw)
         case PrimeInprocessHistoryLog.typeId:
             return PrimeInprocessHistoryLog(cargo: raw)
         case CgmRejoinSessionHistoryLog.typeId:
