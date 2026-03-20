@@ -1158,12 +1158,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         let bundle = NotificationBundle()
-        for request in NotificationBundle.allRequests() {
-            if let response = try? pumpComm.sendMessage(transport: transport, message: request),
-               NotificationBundle.isNotificationResponse(response)
-            {
-                bundle.add(response)
+        do {
+            try pumpComm.performOnCommandQueue {
+                for request in NotificationBundle.allRequests() {
+                    if let response = try? self.pumpComm.sendMessage(transport: transport, message: request),
+                       NotificationBundle.isNotificationResponse(response)
+                    {
+                        bundle.add(response)
+                    }
+                }
             }
+        } catch {
+            telemetryLogger.error("fetchNotificationCount failed: \(error)")
         }
 
         // Use the shared update method to keep the notification bundle and count in sync
@@ -1606,14 +1612,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
             telemetryConfigured = true
         }
 
-        fetchBasalStatus()
-        fetchReservoirStatus()
-        fetchBatteryStatus()
-        fetchBolusStatus()
-        fetchHomeScreenStatus()
-        fetchControlIQStatus()
-        fetchNotificationCount()
-        fetchTimeSinceReset()
+        do {
+            try pumpComm.performOnCommandQueue {
+                self.fetchBasalStatus()
+                self.fetchReservoirStatus()
+                self.fetchBatteryStatus()
+                self.fetchBolusStatus()
+                self.fetchHomeScreenStatus()
+                self.fetchControlIQStatus()
+                self.fetchNotificationCount()
+                self.fetchTimeSinceReset()
+            }
+        } catch {
+            log.error("ensureCurrentPumpData failed: \(error)")
+        }
 
         recordReconciliation(at: Date.now)
 
@@ -1776,7 +1788,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         guard let transport = pairedTransport else {
             return nil
         }
-        return try? transport.sendMessage(message)
+        return try? pumpComm.sendMessage(transport: transport, message: message)
     }
 
     public func setMustProvideBLEHeartbeat(_: Bool) {
@@ -1965,76 +1977,80 @@ public class TandemPumpManager: PumpManager, Pluggable {
             var shouldReleasePermissionOnFailure = false
 
             do {
-                let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: BolusPermissionRequest(),
-                    expecting: BolusPermissionResponse.self
-                )
-
-                guard permissionResponse.isPermissionGranted else {
-                    throw PumpCommError.errorResponse(
-                        context: LocalizedString(
-                            "Pump rejected bolus permission request",
-                            comment: "Message when pump disallows bolus from occurring"
-                        ),
-                        request: BolusPermissionRequest(),
-                        response: permissionResponse
+                let (initiateResponse, dose, doseEntry) = try self.pumpComm.performOnCommandQueue { () -> (InitiateBolusResponse, UnfinalizedDose, DoseEntry) in
+                    let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: BolusPermissionRequest(),
+                        expecting: BolusPermissionResponse.self
                     )
-                }
 
-                permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
-                shouldReleasePermissionOnFailure = true
+                    guard permissionResponse.isPermissionGranted else {
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString(
+                                "Pump rejected bolus permission request",
+                                comment: "Message when pump disallows bolus from occurring"
+                            ),
+                            request: BolusPermissionRequest(),
+                            response: permissionResponse
+                        )
+                    }
 
-                let milliUnits = max(0, Int((units * 1000).rounded()))
-                let totalVolume = UInt32(clamping: milliUnits)
+                    permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
+                    shouldReleasePermissionOnFailure = true
 
-                let bolusRequest = InitiateBolusRequest(
-                    totalVolume: totalVolume,
-                    bolusID: permissionResponse.bolusId,
-                    bolusTypeBitmask: BolusType.toBitmask([.food2]),
-                    foodVolume: totalVolume,
-                    correctionVolume: 0,
-                    bolusCarbs: 0,
-                    bolusBG: 0,
-                    bolusIOB: 0
-                )
+                    let milliUnits = max(0, Int((units * 1000).rounded()))
+                    let totalVolume = UInt32(clamping: milliUnits)
 
-                telemetryLogger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
-
-                let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: bolusRequest,
-                    expecting: InitiateBolusResponse.self
-                )
-
-                guard initiateResponse.wasBolusInitiated else {
-                    telemetryLogger.info("[enactBolus] bolus not initiated")
-                    throw PumpCommError.errorResponse(
-                        context: LocalizedString(
-                            "Pump rejected bolus initiate request",
-                            comment: "Message when pump disallows bolus from occurring"
-                        ),
-                        request: bolusRequest,
-                        response: initiateResponse
+                    let bolusRequest = InitiateBolusRequest(
+                        totalVolume: totalVolume,
+                        bolusID: permissionResponse.bolusId,
+                        bolusTypeBitmask: BolusType.toBitmask([.food2]),
+                        foodVolume: totalVolume,
+                        correctionVolume: 0,
+                        bolusCarbs: 0,
+                        bolusBG: 0,
+                        bolusIOB: 0
                     )
+
+                    self.telemetryLogger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
+
+                    let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: bolusRequest,
+                        expecting: InitiateBolusResponse.self
+                    )
+
+                    guard initiateResponse.wasBolusInitiated else {
+                        self.telemetryLogger.info("[enactBolus] bolus not initiated")
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString(
+                                "Pump rejected bolus initiate request",
+                                comment: "Message when pump disallows bolus from occurring"
+                            ),
+                            request: bolusRequest,
+                            response: initiateResponse
+                        )
+                    }
+
+                    self.telemetryLogger.info("[enactBolus] bolus started")
+
+                    shouldReleasePermissionOnFailure = false
+
+                    let dose = UnfinalizedDose(
+                        units: units,
+                        duration: self.estimatedDuration(toBolus: units),
+                        activationType: activationType,
+                        insulinType: self.lockedState.value.insulinType
+                    )
+
+                    let syncId = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
+                    let doseEntry = dose.toDoseEntry(endDate: nil, syncIdentifier: syncId)
+
+                    return (initiateResponse, dose, doseEntry)
                 }
-
-                telemetryLogger.info("[enactBolus] bolus started")
-
-                let dose = UnfinalizedDose(
-                    units: units,
-                    duration: estimatedDuration(toBolus: units),
-                    activationType: activationType,
-                    insulinType: lockedState.value.insulinType
-                )
-
-                let syncId = HistoryToDoseMapper.bolusSyncIdentifier(Int(initiateResponse.bolusId))
-                let doseEntry = dose.toDoseEntry(endDate: nil, syncIdentifier: syncId)
 
                 bolusProgressReport = TandemDoseProgressReporter(dose: doseEntry, activationType: activationType)
                 telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5), handler: fetchBolusStatus)
-
-                shouldReleasePermissionOnFailure = false
 
                 self.activeBolus.value = ActiveBolus(
                     id: initiateResponse.bolusId,
@@ -2164,23 +2180,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             var pumpEvents: [NewPumpEvent] = []
             do {
+                try self.pumpComm.performOnCommandQueue {
                 // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
-                log.info("Querying pump temp basal state before enacting new temp basal...")
+                self.log.info("Querying pump temp basal state before enacting new temp basal...")
                 let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
                     transport: transport,
                     message: TempRateRequest(),
                     expecting: TempRateResponse.self
                 )
 
-                log.info("Pump temp basal state: active=\(currentTempRate.active), percent=\(currentTempRate.percentage)%")
+                self.log.info("Pump temp basal state: active=\(currentTempRate.active), percent=\(currentTempRate.percentage)%")
 
                 // Cancel any active temp basal on the pump (whether we know about it or not)
                 if currentTempRate.active {
-                    updateStatus { status in
+                    self.updateStatus { status in
                         status.basalDeliveryState = .cancelingTempBasal
                     }
 
-                    log.info("Cancelling active temp basal on pump (percent=\(currentTempRate.percentage)%)...")
+                    self.log.info("Cancelling active temp basal on pump (percent=\(currentTempRate.percentage)%)...")
                     let response: StopTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: StopTempRateRequest(),
@@ -2188,7 +2205,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
 
                     guard response.isStatusOK else {
-                        log.error("Failed to cancel temp basal - status: \(response.status)")
+                        self.log.error("Failed to cancel temp basal - status: \(response.status)")
                         throw PumpCommError.errorResponse(
                             context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
                             request: StopTempRateRequest(),
@@ -2197,46 +2214,46 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
 
                     // Create cancellation event using either local state or pump-reported values
-                    let tempRateAbsolute = state
-                        .tempRateAbsolute ?? (getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
-                    let tempRateStart = state.tempRateStart ?? currentTempRate.startTime
+                    let tempRateAbsolute = self.state
+                        .tempRateAbsolute ?? (self.getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
+                    let tempRateStart = self.state.tempRateStart ?? currentTempRate.startTime
                     let cancelledDose = DoseEntry.tempBasal(
                         absoluteUnit: tempRateAbsolute,
                         duration: 0, // Ignored when a dose is finished
-                        insulinType: lockedState.value.insulinType,
+                        insulinType: self.lockedState.value.insulinType,
                         startDate: tempRateStart,
                         endDate: Date.now
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
 
                     // Clear local temp basal state
-                    var state = lockedState.value
+                    var state = self.lockedState.value
                     state.tempRatePercentage = nil
                     state.tempRateAbsolute = nil
                     state.tempRateStart = nil
                     state.tempRateDuration = nil
                     state.tempRateSyncIdentifier = nil
-                    lockedState.value = state
+                    self.lockedState.value = state
 
                     self.updateStatus { status in
                         status.basalDeliveryState = .active(Date.now)
                     }
                 }
 
-                let baselineRate = getScheduledBasalRate()
+                let baselineRate = self.getScheduledBasalRate()
                 guard baselineRate > 0 else {
-                    log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+                    self.log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
                     throw PumpCommError.invalidScheduledBasalRate
                 }
 
                 let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-                let absoluteRate = roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
+                let absoluteRate = self.roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
 
                 if duration <= 0 || percent == 100 {
                     // Loop wants us to only cancel the temp basal
                     let basalDose = DoseEntry.basal(
-                        rate: getScheduledBasalRate(),
-                        insulinType: lockedState.value.insulinType
+                        rate: self.getScheduledBasalRate(),
+                        insulinType: self.lockedState.value.insulinType
                     )
                     pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
 
@@ -2244,15 +2261,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
                 } else {
                     // Enact new temp basal
-                    updateStatus { status in
+                    self.updateStatus { status in
                         status.basalDeliveryState = .initiatingTempBasal
                     }
 
                     if absoluteRate < unitsPerHour {
-                        log.warning("Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr")
+                        self.log.warning("Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr")
                     }
 
-                    log.info("ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
+                    self.log.info("ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
                     let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
                     var response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -2262,7 +2279,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     // Fallback: If pump fails to set temp rate, try to stop temp rate and then re-set temp rate
                     if !response.isStatusOK, response.status == 1 {
-                        log
+                        self.log
                             .error(
                                 "enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Checking temp basal state..."
                             )
@@ -2282,7 +2299,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             )
                         }
 
-                        log.info("enactTempBasal fallback: stopping current temp rate since one is active: \(currentTempRate)")
+                        self.log.info("enactTempBasal fallback: stopping current temp rate since one is active: \(currentTempRate)")
 
                         // Cancel the temp basal
                         let stopResponse: StopTempRateResponse = try self.pumpComm.sendMessage(
@@ -2292,7 +2309,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         )
 
                         guard stopResponse.isStatusOK else {
-                            log
+                            self.log
                                 .error(
                                     "enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)"
                                 )
@@ -2303,7 +2320,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             )
                         }
 
-                        log.info("enactTempBasal fallback: successfully cancelled temp basal, retrying SetTempRateRequest...")
+                        self.log.info("enactTempBasal fallback: successfully cancelled temp basal, retrying SetTempRateRequest...")
 
                         // Retry the temp basal request
                         response = try self.pumpComm.sendMessage(
@@ -2313,7 +2330,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         )
 
                         if !response.isStatusOK {
-                            log
+                            self.log
                                 .error(
                                     "enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)"
                                 )
@@ -2324,9 +2341,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             )
                         }
 
-                        log.info("enactTempBasal fallback success: temp basal enacted after cancellation and retry")
+                        self.log.info("enactTempBasal fallback success: temp basal enacted after cancellation and retry")
                     } else if !response.isStatusOK {
-                        log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
+                        self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                         throw PumpCommError.errorResponse(
                             context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
                             request: request,
@@ -2338,22 +2355,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     let dose = DoseEntry.tempBasal(
                         absoluteUnit: absoluteRate,
                         duration: duration,
-                        insulinType: lockedState.value.insulinType,
+                        insulinType: self.lockedState.value.insulinType,
                         startDate: startTime
                     )
                     pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
 
-                    var state = lockedState.value
+                    var state = self.lockedState.value
                     state.tempRatePercentage = percent
                     state.tempRateAbsolute = absoluteRate
                     state.tempRateStart = startTime
                     state.tempRateDuration = duration
                     state.tempRateSyncIdentifier = dose.syncIdentifier
-                    lockedState.value = state
+                    self.lockedState.value = state
 
                     self.recordReconciliation(at: Date.now)
                     self.completeTempBasal(.success(pumpEvents), completion: completion)
                 }
+                } // end performOnCommandQueue
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
 
@@ -2765,49 +2783,54 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let self = self else { return }
 
             do {
+                let appliedLimits: DeliveryLimits = try self.pumpComm.performOnCommandQueue {
+                    let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
+                    var appliedLimits = DeliveryLimits(maximumBasalRate: nil, maximumBolus: nil)
+
+                    if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
+                        let milliunits = Int((maxBasal * 1000.0).rounded())
+                        let request: SetMaxBasalLimitRequest = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
+                        let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: request,
+                            expecting: SetMaxBasalLimitResponse.self
+                        )
+
+                        guard response.status == 0 else {
+                            throw PumpCommError.errorResponse(
+                                context: LocalizedString("Error setting max basal limit", comment: "Message when pump rejects SetMaxBasalLimit"),
+                                request: request,
+                                response: response
+                            )
+                        }
+
+                        appliedLimits.maximumBasalRate = HKQuantity(unit: hkUnit, doubleValue: maxBasal)
+                    }
+
+                    if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
+                        let milliunits = Int((maxBolus * 1000.0).rounded())
+                        let request = SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)
+                        let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: request,
+                            expecting: SetMaxBolusLimitResponse.self
+                        )
+
+                        guard response.status == 0 else {
+                            throw PumpCommError.errorResponse(
+                                context: LocalizedString("Error setting max bolus limit", comment: "Message when pump rejects SetMaxBolusLimit"),
+                                request: request,
+                                response: response
+                            )
+                        }
+
+                        appliedLimits.maximumBolus = HKQuantity(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
+                    }
+
+                    return appliedLimits
+                }
+
                 let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
-                var appliedLimits = DeliveryLimits(maximumBasalRate: nil, maximumBolus: nil)
-
-                if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
-                    let milliunits = Int((maxBasal * 1000.0).rounded())
-                    let request: SetMaxBasalLimitRequest = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
-                    let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: SetMaxBasalLimitResponse.self
-                    )
-
-                    guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(
-                            context: LocalizedString("Error setting max basal limit", comment: "Message when pump rejects SetMaxBasalLimit"),
-                            request: request,
-                            response: response
-                        )
-                    }
-
-                    appliedLimits.maximumBasalRate = HKQuantity(unit: hkUnit, doubleValue: maxBasal)
-                }
-
-                if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
-                    let milliunits = Int((maxBolus * 1000.0).rounded())
-                    let request = SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)
-                    let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: SetMaxBolusLimitResponse.self
-                    )
-
-                    guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(
-                            context: LocalizedString("Error setting max bolus limit", comment: "Message when pump rejects SetMaxBolusLimit"),
-                            request: request,
-                            response: response
-                        )
-                    }
-
-                    appliedLimits.maximumBolus = HKQuantity(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
-                }
-
                 var managerState = self.lockedState.value
                 managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRate?.doubleValue(for: hkUnit)
                 managerState.settings.maxBolus = appliedLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
@@ -2989,17 +3012,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         do {
-            let basalResponse: BasalLimitSettingsResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: BasalLimitSettingsRequest(),
-                expecting: BasalLimitSettingsResponse.self
-            )
+            let (basalResponse, bolusResponse) = try pumpComm.performOnCommandQueue { () -> (BasalLimitSettingsResponse, GlobalMaxBolusSettingsResponse) in
+                let basalResponse: BasalLimitSettingsResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: BasalLimitSettingsRequest(),
+                    expecting: BasalLimitSettingsResponse.self
+                )
 
-            let bolusResponse: GlobalMaxBolusSettingsResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: GlobalMaxBolusSettingsRequest(),
-                expecting: GlobalMaxBolusSettingsResponse.self
-            )
+                let bolusResponse: GlobalMaxBolusSettingsResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: GlobalMaxBolusSettingsRequest(),
+                    expecting: GlobalMaxBolusSettingsResponse.self
+                )
+
+                return (basalResponse, bolusResponse)
+            }
 
             var managerState = lockedState.value
             managerState.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
@@ -3271,32 +3298,41 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
         notificationLogger.info("[notification] Received qualifying events: \(events)")
 
-        // Fetch suggested status messages for these events
-        Task { @MainActor in
+        // Fetch suggested status messages for these events on a background queue,
+        // routing through pumpComm.sendMessage so they go through the serial command queue.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
             let handlers = QualifyingEvent.groupSuggestedHandlers(events)
-            notificationLogger.debug("[notification] Fetching \(handlers.count) status messages for qualifying events")
+            self.notificationLogger.debug("[notification] Fetching \(handlers.count) status messages for qualifying events")
 
-            for message in handlers {
-                do {
-                    guard let transport = pairedTransport else {
-                        notificationLogger.warning("[notification] No transport available for qualifying event handler")
-                        break
+            guard let transport = self.pairedTransport else {
+                self.notificationLogger.warning("[notification] No transport available for qualifying event handler")
+                return
+            }
+
+            do {
+                try self.pumpComm.performOnCommandQueue {
+                    for message in handlers {
+                        do {
+                            let response = try self.pumpComm.sendMessage(transport: transport, message: message)
+                            let metadata = MessageRegistry.metadata(for: response)
+
+                            // Process the response through the normal notification handler
+                            self.pumpComm(
+                                self.pumpComm,
+                                didReceive: response,
+                                metadata: metadata,
+                                characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+                                txId: 0
+                            )
+                        } catch {
+                            self.notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
+                        }
                     }
-
-                    let response = try transport.sendMessage(message)
-                    let metadata = MessageRegistry.metadata(for: response)
-
-                    // Process the response through the normal notification handler
-                    pumpComm(
-                        pumpComm,
-                        didReceive: response,
-                        metadata: metadata,
-                        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-                        txId: 0
-                    )
-                } catch {
-                    notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
                 }
+            } catch {
+                self.notificationLogger.error("[notification] Qualifying event handler failed: \(error)")
             }
         }
     }
