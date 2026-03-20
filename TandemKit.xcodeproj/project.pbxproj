@@ -55,7 +55,6 @@
 		22393DD730C3E91DF92FC436 /* CgmStopSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */; };
 		227F0A01FFDB9AA9A6CBA941 /* CgmStopSessionMsg2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BAE3A73C5864C7B4F33631A /* CgmStopSessionMsg2HistoryLog.swift */; };
 		22EC259598464105BFD8C1D1 /* HistoryFetchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD8951E3191413C8074A6A4 /* HistoryFetchSession.swift */; };
-		2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */; };
 		2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */; };
 		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
 		35710C54F4F4E1C26051CBF1 /* VersionsAHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */; };
@@ -455,7 +454,6 @@
 		FC05B5C5270527052705B5C5 /* FetchedRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC02A2B2270227022702A2B2 /* FetchedRange.swift */; };
 		FC06B6C6270627062706B6C6 /* HistoryRangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */; };
 		FCD3F2BD0FC96D67F804ED9F /* DexcomG7CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */; };
-		FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */; };
 		WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -924,7 +922,6 @@
 		97B6659EC42092BEEEC91D1A /* BasalIqSettingsChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BasalIqSettingsChangeHistoryLog.swift; path = Sources/TandemCore/Messages/HistoryLog/BasalIqSettingsChangeHistoryLog.swift; sourceTree = "<group>"; };
 		98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeView.swift; sourceTree = "<group>"; };
 		9A390F070116FA01DED75C05 /* AaWeightSettingChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AaWeightSettingChangeHistoryLog.swift; path = Sources/TandemCore/Messages/HistoryLog/AaWeightSettingChangeHistoryLog.swift; sourceTree = "<group>"; };
-		9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardProgressBar.swift; sourceTree = "<group>"; };
 		9D44852CA6D8D9C07A7D0B80 /* CgmStartSessionReqGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CgmStartSessionReqGxHistoryLog.swift; path = Sources/TandemCore/Messages/HistoryLog/CgmStartSessionReqGxHistoryLog.swift; sourceTree = "<group>"; };
 		9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		A086B4F239E6B83054BE165D /* PlgsPeriodicHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlgsPeriodicHistoryLog.swift; sourceTree = "<group>"; };
@@ -937,7 +934,6 @@
 		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
 		B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillTubingView.swift; sourceTree = "<group>"; };
-		B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStepContainer.swift; sourceTree = "<group>"; };
 		B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		B8003BA69CB31003CBE6C860 /* WumpCartridgeFilledHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WumpCartridgeFilledHistoryLog.swift; path = Sources/TandemCore/Messages/HistoryLog/WumpCartridgeFilledHistoryLog.swift; sourceTree = "<group>"; };
 		BB739377BE92F9DBFEDDB1FE /* CgmUnexpectedGeAlertHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CgmUnexpectedGeAlertHistoryLog.swift; path = Sources/TandemCore/Messages/HistoryLog/CgmUnexpectedGeAlertHistoryLog.swift; sourceTree = "<group>"; };
@@ -1262,8 +1258,6 @@
 				3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */,
 				3EE346162EC9274E008A07F6 /* Bundle.swift */,
 				3EE3461E2EC92806008A07F6 /* ContinueButton.swift */,
-				B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */,
-				9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */,
 				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
 				1A55E0F32EC967E5006E651D /* Image.swift */,
 				1A02E3ED2F2C949900203519 /* ErrorSheet.swift */,
@@ -2000,8 +1994,6 @@
 				3E7EC31A2F49E5B8005157EB /* ReservoirView.swift in Sources */,
 				1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */,
 				0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */,
-				2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */,
-				FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */,
 				3EEECBC62EC9008E0063D7BC /* TandemPumpManager+UI.swift in Sources */,
 				3EE3461B2EC92803008A07F6 /* TandemKitSetupView.swift in Sources */,
 				3EE3461C2EC92804008A07F6 /* TandemKitScanView.swift in Sources */,
