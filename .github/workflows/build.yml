@@ -130,10 +130,13 @@ jobs:
           path: trio/TandemKit
           fetch-depth: 1
 
-      - name: Validate TandemCore Xcode source membership
+      - name: Validate Xcode source membership (all targets)
         run: |
           ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
-          ruby scripts/check_xcodeproj_source_membership.rb --check
+          ruby scripts/check_xcodeproj_source_membership.rb --check --target TandemCore --source-root Sources/TandemCore
+          ruby scripts/check_xcodeproj_source_membership.rb --check --target TandemKit  --source-root Sources/TandemKit
+          ruby scripts/check_xcodeproj_source_membership.rb --check --target TandemKit  --source-root Sources/TandemKitUI
+          ruby scripts/check_xcodeproj_source_membership.rb --check --target TandemBLE  --source-root Sources/TandemBLE
         working-directory: trio/TandemKit
 
       - name: Initialize Trio submodules (excluding TandemKit)
