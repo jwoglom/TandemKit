@@ -9,7 +9,7 @@ public struct PacketArrayList {
     static let IGNORE_INVALID_HMAC = "IGNORE_HMAC_SIGNATURE_EXCEPTION"
     static let ignoreInvalidTxId = false
 
-    let expectedOpCode: UInt8
+    private(set) var expectedOpCode: UInt8
     private(set) var expectedCargoSize: UInt8
     let expectedTxId: UInt8
     let isSigned: Bool
@@ -52,6 +52,8 @@ public struct PacketArrayList {
         var cargoSize = Int(Int8(bitPattern: packet[4]))
         if cargoSize < 0 { cargoSize += 256 }
 
+        applyDynamicCargoSizeOverrideIfNeeded(opCode: opCode, cargoSize: cargoSize)
+
         if opCode == expectedOpCode {
             firstByteMod15 = Int(packet[0] & 0x0F)
             let txId = packet[3]
@@ -73,6 +75,41 @@ public struct PacketArrayList {
         }
         packetArrayLogger
             .debug("[PacketArrayList] parse ok opCode=\(opCode) firstByteMod15=\(firstByteMod15) cargoSize=\(cargoSize)")
+    }
+
+    private mutating func applyDynamicCargoSizeOverrideIfNeeded(opCode: UInt8, cargoSize: Int) {
+        // Mirror PumpX2 dynamic cargo-size handling in PacketArrayList.parse():
+        // https://github.com/jwoglom/pumpx2/blob/dev/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/PacketArrayList.java
+
+        // ErrorResponse can arrive as 2-byte or 26-byte cargo, and may replace the expected opcode.
+        if opCode == 77, cargoSize == 2 || cargoSize == 26 {
+            expectedOpCode = 77
+            expectedCargoSize = UInt8(cargoSize)
+            actualExpectedCargoSize = cargoSize
+            fullCargo = Data(repeating: 0, count: actualExpectedCargoSize + 2)
+            return
+        }
+
+        // ApiVersionResponse can be 0-byte or 2-byte cargo.
+        if opCode == 32, cargoSize == 0 {
+            expectedCargoSize = 0
+            actualExpectedCargoSize = 0
+        }
+        // CommonSoftwareInfoRequest can be 0-byte or 1-byte cargo.
+        else if opCode == UInt8(bitPattern: Int8(-114)), cargoSize == 1 {
+            expectedCargoSize = 1
+            actualExpectedCargoSize = 1
+        }
+        // CommonSoftwareInfoResponse can be 60-byte or 51-byte cargo.
+        else if opCode == UInt8(bitPattern: Int8(-113)), cargoSize == 51 {
+            expectedCargoSize = 51
+            actualExpectedCargoSize = 51
+        }
+        // MalfunctionStatusResponse can be 11-byte or 10-byte cargo.
+        else if opCode == 121, cargoSize == 10 {
+            expectedCargoSize = 10
+            actualExpectedCargoSize = 10
+        }
     }
 
     public mutating func validatePacket(_ packet: Data) throws {
