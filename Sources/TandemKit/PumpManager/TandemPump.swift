@@ -105,6 +105,7 @@ public class TandemPump {
         let startupMessages: [Message] = [
             ApiVersionRequest(),
             PumpVersionRequest(),
+            TimeSinceResetRequest(),
             CurrentBatteryV2Request(),
             InsulinStatusRequest(),
             CurrentBasalStatusRequest(),

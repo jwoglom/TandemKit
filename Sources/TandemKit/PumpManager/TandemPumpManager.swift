@@ -85,6 +85,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let historyRangeTracker = HistoryRangeTracker()
     private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
     private var historyTelemetryInterval: TimeInterval = 5 * 60
+    private var timeSinceResetTelemetryInterval: TimeInterval = 120
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -107,6 +108,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private weak var activePeripheralManager: PeripheralManager?
     private var targetPeripheralIdentifier: UUID?
     private let silentToneManager = TandemSilentToneManager()
+
+    // Post-initialization connection timeout (mirrors PumpX2's checkIfInitialPumpConnectionEstablished)
+    private let processedResponseMessages = Locked<Int>(0)
+    private var initialConnectionTimeoutWork: DispatchWorkItem?
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -1573,12 +1578,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-//        if !telemetryConfigured {
+        if !telemetryConfigured {
 //            telemetryScheduler.schedule(kind: .history, interval: historyTelemetryInterval, leeway: 10.0) { [weak self] in
 //                self?.performScheduledHistoryFetch()
 //            }
-//            telemetryConfigured = true
-//        }
+            telemetryScheduler.schedule(kind: .timeSinceReset, interval: timeSinceResetTelemetryInterval, leeway: 5.0) { [weak self] in
+                self?.fetchTimeSinceReset()
+            }
+            telemetryConfigured = true
+        }
 
         fetchBasalStatus()
         fetchReservoirStatus()
@@ -2917,6 +2925,42 @@ public class TandemPumpManager: PumpManager, Pluggable {
         activePeripheralManager = peripheralManager
         pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
+
+        scheduleInitialConnectionTimeoutCheck()
+    }
+
+    /// Schedule a 5-second post-initialization timeout check.
+    ///
+    /// After BLE initialization completes and startup messages are dispatched,
+    /// this verifies that at least one response has been received. If no responses
+    /// arrived within the window, the pump is disconnected so the connection can
+    /// be retried. This mirrors PumpX2's `checkIfInitialPumpConnectionEstablished()`.
+    private func scheduleInitialConnectionTimeoutCheck() {
+        // Reset the counter for this connection attempt
+        processedResponseMessages.value = 0
+
+        // Cancel any previously scheduled check
+        initialConnectionTimeoutWork?.cancel()
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+
+            let repliesReceived = self.processedResponseMessages.value
+            if repliesReceived == 0 {
+                self.log.error(
+                    "InitialConnectionTimeout: no responses received within 5 seconds of initialization – disconnecting"
+                )
+                self.tandemPump.disconnect()
+            } else {
+                self.log.info(
+                    "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
+                )
+            }
+            self.initialConnectionTimeoutWork = nil
+        }
+
+        initialConnectionTimeoutWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: work)
     }
 
     public func tandemPump(
@@ -2953,6 +2997,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         didDisconnectWithError error: Error?
     ) {
         log.error("Pump disconnected with error: \(String(describing: error))")
+
+        // Cancel any pending initial connection timeout check
+        initialConnectionTimeoutWork?.cancel()
+        initialConnectionTimeoutWork = nil
+        processedResponseMessages.value = 0
 
         if let manager = activePeripheralManager {
             notificationRouter.stop(with: manager)
@@ -3002,6 +3051,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         characteristic: CharacteristicUUID,
         txId: UInt8
     ) {
+        processedResponseMessages.value += 1
+        initialConnectionTimeoutWork?.cancel()
+        initialConnectionTimeoutWork = nil
+
         notificationLogger
             .debug(
                 "[notification] Received \(String(describing: type(of: message))) opCode=\(metadata?.opCode ?? type(of: message).props.opCode) characteristic=\(characteristic.prettyName) txId=\(txId)"
