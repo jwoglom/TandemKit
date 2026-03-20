@@ -1,5 +1,5 @@
 import Foundation
 
-/// Backward-compatible aliases for opcode 20/21 now identified as LoadStatus.
-public typealias LoadStatusRequest = UnknownMobiOpcode20Request
-public typealias LoadStatusResponse = UnknownMobiOpcode20Response
+/// Backward-compatible aliases so existing code referencing the old opcode-20 names still compiles.
+public typealias UnknownMobiOpcode20Request = LoadStatusRequest
+public typealias UnknownMobiOpcode20Response = LoadStatusResponse
