@@ -112,6 +112,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Post-initialization connection timeout (mirrors PumpX2's checkIfInitialPumpConnectionEstablished)
     private let processedResponseMessages = Locked<Int>(0)
     private var initialConnectionTimeoutWork: DispatchWorkItem?
+    private let initialConnectionTimeoutAttempts = Locked<Int>(0)
+    private let initialConnectionTimeoutMaxAttempts = 3
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -320,6 +322,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.handleTimeSinceResetResponse(response, source: .telemetry)
                 self.needsSessionInitialization.value = false
                 self.sessionBootstrapRetryAttempt.value = 0
+
+                // Auth + TimeSinceReset succeeded: pump is alive.
+                // Cancel initial connection timeout and mark responses received.
+                self.processedResponseMessages.value += 1
+                self.initialConnectionTimeoutWork?.cancel()
+                self.initialConnectionTimeoutWork = nil
+
                 self.telemetryLogger.debug("Session bootstrap complete – triggering telemetry refresh")
                 self.ensureCurrentPumpData { _ in }
                 self.telemetryScheduler.trigger(kind: .history)
@@ -3109,12 +3118,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
     ///
     /// After BLE initialization completes and startup messages are dispatched,
     /// this verifies that at least one response has been received. If no responses
-    /// arrived within the window, the pump is disconnected so the connection can
-    /// be retried. This mirrors PumpX2's `checkIfInitialPumpConnectionEstablished()`.
+    /// arrived within the window and no auth bootstrap is running, the pump is
+    /// soft-disconnected so the connection can be retried automatically.
+    /// This mirrors PumpX2's `checkIfInitialPumpConnectionEstablished()`.
     private func scheduleInitialConnectionTimeoutCheck() {
-        // Reset the counter for this connection attempt
+        // Reset counters for this connection attempt
         processedResponseMessages.value = 0
+        initialConnectionTimeoutAttempts.value = 0
 
+        scheduleNextInitialConnectionTimeout()
+    }
+
+    private func scheduleNextInitialConnectionTimeout() {
         // Cancel any previously scheduled check
         initialConnectionTimeoutWork?.cancel()
 
@@ -3122,15 +3137,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let self = self else { return }
 
             let repliesReceived = self.processedResponseMessages.value
-            if repliesReceived == 0 {
-                self.log.error(
-                    "InitialConnectionTimeout: no responses received within 5 seconds of initialization – disconnecting"
-                )
-                self.tandemPump.disconnect()
-            } else {
+            let bootstrapRunning = self.sessionBootstrapInProgress.value
+            let attempt = self.initialConnectionTimeoutAttempts.value
+
+            if repliesReceived > 0 {
                 self.log.info(
                     "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
                 )
+            } else if bootstrapRunning && attempt < self.initialConnectionTimeoutMaxAttempts {
+                self.initialConnectionTimeoutAttempts.value += 1
+                self.log.info(
+                    "InitialConnectionTimeout: auth bootstrap still in progress (attempt \(attempt + 1)/\(self.initialConnectionTimeoutMaxAttempts)) – extending timeout"
+                )
+                self.scheduleNextInitialConnectionTimeout()
+                return
+            } else {
+                self.log.error(
+                    "InitialConnectionTimeout: no responses received (bootstrap=\(bootstrapRunning), attempt=\(attempt)) – soft disconnecting for retry"
+                )
+                self.tandemPump.softDisconnect()
             }
             self.initialConnectionTimeoutWork = nil
         }
@@ -3178,6 +3203,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         initialConnectionTimeoutWork?.cancel()
         initialConnectionTimeoutWork = nil
         processedResponseMessages.value = 0
+        initialConnectionTimeoutAttempts.value = 0
 
         if let manager = activePeripheralManager {
             notificationRouter.stop(with: manager)
