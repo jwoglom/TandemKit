@@ -311,6 +311,7 @@ struct TandemKitSettingsView: View {
                     ) {
                         Text("10 min").tag(10)
                         Text("20 min").tag(20)
+                        Text("30 min").tag(30)
                     }
                 }
             }
