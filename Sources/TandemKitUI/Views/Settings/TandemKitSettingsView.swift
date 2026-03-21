@@ -8,6 +8,7 @@ struct TandemKitSettingsView: View {
     @Environment(\.insulinTintColor) var insulinTintColor
 
     @State var isSharePresented: Bool = false
+    @State var showingFindPumpConfirmation: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -245,10 +246,10 @@ struct TandemKitSettingsView: View {
                 }
 
                 Button(action: {
-                    viewModel.playSound()
+                    showingFindPumpConfirmation = true
                 }) {
                     HStack {
-                        Text(LocalizedString("Find My Pump", comment: "Tandem find my pump"))
+                        Text(LocalizedString("Find my pump", comment: "Tandem find my pump"))
                         Spacer()
                         if viewModel.isPlayingSound {
                             ActivityIndicator(isAnimating: .constant(true), style: .medium)
@@ -256,6 +257,20 @@ struct TandemKitSettingsView: View {
                     }
                 }
                 .disabled(viewModel.isPlayingSound)
+                .alert(isPresented: $showingFindPumpConfirmation) {
+                    Alert(
+                        title: Text(LocalizedString("Find my pump", comment: "Find pump alert title")),
+                        message: Text(LocalizedString(
+                            "The pump will vibrate and make sounds to help you identify its location.",
+                            comment: "Find pump alert message"
+                        )),
+                        primaryButton: .default(
+                            Text(LocalizedString("Continue", comment: "Continue button")),
+                            action: { viewModel.playSound() }
+                        ),
+                        secondaryButton: .cancel()
+                    )
+                }
 
             }
             Section(header: SectionHeader(label: LocalizedString(
