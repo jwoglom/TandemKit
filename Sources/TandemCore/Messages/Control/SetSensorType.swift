@@ -4,24 +4,33 @@ import Foundation
 public class SetSensorTypeRequest: Message {
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-64)),
-        size: 0,
+        size: 1,
         type: .Request,
         characteristic: .CONTROL_CHARACTERISTICS,
         signed: true
     )
 
     public var cargo: Data
+    public var sensorTypeId: Int
 
     public required init(cargo: Data) {
         self.cargo = cargo
+        sensorTypeId = cargo.isEmpty ? 0 : Int(cargo[0])
     }
 
-    public init() {
-        cargo = Data()
+    public init(sensorTypeId: Int) {
+        cargo = Data([UInt8(sensorTypeId & 0xFF)])
+        self.sensorTypeId = sensorTypeId
+    }
+
+    /// Convenience initializer using CGMStatusV2Response.CGMSensorType values:
+    /// dexcomG6 = 1, dexcomG7 = 3
+    public convenience init(sensorType: CGMStatusV2Response.CGMSensorType) {
+        self.init(sensorTypeId: sensorType.rawValue)
     }
 
     public var description: String {
-        "SetSensorTypeRequest(cargo=\(cargo.hexadecimalString))"
+        "SetSensorTypeRequest(cargo=\(cargo.hexadecimalString), sensorTypeId=\(sensorTypeId))"
     }
 }
 

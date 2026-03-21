@@ -76,6 +76,23 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 return
             }
 
+            // Set sensor type to G6
+            let sensorTypeResponse = pumpManager.sendMessage(
+                message: SetSensorTypeRequest(sensorType: .dexcomG6)
+            ) as? SetSensorTypeResponse
+
+            guard sensorTypeResponse?.isStatusOK == true else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = LocalizedString(
+                        "Failed to set sensor type. Check pump connection and try again.",
+                        comment: "Error when setting sensor type fails"
+                    )
+                }
+                return
+            }
+
+            // Set transmitter ID
             let txResponse = pumpManager.sendMessage(
                 message: SetG6TransmitterIdRequest(txId: txId)
             ) as? SetG6TransmitterIdResponse
@@ -117,7 +134,23 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 return
             }
 
-            // Step 1: Set transmitter ID
+            // Step 1: Set sensor type to G6
+            let sensorTypeResponse = pumpManager.sendMessage(
+                message: SetSensorTypeRequest(sensorType: .dexcomG6)
+            ) as? SetSensorTypeResponse
+
+            guard sensorTypeResponse?.isStatusOK == true else {
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    self.error = LocalizedString(
+                        "Failed to set sensor type. Check pump connection and try again.",
+                        comment: "Error when setting sensor type fails"
+                    )
+                }
+                return
+            }
+
+            // Step 2: Set transmitter ID
             let txResponse = pumpManager.sendMessage(
                 message: SetG6TransmitterIdRequest(txId: txId)
             ) as? SetG6TransmitterIdResponse
@@ -133,7 +166,7 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 return
             }
 
-            // Step 2: Start sensor session
+            // Step 3: Start sensor session
             let startResponse = pumpManager.sendMessage(
                 message: StartDexcomG6SensorSessionRequest(sensorCode: code)
             ) as? StartDexcomG6SensorSessionResponse
