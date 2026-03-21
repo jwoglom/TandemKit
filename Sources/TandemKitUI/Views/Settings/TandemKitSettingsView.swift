@@ -10,6 +10,7 @@ struct TandemKitSettingsView: View {
     @State var isSharePresented: Bool = false
     @State var showingFindPumpConfirmation: Bool = false
     @State var showingStopTempRateConfirmation: Bool = false
+    @State var showingAlgorithmToggle: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -181,6 +182,31 @@ struct TandemKitSettingsView: View {
                         .frame(maxWidth: .infinity)
                     algorithmStatus
                         .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            showingAlgorithmToggle = true
+                        }
+                        .alert(isPresented: $showingAlgorithmToggle) {
+                            if viewModel.useControlIQ {
+                                return Alert(
+                                    title: Text(LocalizedString("Enable DIY Algorithm", comment: "Title for alert to switch from Control-IQ to DIY")),
+                                    message: Text(LocalizedString("This will disable Control-IQ on your pump and allow Trio or Loop to resume DIY closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY")),
+                                    primaryButton: .default(Text(LocalizedString("Switch to DIY", comment: "Button to confirm switching to DIY algorithm"))) {
+                                        viewModel.switchAlgorithmToDIY()
+                                    },
+                                    secondaryButton: .cancel()
+                                )
+                            } else {
+                                return Alert(
+                                    title: Text(LocalizedString("Disable DIY Algorithm", comment: "Title for alert to switch from DIY to Control-IQ")),
+                                    message: Text(LocalizedString("This will DISABLE Trio or Loop in favor of the Control-IQ algorithm built-in to your pump.\n\nThis app will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ")),
+                                    primaryButton: .default(Text(LocalizedString("Switch to Control-IQ", comment: "Button to confirm switching to Control-IQ algorithm"))) {
+                                        viewModel.switchAlgorithmToControlIQ()
+                                    },
+                                    secondaryButton: .cancel()
+                                )
+                            }
+                        }
                     reservoirStatus
                         .frame(maxWidth: .infinity)
                 }
@@ -599,10 +625,10 @@ struct TandemKitSettingsView: View {
         VStack(alignment: .center, spacing: 5) {
             Text(LocalizedString("Algorithm", comment: "Header for algorithm status"))
                 .foregroundColor(Color(UIColor.secondaryLabel))
-            Text("DIY")
+            Text(viewModel.algorithmModeText)
                 .font(.system(size: 28))
                 .fontWeight(.regular)
-                .foregroundColor(.secondary)
+                .foregroundColor(viewModel.useControlIQ ? .orange : .secondary)
                 .fixedSize()
         }
     }
@@ -611,6 +637,7 @@ struct TandemKitSettingsView: View {
         VStack(alignment: .center, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
+                .lineLimit(1)
             if viewModel.isUpdatingPumpState {
                 HStack(alignment: .center) {
                     ActivityIndicator(isAnimating: .constant(true), style: .medium)
@@ -708,7 +735,7 @@ struct TandemKitSettingsView: View {
         } else if viewModel.tempRateActive {
             return LocalizedString("Temp Basal", comment: "Title for temp rate")
         } else {
-            return LocalizedString("Scheduled Basal", comment: "Title of insulin delivery section")
+            return LocalizedString("Profile Basal", comment: "Title of insulin delivery section")
         }
     }
 

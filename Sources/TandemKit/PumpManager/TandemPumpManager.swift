@@ -1608,6 +1608,91 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
     }
 
+    // MARK: - Control-IQ / DIY Algorithm Mode
+
+    private var isControlIQModeActive: Bool {
+        lockedState.value.useControlIQ
+    }
+
+    public func configureControlIQMode(_ enabled: Bool, completion: @escaping (Bool) -> Void) {
+        guard let transport = pairedTransport else {
+            completion(false)
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else {
+                completion(false)
+                return
+            }
+
+            do {
+                try self.pumpComm.performOnCommandQueue {
+                    // When switching to ControlIQ, cancel any active DIY temp basal first
+                    if enabled, self.state.tempRateAbsolute != nil {
+                        self.log.info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
+                        let _: StopTempRateResponse = try self.pumpComm.sendMessage(
+                            transport: transport,
+                            message: StopTempRateRequest(),
+                            expecting: StopTempRateResponse.self
+                        )
+
+                        var state = self.lockedState.value
+                        state.tempRatePercentage = nil
+                        state.tempRateAbsolute = nil
+                        state.tempRateStart = nil
+                        state.tempRateDuration = nil
+                        state.tempRateSyncIdentifier = nil
+                        self.lockedState.value = state
+                    }
+
+                    let weight = self.lockedState.value.controlIQWeight ?? 70
+                    let tdi = self.lockedState.value.controlIQTotalDailyInsulin ?? 30
+
+                    let response: ChangeControlIQSettingsResponse = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: ChangeControlIQSettingsRequest(
+                            enabled: enabled,
+                            weightLbs: weight,
+                            totalDailyInsulinUnits: tdi
+                        ),
+                        expecting: ChangeControlIQSettingsResponse.self
+                    )
+
+                    guard response.isStatusOK else {
+                        self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(enabled)")
+                        throw PumpCommError.errorResponse(
+                            context: LocalizedString(
+                                "Pump rejected Control-IQ settings change",
+                                comment: "Message when pump rejects ControlIQ settings change"
+                            ),
+                            request: ChangeControlIQSettingsRequest(enabled: enabled, weightLbs: weight, totalDailyInsulinUnits: tdi),
+                            response: response
+                        )
+                    }
+                }
+            } catch {
+                self.log.error("[configureControlIQMode] Failed: \(error.localizedDescription)")
+                DispatchQueue.main.async { completion(false) }
+                return
+            }
+
+            // Pump accepted -- update local preference
+            var state = self.lockedState.value
+            state.useControlIQ = enabled
+            self.lockedState.value = state
+
+            self.telemetryLogger.info("Algorithm mode set to \(enabled ? "Control-IQ" : "DIY")")
+
+            // Refresh pump state to confirm ControlIQ status
+            Thread.sleep(forTimeInterval: 1.0)
+            self.ensureCurrentPumpData { _ in }
+
+            self.notifyDelegateStateUpdated()
+            DispatchQueue.main.async { completion(true) }
+        }
+    }
+
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
@@ -1975,6 +2060,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if isControlIQModeActive && activationType.isAutomatic {
+            log.info("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
+            completeBolus(.failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)), completion: completion)
+            return
+        }
+
         updateStatus { status in
             status.bolusState = .initiating
         }
@@ -2177,6 +2268,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
+        if isControlIQModeActive {
+            log.info("[enactTempBasal] Blocked: Control-IQ mode is active")
+            completeTempBasal(.failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)), completion: completion)
+            return
+        }
+
         guard let transport = pairedTransport else {
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)

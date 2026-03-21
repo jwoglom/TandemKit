@@ -38,6 +38,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var alertSnoozeEnabled: Bool = false
     @Published var alertSnoozeDurationMins: Int = 10
     @Published var isPlayingSound: Bool = false
+    @Published var useControlIQ: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -66,6 +67,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openSoundSettings = openSoundSettings
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
+        useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = pumpManager?.connectedAndPaired ?? false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
@@ -238,40 +240,32 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func toggleControlIQMode() {
-        // TODO(jwoglom): this should enforce that Trio closed loop is FULLY turned off
+    func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
-                }
-                return
-            }
-
-            let isPumpControlIqOn = self.controlIQEnabled
-            let weight = self.pumpManager?.state.controlIQWeight ?? 70
-            let tdi = self.pumpManager?.state.controlIQTotalDailyInsulin ?? 30
-
-            let response = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
-                enabled: !isPumpControlIqOn,
-                weightLbs: weight,
-                totalDailyInsulinUnits: tdi
-            )) as? ChangeControlIQSettingsResponse
-
-            guard response?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
+        pumpManager?.configureControlIQMode(true) { [weak self] success in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isUpdatingPumpState = false
+                if success {
+                    self.useControlIQ = true
+                } else {
                     self.commandFailure = .controlIQ
                 }
-                return
             }
+        }
+    }
 
-            Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
+    func switchAlgorithmToDIY() {
+        isUpdatingPumpState = true
+        pumpManager?.configureControlIQMode(false) { [weak self] success in
             DispatchQueue.main.async {
+                guard let self = self else { return }
                 self.isUpdatingPumpState = false
+                if success {
+                    self.useControlIQ = false
+                } else {
+                    self.commandFailure = .controlIQ
+                }
             }
         }
     }
@@ -407,6 +401,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         return nil
     }
 
+    var algorithmModeText: String {
+        useControlIQ ? "CIQ" : "DIY"
+    }
+
     var controlIqModeText: String {
         if controlIQEnabled {
             return "Disable ControlIQ"
@@ -540,6 +538,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.isConnected = pumpManager.connectedAndPaired
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
+            self.useControlIQ = pumpManager.state.useControlIQ
 
             if self.pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
                 self.pendingRefreshOnReconnect = false
