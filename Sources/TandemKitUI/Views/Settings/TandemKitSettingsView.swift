@@ -405,27 +405,24 @@ struct TandemKitSettingsView: View {
                 NavigationLink(destination: TandemKitDeliveryLimitsView(
                     viewModel: viewModel.createDeliveryLimitsViewModel()
                 )) {
-                    HStack {
-                        Text(LocalizedString("Max Basal Rate", comment: "Label for max basal rate"))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if let text = viewModel.maxBasalRateText {
-                            Text(text)
-                                .foregroundColor(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(LocalizedString("Max Basal Rate", comment: "Label for max basal rate"))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if let text = viewModel.maxBasalRateText {
+                                Text(text)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                    }
-                }
-
-                NavigationLink(destination: TandemKitDeliveryLimitsView(
-                    viewModel: viewModel.createDeliveryLimitsViewModel()
-                )) {
-                    HStack {
-                        Text(LocalizedString("Max Bolus", comment: "Label for max bolus"))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if let text = viewModel.maxBolusText {
-                            Text(text)
-                                .foregroundColor(.secondary)
+                        HStack {
+                            Text(LocalizedString("Max Bolus", comment: "Label for max bolus"))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if let text = viewModel.maxBolusText {
+                                Text(text)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }

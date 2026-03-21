@@ -10,7 +10,7 @@ class TandemKitDeliveryLimitsViewModel: ObservableObject {
 
     @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
-    @Published var isFetching: Bool = true
+    @Published var isFetching: Bool = false
     @Published var saveError: String?
 
     private var originalMaxBasalRate: Double = 2.5
@@ -22,22 +22,15 @@ class TandemKitDeliveryLimitsViewModel: ObservableObject {
         self.pumpManager = pumpManager
 
         guard let pumpManager = pumpManager else {
-            isFetching = false
             return
         }
 
         let state = pumpManager.state
         if state.maxBasalLimitMilliunits != nil {
             loadFromState(state)
-            isFetching = false
         }
 
         pumpManager.addStatusObserver(self, queue: .main)
-
-        // Fetch current limits from pump
-        DispatchQueue.global(qos: .userInitiated).async {
-            pumpManager.fetchDeliveryLimits()
-        }
     }
 
     deinit {
