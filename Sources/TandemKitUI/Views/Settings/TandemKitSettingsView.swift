@@ -2,12 +2,15 @@ import LoopKitUI
 import SwiftUI
 import TandemCore
 
-private enum AlgorithmAlertType: Identifiable {
+private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
     case diyRestored
     case noCGMConnected
     case enableClosedLoop
+    case findPump
+    case stopTempRate
+    case stopTempRateClosedLoopWarning
 
     var id: String {
         switch self {
@@ -16,6 +19,9 @@ private enum AlgorithmAlertType: Identifiable {
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .enableClosedLoop: return "enableClosedLoop"
+        case .findPump: return "findPump"
+        case .stopTempRate: return "stopTempRate"
+        case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
         }
     }
 }
@@ -26,19 +32,17 @@ struct TandemKitSettingsView: View {
     @Environment(\.insulinTintColor) var insulinTintColor
 
     @State var isSharePresented: Bool = false
-    @State var showingFindPumpConfirmation: Bool = false
-    @State var showingStopTempRateConfirmation: Bool = false
-    @State fileprivate var activeAlgorithmAlert: AlgorithmAlertType?
+    @State fileprivate var activeAlert: SettingsAlertType?
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
         ActionSheet(
             title: Text(LocalizedString("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet."))
                 .font(.headline),
-            message: Text(LocalizedString(
-                "Are you sure you want to remove the pump from this app? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
+            message: Text(String(format: LocalizedString(
+                "Are you sure you want to remove the pump from %@? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
                 comment: "Message for Tandem PumpManager deletion action sheet"
-            )),
+            ), viewModel.appName)),
             buttons: [
                 .destructive(Text(LocalizedString(
                     "Delete pump",
@@ -220,19 +224,19 @@ struct TandemKitSettingsView: View {
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                activeAlgorithmAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
+                                activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
                             }
                     }
                     reservoirStatus
                         .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 5)
-                .alert(item: $activeAlgorithmAlert) { alertType in
+                .alert(item: $activeAlert) { alertType in
                     switch alertType {
                     case .switchToCIQ:
                         return Alert(
-                            title: Text(LocalizedString("Disable DIY Algorithm", comment: "Title for alert to switch from DIY to Control-IQ")),
-                            message: Text(LocalizedString("This will DISABLE this app in favor of the Control-IQ algorithm built-in to your pump.\n\nThis app will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ")),
+                            title: Text(String(format: LocalizedString("Disable %@ Algorithm", comment: "Title for alert to switch from DIY to Control-IQ"), viewModel.algorithmName)),
+                            message: Text(String(format: LocalizedString("This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ"), viewModel.appName, viewModel.appName)),
                             primaryButton: .default(Text(LocalizedString("Switch to Control-IQ", comment: "Button to confirm switching to Control-IQ algorithm"))) {
                                 viewModel.switchAlgorithmToControlIQ()
                             },
@@ -240,20 +244,20 @@ struct TandemKitSettingsView: View {
                         )
                     case .switchToDIY:
                         return Alert(
-                            title: Text(LocalizedString("Enable DIY Algorithm", comment: "Title for alert to switch from Control-IQ to DIY")),
-                            message: Text(LocalizedString("This will disable Control-IQ on your pump and allow this app to resume DIY closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY")),
-                            primaryButton: .default(Text(LocalizedString("Switch to DIY", comment: "Button to confirm switching to DIY algorithm"))) {
+                            title: Text(String(format: LocalizedString("Enable %@ Algorithm", comment: "Title for alert to switch from Control-IQ to DIY"), viewModel.algorithmName)),
+                            message: Text(String(format: LocalizedString("This will disable Control-IQ on your pump and allow %@ to resume %@ closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY"), viewModel.appName, viewModel.algorithmName)),
+                            primaryButton: .default(Text(String(format: LocalizedString("Switch to %@", comment: "Button to confirm switching to DIY algorithm"), viewModel.algorithmName))) {
                                 viewModel.switchAlgorithmToDIY()
                             },
                             secondaryButton: .cancel()
                         )
                     case .diyRestored:
                         return Alert(
-                            title: Text(LocalizedString("DIY Mode Restored", comment: "Title for DIY mode restored notice")),
-                            message: Text(LocalizedString(
-                                "Control-IQ has been disabled and you are currently in open-loop. To re-enable DIY closed-loop, go to your app's Algorithm settings.",
+                            title: Text(String(format: LocalizedString("%@ Mode Restored", comment: "Title for DIY mode restored notice"), viewModel.algorithmName)),
+                            message: Text(String(format: LocalizedString(
+                                "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
                                 comment: "Message for DIY mode restored notice"
-                            )),
+                            ), viewModel.algorithmName)),
                             dismissButton: .default(Text("OK"))
                         )
                     case .noCGMConnected:
@@ -268,26 +272,70 @@ struct TandemKitSettingsView: View {
                     case .enableClosedLoop:
                         return Alert(
                             title: Text(LocalizedString("Enable Closed Loop", comment: "Title for enable closed loop prompt")),
-                            message: Text(LocalizedString(
-                                "Would you like to enable DIY closed loop?",
+                            message: Text(String(format: LocalizedString(
+                                "Would you like to enable %@ closed loop?",
                                 comment: "Message for enable closed loop prompt"
-                            )),
+                            ), viewModel.algorithmName)),
                             primaryButton: .default(Text(LocalizedString("Enable", comment: "Button to enable closed loop"))) {
                                 viewModel.enableClosedLoop()
                             },
+                            secondaryButton: .cancel()
+                        )
+                    case .findPump:
+                        return Alert(
+                            title: Text(LocalizedString("Find my pump", comment: "Find pump alert title")),
+                            message: Text(LocalizedString(
+                                "The pump will vibrate and make sounds to help you identify its location.",
+                                comment: "Find pump alert message"
+                            )),
+                            primaryButton: .default(
+                                Text(LocalizedString("Continue", comment: "Continue button")),
+                                action: { viewModel.playSound() }
+                            ),
+                            secondaryButton: .cancel()
+                        )
+                    case .stopTempRate:
+                        return Alert(
+                            title: Text(LocalizedString("Temp Basal Active", comment: "Stop temp rate alert title")),
+                            message: Text(stopTempRateMessage),
+                            primaryButton: .destructive(
+                                Text(LocalizedString("Stop Temp Rate", comment: "Stop temp rate button")),
+                                action: {
+                                    if viewModel.isClosedLoopEnabled {
+                                        DispatchQueue.main.async {
+                                            activeAlert = .stopTempRateClosedLoopWarning
+                                        }
+                                    } else {
+                                        viewModel.stopTempRate()
+                                    }
+                                }
+                            ),
+                            secondaryButton: .cancel()
+                        )
+                    case .stopTempRateClosedLoopWarning:
+                        return Alert(
+                            title: Text(LocalizedString("WARNING", comment: "Closed loop temp rate warning title")),
+                            message: Text(LocalizedString(
+                                "Closed loop is currently enabled. Cancelling the active temp rate on the pump will NOT place you in open-loop mode, and the next run of the oref algorithm will set a new temp rate.",
+                                comment: "Closed loop temp rate warning message"
+                            )),
+                            primaryButton: .destructive(
+                                Text(LocalizedString("I Understand", comment: "Closed loop temp rate warning confirm button")),
+                                action: { viewModel.stopTempRate() }
+                            ),
                             secondaryButton: .cancel()
                         )
                     }
                 }
                 .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
                     if show {
-                        activeAlgorithmAlert = .diyRestored
+                        activeAlert = .diyRestored
                         viewModel.showReenableClosedLoopPrompt = false
                     }
                 }
                 .onChange(of: viewModel.showNoCGMWarning) { show in
                     if show {
-                        activeAlgorithmAlert = .noCGMConnected
+                        activeAlert = .noCGMConnected
                         viewModel.showNoCGMWarning = false
                     }
                 }
@@ -300,13 +348,13 @@ struct TandemKitSettingsView: View {
                 } else if viewModel.useControlIQ && !viewModel.isCGMActiveOnPump {
                     statusBanner(
                         title: LocalizedString("No CGM connected to pump", comment: "title for CIQ no CGM notice"),
-                        subtitle: LocalizedString("DIY closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop.", comment: "subtitle for CIQ no CGM notice"),
+                        subtitle: String(format: LocalizedString("%@ closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop.", comment: "subtitle for CIQ no CGM notice"), viewModel.algorithmName),
                         color: .orange
                     )
                 } else if viewModel.useControlIQ {
                     statusBanner(
                         title: LocalizedString("Control-IQ pump algorithm enabled", comment: "title for CIQ active notice"),
-                        subtitle: LocalizedString("DIY closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
+                        subtitle: String(format: LocalizedString("%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"), viewModel.algorithmName),
                         color: .orange
                     )
                 } else if !viewModel.isClosedLoopEnabled {
@@ -316,7 +364,7 @@ struct TandemKitSettingsView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        activeAlgorithmAlert = .enableClosedLoop
+                        activeAlert = .enableClosedLoop
                     }
                 }
 
@@ -380,7 +428,7 @@ struct TandemKitSettingsView: View {
 
 
                 Button(action: {
-                    showingFindPumpConfirmation = true
+                    activeAlert = .findPump
                 }) {
                     HStack {
                         Text(LocalizedString("Find my pump", comment: "Tandem find my pump"))
@@ -391,20 +439,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
                 .disabled(viewModel.isPlayingSound)
-                .alert(isPresented: $showingFindPumpConfirmation) {
-                    Alert(
-                        title: Text(LocalizedString("Find my pump", comment: "Find pump alert title")),
-                        message: Text(LocalizedString(
-                            "The pump will vibrate and make sounds to help you identify its location.",
-                            comment: "Find pump alert message"
-                        )),
-                        primaryButton: .default(
-                            Text(LocalizedString("Continue", comment: "Continue button")),
-                            action: { viewModel.playSound() }
-                        ),
-                        secondaryButton: .cancel()
-                    )
-                }
 
             }
             Section(header: SectionHeader(label: LocalizedString(
@@ -728,19 +762,8 @@ struct TandemKitSettingsView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if viewModel.tempRateActive {
-                        showingStopTempRateConfirmation = true
+                        activeAlert = .stopTempRate
                     }
-                }
-                .alert(isPresented: $showingStopTempRateConfirmation) {
-                    Alert(
-                        title: Text(LocalizedString("Temp Basal Active", comment: "Stop temp rate alert title")),
-                        message: Text(stopTempRateMessage),
-                        primaryButton: .destructive(
-                            Text(LocalizedString("Stop Temp Rate", comment: "Stop temp rate button")),
-                            action: { viewModel.stopTempRate() }
-                        ),
-                        secondaryButton: .cancel()
-                    )
                 }
             } else {
                 HStack(alignment: .center) {

@@ -25,10 +25,10 @@ struct TandemKitCGMSettingsView: View {
                 .bold()
                 .padding(.horizontal)
 
-            Text(LocalizedString(
-                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used.",
+            Text(String(format: LocalizedString(
+                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when %@ is not being used.",
                 comment: "Description for CGM settings"
-            ))
+            ), viewModel.appName))
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal)
 

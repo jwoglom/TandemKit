@@ -35,6 +35,8 @@ enum CGMSessionState {
 }
 
 class TandemKitCGMSettingsViewModel: ObservableObject {
+    var appName: String { HostApp.current.appName }
+
     @Published var isFetching: Bool = true
     @Published var isLoading: Bool = false
     @Published var cgmSessionState: CGMSessionState = .unknown

@@ -29,10 +29,10 @@ struct TandemKitSetupCompleteView: View {
 
                 Spacer()
 
-                Text(LocalizedString(
-                    "You can now use your Tandem pump with this app. Make sure to keep your pump nearby and within Bluetooth range.",
+                Text(String(format: LocalizedString(
+                    "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range.",
                     comment: "Tandem setup complete instructions"
-                ))
+                ), HostApp.current.appName))
                     .padding(.all)
             }
 

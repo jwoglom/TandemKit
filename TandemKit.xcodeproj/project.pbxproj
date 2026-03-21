@@ -367,6 +367,7 @@
 		8A2E807120E267CA6CD3EF95 /* CgmJoinSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */; };
 		8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */; };
 		91DB5F574F2E287B78CA0778 /* AaSleepScheduleChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC4490958D80E881D569D3C /* AaSleepScheduleChangeHistoryLog.swift */; };
+		9207058A976863F87B36BE16 /* HostApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0EABF4A19C3496270B55E8 /* HostApp.swift */; };
 		928E5C368BBB346CD2671284 /* CgmLgaSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D55BE8988C714C2A9032CFF /* CgmLgaSettingsHistoryLog.swift */; };
 		953C7E439817FD6F4A93942D /* CgmAlertActivatedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */; };
 		9555F9CFB3D829D63410E3EA /* CgmStopSessionReqGxHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DC1562C6E40633EA9A9F13 /* CgmStopSessionReqGxHistoryLog.swift */; };
@@ -918,6 +919,7 @@
 		7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedHistoryLog.swift; sourceTree = "<group>"; };
 		7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedDexHistoryLog.swift; sourceTree = "<group>"; };
 		7D55BE8988C714C2A9032CFF /* CgmLgaSettingsHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmLgaSettingsHistoryLog.swift; sourceTree = "<group>"; };
+		7F0EABF4A19C3496270B55E8 /* HostApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostApp.swift; sourceTree = "<group>"; };
 		7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG6CGMHistoryLog.swift; sourceTree = "<group>"; };
 		811C175C4A0485FFD4D33337 /* SaveButton.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SaveButton.swift; sourceTree = "<group>"; };
 		81DC8A3B85604051225CB808 /* TandemKitControlIQSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitControlIQSettingsViewModel.swift; sourceTree = "<group>"; };
@@ -1222,6 +1224,7 @@
 				3EEF3B9D2F0A123400ABCD12 /* ModalInPresentationSetter.swift */,
 				1A55E0F32EC967E5006E651D /* Image.swift */,
 				1A02E3ED2F2C949900203519 /* ErrorSheet.swift */,
+				7F0EABF4A19C3496270B55E8 /* HostApp.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -2072,6 +2075,7 @@
 				EBEA23EC9FD22005212E5559 /* TandemKitG7SetupViewModel.swift in Sources */,
 				DA434FB465A9BDAD25930F69 /* TandemKitG7SetupWizardView.swift in Sources */,
 				8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */,
+				9207058A976863F87B36BE16 /* HostApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

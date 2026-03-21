@@ -431,8 +431,11 @@ class TandemKitSettingsViewModel: ObservableObject {
         return nil
     }
 
+    var appName: String { HostApp.current.appName }
+    var algorithmName: String { HostApp.current.diyAlgorithmName }
+
     var algorithmModeText: String {
-        useControlIQ ? "CIQ" : "DIY"
+        useControlIQ ? "CIQ" : algorithmName
     }
 
     var controlIqModeText: String {
