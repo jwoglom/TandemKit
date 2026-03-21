@@ -2,9 +2,21 @@ import LoopKitUI
 import SwiftUI
 import TandemCore
 
+private enum CGMAlertType: Identifiable {
+    case stopConfirmation
+    case error(String)
+
+    var id: String {
+        switch self {
+        case .stopConfirmation: return "stop"
+        case .error(let msg): return "error:\(msg)"
+        }
+    }
+}
+
 struct TandemKitCGMSettingsView: View {
     @StateObject var viewModel: TandemKitCGMSettingsViewModel
-    @State private var showingStopConfirmation = false
+    @State private var activeAlert: CGMAlertType?
 
     var body: some View {
         VStack(alignment: .leading) {
@@ -40,7 +52,7 @@ struct TandemKitCGMSettingsView: View {
                     if viewModel.cgmSessionState == .startPending {
                         Section {
                             Button(action: {
-                                showingStopConfirmation = true
+                                activeAlert = .stopConfirmation
                             }) {
                                 HStack {
                                     Spacer()
@@ -60,28 +72,33 @@ struct TandemKitCGMSettingsView: View {
         .onAppear {
             viewModel.fetchCGMStatus()
         }
-        .alert(isPresented: $showingStopConfirmation) {
-            Alert(
-                title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
-                message: Text(LocalizedString(
-                    "Are you sure you want to stop the CGM sensor session on your pump?",
-                    comment: "Message for stop CGM confirmation"
-                )),
-                primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
-                    viewModel.stopCGMSensor()
-                },
-                secondaryButton: .cancel()
-            )
+        .alert(item: $activeAlert) { alertType in
+            switch alertType {
+            case .stopConfirmation:
+                return Alert(
+                    title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
+                    message: Text(LocalizedString(
+                        "Are you sure you want to stop the CGM sensor session on your pump?",
+                        comment: "Message for stop CGM confirmation"
+                    )),
+                    primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
+                        viewModel.stopCGMSensor()
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .error(let message):
+                return Alert(
+                    title: Text(LocalizedString("Error", comment: "Error alert title")),
+                    message: Text(message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
-        .alert(item: Binding(
-            get: { viewModel.commandError.map { ErrorMessage(message: $0) } },
-            set: { _ in viewModel.commandError = nil }
-        )) { error in
-            Alert(
-                title: Text(LocalizedString("Error", comment: "Error alert title")),
-                message: Text(error.message),
-                dismissButton: .default(Text("OK"))
-            )
+        .onChange(of: viewModel.commandError) { error in
+            if let error = error {
+                activeAlert = .error(error)
+                viewModel.commandError = nil
+            }
         }
     }
 
@@ -180,7 +197,7 @@ struct TandemKitCGMSettingsView: View {
 
             case .active:
                 Button(action: {
-                    showingStopConfirmation = true
+                    activeAlert = .stopConfirmation
                 }) {
                     HStack {
                         Spacer()
@@ -229,7 +246,3 @@ struct TandemKitCGMSettingsView: View {
 
 // MARK: - Helper
 
-private struct ErrorMessage: Identifiable {
-    let id = UUID()
-    let message: String
-}
