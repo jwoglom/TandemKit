@@ -71,6 +71,8 @@ class TandemKitSettingsViewModel: ObservableObject {
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
+
+        refreshPumpStatus()
     }
 
     var currentPumpTime: String {
@@ -121,6 +123,16 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var tempRateDuration: Double? {
         pumpManager?.state.tempRateDuration
+    }
+
+    var tempRateStart: Date? {
+        pumpManager?.state.tempRateStart
+    }
+
+    var tempRateRemainingSeconds: Double? {
+        guard let start = tempRateStart, let duration = tempRateDuration else { return nil }
+        let remaining = duration - Date().timeIntervalSince(start)
+        return remaining > 0 ? remaining : nil
     }
 
     var batteryPercentage: String? {
@@ -177,7 +189,7 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var reservoirUnitsText: String? {
         guard let reservoirValue else { return nil }
-        return String(format: "%.1f", reservoirValue.unitVolume)
+        return String(format: "%.0f", reservoirValue.unitVolume)
     }
 
     func suspendResumeButtonPressed() {

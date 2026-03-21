@@ -9,6 +9,7 @@ struct TandemKitSettingsView: View {
 
     @State var isSharePresented: Bool = false
     @State var showingFindPumpConfirmation: Bool = false
+    @State var showingStopTempRateConfirmation: Bool = false
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -230,20 +231,6 @@ struct TandemKitSettingsView: View {
                     }.disabled(true)
                 }
 
-                if viewModel.tempRateActive {
-                    Button(action: {
-                        viewModel.stopTempRate()
-                    }) {
-                        HStack {
-                            Text(LocalizedString("Stop temp rate", comment: "Tandem settings stop temp rate"))
-                            Spacer()
-                            if viewModel.isUpdatingPumpState {
-                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            }
-                        }
-                    }
-                    .disabled(viewModel.isUpdatingPumpState || viewModel.isUpdatingTime)
-                }
 
                 Button(action: {
                     showingFindPumpConfirmation = true
@@ -578,8 +565,8 @@ struct TandemKitSettingsView: View {
     }
 
     var reservoirStatus: some View {
-        VStack(alignment: .trailing, spacing: 5) {
-            Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
+        VStack(alignment: .center, spacing: 5) {
+            Text(LocalizedString("Cartridge", comment: "Header for insulin remaining"))
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
             if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
@@ -605,7 +592,7 @@ struct TandemKitSettingsView: View {
     }
 
     var deliveryStatus: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .center, spacing: 5) {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
             if viewModel.isUpdatingPumpState {
@@ -629,16 +616,35 @@ struct TandemKitSettingsView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     if let rate = viewModel.tempRateAbsolute {
                         Text(String(format: "%.2f", rate))
-                            .fontWeight(.bold)
-                            .font(.system(size: 24))
+                            .font(.system(size: 28))
+                            .fontWeight(.heavy)
+                            .fixedSize()
                     } else {
                         Text(viewModel.currentBasalRateForDisplay)
-                            .fontWeight(.bold)
-                            .font(.system(size: 24))
+                            .font(.system(size: 28))
+                            .fontWeight(.heavy)
+                            .fixedSize()
                     }
 
                     Text("U/hr")
                         .foregroundColor(.secondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if viewModel.tempRateActive {
+                        showingStopTempRateConfirmation = true
+                    }
+                }
+                .alert(isPresented: $showingStopTempRateConfirmation) {
+                    Alert(
+                        title: Text(LocalizedString("Temp Basal Active", comment: "Stop temp rate alert title")),
+                        message: Text(stopTempRateMessage),
+                        primaryButton: .destructive(
+                            Text(LocalizedString("Stop Temp Rate", comment: "Stop temp rate button")),
+                            action: { viewModel.stopTempRate() }
+                        ),
+                        secondaryButton: .cancel()
+                    )
                 }
             } else {
                 HStack(alignment: .center) {
@@ -652,6 +658,31 @@ struct TandemKitSettingsView: View {
                 }
             }
         }
+    }
+
+    var stopTempRateMessage: String {
+        let rateText: String
+        if let rate = viewModel.tempRateAbsolute {
+            rateText = String(format: "%.2f U/hr", rate)
+        } else {
+            rateText = "unknown"
+        }
+
+        let durationText: String
+        if let remaining = viewModel.tempRateRemainingSeconds {
+            let minutes = Int(remaining) / 60
+            let hours = minutes / 60
+            let mins = minutes % 60
+            if hours > 0 {
+                durationText = "\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"
+            } else {
+                durationText = "\(mins) minute\(mins == 1 ? "" : "s")"
+            }
+        } else {
+            durationText = "an unknown duration"
+        }
+
+        return "The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?"
     }
 
     var deliverySectionTitle: String {
