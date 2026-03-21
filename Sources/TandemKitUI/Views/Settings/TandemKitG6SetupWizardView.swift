@@ -57,15 +57,32 @@ struct TandemKitG6SetupWizardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "iphone")
+                        .frame(width: 24)
                     Text(LocalizedString("One phone", comment: "G6 setup: one phone"))
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "cross.case")
+                        .frame(width: 24)
                     Text(LocalizedString("One pump", comment: "G6 setup: one pump"))
                 }
             }
             .font(.body)
             .padding(.leading, 8)
+
+            (Text(LocalizedString(
+                "This page configures the connection between your pump and Dexcom G6. ",
+                comment: "G6 setup explanation prefix"
+            )) + Text(String(format: LocalizedString(
+                "It is not used by %@ for algorithm dosing decisions.",
+                comment: "G6 setup explanation bold part, parameter is app name"
+            ), HostApp.current.appName)).bold())
+            .font(.body)
+
+            Text(LocalizedString(
+                "When configured, the pump can vibrate or beep to deliver CGM notifications at all times. When Control-IQ is on, it will be used for automated insulin delivery with the built-in pump algorithm.",
+                comment: "G6 setup explanation CGM notification info"
+            ))
+            .font(.body)
 
             Divider()
 

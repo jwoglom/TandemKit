@@ -3,6 +3,12 @@ import SwiftUI
 import TandemCore
 
 class TandemKitG7SetupViewModel: ObservableObject {
+    enum Step: Int {
+        case landing
+        case pairingCode
+    }
+
+    @Published var currentStep: Step = .landing
     @Published var pairingCode: String = ""
     @Published var isLoading: Bool = false
     @Published var error: String?
@@ -12,6 +18,12 @@ class TandemKitG7SetupViewModel: ObservableObject {
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+    }
+
+    // MARK: - Navigation
+
+    func goToPairingCode() {
+        currentStep = .pairingCode
     }
 
     // MARK: - Validation
