@@ -73,14 +73,14 @@ struct TandemKitCGMSettingsView: View {
                     viewModel: viewModel.createG6SetupViewModel()
                 )) {
                     HStack {
-                        Text(LocalizedString("Dexcom G6", comment: "Dexcom G6 sensor option"))
+                        Text(LocalizedString("Start Dexcom G6 Sensor", comment: "Dexcom G6 sensor option"))
                             .foregroundColor(.primary)
                         Spacer()
                     }
                 }
 
                 HStack {
-                    Text(LocalizedString("Dexcom G7", comment: "Dexcom G7 sensor option"))
+                    Text(LocalizedString("Start Dexcom G7 Sensor", comment: "Dexcom G7 sensor option"))
                         .foregroundColor(.secondary)
                     Spacer()
                     Text(LocalizedString("Coming soon", comment: "Dexcom G7 not yet supported"))

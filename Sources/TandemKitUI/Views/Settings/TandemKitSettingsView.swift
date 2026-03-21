@@ -157,6 +157,7 @@ struct TandemKitSettingsView: View {
                             .padding(.horizontal)
                             .frame(height: 200)
                         .padding(.top, -25)
+                        .padding(.bottom, -25)
                         Spacer()
                     }
                     Button(action: {

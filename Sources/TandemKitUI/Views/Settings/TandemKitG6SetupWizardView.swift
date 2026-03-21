@@ -9,7 +9,7 @@ struct TandemKitG6SetupWizardView: View {
     var body: some View {
         WizardStepContainer(
             title: LocalizedString("Dexcom G6 Setup", comment: "Title for G6 setup wizard"),
-            currentStep: viewModel.currentStep.rawValue + 1,
+            currentStep: min(viewModel.currentStep.rawValue + 1, 2),
             totalSteps: 2,
             canCancel: !viewModel.isLoading,
             onCancel: {
@@ -21,6 +21,8 @@ struct TandemKitG6SetupWizardView: View {
                 landingStep
             case .sensorDetails:
                 sensorDetailsStep
+            case .connectExisting:
+                connectExistingStep
             }
         }
         .alert(item: Binding(
@@ -88,7 +90,9 @@ struct TandemKitG6SetupWizardView: View {
                 .cornerRadius(10)
             }
 
-            Button(action: {}) {
+            Button(action: {
+                viewModel.goToConnectExisting()
+            }) {
                 HStack {
                     Spacer()
                     Text(LocalizedString("Connect to existing session", comment: "Button to connect to existing G6 session"))
@@ -96,15 +100,10 @@ struct TandemKitG6SetupWizardView: View {
                     Spacer()
                 }
                 .padding()
-                .background(Color(UIColor.systemGray4))
-                .foregroundColor(.secondary)
+                .background(Color(UIColor.systemGray5))
+                .foregroundColor(.primary)
                 .cornerRadius(10)
             }
-            .disabled(true)
-
-            Text(LocalizedString("Connecting to an existing session is not yet supported.", comment: "G6 setup: existing session not supported"))
-                .font(.caption)
-                .foregroundColor(.secondary)
         }
     }
 
@@ -177,6 +176,56 @@ struct TandemKitG6SetupWizardView: View {
                 .cornerRadius(10)
             }
             .disabled(!viewModel.canStartSensor || viewModel.isLoading)
+        }
+    }
+
+    // MARK: - Step 2b: Connect to Existing Session
+
+    private var connectExistingStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(LocalizedString("Transmitter ID", comment: "Label for G6 transmitter ID"))
+                    .font(.headline)
+
+                TextField(
+                    "XXXXXX",
+                    text: $viewModel.transmitterId
+                )
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .autocapitalization(.allCharacters)
+                .disableAutocorrection(true)
+
+                Text(LocalizedString(
+                    "The transmitter ID is a 6-character code shown on the back of the transmitter.",
+                    comment: "Help text for G6 transmitter ID"
+                ))
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+
+            Spacer()
+                .frame(height: 10)
+
+            Button(action: {
+                viewModel.connectToExistingSession()
+            }) {
+                HStack {
+                    Spacer()
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .padding(.trailing, 5)
+                    }
+                    Text(LocalizedString("Connect to Transmitter", comment: "Button to connect to existing G6 transmitter"))
+                        .fontWeight(.semibold)
+                    Spacer()
+                }
+                .padding()
+                .background(viewModel.canConnectExisting ? Color.accentColor : Color(UIColor.systemGray4))
+                .foregroundColor(viewModel.canConnectExisting ? .white : .secondary)
+                .cornerRadius(10)
+            }
+            .disabled(!viewModel.canConnectExisting || viewModel.isLoading)
         }
     }
 }

@@ -5,6 +5,7 @@ import TandemCore
 enum G6SetupStep: Int {
     case landing = 0
     case sensorDetails = 1
+    case connectExisting = 2
 }
 
 class TandemKitG6SetupViewModel: ObservableObject {
@@ -29,6 +30,12 @@ class TandemKitG6SetupViewModel: ObservableObject {
         }
     }
 
+    func goToConnectExisting() {
+        withAnimation {
+            currentStep = .connectExisting
+        }
+    }
+
     // MARK: - Validation
 
     var isTransmitterIdValid: Bool {
@@ -41,6 +48,50 @@ class TandemKitG6SetupViewModel: ObservableObject {
 
     var canStartSensor: Bool {
         isTransmitterIdValid && isSensorCodeValid
+    }
+
+    var canConnectExisting: Bool {
+        isTransmitterIdValid
+    }
+
+    // MARK: - Connect to Existing Session
+
+    func connectToExistingSession() {
+        guard canConnectExisting else { return }
+
+        error = nil
+        isLoading = true
+
+        let txId = transmitterId.uppercased()
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self, let pumpManager = self.pumpManager else {
+                DispatchQueue.main.async {
+                    self?.isLoading = false
+                    self?.error = LocalizedString(
+                        "Pump not connected.",
+                        comment: "Error when pump is not connected"
+                    )
+                }
+                return
+            }
+
+            let txResponse = pumpManager.sendMessage(
+                message: SetG6TransmitterIdRequest(txId: txId)
+            ) as? SetG6TransmitterIdResponse
+
+            DispatchQueue.main.async {
+                self.isLoading = false
+                if txResponse?.isStatusOK == true {
+                    self.didComplete = true
+                } else {
+                    self.error = LocalizedString(
+                        "Failed to set transmitter ID. Check pump connection and try again.",
+                        comment: "Error when setting G6 transmitter ID fails"
+                    )
+                }
+            }
+        }
     }
 
     // MARK: - Start Sensor
