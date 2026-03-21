@@ -3,7 +3,7 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitG6SetupWizardView: View {
-    @ObservedObject var viewModel: TandemKitG6SetupViewModel
+    @StateObject var viewModel: TandemKitG6SetupViewModel
     @Environment(\.presentationMode) var presentationMode
 
     var body: some View {

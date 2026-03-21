@@ -20,7 +20,6 @@ struct TandemKitQuickBolusSettingsView: View {
                 .padding(.horizontal)
 
             Divider()
-                .padding(.vertical)
 
             List {
                 Section {
@@ -98,6 +97,6 @@ struct TandemKitQuickBolusSettingsView: View {
             }
             .padding(.horizontal)
         }
-        .listStyle(InsetGroupedListStyle())
+        .listStyle(.insetGrouped)
     }
 }

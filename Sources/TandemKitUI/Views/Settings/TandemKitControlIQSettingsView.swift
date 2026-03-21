@@ -3,7 +3,7 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitControlIQSettingsView: View {
-    @ObservedObject var viewModel: TandemKitControlIQSettingsViewModel
+    @StateObject var viewModel: TandemKitControlIQSettingsViewModel
     @State private var isEditingWeight = false
     @State private var isEditingTDI = false
 

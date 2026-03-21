@@ -3,7 +3,7 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitCGMSettingsView: View {
-    @ObservedObject var viewModel: TandemKitCGMSettingsViewModel
+    @StateObject var viewModel: TandemKitCGMSettingsViewModel
     @State private var showingStopConfirmation = false
 
     var body: some View {
@@ -55,23 +55,23 @@ struct TandemKitCGMSettingsView: View {
                     }
                 }
                 .listStyle(InsetGroupedListStyle())
-                .alert(isPresented: $showingStopConfirmation) {
-                    Alert(
-                        title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
-                        message: Text(LocalizedString(
-                            "Are you sure you want to stop the CGM sensor session on your pump?",
-                            comment: "Message for stop CGM confirmation"
-                        )),
-                        primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
-                            viewModel.stopCGMSensor()
-                        },
-                        secondaryButton: .cancel()
-                    )
-                }
             }
         }
-        .task {
+        .onAppear {
             viewModel.fetchCGMStatus()
+        }
+        .alert(isPresented: $showingStopConfirmation) {
+            Alert(
+                title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
+                message: Text(LocalizedString(
+                    "Are you sure you want to stop the CGM sensor session on your pump?",
+                    comment: "Message for stop CGM confirmation"
+                )),
+                primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
+                    viewModel.stopCGMSensor()
+                },
+                secondaryButton: .cancel()
+            )
         }
         .alert(item: Binding(
             get: { viewModel.commandError.map { ErrorMessage(message: $0) } },
