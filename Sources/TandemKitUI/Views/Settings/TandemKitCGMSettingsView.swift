@@ -14,7 +14,7 @@ struct TandemKitCGMSettingsView: View {
                 .padding(.horizontal)
 
             Text(LocalizedString(
-                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm.",
+                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when Trio or Loop are not being used.",
                 comment: "Description for CGM settings"
             ))
                 .fixedSize(horizontal: false, vertical: true)
@@ -36,8 +36,38 @@ struct TandemKitCGMSettingsView: View {
             } else {
                 List {
                     cgmStatusSection
+
+                    if viewModel.cgmSessionState == .startPending {
+                        Section {
+                            Button(action: {
+                                showingStopConfirmation = true
+                            }) {
+                                HStack {
+                                    Spacer()
+                                    Text(LocalizedString("Stop Sensor", comment: "Button to stop sensor during startup"))
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.red)
+                                    Spacer()
+                                }
+                            }
+                            .disabled(viewModel.isLoading)
+                        }
+                    }
                 }
                 .listStyle(InsetGroupedListStyle())
+                .alert(isPresented: $showingStopConfirmation) {
+                    Alert(
+                        title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
+                        message: Text(LocalizedString(
+                            "Are you sure you want to stop the CGM sensor session on your pump?",
+                            comment: "Message for stop CGM confirmation"
+                        )),
+                        primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
+                            viewModel.stopCGMSensor()
+                        },
+                        secondaryButton: .cancel()
+                    )
+                }
             }
         }
         .alert(item: Binding(
@@ -56,6 +86,15 @@ struct TandemKitCGMSettingsView: View {
 
     private var cgmStatusSection: some View {
         Section(header: Text(LocalizedString("CGM Sensor", comment: "Header for CGM sensor section"))) {
+            if let sensorType = viewModel.sensorTypeText {
+                HStack {
+                    Text(LocalizedString("Session Type", comment: "Label for CGM session type"))
+                    Spacer()
+                    Text(sensorType)
+                        .foregroundColor(.secondary)
+                }
+            }
+
             HStack {
                 Text(LocalizedString("Session Status", comment: "Label for CGM session status"))
                 Spacer()
@@ -65,6 +104,53 @@ struct TandemKitCGMSettingsView: View {
                 }
                 Text(viewModel.cgmSessionState.displayText)
                     .foregroundColor(statusColor)
+            }
+
+            if let startedDate = viewModel.sensorStartedDate {
+                HStack {
+                    Text(LocalizedString("Sensor Started", comment: "Label for sensor started date"))
+                    Spacer()
+                    Text(startedDate, style: .relative)
+                        .foregroundColor(.secondary)
+                    Text(LocalizedString("ago", comment: "Suffix for relative time"))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let duration = viewModel.sessionDuration {
+                HStack {
+                    Text(LocalizedString("Session Duration", comment: "Label for session duration"))
+                    Spacer()
+                    Text(duration)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let remaining = viewModel.sessionTimeRemaining {
+                HStack {
+                    Text(LocalizedString("Time Remaining", comment: "Label for session time remaining"))
+                    Spacer()
+                    Text(remaining)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let battery = viewModel.transmitterBattery {
+                HStack {
+                    Text(LocalizedString("Transmitter Battery", comment: "Label for transmitter battery"))
+                    Spacer()
+                    Text(battery)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if viewModel.gracePeriod {
+                HStack {
+                    Text(LocalizedString("Grace Period", comment: "Label for grace period"))
+                    Spacer()
+                    Text(LocalizedString("Active", comment: "Grace period is active"))
+                        .foregroundColor(.orange)
+                }
             }
 
             switch viewModel.cgmSessionState {
@@ -102,19 +188,6 @@ struct TandemKitCGMSettingsView: View {
                     }
                 }
                 .disabled(viewModel.isLoading)
-                .alert(isPresented: $showingStopConfirmation) {
-                    Alert(
-                        title: Text(LocalizedString("Stop CGM Sensor", comment: "Title for stop CGM confirmation")),
-                        message: Text(LocalizedString(
-                            "Are you sure you want to stop the CGM sensor session?",
-                            comment: "Message for stop CGM confirmation"
-                        )),
-                        primaryButton: .destructive(Text(LocalizedString("Stop Sensor", comment: "Button to confirm stopping CGM"))) {
-                            viewModel.stopCGMSensor()
-                        },
-                        secondaryButton: .cancel()
-                    )
-                }
 
             case .startPending, .stopPending:
                 Button(action: {
