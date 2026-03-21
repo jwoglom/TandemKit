@@ -40,6 +40,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
+    @Published var showNoCGMWarning: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -244,12 +245,27 @@ class TandemKitSettingsViewModel: ObservableObject {
     func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
         pumpManager?.configureControlIQMode(true) { [weak self] success in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                self.isUpdatingPumpState = false
-                if success {
-                    self.useControlIQ = true
-                } else {
+            guard let self = self else { return }
+            if success {
+                // Check CGM status on background thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let cgmResponse = self.pumpManager?.sendMessage(
+                        message: CGMStatusV2Request()
+                    ) as? CGMStatusV2Response
+
+                    let cgmActive = cgmResponse?.sessionState == .active
+
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.useControlIQ = true
+                        if !cgmActive {
+                            self.showNoCGMWarning = true
+                        }
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
                     self.commandFailure = .controlIQ
                 }
             }

@@ -6,12 +6,14 @@ private enum AlgorithmAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
     case diyRestored
+    case noCGMConnected
 
     var id: String {
         switch self {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
         case .diyRestored: return "diyRestored"
+        case .noCGMConnected: return "noCGMConnected"
         }
     }
 }
@@ -252,12 +254,27 @@ struct TandemKitSettingsView: View {
                             )),
                             dismissButton: .default(Text("OK"))
                         )
+                    case .noCGMConnected:
+                        return Alert(
+                            title: Text(LocalizedString("No CGM Connected", comment: "Title for no CGM connected warning")),
+                            message: Text(LocalizedString(
+                                "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below.",
+                                comment: "Message for no CGM connected warning after enabling Control-IQ"
+                            )),
+                            dismissButton: .default(Text("OK"))
+                        )
                     }
                 }
                 .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
                     if show {
                         activeAlgorithmAlert = .diyRestored
                         viewModel.showReenableClosedLoopPrompt = false
+                    }
+                }
+                .onChange(of: viewModel.showNoCGMWarning) { show in
+                    if show {
+                        activeAlgorithmAlert = .noCGMConnected
+                        viewModel.showNoCGMWarning = false
                     }
                 }
 
