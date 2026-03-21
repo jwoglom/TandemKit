@@ -32,6 +32,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
+    @Published var isConnected: Bool = false
+    @Published var isRefreshing: Bool = false
     @Published var useSilentMode: Bool = false
     @Published var alertSnoozeEnabled: Bool = false
     @Published var alertSnoozeDurationMins: Int = 10
@@ -65,6 +67,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         reservoirValue = pumpManager?.reservoirLevel
+        isConnected = pumpManager?.connectedAndPaired ?? false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
@@ -149,14 +152,27 @@ class TandemKitSettingsViewModel: ObservableObject {
     // MARK: - Refresh Methods
 
     func refreshPumpStatus() {
-        guard pumpManager?.connectedAndPaired == true else {
+        guard let pumpManager, pumpManager.connectedAndPaired else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
             pendingRefreshOnReconnect = true
             return
         }
 
+        guard !isRefreshing else { return }
+
         pendingRefreshOnReconnect = false
-        pumpManager?.ensureCurrentPumpData { _ in }
+        isRefreshing = true
+
+        // Dispatch everything off main so the spinner renders immediately
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            pumpManager.ensureCurrentPumpData { _ in }
+            pumpManager.fetchGlobalPumpSettings()
+            pumpManager.fetchDeliveryLimits()
+
+            DispatchQueue.main.async {
+                self?.isRefreshing = false
+            }
+        }
     }
 
     var reservoirUnitsText: String? {
@@ -509,6 +525,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
+            self.isConnected = pumpManager.connectedAndPaired
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
 

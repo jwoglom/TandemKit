@@ -144,15 +144,33 @@ struct TandemKitSettingsView: View {
     var body: some View {
         List {
             Section {
-                HStack {
-                    Spacer()
-                    Image(imageName: "tandem_mobi")
-                        .resizable()
-                        .rotationEffect(.degrees(90))
-                        .scaledToFit()
-                        .padding(.horizontal)
-                        .frame(height: 200)
-                    Spacer()
+                ZStack(alignment: .topTrailing) {
+                    HStack {
+                        Spacer()
+                        Image(imageName: "tandem_mobi")
+                            .resizable()
+                            .rotationEffect(.degrees(90))
+                            .scaledToFit()
+                            .padding(.horizontal)
+                            .frame(height: 200)
+                        Spacer()
+                    }
+                    Button(action: {
+                        viewModel.refreshPumpStatus()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.accentColor)
+                            .opacity(viewModel.isRefreshing ? 0 : 1)
+                            .overlay {
+                                if viewModel.isRefreshing {
+                                    ProgressView()
+                                }
+                            }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(!viewModel.isConnected || viewModel.isRefreshing)
+                    .opacity(viewModel.isConnected ? 1.0 : 0.4)
                 }
 
                 HStack(alignment: .top) {
@@ -161,6 +179,17 @@ struct TandemKitSettingsView: View {
                     reservoirStatus
                 }
                 .padding(.bottom, 5)
+
+                if !viewModel.isConnected {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 10, height: 10)
+                        Text(LocalizedString("Pump Disconnected", comment: "title for pump disconnected notice"))
+                            .font(Font.subheadline.weight(.bold))
+                            .foregroundColor(.red)
+                    }.padding(.vertical, 8)
+                }
 
                 if viewModel.showPumpTimeSyncWarning {
                     VStack(alignment: .leading, spacing: 4) {
@@ -228,14 +257,6 @@ struct TandemKitSettingsView: View {
                 }
                 .disabled(viewModel.isPlayingSound)
 
-                Button(action: {
-                    viewModel.refreshPumpStatus()
-                }) {
-                    HStack {
-                        Text(LocalizedString("Refresh pump status", comment: "Tandem refresh pump"))
-                        Spacer()
-                    }
-                }
             }
             Section(header: SectionHeader(label: LocalizedString(
                 "Notifications",
