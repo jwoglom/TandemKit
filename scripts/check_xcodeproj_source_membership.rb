@@ -184,6 +184,129 @@ def orphan_broken_duplicate_swift_file_refs(project)
     end
 end
 
+def misplaced_group_file_refs(project, source_root_abs)
+  misplaced = []
+
+  project.files.each do |file_ref|
+    next unless file_ref&.path
+    ref_path = file_ref.path.to_s
+    next unless ref_path.end_with?(".swift")
+
+    abs = file_ref_abs_path(file_ref)
+    next unless abs && within_root?(abs, source_root_abs)
+    next unless File.file?(abs)
+
+    expected_dir = File.dirname(abs)
+    parent_group = file_ref.parent
+    next unless parent_group.is_a?(Xcodeproj::Project::Object::PBXGroup)
+
+    parent_abs = group_abs_path(parent_group)
+    next if parent_abs && normalize_path(expected_dir) == parent_abs
+
+    # File is in the wrong group
+    correct_group = find_group_for_abs_directory(project, expected_dir)
+    misplaced << {
+      file_ref: file_ref,
+      abs: abs,
+      expected_dir: expected_dir,
+      current_group: parent_group,
+      correct_group: correct_group
+    }
+  end
+
+  misplaced
+end
+
+def find_or_create_group_for_abs_directory(project, abs_dir, source_root_abs)
+  existing = find_group_for_abs_directory(project, abs_dir)
+  return existing if existing
+
+  # Walk up to find the nearest existing parent group, then create children down
+  parts = Pathname.new(abs_dir).relative_path_from(Pathname.new(source_root_abs)).to_s.split("/")
+
+  # Find the source root group first
+  source_root_group = find_group_for_abs_directory(project, source_root_abs)
+  unless source_root_group
+    # Try to find any ancestor group
+    current_dir = source_root_abs
+    project.groups.each do |g|
+      gp = group_abs_path(g)
+      next unless gp && current_dir.start_with?("#{gp}/")
+      source_root_group = g
+    end
+  end
+
+  return nil unless source_root_group
+
+  # Walk down from the source root group creating subgroups as needed
+  current_group = source_root_group
+  current_path = source_root_abs
+
+  parts.each do |part|
+    current_path = File.join(current_path, part)
+    child_group = current_group.children.find do |c|
+      c.is_a?(Xcodeproj::Project::Object::PBXGroup) && c.path == part
+    end
+
+    unless child_group
+      child_group = project.new_group(part, part)
+      current_group.children << child_group
+    end
+
+    current_group = child_group
+  end
+
+  current_group
+end
+
+def fix_misplaced_group_refs!(project, misplaced, source_root_abs)
+  changed = false
+
+  misplaced.each do |entry|
+    correct_group = entry[:correct_group] ||
+      find_or_create_group_for_abs_directory(project, entry[:expected_dir], source_root_abs)
+    next unless correct_group
+
+    file_ref = entry[:file_ref]
+    current_group = entry[:current_group]
+
+    # Remove from current group
+    current_group.children.delete(file_ref)
+
+    # Update path to be relative to the new group
+    file_ref.path = File.basename(file_ref.path.to_s)
+    file_ref.name = nil if file_ref.respond_to?(:name=)
+    file_ref.source_tree = "<group>"
+
+    # Add to correct group
+    correct_group.children << file_ref
+    changed = true
+  end
+
+  changed
+end
+
+def print_misplaced_groups(entries)
+  return if entries.empty?
+
+  fixable = entries.select { |e| e[:correct_group] }
+  unfixable = entries.reject { |e| e[:correct_group] }
+
+  unless fixable.empty?
+    puts "  Misplaced file references (fixable): #{fixable.length}"
+    fixable.each do |e|
+      puts "    - #{File.basename(e[:abs])} (in #{e[:current_group].display_name}, should be #{e[:correct_group].display_name})"
+    end
+  end
+
+  unless unfixable.empty?
+    puts "  Misplaced file references (no matching group): #{unfixable.length}"
+    unfixable.each do |e|
+      puts "    - #{File.basename(e[:abs])} (in #{e[:current_group].display_name}, expected dir: #{relpath_from_repo(e[:expected_dir])})"
+    end
+  end
+end
+
 def print_stale_broken_duplicates(target_name, entries)
   return if entries.empty?
 
@@ -253,10 +376,15 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
   missing_target_membership = (disk_set - target_set).to_a.sort
   stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
   orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
+  misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
 
   puts "Target: #{target_name}  Source root: #{source_root_rel}  Swift files: #{disk_files.length}"
 
-  if mode == :fix && (!missing_project_refs.empty? || !missing_target_membership.empty? || !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty?)
+  has_issues = !missing_project_refs.empty? || !missing_target_membership.empty? ||
+               !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty? ||
+               !misplaced_refs.empty?
+
+  if mode == :fix && has_issues
     changed = false
 
     missing_target_membership.each do |abs|
@@ -277,6 +405,10 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       changed = true
     end
 
+    if fix_misplaced_group_refs!(project, misplaced_refs, source_root.to_s)
+      changed = true
+    end
+
     if changed
       project.save
       project = Xcodeproj::Project.open(project_path.to_s)
@@ -287,11 +419,14 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       missing_target_membership = (disk_set - target_set).to_a.sort
       stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
       orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
+      misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
       puts "  Applied fixes"
     end
   end
 
-  ok = missing_project_refs.empty? && missing_target_membership.empty? && stale_broken_duplicates.empty? && orphan_broken_file_refs.empty?
+  ok = missing_project_refs.empty? && missing_target_membership.empty? &&
+       stale_broken_duplicates.empty? && orphan_broken_file_refs.empty? &&
+       misplaced_refs.empty?
 
   if ok
     puts "  Status: OK"
@@ -301,6 +436,7 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
     print_missing("Missing target source membership in #{target_name}", missing_target_membership)
     print_stale_broken_duplicates(target_name, stale_broken_duplicates)
     print_orphan_broken_file_refs(orphan_broken_file_refs)
+    print_misplaced_groups(misplaced_refs)
   end
 
   { ok: ok, project: project }
