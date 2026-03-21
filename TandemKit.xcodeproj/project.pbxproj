@@ -364,8 +364,8 @@
 		7C89D6494759CE1E0454D307 /* CgmOorSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30D9E5C3141560950708C87 /* CgmOorSettingsHistoryLog.swift */; };
 		7CBD1AC526F1CC70C55BE73D /* CgmBleCalibrationEvtG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6585C8FC6C57879C0217AD1B /* CgmBleCalibrationEvtG7HistoryLog.swift */; };
 		803D4084B130DE032B3D1C96 /* CgmStopSessionReqG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45A088DE631C292E8D0ADF41 /* CgmStopSessionReqG7HistoryLog.swift */; };
-
 		8A2E807120E267CA6CD3EF95 /* CgmJoinSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */; };
+		8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */; };
 		91DB5F574F2E287B78CA0778 /* AaSleepScheduleChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC4490958D80E881D569D3C /* AaSleepScheduleChangeHistoryLog.swift */; };
 		928E5C368BBB346CD2671284 /* CgmLgaSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D55BE8988C714C2A9032CFF /* CgmLgaSettingsHistoryLog.swift */; };
 		953C7E439817FD6F4A93942D /* CgmAlertActivatedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */; };
@@ -427,11 +427,9 @@
 		DD00000000000000000010B1 /* StreamDataPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000010A1 /* StreamDataPreflight.swift */; };
 		DD00000000000000000011B1 /* UserInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000011A1 /* UserInteraction.swift */; };
 		DD00000000000000000012B1 /* BleSoftwareInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000012A1 /* BleSoftwareInfo.swift */; };
-
 		DD00000000000000000014B1 /* CGMSupportPackageStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000014A1 /* CGMSupportPackageStatus.swift */; };
 		DD00000000000000000015B1 /* CurrentActiveIdpValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000015A1 /* CurrentActiveIdpValues.swift */; };
 		DD00000000000000000016B1 /* ExtendedBolusStatusV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000016A1 /* ExtendedBolusStatusV2.swift */; };
-
 		DD00000000000000000018B1 /* PumpVersionB.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000018A1 /* PumpVersionB.swift */; };
 		DD00000000000000000019B1 /* SecretMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000019A1 /* SecretMenu.swift */; };
 		DD0000000000000000001AB1 /* StreamDataReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000001AA1 /* StreamDataReadiness.swift */; };
@@ -612,6 +610,7 @@
 		24DC1562C6E40633EA9A9F13 /* CgmStopSessionReqGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionReqGxHistoryLog.swift; sourceTree = "<group>"; };
 		24F591C36AADA11D1F88CE99 /* MalfunctionAckHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MalfunctionAckHistoryLog.swift; sourceTree = "<group>"; };
 		252B1A75D16A6391D4C3B01A /* CgmTransmitterIdHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmTransmitterIdHistoryLog.swift; sourceTree = "<group>"; };
+		29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitAlertSettingsView.swift; sourceTree = "<group>"; };
 		2BAE3A73C5864C7B4F33631A /* CgmStopSessionMsg2HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionMsg2HistoryLog.swift; sourceTree = "<group>"; };
 		2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStatusHistoryLog.swift; sourceTree = "<group>"; };
 		3418E5C59739C43AEEAE153F /* SnoozeActivatedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnoozeActivatedHistoryLog.swift; sourceTree = "<group>"; };
@@ -957,7 +956,6 @@
 		C22721CFC4B855CB29BFF1FB /* ReminderDismissedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReminderDismissedHistoryLog.swift; sourceTree = "<group>"; };
 		C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModeHistoryLog.swift; sourceTree = "<group>"; };
 		C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionHistoryLog.swift; sourceTree = "<group>"; };
-
 		CC8BE39237ECC840D3662088 /* CgmAlertClearedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedDexHistoryLog.swift; sourceTree = "<group>"; };
 		D1ECC52D7C7D4542BF3BDA72 /* HistoryToDoseMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryToDoseMapper.swift; sourceTree = "<group>"; };
 		D33C90FD06F65E682998E704 /* TipscReqPrimeCannulaHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TipscReqPrimeCannulaHistoryLog.swift; sourceTree = "<group>"; };
@@ -981,11 +979,9 @@
 		DD00000000000000000010A1 /* StreamDataPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamDataPreflight.swift; sourceTree = "<group>"; };
 		DD00000000000000000011A1 /* UserInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInteraction.swift; sourceTree = "<group>"; };
 		DD00000000000000000012A1 /* BleSoftwareInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BleSoftwareInfo.swift; sourceTree = "<group>"; };
-
 		DD00000000000000000014A1 /* CGMSupportPackageStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CGMSupportPackageStatus.swift; sourceTree = "<group>"; };
 		DD00000000000000000015A1 /* CurrentActiveIdpValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentActiveIdpValues.swift; sourceTree = "<group>"; };
 		DD00000000000000000016A1 /* ExtendedBolusStatusV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtendedBolusStatusV2.swift; sourceTree = "<group>"; };
-
 		DD00000000000000000018A1 /* PumpVersionB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpVersionB.swift; sourceTree = "<group>"; };
 		DD00000000000000000019A1 /* SecretMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecretMenu.swift; sourceTree = "<group>"; };
 		DD0000000000000000001AA1 /* StreamDataReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamDataReadiness.swift; sourceTree = "<group>"; };
@@ -1207,6 +1203,7 @@
 				194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */,
 				17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */,
 				A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */,
+				29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -1426,7 +1423,6 @@
 				3EE3449A2EC91299008A07F6 /* CGMOORAlertSettings.swift */,
 				3EE3449B2EC91299008A07F6 /* CGMRateAlertSettings.swift */,
 				3EE3449C2EC91299008A07F6 /* CGMStatus.swift */,
-
 				DD00000000000000000014A1 /* CGMSupportPackageStatus.swift */,
 				3EE3449D2EC91299008A07F6 /* CommonSoftwareInfo.swift */,
 				3EE344A12EC91299008A07F6 /* ControlIQIOB.swift */,
@@ -1456,7 +1452,6 @@
 				3EE344B42EC91299008A07F6 /* LastBolusStatus.swift */,
 				3EE344B52EC91299008A07F6 /* LastBolusStatusAbstractResponse.swift */,
 				3EE344B62EC91299008A07F6 /* LastBolusStatusV2.swift */,
-
 				3EE344B72EC91299008A07F6 /* Localization.swift */,
 				3EE344B82EC91299008A07F6 /* MalfunctionStatus.swift */,
 				3EE344B92EC91299008A07F6 /* NonControlIQIOB.swift */,
@@ -1485,7 +1480,6 @@
 				3EE344CB2EC91299008A07F6 /* LastBolusStatusV3.swift */,
 				8C08035C52A91DA0900266E0 /* ActiveAamBits.swift */,
 				16529562409EAFE1547BDAD9 /* HighestAam.swift */,
-
 			);
 			path = CurrentStatus;
 			sourceTree = "<group>";
@@ -2077,6 +2071,7 @@
 				E7F80920A3B4C5D6E7F81920 /* TandemKitG6SetupWizardView.swift in Sources */,
 				EBEA23EC9FD22005212E5559 /* TandemKitG7SetupViewModel.swift in Sources */,
 				DA434FB465A9BDAD25930F69 /* TandemKitG7SetupWizardView.swift in Sources */,
+				8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2348,7 +2343,6 @@
 				5421C9C389E8DC2161813B73 /* NonexistentPrimeNudgeStateStream.swift in Sources */,
 				1FFD9D0538AE4159F67CCE28 /* ActiveAamBits.swift in Sources */,
 				96F6754AAA1D205E59C40A68 /* HighestAam.swift in Sources */,
-
 				0EBC5FC6AA236C05ECA78D80 /* AaAutoBolusRejectedHistoryLog.swift in Sources */,
 				59F75F38E289162F89C8B84D /* AaDeliveryStatusChangeHistoryLog.swift in Sources */,
 				F76070B8DA287EE6B06273E3 /* AaEnableSettingChangeHistoryLog.swift in Sources */,
@@ -2417,11 +2411,9 @@
 				DD00000000000000000010B1 /* StreamDataPreflight.swift in Sources */,
 				DD00000000000000000011B1 /* UserInteraction.swift in Sources */,
 				DD00000000000000000012B1 /* BleSoftwareInfo.swift in Sources */,
-
 				DD00000000000000000014B1 /* CGMSupportPackageStatus.swift in Sources */,
 				DD00000000000000000015B1 /* CurrentActiveIdpValues.swift in Sources */,
 				DD00000000000000000016B1 /* ExtendedBolusStatusV2.swift in Sources */,
-
 				DD00000000000000000018B1 /* PumpVersionB.swift in Sources */,
 				DD00000000000000000019B1 /* SecretMenu.swift in Sources */,
 				DD0000000000000000001AB1 /* StreamDataReadiness.swift in Sources */,

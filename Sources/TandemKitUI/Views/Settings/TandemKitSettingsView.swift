@@ -147,35 +147,51 @@ struct TandemKitSettingsView: View {
     var body: some View {
         List {
             Section {
-                ZStack(alignment: .topTrailing) {
-                    HStack {
-                        Spacer()
-                        Image(imageName: "tandem_mobi")
-                            .resizable()
-                            .rotationEffect(.degrees(90))
-                            .scaledToFit()
-                            .padding(.horizontal)
-                            .frame(height: 200)
+                ZStack {
+                    Image(imageName: "tandem_mobi")
+                        .resizable()
+                        .rotationEffect(.degrees(90))
+                        .scaledToFit()
+                        .frame(height: 200)
                         .padding(.top, -25)
                         .padding(.bottom, -25)
-                        Spacer()
-                    }
-                    Button(action: {
-                        viewModel.refreshPumpStatus()
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.accentColor)
-                            .opacity(viewModel.isRefreshing ? 0 : 1)
-                            .overlay {
-                                if viewModel.isRefreshing {
-                                    ProgressView()
+                        .frame(maxWidth: .infinity)
+
+                    VStack {
+                        HStack {
+                            if let battery = viewModel.batteryPercentage {
+                                HStack(spacing: 4) {
+                                    Image(systemName: batteryIconName(battery))
+                                        .font(.system(size: 16))
+                                        .foregroundColor(batteryColor(battery))
+                                    Text("\(battery)")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.secondary)
                                 }
                             }
+
+                            Spacer()
+
+                            Button(action: {
+                                viewModel.refreshPumpStatus()
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.accentColor)
+                                    .opacity(viewModel.isRefreshing ? 0 : 1)
+                                    .overlay {
+                                        if viewModel.isRefreshing {
+                                            ProgressView()
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(!viewModel.isConnected || viewModel.isRefreshing)
+                            .opacity(viewModel.isConnected ? 1.0 : 0.4)
+                        }
+                        .padding(.top, 4)
+                        Spacer()
                     }
-                    .buttonStyle(.borderless)
-                    .disabled(!viewModel.isConnected || viewModel.isRefreshing)
-                    .opacity(viewModel.isConnected ? 1.0 : 0.4)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
@@ -251,6 +267,26 @@ struct TandemKitSettingsView: View {
                 "Actions",
                 comment: "The title of the actions section in TandemKit settings"
             ))) {
+                NavigationLink(destination: TandemKitNotificationsView(
+                    viewModel: viewModel.createNotificationsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("Pump notifications", comment: "Label for pump notifications"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if viewModel.notificationCount > 0 {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 24, height: 24)
+                                Text("\(viewModel.notificationCount)")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                        }
+                    }
+                }
+
                 if let suspendResumeText = viewModel.suspendResumeText {
                     Button(action: {
                         viewModel.suspendResumeButtonPressed()
@@ -302,88 +338,10 @@ struct TandemKitSettingsView: View {
 
             }
             Section(header: SectionHeader(label: LocalizedString(
-                "Notifications",
-                comment: "The title of the notifications section in TandemKit settings"
+                "Pump Settings",
+                comment: "The title of the pump settings section in TandemKit settings"
             ))) {
-                NavigationLink(destination: TandemKitNotificationsView(
-                    viewModel: viewModel.createNotificationsViewModel()
-                )) {
-                    HStack {
-                        Text(LocalizedString("View Notifications", comment: "Label for viewing notifications"))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if viewModel.notificationCount > 0 {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 24, height: 24)
-                                Text("\(viewModel.notificationCount)")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 12, weight: .bold))
-                            }
-                        }
-                    }
-                }
 
-                Toggle(isOn: Binding(
-                    get: { viewModel.autoAcknowledgeBasalAlerts },
-                    set: { viewModel.setAutoAcknowledgeBasalAlerts($0) }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedString(
-                            "Auto-Acknowledge Basal Alerts",
-                            comment: "Label for auto-acknowledge basal alerts toggle"
-                        ))
-                        Text(LocalizedString(
-                            "Automatically dismiss min/max basal rate alerts during looping",
-                            comment: "Description for auto-acknowledge basal alerts toggle"
-                        ))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Toggle(isOn: Binding(
-                    get: { viewModel.alertSnoozeEnabled },
-                    set: { enabled in
-                        viewModel.setAlertSnooze(enabled: enabled, durationMins: viewModel.alertSnoozeDurationMins)
-                    }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedString(
-                            "Alert Snooze",
-                            comment: "Label for alert snooze toggle"
-                        ))
-                        Text(LocalizedString(
-                            "Allow snoozing alerts via triple-press on pump button",
-                            comment: "Description for alert snooze toggle"
-                        ))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if viewModel.alertSnoozeEnabled {
-                    Picker(
-                        LocalizedString("Snooze Duration", comment: "Label for snooze duration picker"),
-                        selection: Binding(
-                            get: { viewModel.alertSnoozeDurationMins },
-                            set: { mins in
-                                viewModel.setAlertSnooze(enabled: true, durationMins: mins)
-                            }
-                        )
-                    ) {
-                        Text("10 min").tag(10)
-                        Text("20 min").tag(20)
-                        Text("30 min").tag(30)
-                    }
-                }
-            }
-
-            Section(header: SectionHeader(label: LocalizedString(
-                "Pump Status",
-                comment: "The title of the pump status section in TandemKit settings"
-            ))) {
                 if viewModel.controlIQEnabled, let mode = viewModel.controlIQUserMode {
                     HStack {
                         Text(LocalizedString("Control-IQ User mode", comment: "Text for Control-IQ user mode"))
@@ -407,15 +365,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
 
-                if let battery = viewModel.batteryPercentage {
-                    HStack {
-                        Text(LocalizedString("Battery percentage", comment: "Text for battery"))
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text("\(battery)")
-                            .foregroundColor(.secondary)
-                    }
-                }
 
                 Button(action: {
                     viewModel.openInsulinType()
@@ -472,6 +421,14 @@ struct TandemKitSettingsView: View {
                             Text(summary)
                                 .foregroundColor(.secondary)
                         }
+                    }
+                }
+
+                NavigationLink(destination: TandemKitAlertSettingsView(viewModel: viewModel)) {
+                    HStack {
+                        Text(LocalizedString("Alert Settings", comment: "Label for alert settings"))
+                            .foregroundColor(.primary)
+                        Spacer()
                     }
                 }
             }
@@ -777,6 +734,28 @@ struct TandemKitSettingsView: View {
     }
 
     // TODO(jwoglom): replace with consts from TandemCore
+    private func batteryIconName(_ percentage: String) -> String {
+        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
+            return "battery.0"
+        }
+        switch value {
+        case 75...100: return "battery.100"
+        case 50..<75: return "battery.75"
+        case 25..<50: return "battery.50"
+        case 1..<25: return "battery.25"
+        default: return "battery.0"
+        }
+    }
+
+    private func batteryColor(_ percentage: String) -> Color {
+        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
+            return .secondary
+        }
+        if value <= 10 { return .red }
+        if value <= 25 { return .orange }
+        return .green
+    }
+
     private func userModeText(_ mode: Int) -> String {
         switch mode {
         case 0,
