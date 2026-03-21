@@ -32,6 +32,7 @@ struct TandemKitCGMSettingsView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                 }
+                Spacer()
             } else {
                 List {
                     cgmStatusSection

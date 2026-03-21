@@ -35,7 +35,9 @@ struct TandemKitG6SetupWizardView: View {
         }
         .onChange(of: viewModel.didComplete) { completed in
             if completed {
-                presentationMode.wrappedValue.dismiss()
+                DispatchQueue.main.async {
+                    presentationMode.wrappedValue.dismiss()
+                }
             }
         }
     }
