@@ -2,6 +2,20 @@ import LoopKitUI
 import SwiftUI
 import TandemCore
 
+private enum AlgorithmAlertType: Identifiable {
+    case switchToCIQ
+    case switchToDIY
+    case diyRestored
+
+    var id: String {
+        switch self {
+        case .switchToCIQ: return "switchToCIQ"
+        case .switchToDIY: return "switchToDIY"
+        case .diyRestored: return "diyRestored"
+        }
+    }
+}
+
 struct TandemKitSettingsView: View {
     @Environment(\.dismissAction) private var dismiss
     @Environment(\.guidanceColors) private var guidanceColors
@@ -10,7 +24,7 @@ struct TandemKitSettingsView: View {
     @State var isSharePresented: Bool = false
     @State var showingFindPumpConfirmation: Bool = false
     @State var showingStopTempRateConfirmation: Bool = false
-    @State var showingAlgorithmToggle: Bool = false
+    @State fileprivate var activeAlgorithmAlert: AlgorithmAlertType?
     @StateObject var viewModel: TandemKitSettingsViewModel
 
     var removePumpManagerActionSheet: ActionSheet {
@@ -197,46 +211,54 @@ struct TandemKitSettingsView: View {
                 HStack(alignment: .firstTextBaseline) {
                     deliveryStatus
                         .frame(maxWidth: .infinity)
-                    algorithmStatus
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            showingAlgorithmToggle = true
-                        }
-                        .alert(isPresented: $showingAlgorithmToggle) {
-                            if viewModel.useControlIQ {
-                                return Alert(
-                                    title: Text(LocalizedString("Enable DIY Algorithm", comment: "Title for alert to switch from Control-IQ to DIY")),
-                                    message: Text(LocalizedString("This will disable Control-IQ on your pump and allow Trio or Loop to resume DIY closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY")),
-                                    primaryButton: .default(Text(LocalizedString("Switch to DIY", comment: "Button to confirm switching to DIY algorithm"))) {
-                                        viewModel.switchAlgorithmToDIY()
-                                    },
-                                    secondaryButton: .cancel()
-                                )
-                            } else {
-                                return Alert(
-                                    title: Text(LocalizedString("Disable DIY Algorithm", comment: "Title for alert to switch from DIY to Control-IQ")),
-                                    message: Text(LocalizedString("This will DISABLE Trio or Loop in favor of the Control-IQ algorithm built-in to your pump.\n\nThis app will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ")),
-                                    primaryButton: .default(Text(LocalizedString("Switch to Control-IQ", comment: "Button to confirm switching to Control-IQ algorithm"))) {
-                                        viewModel.switchAlgorithmToControlIQ()
-                                    },
-                                    secondaryButton: .cancel()
-                                )
+                    if viewModel.isSuspended != true {
+                        algorithmStatus
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                activeAlgorithmAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
                             }
-                        }
+                    }
                     reservoirStatus
                         .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 5)
-                .alert(isPresented: $viewModel.showReenableClosedLoopPrompt) {
-                    Alert(
-                        title: Text(LocalizedString("DIY Mode Restored", comment: "Title for DIY mode restored notice")),
-                        message: Text(LocalizedString(
-                            "Control-IQ has been disabled and you are currently in open-loop. To re-enable DIY closed-loop, go to your app's Algorithm settings.",
-                            comment: "Message for DIY mode restored notice"
-                        )),
-                        dismissButton: .default(Text("OK"))
-                    )
+                .alert(item: $activeAlgorithmAlert) { alertType in
+                    switch alertType {
+                    case .switchToCIQ:
+                        return Alert(
+                            title: Text(LocalizedString("Disable DIY Algorithm", comment: "Title for alert to switch from DIY to Control-IQ")),
+                            message: Text(LocalizedString("This will DISABLE this app in favor of the Control-IQ algorithm built-in to your pump.\n\nThis app will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ")),
+                            primaryButton: .default(Text(LocalizedString("Switch to Control-IQ", comment: "Button to confirm switching to Control-IQ algorithm"))) {
+                                viewModel.switchAlgorithmToControlIQ()
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    case .switchToDIY:
+                        return Alert(
+                            title: Text(LocalizedString("Enable DIY Algorithm", comment: "Title for alert to switch from Control-IQ to DIY")),
+                            message: Text(LocalizedString("This will disable Control-IQ on your pump and allow this app to resume DIY closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY")),
+                            primaryButton: .default(Text(LocalizedString("Switch to DIY", comment: "Button to confirm switching to DIY algorithm"))) {
+                                viewModel.switchAlgorithmToDIY()
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    case .diyRestored:
+                        return Alert(
+                            title: Text(LocalizedString("DIY Mode Restored", comment: "Title for DIY mode restored notice")),
+                            message: Text(LocalizedString(
+                                "Control-IQ has been disabled and you are currently in open-loop. To re-enable DIY closed-loop, go to your app's Algorithm settings.",
+                                comment: "Message for DIY mode restored notice"
+                            )),
+                            dismissButton: .default(Text("OK"))
+                        )
+                    }
+                }
+                .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
+                    if show {
+                        activeAlgorithmAlert = .diyRestored
+                        viewModel.showReenableClosedLoopPrompt = false
+                    }
                 }
 
                 if !viewModel.isConnected {
