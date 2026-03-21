@@ -494,6 +494,14 @@ class TandemKitSettingsViewModel: ObservableObject {
         TandemKitDeliveryLimitsViewModel(pumpManager: pumpManager)
     }
 
+    func createControlIQSettingsViewModel() -> TandemKitControlIQSettingsViewModel {
+        TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    func createCGMSettingsViewModel() -> TandemKitCGMSettingsViewModel {
+        TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
+    }
+
     // Cartridge operations
     func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
         TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)

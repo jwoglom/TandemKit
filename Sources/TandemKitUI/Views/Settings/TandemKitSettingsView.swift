@@ -373,17 +373,9 @@ struct TandemKitSettingsView: View {
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
-                HStack {
-                    Text(LocalizedString("Control-IQ", comment: "Text for Control-IQ status"))
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Text(viewModel.controlIQEnabled ? "Enabled" : "Disabled")
-                        .foregroundColor(.secondary)
-                }
-
-                if let mode = viewModel.controlIQUserMode {
+                if viewModel.controlIQEnabled, let mode = viewModel.controlIQUserMode {
                     HStack {
-                        Text(LocalizedString("User mode", comment: "Text for user mode"))
+                        Text(LocalizedString("Control-IQ User mode", comment: "Text for Control-IQ user mode"))
                             .foregroundColor(.primary)
                         Spacer()
                         Text(userModeText(mode.rawValue))
@@ -435,6 +427,28 @@ struct TandemKitSettingsView: View {
                         .opacity(0.35)
                 }
                 .buttonStyle(.plain)
+
+                if viewModel.useControlIQ {
+                    NavigationLink(destination: TandemKitControlIQSettingsView(
+                        viewModel: viewModel.createControlIQSettingsViewModel()
+                    )) {
+                        HStack {
+                            Text(LocalizedString("Control-IQ Settings", comment: "Label for Control-IQ settings"))
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                    }
+                }
+
+                NavigationLink(destination: TandemKitCGMSettingsView(
+                    viewModel: viewModel.createCGMSettingsViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("CGM Settings", comment: "Label for CGM settings"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
+                }
 
                 NavigationLink(destination: TandemKitQuickBolusSettingsView(
                     viewModel: viewModel.createQuickBolusSettingsViewModel()
