@@ -48,14 +48,17 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
     private let pumpManager: TandemPumpManager?
 
+    private var hasFetched = false
+
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
-        fetchCGMStatus()
     }
 
     // MARK: - Fetch
 
-    func fetchCGMStatus() {
+    func fetchCGMStatus(force: Bool = false) {
+        guard !hasFetched || force else { return }
+        hasFetched = true
         isFetching = true
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in

@@ -70,6 +70,9 @@ struct TandemKitCGMSettingsView: View {
                 }
             }
         }
+        .task {
+            viewModel.fetchCGMStatus()
+        }
         .alert(item: Binding(
             get: { viewModel.commandError.map { ErrorMessage(message: $0) } },
             set: { _ in viewModel.commandError = nil }
@@ -191,7 +194,7 @@ struct TandemKitCGMSettingsView: View {
 
             case .startPending, .stopPending:
                 Button(action: {
-                    viewModel.fetchCGMStatus()
+                    viewModel.fetchCGMStatus(force: true)
                 }) {
                     HStack {
                         Spacer()
@@ -202,7 +205,7 @@ struct TandemKitCGMSettingsView: View {
 
             case .unknown:
                 Button(action: {
-                    viewModel.fetchCGMStatus()
+                    viewModel.fetchCGMStatus(force: true)
                 }) {
                     HStack {
                         Spacer()
