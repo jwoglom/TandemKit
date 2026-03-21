@@ -155,6 +155,7 @@ struct TandemKitSettingsView: View {
                             .scaledToFit()
                             .padding(.horizontal)
                             .frame(height: 200)
+                        .padding(.top, -50)
                         Spacer()
                     }
                     Button(action: {
@@ -175,10 +176,13 @@ struct TandemKitSettingsView: View {
                     .opacity(viewModel.isConnected ? 1.0 : 0.4)
                 }
 
-                HStack(alignment: .top) {
+                HStack(alignment: .firstTextBaseline) {
                     deliveryStatus
-                    Spacer()
+                        .frame(maxWidth: .infinity)
+                    algorithmStatus
+                        .frame(maxWidth: .infinity)
                     reservoirStatus
+                        .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 5)
 
@@ -570,7 +574,7 @@ struct TandemKitSettingsView: View {
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
             if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
-                HStack(alignment: .center, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
                     ReservoirView(reservoirLevel: reservoirLevel, fillColor: reservoirColor(reservoirLevel))
                         .frame(width: 19, height: 26)
 
@@ -588,6 +592,18 @@ struct TandemKitSettingsView: View {
                     .font(.system(size: 28))
                     .fontWeight(.heavy)
             }
+        }
+    }
+
+    var algorithmStatus: some View {
+        VStack(alignment: .center, spacing: 5) {
+            Text(LocalizedString("Algorithm", comment: "Header for algorithm status"))
+                .foregroundColor(Color(UIColor.secondaryLabel))
+            Text("DIY")
+                .font(.system(size: 28))
+                .fontWeight(.regular)
+                .foregroundColor(.secondary)
+                .fixedSize()
         }
     }
 
@@ -628,6 +644,7 @@ struct TandemKitSettingsView: View {
 
                     Text("U/hr")
                         .foregroundColor(.secondary)
+                        .fixedSize()
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
