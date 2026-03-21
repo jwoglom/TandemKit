@@ -33,6 +33,7 @@ struct TandemKitControlIQSettingsView: View {
                         .foregroundColor(.secondary)
                     Spacer()
                 }
+                Spacer()
             } else {
                 List {
                     controlIQSection

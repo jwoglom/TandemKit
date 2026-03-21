@@ -212,6 +212,16 @@ struct TandemKitSettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 5)
+                .alert(isPresented: $viewModel.showReenableClosedLoopPrompt) {
+                    Alert(
+                        title: Text(LocalizedString("DIY Mode Restored", comment: "Title for DIY mode restored notice")),
+                        message: Text(LocalizedString(
+                            "Control-IQ has been disabled and you are currently in open-loop. To re-enable DIY closed-loop, go to your app's Algorithm settings.",
+                            comment: "Message for DIY mode restored notice"
+                        )),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
 
                 if !viewModel.isConnected {
                     HStack(spacing: 8) {

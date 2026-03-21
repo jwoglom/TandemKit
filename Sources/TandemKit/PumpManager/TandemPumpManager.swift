@@ -1614,6 +1614,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedState.value.useControlIQ
     }
 
+
     public func configureControlIQMode(_ enabled: Bool, completion: @escaping (Bool) -> Void) {
         guard let transport = pairedTransport else {
             completion(false)

@@ -39,6 +39,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var alertSnoozeDurationMins: Int = 10
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
+    @Published var showReenableClosedLoopPrompt: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -263,6 +264,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self.isUpdatingPumpState = false
                 if success {
                     self.useControlIQ = false
+                    self.showReenableClosedLoopPrompt = true
                 } else {
                     self.commandFailure = .controlIQ
                 }

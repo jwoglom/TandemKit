@@ -106,7 +106,7 @@ struct TandemKitCGMSettingsView: View {
 
     private var cgmStatusSection: some View {
         Section(header: Text(LocalizedString("CGM Sensor", comment: "Header for CGM sensor section"))) {
-            if let sensorType = viewModel.sensorTypeText {
+            if viewModel.cgmSessionState != .stopped, let sensorType = viewModel.sensorTypeText {
                 HStack {
                     Text(LocalizedString("Session Type", comment: "Label for CGM session type"))
                     Spacer()
@@ -155,7 +155,7 @@ struct TandemKitCGMSettingsView: View {
                 }
             }
 
-            if let battery = viewModel.transmitterBattery {
+            if viewModel.cgmSessionState != .stopped, let battery = viewModel.transmitterBattery {
                 HStack {
                     Text(LocalizedString("Transmitter Battery", comment: "Label for transmitter battery"))
                     Spacer()
