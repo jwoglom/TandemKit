@@ -405,6 +405,10 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       changed = true
     end
 
+    # Re-detect misplaced refs after adding missing files (ensure_file_ref! may
+    # have created new refs in the main group that now need relocating)
+    misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
+
     if fix_misplaced_group_refs!(project, misplaced_refs, source_root.to_s)
       changed = true
     end

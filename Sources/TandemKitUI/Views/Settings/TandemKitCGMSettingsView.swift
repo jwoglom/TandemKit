@@ -79,13 +79,14 @@ struct TandemKitCGMSettingsView: View {
                     }
                 }
 
-                HStack {
-                    Text(LocalizedString("Start Dexcom G7 Sensor", comment: "Dexcom G7 sensor option"))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text(LocalizedString("Coming soon", comment: "Dexcom G7 not yet supported"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                NavigationLink(destination: TandemKitG7SetupWizardView(
+                    viewModel: viewModel.createG7SetupViewModel()
+                )) {
+                    HStack {
+                        Text(LocalizedString("Start Dexcom G7 Sensor", comment: "Dexcom G7 sensor option"))
+                            .foregroundColor(.primary)
+                        Spacer()
+                    }
                 }
 
             case .active:

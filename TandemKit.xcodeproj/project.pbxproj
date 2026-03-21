@@ -408,6 +408,7 @@
 		D3754862C735410C0976A985 /* CgmInactiveG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 775DD74DF544A5601ADA3056 /* CgmInactiveG7HistoryLog.swift */; };
 		D462A8390D0CC5C256E7EC02 /* DexcomG6CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */; };
 		D4863F494609FDDE27A23274 /* TandemKitDeliveryLimitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */; };
+		DA434FB465A9BDAD25930F69 /* TandemKitG7SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */; };
 		DD00000000000000000001B1 /* ActivateShelfMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000001A1 /* ActivateShelfMode.swift */; };
 		DD00000000000000000002B1 /* AdditionalBolus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000002A1 /* AdditionalBolus.swift */; };
 		DD00000000000000000003B1 /* CgmHighLowAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000003A1 /* CgmHighLowAlert.swift */; };
@@ -445,6 +446,7 @@
 		E782A9293A03493E8DF467C9 /* HistoryToDoseMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1ECC52D7C7D4542BF3BDA72 /* HistoryToDoseMapper.swift */; };
 		E7F80920A3B4C5D6E7F81920 /* TandemKitG6SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E6F7081920A3B4C5D6E7F8 /* TandemKitG6SetupWizardView.swift */; };
 		E9F1CCB141C5B558BBFD8DE6 /* CgmStopSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2AC5DC56238EBA99199B3E8 /* CgmStopSessionFsl3HistoryLog.swift */; };
+		EBEA23EC9FD22005212E5559 /* TandemKitG7SetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 376AE425366FFE71D7A4E384 /* TandemKitG7SetupViewModel.swift */; };
 		EF095AF6D8D1A7BA9BC88E8B /* ReminderActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAB1987FA4CB86DCD66A9B3 /* ReminderActivatedHistoryLog.swift */; };
 		EF538BD3D2C2914C67FAAB84 /* TandemKitControlIQSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81DC8A3B85604051225CB808 /* TandemKitControlIQSettingsViewModel.swift */; };
 		EFC8345D65950D5AD12E7BCF /* PrimeInprocessHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DC539C39F0FD725F585359 /* PrimeInprocessHistoryLog.swift */; };
@@ -613,6 +615,7 @@
 		2BAE3A73C5864C7B4F33631A /* CgmStopSessionMsg2HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionMsg2HistoryLog.swift; sourceTree = "<group>"; };
 		2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStatusHistoryLog.swift; sourceTree = "<group>"; };
 		3418E5C59739C43AEEAE153F /* SnoozeActivatedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SnoozeActivatedHistoryLog.swift; sourceTree = "<group>"; };
+		376AE425366FFE71D7A4E384 /* TandemKitG7SetupViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitG7SetupViewModel.swift; sourceTree = "<group>"; };
 		3829D895B627CF4D2AE51934 /* CgmTransmitterIdGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmTransmitterIdGxHistoryLog.swift; sourceTree = "<group>"; };
 		386AF03F69573CA779923396 /* WizardStepContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WizardStepContainer.swift; sourceTree = "<group>"; };
 		3A69A63513A247938EEE8FA2 /* TandemKitDeliveryLimitsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitDeliveryLimitsViewModel.swift; sourceTree = "<group>"; };
@@ -941,6 +944,7 @@
 		A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG7CGMHistoryLog.swift; sourceTree = "<group>"; };
 		A4C9977957439AFA0C6024A1 /* CgmFraSettingsHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmFraSettingsHistoryLog.swift; sourceTree = "<group>"; };
 		A7DC539C39F0FD725F585359 /* PrimeInprocessHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrimeInprocessHistoryLog.swift; sourceTree = "<group>"; };
+		A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitG7SetupWizardView.swift; sourceTree = "<group>"; };
 		ABE7FB59AD1DF5F90AE36B61 /* CgmAnnuSettingsHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmAnnuSettingsHistoryLog.swift; sourceTree = "<group>"; };
 		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
@@ -1109,6 +1113,7 @@
 				A1B2C3D4E5F60718293A4B5C /* TandemKitG6SetupViewModel.swift */,
 				3A69A63513A247938EEE8FA2 /* TandemKitDeliveryLimitsViewModel.swift */,
 				63B6DBEF24B35125C1052B7C /* TandemKitQuickBolusSettingsViewModel.swift */,
+				376AE425366FFE71D7A4E384 /* TandemKitG7SetupViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1201,6 +1206,7 @@
 				D5E6F7081920A3B4C5D6E7F8 /* TandemKitG6SetupWizardView.swift */,
 				194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */,
 				17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */,
+				A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -2069,6 +2075,8 @@
 				FE68A1A10C9D65F1ABE08540 /* TandemKitControlIQSettingsView.swift in Sources */,
 				B3C4D5E6F7081920A3B4C5D6 /* TandemKitG6SetupViewModel.swift in Sources */,
 				E7F80920A3B4C5D6E7F81920 /* TandemKitG6SetupWizardView.swift in Sources */,
+				EBEA23EC9FD22005212E5559 /* TandemKitG7SetupViewModel.swift in Sources */,
+				DA434FB465A9BDAD25930F69 /* TandemKitG7SetupWizardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

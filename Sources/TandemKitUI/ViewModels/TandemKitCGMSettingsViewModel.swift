@@ -76,6 +76,10 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         TandemKitG6SetupViewModel(pumpManager: pumpManager)
     }
 
+    func createG7SetupViewModel() -> TandemKitG7SetupViewModel {
+        TandemKitG7SetupViewModel(pumpManager: pumpManager)
+    }
+
     // MARK: - Stop CGM Sensor
 
     func stopCGMSensor() {
