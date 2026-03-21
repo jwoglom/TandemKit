@@ -11,11 +11,11 @@ public struct TronMessageWrapper {
     public let responseMetadata: MessageMetadata?
     public let packets: [Packet]
 
-    @MainActor public init(message: Message, currentTxId: UInt8) {
+    public init(message: Message, currentTxId: UInt8) {
         self.init(message: message, currentTxId: currentTxId, maxChunkSize: nil)
     }
 
-    @MainActor public init(message: Message, currentTxId: UInt8, maxChunkSize: Int?) {
+    public init(message: Message, currentTxId: UInt8, maxChunkSize: Int?) {
         self.message = message
 
         // Get metadata for the message
