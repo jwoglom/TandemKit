@@ -20,7 +20,7 @@ private func determineMaxChunkSize(_ message: Message) -> Int {
     return DEFAULT_MAX_CHUNK_SIZE
 }
 
-@MainActor public func Packetize(
+public func Packetize(
     message: Message,
     authenticationKey: Data?,
     txId: UInt8,
