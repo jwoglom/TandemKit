@@ -763,6 +763,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         var managerState = lockedState.value
         managerState.controlIQEnabled = response.closedLoopEnabled
+
+        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
+        // sync useControlIQ so dosing guards activate and Trio disables closed loop
+        if response.closedLoopEnabled && !managerState.useControlIQ {
+            log.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
+            managerState.useControlIQ = true
+        }
+
         if let userMode = response.currentUserModeType {
             managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
         } else {
@@ -1614,6 +1622,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedState.value.useControlIQ
     }
 
+
+    public func requestEnableClosedLoop() {
+        var state = lockedState.value
+        state.pendingEnableClosedLoop = true
+        lockedState.value = state
+        notifyDelegateStateUpdated()
+    }
+
+    public func clearPendingEnableClosedLoop() {
+        var state = lockedState.value
+        state.pendingEnableClosedLoop = false
+        lockedState.value = state
+    }
 
     public func configureControlIQMode(_ enabled: Bool, completion: @escaping (Bool) -> Void) {
         guard let transport = pairedTransport else {

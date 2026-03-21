@@ -7,6 +7,7 @@ private enum AlgorithmAlertType: Identifiable {
     case switchToDIY
     case diyRestored
     case noCGMConnected
+    case enableClosedLoop
 
     var id: String {
         switch self {
@@ -14,6 +15,7 @@ private enum AlgorithmAlertType: Identifiable {
         case .switchToDIY: return "switchToDIY"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
+        case .enableClosedLoop: return "enableClosedLoop"
         }
     }
 }
@@ -263,6 +265,18 @@ struct TandemKitSettingsView: View {
                             )),
                             dismissButton: .default(Text("OK"))
                         )
+                    case .enableClosedLoop:
+                        return Alert(
+                            title: Text(LocalizedString("Enable Closed Loop", comment: "Title for enable closed loop prompt")),
+                            message: Text(LocalizedString(
+                                "Would you like to enable DIY closed loop?",
+                                comment: "Message for enable closed loop prompt"
+                            )),
+                            primaryButton: .default(Text(LocalizedString("Enable", comment: "Button to enable closed loop"))) {
+                                viewModel.enableClosedLoop()
+                            },
+                            secondaryButton: .cancel()
+                        )
                     }
                 }
                 .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
@@ -279,14 +293,31 @@ struct TandemKitSettingsView: View {
                 }
 
                 if !viewModel.isConnected {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
-                        Text(LocalizedString("Pump Disconnected", comment: "title for pump disconnected notice"))
-                            .font(Font.subheadline.weight(.bold))
-                            .foregroundColor(.red)
-                    }.padding(.vertical, 8)
+                    statusBanner(
+                        title: LocalizedString("Pump Disconnected", comment: "title for pump disconnected notice"),
+                        color: .red
+                    )
+                } else if viewModel.useControlIQ && !viewModel.isCGMActiveOnPump {
+                    statusBanner(
+                        title: LocalizedString("No CGM connected to pump", comment: "title for CIQ no CGM notice"),
+                        subtitle: LocalizedString("DIY closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop.", comment: "subtitle for CIQ no CGM notice"),
+                        color: .orange
+                    )
+                } else if viewModel.useControlIQ {
+                    statusBanner(
+                        title: LocalizedString("Control-IQ pump algorithm enabled", comment: "title for CIQ active notice"),
+                        subtitle: LocalizedString("DIY closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
+                        color: .orange
+                    )
+                } else if !viewModel.isClosedLoopEnabled {
+                    statusBanner(
+                        title: LocalizedString("Open loop mode", comment: "title for open loop notice"),
+                        color: .orange
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        activeAlgorithmAlert = .enableClosedLoop
+                    }
                 }
 
                 if viewModel.showPumpTimeSyncWarning {
@@ -773,6 +804,25 @@ struct TandemKitSettingsView: View {
     }
 
     // TODO(jwoglom): replace with consts from TandemCore
+    private func statusBanner(title: String, subtitle: String? = nil, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Font.subheadline.weight(.bold))
+                    .foregroundColor(color)
+                if let subtitle = subtitle {
+                    Text(subtitle)
+                        .font(Font.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
     private func batteryIconName(_ percentage: String) -> String {
         guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
             return "battery.0"

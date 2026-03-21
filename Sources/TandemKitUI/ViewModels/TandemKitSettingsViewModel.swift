@@ -41,6 +41,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
     @Published var showNoCGMWarning: Bool = false
+    @Published var isCGMActiveOnPump: Bool = false
+    @Published var pendingEnableClosedLoop: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -107,6 +109,10 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var controlIQEnabled: Bool {
         pumpManager?.state.controlIQEnabled ?? false
+    }
+
+    var isClosedLoopEnabled: Bool {
+        pumpManager?.pumpManagerDelegate?.automaticDosingEnabled ?? false
     }
 
     var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? {
@@ -258,6 +264,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                     DispatchQueue.main.async {
                         self.isUpdatingPumpState = false
                         self.useControlIQ = true
+                        self.isCGMActiveOnPump = cgmActive
                         if !cgmActive {
                             self.showNoCGMWarning = true
                         }
@@ -270,6 +277,11 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func enableClosedLoop() {
+        pendingEnableClosedLoop = true
+        pumpManager?.requestEnableClosedLoop()
     }
 
     func switchAlgorithmToDIY() {

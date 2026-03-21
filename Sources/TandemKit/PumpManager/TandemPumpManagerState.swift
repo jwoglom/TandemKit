@@ -173,6 +173,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
 
     // Control-IQ state
     public var useControlIQ: Bool
+    public var pendingEnableClosedLoop: Bool
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
     public var controlIQWeight: Int?
@@ -238,6 +239,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         maxBolusLimitMilliunits: Int? = nil,
         maxBolusLimitDefaultMilliunits: Int? = nil,
         useControlIQ: Bool = false,
+        pendingEnableClosedLoop: Bool = false,
         controlIQEnabled: Bool? = nil,
         controlIQUserMode: ControlIQUserMode? = nil,
         controlIQWeight: Int? = nil,
@@ -294,6 +296,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.maxBolusLimitMilliunits = maxBolusLimitMilliunits
         self.maxBolusLimitDefaultMilliunits = maxBolusLimitDefaultMilliunits
         self.useControlIQ = useControlIQ
+        self.pendingEnableClosedLoop = pendingEnableClosedLoop
         self.controlIQEnabled = controlIQEnabled
         self.controlIQUserMode = controlIQUserMode
         self.controlIQWeight = controlIQWeight
@@ -327,6 +330,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         connectionSharingEnabled = rawValue["connectionSharingEnabled"] as? Bool ?? false
         autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool ?? false
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
+        pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
         controlIQWeight = rawValue["controlIQWeight"] as? Int
         controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
@@ -544,6 +548,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
         raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["useControlIQ"] = useControlIQ
+        raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
         raw["controlIQWeight"] = controlIQWeight
@@ -650,6 +655,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             "* alarmAnnun: \(String(describing: alarmAnnun))",
             "* generalAnnun: \(String(describing: generalAnnun))",
             "* useControlIQ: \(useControlIQ)",
+            "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",
             "* controlIQWeight: \(String(describing: controlIQWeight))",
@@ -703,6 +709,7 @@ public extension TandemPumpManagerState {
             lhs.alarmAnnun == rhs.alarmAnnun &&
             lhs.generalAnnun == rhs.generalAnnun &&
             lhs.useControlIQ == rhs.useControlIQ &&
+            lhs.pendingEnableClosedLoop == rhs.pendingEnableClosedLoop &&
             lhs.controlIQEnabled == rhs.controlIQEnabled &&
             lhs.controlIQUserMode == rhs.controlIQUserMode &&
             lhs.controlIQWeight == rhs.controlIQWeight &&
