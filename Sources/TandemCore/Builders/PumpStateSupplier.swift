@@ -55,18 +55,63 @@ public enum PumpStateSupplier {
     public static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
     public static var currentBolusId: (() -> Int?)?
 
-    // Flags mirroring PumpX2 PumpState fields
-    static var tconnectAppConnectionSharing = false
-    static var sendSharedConnectionResponseMessages = false
-    static var relyOnConnectionSharingForAuthentication = false
-    static var tconnectAppAlreadyAuthenticated = false
-    static var tconnectAppConnectionSharingIgnoreInitialFailingWrite = false
-    static var onlySnoopBluetooth = false
+    // Flags mirroring PumpX2 PumpState fields — all accessed through withLock.
+    private static var _tconnectAppConnectionSharing = false
+    private static var _sendSharedConnectionResponseMessages = false
+    private static var _relyOnConnectionSharingForAuthentication = false
+    private static var _tconnectAppAlreadyAuthenticated = false
+    private static var _tconnectAppConnectionSharingIgnoreInitialFailingWrite = false
+    private static var _onlySnoopBluetooth = false
 
-    static var processedResponseMessages = 0
-    static var processedResponseMessagesFromUs = 0
+    private static var _processedResponseMessages = 0
+    private static var _processedResponseMessagesFromUs = 0
 
-    static var pairingCodeType: PairingCodeType = .long16Char
+    private static var _pairingCodeType: PairingCodeType = .long16Char
+
+    static var tconnectAppConnectionSharing: Bool {
+        get { withLock { _tconnectAppConnectionSharing } }
+        set { withLock { _tconnectAppConnectionSharing = newValue } }
+    }
+
+    static var sendSharedConnectionResponseMessages: Bool {
+        get { withLock { _sendSharedConnectionResponseMessages } }
+        set { withLock { _sendSharedConnectionResponseMessages = newValue } }
+    }
+
+    static var relyOnConnectionSharingForAuthentication: Bool {
+        get { withLock { _relyOnConnectionSharingForAuthentication } }
+        set { withLock { _relyOnConnectionSharingForAuthentication = newValue } }
+    }
+
+    static var tconnectAppAlreadyAuthenticated: Bool {
+        get { withLock { _tconnectAppAlreadyAuthenticated } }
+        set { withLock { _tconnectAppAlreadyAuthenticated = newValue } }
+    }
+
+    static var tconnectAppConnectionSharingIgnoreInitialFailingWrite: Bool {
+        get { withLock { _tconnectAppConnectionSharingIgnoreInitialFailingWrite } }
+        set { withLock { _tconnectAppConnectionSharingIgnoreInitialFailingWrite = newValue } }
+    }
+
+    static var onlySnoopBluetooth: Bool {
+        get { withLock { _onlySnoopBluetooth } }
+        set { withLock { _onlySnoopBluetooth = newValue } }
+    }
+
+    static var processedResponseMessages: Int {
+        get { withLock { _processedResponseMessages } }
+        set { withLock { _processedResponseMessages = newValue } }
+    }
+
+    static var processedResponseMessagesFromUs: Int {
+        get { withLock { _processedResponseMessagesFromUs } }
+        set { withLock { _processedResponseMessagesFromUs = newValue } }
+    }
+
+    static var pairingCodeType: PairingCodeType {
+        get { withLock { _pairingCodeType } }
+        set { withLock { _pairingCodeType = newValue } }
+    }
 
     public static var authenticationKey: () -> Data = {
         determinePumpAuthKey()
