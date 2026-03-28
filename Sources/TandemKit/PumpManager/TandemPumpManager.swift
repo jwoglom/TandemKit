@@ -115,6 +115,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let initialConnectionTimeoutAttempts = Locked<Int>(0)
     private let initialConnectionTimeoutMaxAttempts = 3
 
+    // Pairing-in-progress flag: prevents the connection timeout from
+    // soft-disconnecting the pump while the JPAKE handshake is running.
+    private let pairingInProgress = Locked<Bool>(false)
+
     @objc func appMovedToBackground() {
         if state.useSilentTones {
             log.info("Starting silent tones")
@@ -2005,6 +2009,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // immediately disconnects because requests are signed with an invalid key.
         clearStalePairingArtifactsIfNeeded()
 
+        // Prevent the session bootstrap from racing with pairing by clearing the
+        // initialization flag *before* BLE connects (didCompleteConfiguration checks it).
+        needsSessionInitialization.value = false
+
         Task {
             do {
                 let peripheralUuid = peripheral.identifier.uuidString
@@ -2018,6 +2026,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     tries += 1
 
                     if tries >= 50 {
+                        pairingInProgress.value = false
                         completion(.failure(NSError(
                             domain: "Gave up waiting for peripheral to connect",
                             code: -1
@@ -2034,6 +2043,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     tries += 1
 
                     if tries >= 50 {
+                        pairingInProgress.value = false
                         completion(.failure(NSError(
                             domain: "Gave up waiting for transport initialization",
                             code: -2
@@ -2044,16 +2054,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard let transport = transportLock.value else {
                     log.error("pumpNotConnected during pairing")
+                    pairingInProgress.value = false
                     completion(.failure(PumpCommError.pumpNotConnected))
                     return
                 }
 
+                // Cancel the initial connection timeout — the JPAKE handshake
+                // (especially the first SwiftECC round) can take >10 seconds and
+                // the timeout would soft-disconnect the pump mid-handshake.
+                initialConnectionTimeoutWork?.cancel()
+                initialConnectionTimeoutWork = nil
+                pairingInProgress.value = true
+                log.info("Pairing started – connection timeout cancelled")
+
                 // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
                 try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
 
+                pairingInProgress.value = false
+                processedResponseMessages.value += 1
                 log.info("Succesfully paired!")
                 completion(.success(()))
             } catch {
+                pairingInProgress.value = false
                 log.error("Failed to pair: \(error.localizedDescription)")
                 completion(.failure(error))
             }
@@ -3284,11 +3306,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let repliesReceived = self.processedResponseMessages.value
             let bootstrapRunning = self.sessionBootstrapInProgress.value
+            let pairing = self.pairingInProgress.value
             let attempt = self.initialConnectionTimeoutAttempts.value
 
             if repliesReceived > 0 {
                 self.log.info(
                     "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
+                )
+            } else if pairing {
+                // JPAKE handshake is in progress (first SwiftECC round can take >10s).
+                // Do not disconnect — pairing manages its own lifecycle.
+                self.log.info(
+                    "InitialConnectionTimeout: pairing in progress – skipping disconnect"
                 )
             } else if bootstrapRunning && attempt < self.initialConnectionTimeoutMaxAttempts {
                 self.initialConnectionTimeoutAttempts.value += 1
