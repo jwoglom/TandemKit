@@ -84,12 +84,14 @@ public class PumpComm: CustomDebugStringConvertible {
 
     #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
         public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
-            let session = ensureSession()
-            log.debug("PumpComm pair started")
-            try session.runSynchronously(withName: "Pairing") {
-                try session.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
+            try performOnCommandQueue {
+                let session = self.ensureSession()
+                self.log.debug("PumpComm pair started")
+                try session.runSynchronously(withName: "Pairing") {
+                    try session.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
+                }
+                self.log.debug("PumpComm pair finished")
             }
-            log.debug("PumpComm pair finished")
         }
 
         public func confirmAuthentication(
@@ -101,16 +103,18 @@ public class PumpComm: CustomDebugStringConvertible {
                 throw PumpCommError.missingAuthenticationKey
             }
 
-            let session = ensureSession()
-            log.debug("PumpComm confirmAuthentication started")
-            try session.runSynchronously(withName: "ConfirmAuthentication") {
-                try session.confirmAuthentication(
-                    transport: transport,
-                    peripheralUuid: peripheralUuid,
-                    derivedSecret: derivedSecret
-                )
+            try performOnCommandQueue {
+                let session = self.ensureSession()
+                self.log.debug("PumpComm confirmAuthentication started")
+                try session.runSynchronously(withName: "ConfirmAuthentication") {
+                    try session.confirmAuthentication(
+                        transport: transport,
+                        peripheralUuid: peripheralUuid,
+                        derivedSecret: derivedSecret
+                    )
+                }
+                self.log.debug("PumpComm confirmAuthentication finished")
             }
-            log.debug("PumpComm confirmAuthentication finished")
         }
     #endif
 

@@ -98,6 +98,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
     private let needsSessionInitialization = Locked<Bool>(false)
     private let sessionBootstrapInProgress = Locked<Bool>(false)
+    private let pairingInProgress = Locked<Bool>(false)
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
@@ -2048,8 +2049,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     return
                 }
 
+                // Cancel the initial connection timeout — JPAKE pairing with SwiftECC
+                // can take >10s for the first round, well beyond the 5s timeout window.
+                // The timeout checks processedResponseMessages which pairing bypasses,
+                // so it would fire a softDisconnect() mid-handshake.
+                initialConnectionTimeoutWork?.cancel()
+                initialConnectionTimeoutWork = nil
+
+                // Mark pairing in progress so the timeout checker extends rather than
+                // disconnecting if it somehow fires (belt and suspenders).
+                pairingInProgress.value = true
+                defer { pairingInProgress.value = false }
+
                 // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
                 try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
+
+                // Pairing succeeded — mark the connection as alive so any future
+                // timeout checks see that the pump responded.
+                processedResponseMessages.value += 1
 
                 log.info("Succesfully paired!")
                 completion(.success(()))
@@ -3284,12 +3301,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let repliesReceived = self.processedResponseMessages.value
             let bootstrapRunning = self.sessionBootstrapInProgress.value
+            let pairing = self.pairingInProgress.value
             let attempt = self.initialConnectionTimeoutAttempts.value
 
             if repliesReceived > 0 {
                 self.log.info(
                     "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
                 )
+            } else if pairing {
+                self.log.info(
+                    "InitialConnectionTimeout: pairing in progress – extending timeout"
+                )
+                self.scheduleNextInitialConnectionTimeout()
+                return
             } else if bootstrapRunning && attempt < self.initialConnectionTimeoutMaxAttempts {
                 self.initialConnectionTimeoutAttempts.value += 1
                 self.log.info(
