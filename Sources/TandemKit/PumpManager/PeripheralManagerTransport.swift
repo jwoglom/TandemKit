@@ -14,6 +14,11 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     private let maxHistorySize = 100 // Keep last 100 exchanges
     private let txIdLock = NSLock() // Protects currentTxId from concurrent access
 
+    // Serializes the entire send→receive round-trip so that concurrent callers
+    // (e.g. pairing on sessionQueue vs telemetry on commandQueue) cannot
+    // interleave BLE packets or steal each other's responses.
+    private let sendLock = NSLock()
+
     // Request throttling to prevent BLE write queue saturation
     private let throttleLock = NSLock()
     private var lastSendTimestamp: Date?
@@ -34,6 +39,9 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
     }
 
     public func sendMessage(_ message: Message) throws -> Message {
+        sendLock.lock()
+        defer { sendLock.unlock() }
+
         let instanceId = ObjectIdentifier(self)
 
         // Apply request throttling to prevent BLE write queue saturation
