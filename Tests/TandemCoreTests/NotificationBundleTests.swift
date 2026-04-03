@@ -158,11 +158,11 @@ final class NotificationBundleTests: XCTestCase {
 
         // PumpX2 comment payload: codeA 23, and reminder bit 23 is DEFAULT_REMINDER_23
         bundle.add(ReminderStatusResponse(intMap: bitmask(23)))
-        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
         let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
         MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
         XCTAssertEqual(23, malfunctionResponse.codeA)
-        XCTAssertEqual(0x20a7, malfunctionResponse.codeB)
+        XCTAssertEqual(0x20A7, malfunctionResponse.codeB)
         bundle.add(malfunctionResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)
@@ -195,11 +195,11 @@ final class NotificationBundleTests: XCTestCase {
 
         // PumpX2 comment payload: codeA 23, and CGM alert bit 23 is DEFAULT_CGM_ALERT_23
         bundle.add(CGMAlertStatusResponse(intMap: bitmask(23)))
-        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
         let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
         MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
         XCTAssertEqual(23, malfunctionResponse.codeA)
-        XCTAssertEqual(0x20a7, malfunctionResponse.codeB)
+        XCTAssertEqual(0x20A7, malfunctionResponse.codeB)
         bundle.add(malfunctionResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)

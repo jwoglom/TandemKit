@@ -36,21 +36,33 @@ extension PumpCommError: LocalizedError {
         case let .errorResponse(context, request, response):
             if let context = context {
                 return String(
-                    format: LocalizedString("Pump Error: %@", comment: "Error message shown when pump returns an error for a command"),
+                    format: LocalizedString(
+                        "Pump Error: %@",
+                        comment: "Error message shown when pump returns an error for a command"
+                    ),
                     context
                 )
             } else if let request = request {
                 return String(
-                    format: LocalizedString("Pump Error: Error sending %@", comment: "Error message shown when pump returns an error for a command"),
+                    format: LocalizedString(
+                        "Pump Error: Error sending %@",
+                        comment: "Error message shown when pump returns an error for a command"
+                    ),
                     String("\(type(of: request))")
                 )
             } else if let response = response {
                 return String(
-                    format: LocalizedString("Pump Error: Error sending %@", comment: "Error message shown when pump returns an error for a command"),
+                    format: LocalizedString(
+                        "Pump Error: Error sending %@",
+                        comment: "Error message shown when pump returns an error for a command"
+                    ),
                     String("\(type(of: response))")
                 )
             } else {
-                return LocalizedString("Pump Error: unknown", comment: "Error message shown when pump returns an error for a command")
+                return LocalizedString(
+                    "Pump Error: unknown",
+                    comment: "Error message shown when pump returns an error for a command"
+                )
             }
         case let .pumpFault(event):
             return String(

@@ -12,17 +12,17 @@ struct TandemKitSettingsView: View {
 
     var removePumpManagerActionSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet."))
+            title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")
                 .font(.headline),
-            message: Text(LocalizedString(
+            message: Text(
                 "Are you sure you want to remove the pump from this app? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
                 comment: "Message for Tandem PumpManager deletion action sheet"
-            )),
+            ),
             buttons: [
-                .destructive(Text(LocalizedString(
+                .destructive(Text(
                     "Delete pump",
                     comment: "Button text to confirm Tandem PumpManager deletion"
-                ))) {
+                )) {
                     viewModel.removePump()
                 },
                 .cancel()
@@ -32,16 +32,16 @@ struct TandemKitSettingsView: View {
 
     var syncPumpTime: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Time Change Detected", comment: "Title for pod sync time action sheet.")),
-            message: Text(LocalizedString(
+            title: Text("Time Change Detected", comment: "Title for pod sync time action sheet."),
+            message: Text(
                 "The time on your pump is different from the current time. Do you want to update the time on your pump to the current time?",
                 comment: "Message for pod sync time action sheet"
-            )),
+            ),
             buttons: [
-                .default(Text(LocalizedString("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync"))) {
+                .default(Text("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync")) {
                     self.viewModel.syncPumpTime()
                 },
-                .cancel(Text(LocalizedString("No, Keep Pump As Is", comment: "Button text to cancel pump time sync")))
+                .cancel(Text("No, Keep Pump As Is", comment: "Button text to cancel pump time sync"))
             ]
         )
     }
@@ -51,66 +51,78 @@ struct TandemKitSettingsView: View {
         switch failure {
         case .resume:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not resume insulin delivery",
                     comment: "Title for failure to resume insulin delivery"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected starting insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to active pump notifications, invalid settings, empty cartridge, or not filling the tubing.",
                     comment: "Message for failed to resume insulin delivery"
                 )
             )
         case .suspend:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not suspend insulin delivery",
                     comment: "Title for failure to suspend insulin delivery"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected suspending insulin delivery. Check \"View Notifications\" to see the pump's current status and swipe away all active pump notifications. This may have occurred due to an active bolus. To urgently suspend insulin delivery, detach from your site.",
                     comment: "Message for failed to suspend insulin delivery"
                 )
             )
         case .controlIQ:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not change Control-IQ setting",
                     comment: "Title for failure to toggle Control-IQ"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle Control-IQ"
                 )
             )
         case .exerciseMode:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not change exercise mode",
                     comment: "Title for failure to toggle exercise mode"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle exercise mode"
                 )
             )
         case .sleepMode:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not change sleep mode",
                     comment: "Title for failure to toggle sleep mode"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected the sleep mode change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle sleep mode"
                 )
             )
         case .stopTempRate:
             content = ErrorSheetContent(
-                title: LocalizedString(
+                title: String(
+                    localized:
                     "Could not stop temp rate",
                     comment: "Title for failure to stop temp rate"
                 ),
-                message: LocalizedString(
+                message: String(
+                    localized:
                     "The pump rejected stopping the temp rate. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to stop temp rate"
                 )
@@ -142,18 +154,19 @@ struct TandemKitSettingsView: View {
 
                 if viewModel.showPumpTimeSyncWarning {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(LocalizedString("Time Change Detected", comment: "title for time change detected notice"))
+                        Text("Time Change Detected", comment: "title for time change detected notice")
                             .font(Font.subheadline.weight(.bold))
-                        Text(LocalizedString(
+                        Text(
                             "The time on your pump is different from the current time. Your pump’s time controls your scheduled therapy settings. Scroll down to Pump Time row to review the time difference and configure your pump.",
                             comment: "description for time change detected notice"
-                        ))
-                            .font(Font.footnote.weight(.semibold))
+                        )
+                        .font(Font.footnote.weight(.semibold))
                     }.padding(.vertical, 8)
                 }
             }
 
-            Section(header: SectionHeader(label: LocalizedString(
+            Section(header: SectionHeader(label: String(
+                localized:
                 "Actions",
                 comment: "The title of the actions section in TandemKit settings"
             ))) {
@@ -183,7 +196,7 @@ struct TandemKitSettingsView: View {
                         viewModel.stopTempRate()
                     }) {
                         HStack {
-                            Text(LocalizedString("Stop temp rate", comment: "Tandem settings stop temp rate"))
+                            Text("Stop temp rate", comment: "Tandem settings stop temp rate")
                             Spacer()
                             if viewModel.isUpdatingPumpState {
                                 ActivityIndicator(isAnimating: .constant(true), style: .medium)
@@ -196,13 +209,11 @@ struct TandemKitSettingsView: View {
                 Button(action: {
                     viewModel.refreshPumpStatus()
                 }) {
-                    HStack {
-                        Text(LocalizedString("Refresh pump status", comment: "Tandem refresh pump"))
-                        Spacer()
-                    }
+                    Text("Refresh pump status", comment: "Tandem refresh pump")
                 }
             }
-            Section(header: SectionHeader(label: LocalizedString(
+            Section(header: SectionHeader(label: String(
+                localized:
                 "Notifications",
                 comment: "The title of the notifications section in TandemKit settings"
             ))) {
@@ -210,7 +221,7 @@ struct TandemKitSettingsView: View {
                     viewModel: viewModel.createNotificationsViewModel()
                 )) {
                     HStack {
-                        Text(LocalizedString("View Notifications", comment: "Label for viewing notifications"))
+                        Text("View Notifications", comment: "Label for viewing notifications")
                             .foregroundColor(.primary)
                         Spacer()
                         if viewModel.notificationCount > 0 {
@@ -231,26 +242,27 @@ struct TandemKitSettingsView: View {
                     set: { viewModel.setAutoAcknowledgeBasalAlerts($0) }
                 )) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(LocalizedString(
+                        Text(
                             "Auto-Acknowledge Basal Alerts",
                             comment: "Label for auto-acknowledge basal alerts toggle"
-                        ))
-                        Text(LocalizedString(
+                        )
+                        Text(
                             "Automatically dismiss min/max basal rate alerts during looping",
                             comment: "Description for auto-acknowledge basal alerts toggle"
-                        ))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        )
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                     }
                 }
             }
 
-            Section(header: SectionHeader(label: LocalizedString(
+            Section(header: SectionHeader(label: String(
+                localized:
                 "Pump Status",
                 comment: "The title of the pump status section in TandemKit settings"
             ))) {
                 HStack {
-                    Text(LocalizedString("Control-IQ", comment: "Text for Control-IQ status"))
+                    Text("Control-IQ", comment: "Text for Control-IQ status")
                         .foregroundColor(.primary)
                     Spacer()
                     Text(viewModel.controlIQEnabled ? "Enabled" : "Disabled")
@@ -259,7 +271,7 @@ struct TandemKitSettingsView: View {
 
                 if let mode = viewModel.controlIQUserMode {
                     HStack {
-                        Text(LocalizedString("User mode", comment: "Text for user mode"))
+                        Text("User mode", comment: "Text for user mode")
                             .foregroundColor(.primary)
                         Spacer()
                         Text(userModeText(mode.rawValue))
@@ -272,7 +284,7 @@ struct TandemKitSettingsView: View {
                    let duration = viewModel.tempRateDuration
                 {
                     HStack {
-                        Text(LocalizedString("Temp rate", comment: "Text for temp rate"))
+                        Text("Temp rate", comment: "Text for temp rate")
                             .foregroundColor(.primary)
                         Spacer()
                         Text("\(percentage)% (\(formatDuration(duration)))")
@@ -282,7 +294,7 @@ struct TandemKitSettingsView: View {
 
                 if let battery = viewModel.batteryPercentage {
                     HStack {
-                        Text(LocalizedString("Battery percentage", comment: "Text for battery"))
+                        Text("Battery percentage", comment: "Text for battery")
                             .foregroundColor(.primary)
                         Spacer()
                         Text("\(battery)")
@@ -293,7 +305,7 @@ struct TandemKitSettingsView: View {
                 Button(action: {
                     viewModel.openInsulinType()
                 }) {
-                    Text(LocalizedString("Insulin type", comment: "Label for button to view insulin type of pump"))
+                    Text("Insulin type", comment: "Label for button to view insulin type of pump")
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: UIFont.systemFontSize, weight: .medium))
@@ -304,7 +316,7 @@ struct TandemKitSettingsView: View {
                 Button(action: {
                     viewModel.openSoundSettings()
                 }) {
-                    Text(LocalizedString("Sound settings", comment: "Label for button to view sound settings of pump"))
+                    Text("Sound settings", comment: "Label for button to view sound settings of pump")
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: UIFont.systemFontSize, weight: .medium))
@@ -313,28 +325,29 @@ struct TandemKitSettingsView: View {
                 .buttonStyle(.plain)
             }
 
-            Section(header: SectionHeader(label: LocalizedString(
+            Section(header: SectionHeader(label: String(
+                localized:
                 "Cartridge Operations",
                 comment: "The title of the cartridge operations section in TandemKit settings"
             ))) {
                 NavigationLink(destination: TandemKitChangeCartridgeView(
                     viewModel: viewModel.createChangeCartridgeViewModel()
                 )) {
-                    Text(LocalizedString("Change Cartridge", comment: "Label for change cartridge"))
+                    Text("Change Cartridge", comment: "Label for change cartridge")
                         .foregroundColor(.primary)
                 }
 
                 NavigationLink(destination: TandemKitFillTubingView(
                     viewModel: viewModel.createFillTubingViewModel()
                 )) {
-                    Text(LocalizedString("Fill Tubing", comment: "Label for fill tubing"))
+                    Text("Fill Tubing", comment: "Label for fill tubing")
                         .foregroundColor(.primary)
                 }
 
                 NavigationLink(destination: TandemKitFillCannulaView(
                     viewModel: viewModel.createFillCannulaViewModel()
                 )) {
-                    Text(LocalizedString("Fill Cannula", comment: "Label for fill cannula"))
+                    Text("Fill Cannula", comment: "Label for fill cannula")
                         .foregroundColor(.primary)
                 }
             }
@@ -344,7 +357,7 @@ struct TandemKitSettingsView: View {
                 comment: "The title of the pump time section in DanaKit settings"
             ))) {
                 HStack {
-                    Text(LocalizedString("Pump time", comment: "Text for pump time"))
+                    Text("Pump time", comment: "Text for pump time")
                         .foregroundColor(Color.primary)
                     Spacer()
                     if viewModel.showPumpTimeSyncWarning {
@@ -355,7 +368,7 @@ struct TandemKitSettingsView: View {
                         .foregroundColor(viewModel.showPumpTimeSyncWarning ? guidanceColors.warning : .secondary)
                 }
                 HStack {
-                    Text(LocalizedString("Checked at", comment: "Text for pump time synced at"))
+                    Text("Checked at", comment: "Text for pump time synced at")
                         .foregroundColor(Color.primary)
                     Spacer()
                     Text(viewModel.pumpTimeCheckedAt)
@@ -365,7 +378,7 @@ struct TandemKitSettingsView: View {
                 Button(action: {
                     viewModel.showingTimeSyncConfirmation = true
                 }) {
-                    Text(LocalizedString("Manually sync Pump time", comment: "Label for syncing the time on the pump"))
+                    Text("Manually sync Pump time", comment: "Label for syncing the time on the pump")
                         .foregroundColor(.accentColor)
                 }
                 .disabled(viewModel.isUpdatingTime)
@@ -379,9 +392,9 @@ struct TandemKitSettingsView: View {
                     get: { viewModel.useSilentMode },
                     set: { viewModel.setSilentMode($0) }
                 )) {
-                    Text(LocalizedString("Silent Tones", comment: "Label for silent tones"))
+                    Text("Silent Tones", comment: "Label for silent tones")
                 }
-                Button(LocalizedString("Share Tandem pump logs", comment: "TandemKit share logs")) {
+                Button(String(localized: "Share Tandem pump logs", comment: "TandemKit share logs")) {
                     self.isSharePresented = true
                 }
                 .sheet(isPresented: $isSharePresented, onDismiss: {}, content: {
@@ -390,7 +403,7 @@ struct TandemKitSettingsView: View {
                 Button(action: {
                     viewModel.showingDeleteConfirmation = true
                 }) {
-                    Text(LocalizedString("Delete Pump", comment: "Label for PumpManager deletion button"))
+                    Text("Delete Pump", comment: "Label for PumpManager deletion button")
                         .foregroundColor(guidanceColors.critical)
                 }
                 .actionSheet(isPresented: $viewModel.showingDeleteConfirmation) {
@@ -421,14 +434,14 @@ struct TandemKitSettingsView: View {
     }
 
     private var doneButton: some View {
-        Button("Done", action: {
+        Button(String(localized: "Done", comment: "button text")) {
             dismiss()
-        })
+        }
     }
 
     var reservoirStatus: some View {
         VStack(alignment: .trailing, spacing: 5) {
-            Text(LocalizedString("Insulin Remaining", comment: "Header for insulin remaining"))
+            Text("Insulin Remaining", comment: "Header for insulin remaining")
                 .foregroundColor(Color(UIColor.secondaryLabel))
 
             if let unitsText = viewModel.reservoirUnitsText, let reservoirLevel = viewModel.reservoirValue?.unitVolume {
@@ -470,7 +483,7 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(guidanceColors.warning)
-                    Text(LocalizedString("Insulin\nSuspended", comment: "Text shown when insulin suspended"))
+                    Text("Insulin\nSuspended", comment: "Text shown when insulin suspended")
                         .fontWeight(.bold)
                         .fixedSize()
                 }
@@ -495,7 +508,7 @@ struct TandemKitSettingsView: View {
                         .font(.system(size: 34))
                         .fixedSize()
                         .foregroundColor(.accentColor)
-                    Text(LocalizedString("Unknown", comment: "Text shown when insulin status unknown"))
+                    Text("Unknown", comment: "Text shown when insulin status unknown")
                         .fontWeight(.bold)
                         .fixedSize()
                 }
@@ -505,11 +518,11 @@ struct TandemKitSettingsView: View {
 
     var deliverySectionTitle: String {
         if viewModel.isSuspended == true {
-            return LocalizedString("Insulin Delivery", comment: "Title of insulin delivery section")
+            return String(localized: "Insulin Delivery", comment: "Title of insulin delivery section")
         } else if viewModel.tempRateActive {
-            return LocalizedString("Temp Basal", comment: "Title for temp rate")
+            return String(localized: "Temp Basal", comment: "Title for temp rate")
         } else {
-            return LocalizedString("Scheduled Basal", comment: "Title of insulin delivery section")
+            return String(localized: "Scheduled Basal", comment: "Title of insulin delivery section")
         }
     }
 
@@ -530,13 +543,13 @@ struct TandemKitSettingsView: View {
         switch mode {
         case 0,
              1:
-            return "Standard"
+            return String(localized: "Standard", comment: "user mode standard")
         case 2:
-            return "Sleep"
+            return String(localized: "Sleep", comment: "user mode sleep")
         case 3:
-            return "Exercise"
+            return String(localized: "Exercise", comment: "user mode exercise")
         default:
-            return "Unknown"
+            return String(localized: "Unknown", comment: "user mode unknown")
         }
     }
 

@@ -100,7 +100,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
     private let activeHistoryFetchSession = Locked<HistoryFetchSession?>(nil)
-    private let lockedBatteryChargeRemaining: Locked<Double?>
     private let lockedReservoirValue: Locked<ReservoirValue?>
     private var bolusProgressReport: TandemDoseProgressReporter?
     private var telemetryConfigured = false
@@ -168,7 +167,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             status.deliveryIsUncertain = true
         }
 
-        lockedBatteryChargeRemaining.value = nil
         lockedReservoirValue.value = nil
         activeBolus.value = nil
 
@@ -427,7 +425,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public init(state: TandemPumpManagerState) {
         lockedState = Locked(state)
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
         tandemPump = TandemPump(pumpState: state.pumpState)
         needsSessionInitialization.value = state.pumpState?.valid == true
@@ -462,7 +459,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         lockedState = Locked(state)
         lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedBatteryChargeRemaining = Locked(state.lastBatteryReading?.chargeRemaining)
         lockedReservoirValue = Locked(state.lastReservoirReading)
         tandemPump = TandemPump(pumpState: state.pumpState)
         needsSessionInitialization.value = state.pumpState?.valid == true
@@ -606,10 +602,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedStatus.value
     }
 
-    public var pumpBatteryChargeRemaining: Double? {
-        lockedBatteryChargeRemaining.value
-    }
-
     public var reservoirLevel: ReservoirValue? {
         lockedReservoirValue.value
     }
@@ -648,7 +640,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
         let percent = Double(response.batteryPercent) / 100.0
         let timestamp = Date()
-        lockedBatteryChargeRemaining.value = percent
 
         logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
 
@@ -1777,7 +1768,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func setScanningMode(_ enabled: Bool) {
         inScanningMode.value = enabled
     }
-    
+
     private func handleAlertResponse(_ alertResponse: AlertStatusResponse) {
         guard let transport = telemetryTransportIfReady(for: .alerts) else {
             return
@@ -2074,7 +2065,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard response.wasCancelled else {
                     throw PumpCommError.errorResponse(
-                        context: LocalizedString("Pump failed to cancel bolus", comment: "Message when bolus could not be cancelled"),
+                        context: LocalizedString(
+                            "Pump failed to cancel bolus",
+                            comment: "Message when bolus could not be cancelled"
+                        ),
                         request: request,
                         response: response
                     )
@@ -2164,7 +2158,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     guard response.isStatusOK else {
                         log.error("Failed to cancel temp basal - status: \(response.status)")
                         throw PumpCommError.errorResponse(
-                            context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                            context: LocalizedString(
+                                "Pump failed to cancel temp basal",
+                                comment: "Message when pump rejects request to stop temp rate"
+                            ),
                             request: StopTempRateRequest(),
                             response: response
                         )
@@ -2223,10 +2220,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
 
                     if absoluteRate < unitsPerHour {
-                        log.warning("Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr")
+                        log
+                            .warning(
+                                "Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr"
+                            )
                     }
 
-                    log.info("ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)")
+                    log
+                        .info(
+                            "ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)"
+                        )
                     let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
                     var response: SetTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
@@ -2250,7 +2253,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         guard currentTempRate.active else {
                             // There isn't an active temp rate (second check), so there is something wrong with the SetTempRate construction itself
                             throw PumpCommError.errorResponse(
-                                context: LocalizedString("Pump failed to set temp basal", comment: "Message when pump rejects request to set temp rate"),
+                                context: LocalizedString(
+                                    "Pump failed to set temp basal",
+                                    comment: "Message when pump rejects request to set temp rate"
+                                ),
                                 request: request,
                                 response: response
                             )
@@ -2271,7 +2277,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                     "enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)"
                                 )
                             throw PumpCommError.errorResponse(
-                                context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                                context: LocalizedString(
+                                    "Pump failed to cancel temp basal",
+                                    comment: "Message when pump rejects request to stop temp rate"
+                                ),
                                 request: StopTempRateRequest(),
                                 response: stopResponse
                             )
@@ -2292,7 +2301,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                     "enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)"
                                 )
                             throw PumpCommError.errorResponse(
-                                context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                                context: LocalizedString(
+                                    "Pump failed to cancel temp basal",
+                                    comment: "Message when pump rejects request to stop temp rate"
+                                ),
                                 request: request,
                                 response: response
                             )
@@ -2302,7 +2314,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     } else if !response.isStatusOK {
                         log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                         throw PumpCommError.errorResponse(
-                            context: LocalizedString("Pump failed to cancel temp basal", comment: "Message when pump rejects request to stop temp rate"),
+                            context: LocalizedString(
+                                "Pump failed to cancel temp basal",
+                                comment: "Message when pump rejects request to stop temp rate"
+                            ),
                             request: request,
                             response: response
                         )
@@ -2414,7 +2429,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard response.status == 0 else {
                     throw PumpCommError.errorResponse(
-                        context: LocalizedString("Pump failed to suspend delivery", comment: "Message when pump rejects request to suspend insulin delivery"),
+                        context: LocalizedString(
+                            "Pump failed to suspend delivery",
+                            comment: "Message when pump rejects request to suspend insulin delivery"
+                        ),
                         request: SuspendPumpingRequest(),
                         response: response
                     )
@@ -2490,7 +2508,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 guard response.status == 0 else {
                     throw PumpCommError.errorResponse(
-                        context: LocalizedString("Pump failed to resume delivery", comment: "Message when pump rejects request to resume insulin delivery"),
+                        context: LocalizedString(
+                            "Pump failed to resume delivery",
+                            comment: "Message when pump rejects request to resume insulin delivery"
+                        ),
                         request: ResumePumpingRequest(),
                         response: response
                     )
@@ -2683,7 +2704,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     guard response.status == 0 else {
                         throw PumpCommError.errorResponse(
-                            context: LocalizedString("Error syncing basal rates: Pump rejected SetIDPSegment", comment: "Message when pump rejects SetIDPSegment"),
+                            context: LocalizedString(
+                                "Error syncing basal rates: Pump rejected SetIDPSegment",
+                                comment: "Message when pump rejects SetIDPSegment"
+                            ),
                             request: request,
                             response: response
                         )
@@ -2744,7 +2768,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
                     let milliunits = Int((maxBasal * 1000.0).rounded())
-                    let request: SetMaxBasalLimitRequest = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
+                    let request = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
                     let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
@@ -2753,7 +2777,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     guard response.status == 0 else {
                         throw PumpCommError.errorResponse(
-                            context: LocalizedString("Error setting max basal limit", comment: "Message when pump rejects SetMaxBasalLimit"),
+                            context: LocalizedString(
+                                "Error setting max basal limit",
+                                comment: "Message when pump rejects SetMaxBasalLimit"
+                            ),
                             request: request,
                             response: response
                         )
@@ -2773,7 +2800,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     guard response.status == 0 else {
                         throw PumpCommError.errorResponse(
-                            context: LocalizedString("Error setting max bolus limit", comment: "Message when pump rejects SetMaxBolusLimit"),
+                            context: LocalizedString(
+                                "Error setting max bolus limit",
+                                comment: "Message when pump rejects SetMaxBolusLimit"
+                            ),
                             request: request,
                             response: response
                         )
@@ -2831,7 +2861,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     log.error("Pump time sync failed, status NOK!")
 
                     let error = PumpCommError.errorResponse(
-                        context: LocalizedString("Error syncing time with pump", comment: "Message when pump rejects ChangeTimeDateRequest"),
+                        context: LocalizedString(
+                            "Error syncing time with pump",
+                            comment: "Message when pump rejects ChangeTimeDateRequest"
+                        ),
                         request: request,
                         response: response
                     )
@@ -3137,8 +3170,8 @@ extension TandemPumpManager {
         let multiplier = 1000.0
 
         let startInt = Int(round(start * multiplier))
-        let endInt   = Int(round(end * multiplier))
-        let stepInt  = Int(round(step * multiplier))
+        let endInt = Int(round(end * multiplier))
+        let stepInt = Int(round(step * multiplier))
 
         return stride(from: startInt, through: endInt, by: stepInt).map {
             Double($0) / multiplier

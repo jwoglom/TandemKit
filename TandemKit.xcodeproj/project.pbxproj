@@ -8,7 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */; };
+		04A832ADBE93C844E772E490 /* CgmStopSessionG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3689FD22E786D47B4D5852 /* CgmStopSessionG7HistoryLog.swift */; };
 		0A494E19000146BBB6CCE7FA /* TandemKitFillCannulaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 139C7A5F8AE04C7F95BF4C9B /* TandemKitFillCannulaView.swift */; };
+		161999189ECC17C413F12214 /* AlertClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C389294DD1587871D64684E /* AlertClearedHistoryLog.swift */; };
 		16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */; };
 		1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A02E3ED2F2C949900203519 /* ErrorSheet.swift */; };
 		1A0E17272ED105CC00E75219 /* NotificationBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E17262ED105CC00E75219 /* NotificationBundle.swift */; };
@@ -41,10 +43,13 @@
 		1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */; };
 		1A9E00D02F009A840096E8EB /* ProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */; };
 		1AAA18792D2B1E060061C043 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
+		22393DD730C3E91DF92FC436 /* CgmStopSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */; };
 		22EC259598464105BFD8C1D1 /* HistoryFetchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD8951E3191413C8074A6A4 /* HistoryFetchSession.swift */; };
 		2358014A78C1D126AF7D580B /* WizardStepContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */; };
 		2462F3C94813468BA262EC20 /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */; };
 		2CBCB4486CAD49F392684798 /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
+		35710C54F4F4E1C26051CBF1 /* VersionsAHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */; };
+		3E0811902F803DE600555533 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3E08118F2F803DE600555533 /* Localizable.xcstrings */; };
 		3E0F4D3C2F265A64008290A3 /* LocalizedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444F2EC91299008A07F6 /* LocalizedString.swift */; };
 		3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */; };
 		3E0F4D422F265C25008290A3 /* blank.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3E0F4D412F265C25008290A3 /* blank.wav */; };
@@ -320,48 +325,44 @@
 		3EF00DD62F0AAF9000776DCD /* Double.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF00DD52F0AAF8F00776DCD /* Double.swift */; };
 		3EF00DDA2F0AAFB600776DCD /* TandemDoseProgressReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF00DD92F0AAFB600776DCD /* TandemDoseProgressReporter.swift */; };
 		3FF000022EC91299008A07F6 /* NotificationInterfaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FF000012EC91299008A07F6 /* NotificationInterfaces.swift */; };
+		44F9997771AA94D4E42B245E /* CgmStartSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FCF43E1E212774C16E62D8F /* CgmStartSessionHistoryLog.swift */; };
+		4D9AA58A2D544DE535CC3472 /* CgmAlertClearedDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8BE39237ECC840D3662088 /* CgmAlertClearedDexHistoryLog.swift */; };
+		5D7D7F717875DBF2A4A42F48 /* AlarmClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F51C7B8036596EC14CC42B5 /* AlarmClearedHistoryLog.swift */; };
+		5E18F7B32FFF22C8768C0602 /* MalfunctionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1944DA5C17F8862807EFD00 /* MalfunctionHistoryLog.swift */; };
+		5E19157FF87D0E423ECE1E88 /* CgmAlertActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F78CAC3E0F57884DF5FDFBF0 /* CgmAlertActivatedHistoryLog.swift */; };
+		6833E4FCC0143EFBD7BD7C26 /* UpdateStatusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F8D51B0055C009C9C77BEB6 /* UpdateStatusHistoryLog.swift */; };
+		68CB1A0733B6819067D5E0CB /* CgmDataFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */; };
+		711FC8E5B09606739A3E5797 /* CgmAlertClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */; };
 		74F710225EEC427D90574E55 /* HistoryReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 913C81067F9341F1B4E27A04 /* HistoryReconciler.swift */; };
+		7B2BD678D6C2A274F575A977 /* CgmStopSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49FA480CFF33F02359F41763 /* CgmStopSessionFsl2HistoryLog.swift */; };
+		8A2E807120E267CA6CD3EF95 /* CgmJoinSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */; };
+		953C7E439817FD6F4A93942D /* CgmAlertActivatedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */; };
+		9AC5445E56B80B480C0D5265 /* CgmAlertAckDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8E7B3454B7C27CDE980B4C /* CgmAlertAckDexHistoryLog.swift */; };
+		9F8FCF401B970A504551AE89 /* DailyStatusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */; };
+		A31C76D65E17F6099B1FC1DD /* PlgsPeriodicHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A086B4F239E6B83054BE165D /* PlgsPeriodicHistoryLog.swift */; };
+		A31D89B8092C28376D603039 /* ShelfModeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */; };
+		A344A4CB88EE9F632A45DC50 /* VersionInfoHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */; };
 		A5F67C20D8C9446E958F2AA3 /* TandemKitFillCannulaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */; };
+		AEEF8B956FBC56D3B71BF911 /* CgmJoinSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */; };
+		B88FC99018BE50CC427F3AC6 /* CgmDataFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */; };
+		BDDE8CE2B9218F557186A1F7 /* CgmStartSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AEC2C7DE05B52C8C4CD307 /* CgmStartSessionFsl2HistoryLog.swift */; };
+		BE6EDCAE228E2A7FC1E66002 /* CgmJoinSessionG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */; };
+		BEDF29C0E2124562AC969492 /* CgmAlertActivatedDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */; };
 		C287E57A93E74DAEA0A9E84E /* HistoryTimestampReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4530C85FF45849B7AA2960FD /* HistoryTimestampReconciler.swift */; };
+		CA61B8F3EB64EB3A3C24115A /* CgmJoinSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */; };
 		CFD999683FF946ABAB42D13B /* TandemKitFillTubingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */; };
+		D02586F563B44CC5D595EE29 /* CgmAlertClearedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */; };
 		D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2464522A674D05B5968DE6 /* TandemKitFillTubingViewModel.swift */; };
+		D462A8390D0CC5C256E7EC02 /* DexcomG6CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */; };
 		E782A9293A03493E8DF467C9 /* HistoryToDoseMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1ECC52D7C7D4542BF3BDA72 /* HistoryToDoseMapper.swift */; };
+		E9F1CCB141C5B558BBFD8DE6 /* CgmStopSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2AC5DC56238EBA99199B3E8 /* CgmStopSessionFsl3HistoryLog.swift */; };
+		F4E47F103FD305F638792DE6 /* ArmInitHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1785103F4E84376734E11E6 /* ArmInitHistoryLog.swift */; };
 		FC04B4C4270427042704B4C4 /* ChunkedStreamCollector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01A1B1270127012701A1B1 /* ChunkedStreamCollector.swift */; };
 		FC05B5C5270527052705B5C5 /* FetchedRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC02A2B2270227022702A2B2 /* FetchedRange.swift */; };
 		FC06B6C6270627062706B6C6 /* HistoryRangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */; };
+		FCD3F2BD0FC96D67F804ED9F /* DexcomG7CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */; };
 		FEC1A0ABB72D3231BD820E03 /* WizardProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */; };
 		WG643K54SZICC7GBOF5YAHMA /* TandemKitNotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */; };
-		5D7D7F717875DBF2A4A42F48 /* AlarmClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F51C7B8036596EC14CC42B5 /* AlarmClearedHistoryLog.swift */; };
-		161999189ECC17C413F12214 /* AlertClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C389294DD1587871D64684E /* AlertClearedHistoryLog.swift */; };
-		F4E47F103FD305F638792DE6 /* ArmInitHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1785103F4E84376734E11E6 /* ArmInitHistoryLog.swift */; };
-		9AC5445E56B80B480C0D5265 /* CgmAlertAckDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8E7B3454B7C27CDE980B4C /* CgmAlertAckDexHistoryLog.swift */; };
-		BEDF29C0E2124562AC969492 /* CgmAlertActivatedDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */; };
-		953C7E439817FD6F4A93942D /* CgmAlertActivatedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */; };
-		5E19157FF87D0E423ECE1E88 /* CgmAlertActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F78CAC3E0F57884DF5FDFBF0 /* CgmAlertActivatedHistoryLog.swift */; };
-		4D9AA58A2D544DE535CC3472 /* CgmAlertClearedDexHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8BE39237ECC840D3662088 /* CgmAlertClearedDexHistoryLog.swift */; };
-		D02586F563B44CC5D595EE29 /* CgmAlertClearedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */; };
-		711FC8E5B09606739A3E5797 /* CgmAlertClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */; };
-		B88FC99018BE50CC427F3AC6 /* CgmDataFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */; };
-		68CB1A0733B6819067D5E0CB /* CgmDataFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */; };
-		CA61B8F3EB64EB3A3C24115A /* CgmJoinSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */; };
-		8A2E807120E267CA6CD3EF95 /* CgmJoinSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */; };
-		BE6EDCAE228E2A7FC1E66002 /* CgmJoinSessionG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */; };
-		AEEF8B956FBC56D3B71BF911 /* CgmJoinSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */; };
-		BDDE8CE2B9218F557186A1F7 /* CgmStartSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AEC2C7DE05B52C8C4CD307 /* CgmStartSessionFsl2HistoryLog.swift */; };
-		44F9997771AA94D4E42B245E /* CgmStartSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FCF43E1E212774C16E62D8F /* CgmStartSessionHistoryLog.swift */; };
-		7B2BD678D6C2A274F575A977 /* CgmStopSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49FA480CFF33F02359F41763 /* CgmStopSessionFsl2HistoryLog.swift */; };
-		E9F1CCB141C5B558BBFD8DE6 /* CgmStopSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2AC5DC56238EBA99199B3E8 /* CgmStopSessionFsl3HistoryLog.swift */; };
-		04A832ADBE93C844E772E490 /* CgmStopSessionG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3689FD22E786D47B4D5852 /* CgmStopSessionG7HistoryLog.swift */; };
-		22393DD730C3E91DF92FC436 /* CgmStopSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */; };
-		9F8FCF401B970A504551AE89 /* DailyStatusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */; };
-		D462A8390D0CC5C256E7EC02 /* DexcomG6CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */; };
-		FCD3F2BD0FC96D67F804ED9F /* DexcomG7CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */; };
-		5E18F7B32FFF22C8768C0602 /* MalfunctionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1944DA5C17F8862807EFD00 /* MalfunctionHistoryLog.swift */; };
-		A31C76D65E17F6099B1FC1DD /* PlgsPeriodicHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A086B4F239E6B83054BE165D /* PlgsPeriodicHistoryLog.swift */; };
-		A31D89B8092C28376D603039 /* ShelfModeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */; };
-		6833E4FCC0143EFBD7BD7C26 /* UpdateStatusHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F8D51B0055C009C9C77BEB6 /* UpdateStatusHistoryLog.swift */; };
-		A344A4CB88EE9F632A45DC50 /* VersionInfoHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */; };
-		35710C54F4F4E1C26051CBF1 /* VersionsAHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -495,6 +496,11 @@
 		1A9E00CF2F009A7D0096E8EB /* ProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressBar.swift; sourceTree = "<group>"; };
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl3HistoryLog.swift; sourceTree = "<group>"; };
+		232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionsAHistoryLog.swift; sourceTree = "<group>"; };
+		244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl3HistoryLog.swift; sourceTree = "<group>"; };
+		2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStatusHistoryLog.swift; sourceTree = "<group>"; };
+		3E08118F2F803DE600555533 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemSilentToneManager.swift; sourceTree = "<group>"; };
 		3E0F4D412F265C25008290A3 /* blank.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = blank.wav; sourceTree = "<group>"; };
 		3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsViewModel.swift; sourceTree = "<group>"; };
@@ -763,51 +769,47 @@
 		3EF00DD92F0AAFB600776DCD /* TandemDoseProgressReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemDoseProgressReporter.swift; sourceTree = "<group>"; };
 		3FF000012EC91299008A07F6 /* NotificationInterfaces.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationInterfaces.swift; sourceTree = "<group>"; };
 		4530C85FF45849B7AA2960FD /* HistoryTimestampReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryTimestampReconciler.swift; sourceTree = "<group>"; };
+		476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
+		49FA480CFF33F02359F41763 /* CgmStopSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		4CD8951E3191413C8074A6A4 /* HistoryFetchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryFetchSession.swift; sourceTree = "<group>"; };
+		4F8D51B0055C009C9C77BEB6 /* UpdateStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateStatusHistoryLog.swift; sourceTree = "<group>"; };
+		5FCF43E1E212774C16E62D8F /* CgmStartSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStartSessionHistoryLog.swift; sourceTree = "<group>"; };
+		67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionG7HistoryLog.swift; sourceTree = "<group>"; };
 		67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeViewModel.swift; sourceTree = "<group>"; };
+		6C389294DD1587871D64684E /* AlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertClearedHistoryLog.swift; sourceTree = "<group>"; };
+		7A3689FD22E786D47B4D5852 /* CgmStopSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionG7HistoryLog.swift; sourceTree = "<group>"; };
+		7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedHistoryLog.swift; sourceTree = "<group>"; };
+		7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedDexHistoryLog.swift; sourceTree = "<group>"; };
+		7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG6CGMHistoryLog.swift; sourceTree = "<group>"; };
+		8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionHistoryLog.swift; sourceTree = "<group>"; };
 		8D2464522A674D05B5968DE6 /* TandemKitFillTubingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillTubingViewModel.swift; sourceTree = "<group>"; };
+		8F51C7B8036596EC14CC42B5 /* AlarmClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmClearedHistoryLog.swift; sourceTree = "<group>"; };
 		913C81067F9341F1B4E27A04 /* HistoryReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryReconciler.swift; sourceTree = "<group>"; };
+		93AEC2C7DE05B52C8C4CD307 /* CgmStartSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStartSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeView.swift; sourceTree = "<group>"; };
 		9CE2BB84327860AD55F5030B /* WizardProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardProgressBar.swift; sourceTree = "<group>"; };
+		9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedFsl2HistoryLog.swift; sourceTree = "<group>"; };
+		A086B4F239E6B83054BE165D /* PlgsPeriodicHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlgsPeriodicHistoryLog.swift; sourceTree = "<group>"; };
+		A1944DA5C17F8862807EFD00 /* MalfunctionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MalfunctionHistoryLog.swift; sourceTree = "<group>"; };
+		A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG7CGMHistoryLog.swift; sourceTree = "<group>"; };
+		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
+		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
 		B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillTubingView.swift; sourceTree = "<group>"; };
 		B42CCCD361650141D00BC9B3 /* WizardStepContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WizardStepContainer.swift; sourceTree = "<group>"; };
+		B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedFsl2HistoryLog.swift; sourceTree = "<group>"; };
+		C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModeHistoryLog.swift; sourceTree = "<group>"; };
+		C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionHistoryLog.swift; sourceTree = "<group>"; };
+		CC8BE39237ECC840D3662088 /* CgmAlertClearedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedDexHistoryLog.swift; sourceTree = "<group>"; };
 		D1ECC52D7C7D4542BF3BDA72 /* HistoryToDoseMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryToDoseMapper.swift; sourceTree = "<group>"; };
 		DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitNotificationsView.swift; sourceTree = "<group>"; };
+		E1785103F4E84376734E11E6 /* ArmInitHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmInitHistoryLog.swift; sourceTree = "<group>"; };
+		E2AC5DC56238EBA99199B3E8 /* CgmStopSessionFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl3HistoryLog.swift; sourceTree = "<group>"; };
 		E8D1C66465254B59ADFDAF3F /* HistoryDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDeduplicator.swift; sourceTree = "<group>"; };
+		F78CAC3E0F57884DF5FDFBF0 /* CgmAlertActivatedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedHistoryLog.swift; sourceTree = "<group>"; };
 		FC01A1B1270127012701A1B1 /* ChunkedStreamCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkedStreamCollector.swift; sourceTree = "<group>"; };
 		FC02A2B2270227022702A2B2 /* FetchedRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FetchedRange.swift; sourceTree = "<group>"; };
 		FC03A3B3270327032703A3B3 /* HistoryRangeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryRangeTracker.swift; sourceTree = "<group>"; };
-		8F51C7B8036596EC14CC42B5 /* AlarmClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmClearedHistoryLog.swift; sourceTree = "<group>"; };
-		6C389294DD1587871D64684E /* AlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertClearedHistoryLog.swift; sourceTree = "<group>"; };
-		E1785103F4E84376734E11E6 /* ArmInitHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmInitHistoryLog.swift; sourceTree = "<group>"; };
 		FF8E7B3454B7C27CDE980B4C /* CgmAlertAckDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertAckDexHistoryLog.swift; sourceTree = "<group>"; };
-		7B23AE00FB77F0B0B565C594 /* CgmAlertActivatedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedDexHistoryLog.swift; sourceTree = "<group>"; };
-		B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		F78CAC3E0F57884DF5FDFBF0 /* CgmAlertActivatedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedHistoryLog.swift; sourceTree = "<group>"; };
-		CC8BE39237ECC840D3662088 /* CgmAlertClearedDexHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedDexHistoryLog.swift; sourceTree = "<group>"; };
-		9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertClearedHistoryLog.swift; sourceTree = "<group>"; };
-		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl3HistoryLog.swift; sourceTree = "<group>"; };
-		476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl3HistoryLog.swift; sourceTree = "<group>"; };
-		67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionG7HistoryLog.swift; sourceTree = "<group>"; };
-		C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionHistoryLog.swift; sourceTree = "<group>"; };
-		93AEC2C7DE05B52C8C4CD307 /* CgmStartSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStartSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		5FCF43E1E212774C16E62D8F /* CgmStartSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStartSessionHistoryLog.swift; sourceTree = "<group>"; };
-		49FA480CFF33F02359F41763 /* CgmStopSessionFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl2HistoryLog.swift; sourceTree = "<group>"; };
-		E2AC5DC56238EBA99199B3E8 /* CgmStopSessionFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl3HistoryLog.swift; sourceTree = "<group>"; };
-		7A3689FD22E786D47B4D5852 /* CgmStopSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionG7HistoryLog.swift; sourceTree = "<group>"; };
-		8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionHistoryLog.swift; sourceTree = "<group>"; };
-		2E35290A1F1E3816CB7632D9 /* DailyStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStatusHistoryLog.swift; sourceTree = "<group>"; };
-		7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG6CGMHistoryLog.swift; sourceTree = "<group>"; };
-		A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DexcomG7CGMHistoryLog.swift; sourceTree = "<group>"; };
-		A1944DA5C17F8862807EFD00 /* MalfunctionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MalfunctionHistoryLog.swift; sourceTree = "<group>"; };
-		A086B4F239E6B83054BE165D /* PlgsPeriodicHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlgsPeriodicHistoryLog.swift; sourceTree = "<group>"; };
-		C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModeHistoryLog.swift; sourceTree = "<group>"; };
-		4F8D51B0055C009C9C77BEB6 /* UpdateStatusHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateStatusHistoryLog.swift; sourceTree = "<group>"; };
-		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
-		232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionsAHistoryLog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1412,6 +1414,7 @@
 				3E945F062F2E107800F38431 /* TandemKitHUDProvider.swift */,
 				3E0F4D412F265C25008290A3 /* blank.wav */,
 				1A55E0F52EC9686A006E651D /* Media.xcassets */,
+				3E08118F2F803DE600555533 /* Localizable.xcstrings */,
 			);
 			name = TandemKitUI;
 			path = Sources/TandemKitUI;
@@ -1611,6 +1614,31 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				"zh-Hans",
+				ja,
+				nb,
+				es,
+				da,
+				it,
+				sv,
+				pl,
+				vi,
+				ru,
+				fr,
+				fi,
+				nl,
+				ro,
+				he,
+				tr,
+				ar,
+				cs,
+				hi,
+				sk,
+				pt_BR,
+				ce,
+				hu,
+				uk,
 			);
 			mainGroup = 1AAA18642D2B1E060061C043;
 			minimizedProjectReferenceProxies = 1;
@@ -1641,6 +1669,7 @@
 			files = (
 				1A55E0F62EC9686A006E651D /* Media.xcassets in Resources */,
 				3E0F4D422F265C25008290A3 /* blank.wav in Resources */,
+				3E0811902F803DE600555533 /* Localizable.xcstrings in Resources */,
 				3E945F012F2E0FBE00F38431 /* TandemKitReservoirView.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2235,6 +2264,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -2294,6 +2324,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};

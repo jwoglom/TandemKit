@@ -103,53 +103,43 @@ struct TandemKitScanView: View {
         }
         .sheet(isPresented: $isHelpSheetPresented, onDismiss: {}, content: {
             VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizedString(
+                Text(
                     "If your pump is not being detected, make sure you've:",
                     comment: "If pump not detected help"
-                ))
-                    .bold()
-                    .padding(EdgeInsets(top: 0, leading: 0, bottom: 5, trailing: 0))
+                )
+                .bold()
+                .padding(EdgeInsets(top: 0, leading: 0, bottom: 5, trailing: 0))
 
                 Text(
-                    LocalizedString(
-                        "Unpaired the pump from any other apps",
-                        comment: "Pump not detected tip 1"
-                    )
+                    "Unpaired the pump from any other apps",
+                    comment: "Pump not detected tip 1"
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString(
-                        "Removed the pump from your saved Bluetooth device list",
-                        comment: "Pump not detected tip 2"
-                    )
+                    "Removed the pump from your saved Bluetooth device list",
+                    comment: "Pump not detected tip 2"
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString(
-                        "Placed the pump on the center of the charging pad",
-                        comment: "Pump not detected tip 3"
-                    )
+                    "Placed the pump on the center of the charging pad",
+                    comment: "Pump not detected tip 3"
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString(
-                        "If the charging pad and pump don't light up, try a different USB cord or charger. Don't use a USB-C to USB-C cable or high-wattage charger.",
-                        comment: "Pump not detected tip 4"
-                    )
+                    "If the charging pad and pump don't light up, try a different USB cord or charger. Don't use a USB-C to USB-C cable or high-wattage charger.",
+                    comment: "Pump not detected tip 4"
                 ).foregroundStyle(.secondary)
 
                 Text(
-                    LocalizedString(
-                        "If the pump is off or out of battery, hold down the T button while placed on the pad for 30 seconds to wake it up.",
-                        comment: "Pump not detected tip 5"
-                    )
+                    "If the pump is off or out of battery, hold down the T button while placed on the pad for 30 seconds to wake it up.",
+                    comment: "Pump not detected tip 5"
                 ).foregroundStyle(.secondary)
             }
             .padding(.all)
 
             Spacer()
 
-            ContinueButton(text: LocalizedString("OK", comment: "OK button title")) {
+            ContinueButton(text: Text("OK", comment: "OK button title")) {
                 isHelpSheetPresented = false
             }
         })
@@ -168,7 +158,7 @@ struct TandemKitScanView: View {
 
     @ViewBuilder var PlaceMobiOnPadView: some View {
         VStack(alignment: .center, spacing: 20) {
-            Text(LocalizedString("Place your Mobi on the charging pad", comment: "Place on charging pad explanation"))
+            Text("Place your Mobi on the charging pad", comment: "Place on charging pad explanation")
                 .font(.headline)
                 .bold()
 
@@ -183,12 +173,12 @@ struct TandemKitScanView: View {
     @ViewBuilder var DoubleTapView: some View {
         VStack(alignment: .center, spacing: 40) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(LocalizedString(
+                Text(
                     "Pick up your pump, wait a second, then double-press the T button",
                     comment: "Double-tap explanation"
-                ))
-                    .font(.headline)
-                    .bold()
+                )
+                .font(.headline)
+                .bold()
 
                 Text(LocalizedString("Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
@@ -202,7 +192,7 @@ struct TandemKitScanView: View {
 
             Spacer()
 
-            Text(LocalizedString("You should hear two beeps after double-pressing the button.", comment: "Beep explanation"))
+            Text("You should hear two beeps after double-pressing the button.", comment: "Beep explanation")
                 .foregroundStyle(.secondary)
         }
     }
@@ -216,15 +206,15 @@ struct TandemKitScanView: View {
                 .font(.headline)
                 .bold()
 
-            Text(LocalizedString(
+            Text(
                 "Please be patient while we authenticate with the pump.",
                 comment: "Pump authenticating explanation"
-            ))
-                .foregroundStyle(.secondary)
+            )
+            .foregroundStyle(.secondary)
 
             Spacer()
 
-            Text(LocalizedString("This can take up to 60 seconds to complete.", comment: "Pump authenticating wait message"))
+            Text("This can take up to 60 seconds to complete.", comment: "Pump authenticating wait message")
                 .foregroundStyle(.secondary)
         }
     }

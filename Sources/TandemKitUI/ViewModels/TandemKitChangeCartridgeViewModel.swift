@@ -77,6 +77,10 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         notificationCheckTask?.cancel()
     }
 
+    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
+        TandemKitFillTubingViewModel(pumpManager: pumpManager)
+    }
+
     func startPeriodicNotificationCheck() async {
         // Cancel any existing task
         notificationCheckTask?.cancel()
@@ -108,16 +112,10 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     }
 
     func checkSuspendedStatus() {
-        print("TandemKit Change Cartridge: checkSuspendedStatus() entered")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            print("TandemKit Change Cartridge: async block started")
-            guard let self = self else {
-                print("TandemKit Change Cartridge: self is nil")
-                return
-            }
+            guard let self = self else { return }
 
             guard let transport = self.pumpManager?.pairedTransport else {
-                print("TandemKit Change Cartridge: No paired transport available")
                 DispatchQueue.main.async {
                     self.isSuspended = nil
                 }
@@ -126,7 +124,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
             do {
                 guard let mirror = try transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse else {
-                    print("TandemKit Change Cartridge: Failed to get HomeScreenMirrorResponse")
                     DispatchQueue.main.async {
                         self.isSuspended = nil
                     }
@@ -162,23 +159,17 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(SuspendPumpingRequest())
-
+            pumpManager?.suspendDelivery { error in
                 DispatchQueue.main.async {
                     self.loadingSuspend = false
-                    if let _ = response {
+                    if let _ = error {
+                        self.failedSuspend = true
+
+                    } else {
                         self.failedSuspend = false
                         self.isSuspended = true
                         self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        self.failedSuspend = true
                     }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingSuspend = false
-                    self.failedSuspend = true
                 }
             }
         }

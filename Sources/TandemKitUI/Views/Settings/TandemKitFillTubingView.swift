@@ -58,14 +58,14 @@ struct TandemKitFillTubingView: View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                ContinueButton(text: Text("Continue", comment: "Continue button")) {
                     withAnimation {
                         viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
                     }
                 }
             } else {
                 ContinueButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
                     viewModel.showingSuspendConfirmation = true
@@ -76,7 +76,7 @@ struct TandemKitFillTubingView: View {
             }
         case .enterMode:
             ContinueButton(
-                text: LocalizedString("Start tubing fill", comment: "Button text"),
+                text: Text("Start tubing fill", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
                     get: { viewModel.hasActiveNotifications },
@@ -92,7 +92,7 @@ struct TandemKitFillTubingView: View {
                         .transition(.opacity)
                 } else if viewModel.hasDisplayedFlow {
                     ContinueButton(
-                        text: LocalizedString("Complete tubing fill", comment: "Button text"),
+                        text: Text("Complete tubing fill", comment: "Button text"),
                         loading: $viewModel.loadingExitMode,
                         disabled: Binding(
                             get: { viewModel.hasActiveNotifications },

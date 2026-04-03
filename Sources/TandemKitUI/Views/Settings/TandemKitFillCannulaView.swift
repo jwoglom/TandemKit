@@ -61,14 +61,14 @@ struct TandemKitFillCannulaView: View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                ContinueButton(text: Text("Continue", comment: "Continue button")) {
                     withAnimation {
                         viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
                     }
                 }
             } else {
                 ContinueButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
                     viewModel.showingSuspendConfirmation = true
@@ -79,7 +79,7 @@ struct TandemKitFillCannulaView: View {
             }
         case .enterAmount:
             ContinueButton(
-                text: LocalizedString("Fill cannula", comment: "Button text"),
+                text: Text("Fill cannula", comment: "Button text"),
                 loading: $viewModel.loadingFill
             ) {
                 viewModel.fillCannula()
@@ -87,7 +87,7 @@ struct TandemKitFillCannulaView: View {
         case .done:
             VStack(spacing: 12) {
                 ContinueButton(
-                    text: LocalizedString("Resume insulin delivery", comment: "Button text"),
+                    text: Text("Resume insulin delivery", comment: "Button text"),
                     loading: $viewModel.loadingResume
                 ) {
                     viewModel.showingResumeConfirmation = true
@@ -99,13 +99,9 @@ struct TandemKitFillCannulaView: View {
                 Button(action: {
                     presentationMode.wrappedValue.dismiss()
                 }) {
-                    Text(LocalizedString("Done", comment: "Button text"))
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                    Text("Done", comment: "Button text")
                 }
+                .buttonStyle(ActionButtonStyle())
             }
         }
     }
