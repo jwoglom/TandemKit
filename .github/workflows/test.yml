@@ -48,12 +48,6 @@ jobs:
         -skipMacroValidation
         -skipPackagePluginValidation
     steps:
-      - name: Checkout TandemKit (this repo)
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
-          path: tandemkit
-
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -112,45 +106,68 @@ jobs:
           echo "Fix: run CI from a branch in the main repo, or enable secrets for fork PRs in repo Settings -> Actions."
           exit 1
 
-      - name: Checkout Trio app repository (default branch, with submodules)
+      - name: Checkout Trio app repository (default branch, no submodules)
         if: env.TRIO_REF == ''
         uses: actions/checkout@v4
         with:
           repository: ${{ env.TRIO_REPO }}
           path: trio
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
           token: ${{ env.TRIO_REPO_TOKEN }}
 
-      - name: Checkout Trio app repository (specific ref, with submodules)
+      - name: Checkout Trio app repository (specific ref, no submodules)
         if: env.TRIO_REF != ''
         uses: actions/checkout@v4
         with:
           repository: ${{ env.TRIO_REPO }}
           ref: ${{ env.TRIO_REF }}
           path: trio
-          submodules: recursive
+          submodules: false
           fetch-depth: 1
           token: ${{ env.TRIO_REPO_TOKEN }}
 
-      - name: Replace Trio TandemKit submodule with TandemKit under test
+      - name: Remove Trio TandemKit submodule working tree placeholder
         run: |
           set -euo pipefail
-          if [[ ! -d "trio/TandemKit" ]]; then
-            echo "Expected Trio repo to have TandemKit at path 'TandemKit' (missing: trio/TandemKit)" >&2
-            exit 1
+          rm -rf "trio/TandemKit"
+
+      - name: Checkout TandemKit under test into Trio/TandemKit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          path: trio/TandemKit
+          fetch-depth: 1
+
+      - name: Validate Xcode source membership (all targets)
+        run: |
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check
+        working-directory: trio/TandemKit
+
+      - name: Initialize Trio submodules (excluding TandemKit)
+        run: |
+          set -euo pipefail
+          cd trio
+
+          if [[ ! -f ".gitmodules" ]]; then
+            exit 0
           fi
 
-          rm -rf "trio/TandemKit"
-          mkdir -p "trio/TandemKit"
+          git submodule sync --recursive
 
-          rsync -a --delete \
-            --exclude ".git" \
-            --exclude ".github" \
-            --exclude "build" \
-            --exclude ".build" \
-            --exclude "DerivedData" \
-            "tandemkit/" "trio/TandemKit/"
+          submodule_paths=()
+          while IFS= read -r path; do
+            [[ -z "${path}" ]] && continue
+            [[ "${path}" == "TandemKit" ]] && continue
+            submodule_paths+=("${path}")
+          done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+          if [[ ${#submodule_paths[@]} -eq 0 ]]; then
+            exit 0
+          fi
+
+          git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"
 
       - name: Cache SwiftPM artifacts
         uses: actions/cache@v4
@@ -169,10 +186,10 @@ jobs:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/Build
             ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved', 'tandemkit/Package.swift', 'tandemkit/Sources/**', 'tandemkit/Tests/**', 'trio/**/*.xcodeproj/**', 'trio/**/*.xcworkspace/**') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
           restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-${{ hashFiles('trio/**/Package.resolved') }}-
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-test-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
 
       - name: Boot selected simulator
         run: |
@@ -206,7 +223,6 @@ jobs:
             -resultBundlePath "TrioTests.xcresult" \
             ${XCODEBUILD_COMMON_FLAGS} \
             -retry-tests-on-failure \
-            -test-iterations 2 \
             -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-test.log"

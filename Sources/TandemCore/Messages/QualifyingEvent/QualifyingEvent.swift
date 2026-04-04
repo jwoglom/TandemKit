@@ -34,11 +34,16 @@ public enum QualifyingEvent: CaseIterable {
     case battery
     case basalIQ
     case remainingInsulin
-    case suspendComm
-    case activeSegmentChange
+    case pumpCommunicationsSuspended
+    case activeProfileSegmentChange
     case basalIQStatus
     case controlIQInfo
     case controlIQSleep
+    case globalPumpSettings
+    case snoozeStatus
+    case pumpingStatus
+    case pumpReset
+    case heartbeat
     case bolusPermissionRevoked
 
     /// Identifier used in bitmasks from the pump.
@@ -63,11 +68,16 @@ public enum QualifyingEvent: CaseIterable {
         case .battery: return 65536
         case .basalIQ: return 131_072
         case .remainingInsulin: return 262_144
-        case .suspendComm: return 524_288
-        case .activeSegmentChange: return 1_048_576
+        case .pumpCommunicationsSuspended: return 524_288
+        case .activeProfileSegmentChange: return 1_048_576
         case .basalIQStatus: return 2_097_152
         case .controlIQInfo: return 4_194_304
         case .controlIQSleep: return 8_388_608
+        case .globalPumpSettings: return 16_777_216
+        case .snoozeStatus: return 33_554_432
+        case .pumpingStatus: return 67_108_864
+        case .pumpReset: return 134_217_728
+        case .heartbeat: return 268_435_456
         case .bolusPermissionRevoked: return 2_147_483_648
         }
     }
@@ -83,11 +93,19 @@ public enum QualifyingEvent: CaseIterable {
         case .alert:
             return [{ AlertStatusRequest() }]
         case .alarm:
-            return [{ AlarmStatusRequest() }]
+            return [
+                { AlarmStatusRequest() },
+                { HighestAamRequest() },
+                { Self.activeAamBitsRequest(aamType: 2) }
+            ]
         case .reminder:
             return [{ ReminderStatusRequest() }]
         case .malfunction:
-            return [{ MalfunctionStatusRequest() }]
+            return [
+                { MalfunctionStatusRequest() },
+                { HighestAamRequest() },
+                { Self.activeAamBitsRequest(aamType: 4) }
+            ]
         case .cgmAlert:
             return [{ CGMAlertStatusRequest() }]
         case .homeScreenChange:
@@ -159,9 +177,9 @@ public enum QualifyingEvent: CaseIterable {
             return [{ BasalIQSettingsRequest() }]
         case .remainingInsulin:
             return [{ InsulinStatusRequest() }]
-        case .suspendComm:
+        case .pumpCommunicationsSuspended:
             return []
-        case .activeSegmentChange:
+        case .activeProfileSegmentChange:
             return [{ ProfileStatusRequest() }]
         case .basalIQStatus:
             return [{ BasalIQSettingsRequest() }, { BasalIQStatusRequest() }]
@@ -175,6 +193,22 @@ public enum QualifyingEvent: CaseIterable {
             ]
         case .controlIQSleep:
             return [{ ControlIQSleepScheduleRequest() }]
+        case .globalPumpSettings:
+            return [
+                { GlobalMaxBolusSettingsRequest() },
+                { BasalLimitSettingsRequest() },
+                { LocalizationRequest() },
+                { PumpGlobalsRequest() },
+                { PumpSettingsRequest() }
+            ]
+        case .snoozeStatus:
+            return []
+        case .pumpingStatus:
+            return [{ LoadStatusRequest() }]
+        case .pumpReset:
+            return []
+        case .heartbeat:
+            return []
         case .bolusPermissionRevoked:
             return [{
                 let bolusId = PumpStateSupplier.currentBolusId?() ?? 0
@@ -221,5 +255,9 @@ public enum QualifyingEvent: CaseIterable {
     /// Construct a bitmask from multiple events.
     public static func toBitmask(_ events: [QualifyingEvent]) -> UInt32 {
         events.reduce(0) { $0 | $1.id }
+    }
+
+    private static func activeAamBitsRequest(aamType: UInt8) -> ActiveAamBitsRequest {
+        ActiveAamBitsRequest(cargo: Data([aamType]))
     }
 }

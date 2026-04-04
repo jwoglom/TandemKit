@@ -72,4 +72,5 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case invalidTempBasalRate(requested: Double)
     case maximumTempBasalRateExceeded(requested: Double, maximum: Double)
     case invalidTempBasalDuration(requested: TimeInterval)
+    case controlIQModeActive
 }

@@ -1,9 +1,9 @@
 import Foundation
 
-/// Request any malfunction codes from the pump.
+/// Request any malfunction status from the pump.
 public class MalfunctionStatusRequest: Message {
     public static let props = MessageProps(
-        opCode: 120,
+        opCode: 118,
         size: 0,
         type: .Request,
         characteristic: .CURRENT_STATUS_CHARACTERISTICS
@@ -24,95 +24,81 @@ public class MalfunctionStatusRequest: Message {
     }
 }
 
-/// Response with malfunction codes.
-public class MalfunctionStatusResponse: Message, NotificationMessage, NotificationEnum {
+/// Response with a bitmask of active malfunction types.
+public class MalfunctionBitmaskStatusResponse: Message {
     public static let props = MessageProps(
-        opCode: 121,
-        size: 11,
+        opCode: 119,
+        size: 8,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        variableSize: true
+        characteristic: .CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
-    public var codeA: UInt32
-    public var codeB: UInt32
-    public var remaining: Data
+    public var bitmask: UInt64
+    public var malfunctions: Set<MalfunctionType>
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        codeA = Bytes.readUint32(cargo, 0)
-        codeB = Bytes.readUint32(cargo, 4)
-        if cargo.count > 8 {
-            remaining = cargo.subdata(in: 8 ..< cargo.count)
-        } else {
-            remaining = Data()
-        }
+        bitmask = Bytes.readUint64(cargo, 0)
+        malfunctions = MalfunctionType.fromBitmask(bitmask)
     }
 
-    public init(codeA: UInt32, codeB: UInt32, remaining: Data = Data([0, 0, 0])) {
-        cargo = Bytes.combine(
-            Bytes.toUint32(codeA),
-            Bytes.toUint32(codeB),
-            remaining
-        )
-        self.codeA = codeA
-        self.codeB = codeB
-        self.remaining = remaining
+    public init(bitmask: UInt64) {
+        cargo = Bytes.toUint64(bitmask)
+        self.bitmask = bitmask
+        malfunctions = MalfunctionType.fromBitmask(bitmask)
     }
 
-    /// Malfunction code pairs that should be ignored (not treated as actual malfunctions).
-    public static let IGNORABLE_CODES: [(UInt32, UInt32)] = [
-        (0, 0), // empty
-        (3, 8230), // 3-0x2026
-        (18, 8311), // 18-0x2077
-        (26, 8322) // 26-0x2082
-    ]
-
-    /// Formatted malfunction code string if present.
-    public var errorString: String {
-        if !hasMalfunction() { return "" }
-        return String(format: "%d-%#x", codeA, codeB)
+    public func hasMalfunctionBit(_ type: MalfunctionType) -> Bool {
+        (bitmask & type.rawValue) != 0
     }
 
-    /// Whether the pump reports a malfunction. Optionally suppresses malfunctions when
-    /// other notification payloads contain matching IDs.
-    public func hasMalfunction(_ otherMessages: [NotificationMessage] = []) -> Bool {
-        for code in Self.IGNORABLE_CODES {
-            if code.0 == codeA, code.1 == codeB {
-                return false
+    /// Check by raw bit position (used by HighestAamResponse.matchesActiveMalfunction).
+    public func hasMalfunctionBit(_ bit: Int) -> Bool {
+        (bitmask & (1 << bit)) != 0
+    }
+
+    /// Malfunction subsystem types encoded as bit positions in the bitmask.
+    public enum MalfunctionType: UInt64, CaseIterable {
+        case software       = 1
+        case cpuCore        = 2
+        case armMspCom      = 4
+        case sensor         = 8
+        case lipo           = 16
+        case touchscreen    = 32
+        case nvm            = 64
+        case display        = 128
+        case msp            = 256
+        case motor          = 512
+        case externalBins   = 1024
+        case swInit         = 2048
+        case vibe           = 4096
+        case periphPower    = 8192
+        case p2             = 16384
+        case datalog        = 32768
+        case speaker        = 65536
+        case mspSupply      = 131072
+        case calData        = 262144
+        case btle           = 524288
+        case ap             = 1048576
+        case rtc            = 2097152
+        case armBleCom      = 4194304
+        case overtravelStall = 8388608
+        case undertravelStall = 16777216
+        case pushoffStall   = 33554432
+
+        public static func fromBitmask(_ bitmask: UInt64) -> Set<MalfunctionType> {
+            var result = Set<MalfunctionType>()
+            for type in MalfunctionType.allCases {
+                if (bitmask & type.rawValue) != 0 {
+                    result.insert(type)
+                }
             }
+            return result
         }
-
-        if matchesKnownIds(otherMessages) {
-            return false
-        }
-
-        return true
     }
-
-    private func matchesKnownIds(_ otherMessages: [NotificationMessage]) -> Bool {
-        for message in otherMessages {
-            if message.notificationIds.contains(Int(codeA)) {
-                return true
-            }
-        }
-        return false
-    }
-
-    public var notificationCount: Int {
-        (hasMalfunction() && !errorString.isEmpty) ? 1 : 0
-    }
-
-    public var notificationIds: Set<Int> {
-        hasMalfunction() ? [Int(codeA)] : []
-    }
-
-    public var id: Int { Int(codeA) }
-
-    public var notificationDescription: String? { errorString }
 
     public var description: String {
-        "MalfunctionStatusResponse(cargo=\(cargo.hexadecimalString), codeA=\(codeA), codeB=\(codeB), remaining=\(remaining.hexadecimalString))"
+        "MalfunctionBitmaskStatusResponse(cargo=\(cargo.hexadecimalString), bitmask=\(bitmask), malfunctions=\(malfunctions))"
     }
 }

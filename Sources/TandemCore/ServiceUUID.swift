@@ -4,6 +4,9 @@ public enum ServiceUUID: String, Sendable {
     // All pump operations
     case PUMP_SERVICE = "0000fdfb-0000-1000-8000-00805f9b34fb"
 
+    // Tandem Device Update service
+    case TDU_SERVICE = "0000fdfa-0000-1000-8000-00805f9b34fb"
+
     // Bluetooth Device Information service (DIS)
     case DIS_SERVICE = "0000180A-0000-1000-8000-00805f9b34fb"
 
@@ -16,6 +19,7 @@ public enum ServiceUUID: String, Sendable {
 
 public let AllServiceUUIDs: [ServiceUUID] = [
     .PUMP_SERVICE,
+    .TDU_SERVICE,
     .DIS_SERVICE,
     .GENERIC_ACCESS_SERVICE,
     .GENERIC_ATTRIBUTE_SERVICE

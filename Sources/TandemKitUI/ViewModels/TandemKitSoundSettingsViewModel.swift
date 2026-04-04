@@ -76,8 +76,9 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             reminderAnnunRaw: reminderAnnun,
             alertAnnunRaw: alertAnnun,
             alarmAnnunRaw: alarmAnnun,
-            cgmAlertAnnun: 0x0000, // Hardcoded
-            changeBitmask: PumpSoundChangeBitmask.toBitmask(changedBits)
+            cgmAlertAnnunA: 0,
+            cgmAlertAnnunB: 0,
+            changeBitmaskRaw: PumpSoundChangeBitmask.toBitmask(changedBits)
         )
 
         isDirty = false

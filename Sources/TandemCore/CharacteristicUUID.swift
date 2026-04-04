@@ -19,6 +19,10 @@ public enum CharacteristicUUID: String, Sendable {
     // Device Information Service
     case DIS_MANUFACTURER_NAME = "00002A29-0000-1000-8000-00805F9B34FB"
     case DIS_MODEL_NUMBER = "00002A24-0000-1000-8000-00805F9B34FB"
+
+    // Tandem Device Update characteristics
+    case TDU_FILE_POINT_CHARACTERISTICS = "7B83FFE7-9F77-4E5C-8064-AAE2C24838B9"
+    case TDU_CONTROL_POINT_CHARACTERISTICS = "7B83FFE8-9F77-4E5C-8064-AAE2C24838B9"
 }
 
 public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
@@ -89,6 +93,8 @@ public extension CharacteristicUUID {
         case .SERVICE_CHANGED: return "ServiceChanged"
         case .DIS_MANUFACTURER_NAME: return "ManufacturerName"
         case .DIS_MODEL_NUMBER: return "ModelNumber"
+        case .TDU_FILE_POINT_CHARACTERISTICS: return "TDUFilePoint"
+        case .TDU_CONTROL_POINT_CHARACTERISTICS: return "TDUControlPoint"
         }
     }
 }

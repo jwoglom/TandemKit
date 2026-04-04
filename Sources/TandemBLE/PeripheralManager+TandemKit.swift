@@ -109,4 +109,19 @@ public extension PeripheralManager {
         }
         return .sentWithAcknowledgment
     }
+
+    public func writeCharacteristicValue(
+        _ value: Data,
+        to uuid: CharacteristicUUID,
+        type: CBCharacteristicWriteType = .withResponse,
+        timeout: TimeInterval = 5
+    ) throws {
+        dispatchPrecondition(condition: .onQueue(queue))
+
+        guard let characteristic = peripheral.characteristic(for: uuid) else {
+            throw PeripheralManagerError.notReady
+        }
+
+        try writeValue(value, for: characteristic, type: type, timeout: timeout)
+    }
 }

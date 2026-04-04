@@ -33,7 +33,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         transportLogger.info("init: instance=\(instanceId) currentTxId=0 verboseLogging=\(enableVerbosePacketLogging)")
     }
 
-    @MainActor public func sendMessage(_ message: Message) throws -> Message {
+    public func sendMessage(_ message: Message) throws -> Message {
         let instanceId = ObjectIdentifier(self)
 
         // Apply request throttling to prevent BLE write queue saturation
@@ -64,7 +64,7 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
                 .info("[PeripheralManagerTransport] sendMessage called: instance=\(instanceId) currentTxId=\(currentTxId)")
         }
 
-        // Create wrapper with current TxId while holding lock (we are on @MainActor)
+        // Create wrapper with current TxId while holding lock
         let wrapper = TronMessageWrapper(message: message, currentTxId: txIdForRequest)
 
         // Increment after wrapper is created successfully
@@ -290,19 +290,4 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         requestResponseHistory.removeAll()
     }
 
-    // MARK: - Utilities
-
-    /// Execute a closure synchronously on the main thread and return its value.
-    /// This provides a cohesive solution to call @MainActor APIs from a synchronous context.
-    @inline(__always) private func syncOnMain<T>(_ work: () -> T) -> T {
-        if Thread.isMainThread {
-            return work()
-        } else {
-            var result: T!
-            DispatchQueue.main.sync {
-                result = work()
-            }
-            return result
-        }
-    }
 }

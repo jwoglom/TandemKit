@@ -69,18 +69,18 @@ final class NotificationBundleTests: XCTestCase {
         let bundle = NotificationBundle()
 
         // PumpX2 test payload: 12-0x2071 (stuck vibrator motor), non-ignorable
-        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
-        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+        let expected = HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let aamResponse: HighestAamResponse = MessageTester.test(
             "000779070b0c0000007120000004ffffd6a6",
             7,
             1,
             .CURRENT_STATUS_CHARACTERISTICS,
             expected
         )
-        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
-        XCTAssertEqual(12, malfunctionResponse.codeA)
-        XCTAssertEqual(0x2071, malfunctionResponse.codeB)
-        bundle.add(malfunctionResponse)
+        MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
+        XCTAssertEqual(12, aamResponse.aamId)
+        XCTAssertEqual(0x2071, aamResponse.faultId)
+        bundle.add(aamResponse)
 
         // Malfunction should be counted since codes are not in IGNORABLE_CODES
         XCTAssertEqual(bundle.getNotificationCount(), 1)
@@ -92,18 +92,18 @@ final class NotificationBundleTests: XCTestCase {
         let bundle = NotificationBundle()
 
         // PumpX2 test payload: 3-0x2026 (ignorable)
-        let expected = MalfunctionStatusResponse(codeA: 3, codeB: 0x2026, remaining: Data([2, 0xFF, 0xFF]))
-        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+        let expected = HighestAamResponse(aamId: 3, faultId: 0x2026, remaining: Data([2, 0xFF, 0xFF]))
+        let aamResponse: HighestAamResponse = MessageTester.test(
             "001079100b030000002620000002ffff2ab0",
             16,
             1,
             .CURRENT_STATUS_CHARACTERISTICS,
             expected
         )
-        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
-        XCTAssertEqual(3, malfunctionResponse.codeA)
-        XCTAssertEqual(0x2026, malfunctionResponse.codeB)
-        bundle.add(malfunctionResponse)
+        MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
+        XCTAssertEqual(3, aamResponse.aamId)
+        XCTAssertEqual(0x2026, aamResponse.faultId)
+        bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 0)
         XCTAssertEqual(bundle.get().count, 0)
@@ -113,21 +113,21 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionSuppressedByMatchingAlarm() {
         let bundle = NotificationBundle()
 
-        // PumpX2 test payload: codeA 12, and alarm bit 12 is BATTERY_SHUTDOWN_ALARM (known)
+        // PumpX2 test payload: aamId 12, and alarm bit 12 is BATTERY_SHUTDOWN_ALARM (known)
         let alarmResponse = AlarmStatusResponse(intMap: bitmask(12))
         bundle.add(alarmResponse)
 
-        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
-        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+        let expected = HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let aamResponse: HighestAamResponse = MessageTester.test(
             "000779070b0c0000007120000004ffffd6a6",
             7,
             1,
             .CURRENT_STATUS_CHARACTERISTICS,
             expected
         )
-        bundle.add(malfunctionResponse)
+        bundle.add(aamResponse)
 
-        // Malfunction should be suppressed because codeA (12) matches BATTERY_SHUTDOWN_ALARM
+        // Malfunction should be suppressed because aamId (12) matches BATTERY_SHUTDOWN_ALARM
         XCTAssertEqual(bundle.getNotificationCount(), 1)
         XCTAssertEqual(bundle.get().count, 1)
     }
@@ -136,17 +136,17 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionSuppressedByMatchingKnownAlert() {
         let bundle = NotificationBundle()
 
-        // PumpX2 test payload: codeA 12, and alert bit 12 is a known alert
+        // PumpX2 test payload: aamId 12, and alert bit 12 is a known alert
         bundle.add(AlertStatusResponse(intMap: bitmask(12)))
-        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
-        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+        let expected = HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let aamResponse: HighestAamResponse = MessageTester.test(
             "000779070b0c0000007120000004ffffd6a6",
             7,
             1,
             .CURRENT_STATUS_CHARACTERISTICS,
             expected
         )
-        bundle.add(malfunctionResponse)
+        bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 1)
         XCTAssertEqual(bundle.get().count, 1)
@@ -156,14 +156,14 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionNotSuppressedByDefaultReminder() {
         let bundle = NotificationBundle()
 
-        // PumpX2 comment payload: codeA 23, and reminder bit 23 is DEFAULT_REMINDER_23
+        // PumpX2 comment payload: aamId 23, and reminder bit 23 is DEFAULT_REMINDER_23
         bundle.add(ReminderStatusResponse(intMap: bitmask(23)))
-        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
-        let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
-        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
-        XCTAssertEqual(23, malfunctionResponse.codeA)
-        XCTAssertEqual(0x20A7, malfunctionResponse.codeB)
-        bundle.add(malfunctionResponse)
+        let expected = HighestAamResponse(aamId: 23, faultId: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let aamResponse = HighestAamResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
+        MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
+        XCTAssertEqual(23, aamResponse.aamId)
+        XCTAssertEqual(0x20a7, aamResponse.faultId)
+        bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)
         XCTAssertEqual(bundle.get().count, 2)
@@ -173,17 +173,17 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionSuppressedByMatchingKnownCGMAlert() {
         let bundle = NotificationBundle()
 
-        // PumpX2 test payload: codeA 12, and CGM alert bit 12 is known
+        // PumpX2 test payload: aamId 12, and CGM alert bit 12 is known
         bundle.add(CGMAlertStatusResponse(intMap: bitmask(12)))
-        let expected = MalfunctionStatusResponse(codeA: 12, codeB: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
-        let malfunctionResponse: MalfunctionStatusResponse = MessageTester.test(
+        let expected = HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF]))
+        let aamResponse: HighestAamResponse = MessageTester.test(
             "000779070b0c0000007120000004ffffd6a6",
             7,
             1,
             .CURRENT_STATUS_CHARACTERISTICS,
             expected
         )
-        bundle.add(malfunctionResponse)
+        bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 1)
         XCTAssertEqual(bundle.get().count, 1)
@@ -193,14 +193,14 @@ final class NotificationBundleTests: XCTestCase {
     func testMalfunctionNotSuppressedByDefaultCGMAlert() {
         let bundle = NotificationBundle()
 
-        // PumpX2 comment payload: codeA 23, and CGM alert bit 23 is DEFAULT_CGM_ALERT_23
+        // PumpX2 comment payload: aamId 23, and CGM alert bit 23 is DEFAULT_CGM_ALERT_23
         bundle.add(CGMAlertStatusResponse(intMap: bitmask(23)))
-        let expected = MalfunctionStatusResponse(codeA: 23, codeB: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
-        let malfunctionResponse = MalfunctionStatusResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
-        MessageTester.assertHexEquals(expected.cargo, malfunctionResponse.cargo)
-        XCTAssertEqual(23, malfunctionResponse.codeA)
-        XCTAssertEqual(0x20A7, malfunctionResponse.codeB)
-        bundle.add(malfunctionResponse)
+        let expected = HighestAamResponse(aamId: 23, faultId: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let aamResponse = HighestAamResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
+        MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
+        XCTAssertEqual(23, aamResponse.aamId)
+        XCTAssertEqual(0x20a7, aamResponse.faultId)
+        bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)
         XCTAssertEqual(bundle.get().count, 2)
@@ -290,7 +290,7 @@ final class NotificationBundleTests: XCTestCase {
         XCTAssertTrue(NotificationBundle.isNotificationResponse(ReminderStatusResponse(intMap: 0)))
         XCTAssertTrue(NotificationBundle.isNotificationResponse(AlarmStatusResponse(intMap: 0)))
         XCTAssertTrue(NotificationBundle.isNotificationResponse(CGMAlertStatusResponse(intMap: 0)))
-        XCTAssertTrue(NotificationBundle.isNotificationResponse(MalfunctionStatusResponse(codeA: 0, codeB: 0)))
+        XCTAssertTrue(NotificationBundle.isNotificationResponse(HighestAamResponse(aamId: 0, faultId: 0)))
 
         // Non-notification responses should return false
         XCTAssertFalse(NotificationBundle.isNotificationResponse(ApiVersionRequest()))

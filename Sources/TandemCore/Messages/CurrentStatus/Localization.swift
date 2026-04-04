@@ -34,33 +34,33 @@ public class LocalizationResponse: Message {
     )
 
     public var cargo: Data
-    public var glucoseOUM: Int
-    public var regionSetting: Int
+    public var glucoseUOM: Int
     public var languageSelected: Int
+    public var regionSetting: Int
     public var languagesAvailableBitmask: UInt32
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        glucoseOUM = Int(cargo[0])
-        regionSetting = Int(cargo[1])
-        languageSelected = Int(cargo[2])
+        glucoseUOM = Int(cargo[0])
+        languageSelected = Int(cargo[1])
+        regionSetting = Int(cargo[2])
         languagesAvailableBitmask = Bytes.readUint32(cargo, 3)
     }
 
-    public init(glucoseOUM: Int, regionSetting: Int, languageSelected: Int, languagesAvailableBitmask: UInt32) {
+    public init(glucoseUOM: Int, languageSelected: Int, regionSetting: Int, languagesAvailableBitmask: UInt32) {
         cargo = Bytes.combine(
-            Bytes.firstByteLittleEndian(glucoseOUM),
-            Bytes.firstByteLittleEndian(regionSetting),
+            Bytes.firstByteLittleEndian(glucoseUOM),
             Bytes.firstByteLittleEndian(languageSelected),
+            Bytes.firstByteLittleEndian(regionSetting),
             Bytes.toUint32(languagesAvailableBitmask)
         )
-        self.glucoseOUM = glucoseOUM
-        self.regionSetting = regionSetting
+        self.glucoseUOM = glucoseUOM
         self.languageSelected = languageSelected
+        self.regionSetting = regionSetting
         self.languagesAvailableBitmask = languagesAvailableBitmask
     }
 
     public var description: String {
-        "LocalizationResponse(cargo=\(cargo.hexadecimalString), glucoseOUM=\(glucoseOUM), regionSetting=\(regionSetting), languageSelected=\(languageSelected), languagesAvailableBitmask=\(languagesAvailableBitmask))"
+        "LocalizationResponse(cargo=\(cargo.hexadecimalString), glucoseUOM=\(glucoseUOM), languageSelected=\(languageSelected), regionSetting=\(regionSetting), languagesAvailableBitmask=\(languagesAvailableBitmask))"
     }
 }

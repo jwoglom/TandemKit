@@ -1,13 +1,13 @@
 import Foundation
 
-public class UnknownMobiOpcodeNeg70Request: Message {
+/// Request to activate shelf mode on the pump.
+public class ActivateShelfModeRequest: Message {
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-70)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        minApi: .mobiApiV3_5,
-        supportedDevices: .mobiOnly
+        characteristic: .CONTROL_CHARACTERISTICS,
+        signed: true
     )
 
     public var cargo: Data
@@ -21,18 +21,18 @@ public class UnknownMobiOpcodeNeg70Request: Message {
     }
 
     public var description: String {
-        "UnknownMobiOpcodeNeg70Request(cargo=\(cargo.hexadecimalString))"
+        "ActivateShelfModeRequest(cargo=\(cargo.hexadecimalString))"
     }
 }
 
-public class UnknownMobiOpcodeNeg70Response: Message {
+/// Response after requesting shelf mode activation.
+public class ActivateShelfModeResponse: Message {
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-69)),
-        size: 53,
+        size: 0,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        minApi: .mobiApiV3_5,
-        supportedDevices: .mobiOnly
+        characteristic: .CONTROL_CHARACTERISTICS,
+        signed: true
     )
 
     public var cargo: Data
@@ -41,11 +41,7 @@ public class UnknownMobiOpcodeNeg70Response: Message {
         self.cargo = cargo
     }
 
-    public init() {
-        cargo = Data()
-    }
-
     public var description: String {
-        "UnknownMobiOpcodeNeg70Response(cargo=\(cargo.hexadecimalString))"
+        "ActivateShelfModeResponse(cargo=\(cargo.hexadecimalString))"
     }
 }

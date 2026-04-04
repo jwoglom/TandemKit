@@ -7,12 +7,28 @@ public enum HistoryLogParser {
         switch typeId {
         case AlarmActivatedHistoryLog.typeId:
             return AlarmActivatedHistoryLog(cargo: raw)
+        case MalfunctionAckHistoryLog.typeId:
+            return MalfunctionAckHistoryLog(cargo: raw)
+        case AlarmAckHistoryLog.typeId:
+            return AlarmAckHistoryLog(cargo: raw)
         case AlarmClearedHistoryLog.typeId:
             return AlarmClearedHistoryLog(cargo: raw)
         case AlertActivatedHistoryLog.typeId:
             return AlertActivatedHistoryLog(cargo: raw)
+        case ReminderActivatedHistoryLog.typeId:
+            return ReminderActivatedHistoryLog(cargo: raw)
+        case AlertAckHistoryLog.typeId:
+            return AlertAckHistoryLog(cargo: raw)
         case AlertClearedHistoryLog.typeId:
             return AlertClearedHistoryLog(cargo: raw)
+        case ReminderDismissedHistoryLog.typeId:
+            return ReminderDismissedHistoryLog(cargo: raw)
+        case ReminderSnoozedHistoryLog.typeId:
+            return ReminderSnoozedHistoryLog(cargo: raw)
+        case CartridgeRemovedHistoryLog.typeId:
+            return CartridgeRemovedHistoryLog(cargo: raw)
+        case CartridgeInsertedHistoryLog.typeId:
+            return CartridgeInsertedHistoryLog(cargo: raw)
         case ArmInitHistoryLog.typeId:
             return ArmInitHistoryLog(cargo: raw)
         case BasalRateChangeHistoryLog.typeId:
@@ -35,8 +51,36 @@ public enum HistoryLogParser {
             return CgmAlertClearedFsl2HistoryLog(cargo: raw)
         case CgmAlertClearedHistoryLog.typeId:
             return CgmAlertClearedHistoryLog(cargo: raw)
+        case ConfirmCartridgeFilledHistoryLog.typeId:
+            return ConfirmCartridgeFilledHistoryLog(cargo: raw)
+        case FillEstimateFinalHistoryLog.typeId:
+            return FillEstimateFinalHistoryLog(cargo: raw)
         case CgmCalibrationHistoryLog.typeId:
             return CgmCalibrationHistoryLog(cargo: raw)
+        case BasalIqSettingsChangeHistoryLog.typeId:
+            return BasalIqSettingsChangeHistoryLog(cargo: raw)
+        case CgmTransmitterIdHistoryLog.typeId:
+            return CgmTransmitterIdHistoryLog(cargo: raw)
+        case CgmAnnuSettingsHistoryLog.typeId:
+            return CgmAnnuSettingsHistoryLog(cargo: raw)
+        case CgmStopSessionMsg1HistoryLog.typeId:
+            return CgmStopSessionMsg1HistoryLog(cargo: raw)
+        case CgmStopSessionMsg2HistoryLog.typeId:
+            return CgmStopSessionMsg2HistoryLog(cargo: raw)
+        case CgmHgaSettingsHistoryLog.typeId:
+            return CgmHgaSettingsHistoryLog(cargo: raw)
+        case CgmLgaSettingsHistoryLog.typeId:
+            return CgmLgaSettingsHistoryLog(cargo: raw)
+        case CgmRraSettingsHistoryLog.typeId:
+            return CgmRraSettingsHistoryLog(cargo: raw)
+        case CgmFraSettingsHistoryLog.typeId:
+            return CgmFraSettingsHistoryLog(cargo: raw)
+        case CgmOorSettingsHistoryLog.typeId:
+            return CgmOorSettingsHistoryLog(cargo: raw)
+        case CgmAlertAckHistoryLog.typeId:
+            return CgmAlertAckHistoryLog(cargo: raw)
+        case CgmUnexpectedGeAlertHistoryLog.typeId:
+            return CgmUnexpectedGeAlertHistoryLog(cargo: raw)
         case CgmCalibrationGxHistoryLog.typeId:
             return CgmCalibrationGxHistoryLog(cargo: raw)
         case CgmDataFsl2HistoryLog.typeId:
@@ -61,6 +105,16 @@ public enum HistoryLogParser {
             return CgmStartSessionFsl2HistoryLog(cargo: raw)
         case CgmStopSessionHistoryLog.typeId:
             return CgmStopSessionHistoryLog(cargo: raw)
+        case CgmInactiveGxHistoryLog.typeId:
+            return CgmInactiveGxHistoryLog(cargo: raw)
+        case CgmTransmitterIdGxHistoryLog.typeId:
+            return CgmTransmitterIdGxHistoryLog(cargo: raw)
+        case CgmStartSessionReqGxHistoryLog.typeId:
+            return CgmStartSessionReqGxHistoryLog(cargo: raw)
+        case CgmStopSessionReqGxHistoryLog.typeId:
+            return CgmStopSessionReqGxHistoryLog(cargo: raw)
+        case CgmTransmitterVersionGxHistoryLog.typeId:
+            return CgmTransmitterVersionGxHistoryLog(cargo: raw)
         case CgmStopSessionFsl2HistoryLog.typeId:
             return CgmStopSessionFsl2HistoryLog(cargo: raw)
         case CgmStopSessionFsl3HistoryLog.typeId:
@@ -131,6 +185,56 @@ public enum HistoryLogParser {
             return ParamChangeRemSettingsHistoryLog(cargo: raw)
         case ParamChangeReminderHistoryLog.typeId:
             return ParamChangeReminderHistoryLog(cargo: raw)
+        case AaSleepScheduleChangeHistoryLog.typeId:
+            return AaSleepScheduleChangeHistoryLog(cargo: raw)
+        case AaDeliveryStatusChangeHistoryLog.typeId:
+            return AaDeliveryStatusChangeHistoryLog(cargo: raw)
+        case AaEnableSettingChangeHistoryLog.typeId:
+            return AaEnableSettingChangeHistoryLog(cargo: raw)
+        case AaTdiSettingChangeHistoryLog.typeId:
+            return AaTdiSettingChangeHistoryLog(cargo: raw)
+        case AaWeightSettingChangeHistoryLog.typeId:
+            return AaWeightSettingChangeHistoryLog(cargo: raw)
+        case CgmSessionTypeChangeHistoryLog.typeId:
+            return CgmSessionTypeChangeHistoryLog(cargo: raw)
+        case WumpOcclusionDebugHistoryLog.typeId:
+            return WumpOcclusionDebugHistoryLog(cargo: raw)
+        case SnoozeActivatedHistoryLog.typeId:
+            return SnoozeActivatedHistoryLog(cargo: raw)
+        case AaAutoBolusRejectedHistoryLog.typeId:
+            return AaAutoBolusRejectedHistoryLog(cargo: raw)
+        case TipscReqPrimeCannulaHistoryLog.typeId:
+            return TipscReqPrimeCannulaHistoryLog(cargo: raw)
+        case WumpCartridgeFilledHistoryLog.typeId:
+            return WumpCartridgeFilledHistoryLog(cargo: raw)
+        case WumpCartridgeRemovedHistoryLog.typeId:
+            return WumpCartridgeRemovedHistoryLog(cargo: raw)
+        case AaTdiEstChangeHistoryLog.typeId:
+            return AaTdiEstChangeHistoryLog(cargo: raw)
+        case AaExerciseTimeChangeHistoryLog.typeId:
+            return AaExerciseTimeChangeHistoryLog(cargo: raw)
+        case AaExerciseChoiceChangeHistoryLog.typeId:
+            return AaExerciseChoiceChangeHistoryLog(cargo: raw)
+        case PrimeInprocessHistoryLog.typeId:
+            return PrimeInprocessHistoryLog(cargo: raw)
+        case CgmRejoinSessionHistoryLog.typeId:
+            return CgmRejoinSessionHistoryLog(cargo: raw)
+        case CgmSensorTypeChangeHistoryLog.typeId:
+            return CgmSensorTypeChangeHistoryLog(cargo: raw)
+        case CgmStartSensorReqG7HistoryLog.typeId:
+            return CgmStartSensorReqG7HistoryLog(cargo: raw)
+        case CgmPairingCodeG7HistoryLog.typeId:
+            return CgmPairingCodeG7HistoryLog(cargo: raw)
+        case TipsErrorHistoryLog.typeId:
+            return TipsErrorHistoryLog(cargo: raw)
+        case CgmCalibrationG7HistoryLog.typeId:
+            return CgmCalibrationG7HistoryLog(cargo: raw)
+        case CgmBleCalibrationEvtG7HistoryLog.typeId:
+            return CgmBleCalibrationEvtG7HistoryLog(cargo: raw)
+        case CgmInactiveG7HistoryLog.typeId:
+            return CgmInactiveG7HistoryLog(cargo: raw)
+        case CgmStopSessionReqG7HistoryLog.typeId:
+            return CgmStopSessionReqG7HistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }

@@ -9,7 +9,7 @@ public class NotificationBundle {
     public var reminderStatusResponse: ReminderStatusResponse?
     public var alarmStatusResponse: AlarmStatusResponse?
     public var cgmAlertStatusResponse: CGMAlertStatusResponse?
-    public var malfunctionStatusResponse: MalfunctionStatusResponse?
+    public var highestAamResponse: HighestAamResponse?
     public var otherNotificationStatusResponse: OtherNotificationStatusResponse?
     public var otherNotification2StatusResponse: OtherNotification2StatusResponse?
 
@@ -25,7 +25,7 @@ public class NotificationBundle {
             ReminderStatusRequest(),
             AlarmStatusRequest(),
             CGMAlertStatusRequest(),
-            MalfunctionStatusRequest(),
+            HighestAamRequest(),
             OtherNotificationStatusRequest(),
             OtherNotification2StatusRequest()
         ]
@@ -38,7 +38,7 @@ public class NotificationBundle {
             ReminderStatusResponse.self,
             AlarmStatusResponse.self,
             CGMAlertStatusResponse.self,
-            MalfunctionStatusResponse.self,
+            HighestAamResponse.self,
             OtherNotificationStatusResponse.self,
             OtherNotification2StatusResponse.self
         ]
@@ -50,7 +50,7 @@ public class NotificationBundle {
             message is ReminderStatusResponse ||
             message is AlarmStatusResponse ||
             message is CGMAlertStatusResponse ||
-            message is MalfunctionStatusResponse ||
+            message is HighestAamResponse ||
             message is OtherNotificationStatusResponse ||
             message is OtherNotification2StatusResponse
     }
@@ -75,8 +75,8 @@ public class NotificationBundle {
         } else if let response = message as? CGMAlertStatusResponse {
             cgmAlertStatusResponse = response
             lastUpdatedTimes[typeName] = timestamp
-        } else if let response = message as? MalfunctionStatusResponse {
-            malfunctionStatusResponse = response
+        } else if let response = message as? HighestAamResponse {
+            highestAamResponse = response
             lastUpdatedTimes[typeName] = timestamp
         } else if let response = message as? OtherNotificationStatusResponse {
             otherNotificationStatusResponse = response
@@ -149,10 +149,10 @@ public class NotificationBundle {
         }
 
         // Add malfunction if present
-        if let response = malfunctionStatusResponse, response.hasMalfunction(notificationMessages) {
+        if let response = highestAamResponse, response.hasMalfunction(notificationMessages) {
             items.append(NotificationItem(
                 type: .malfunction,
-                id: UInt32(response.codeA),
+                id: UInt32(response.aamId),
                 name: response.errorString,
                 notificationDescription: response.notificationDescription
             ))

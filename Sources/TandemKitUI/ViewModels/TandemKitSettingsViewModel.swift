@@ -10,6 +10,8 @@ enum CommandFailure: Int, Identifiable {
     case exerciseMode
     case sleepMode
     case stopTempRate
+    case playSound
+    case alertSnooze
 
     var id: Int { rawValue }
 }
@@ -34,7 +36,17 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
+    @Published var isConnected: Bool = false
+    @Published var isRefreshing: Bool = false
     @Published var useSilentMode: Bool = false
+    @Published var alertSnoozeEnabled: Bool = false
+    @Published var alertSnoozeDurationMins: Int = 10
+    @Published var isPlayingSound: Bool = false
+    @Published var useControlIQ: Bool = false
+    @Published var showReenableClosedLoopPrompt: Bool = false
+    @Published var showNoCGMWarning: Bool = false
+    @Published var isCGMActiveOnPump: Bool = false
+    @Published var pendingEnableClosedLoop: Bool = false
 
     private var pendingRefreshOnReconnect = false
 
@@ -71,10 +83,14 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openFillCannula = openFillCannula
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
+        useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
+        isConnected = pumpManager?.connectedAndPaired ?? false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
+
+        refreshPumpStatus()
     }
 
     var currentPumpTime: String {
@@ -107,6 +123,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.state.controlIQEnabled ?? false
     }
 
+    var isClosedLoopEnabled: Bool {
+        pumpManager?.pumpManagerDelegate?.automaticDosingEnabled ?? false
+    }
+
     var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? {
         pumpManager?.state.controlIQUserMode
     }
@@ -125,6 +145,16 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var tempRateDuration: Double? {
         pumpManager?.state.tempRateDuration
+    }
+
+    var tempRateStart: Date? {
+        pumpManager?.state.tempRateStart
+    }
+
+    var tempRateRemainingSeconds: Double? {
+        guard let start = tempRateStart, let duration = tempRateDuration else { return nil }
+        let remaining = duration - Date().timeIntervalSince(start)
+        return remaining > 0 ? remaining : nil
     }
 
     var batteryPercentage: String? {
@@ -156,19 +186,32 @@ class TandemKitSettingsViewModel: ObservableObject {
     // MARK: - Refresh Methods
 
     func refreshPumpStatus() {
-        guard pumpManager?.connectedAndPaired == true else {
+        guard let pumpManager, pumpManager.connectedAndPaired else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
             pendingRefreshOnReconnect = true
             return
         }
 
+        guard !isRefreshing else { return }
+
         pendingRefreshOnReconnect = false
-        pumpManager?.ensureCurrentPumpData { _ in }
+        isRefreshing = true
+
+        // Dispatch everything off main so the spinner renders immediately
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            pumpManager.ensureCurrentPumpData { _ in }
+            pumpManager.fetchGlobalPumpSettings()
+            pumpManager.fetchDeliveryLimits()
+
+            DispatchQueue.main.async {
+                self?.isRefreshing = false
+            }
+        }
     }
 
     var reservoirUnitsText: String? {
         guard let reservoirValue else { return nil }
-        return String(format: "%.1f", reservoirValue.unitVolume)
+        return String(format: "%.0f", reservoirValue.unitVolume)
     }
 
     func suspendResumeButtonPressed() {
@@ -221,40 +264,54 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func toggleControlIQMode() {
-        // TODO(jwoglom): this should enforce that Trio closed loop is FULLY turned off
+    func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
+        pumpManager?.configureControlIQMode(true) { [weak self] success in
+            guard let self = self else { return }
+            if success {
+                // Check CGM status on background thread
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let cgmResponse = self.pumpManager?.sendMessage(
+                        message: CGMStatusV2Request()
+                    ) as? CGMStatusV2Response
+
+                    let cgmActive = cgmResponse?.sessionState == .active
+
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.useControlIQ = true
+                        self.isCGMActiveOnPump = cgmActive
+                        if !cgmActive {
+                            self.showNoCGMWarning = true
+                        }
+                    }
                 }
-                return
-            }
-
-            let isPumpControlIqOn = self.controlIQEnabled
-            let weight = self.pumpManager?.state.controlIQWeight ?? 70
-            let tdi = self.pumpManager?.state.controlIQTotalDailyInsulin ?? 30
-
-            let response = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
-                enabled: !isPumpControlIqOn,
-                weightLbs: weight,
-                totalDailyInsulinUnits: tdi
-            )) as? ChangeControlIQSettingsResponse
-
-            guard response?.isStatusOK == true else {
+            } else {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                     self.commandFailure = .controlIQ
                 }
-                return
             }
+        }
+    }
 
-            Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in }
+    func enableClosedLoop() {
+        pendingEnableClosedLoop = true
+        pumpManager?.requestEnableClosedLoop()
+    }
 
+    func switchAlgorithmToDIY() {
+        isUpdatingPumpState = true
+        pumpManager?.configureControlIQMode(false) { [weak self] success in
             DispatchQueue.main.async {
+                guard let self = self else { return }
                 self.isUpdatingPumpState = false
+                if success {
+                    self.useControlIQ = false
+                    self.showReenableClosedLoopPrompt = true
+                } else {
+                    self.commandFailure = .controlIQ
+                }
             }
         }
     }
@@ -390,6 +447,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         return nil
     }
 
+    var algorithmModeText: String {
+        useControlIQ ? "CIQ" : "DIY"
+    }
+
     var controlIqModeText: String {
         if controlIQEnabled {
             return "Disable ControlIQ"
@@ -409,6 +470,99 @@ class TandemKitSettingsViewModel: ObservableObject {
             return "Disable sleep mode"
         }
         return "Enable sleep mode"
+    }
+
+    // MARK: - Find My Pump
+
+    func playSound() {
+        isPlayingSound = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.pumpManager?.playSound()
+            DispatchQueue.main.async {
+                self?.isPlayingSound = false
+            }
+        }
+    }
+
+    // MARK: - Alert Snooze
+
+    func setAlertSnooze(enabled: Bool, durationMins: Int) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
+            DispatchQueue.main.async {
+                self?.alertSnoozeEnabled = enabled
+                self?.alertSnoozeDurationMins = durationMins
+            }
+        }
+    }
+
+    // MARK: - Delivery Limits
+
+    var maxBasalRateText: String? {
+        guard let milliunits = pumpManager?.state.maxBasalLimitMilliunits else { return nil }
+        return String(format: "%.2f U/hr", Double(milliunits) / 1000.0)
+    }
+
+    var maxBolusText: String? {
+        guard let milliunits = pumpManager?.state.maxBolusLimitMilliunits else { return nil }
+        return String(format: "%.1f U", Double(milliunits) / 1000.0)
+    }
+
+    // MARK: - Quick Bolus
+
+    var quickBolusEnabled: Bool? {
+        pumpManager?.state.quickBolusEnabled
+    }
+
+    var quickBolusSummary: String? {
+        guard let enabled = pumpManager?.state.quickBolusEnabled else { return nil }
+        if !enabled { return "Disabled" }
+
+        let entryType = pumpManager?.state.quickBolusEntryType ?? 0
+        if entryType == 1 {
+            let carbsMilliunits = pumpManager?.state.quickBolusIncrementCarbs ?? 0
+            let carbs = Double(carbsMilliunits) / 1000.0
+            return String(format: "Carbs, %.0f g", carbs)
+        } else {
+            let unitsMilliunits = pumpManager?.state.quickBolusIncrementUnits ?? 0
+            let units = Double(unitsMilliunits) / 1000.0
+            return String(format: "Units, %.1f U", units)
+        }
+    }
+
+    // MARK: - Factory Methods
+
+    func createQuickBolusSettingsViewModel() -> TandemKitQuickBolusSettingsViewModel {
+        TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    func createDeliveryLimitsViewModel() -> TandemKitDeliveryLimitsViewModel {
+        TandemKitDeliveryLimitsViewModel(pumpManager: pumpManager)
+    }
+
+    func createControlIQSettingsViewModel() -> TandemKitControlIQSettingsViewModel {
+        TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    func createCGMSettingsViewModel() -> TandemKitCGMSettingsViewModel {
+        TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
+    }
+
+    // Cartridge operations
+    func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
+        TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
+    }
+
+    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
+        TandemKitFillTubingViewModel(pumpManager: pumpManager)
+    }
+
+    func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
+        TandemKitFillCannulaViewModel(pumpManager: pumpManager)
+    }
+
+    func createNotificationsViewModel() -> TandemKitNotificationsViewModel {
+        TandemKitNotificationsViewModel(pumpManager)
     }
 
     func removePump() {
@@ -435,8 +589,10 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
+            self.isConnected = pumpManager.connectedAndPaired
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
+            self.useControlIQ = pumpManager.state.useControlIQ
 
             if self.pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
                 self.pendingRefreshOnReconnect = false

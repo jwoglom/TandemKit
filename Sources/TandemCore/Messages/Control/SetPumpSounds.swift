@@ -16,8 +16,9 @@ public class SetPumpSoundsRequest: Message {
     public var reminderAnnunRaw: Int
     public var alertAnnunRaw: Int
     public var alarmAnnunRaw: Int
-    public var cgmAlertAnnun: Int
-    public var changeBitmask: Int
+    public var cgmAlertAnnunA: Int
+    public var cgmAlertAnnunB: Int
+    public var changeBitmaskRaw: Int
 
     public required init(cargo: Data) {
         self.cargo = cargo
@@ -26,8 +27,9 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw = Int(cargo[3])
         alertAnnunRaw = Int(cargo[4])
         alarmAnnunRaw = Int(cargo[5])
-        cgmAlertAnnun = Int(cargo[6]) | (Int(cargo[7]) << 8)
-        changeBitmask = Int(cargo[8])
+        cgmAlertAnnunA = Int(cargo[6])
+        cgmAlertAnnunB = Int(cargo[7])
+        changeBitmaskRaw = Int(cargo[8])
     }
 
     public init(
@@ -36,8 +38,9 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw: Int,
         alertAnnunRaw: Int,
         alarmAnnunRaw: Int,
-        cgmAlertAnnun: Int,
-        changeBitmask: Int
+        cgmAlertAnnunA: Int,
+        cgmAlertAnnunB: Int,
+        changeBitmaskRaw: Int
     ) {
         cargo = SetPumpSoundsRequest.buildCargo(
             quickBolusAnnunRaw: quickBolusAnnunRaw,
@@ -45,16 +48,39 @@ public class SetPumpSoundsRequest: Message {
             reminderAnnunRaw: reminderAnnunRaw,
             alertAnnunRaw: alertAnnunRaw,
             alarmAnnunRaw: alarmAnnunRaw,
-            cgmAlertAnnun: cgmAlertAnnun,
-            changeBitmask: changeBitmask
+            cgmAlertAnnunA: cgmAlertAnnunA,
+            cgmAlertAnnunB: cgmAlertAnnunB,
+            changeBitmaskRaw: changeBitmaskRaw
         )
         self.quickBolusAnnunRaw = quickBolusAnnunRaw
         self.generalAnnunRaw = generalAnnunRaw
         self.reminderAnnunRaw = reminderAnnunRaw
         self.alertAnnunRaw = alertAnnunRaw
         self.alarmAnnunRaw = alarmAnnunRaw
-        self.cgmAlertAnnun = cgmAlertAnnun
-        self.changeBitmask = changeBitmask
+        self.cgmAlertAnnunA = cgmAlertAnnunA
+        self.cgmAlertAnnunB = cgmAlertAnnunB
+        self.changeBitmaskRaw = changeBitmaskRaw
+    }
+
+    public convenience init(
+        quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum,
+        generalAnnun: PumpGlobalsResponse.AnnunciationEnum,
+        reminderAnnun: PumpGlobalsResponse.AnnunciationEnum,
+        alertAnnun: PumpGlobalsResponse.AnnunciationEnum,
+        alarmAnnun: PumpGlobalsResponse.AnnunciationEnum,
+        cgmAlertAnnun: CgmAlertAnnunciationEnum,
+        changeBitmask: PumpSoundChangeBitmask
+    ) {
+        self.init(
+            quickBolusAnnunRaw: quickBolusAnnun.rawValue,
+            generalAnnunRaw: generalAnnun.rawValue,
+            reminderAnnunRaw: reminderAnnun.rawValue,
+            alertAnnunRaw: alertAnnun.rawValue,
+            alarmAnnunRaw: alarmAnnun.rawValue,
+            cgmAlertAnnunA: cgmAlertAnnun.idA,
+            cgmAlertAnnunB: cgmAlertAnnun.idB,
+            changeBitmaskRaw: changeBitmask.rawValue
+        )
     }
 
     public static func buildCargo(
@@ -63,8 +89,9 @@ public class SetPumpSoundsRequest: Message {
         reminderAnnunRaw: Int,
         alertAnnunRaw: Int,
         alarmAnnunRaw: Int,
-        cgmAlertAnnun: Int,
-        changeBitmask: Int
+        cgmAlertAnnunA: Int,
+        cgmAlertAnnunB: Int,
+        changeBitmaskRaw: Int
     ) -> Data {
         Bytes.combine(
             Data([0]),
@@ -73,9 +100,9 @@ public class SetPumpSoundsRequest: Message {
             Data([UInt8(reminderAnnunRaw & 0xFF)]),
             Data([UInt8(alertAnnunRaw & 0xFF)]),
             Data([UInt8(alarmAnnunRaw & 0xFF)]),
-            Data([UInt8((cgmAlertAnnun >> 8) & 0xFF)]),
-            Data([UInt8(cgmAlertAnnun & 0xFF)]),
-            Data([UInt8(changeBitmask & 0xFF)])
+            Data([UInt8(cgmAlertAnnunA & 0xFF)]),
+            Data([UInt8(cgmAlertAnnunB & 0xFF)]),
+            Data([UInt8(changeBitmaskRaw & 0xFF)])
         )
     }
 
@@ -87,9 +114,43 @@ public class SetPumpSoundsRequest: Message {
         .AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnunRaw) }
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnunRaw) }
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum? { PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw) }
+    public var cgmAlertAnnun: CgmAlertAnnunciationEnum? { CgmAlertAnnunciationEnum.fromIds(cgmAlertAnnunA, cgmAlertAnnunB) }
+    public var changeBitmask: Set<PumpSoundChangeBitmask> { PumpSoundChangeBitmask.fromBitmask(changeBitmaskRaw) }
 
     public var description: String {
-        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(String(describing: quickBolusAnnun)), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(String(describing: generalAnnun)), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(String(describing: reminderAnnun)), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(String(describing: alertAnnun)), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(String(describing: alarmAnnun)), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnun=\(cgmAlertAnnun), changeBitmask=\(changeBitmask))"
+        "SetPumpSoundsRequest(cargo=\(cargo.hexadecimalString), quickBolusAnnun=\(String(describing: quickBolusAnnun)), quickBolusAnnunRaw=\(quickBolusAnnunRaw), generalAnnun=\(String(describing: generalAnnun)), generalAnnunRaw=\(generalAnnunRaw), reminderAnnun=\(String(describing: reminderAnnun)), reminderAnnunRaw=\(reminderAnnunRaw), alertAnnun=\(String(describing: alertAnnun)), alertAnnunRaw=\(alertAnnunRaw), alarmAnnun=\(String(describing: alarmAnnun)), alarmAnnunRaw=\(alarmAnnunRaw), cgmAlertAnnunA=\(cgmAlertAnnunA), cgmAlertAnnunB=\(cgmAlertAnnunB), changeBitmaskRaw=\(changeBitmaskRaw))"
+    }
+
+    /// CGM alert annunciation type, composed of two byte IDs.
+    public enum CgmAlertAnnunciationEnum {
+        case vibrate
+        case beep
+        case hypoRepeat
+
+        public var idA: Int {
+            switch self {
+            case .vibrate: return 0
+            case .beep: return 0
+            case .hypoRepeat: return 0
+            }
+        }
+
+        public var idB: Int {
+            switch self {
+            case .vibrate: return 0
+            case .beep: return 2
+            case .hypoRepeat: return 3
+            }
+        }
+
+        public static func fromIds(_ idA: Int, _ idB: Int) -> CgmAlertAnnunciationEnum? {
+            switch (idA, idB) {
+            case (0, 0): return .vibrate
+            case (0, 2): return .beep
+            case (0, 3): return .hypoRepeat
+            default: return nil
+            }
+        }
     }
 }
 

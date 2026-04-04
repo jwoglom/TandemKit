@@ -4,6 +4,8 @@ import TandemBLE
 import TandemCore
 
 final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
+    private static let clearQualifyingEventsValue = Data([0, 0, 0, 0])
+
     private final class Collector {
         var packetArrayList: PacketArrayList
         let metadata: MessageMetadata?
@@ -21,6 +23,14 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
     private weak var peripheralManager: PeripheralManager?
 
     private var collectors: [CharacteristicUUID: [UInt8: Collector]] = [:]
+
+    static func normalizeQualifyingEvents(_ rawEvents: Set<QualifyingEvent>) -> Set<QualifyingEvent> {
+        var normalizedEvents = rawEvents
+        if normalizedEvents.contains(.bolusChange) {
+            normalizedEvents.remove(.extendedBolusChange)
+        }
+        return normalizedEvents
+    }
 
     func start(with peripheralManager: PeripheralManager, session: PumpCommSession) {
         queue.async {
@@ -63,8 +73,16 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
     // MARK: - Parsing
 
     private func handleQualifyingEvent(_ data: Data) {
-        let events = QualifyingEvent.fromRawBytes(data)
-        logger.info("[PumpNotificationRouter] received qualifying events: \(events)")
+        let rawEvents = QualifyingEvent.fromRawBytes(data)
+        let events = Self.normalizeQualifyingEvents(rawEvents)
+        if !rawEvents.isEmpty {
+            clearQualifyingEvents()
+        }
+        if rawEvents == events {
+            logger.info("[PumpNotificationRouter] received qualifying events: \(events)")
+        } else {
+            logger.info("[PumpNotificationRouter] received qualifying events: \(rawEvents) -> \(events)")
+        }
 
         guard let session else {
             logger.warning("[PumpNotificationRouter] dropping qualifying events – missing session")
@@ -73,6 +91,31 @@ final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
 
         session.runSession(withName: "QualifyingEvents") {
             session.handleQualifyingEvents(events)
+        }
+    }
+
+    private func clearQualifyingEvents() {
+        if PumpStateSupplier.isOnlySnoopBluetoothEnabled() {
+            logger.debug("[PumpNotificationRouter] only-snoop mode enabled; skipping qualifying event clear")
+            return
+        }
+
+        guard let peripheralManager else {
+            logger.warning("[PumpNotificationRouter] unable to clear qualifying events – missing peripheral manager")
+            return
+        }
+
+        peripheralManager.perform { manager in
+            do {
+                try manager.writeCharacteristicValue(
+                    Self.clearQualifyingEventsValue,
+                    to: .QUALIFYING_EVENTS_CHARACTERISTICS,
+                    type: .withResponse
+                )
+                self.logger.debug("[PumpNotificationRouter] cleared qualifying event characteristic")
+            } catch {
+                self.logger.warning("[PumpNotificationRouter] failed to clear qualifying event characteristic: \(error)")
+            }
         }
     }
 

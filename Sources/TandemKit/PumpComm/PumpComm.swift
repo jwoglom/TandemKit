@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import LoopKit
 import TandemCore
@@ -24,6 +25,16 @@ public class PumpComm: CustomDebugStringConvertible {
 
     public var retryPolicy: PumpCommRetryPolicy
     private let delayHandler: (TimeInterval) -> Void
+
+    // Serial command queue — only one pump message round-trip at a time
+    private let commandQueue = DispatchQueue(label: "com.loopkit.TandemKit.PumpComm.commandQueue", qos: .userInitiated)
+    private static let commandQueueKey = DispatchSpecificKey<Bool>()
+    private var commandQueueKeyInstalled = false
+
+    /// True when the current thread is already executing on the command queue.
+    private var isOnCommandQueue: Bool {
+        DispatchQueue.getSpecific(key: PumpComm.commandQueueKey) == true
+    }
 
     private var session: PumpCommSession?
 
@@ -61,6 +72,9 @@ public class PumpComm: CustomDebugStringConvertible {
         let initialState = pumpState ?? PumpState()
         self.pumpState = pumpState ?? initialState
         session = PumpCommSession(pumpState: initialState, delegate: self)
+
+        commandQueue.setSpecific(key: PumpComm.commandQueueKey, value: true)
+        commandQueueKeyInstalled = true
     }
 
     private static func defaultDelayHandler(_ interval: TimeInterval) {
@@ -128,6 +142,26 @@ public class PumpComm: CustomDebugStringConvertible {
     /// - Returns: The response message from the pump
     /// - Throws: PumpCommError if communication fails or response is invalid
     public func sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
+        // If we're already on the command queue (e.g. inside performOnCommandQueue),
+        // execute directly to avoid deadlock.
+        if isOnCommandQueue {
+            return try _sendMessage(transport: transport, message: message)
+        }
+
+        // Otherwise, serialize onto the command queue so only one round-trip is in flight.
+        var result: Result<Message, Error>!
+        commandQueue.sync {
+            do {
+                result = .success(try _sendMessage(transport: transport, message: message))
+            } catch {
+                result = .failure(error)
+            }
+        }
+        return try result.get()
+    }
+
+    /// The actual send implementation, always called on the command queue.
+    private func _sendMessage(transport: PumpMessageTransport, message: Message) throws -> Message {
         log.debug("sendMessage: attempting to send \(message)")
 
         var attempt = 0
@@ -136,7 +170,6 @@ public class PumpComm: CustomDebugStringConvertible {
             attempt += 1
             do {
                 let response = try transport.sendMessage(message)
-                // log.debug("sendMessage: received response %@", String(describing: response))
 
                 if let errorResponse = response as? ErrorResponse {
                     log.error(
@@ -221,6 +254,30 @@ public class PumpComm: CustomDebugStringConvertible {
         }
 
         return typedResponse
+    }
+
+    // MARK: - Command Queue
+
+    /// Execute a block on the serial command queue.
+    ///
+    /// Use this to hold the queue across multi-message sequences (e.g. bolus
+    /// permission + initiate, temp basal query + stop + set). Individual
+    /// `sendMessage` calls within the block will detect re-entrancy and skip
+    /// the queue acquire, so there is no deadlock risk.
+    public func performOnCommandQueue<T>(_ block: () throws -> T) throws -> T {
+        if isOnCommandQueue {
+            return try block()
+        }
+
+        var result: Result<T, Error>!
+        commandQueue.sync {
+            do {
+                result = .success(try block())
+            } catch {
+                result = .failure(error)
+            }
+        }
+        return try result.get()
     }
 
     // MARK: - CustomDebugStringConvertible

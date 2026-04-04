@@ -6,8 +6,7 @@ public class LastBolusStatusRequest: Message {
         opCode: 48,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-        minApi: .apiFuture
+        characteristic: .CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

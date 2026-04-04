@@ -71,11 +71,24 @@ struct TandemKitNotificationsView: View {
                     }
                 }
             }
+
+            if !viewModel.notifications.isEmpty {
+                Section {
+                    Text(LocalizedString(
+                        "To dismiss a pump notification, swipe it away.",
+                        comment: "Hint for dismissing notifications"
+                    ))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+                }
+            }
         }
         .listStyle(InsetGroupedListStyle())
         .navigationBarTitle(String(localized: "Notifications", comment: "Notifications view title"))
         .navigationBarItems(trailing: refreshButton)
-        .task {
+        .onAppear {
             guard !didLoad else { return }
             didLoad = true
             viewModel.refreshNotifications()
@@ -106,9 +119,9 @@ struct TandemKitNotificationsView: View {
     }
 
     private func formatLastRefreshTime(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
     }
 }
 
