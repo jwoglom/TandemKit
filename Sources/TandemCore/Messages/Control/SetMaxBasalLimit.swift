@@ -15,14 +15,11 @@ public class SetMaxBasalLimitRequest: Message {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        maxHourlyBasalMilliunits = Bytes.readShort(cargo, 0)
+        maxHourlyBasalMilliunits = Int(Bytes.readUint32(cargo, 0))
     }
 
     public init(maxHourlyBasalMilliunits: Int) {
-        cargo = Bytes.combine(
-            Bytes.firstTwoBytesLittleEndian(maxHourlyBasalMilliunits),
-            Data([0, 0])
-        )
+        cargo = Bytes.toUint32(UInt32(maxHourlyBasalMilliunits))
         self.maxHourlyBasalMilliunits = maxHourlyBasalMilliunits
     }
 

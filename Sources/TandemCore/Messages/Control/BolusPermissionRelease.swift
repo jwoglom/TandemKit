@@ -12,20 +12,30 @@ public class BolusPermissionReleaseRequest: Message {
     )
 
     public var cargo: Data
-    public var bolusId: UInt32
+    public var bolusID: Int
+    public var reserve: Int
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        bolusId = Bytes.readUint32(cargo, 0)
+        bolusID = Bytes.readShort(cargo, 0)
+        reserve = Bytes.readShort(cargo, 2)
     }
 
-    public init(bolusId: UInt32) {
-        cargo = Bytes.toUint32(bolusId)
-        self.bolusId = bolusId
+    public init(bolusID: Int, reserve: Int = 0) {
+        cargo = BolusPermissionReleaseRequest.buildCargo(bolusID: bolusID, reserve: reserve)
+        self.bolusID = bolusID
+        self.reserve = reserve
+    }
+
+    public static func buildCargo(bolusID: Int, reserve: Int) -> Data {
+        Bytes.combine(
+            Bytes.firstTwoBytesLittleEndian(bolusID),
+            Bytes.firstTwoBytesLittleEndian(reserve)
+        )
     }
 
     public var description: String {
-        "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId))"
+        "BolusPermissionReleaseRequest(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), reserve=\(reserve))"
     }
 }
 

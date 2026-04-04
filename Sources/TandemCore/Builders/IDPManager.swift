@@ -26,10 +26,12 @@ public class IDPManager {
         private var idpSettingsResponse: IDPSettingsResponse
         fileprivate var segments: [IDPSegmentResponse] = []
         private let isActive: Bool
+        public let profileIndex: Int
 
-        public init(idpSettingsResponse: IDPSettingsResponse, isActive: Bool) {
+        public init(idpSettingsResponse: IDPSettingsResponse, isActive: Bool, profileIndex: Int) {
             self.idpSettingsResponse = idpSettingsResponse
             self.isActive = isActive
+            self.profileIndex = profileIndex
         }
 
         /// Whether all segments have been loaded for this profile.
@@ -59,7 +61,7 @@ public class IDPManager {
 
         /// Generate a request to delete this profile.
         public func deleteProfileMessage() -> DeleteIDPRequest {
-            DeleteIDPRequest(idpId: idpId)
+            DeleteIDPRequest(idpId: idpId, profileIndex: profileIndex)
         }
 
         /// Generate a request to duplicate this profile with a new name.
@@ -69,7 +71,7 @@ public class IDPManager {
 
         /// Generate a request to make this profile the active one.
         public func setActiveProfileMessage() -> SetActiveIDPRequest {
-            SetActiveIDPRequest(idpId: idpId)
+            SetActiveIDPRequest(idpId: idpId, profileIndex: profileIndex)
         }
 
         // MARK: - Segment Mutation Messages
@@ -88,7 +90,7 @@ public class IDPManager {
 
             return SetIDPSegmentRequest(
                 idpId: idpId,
-                unknownId: 0,
+                profileIndex: profileIndex,
                 segmentIndex: segment.segmentIndex,
                 operation: .deleteSegmentId,
                 profileStartTime: segment.profileStartTime,
@@ -112,7 +114,7 @@ public class IDPManager {
 
             return SetIDPSegmentRequest(
                 idpId: idpId,
-                unknownId: 0,
+                profileIndex: profileIndex,
                 segmentIndex: segment.segmentIndex,
                 operation: .modifySegmentId,
                 profileStartTime: segment.profileStartTime,
@@ -145,7 +147,7 @@ public class IDPManager {
 
             return SetIDPSegmentRequest(
                 idpId: idpId,
-                unknownId: 0,
+                profileIndex: profileIndex,
                 segmentIndex: 0, // Segment index is ignored for create operations
                 operation: .createSegment,
                 profileStartTime: profileStartTime,
@@ -258,7 +260,8 @@ public class IDPManager {
                 }
                 let activeSlot = profileStatus.activeIdpSlotId
                 let isActive = (idpId == activeSlot)
-                let newProfile = Profile(idpSettingsResponse: settings, isActive: isActive)
+                let slotIndex = profileStatus.idpSlotIds.firstIndex(of: idpId) ?? 0
+                let newProfile = Profile(idpSettingsResponse: settings, isActive: isActive, profileIndex: slotIndex)
                 profiles.append(newProfile)
 
                 // Sort profiles by their slot order

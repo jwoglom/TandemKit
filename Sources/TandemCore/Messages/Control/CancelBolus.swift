@@ -52,14 +52,14 @@ public class CancelBolusResponse: Message {
         self.cargo = cargo
         statusId = Int(cargo[0])
         bolusId = Bytes.readShort(cargo, 1)
-        reasonId = Bytes.readShort(cargo, 3)
+        reasonId = Int(cargo[3])
     }
 
     public init(statusId: Int, bolusId: Int, reasonId: Int) {
         cargo = Bytes.combine(
             Data([UInt8(statusId & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(bolusId),
-            Bytes.firstTwoBytesLittleEndian(reasonId)
+            Data([UInt8(reasonId & 0xFF), 0])
         )
         self.statusId = statusId
         self.bolusId = bolusId

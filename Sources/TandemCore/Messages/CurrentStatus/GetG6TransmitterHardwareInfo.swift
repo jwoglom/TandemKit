@@ -38,7 +38,8 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
     public var transmitterHardwareRevision: String
     public var transmitterBleHardwareId: String
     public var transmitterSoftwareNumber: String
-    public var unusedRemaining: Data
+    public var transmitterPairingCode: String
+    public var transmitterSerialNumber: String
 
     public required init(cargo: Data) {
         self.cargo = cargo
@@ -46,30 +47,35 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         transmitterHardwareRevision = Bytes.readString(cargo, 16, 16)
         transmitterBleHardwareId = Bytes.readString(cargo, 32, 16)
         transmitterSoftwareNumber = Bytes.readString(cargo, 48, 16)
-        unusedRemaining = Bytes.dropFirstN(cargo, 64)
+        transmitterPairingCode = Bytes.readString(cargo, 64, 16)
+        transmitterSerialNumber = Bytes.readString(cargo, 80, 16)
     }
 
     public init(
         transmitterFirmwareVersion: String,
         transmitterHardwareRevision: String,
         transmitterBleHardwareId: String,
-        transmitterSoftwareNumber: String
+        transmitterSoftwareNumber: String,
+        transmitterPairingCode: String,
+        transmitterSerialNumber: String
     ) {
         cargo = Bytes.combine(
             Bytes.writeString(transmitterFirmwareVersion, 16),
             Bytes.writeString(transmitterHardwareRevision, 16),
             Bytes.writeString(transmitterBleHardwareId, 16),
             Bytes.writeString(transmitterSoftwareNumber, 16),
-            Bytes.emptyBytes(32)
+            Bytes.writeString(transmitterPairingCode, 16),
+            Bytes.writeString(transmitterSerialNumber, 16)
         )
         self.transmitterFirmwareVersion = transmitterFirmwareVersion
         self.transmitterHardwareRevision = transmitterHardwareRevision
         self.transmitterBleHardwareId = transmitterBleHardwareId
         self.transmitterSoftwareNumber = transmitterSoftwareNumber
-        unusedRemaining = Bytes.emptyBytes(32)
+        self.transmitterPairingCode = transmitterPairingCode
+        self.transmitterSerialNumber = transmitterSerialNumber
     }
 
     public var description: String {
-        "GetG6TransmitterHardwareInfoResponse(cargo=\(cargo.hexadecimalString), transmitterFirmwareVersion=\(transmitterFirmwareVersion), transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), unusedRemaining=\(unusedRemaining.hexadecimalString))"
+        "GetG6TransmitterHardwareInfoResponse(cargo=\(cargo.hexadecimalString), transmitterFirmwareVersion=\(transmitterFirmwareVersion), transmitterHardwareRevision=\(transmitterHardwareRevision), transmitterBleHardwareId=\(transmitterBleHardwareId), transmitterSoftwareNumber=\(transmitterSoftwareNumber), transmitterPairingCode=\(transmitterPairingCode), transmitterSerialNumber=\(transmitterSerialNumber))"
     }
 }

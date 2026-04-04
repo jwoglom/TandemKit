@@ -13,20 +13,24 @@ public class DismissNotificationRequest: Message {
     public var cargo: Data
     public var notificationId: UInt32
     public var notificationTypeId: Int
+    public var executeExtraAction: Bool
 
     public required init(cargo: Data) {
         self.cargo = cargo
         notificationId = Bytes.readUint32(cargo, 0)
-        notificationTypeId = Bytes.readShort(cargo, 4)
+        notificationTypeId = Int(cargo[4] & 0xFF)
+        executeExtraAction = (cargo[5] & 0xFF) != 0
     }
 
-    public init(notificationType: NotificationType, notificationId: UInt32) {
+    public init(notificationType: NotificationType, notificationId: UInt32, executeExtraAction: Bool = false) {
         cargo = Bytes.combine(
             Bytes.toUint32(notificationId),
-            Bytes.firstTwoBytesLittleEndian(notificationType.rawValue)
+            Bytes.firstByteLittleEndian(notificationType.rawValue),
+            Bytes.firstByteLittleEndian(executeExtraAction ? 1 : 0)
         )
         self.notificationId = notificationId
         notificationTypeId = notificationType.rawValue
+        self.executeExtraAction = executeExtraAction
     }
 
     public var notificationType: NotificationType? {
@@ -41,7 +45,7 @@ public class DismissNotificationRequest: Message {
     }
 
     public var description: String {
-        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(String(describing: notificationType)), notificationTypeId=\(notificationTypeId))"
+        "DismissNotificationRequest(cargo=\(cargo.hexadecimalString), notificationId=\(notificationId), notificationType=\(String(describing: notificationType)), notificationTypeId=\(notificationTypeId), executeExtraAction=\(executeExtraAction))"
     }
 }
 

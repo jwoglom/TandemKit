@@ -14,27 +14,30 @@ public class RenameIDPRequest: Message {
 
     public var cargo: Data
     public var idpId: Int
+    public var profileIndex: Int
     public var profileName: String
 
     public required init(cargo: Data) {
         self.cargo = cargo
         idpId = Int(cargo[0])
+        profileIndex = Int(cargo[1])
         profileName = Bytes.readString(cargo, 2, 16)
     }
 
-    public init(idpId: Int, profileName: String) {
+    public init(idpId: Int, profileIndex: Int = 0, profileName: String) {
         cargo = Bytes.combine(
             Data([UInt8(idpId & 0xFF)]),
-            Data([1]),
+            Data([UInt8(profileIndex & 0xFF)]),
             Bytes.writeString(profileName, 16),
             Data([0])
         )
         self.idpId = idpId
+        self.profileIndex = profileIndex
         self.profileName = profileName
     }
 
     public var description: String {
-        "RenameIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileName=\(profileName))"
+        "RenameIDPRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileIndex=\(profileIndex), profileName=\(profileName))"
     }
 }
 

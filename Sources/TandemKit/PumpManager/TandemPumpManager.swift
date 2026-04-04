@@ -2117,7 +2117,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            var permissionBolusId: UInt32?
+            var permissionBolusId: Int?
             var shouldReleasePermissionOnFailure = false
 
             do {
@@ -2139,7 +2139,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         )
                     }
 
-                    permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
+                    permissionBolusId = permissionResponse.bolusId
                     shouldReleasePermissionOnFailure = true
 
                     let milliUnits = max(0, Int((units * 1000).rounded()))
@@ -3536,11 +3536,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 private extension TandemPumpManager {
-    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
+    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: Int) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
                 transport: transport,
-                message: BolusPermissionReleaseRequest(bolusId: bolusId),
+                message: BolusPermissionReleaseRequest(bolusID: bolusId),
                 expecting: BolusPermissionReleaseResponse.self
             )
 
