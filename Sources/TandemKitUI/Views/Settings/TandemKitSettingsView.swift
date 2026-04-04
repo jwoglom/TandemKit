@@ -352,7 +352,8 @@ struct TandemKitSettingsView: View {
                 }
             }
 
-            Section(header: SectionHeader(label: LocalizedString(
+            Section(header: SectionHeader(label: String(
+                localized:
                 "Pump time",
                 comment: "The title of the pump time section in DanaKit settings"
             ))) {
@@ -473,7 +474,7 @@ struct TandemKitSettingsView: View {
             if viewModel.isUpdatingPumpState {
                 HStack(alignment: .center) {
                     ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Text(LocalizedString("Updating...", comment: "Text shown when updating pump state"))
+                    Text("Updating...", comment: "Text shown when updating pump state")
                         .fontWeight(.bold)
                         .fixedSize()
                 }

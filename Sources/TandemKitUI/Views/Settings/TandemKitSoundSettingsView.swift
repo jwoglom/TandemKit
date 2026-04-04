@@ -15,9 +15,9 @@ struct TandemKitSoundSettingsView: View {
     private func soundSettingFormatter(_ value: Int) -> String {
         switch value {
         case 0:
-            return LocalizedString("Beep", comment: "sound setting audioHigh")
+            return String(localized: "Beep", comment: "sound setting audioHigh")
         case 3:
-            return LocalizedString("Vibrate", comment: "sound setting vibrate")
+            return String(localized: "Vibrate", comment: "sound setting vibrate")
         default:
             return ""
         }
@@ -170,12 +170,12 @@ struct TandemKitSoundSettingsView: View {
     }
 
     @ViewBuilder private var title: some View {
-        Text(LocalizedString(
+        Text(
             "You can configure which actions cause your pump to beep or vibrate",
             comment: "Title text for insulin type confirmation page"
-        ))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
+        )
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal)
 
         Divider()
             .padding(.vertical)

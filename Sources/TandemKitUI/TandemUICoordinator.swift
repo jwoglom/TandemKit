@@ -134,7 +134,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitInsulinType(
                 initialValue: pumpManager?.state.insulinType ?? allowedInsulinTypes.first,
                 supportedInsulinTypes: allowedInsulinTypes,
-                label: !isOnboarded ? LocalizedString("Continue", comment: "continue") : LocalizedString("Save", comment: "save"),
+                label: !isOnboarded ? String(localized: "Continue", comment: "continue") :
+                    String(localized: "Save", comment: "save"),
                 didConfirm: { type in
                     guard let pumpManager = self.pumpManager else { return }
 

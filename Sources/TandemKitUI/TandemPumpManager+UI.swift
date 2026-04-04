@@ -110,7 +110,7 @@ extension TandemPumpManager {
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
         if let reservoirLevel = reservoirLevel, reservoirLevel.unitVolume < 1 {
             return PumpStatusHighlight(
-                localizedMessage: LocalizedString("No Insulin", comment: "Status highlight that a pump is out of insulin."),
+                localizedMessage: String(localized: "No Insulin", comment: "Status highlight that a pump is out of insulin."),
                 imageName: "exclamationmark.circle.fill",
                 state: .critical
             )

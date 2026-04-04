@@ -11,7 +11,7 @@ struct TandemKitScanView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
+            title: String(localized: "Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
             currentStep: viewModel.currentPhase.rawValue + 1,
             totalSteps: 3,
             canCancel: false,
@@ -34,7 +34,7 @@ struct TandemKitScanView: View {
                 if viewModel.currentPhase == .mobiOnPad {
                     VStack(alignment: .leading, spacing: 10) {
                         Button(
-                            LocalizedString("Pump not detected?", comment: "Button text for help when pump not found"),
+                            String(localized: "Pump not detected?", comment: "Button text for help when pump not found"),
                             action: {
                                 isHelpSheetPresented = true
                             }
@@ -49,7 +49,7 @@ struct TandemKitScanView: View {
         .navigationBarHidden(false)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(LocalizedString("Cancel", comment: "Cancel button title"), action: {
+                Button(String(localized: "Cancel", comment: "Cancel button title"), action: {
                     viewModel.stopScan()
                     self.dismiss()
                 })
@@ -61,26 +61,26 @@ struct TandemKitScanView: View {
             }
         }
         .alert(
-            LocalizedString("Error while connecting to device", comment: "Connection error message"),
+            String(localized: "Error while connecting to device", comment: "Connection error message"),
             isPresented: $viewModel.isConnectionError,
             presenting: $viewModel.connectionErrorMessage,
             actions: { _ in
-                Button(LocalizedString("OK", comment: "OK button"), action: {})
+                Button(String(localized: "OK", comment: "OK button"), action: {})
             },
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
-            LocalizedString("Enter Pairing code", comment: "Enter Pairing code instruction"),
+            String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),
             isPresented: $viewModel.isPromptingPincode
         ) {
-            Button(LocalizedString("Cancel", comment: "Cancel button title"), role: .cancel) {
+            Button(String(localized: "Cancel", comment: "Cancel button title"), role: .cancel) {
                 viewModel.cancelPinPrompt()
             }
-            Button(LocalizedString("Pair", comment: "Pair button")) {
+            Button(String(localized: "Pair", comment: "Pair button")) {
                 viewModel.processPinPrompt()
             }
 
-            TextField(LocalizedString("PIN", comment: "Tandem pairing code prompt"), text: $viewModel.devicePinCode)
+            TextField(String(localized: "PIN", comment: "Tandem pairing code prompt"), text: $viewModel.devicePinCode)
                 .keyboardType(.numberPad)
                 .onChange(of: viewModel.devicePinCode) { newValue in
                     let filtered = newValue.filter { $0.isNumber }
@@ -93,8 +93,12 @@ struct TandemKitScanView: View {
                 Text(message)
             } else {
                 VStack {
-                    Text(LocalizedString("Enter the pairing code from your pump", comment: "Tandem pairing code prompt message"))
-                    Text(LocalizedString(
+                    Text(String(
+                        localized: "Enter the pairing code from your pump",
+                        comment: "Tandem pairing code prompt message"
+                    ))
+                    Text(String(
+                        localized:
                         "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers.",
                         comment: "Tandem instructions for finding pairing code"
                     )).font(.caption)
@@ -180,7 +184,7 @@ struct TandemKitScanView: View {
                 .font(.headline)
                 .bold()
 
-                Text(LocalizedString("Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
+                Text(String(localized: "Found the ", comment: "Found device prefix text") + (viewModel.connectingTo ?? ""))
                     .foregroundStyle(.secondary)
             }
 
@@ -199,7 +203,8 @@ struct TandemKitScanView: View {
 
     @ViewBuilder var AuthenticatingView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(LocalizedString(
+            Text(String(
+                localized:
                 "Pairing with ",
                 comment: "Pairing with device prefix text"
             ) + (viewModel.connectingTo ?? "Tandem Mobi"))

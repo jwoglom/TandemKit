@@ -10,7 +10,7 @@ struct TandemKitFillTubingView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Fill Tubing", comment: "Title for fill tubing"),
+            title: String(localized: "Fill Tubing", comment: "Title for fill tubing"),
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 5,
             canCancel: !viewModel.isProcessing,
@@ -112,13 +112,9 @@ struct TandemKitFillTubingView: View {
             Button(action: {
                 presentationMode.wrappedValue.dismiss()
             }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                Text("Done", comment: "Button text")
             }
+            .buttonStyle(ActionButtonStyle())
         }
     }
 
@@ -132,14 +128,14 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(guidanceColors.warning)
                     .font(.title2)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(LocalizedString("Important", comment: "Important section header"))
+                    Text("Important", comment: "Important section header")
                         .font(.headline)
                         .foregroundColor(guidanceColors.warning)
-                    Text(LocalizedString(
+                    Text(
                         "Filling tubing requires suspending insulin delivery. You will use the pump button to fill.",
                         comment: "Warning message for tubing fill"
-                    ))
-                        .font(.subheadline)
+                    )
+                    .font(.subheadline)
                 }
             }
             .padding()
@@ -148,10 +144,10 @@ struct TandemKitFillTubingView: View {
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
+                Text("Step 1: Suspend Insulin", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("First, suspend insulin delivery", comment: "Step description"))
+                Text("First, suspend insulin delivery", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -159,7 +155,7 @@ struct TandemKitFillTubingView: View {
             // Step content
             if viewModel.isSuspended == true {
                 Label(
-                    LocalizedString("Insulin suspended", comment: "Status text"),
+                    String(localized: "Insulin suspended", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
@@ -171,7 +167,7 @@ struct TandemKitFillTubingView: View {
             } else {
                 if viewModel.failedSuspend {
                     Label(
-                        LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
+                        String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
@@ -187,10 +183,10 @@ struct TandemKitFillTubingView: View {
     private var enterModeStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 2: Prepare Pump", comment: "Step header"))
+                Text("Step 2: Prepare Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Clear all pump notifications before continuing", comment: "Step description"))
+                Text("Clear all pump notifications before continuing", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -198,7 +194,7 @@ struct TandemKitFillTubingView: View {
             // Embedded notifications check
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                    Text("Active Notifications", comment: "Notifications section header")
                         .font(.headline)
                     Spacer()
                     Button(action: {
@@ -218,7 +214,7 @@ struct TandemKitFillTubingView: View {
                         Spacer()
                         VStack(spacing: 12) {
                             ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            Text(LocalizedString("Checking notifications...", comment: "Loading notifications message"))
+                            Text("Checking notifications...", comment: "Loading notifications message")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -232,7 +228,7 @@ struct TandemKitFillTubingView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 40))
                                 .foregroundColor(.green)
-                            Text(LocalizedString("No active notifications", comment: "No notifications message"))
+                            Text("No active notifications", comment: "No notifications message")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -259,7 +255,8 @@ struct TandemKitFillTubingView: View {
 
             if viewModel.hasActiveNotifications {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before starting tubing fill",
                         comment: "Warning message"
                     ),
@@ -274,7 +271,8 @@ struct TandemKitFillTubingView: View {
 
             if viewModel.failedEnterMode {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Failed to enter fill mode. Ensure insulin delivery is suspended, the active cartridge contains insulin, and check pump notifications.",
                         comment: "Error message"
                     ),
@@ -296,27 +294,27 @@ struct TandemKitFillTubingView: View {
     private var fillingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 3: Fill Tubing", comment: "Step header"))
+                Text("Step 3: Fill Tubing", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Use your pump to fill the tubing with insulin", comment: "Step description"))
+                Text("Use your pump to fill the tubing with insulin", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             if !viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(LocalizedString(
+                    Text(
                         "Press and hold the button on your pump to fill tubing.",
                         comment: "Instructions"
-                    ))
-                        .font(.body)
+                    )
+                    .font(.body)
 
-                    Text(LocalizedString(
+                    Text(
                         "Watch the tubing for insulin and release the button when you see it.",
                         comment: "Instructions"
-                    ))
-                        .font(.body)
+                    )
+                    .font(.body)
                 }
                 .padding()
                 .background(Color(.secondarySystemGroupedBackground))
@@ -327,7 +325,7 @@ struct TandemKitFillTubingView: View {
             if viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                        Text("Active Notifications", comment: "Notifications section header")
                             .font(.headline)
                         Spacer()
                     }
@@ -349,7 +347,8 @@ struct TandemKitFillTubingView: View {
                 .cornerRadius(12)
 
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before completing tubing fill",
                         comment: "Warning message"
                     ),
@@ -364,7 +363,7 @@ struct TandemKitFillTubingView: View {
 
             if viewModel.failedExitMode {
                 Label(
-                    LocalizedString("Failed to complete. Please try again.", comment: "Error message"),
+                    String(localized: "Failed to complete. Please try again.", comment: "Error message"),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
@@ -387,17 +386,17 @@ struct TandemKitFillTubingView: View {
     private var exitingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Completing Fill", comment: "Step header"))
+                Text("Completing Fill", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Finalizing tubing fill process", comment: "Step description"))
+                Text("Finalizing tubing fill process", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             HStack(spacing: 12) {
                 ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                Text(LocalizedString("Exiting fill mode...", comment: "Status text"))
+                Text("Exiting fill mode...", comment: "Status text")
                     .font(.headline)
             }
             .padding()
@@ -415,12 +414,12 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(.green)
 
                 VStack(spacing: 8) {
-                    Text(LocalizedString("Tubing fill complete!", comment: "Success message"))
+                    Text("Tubing fill complete!", comment: "Success message")
                         .font(.title2)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text(LocalizedString("You can now fill your cannula and resume insulin", comment: "Success description"))
+                    Text("You can now fill your cannula and resume insulin", comment: "Success description")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -445,33 +444,33 @@ struct TandemKitFillTubingView: View {
 
     var suspendInsulinSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Suspend insulin delivery?", comment: "Action sheet title")),
-            message: Text(LocalizedString(
+            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+            message: Text(
                 "This will stop all insulin delivery until you resume.",
                 comment: "Action sheet message"
-            )),
+            ),
             buttons: [
-                .destructive(Text(LocalizedString("Yes, Suspend Insulin", comment: "Confirm button"))) {
+                .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
-                .cancel(Text(LocalizedString("Cancel", comment: "Cancel button")))
+                .cancel(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
 
     var cancelOperationSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Cancel tubing fill?", comment: "Action sheet title")),
-            message: Text(LocalizedString(
+            title: Text("Cancel tubing fill?", comment: "Action sheet title"),
+            message: Text(
                 "The tubing fill is not complete. The pump will attempt to exit fill mode.",
                 comment: "Action sheet message"
-            )),
+            ),
             buttons: [
-                .destructive(Text(LocalizedString("Yes, Cancel", comment: "Confirm button"))) {
+                .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
                     presentationMode.wrappedValue.dismiss()
                 },
-                .cancel(Text(LocalizedString("No, Continue", comment: "Cancel button")))
+                .cancel(Text("No, Continue", comment: "Cancel button"))
             ]
         )
     }

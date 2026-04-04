@@ -9,12 +9,14 @@ extension PumpPairingCodeValidationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .empty:
-            return LocalizedString(
+            return String(
+                localized:
                 "Enter the pairing code shown on your pump.",
                 comment: "Error message when pairing code text field is empty"
             )
         case .invalidLength:
-            return LocalizedString(
+            return String(
+                localized:
                 "Pairing codes are 6 digits long.",
                 comment: "Error message when pairing code entry has the wrong length"
             )
@@ -24,12 +26,14 @@ extension PumpPairingCodeValidationError: LocalizedError {
     public var recoverySuggestion: String? {
         switch self {
         case .empty:
-            return LocalizedString(
+            return String(
+                localized:
                 "Type the code displayed on the pump screen.",
                 comment: "Recovery suggestion when pairing code text field is empty"
             )
         case .invalidLength:
-            return LocalizedString(
+            return String(
+                localized:
                 "Check the code on the pump and try again.",
                 comment: "Recovery suggestion when pairing code entry has the wrong length"
             )

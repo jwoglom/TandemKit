@@ -167,7 +167,7 @@ struct TandemKitChangeCartridgeView: View {
             // Step content
             if viewModel.isSuspended == true {
                 Label(
-                    LocalizedString("Insulin suspended", comment: "Status text"),
+                    String(localized: "Insulin suspended", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
@@ -179,7 +179,7 @@ struct TandemKitChangeCartridgeView: View {
             } else {
                 if viewModel.failedSuspend {
                     Label(
-                        LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
+                        String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
@@ -267,7 +267,8 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.hasActiveNotifications {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before starting cartridge change",
                         comment: "Warning message"
                     ),
@@ -282,7 +283,8 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.failedEnterMode {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Failed to enter change mode. Ensure insulin delivery is suspended and check pump notifications.",
                         comment: "Error message"
                     ),
@@ -314,7 +316,7 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.changeCartridgeState == .readyToChange {
                 Label(
-                    LocalizedString("Pump is ready", comment: "Status text"),
+                    String(localized: "Pump is ready", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
@@ -396,7 +398,8 @@ struct TandemKitChangeCartridgeView: View {
                 .cornerRadius(12)
 
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before continuing",
                         comment: "Warning message"
                     ),
@@ -458,7 +461,7 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.failedExitMode {
                 Label(
-                    LocalizedString("Failed to complete cartridge change. Please try again.", comment: "Error message"),
+                    String(localized: "Failed to complete cartridge change. Please try again.", comment: "Error message"),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
