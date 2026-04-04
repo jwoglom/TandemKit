@@ -18,8 +18,12 @@ class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
-    var openInsulinType: () -> Void
-    var openSoundSettings: () -> Void
+    let openNotifications: () -> Void
+    let openInsulinType: () -> Void
+    let openSoundSettings: () -> Void
+    let openCartridgeChange: () -> Void
+    let openFillTubing: () -> Void
+    let openFillCannula: () -> Void
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
@@ -50,13 +54,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     init(
         _ pumpManager: TandemPumpManager? = nil,
         nextStep: @escaping () -> Void,
+        openNotifications: @escaping () -> Void,
         openInsulinType: @escaping () -> Void,
-        openSoundSettings: @escaping () -> Void
+        openSoundSettings: @escaping () -> Void,
+        openCartridgeChange: @escaping () -> Void,
+        openFillTubing: @escaping () -> Void,
+        openFillCannula: @escaping () -> Void
     ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
+        self.openNotifications = openNotifications
         self.openInsulinType = openInsulinType
         self.openSoundSettings = openSoundSettings
+        self.openCartridgeChange = openCartridgeChange
+        self.openFillTubing = openFillTubing
+        self.openFillCannula = openFillCannula
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         reservoirValue = pumpManager?.reservoirLevel
@@ -168,7 +180,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
                 return
             }
-            guard let isSuspended = self.isSuspended else {
+            guard let isSuspended = self.isSuspended, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                 }
@@ -176,31 +188,35 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             if isSuspended {
-                let response = self.pumpManager?.sendMessage(message: ResumePumpingRequest()) as? ResumePumpingResponse
+                pumpManager.resumeDelivery { error in
+                    if let _ = error {
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                            self.commandFailure = .resume
+                        }
+                    } else {
+                        pumpManager.ensureCurrentPumpData { _ in }
 
-                guard response?.isStatusOK == true else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.commandFailure = .resume
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                        }
                     }
-                    return
                 }
             } else {
-                let response = self.pumpManager?.sendMessage(message: SuspendPumpingRequest()) as? SuspendPumpingResponse
+                pumpManager.suspendDelivery { error in
+                    if let _ = error {
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                            self.commandFailure = .suspend
+                        }
+                    } else {
+                        pumpManager.ensureCurrentPumpData { _ in }
 
-                guard response?.isStatusOK == true else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.commandFailure = .suspend
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                        }
                     }
-                    return
                 }
-            }
-
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
             }
         }
     }
@@ -393,23 +409,6 @@ class TandemKitSettingsViewModel: ObservableObject {
             return "Disable sleep mode"
         }
         return "Enable sleep mode"
-    }
-
-    // Cartridge operations
-    func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
-        TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
-        TandemKitFillTubingViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
-        TandemKitFillCannulaViewModel(pumpManager: pumpManager)
-    }
-
-    func createNotificationsViewModel() -> TandemKitNotificationsViewModel {
-        TandemKitNotificationsViewModel(pumpManager)
     }
 
     func removePump() {

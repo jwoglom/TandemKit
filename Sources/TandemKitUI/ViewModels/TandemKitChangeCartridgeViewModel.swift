@@ -49,6 +49,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var showingSuspendConfirmation = false
     @Published var showingCancelConfirmation = false
 
+    let done: () -> Void
+    let toFillTubing: () -> Void
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.cartridge.processQueue")
 
@@ -61,8 +63,10 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         !notificationsViewModel.notifications.isEmpty
     }
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillTubing: @escaping () -> Void) {
         self.pumpManager = pumpManager
+        self.done = done
+        self.toFillTubing = toFillTubing
         notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
 
         // Forward child ViewModel changes to parent
@@ -75,10 +79,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
     deinit {
         notificationCheckTask?.cancel()
-    }
-
-    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
-        TandemKitFillTubingViewModel(pumpManager: pumpManager)
     }
 
     func startPeriodicNotificationCheck() async {

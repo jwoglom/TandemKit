@@ -3,7 +3,6 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitChangeCartridgeView: View {
-    @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitChangeCartridgeViewModel
     @State private var didLoad = false
@@ -110,19 +109,12 @@ struct TandemKitChangeCartridgeView: View {
             }
         case .done:
             VStack {
-                NavigationLink(destination: TandemKitFillTubingView(
-                    viewModel: viewModel.createFillTubingViewModel()
-                )) {
+                Button(action: { viewModel.toFillTubing() }) {
                     Text("Fill Tubing", comment: "Button text")
                 }
                 .buttonStyle(ActionButtonStyle())
 
-                Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                    Text("Fill Tubing", comment: "Button text")
-                }
-                .buttonStyle(ActionButtonStyle())
-
-                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Button(action: { viewModel.done() }) {
                     Text("Done", comment: "Button text")
                 }
                 .buttonStyle(ActionButtonStyle(.secondary))
@@ -513,7 +505,7 @@ struct TandemKitChangeCartridgeView: View {
 
     private func handleCancel() {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
-            presentationMode.wrappedValue.dismiss()
+            viewModel.done()
         } else {
             viewModel.showingCancelConfirmation = true
         }
@@ -547,7 +539,7 @@ struct TandemKitChangeCartridgeView: View {
             buttons: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
-                    presentationMode.wrappedValue.dismiss()
+                    viewModel.done()
                 },
                 .cancel(Text("No, Continue", comment: "Cancel button"))
             ]
@@ -560,7 +552,7 @@ struct TandemKitChangeCartridgeView: View {
 private extension TandemKitChangeCartridgeViewModel {
     static func preview(step: CartridgeChangeStep, configure: (TandemKitChangeCartridgeViewModel) -> Void = { _ in
     }) -> TandemKitChangeCartridgeViewModel {
-        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
+        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil, done: {}, toFillTubing: {})
         viewModel.currentStep = step
         configure(viewModel)
         return viewModel

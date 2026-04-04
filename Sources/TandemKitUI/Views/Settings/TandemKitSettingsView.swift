@@ -217,24 +217,11 @@ struct TandemKitSettingsView: View {
                 "Notifications",
                 comment: "The title of the notifications section in TandemKit settings"
             ))) {
-                NavigationLink(destination: TandemKitNotificationsView(
-                    viewModel: viewModel.createNotificationsViewModel()
-                )) {
-                    HStack {
-                        Text("View Notifications", comment: "Label for viewing notifications")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if viewModel.notificationCount > 0 {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 24, height: 24)
-                                Text("\(viewModel.notificationCount)")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 12, weight: .bold))
-                            }
-                        }
-                    }
+                navigationLink(
+                    label: Text("View Notifications", comment: "Label for viewing notifications"),
+                    notificationCount: viewModel.notificationCount
+                ) {
+                    viewModel.openNotifications()
                 }
 
                 Toggle(isOn: Binding(
@@ -302,27 +289,13 @@ struct TandemKitSettingsView: View {
                     }
                 }
 
-                Button(action: {
+                navigationLink(label: Text("Insulin type", comment: "Label for button to view insulin type of pump")) {
                     viewModel.openInsulinType()
-                }) {
-                    Text("Insulin type", comment: "Label for button to view insulin type of pump")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: UIFont.systemFontSize, weight: .medium))
-                        .opacity(0.35)
                 }
-                .buttonStyle(.plain)
 
-                Button(action: {
+                navigationLink(label: Text("Sound settings", comment: "Label for button to view sound settings of pump")) {
                     viewModel.openSoundSettings()
-                }) {
-                    Text("Sound settings", comment: "Label for button to view sound settings of pump")
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: UIFont.systemFontSize, weight: .medium))
-                        .opacity(0.35)
                 }
-                .buttonStyle(.plain)
             }
 
             Section(header: SectionHeader(label: String(
@@ -330,25 +303,16 @@ struct TandemKitSettingsView: View {
                 "Cartridge Operations",
                 comment: "The title of the cartridge operations section in TandemKit settings"
             ))) {
-                NavigationLink(destination: TandemKitChangeCartridgeView(
-                    viewModel: viewModel.createChangeCartridgeViewModel()
-                )) {
-                    Text("Change Cartridge", comment: "Label for change cartridge")
-                        .foregroundColor(.primary)
+                navigationLink(label: Text("Change Cartridge", comment: "Label for change cartridge")) {
+                    viewModel.openCartridgeChange()
                 }
 
-                NavigationLink(destination: TandemKitFillTubingView(
-                    viewModel: viewModel.createFillTubingViewModel()
-                )) {
-                    Text("Fill Tubing", comment: "Label for fill tubing")
-                        .foregroundColor(.primary)
+                navigationLink(label: Text("Fill Tubing", comment: "Label for fill tubing")) {
+                    viewModel.openFillTubing()
                 }
 
-                NavigationLink(destination: TandemKitFillCannulaView(
-                    viewModel: viewModel.createFillCannulaViewModel()
-                )) {
-                    Text("Fill Cannula", comment: "Label for fill cannula")
-                        .foregroundColor(.primary)
+                navigationLink(label: Text("Fill Cannula", comment: "Label for fill cannula")) {
+                    viewModel.openFillCannula()
                 }
             }
 
@@ -527,6 +491,32 @@ struct TandemKitSettingsView: View {
         }
     }
 
+    private func navigationLink(label: Text, notificationCount: Int? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: { action() }) {
+            HStack {
+                label
+
+                Spacer()
+
+                if let notificationCount, notificationCount > 0 {
+                    ZStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 24, height: 24)
+                        Text("\(viewModel.notificationCount)")
+                            .foregroundColor(.white)
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: UIFont.systemFontSize, weight: .medium))
+                    .opacity(0.35)
+                    .padding(.leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private func reservoirColor(_ reservoirLevel: Double) -> Color {
         if reservoirLevel > 25 {
             return insulinTintColor
@@ -574,13 +564,29 @@ struct TandemKitSettingsView: View {
 private extension TandemKitSettingsViewModel {
     static var previewData: TandemKitSettingsViewModel {
         // TODO: Create mock TandemPumpManager with populated state for preview
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {}, openSoundSettings: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(
+            nextStep: {},
+            openNotifications: {},
+            openInsulinType: {},
+            openSoundSettings: {},
+            openCartridgeChange: {},
+            openFillTubing: {},
+            openFillCannula: {}
+        )
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         return viewModel
     }
 
     static var previewDataInProgress: TandemKitSettingsViewModel {
-        let viewModel = PreviewTandemKitSettingsViewModel(nextStep: {}, openInsulinType: {}, openSoundSettings: {})
+        let viewModel = PreviewTandemKitSettingsViewModel(
+            nextStep: {},
+            openNotifications: {},
+            openInsulinType: {},
+            openSoundSettings: {},
+            openCartridgeChange: {},
+            openFillTubing: {},
+            openFillCannula: {}
+        )
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
         viewModel.isUpdatingPumpState = true
         return viewModel

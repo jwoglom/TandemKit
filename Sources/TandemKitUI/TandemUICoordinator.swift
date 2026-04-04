@@ -9,6 +9,10 @@ enum TandemScreen {
     case pumpSettings
     case insulinType
     case soundSettings
+    case changeCartridge
+    case fillTubing
+    case fillCannula
+    case notifications
 
     func next() -> TandemScreen? {
         switch self {
@@ -150,13 +154,15 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(rootView: view)
         case .pumpSettings:
             // next step = deactivate the pump
-            let openInsulinType = { self.navigateTo(.insulinType) }
-            let openSoundSettings = { self.navigateTo(.soundSettings) }
             let viewModel = TandemKitSettingsViewModel(
                 pumpManager,
                 nextStep: stepFinished,
-                openInsulinType: openInsulinType,
-                openSoundSettings: openSoundSettings
+                openNotifications: { self.navigateTo(.notifications) },
+                openInsulinType: { self.navigateTo(.insulinType) },
+                openSoundSettings: { self.navigateTo(.soundSettings) },
+                openCartridgeChange: { self.navigateTo(.changeCartridge) },
+                openFillTubing: { self.navigateTo(.fillTubing) },
+                openFillCannula: { self.navigateTo(.fillCannula) }
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
@@ -168,6 +174,35 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
             let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager, onSubmit: onSubmit)
             return hostingController(rootView: TandemKitSoundSettingsView(viewModel: viewModel))
+
+        case .changeCartridge:
+            let viewModel = TandemKitChangeCartridgeViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) },
+                toFillTubing: { self.navigateTo(.fillTubing) }
+            )
+
+            return hostingController(rootView: TandemKitChangeCartridgeView(viewModel: viewModel))
+
+        case .fillTubing:
+            let viewModel = TandemKitFillTubingViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) },
+                toFillingCannula: { self.navigateTo(.fillCannula) }
+            )
+
+            return hostingController(rootView: TandemKitFillTubingView(viewModel: viewModel))
+
+        case .fillCannula:
+            let viewModel = TandemKitFillCannulaViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) }
+            )
+            return hostingController(rootView: TandemKitFillCannulaView(viewModel: viewModel))
+
+        case .notifications:
+            let viewModel = TandemKitNotificationsViewModel(pumpManager)
+            return hostingController(rootView: TandemKitNotificationsView(viewModel: viewModel))
         }
     }
 

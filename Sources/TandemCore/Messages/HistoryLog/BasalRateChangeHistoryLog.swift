@@ -91,6 +91,6 @@ public class BasalRateChangeHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeType=\(changeType), changeTypeId=\(changeTypeId))"
+        "BasalRateChangeHistoryLog(cargo=\(cargo.hexadecimalString), commandBasalRate=\(commandBasalRate), baseBasalRate=\(baseBasalRate), maxBasalRate=\(maxBasalRate), insulinDeliveryProfile=\(insulinDeliveryProfile), changeType=\(String(describing: changeType)), changeTypeId=\(changeTypeId))"
     }
 }

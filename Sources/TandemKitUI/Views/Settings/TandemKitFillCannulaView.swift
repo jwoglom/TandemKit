@@ -3,7 +3,6 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitFillCannulaView: View {
-    @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitFillCannulaViewModel
     @State private var didLoad = false
@@ -15,7 +14,7 @@ struct TandemKitFillCannulaView: View {
             title: String(localized: "Fill Cannula", comment: "Title for fill cannula"),
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 3,
-            canCancel: !viewModel.isProcessing,
+            canCancel: !viewModel.isProcessing && viewModel.currentStep != .done,
             disableInteractiveDismiss: true,
             lockModalWhenCantCancel: true,
             onCancel: handleCancel
@@ -34,6 +33,9 @@ struct TandemKitFillCannulaView: View {
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
+        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
+            resumeInsulinSheet
+        }
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -41,7 +43,7 @@ struct TandemKitFillCannulaView: View {
         }
         .onChange(of: viewModel.resumeSucceeded) { succeeded in
             if succeeded {
-                presentationMode.wrappedValue.dismiss()
+                viewModel.done()
             }
         }
     }
@@ -85,23 +87,11 @@ struct TandemKitFillCannulaView: View {
                 viewModel.fillCannula()
             }
         case .done:
-            VStack(spacing: 12) {
-                ContinueButton(
-                    text: Text("Resume insulin delivery", comment: "Button text"),
-                    loading: $viewModel.loadingResume
-                ) {
-                    viewModel.showingResumeConfirmation = true
-                }
-                .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-                    resumeInsulinSheet
-                }
-
-                Button(action: {
-                    presentationMode.wrappedValue.dismiss()
-                }) {
-                    Text("Done", comment: "Button text")
-                }
-                .buttonStyle(ActionButtonStyle())
+            ContinueButton(
+                text: Text("Resume insulin delivery", comment: "Button text"),
+                loading: $viewModel.loadingResume
+            ) {
+                viewModel.showingResumeConfirmation = true
             }
         }
     }
@@ -269,7 +259,7 @@ struct TandemKitFillCannulaView: View {
 
     private func handleCancel() {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
-            presentationMode.wrappedValue.dismiss()
+            viewModel.done()
         } else {
             viewModel.showingCancelConfirmation = true
         }
@@ -304,7 +294,7 @@ struct TandemKitFillCannulaView: View {
                 .default(Text("Yes, Resume Insulin", comment: "Confirm button")) {
                     viewModel.resumePumping()
                 },
-                .cancel(Text("Not Yet", comment: "Cancel button"))
+                .destructive(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
@@ -318,7 +308,7 @@ struct TandemKitFillCannulaView: View {
             ),
             buttons: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
-                    presentationMode.wrappedValue.dismiss()
+                    viewModel.done()
                 },
                 .cancel(Text("No, Continue", comment: "Cancel button"))
             ]
@@ -330,7 +320,7 @@ struct TandemKitFillCannulaView: View {
 
 private extension TandemKitFillCannulaViewModel {
     static var previewEnteringAmount: TandemKitFillCannulaViewModel {
-        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil)
+        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil, done: {})
         viewModel.isSuspended = true
         viewModel.currentStep = .enterAmount
         viewModel.isEditingAmount = true
@@ -339,7 +329,7 @@ private extension TandemKitFillCannulaViewModel {
     }
 
     static var previewCompleted: TandemKitFillCannulaViewModel {
-        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil)
+        let viewModel = TandemKitFillCannulaViewModel(pumpManager: nil, done: {})
         viewModel.isSuspended = true
         viewModel.currentStep = .done
         return viewModel

@@ -5,6 +5,7 @@ struct ContinueButton: View {
     var text = Text("Continue", comment: "Text for continue button")
     var loading: Binding<Bool> = .constant(false)
     var disabled: Binding<Bool> = .constant(false)
+    var buttonStyle: ActionButtonStyle.ButtonType = .primary
     let action: () -> Void
 
     var body: some View {
@@ -16,7 +17,7 @@ struct ContinueButton: View {
             }
         }
         .disabled(loading.wrappedValue || disabled.wrappedValue)
-        .buttonStyle(ActionButtonStyle())
+        .buttonStyle(ActionButtonStyle(buttonStyle))
     }
 }
 

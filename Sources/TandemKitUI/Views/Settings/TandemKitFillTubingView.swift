@@ -32,6 +32,9 @@ struct TandemKitFillTubingView: View {
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
+        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
+            resumeOperationSheet
+        }
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -109,12 +112,20 @@ struct TandemKitFillTubingView: View {
         case .exiting:
             EmptyView()
         case .done:
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text("Done", comment: "Button text")
+            VStack {
+                Button(action: { viewModel.toFillingCannula() }) {
+                    Text("Fill Cannula", comment: "Label for fill cannula")
+                }
+                .buttonStyle(ActionButtonStyle())
+
+                ContinueButton(
+                    text: Text("Done", comment: "Button text"),
+                    loading: $viewModel.loadingResume,
+                    buttonStyle: .secondary
+                ) {
+                    viewModel.showingResumeConfirmation = true
+                }
             }
-            .buttonStyle(ActionButtonStyle())
         }
     }
 
@@ -474,6 +485,22 @@ struct TandemKitFillTubingView: View {
             ]
         )
     }
+
+    var resumeOperationSheet: ActionSheet {
+        ActionSheet(
+            title: Text("Resume insulin delivery?", comment: "Action sheet title"),
+            message: Text(
+                "The tubing fill is complete. The pump will attempt to exit fill mode.",
+                comment: "Action sheet message"
+            ),
+            buttons: [
+                .default(Text("Yes, Resume delivery", comment: "Confirm button")) {
+                    viewModel.resumeDelivery()
+                },
+                .cancel(Text("No, Go back", comment: "Cancel button"))
+            ]
+        )
+    }
 }
 
 // MARK: - Insulin Flow Indicator
@@ -534,7 +561,7 @@ struct InsulinFlowIndicator: View {
 
 private extension TandemKitFillTubingViewModel {
     static var previewFilling: TandemKitFillTubingViewModel {
-        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil)
+        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil, done: {}, toFillingCannula: {})
         viewModel.currentStep = .filling
         viewModel.isSuspended = true
         viewModel.isProcessing = true
@@ -544,7 +571,7 @@ private extension TandemKitFillTubingViewModel {
     }
 
     static var previewCompleted: TandemKitFillTubingViewModel {
-        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil)
+        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil, done: {}, toFillingCannula: {})
         viewModel.currentStep = .done
         viewModel.isSuspended = true
         viewModel.exitState = .tubingFilled
