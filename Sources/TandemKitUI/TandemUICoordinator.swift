@@ -9,6 +9,14 @@ enum TandemScreen {
     case pumpSettings
     case insulinType
     case soundSettings
+    case changeCartridge
+    case fillTubing
+    case fillCannula
+    case notifications
+    case cgmSettings
+    case controlIQSettings
+    case quickBolus
+    case alertSettings
 
     func next() -> TandemScreen? {
         switch self {
@@ -134,7 +142,8 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitInsulinType(
                 initialValue: pumpManager?.state.insulinType ?? allowedInsulinTypes.first,
                 supportedInsulinTypes: allowedInsulinTypes,
-                label: !isOnboarded ? LocalizedString("Continue", comment: "continue") : LocalizedString("Save", comment: "save"),
+                label: !isOnboarded ? String(localized: "Continue", comment: "continue") :
+                    String(localized: "Save", comment: "save"),
                 didConfirm: { type in
                     guard let pumpManager = self.pumpManager else { return }
 
@@ -149,13 +158,19 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(rootView: view)
         case .pumpSettings:
             // next step = deactivate the pump
-            let openInsulinType = { self.navigateTo(.insulinType) }
-            let openSoundSettings = { self.navigateTo(.soundSettings) }
             let viewModel = TandemKitSettingsViewModel(
                 pumpManager,
                 nextStep: stepFinished,
-                openInsulinType: openInsulinType,
-                openSoundSettings: openSoundSettings
+                openNotifications: { self.navigateTo(.notifications) },
+                openInsulinType: { self.navigateTo(.insulinType) },
+                openSoundSettings: { self.navigateTo(.soundSettings) },
+                openCartridgeChange: { self.navigateTo(.changeCartridge) },
+                openFillTubing: { self.navigateTo(.fillTubing) },
+                openFillCannula: { self.navigateTo(.fillCannula) },
+                openCgmSettings: { self.navigateTo(.cgmSettings) },
+                openControlIQSettings: { self.navigateTo(.controlIQSettings) },
+                openQuickBolus: { self.navigateTo(.quickBolus) },
+                openAlertSettings: { self.navigateTo(.alertSettings) }
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
@@ -167,6 +182,51 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
             let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager, onSubmit: onSubmit)
             return hostingController(rootView: TandemKitSoundSettingsView(viewModel: viewModel))
+
+        case .changeCartridge:
+            let viewModel = TandemKitChangeCartridgeViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) },
+                toFillTubing: { self.navigateTo(.fillTubing) }
+            )
+
+            return hostingController(rootView: TandemKitChangeCartridgeView(viewModel: viewModel))
+
+        case .fillTubing:
+            let viewModel = TandemKitFillTubingViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) },
+                toFillingCannula: { self.navigateTo(.fillCannula) }
+            )
+
+            return hostingController(rootView: TandemKitFillTubingView(viewModel: viewModel))
+
+        case .fillCannula:
+            let viewModel = TandemKitFillCannulaViewModel(
+                pumpManager: pumpManager,
+                done: { self.resetNavigationTo([.pumpSettings]) }
+            )
+            return hostingController(rootView: TandemKitFillCannulaView(viewModel: viewModel))
+
+        case .notifications:
+            let viewModel = TandemKitNotificationsViewModel(pumpManager)
+            return hostingController(rootView: TandemKitNotificationsView(viewModel: viewModel))
+
+        case .cgmSettings:
+            let viewModel = TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitCGMSettingsView(viewModel: viewModel))
+
+        case .controlIQSettings:
+            let viewModel = TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitControlIQSettingsView(viewModel: viewModel))
+
+        case .quickBolus:
+            let viewModel = TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitQuickBolusSettingsView(viewModel: viewModel))
+
+        case .alertSettings:
+            let viewModel = TandemKitAlertSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitAlertSettingsView(viewModel: viewModel))
         }
     }
 

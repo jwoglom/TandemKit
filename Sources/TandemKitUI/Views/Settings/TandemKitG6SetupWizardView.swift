@@ -8,7 +8,7 @@ struct TandemKitG6SetupWizardView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Dexcom G6 Setup", comment: "Title for G6 setup wizard"),
+            title: String(localized: "Dexcom G6 Setup", comment: "Title for G6 setup wizard"),
             currentStep: min(viewModel.currentStep.rawValue + 1, 2),
             totalSteps: 2,
             canCancel: !viewModel.isLoading,
@@ -30,7 +30,7 @@ struct TandemKitG6SetupWizardView: View {
             set: { _ in viewModel.error = nil }
         )) { error in
             Alert(
-                title: Text(LocalizedString("Error", comment: "Error alert title")),
+                title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
                 dismissButton: .default(Text("OK"))
             )
@@ -48,48 +48,46 @@ struct TandemKitG6SetupWizardView: View {
 
     private var landingStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(LocalizedString(
+            Text(
                 "Your Dexcom G6 transmitter can be connected to a maximum of two devices:",
                 comment: "G6 setup landing info header"
-            ))
+            )
             .font(.body)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "iphone")
-                        .frame(width: 24)
-                    Text(LocalizedString("One phone", comment: "G6 setup: one phone"))
+                    Text("One phone", comment: "G6 setup: one phone")
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "cross.case")
-                        .frame(width: 24)
-                    Text(LocalizedString("One pump", comment: "G6 setup: one pump"))
+                    Text("One pump", comment: "G6 setup: one pump")
                 }
             }
             .font(.body)
             .padding(.leading, 8)
 
-            (Text(LocalizedString(
+            (Text(
                 "This page configures the connection between your pump and Dexcom G6. ",
                 comment: "G6 setup explanation prefix"
-            )) + Text(String(format: LocalizedString(
+            ) + Text(String(format: String(localized:
                 "It is not used by %@ for algorithm dosing decisions.",
                 comment: "G6 setup explanation bold part, parameter is app name"
             ), HostApp.current.appName)).bold())
             .font(.body)
 
-            Text(LocalizedString(
+            Text(
                 "When configured, the pump can vibrate or beep to deliver CGM notifications at all times. When Control-IQ is on, it will be used for automated insulin delivery with the built-in pump algorithm.",
                 comment: "G6 setup explanation CGM notification info"
-            ))
+            )
             .font(.body)
 
             Divider()
 
-            Text(LocalizedString(
+            Text(
                 "Are you starting a new sensor or connecting to an existing session?",
                 comment: "G6 setup prompt"
-            ))
+            )
             .font(.body)
 
             Button(action: {
@@ -97,7 +95,7 @@ struct TandemKitG6SetupWizardView: View {
             }) {
                 HStack {
                     Spacer()
-                    Text(LocalizedString("Start new sensor", comment: "Button to start new G6 sensor"))
+                    Text("Start new sensor", comment: "Button to start new G6 sensor")
                         .fontWeight(.semibold)
                     Spacer()
                 }
@@ -112,7 +110,7 @@ struct TandemKitG6SetupWizardView: View {
             }) {
                 HStack {
                     Spacer()
-                    Text(LocalizedString("Connect to existing session", comment: "Button to connect to existing G6 session"))
+                    Text("Connect to existing session", comment: "Button to connect to existing G6 session")
                         .fontWeight(.semibold)
                     Spacer()
                 }
@@ -130,7 +128,7 @@ struct TandemKitG6SetupWizardView: View {
         VStack(alignment: .leading, spacing: 20) {
             // Transmitter ID
             VStack(alignment: .leading, spacing: 6) {
-                Text(LocalizedString("Transmitter ID", comment: "Label for G6 transmitter ID"))
+                Text("Transmitter ID", comment: "Label for G6 transmitter ID")
                     .font(.headline)
 
                 TextField(
@@ -141,17 +139,17 @@ struct TandemKitG6SetupWizardView: View {
                 .autocapitalization(.allCharacters)
                 .disableAutocorrection(true)
 
-                Text(LocalizedString(
+                Text(
                     "The transmitter ID is a 6-character code shown on the back of the transmitter.",
                     comment: "Help text for G6 transmitter ID"
-                ))
+                )
                 .font(.caption)
                 .foregroundColor(.secondary)
             }
 
             // Sensor Code
             VStack(alignment: .leading, spacing: 6) {
-                Text(LocalizedString("Sensor Code", comment: "Label for G6 sensor code"))
+                Text("Sensor Code", comment: "Label for G6 sensor code")
                     .font(.headline)
 
                 TextField(
@@ -161,10 +159,10 @@ struct TandemKitG6SetupWizardView: View {
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.numberPad)
 
-                Text(LocalizedString(
+                Text(
                     "The sensor code is a 4-digit code shown on the paper lining of the sensor.",
                     comment: "Help text for G6 sensor code"
-                ))
+                )
                 .font(.caption)
                 .foregroundColor(.secondary)
             }
@@ -183,7 +181,7 @@ struct TandemKitG6SetupWizardView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .padding(.trailing, 5)
                     }
-                    Text(LocalizedString("Start G6 Sensor", comment: "Button to start G6 sensor"))
+                    Text("Start G6 Sensor", comment: "Button to start G6 sensor")
                         .fontWeight(.semibold)
                     Spacer()
                 }
@@ -201,7 +199,7 @@ struct TandemKitG6SetupWizardView: View {
     private var connectExistingStep: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(LocalizedString("Transmitter ID", comment: "Label for G6 transmitter ID"))
+                Text("Transmitter ID", comment: "Label for G6 transmitter ID")
                     .font(.headline)
 
                 TextField(
@@ -212,10 +210,10 @@ struct TandemKitG6SetupWizardView: View {
                 .autocapitalization(.allCharacters)
                 .disableAutocorrection(true)
 
-                Text(LocalizedString(
+                Text(
                     "The transmitter ID is a 6-character code shown on the back of the transmitter.",
                     comment: "Help text for G6 transmitter ID"
-                ))
+                )
                 .font(.caption)
                 .foregroundColor(.secondary)
             }
@@ -233,7 +231,7 @@ struct TandemKitG6SetupWizardView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .padding(.trailing, 5)
                     }
-                    Text(LocalizedString("Connect to Transmitter", comment: "Button to connect to existing G6 transmitter"))
+                    Text("Connect to Transmitter", comment: "Button to connect to existing G6 transmitter")
                         .fontWeight(.semibold)
                     Spacer()
                 }

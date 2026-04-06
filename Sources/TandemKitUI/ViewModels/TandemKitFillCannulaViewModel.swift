@@ -40,11 +40,13 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var showingCancelConfirmation = false
     @Published var showingResumeConfirmation = false
 
+    let done: () -> Void
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.cannula.processQueue")
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager
+        self.done = done
     }
 
     func checkSuspendedStatus() {
@@ -141,28 +143,21 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         failedResume = false
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, let pumpManager = self.pumpManager else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(ResumePumpingRequest())
-
-                Thread.sleep(forTimeInterval: 1.0)
+            pumpManager.resumeDelivery { error in
                 self.checkSuspendedStatus()
 
                 DispatchQueue.main.async {
                     self.loadingResume = false
-                    if let _ = response {
+                    if let _ = error {
+                        self.failedResume = true
+
+                    } else {
                         self.failedResume = false
                         self.isSuspended = false
                         self.resumeSucceeded = true
-                    } else {
-                        self.failedResume = true
                     }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingResume = false
-                    self.failedResume = true
                 }
             }
         }

@@ -3,14 +3,13 @@ import SwiftUI
 import TandemCore
 
 struct TandemKitChangeCartridgeView: View {
-    @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitChangeCartridgeViewModel
     @State private var didLoad = false
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Change Cartridge", comment: "Title for change cartridge"),
+            title: String(localized: "Change Cartridge", comment: "Title for change cartridge"),
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 6,
             canCancel: !viewModel.isProcessing,
@@ -32,14 +31,12 @@ struct TandemKitChangeCartridgeView: View {
         .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
             cancelOperationSheet
         }
+        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+            suspendInsulinSheet
+        }
         .task {
-            print("TandemKit Change Cartridge: .task called, didLoad=\(didLoad)")
-            guard !didLoad else {
-                print("TandemKit Change Cartridge: .task skipped - already loaded")
-                return
-            }
+            guard !didLoad else { return }
             didLoad = true
-            print("TandemKit Change Cartridge: Calling checkSuspendedStatus()")
             viewModel.checkSuspendedStatus()
         }
     }
@@ -65,25 +62,22 @@ struct TandemKitChangeCartridgeView: View {
         switch viewModel.currentStep {
         case .suspend:
             if viewModel.isSuspended == true {
-                ContinueButton(text: LocalizedString("Continue", comment: "Continue button")) {
+                ContinueButton(text: Text("Continue", comment: "Continue button")) {
                     withAnimation {
                         viewModel.currentStep = viewModel.currentStep.nextStep() ?? .done
                     }
                 }
             } else {
                 ContinueButton(
-                    text: LocalizedString("Suspend insulin delivery", comment: "Button to suspend"),
+                    text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
                     viewModel.showingSuspendConfirmation = true
                 }
-                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-                    suspendInsulinSheet
-                }
             }
         case .enterMode:
             ContinueButton(
-                text: LocalizedString("Start cartridge change", comment: "Button text"),
+                text: Text("Start cartridge change", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
                     get: { viewModel.hasActiveNotifications },
@@ -98,18 +92,14 @@ struct TandemKitChangeCartridgeView: View {
             Button(action: {
                 viewModel.cartridgeInserted()
             }) {
-                Text(LocalizedString("New Cartridge Inserted", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(viewModel.hasActiveNotifications ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                Text("New Cartridge Inserted", comment: "Button text")
             }
             .disabled(viewModel.hasActiveNotifications)
+            .buttonStyle(ActionButtonStyle())
         case .detecting:
             if viewModel.failedExitMode {
                 ContinueButton(
-                    text: LocalizedString("Retry", comment: "Retry button"),
+                    text: Text("Retry", comment: "Retry button"),
                     loading: $viewModel.loadingExitMode
                 ) {
                     viewModel.retryExitCartridgeMode()
@@ -118,15 +108,16 @@ struct TandemKitChangeCartridgeView: View {
                 EmptyView()
             }
         case .done:
-            Button(action: {
-                presentationMode.wrappedValue.dismiss()
-            }) {
-                Text(LocalizedString("Done", comment: "Button text"))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+            VStack {
+                Button(action: { viewModel.toFillTubing() }) {
+                    Text("Fill Tubing", comment: "Button text")
+                }
+                .buttonStyle(ActionButtonStyle())
+
+                Button(action: { viewModel.done() }) {
+                    Text("Done", comment: "Button text")
+                }
+                .buttonStyle(ActionButtonStyle(.secondary))
             }
         }
     }
@@ -141,14 +132,14 @@ struct TandemKitChangeCartridgeView: View {
                     .foregroundColor(guidanceColors.warning)
                     .font(.title2)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(LocalizedString("Important", comment: "Important section header"))
+                    Text("Important", comment: "Important section header")
                         .font(.headline)
                         .foregroundColor(guidanceColors.warning)
-                    Text(LocalizedString(
+                    Text(
                         "Changing your cartridge will require suspending insulin delivery.",
                         comment: "Warning message for cartridge change"
-                    ))
-                        .font(.subheadline)
+                    )
+                    .font(.subheadline)
                 }
             }
             .padding()
@@ -157,10 +148,10 @@ struct TandemKitChangeCartridgeView: View {
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 1: Suspend Insulin", comment: "Step header"))
+                Text("Step 1: Suspend Insulin", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("First, suspend insulin delivery", comment: "Step description"))
+                Text("First, suspend insulin delivery", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -168,7 +159,7 @@ struct TandemKitChangeCartridgeView: View {
             // Step content
             if viewModel.isSuspended == true {
                 Label(
-                    LocalizedString("Insulin suspended", comment: "Status text"),
+                    String(localized: "Insulin suspended", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
@@ -180,7 +171,7 @@ struct TandemKitChangeCartridgeView: View {
             } else {
                 if viewModel.failedSuspend {
                     Label(
-                        LocalizedString("Failed to suspend insulin. Please try again.", comment: "Error message"),
+                        String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
@@ -196,10 +187,10 @@ struct TandemKitChangeCartridgeView: View {
     private var enterModeStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 2: Prepare Pump", comment: "Step header"))
+                Text("Step 2: Prepare Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Swipe away any active pump notifications below", comment: "Step description"))
+                Text("Swipe away any active pump notifications below", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -207,7 +198,7 @@ struct TandemKitChangeCartridgeView: View {
             // Embedded notifications check
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                    Text("Active Notifications", comment: "Notifications section header")
                         .font(.headline)
                     Spacer()
                     Button(action: {
@@ -227,7 +218,7 @@ struct TandemKitChangeCartridgeView: View {
                         Spacer()
                         VStack(spacing: 12) {
                             ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            Text(LocalizedString("Checking notifications...", comment: "Loading notifications message"))
+                            Text("Checking notifications...", comment: "Loading notifications message")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -241,7 +232,7 @@ struct TandemKitChangeCartridgeView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 40))
                                 .foregroundColor(.green)
-                            Text(LocalizedString("No active notifications", comment: "No notifications message"))
+                            Text("No active notifications", comment: "No notifications message")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -268,7 +259,8 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.hasActiveNotifications {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before starting cartridge change",
                         comment: "Warning message"
                     ),
@@ -283,7 +275,8 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.failedEnterMode {
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Failed to enter change mode. Ensure insulin delivery is suspended and check pump notifications.",
                         comment: "Error message"
                     ),
@@ -305,17 +298,17 @@ struct TandemKitChangeCartridgeView: View {
     private var waitingForReadyStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Waiting for Pump", comment: "Step header"))
+                Text("Waiting for Pump", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("The pump is preparing for cartridge change", comment: "Step description"))
+                Text("The pump is preparing for cartridge change", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             if viewModel.changeCartridgeState == .readyToChange {
                 Label(
-                    LocalizedString("Pump is ready", comment: "Status text"),
+                    String(localized: "Pump is ready", comment: "Status text"),
                     systemImage: "checkmark.circle.fill"
                 )
                 .foregroundColor(.green)
@@ -327,7 +320,7 @@ struct TandemKitChangeCartridgeView: View {
             } else {
                 HStack(spacing: 12) {
                     ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Text(LocalizedString("Preparing pump...", comment: "Status text"))
+                    Text("Preparing pump...", comment: "Status text")
                         .font(.headline)
                 }
                 .padding()
@@ -341,24 +334,27 @@ struct TandemKitChangeCartridgeView: View {
     private var physicalChangeStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 3: Replace Cartridge", comment: "Step header"))
+                Text("Step 3: Replace Cartridge", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("Follow these steps to replace your cartridge", comment: "Step description"))
+                Text("Follow these steps to replace your cartridge", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                instructionRow(number: 1, text: LocalizedString(
+                instructionRow(number: 1, text: String(
+                    localized:
                     "Remove the old cartridge from the pump by twisting it off",
                     comment: "Instruction"
                 ))
-                instructionRow(number: 2, text: LocalizedString(
+                instructionRow(number: 2, text: String(
+                    localized:
                     "Insert a new cartridge and ensure it is securely in place",
                     comment: "Instruction"
                 ))
-                instructionRow(number: 3, text: LocalizedString(
+                instructionRow(number: 3, text: String(
+                    localized:
                     "Press the button below when complete",
                     comment: "Instruction"
                 ))
@@ -372,7 +368,7 @@ struct TandemKitChangeCartridgeView: View {
             if viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text(LocalizedString("Active Notifications", comment: "Notifications section header"))
+                        Text("Active Notifications", comment: "Notifications section header")
                             .font(.headline)
                         Spacer()
                     }
@@ -394,7 +390,8 @@ struct TandemKitChangeCartridgeView: View {
                 .cornerRadius(12)
 
                 Label(
-                    LocalizedString(
+                    String(
+                        localized:
                         "Clear all notifications before continuing",
                         comment: "Warning message"
                     ),
@@ -420,10 +417,10 @@ struct TandemKitChangeCartridgeView: View {
     private var detectingStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(LocalizedString("Step 4: Detection", comment: "Step header"))
+                Text("Step 4: Detection", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text(LocalizedString("The pump is detecting insulin in the cartridge", comment: "Step description"))
+                Text("The pump is detecting insulin in the cartridge", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -432,7 +429,7 @@ struct TandemKitChangeCartridgeView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
                         ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        Text(LocalizedString("Completing cartridge change...", comment: "Status text"))
+                        Text("Completing cartridge change...", comment: "Status text")
                             .font(.headline)
                     }
                 }
@@ -441,7 +438,7 @@ struct TandemKitChangeCartridgeView: View {
                 .cornerRadius(12)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(LocalizedString("Detecting insulin in cartridge...", comment: "Status text"))
+                    Text("Detecting insulin in cartridge...", comment: "Status text")
                         .font(.headline)
                     ProgressView(value: Double(viewModel.detectingProgress) / 100.0)
                         .progressViewStyle(LinearProgressViewStyle())
@@ -456,7 +453,7 @@ struct TandemKitChangeCartridgeView: View {
 
             if viewModel.failedExitMode {
                 Label(
-                    LocalizedString("Failed to complete cartridge change. Please try again.", comment: "Error message"),
+                    String(localized: "Failed to complete cartridge change. Please try again.", comment: "Error message"),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
@@ -476,12 +473,12 @@ struct TandemKitChangeCartridgeView: View {
                     .foregroundColor(.green)
 
                 VStack(spacing: 8) {
-                    Text(LocalizedString("Cartridge change complete!", comment: "Success message"))
+                    Text("Cartridge change complete!", comment: "Success message")
                         .font(.title2)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
 
-                    Text(LocalizedString("You can now fill your tubing and cannula", comment: "Success description"))
+                    Text("You can now fill your tubing and cannula", comment: "Success description")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -508,7 +505,7 @@ struct TandemKitChangeCartridgeView: View {
 
     private func handleCancel() {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
-            presentationMode.wrappedValue.dismiss()
+            viewModel.done()
         } else {
             viewModel.showingCancelConfirmation = true
         }
@@ -518,33 +515,33 @@ struct TandemKitChangeCartridgeView: View {
 
     var suspendInsulinSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Suspend insulin delivery?", comment: "Action sheet title")),
-            message: Text(LocalizedString(
+            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+            message: Text(
                 "This will stop all insulin delivery until you resume.",
                 comment: "Action sheet message"
-            )),
+            ),
             buttons: [
-                .destructive(Text(LocalizedString("Yes, Suspend Insulin", comment: "Confirm button"))) {
+                .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
-                .cancel(Text(LocalizedString("Cancel", comment: "Cancel button")))
+                .cancel(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
 
     var cancelOperationSheet: ActionSheet {
         ActionSheet(
-            title: Text(LocalizedString("Cancel cartridge change?", comment: "Action sheet title")),
-            message: Text(LocalizedString(
+            title: Text("Cancel cartridge change?", comment: "Action sheet title"),
+            message: Text(
                 "The cartridge change is not complete. The pump will attempt to exit change mode.",
                 comment: "Action sheet message"
-            )),
+            ),
             buttons: [
-                .destructive(Text(LocalizedString("Yes, Cancel", comment: "Confirm button"))) {
+                .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
-                    presentationMode.wrappedValue.dismiss()
+                    viewModel.done()
                 },
-                .cancel(Text(LocalizedString("No, Continue", comment: "Cancel button")))
+                .cancel(Text("No, Continue", comment: "Cancel button"))
             ]
         )
     }
@@ -555,7 +552,7 @@ struct TandemKitChangeCartridgeView: View {
 private extension TandemKitChangeCartridgeViewModel {
     static func preview(step: CartridgeChangeStep, configure: (TandemKitChangeCartridgeViewModel) -> Void = { _ in
     }) -> TandemKitChangeCartridgeViewModel {
-        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil)
+        let viewModel = TandemKitChangeCartridgeViewModel(pumpManager: nil, done: {}, toFillTubing: {})
         viewModel.currentStep = step
         configure(viewModel)
         return viewModel

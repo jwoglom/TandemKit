@@ -53,7 +53,13 @@ public class CgmHighLowAlertRequest: Message {
         self.bitmask = bitmask
     }
 
-    public static func buildCargo(alertType: Int, threshold: Int, repeatDurationMinutes: Int, enableAlert: Bool, bitmask: Int) -> Data {
+    public static func buildCargo(
+        alertType: Int,
+        threshold: Int,
+        repeatDurationMinutes: Int,
+        enableAlert: Bool,
+        bitmask: Int
+    ) -> Data {
         Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(threshold),
             Bytes.firstTwoBytesLittleEndian(repeatDurationMinutes),

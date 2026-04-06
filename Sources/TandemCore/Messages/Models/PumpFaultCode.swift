@@ -82,24 +82,24 @@ public enum PumpFaultCode: Equatable, CustomStringConvertible {
     public var localizedDescription: String {
         switch self {
         case .undefinedError:
-            return LocalizedString("Undefined pump error", comment: "Pump fault code description for undefined error")
+            return String(localized: "Undefined pump error", comment: "Pump fault code description for undefined error")
         case .crcMismatch:
-            return LocalizedString("Checksum mismatch", comment: "Pump fault code description for CRC mismatch")
+            return String(localized: "Checksum mismatch", comment: "Pump fault code description for CRC mismatch")
         case .transactionIdMismatch:
-            return LocalizedString("Transaction identifier mismatch", comment: "Pump fault code description for tx id mismatch")
+            return String(localized: "Transaction identifier mismatch", comment: "Pump fault code description for tx id mismatch")
         case .badCargoLength:
-            return LocalizedString("Invalid payload length", comment: "Pump fault code description for bad cargo length")
+            return String(localized: "Invalid payload length", comment: "Pump fault code description for bad cargo length")
         case .badOpcode:
-            return LocalizedString("Unsupported opcode", comment: "Pump fault code description for bad opcode")
+            return String(localized: "Unsupported opcode", comment: "Pump fault code description for bad opcode")
         case .invalidRequiredParameter:
-            return LocalizedString("Invalid parameter", comment: "Pump fault code description for invalid parameter")
+            return String(localized: "Invalid parameter", comment: "Pump fault code description for invalid parameter")
         case .messageBufferFull:
-            return LocalizedString("Pump is busy", comment: "Pump fault code description for message buffer full")
+            return String(localized: "Pump is busy", comment: "Pump fault code description for message buffer full")
         case .invalidAuthenticationError:
-            return LocalizedString("Authentication required", comment: "Pump fault code description for invalid authentication")
+            return String(localized: "Authentication required", comment: "Pump fault code description for invalid authentication")
         case let .unknown(value):
             return String(
-                format: LocalizedString("Unknown pump error (%d)", comment: "Pump fault code description for unknown code"),
+                format: String(localized: "Unknown pump error (%d)", comment: "Pump fault code description for unknown code"),
                 value
             )
         }

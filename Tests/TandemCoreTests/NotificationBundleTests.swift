@@ -158,11 +158,11 @@ final class NotificationBundleTests: XCTestCase {
 
         // PumpX2 comment payload: aamId 23, and reminder bit 23 is DEFAULT_REMINDER_23
         bundle.add(ReminderStatusResponse(intMap: bitmask(23)))
-        let expected = HighestAamResponse(aamId: 23, faultId: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let expected = HighestAamResponse(aamId: 23, faultId: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
         let aamResponse = HighestAamResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
         MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
         XCTAssertEqual(23, aamResponse.aamId)
-        XCTAssertEqual(0x20a7, aamResponse.faultId)
+        XCTAssertEqual(0x20A7, aamResponse.faultId)
         bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)
@@ -195,11 +195,11 @@ final class NotificationBundleTests: XCTestCase {
 
         // PumpX2 comment payload: aamId 23, and CGM alert bit 23 is DEFAULT_CGM_ALERT_23
         bundle.add(CGMAlertStatusResponse(intMap: bitmask(23)))
-        let expected = HighestAamResponse(aamId: 23, faultId: 0x20a7, remaining: Data([2, 0xFF, 0xFF]))
+        let expected = HighestAamResponse(aamId: 23, faultId: 0x20A7, remaining: Data([2, 0xFF, 0xFF]))
         let aamResponse = HighestAamResponse(cargo: Data(hexadecimalString: "17000000a720000002ffff")!)
         MessageTester.assertHexEquals(expected.cargo, aamResponse.cargo)
         XCTAssertEqual(23, aamResponse.aamId)
-        XCTAssertEqual(0x20a7, aamResponse.faultId)
+        XCTAssertEqual(0x20A7, aamResponse.faultId)
         bundle.add(aamResponse)
 
         XCTAssertEqual(bundle.getNotificationCount(), 2)

@@ -20,8 +20,16 @@ class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
-    var openInsulinType: () -> Void
-    var openSoundSettings: () -> Void
+    let openNotifications: () -> Void
+    let openInsulinType: () -> Void
+    let openSoundSettings: () -> Void
+    let openCartridgeChange: () -> Void
+    let openFillTubing: () -> Void
+    let openFillCannula: () -> Void
+    let openCgmSettings: () -> Void
+    let openControlIQSettings: () -> Void
+    let openQuickBolus: () -> Void
+    let openAlertSettings: () -> Void
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
@@ -35,8 +43,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var isRefreshing: Bool = false
     @Published var useSilentMode: Bool = false
-    @Published var alertSnoozeEnabled: Bool = false
-    @Published var alertSnoozeDurationMins: Int = 10
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
@@ -62,13 +68,29 @@ class TandemKitSettingsViewModel: ObservableObject {
     init(
         _ pumpManager: TandemPumpManager? = nil,
         nextStep: @escaping () -> Void,
+        openNotifications: @escaping () -> Void,
         openInsulinType: @escaping () -> Void,
-        openSoundSettings: @escaping () -> Void
+        openSoundSettings: @escaping () -> Void,
+        openCartridgeChange: @escaping () -> Void,
+        openFillTubing: @escaping () -> Void,
+        openFillCannula: @escaping () -> Void,
+        openCgmSettings: @escaping () -> Void,
+        openControlIQSettings: @escaping () -> Void,
+        openQuickBolus: @escaping () -> Void,
+        openAlertSettings: @escaping () -> Void
     ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
+        self.openNotifications = openNotifications
         self.openInsulinType = openInsulinType
         self.openSoundSettings = openSoundSettings
+        self.openCartridgeChange = openCartridgeChange
+        self.openFillTubing = openFillTubing
+        self.openFillCannula = openFillCannula
+        self.openCgmSettings = openCgmSettings
+        self.openControlIQSettings = openControlIQSettings
+        self.openQuickBolus = openQuickBolus
+        self.openAlertSettings = openAlertSettings
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
@@ -188,8 +210,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         // Dispatch everything off main so the spinner renders immediately
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             pumpManager.ensureCurrentPumpData { _ in }
-            pumpManager.fetchGlobalPumpSettings()
-            pumpManager.fetchDeliveryLimits()
 
             DispatchQueue.main.async {
                 self?.isRefreshing = false
@@ -211,7 +231,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
                 return
             }
-            guard let isSuspended = self.isSuspended else {
+            guard let isSuspended = self.isSuspended, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                 }
@@ -219,39 +239,48 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             if isSuspended {
-                let response = self.pumpManager?.sendMessage(message: ResumePumpingRequest()) as? ResumePumpingResponse
+                pumpManager.resumeDelivery { error in
+                    if let _ = error {
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                            self.commandFailure = .resume
+                        }
+                    } else {
+                        pumpManager.ensureCurrentPumpData { _ in }
 
-                guard response?.isStatusOK == true else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.commandFailure = .resume
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                        }
                     }
-                    return
                 }
             } else {
-                let response = self.pumpManager?.sendMessage(message: SuspendPumpingRequest()) as? SuspendPumpingResponse
+                pumpManager.suspendDelivery { error in
+                    if let _ = error {
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                            self.commandFailure = .suspend
+                        }
+                    } else {
+                        pumpManager.ensureCurrentPumpData { _ in }
 
-                guard response?.isStatusOK == true else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.commandFailure = .suspend
+                        DispatchQueue.main.async {
+                            self.isUpdatingPumpState = false
+                        }
                     }
-                    return
                 }
-            }
-
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
             }
         }
     }
 
     func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
-        pumpManager?.configureControlIQMode(true) { [weak self] success in
-            guard let self = self else { return }
+
+        let request = ChangeControlIQSettingsRequest(
+            enabled: true,
+            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+        )
+        pumpManager?.configureControlIQMode(request) { success in
             if success {
                 // Check CGM status on background thread
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -279,16 +308,16 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func enableClosedLoop() {
-        pendingEnableClosedLoop = true
-        pumpManager?.requestEnableClosedLoop()
-    }
-
     func switchAlgorithmToDIY() {
         isUpdatingPumpState = true
-        pumpManager?.configureControlIQMode(false) { [weak self] success in
+
+        let request = ChangeControlIQSettingsRequest(
+            enabled: false,
+            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+        )
+        pumpManager?.configureControlIQMode(request) { success in
             DispatchQueue.main.async {
-                guard let self = self else { return }
                 self.isUpdatingPumpState = false
                 if success {
                     self.useControlIQ = false
@@ -471,30 +500,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Alert Snooze
-
-    func setAlertSnooze(enabled: Bool, durationMins: Int) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
-            DispatchQueue.main.async {
-                self?.alertSnoozeEnabled = enabled
-                self?.alertSnoozeDurationMins = durationMins
-            }
-        }
-    }
-
-    // MARK: - Delivery Limits
-
-    var maxBasalRateText: String? {
-        guard let milliunits = pumpManager?.state.maxBasalLimitMilliunits else { return nil }
-        return String(format: "%.2f U/hr", Double(milliunits) / 1000.0)
-    }
-
-    var maxBolusText: String? {
-        guard let milliunits = pumpManager?.state.maxBolusLimitMilliunits else { return nil }
-        return String(format: "%.1f U", Double(milliunits) / 1000.0)
-    }
-
     // MARK: - Quick Bolus
 
     var quickBolusEnabled: Bool? {
@@ -515,41 +520,6 @@ class TandemKitSettingsViewModel: ObservableObject {
             let units = Double(unitsMilliunits) / 1000.0
             return String(format: "Units, %.1f U", units)
         }
-    }
-
-    // MARK: - Factory Methods
-
-    func createQuickBolusSettingsViewModel() -> TandemKitQuickBolusSettingsViewModel {
-        TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    func createDeliveryLimitsViewModel() -> TandemKitDeliveryLimitsViewModel {
-        TandemKitDeliveryLimitsViewModel(pumpManager: pumpManager)
-    }
-
-    func createControlIQSettingsViewModel() -> TandemKitControlIQSettingsViewModel {
-        TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    func createCGMSettingsViewModel() -> TandemKitCGMSettingsViewModel {
-        TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    // Cartridge operations
-    func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
-        TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
-        TandemKitFillTubingViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
-        TandemKitFillCannulaViewModel(pumpManager: pumpManager)
-    }
-
-    func createNotificationsViewModel() -> TandemKitNotificationsViewModel {
-        TandemKitNotificationsViewModel(pumpManager)
     }
 
     func removePump() {

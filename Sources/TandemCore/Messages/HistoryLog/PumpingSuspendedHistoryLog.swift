@@ -58,6 +58,6 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reason=\(reason), reasonId=\(reasonId))"
+        "PumpingSuspendedHistoryLog(cargo=\(cargo.hexadecimalString), insulinAmount=\(insulinAmount), reason=\(String(describing: reason)), reasonId=\(reasonId))"
     }
 }

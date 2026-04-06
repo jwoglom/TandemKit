@@ -11,7 +11,11 @@ public class ReminderDismissedHistoryLog: HistoryLog {
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, reminderId: UInt32) {
-        let payload = ReminderDismissedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, reminderId: reminderId)
+        let payload = ReminderDismissedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            reminderId: reminderId
+        )
         self.reminderId = reminderId
         super.init(cargo: payload)
     }

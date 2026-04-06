@@ -13,11 +13,11 @@ extension PumpCommsError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .noPumpPaired:
-            return LocalizedString("No pump paired", comment: "Error when no pump is paired")
+            return String(localized: "No pump paired", comment: "Error when no pump is paired")
         case .noResponse:
-            return LocalizedString("No response from pump", comment: "Error when no response received")
+            return String(localized: "No response from pump", comment: "Error when no response received")
         case .pumpNotConnected:
-            return LocalizedString("Pump not connected", comment: "Error when pump not connected")
+            return String(localized: "Pump not connected", comment: "Error when pump not connected")
         case let .commsError(error):
             return error.localizedDescription
         case let .unacknowledgedMessage(_, error):
@@ -29,7 +29,7 @@ extension PumpCommsError: LocalizedError {
         switch self {
         case .noResponse,
              .pumpNotConnected:
-            return LocalizedString("Make sure your pump is nearby", comment: "Recovery when pump not nearby")
+            return String(localized: "Make sure your pump is nearby", comment: "Recovery when pump not nearby")
         default:
             return nil
         }

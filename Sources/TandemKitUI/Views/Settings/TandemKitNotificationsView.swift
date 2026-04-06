@@ -15,7 +15,7 @@ struct TandemKitNotificationsView: View {
                         Spacer()
                         VStack(spacing: 16) {
                             ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            Text(LocalizedString("Loading notifications...", comment: "Loading notifications message"))
+                            Text("Loading notifications...", comment: "Loading notifications message")
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
@@ -30,22 +30,23 @@ struct TandemKitNotificationsView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 48))
                                 .foregroundColor(.green)
-                            Text(LocalizedString("No notifications", comment: "No notifications message"))
+                            Text("No notifications", comment: "No notifications message")
                                 .font(.headline)
-                            Text(LocalizedString(
+                            Text(
                                 "Your pump has no active notifications",
                                 comment: "No notifications detail message"
-                            ))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
+                            )
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
                         }
                         .padding()
                         Spacer()
                     }
                 }
             } else {
-                Section(header: SectionHeader(label: LocalizedString(
+                Section(header: SectionHeader(label: String(
+                    localized:
                     "Active Notifications",
                     comment: "The title of the active notifications section"
                 ))) {
@@ -60,7 +61,7 @@ struct TandemKitNotificationsView: View {
             if let lastRefresh = viewModel.lastRefreshTime {
                 Section {
                     HStack {
-                        Text(LocalizedString("Last updated", comment: "Last updated label"))
+                        Text("Last updated", comment: "Last updated label")
                             .foregroundColor(.secondary)
                             .font(.caption)
                         Spacer()
@@ -73,10 +74,10 @@ struct TandemKitNotificationsView: View {
 
             if !viewModel.notifications.isEmpty {
                 Section {
-                    Text(LocalizedString(
+                    Text(
                         "To dismiss a pump notification, swipe it away.",
                         comment: "Hint for dismissing notifications"
-                    ))
+                    )
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -85,7 +86,7 @@ struct TandemKitNotificationsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle(LocalizedString("Notifications", comment: "Notifications view title"))
+        .navigationBarTitle(String(localized: "Notifications", comment: "Notifications view title"))
         .navigationBarItems(trailing: refreshButton)
         .onAppear {
             guard !didLoad else { return }
@@ -97,9 +98,9 @@ struct TandemKitNotificationsView: View {
             set: { _ in viewModel.clearError() }
         )) { error in
             Alert(
-                title: Text(LocalizedString("Error", comment: "Error alert title")),
+                title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
-                dismissButton: .default(Text(LocalizedString("OK", comment: "OK button")))
+                dismissButton: .default(Text("OK", comment: "OK button"))
             )
         }
     }

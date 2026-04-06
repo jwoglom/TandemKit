@@ -57,7 +57,7 @@ struct WizardStepContainer<Content: View>: View {
     }
 
     private var cancelButton: some View {
-        Button(LocalizedString("Cancel", comment: "Cancel button")) {
+        Button(String(localized: "Cancel", comment: "Cancel button")) {
             onCancel()
         }
     }

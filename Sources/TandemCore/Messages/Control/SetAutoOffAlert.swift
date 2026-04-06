@@ -28,7 +28,11 @@ public class SetAutoOffAlertRequest: Message {
     }
 
     public init(enableAutoOff: Bool, autoOffDuration: Int, bitmask: Int) {
-        cargo = SetAutoOffAlertRequest.buildCargo(enableAutoOff: enableAutoOff, autoOffDuration: autoOffDuration, bitmask: bitmask)
+        cargo = SetAutoOffAlertRequest.buildCargo(
+            enableAutoOff: enableAutoOff,
+            autoOffDuration: autoOffDuration,
+            bitmask: bitmask
+        )
         self.enableAutoOff = enableAutoOff
         self.autoOffDuration = autoOffDuration
         self.bitmask = bitmask

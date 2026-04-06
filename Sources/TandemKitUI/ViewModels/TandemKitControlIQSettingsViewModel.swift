@@ -3,6 +3,7 @@ import SwiftUI
 import TandemCore
 
 class TandemKitControlIQSettingsViewModel: ObservableObject {
+    @Published var controlIQEnabled = false { didSet { checkDirtyState() } }
     @Published var weight: Int = 70 { didSet { checkDirtyState() } }
     @Published var totalDailyInsulin: Int = 30 { didSet { checkDirtyState() } }
 
@@ -10,9 +11,11 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     @Published var isFetching: Bool = true
     @Published var isDirty: Bool = false
+    @Published var disabled: Bool = false
     @Published var isLoading: Bool = false
     @Published var saveError: String?
 
+    private var originalEnabled: Bool = false
     private var originalWeight: Int = 70
     private var originalTDI: Int = 30
 
@@ -22,6 +25,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         self.pumpManager = pumpManager
 
         if let state = pumpManager?.state {
+            controlIQEnabled = state.useControlIQ
+
             if let w = state.controlIQWeight {
                 weight = w
                 originalWeight = w
@@ -49,7 +54,9 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             // Fetch ControlIQ info
             if let ciqResponse = pumpManager.sendMessage(message: ControlIQInfoV2Request()) as? ControlIQInfoV2Response {
                 DispatchQueue.main.async {
+                    self.controlIQEnabled = ciqResponse.closedLoopEnabled
                     self.weight = ciqResponse.weight
+                    self.originalEnabled = ciqResponse.closedLoopEnabled
                     self.originalWeight = ciqResponse.weight
                     self.totalDailyInsulin = ciqResponse.totalDailyInsulin
                     self.originalTDI = ciqResponse.totalDailyInsulin
@@ -58,12 +65,14 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             }
 
             // Fetch sleep schedules
-            if let scheduleResponse = pumpManager.sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse {
+            if let scheduleResponse = pumpManager
+                .sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse
+            {
                 let slots = [
                     SleepScheduleSlot(from: scheduleResponse.schedule0),
                     SleepScheduleSlot(from: scheduleResponse.schedule1),
                     SleepScheduleSlot(from: scheduleResponse.schedule2),
-                    SleepScheduleSlot(from: scheduleResponse.schedule3),
+                    SleepScheduleSlot(from: scheduleResponse.schedule3)
                 ]
                 DispatchQueue.main.async {
                     self.sleepSchedules = slots
@@ -83,28 +92,31 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         isLoading = true
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
+            guard let self = self, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async { self?.isLoading = false }
                 return
             }
 
-            let response = self.pumpManager?.sendMessage(message: ChangeControlIQSettingsRequest(
-                enabled: true,
+            let request = ChangeControlIQSettingsRequest(
+                enabled: controlIQEnabled,
                 weightLbs: self.weight,
                 totalDailyInsulinUnits: self.totalDailyInsulin
-            )) as? ChangeControlIQSettingsResponse
+            )
 
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if response?.isStatusOK == true {
-                    self.originalWeight = self.weight
-                    self.originalTDI = self.totalDailyInsulin
-                    self.isDirty = false
-                } else {
-                    self.saveError = LocalizedString(
-                        "Failed to update Control-IQ settings. Check pump connection.",
-                        comment: "Error when Control-IQ settings save fails"
-                    )
+            pumpManager.configureControlIQMode(request) { success in
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                    if success {
+                        self.originalWeight = self.weight
+                        self.originalTDI = self.totalDailyInsulin
+                        self.isDirty = false
+                    } else {
+                        self.saveError = String(
+                            localized:
+                            "Failed to update Control-IQ settings. Check pump connection.",
+                            comment: "Error when Control-IQ settings save fails"
+                        )
+                    }
                 }
             }
         }
@@ -133,7 +145,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isLoading = false
                 if response?.isStatusOK != true {
-                    self.saveError = LocalizedString(
+                    self.saveError = String(
+                        localized:
                         "Failed to update sleep schedule. Check pump connection.",
                         comment: "Error when sleep schedule save fails"
                     )
@@ -146,7 +159,13 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     private func checkDirtyState() {
         DispatchQueue.main.async {
-            self.isDirty = (self.weight != self.originalWeight || self.totalDailyInsulin != self.originalTDI)
+            self.isDirty = (
+                self.controlIQEnabled != self.originalEnabled ||
+                    self.weight != self.originalWeight ||
+                    self.totalDailyInsulin != self.originalTDI
+            )
+
+            self.disabled = !self.isDirty
         }
     }
 }
@@ -158,7 +177,7 @@ struct SleepScheduleSlot: Identifiable {
     var enabled: Bool
     var activeDays: Int
     var startTime: Int // minutes from midnight
-    var endTime: Int   // minutes from midnight
+    var endTime: Int // minutes from midnight
 
     init(from schedule: ControlIQSleepScheduleResponse.SleepSchedule, index: Int = 0) {
         id = index
@@ -202,7 +221,7 @@ struct SleepScheduleSlot: Identifiable {
     var activeDaysText: String {
         let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
         var result: [String] = []
-        for i in 0..<7 {
+        for i in 0 ..< 7 {
             if activeDays & (1 << i) != 0 {
                 result.append(dayLetters[i])
             }

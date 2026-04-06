@@ -124,12 +124,12 @@ public class PumpFeaturesV2Response: Message {
     // MARK: - Feature type enumerations
 
     public enum ControlIqProFeatureType: UInt32, CaseIterable {
-        case bleControl              = 1
-        case guiChanges              = 2
-        case rangeChanges            = 4
-        case nvmParam                = 8
-        case extendedBolusDuration   = 16
-        case autoBolus               = 32
+        case bleControl = 1
+        case guiChanges = 2
+        case rangeChanges = 4
+        case nvmParam = 8
+        case extendedBolusDuration = 16
+        case autoBolus = 32
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<ControlIqProFeatureType> {
             Set(allCases.filter { (bitmask & $0.rawValue) != 0 })
@@ -137,37 +137,37 @@ public class PumpFeaturesV2Response: Message {
     }
 
     public enum ControlFeatureType: UInt32, CaseIterable {
-        case changeCartridgeControl      = 1
-        case basalDeliveryControl        = 2
-        case standardBolusControl        = 4
-        case extendedBolusControl        = 8
-        case tempRateControl             = 16
-        case cgmControl                  = 32
-        case aamControl                  = 64
-        case shelfModeControl            = 128
-        case idpControl                  = 256
-        case ledPatternControl           = 512
-        case unregisterControl           = 1024
-        case pumpTimeControl             = 2048
-        case plgsControl                 = 4096
-        case tzControl                   = 8192
-        case reminderSettingsControl     = 16384
-        case alertSettingsControl        = 32768
-        case annumControl                = 65536
-        case aamNotifyMeOnControl        = 131072
-        case pumpGlobalSettingsControl   = 262144
-        case factoryConfigControl        = 524288
-        case snoozeSettingsControl       = 1048576
-        case updatedSettingsQeControl    = 2097152
-        case findMyPumpControl           = 4194304
-        case bolusOverflowControl        = 8388608
-        case preflightControl            = 16777216
-        case userInteractionControl      = 33554432
-        case bloodGlucoseEntryControl    = 67108864
-        case hlogCreatorControl          = 134217728
-        case featureManagement           = 268435456
-        case mobiResearchPump            = 536870912
-        case tipsControlGenericTest      = 1073741824
+        case changeCartridgeControl = 1
+        case basalDeliveryControl = 2
+        case standardBolusControl = 4
+        case extendedBolusControl = 8
+        case tempRateControl = 16
+        case cgmControl = 32
+        case aamControl = 64
+        case shelfModeControl = 128
+        case idpControl = 256
+        case ledPatternControl = 512
+        case unregisterControl = 1024
+        case pumpTimeControl = 2048
+        case plgsControl = 4096
+        case tzControl = 8192
+        case reminderSettingsControl = 16384
+        case alertSettingsControl = 32768
+        case annumControl = 65536
+        case aamNotifyMeOnControl = 131_072
+        case pumpGlobalSettingsControl = 262_144
+        case factoryConfigControl = 524_288
+        case snoozeSettingsControl = 1_048_576
+        case updatedSettingsQeControl = 2_097_152
+        case findMyPumpControl = 4_194_304
+        case bolusOverflowControl = 8_388_608
+        case preflightControl = 16_777_216
+        case userInteractionControl = 33_554_432
+        case bloodGlucoseEntryControl = 67_108_864
+        case hlogCreatorControl = 134_217_728
+        case featureManagement = 268_435_456
+        case mobiResearchPump = 536_870_912
+        case tipsControlGenericTest = 1_073_741_824
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<ControlFeatureType> {
             Set(allCases.filter { (bitmask & $0.rawValue) != 0 })
@@ -175,10 +175,10 @@ public class PumpFeaturesV2Response: Message {
     }
 
     public enum ControlIqFeatureType: UInt32, CaseIterable {
-        case timedExercise              = 1
-        case controlIqVersionOneFive    = 256
-        case tempRateEnabled            = 512
-        case extendedBolusEnabled       = 2048
+        case timedExercise = 1
+        case controlIqVersionOneFive = 256
+        case tempRateEnabled = 512
+        case extendedBolusEnabled = 2048
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<ControlIqFeatureType> {
             Set(allCases.filter { (bitmask & $0.rawValue) != 0 })
@@ -186,10 +186,10 @@ public class PumpFeaturesV2Response: Message {
     }
 
     public enum DexcomFeatureType: UInt32, CaseIterable {
-        case g5Cgm               = 1
-        case g6Cgm               = 2
-        case g7Cgm               = 4
-        case autoCal             = 8
+        case g5Cgm = 1
+        case g6Cgm = 2
+        case g7Cgm = 4
+        case autoCal = 8
         case disableGraphSmoothing = 16
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<DexcomFeatureType> {
@@ -207,8 +207,8 @@ public class PumpFeaturesV2Response: Message {
 
     public enum SecondaryFeatureType: UInt32, CaseIterable {
         case baselineProfiles = 1
-        case multiCgm         = 2
-        case bleTdu           = 4
+        case multiCgm = 2
+        case bleTdu = 4
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<SecondaryFeatureType> {
             Set(allCases.filter { (bitmask & $0.rawValue) != 0 })

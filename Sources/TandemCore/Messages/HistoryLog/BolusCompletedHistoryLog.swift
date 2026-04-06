@@ -81,6 +81,6 @@ public class BolusCompletedHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BolusCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(completionStatus), completionStatusId=\(completionStatusId), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
+        "BolusCompletedHistoryLog(cargo=\(cargo.hexadecimalString), completionStatus=\(String(describing: completionStatus)), completionStatusId=\(completionStatusId), bolusId=\(bolusId), iob=\(iob), insulinDelivered=\(insulinDelivered), insulinRequested=\(insulinRequested))"
     }
 }

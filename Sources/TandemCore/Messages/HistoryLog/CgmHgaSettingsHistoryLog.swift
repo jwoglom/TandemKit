@@ -16,8 +16,22 @@ public class CgmHgaSettingsHistoryLog: HistoryLog {
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, alertLevel: Int, repeatDuration: Int, isEnabled: Bool, modifiedField: Int) {
-        let payload = CgmHgaSettingsHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, alertLevel: alertLevel, repeatDuration: repeatDuration, isEnabled: isEnabled, modifiedField: modifiedField)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        alertLevel: Int,
+        repeatDuration: Int,
+        isEnabled: Bool,
+        modifiedField: Int
+    ) {
+        let payload = CgmHgaSettingsHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            alertLevel: alertLevel,
+            repeatDuration: repeatDuration,
+            isEnabled: isEnabled,
+            modifiedField: modifiedField
+        )
         self.alertLevel = alertLevel
         self.repeatDuration = repeatDuration
         self.isEnabled = isEnabled
@@ -25,7 +39,14 @@ public class CgmHgaSettingsHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, alertLevel: Int, repeatDuration: Int, isEnabled: Bool, modifiedField: Int) -> Data {
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        alertLevel: Int,
+        repeatDuration: Int,
+        isEnabled: Bool,
+        modifiedField: Int
+    ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), 0]),

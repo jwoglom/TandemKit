@@ -16,8 +16,22 @@ public class TipsErrorHistoryLog: HistoryLog {
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, messageType: Int, requestCode: Int, errorCode: Int, isDataMasked: Bool) {
-        let payload = TipsErrorHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, messageType: messageType, requestCode: requestCode, errorCode: errorCode, isDataMasked: isDataMasked)
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        messageType: Int,
+        requestCode: Int,
+        errorCode: Int,
+        isDataMasked: Bool
+    ) {
+        let payload = TipsErrorHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            messageType: messageType,
+            requestCode: requestCode,
+            errorCode: errorCode,
+            isDataMasked: isDataMasked
+        )
         self.messageType = messageType
         self.requestCode = requestCode
         self.errorCode = errorCode
@@ -25,7 +39,14 @@ public class TipsErrorHistoryLog: HistoryLog {
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, messageType: Int, requestCode: Int, errorCode: Int, isDataMasked: Bool) -> Data {
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        messageType: Int,
+        requestCode: Int,
+        errorCode: Int,
+        isDataMasked: Bool
+    ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
