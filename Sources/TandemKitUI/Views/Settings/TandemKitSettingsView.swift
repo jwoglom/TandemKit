@@ -290,7 +290,7 @@ struct TandemKitSettingsView: View {
                             title: Text("Temp Basal Active", comment: "Stop temp rate alert title"),
                             message: Text(stopTempRateMessage),
                             primaryButton: .destructive(
-                                Text(LocalizedString("Stop Temp Rate", comment: "Stop temp rate button")),
+                                Text("Stop Temp Rate", comment: "Stop temp rate button"),
                                 action: {
                                     if viewModel.isClosedLoopEnabled {
                                         DispatchQueue.main.async {
