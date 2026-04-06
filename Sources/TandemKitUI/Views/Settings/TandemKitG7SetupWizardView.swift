@@ -75,11 +75,12 @@ struct TandemKitG7SetupWizardView: View {
             (Text(
                 "This page configures the connection between your pump and Dexcom G7. ",
                 comment: "G7 setup explanation prefix"
-            ) + Text(String(format: String(localized:
+            ) + Text(String(format: String(
+                localized:
                 "It is not used by %@ for algorithm dosing decisions.",
                 comment: "G7 setup explanation bold part, parameter is app name"
             ), HostApp.current.appName)).bold())
-            .font(.body)
+                .font(.body)
 
             Text(
                 "When configured, the pump can vibrate or beep to deliver CGM notifications at all times. When Control-IQ is on, it will be used for automated insulin delivery with the built-in pump algorithm.",

@@ -3126,7 +3126,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.log.info(
                     "InitialConnectionTimeout: pairing in progress – skipping disconnect"
                 )
-            } else if bootstrapRunning && attempt < self.initialConnectionTimeoutMaxAttempts {
+            } else if bootstrapRunning, attempt < self.initialConnectionTimeoutMaxAttempts {
                 self.initialConnectionTimeoutAttempts.value += 1
                 self.log.info(
                     "InitialConnectionTimeout: auth bootstrap still in progress (attempt \(attempt + 1)/\(self.initialConnectionTimeoutMaxAttempts)) – extending timeout"

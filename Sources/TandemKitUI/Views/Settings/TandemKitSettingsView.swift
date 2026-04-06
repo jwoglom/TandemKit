@@ -37,7 +37,8 @@ struct TandemKitSettingsView: View {
         ActionSheet(
             title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")
                 .font(.headline),
-            message: Text(String(format: String(localized:
+            message: Text(String(format: String(
+                localized:
                 "Are you sure you want to remove the pump from %@? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
                 comment: "Message for Tandem PumpManager deletion action sheet"
             ), viewModel.appName)),
@@ -235,8 +236,21 @@ struct TandemKitSettingsView: View {
                     switch alertType {
                     case .switchToCIQ:
                         return Alert(
-                            title: Text(String(format: String(localized: "Disable %@ Algorithm", comment: "Title for alert to switch from DIY to Control-IQ"), viewModel.algorithmName)),
-                            message: Text(String(format: String(localized: "This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?", comment: "Message for alert to switch from DIY to Control-IQ"), viewModel.appName, viewModel.appName)),
+                            title: Text(String(
+                                format: String(
+                                    localized: "Disable %@ Algorithm",
+                                    comment: "Title for alert to switch from DIY to Control-IQ"
+                                ),
+                                viewModel.algorithmName
+                            )),
+                            message: Text(String(
+                                format: String(
+                                    localized: "This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?",
+                                    comment: "Message for alert to switch from DIY to Control-IQ"
+                                ),
+                                viewModel.appName,
+                                viewModel.appName
+                            )),
                             primaryButton: .default(Text(
                                 "Switch to Control-IQ",
                                 comment: "Button to confirm switching to Control-IQ algorithm"
@@ -247,17 +261,40 @@ struct TandemKitSettingsView: View {
                         )
                     case .switchToDIY:
                         return Alert(
-                            title: Text(String(format: String(localized: "Enable %@ Algorithm", comment: "Title for alert to switch from Control-IQ to DIY"), viewModel.algorithmName)),
-                            message: Text(String(format: String(localized: "This will disable Control-IQ on your pump and allow %@ to resume %@ closed-loop dosing.", comment: "Message for alert to switch from Control-IQ to DIY"), viewModel.appName, viewModel.algorithmName)),
-                            primaryButton: .default(Text(String(format: String(localized: "Switch to %@", comment: "Button to confirm switching to DIY algorithm"), viewModel.algorithmName))) {
+                            title: Text(String(
+                                format: String(
+                                    localized: "Enable %@ Algorithm",
+                                    comment: "Title for alert to switch from Control-IQ to DIY"
+                                ),
+                                viewModel.algorithmName
+                            )),
+                            message: Text(String(
+                                format: String(
+                                    localized: "This will disable Control-IQ on your pump and allow %@ to resume %@ closed-loop dosing.",
+                                    comment: "Message for alert to switch from Control-IQ to DIY"
+                                ),
+                                viewModel.appName,
+                                viewModel.algorithmName
+                            )),
+                            primaryButton: .default(Text(String(
+                                format: String(
+                                    localized: "Switch to %@",
+                                    comment: "Button to confirm switching to DIY algorithm"
+                                ),
+                                viewModel.algorithmName
+                            ))) {
                                 viewModel.switchAlgorithmToDIY()
                             },
                             secondaryButton: .cancel()
                         )
                     case .diyRestored:
                         return Alert(
-                            title: Text(String(format: String(localized: "%@ Mode Restored", comment: "Title for DIY mode restored notice"), viewModel.algorithmName)),
-                            message: Text(String(format: String(localized:
+                            title: Text(String(format: String(
+                                localized: "%@ Mode Restored",
+                                comment: "Title for DIY mode restored notice"
+                            ), viewModel.algorithmName)),
+                            message: Text(String(format: String(
+                                localized:
                                 "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
                                 comment: "Message for DIY mode restored notice"
                             ), viewModel.algorithmName)),
@@ -339,13 +376,22 @@ struct TandemKitSettingsView: View {
                 } else if viewModel.useControlIQ && !viewModel.isCGMActiveOnPump {
                     statusBanner(
                         title: String(localized: "No CGM connected to pump", comment: "title for CIQ no CGM notice"),
-                        subtitle:String(format: String(localized: "%@ closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop.", comment: "subtitle for CIQ no CGM notice"), viewModel.algorithmName),
+                        subtitle: String(
+                            format: String(
+                                localized: "%@ closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop.",
+                                comment: "subtitle for CIQ no CGM notice"
+                            ),
+                            viewModel.algorithmName
+                        ),
                         color: .orange
                     )
                 } else if viewModel.useControlIQ {
                     statusBanner(
                         title: String(localized: "Control-IQ pump algorithm enabled", comment: "title for CIQ active notice"),
-                        subtitle: String(format: String(localized: "%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"), viewModel.algorithmName),
+                        subtitle: String(
+                            format: String(localized: "%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
+                            viewModel.algorithmName
+                        ),
                         color: .orange
                     )
                 } else if !viewModel.isClosedLoopEnabled {
