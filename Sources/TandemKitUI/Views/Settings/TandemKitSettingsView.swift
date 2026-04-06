@@ -7,7 +7,6 @@ private enum AlgorithmAlertType: Identifiable {
     case switchToDIY
     case diyRestored
     case noCGMConnected
-    case enableClosedLoop
 
     var id: String {
         switch self {
@@ -15,7 +14,6 @@ private enum AlgorithmAlertType: Identifiable {
         case .switchToDIY: return "switchToDIY"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
-        case .enableClosedLoop: return "enableClosedLoop"
         }
     }
 }
@@ -73,8 +71,7 @@ struct TandemKitSettingsView: View {
         case .resume:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not resume insulin delivery",
+                    localized: "Could not resume insulin delivery",
                     comment: "Title for failure to resume insulin delivery"
                 ),
                 message: String(
@@ -86,8 +83,7 @@ struct TandemKitSettingsView: View {
         case .suspend:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not suspend insulin delivery",
+                    localized: "Could not suspend insulin delivery",
                     comment: "Title for failure to suspend insulin delivery"
                 ),
                 message: String(
@@ -99,78 +95,66 @@ struct TandemKitSettingsView: View {
         case .controlIQ:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not change Control-IQ setting",
+                    localized: "Could not change Control-IQ setting",
                     comment: "Title for failure to toggle Control-IQ"
                 ),
                 message: String(
-                    localized:
-                    "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle Control-IQ"
                 )
             )
         case .exerciseMode:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not change exercise mode",
+                    localized: "Could not change exercise mode",
                     comment: "Title for failure to toggle exercise mode"
                 ),
                 message: String(
-                    localized:
-                    "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the exercise mode change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle exercise mode"
                 )
             )
         case .sleepMode:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not change sleep mode",
+                    localized: "Could not change sleep mode",
                     comment: "Title for failure to toggle sleep mode"
                 ),
                 message: String(
-                    localized:
-                    "The pump rejected the sleep mode change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the sleep mode change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle sleep mode"
                 )
             )
         case .stopTempRate:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not stop temp rate",
+                    localized: "Could not stop temp rate",
                     comment: "Title for failure to stop temp rate"
                 ),
                 message: String(
-                    localized:
-                    "The pump rejected stopping the temp rate. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected stopping the temp rate. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to stop temp rate"
                 )
             )
         case .playSound:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not play sound",
+                    localized: "Could not play sound",
                     comment: "Title for failure to play pump sound"
                 ),
                 message: String(
-                    localized:
-                    "The pump did not respond to the sound request. Check your pump connection.",
+                    localized: "The pump did not respond to the sound request. Check your pump connection.",
                     comment: "Message for failed to play pump sound"
                 )
             )
         case .alertSnooze:
             content = ErrorSheetContent(
                 title: String(
-                    localized:
-                    "Could not update alert snooze",
+                    localized: "Could not update alert snooze",
                     comment: "Title for failure to set alert snooze"
                 ),
                 message: String(
-                    localized:
-                    "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status.",
+                    localized: "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to set alert snooze"
                 )
             )
@@ -293,18 +277,6 @@ struct TandemKitSettingsView: View {
                             ),
                             dismissButton: .default(Text("OK"))
                         )
-                    case .enableClosedLoop:
-                        return Alert(
-                            title: Text("Enable Closed Loop", comment: "Title for enable closed loop prompt"),
-                            message: Text(
-                                "Would you like to enable DIY closed loop?",
-                                comment: "Message for enable closed loop prompt"
-                            ),
-                            primaryButton: .default(Text("Enable", comment: "Button to enable closed loop")) {
-                                viewModel.enableClosedLoop()
-                            },
-                            secondaryButton: .cancel()
-                        )
                     }
                 }
                 .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
@@ -346,9 +318,6 @@ struct TandemKitSettingsView: View {
                         color: .orange
                     )
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        activeAlgorithmAlert = .enableClosedLoop
-                    }
                 }
 
                 if viewModel.showPumpTimeSyncWarning {
@@ -474,20 +443,13 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openSoundSettings() }
                 )
 
-                if viewModel.useControlIQ {
-                    navigationLink(
-                        label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
-                        action: { viewModel.openControlIQSettings() }
-                    )
-                }
-
                 navigationLink(
-                    label: Text("CGM Settings", comment: "Label for CGM settings"),
-                    action: { viewModel.openCgmSettings() }
+                    label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
+                    action: { viewModel.openControlIQSettings() }
                 )
 
                 navigationLink(
-                    label: Text("Quick Bolus settings", comment: "Label for quick bolus settings"),
+                    label: Text("CGM Settings", comment: "Label for CGM settings"),
                     action: { viewModel.openCgmSettings() }
                 )
 
@@ -802,21 +764,15 @@ struct TandemKitSettingsView: View {
         return guidanceColors.critical
     }
 
-    // TODO(jwoglom): replace with consts from TandemCore
     private func statusBanner(title: String, subtitle: String? = nil, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(Font.subheadline.weight(.bold))
-                    .foregroundColor(color)
-                if let subtitle = subtitle {
-                    Text(subtitle)
-                        .font(Font.caption)
-                        .foregroundColor(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(Font.subheadline.weight(.bold))
+                .foregroundColor(color)
+            if let subtitle = subtitle {
+                Text(subtitle)
+                    .font(Font.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 8)

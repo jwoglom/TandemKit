@@ -598,10 +598,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             raw["bolusState"] = encodedBolusState
         }
 
-        if let basalRateSchedule = basalRateSchedule,
-           let encodedSchedule = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
-        {
-            raw["basalRateSchedule"] = encodedSchedule
+        if let basalRateSchedule = basalRateSchedule {
+            raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
         }
 
         if !pendingDoses.isEmpty,
@@ -893,7 +891,7 @@ private extension TandemPumpManagerState {
         return nil
     }
 
-    static func encodeBasalSchedule(_ schedule: BasalRateSchedule) -> [String: Any]? {
+    static func encodeBasalSchedule(_ schedule: BasalRateSchedule) -> [String: Any] {
         let items = schedule.items.map { item -> [String: Any] in
             [
                 "startTime": item.startTime,

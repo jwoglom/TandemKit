@@ -20,21 +20,6 @@ struct TandemKitCGMSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("CGM Settings", comment: "Title for CGM settings screen")
-                .font(.title)
-                .bold()
-                .padding(.horizontal)
-
-            Text(
-                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used.",
-                comment: "Description for CGM settings"
-            )
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
-
-            Divider()
-                .padding(.vertical)
-
             if viewModel.isFetching {
                 HStack {
                     Spacer()
@@ -105,7 +90,7 @@ struct TandemKitCGMSettingsView: View {
     // MARK: - CGM Status Section
 
     private var cgmStatusSection: some View {
-        Section(header: Text("CGM Sensor", comment: "Header for CGM sensor section")) {
+        Section {
             if viewModel.cgmSessionState != .stopped, let sensorType = viewModel.sensorTypeText {
                 HStack {
                     Text("Session Type", comment: "Label for CGM session type")
@@ -232,6 +217,14 @@ struct TandemKitCGMSettingsView: View {
                     }
                 }
             }
+        } header: {
+            Text("CGM Sensor", comment: "Header for CGM sensor section")
+        } footer: {
+            Text(
+                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used.",
+                comment: "Description for CGM settings"
+            )
+            .font(.footnote)
         }
     }
 

@@ -25,8 +25,6 @@ struct TandemKitSoundSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            title
-
             List {
                 Section {
                     sectionItem(
@@ -86,6 +84,12 @@ struct TandemKitSoundSettingsView: View {
                             toggleEditors(propertyName: "alertAnnun")
                         }
                     }
+                } footer: {
+                    Text(
+                        "You can configure which actions cause your pump to beep or vibrate",
+                        comment: "Title text for insulin type confirmation page"
+                    )
+                    .font(.footnote)
                 }
             }
 
@@ -167,17 +171,5 @@ struct TandemKitSoundSettingsView: View {
             )
             .padding(.horizontal)
         }
-    }
-
-    @ViewBuilder private var title: some View {
-        Text(
-            "You can configure which actions cause your pump to beep or vibrate",
-            comment: "Title text for insulin type confirmation page"
-        )
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal)
-
-        Divider()
-            .padding(.vertical)
     }
 }

@@ -189,9 +189,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         needsSessionInitialization.value = false
 
-        #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-            PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
-        #endif
+        PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
         PumpStateSupplier.pumpTimeSinceReset = { 0 }
 
         let refreshedPumpComm = PumpComm(pumpState: nil, retryPolicy: pumpComm.retryPolicy)
@@ -1624,20 +1622,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         lockedState.value.useControlIQ
     }
 
-    public func requestEnableClosedLoop() {
-        var state = lockedState.value
-        state.pendingEnableClosedLoop = true
-        lockedState.value = state
-        notifyDelegateStateUpdated()
-    }
-
-    public func clearPendingEnableClosedLoop() {
-        var state = lockedState.value
-        state.pendingEnableClosedLoop = false
-        lockedState.value = state
-    }
-
-    public func configureControlIQMode(_ enabled: Bool, completion: @escaping (Bool) -> Void) {
+    public func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool) -> Void) {
         guard let transport = pairedTransport else {
             completion(false)
             return
@@ -1652,7 +1637,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             do {
                 try self.pumpComm.performOnCommandQueue {
                     // When switching to ControlIQ, cancel any active DIY temp basal first
-                    if enabled, self.state.tempRateAbsolute != nil {
+                    if request.enabled, self.state.tempRateAbsolute != nil {
                         self.log.info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
                         let _: StopTempRateResponse = try self.pumpComm.sendMessage(
                             transport: transport,
@@ -1674,26 +1659,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     let response: ChangeControlIQSettingsResponse = try self.pumpComm.sendMessage(
                         transport: transport,
-                        message: ChangeControlIQSettingsRequest(
-                            enabled: enabled,
-                            weightLbs: weight,
-                            totalDailyInsulinUnits: tdi
-                        ),
+                        message: request,
                         expecting: ChangeControlIQSettingsResponse.self
                     )
 
                     guard response.isStatusOK else {
-                        self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(enabled)")
+                        self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(request.enabled)")
                         throw PumpCommError.errorResponse(
                             context: String(
                                 localized: "Pump rejected Control-IQ settings change",
                                 comment: "Message when pump rejects ControlIQ settings change"
                             ),
-                            request: ChangeControlIQSettingsRequest(
-                                enabled: enabled,
-                                weightLbs: weight,
-                                totalDailyInsulinUnits: tdi
-                            ),
+                            request: request,
                             response: response
                         )
                     }
@@ -1706,10 +1683,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Pump accepted -- update local preference
             var state = self.lockedState.value
-            state.useControlIQ = enabled
+            state.useControlIQ = request.enabled
+            state.controlIQWeight = request.weightLbs
+            state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
             self.lockedState.value = state
 
-            self.telemetryLogger.info("Algorithm mode set to \(enabled ? "Control-IQ" : "DIY")")
+            self.telemetryLogger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
 
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)

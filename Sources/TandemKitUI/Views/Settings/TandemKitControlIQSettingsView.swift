@@ -9,21 +9,6 @@ struct TandemKitControlIQSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text("Control-IQ Settings", comment: "Title for Control-IQ settings screen")
-                .font(.title)
-                .bold()
-                .padding(.horizontal)
-
-            Text(
-                "Configure the Control-IQ algorithm settings on your pump.",
-                comment: "Description for Control-IQ settings"
-            )
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
-
-            Divider()
-                .padding(.vertical)
-
             if viewModel.isFetching {
                 HStack {
                     Spacer()
@@ -37,11 +22,26 @@ struct TandemKitControlIQSettingsView: View {
             } else {
                 List {
                     controlIQSection
-                    sleepScheduleSection
+
+                    if viewModel.controlIQEnabled {
+                        sleepScheduleSection
+                    }
                 }
                 .listStyle(InsetGroupedListStyle())
+
+                Spacer()
+
+                ContinueButton(
+                    text: Text("Save", comment: "Save action"),
+                    loading: $viewModel.isLoading,
+                    disabled: $viewModel.isDirty,
+                ) {
+                    viewModel.saveControlIQSettings()
+                }
+                .padding(.horizontal)
             }
         }
+        .navigationTitle(String(localized: "Control-IQ Settings", comment: "Title for Control-IQ settings screen"))
         .alert(item: Binding(
             get: { viewModel.saveError.map { ErrorMessage(message: $0) } },
             set: { _ in viewModel.saveError = nil }
@@ -58,73 +58,61 @@ struct TandemKitControlIQSettingsView: View {
 
     private var controlIQSection: some View {
         Section(header: Text("Control-IQ", comment: "Header for Control-IQ settings section")) {
-            // Weight
-            HStack {
-                Text("Weight", comment: "Label for weight")
-                Spacer()
-                Text("\(viewModel.weight) lbs")
-                    .foregroundColor(isEditingWeight ? .accentColor : .secondary)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation {
-                    isEditingWeight.toggle()
-                    if isEditingWeight { isEditingTDI = false }
-                }
-            }
+            Toggle(
+                String(localized: "Enabled", comment: "Control IQ enabled"),
+                isOn: $viewModel.controlIQEnabled
+            )
 
-            if isEditingWeight {
-                Picker("", selection: $viewModel.weight) {
-                    ForEach(Array(stride(from: 50, through: 400, by: 1)), id: \.self) { lbs in
-                        Text("\(lbs) lbs").tag(lbs)
+            if viewModel.controlIQEnabled {
+                // Weight
+                HStack {
+                    Text("Weight", comment: "Label for weight")
+                    Spacer()
+                    Text("\(viewModel.weight) lbs")
+                        .foregroundColor(isEditingWeight ? .accentColor : .secondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        isEditingWeight.toggle()
+                        if isEditingWeight { isEditingTDI = false }
                     }
                 }
-                .pickerStyle(.wheel)
-                .frame(height: 150)
-            }
 
-            // Total Daily Insulin
-            HStack {
-                Text("Total Daily Insulin", comment: "Label for total daily insulin")
-                Spacer()
-                Text("\(viewModel.totalDailyInsulin) U")
-                    .foregroundColor(isEditingTDI ? .accentColor : .secondary)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation {
-                    isEditingTDI.toggle()
-                    if isEditingTDI { isEditingWeight = false }
-                }
-            }
-
-            if isEditingTDI {
-                Picker("", selection: $viewModel.totalDailyInsulin) {
-                    ForEach(Array(stride(from: 1, through: 200, by: 1)), id: \.self) { units in
-                        Text("\(units) U").tag(units)
-                    }
-                }
-                .pickerStyle(.wheel)
-                .frame(height: 150)
-            }
-
-            // Save button
-            if viewModel.isDirty {
-                Button(action: {
-                    viewModel.saveControlIQSettings()
-                }) {
-                    HStack {
-                        Spacer()
-                        if viewModel.isLoading {
-                            ProgressView()
-                                .padding(.trailing, 5)
+                if isEditingWeight {
+                    Picker("", selection: $viewModel.weight) {
+                        ForEach(Array(stride(from: 50, through: 400, by: 1)), id: \.self) { lbs in
+                            Text("\(lbs) lbs").tag(lbs)
                         }
-                        Text("Save", comment: "Button to save Control-IQ settings")
-                            .fontWeight(.semibold)
-                        Spacer()
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(height: 150)
+                }
+
+                // Total Daily Insulin
+                HStack {
+                    Text("Total Daily Insulin", comment: "Label for total daily insulin")
+                    Spacer()
+                    Text("\(viewModel.totalDailyInsulin) U")
+                        .foregroundColor(isEditingTDI ? .accentColor : .secondary)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        isEditingTDI.toggle()
+                        if isEditingTDI { isEditingWeight = false }
                     }
                 }
-                .disabled(viewModel.isLoading)
+
+                if isEditingTDI {
+                    Picker("", selection: $viewModel.totalDailyInsulin) {
+                        ForEach(Array(stride(from: 1, through: 200, by: 1)), id: \.self) { units in
+                            Text("\(units) U").tag(units)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(height: 150)
+                }
             }
         }
     }

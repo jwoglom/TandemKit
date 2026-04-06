@@ -274,8 +274,13 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
-        pumpManager?.configureControlIQMode(true) { [weak self] success in
-            guard let self = self else { return }
+
+        let request = ChangeControlIQSettingsRequest(
+            enabled: true,
+            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+        )
+        pumpManager?.configureControlIQMode(request) { success in
             if success {
                 // Check CGM status on background thread
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -303,16 +308,16 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func enableClosedLoop() {
-        pendingEnableClosedLoop = true
-        pumpManager?.requestEnableClosedLoop()
-    }
-
     func switchAlgorithmToDIY() {
         isUpdatingPumpState = true
-        pumpManager?.configureControlIQMode(false) { [weak self] success in
+
+        let request = ChangeControlIQSettingsRequest(
+            enabled: false,
+            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+        )
+        pumpManager?.configureControlIQMode(request) { success in
             DispatchQueue.main.async {
-                guard let self = self else { return }
                 self.isUpdatingPumpState = false
                 if success {
                     self.useControlIQ = false
@@ -490,18 +495,6 @@ class TandemKitSettingsViewModel: ObservableObject {
                 self?.isPlayingSound = false
             }
         }
-    }
-
-    // MARK: - Delivery Limits
-
-    var maxBasalRateText: String? {
-        guard let milliunits = pumpManager?.state.maxBasalLimitMilliunits else { return nil }
-        return String(format: "%.2f U/hr", Double(milliunits) / 1000.0)
-    }
-
-    var maxBolusText: String? {
-        guard let milliunits = pumpManager?.state.maxBolusLimitMilliunits else { return nil }
-        return String(format: "%.1f U", Double(milliunits) / 1000.0)
     }
 
     // MARK: - Quick Bolus

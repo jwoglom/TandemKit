@@ -169,7 +169,7 @@
       "comment" : "Header for CGM sensor section"
     },
     "CGM Settings" : {
-      "comment" : "Label for CGM settings\nTitle for CGM settings screen"
+      "comment" : "Label for CGM settings"
     },
     "Change Cartridge" : {
       "comment" : "Label for change cartridge\nTitle for change cartridge"
@@ -209,9 +209,6 @@
     },
     "Configure how your pump handles alerts and notifications." : {
       "comment" : "Description for alert settings"
-    },
-    "Configure the Control-IQ algorithm settings on your pump." : {
-      "comment" : "Description for Control-IQ settings"
     },
     "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin or enter carbs using repeated button presses." : {
       "comment" : "Description for quick bolus settings"
@@ -300,17 +297,11 @@
     "Done" : {
       "comment" : "Button text\nbutton text"
     },
-    "Enable" : {
-      "comment" : "Button to enable closed loop"
-    },
-    "Enable Closed Loop" : {
-      "comment" : "Title for enable closed loop prompt"
-    },
     "Enable DIY Algorithm" : {
       "comment" : "Title for alert to switch from Control-IQ to DIY"
     },
     "Enabled" : {
-      "comment" : "Sleep schedule enabled"
+      "comment" : "Control IQ enabled\nSleep schedule enabled"
     },
     "Enter pairing code" : {
       "comment" : "Placeholder for G7 pairing code"
@@ -459,9 +450,6 @@
     },
     "In the first step you will configure your insulin type and pump settings." : {
       "comment" : "welcome to TandemKit1"
-    },
-    "Increment" : {
-      "comment" : "Header for quick bolus increment"
     },
     "Initial state messages failed, please retry pairing" : {
       "comment" : "Error shown when initial pump requests after auth fail"
@@ -725,7 +713,7 @@
       "comment" : "Retry button"
     },
     "Save" : {
-      "comment" : "Button to save Control-IQ settings\nText for save button\nlabel for save\nsave"
+      "comment" : "Save action\nText for save button\nlabel for save\nsave"
     },
     "Schedule" : {
       "comment" : "Sleep schedule label"
@@ -1056,9 +1044,6 @@
     },
     "Weight" : {
       "comment" : "Label for weight"
-    },
-    "Would you like to enable DIY closed loop?" : {
-      "comment" : "Message for enable closed loop prompt"
     },
     "XXXXXX" : {
       "comment" : "A placeholder for the G6 transmitter ID.",
