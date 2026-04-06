@@ -59,7 +59,6 @@
 		35710C54F4F4E1C26051CBF1 /* VersionsAHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 232C049100E2DE02F31D3E51 /* VersionsAHistoryLog.swift */; };
 		382E6335EF9C2D37AE51947B /* FillEstimateFinalHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4323E440D24CE459E79BA89 /* FillEstimateFinalHistoryLog.swift */; };
 		38C5098541A7156093874B74 /* CartridgeInsertedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57443A987633A5CA0651EE88 /* CartridgeInsertedHistoryLog.swift */; };
-		3E0F4D3C2F265A64008290A3 /* LocalizedString.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444F2EC91299008A07F6 /* LocalizedString.swift */; };
 		3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */; };
 		3E0F4D422F265C25008290A3 /* blank.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3E0F4D412F265C25008290A3 /* blank.wav */; };
 		3E0F4D442F2662B3008290A3 /* TandemKitSoundSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */; };
@@ -72,6 +71,8 @@
 		3E68DB722F38BF6500232E59 /* TandemCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EE344082EC9125A008A07F6 /* TandemCore.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3E68DB732F38BFC100232E59 /* TandemBLE.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; };
 		3E68DB742F38BFC100232E59 /* TandemBLE.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3EEECBE52EC904E80063D7BC /* TandemBLE.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		3E74810E2F83E81600B09B8E /* TandemKitAlertSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */; };
+		3E7481102F83E98100B09B8E /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3E74810F2F83E98100B09B8E /* Localizable.xcstrings */; };
 		3E7EC31A2F49E5B8005157EB /* ReservoirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7EC3192F49E5B8005157EB /* ReservoirView.swift */; };
 		3E945F012F2E0FBE00F38431 /* TandemKitReservoirView.xib in Resources */ = {isa = PBXBuildFile; fileRef = 3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */; };
 		3E945F032F2E0FCC00F38431 /* TandemKitReservoirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */; };
@@ -384,7 +385,6 @@
 		A7595B929BB611B6019A22F7 /* TandemKitQuickBolusSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */; };
 		A8817A1E8B913A5A91224829 /* WumpOcclusionDebugHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 956E0BA9CEF3B5A73D2DCEE4 /* WumpOcclusionDebugHistoryLog.swift */; };
 		AA7EB6940D6501CA4BE2C7A3 /* CgmFraSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C9977957439AFA0C6024A1 /* CgmFraSettingsHistoryLog.swift */; };
-		AC3DF712D93018810AF3A37E /* TandemKitDeliveryLimitsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A69A63513A247938EEE8FA2 /* TandemKitDeliveryLimitsViewModel.swift */; };
 		AEEF8B956FBC56D3B71BF911 /* CgmJoinSessionHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */; };
 		B22EA137AEB8417B63501892 /* CgmHgaSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86120F9D4821597AE1719A1 /* CgmHgaSettingsHistoryLog.swift */; };
 		B3C4D5E6F7081920A3B4C5D6 /* TandemKitG6SetupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* TandemKitG6SetupViewModel.swift */; };
@@ -399,13 +399,11 @@
 		C287E57A93E74DAEA0A9E84E /* HistoryTimestampReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4530C85FF45849B7AA2960FD /* HistoryTimestampReconciler.swift */; };
 		C8438650D661A1C20852CBAB /* WumpCartridgeFilledHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8003BA69CB31003CBE6C860 /* WumpCartridgeFilledHistoryLog.swift */; };
 		CA61B8F3EB64EB3A3C24115A /* CgmJoinSessionFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */; };
-		CC377F51BBE87813431BFCA6 /* TandemHUDProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DF68EC93DA6ECB738F7E19 /* TandemHUDProvider.swift */; };
 		CFD999683FF946ABAB42D13B /* TandemKitFillTubingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */; };
 		D02586F563B44CC5D595EE29 /* CgmAlertClearedFsl2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D6E727F339BD6461771D1CE /* CgmAlertClearedFsl2HistoryLog.swift */; };
 		D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2464522A674D05B5968DE6 /* TandemKitFillTubingViewModel.swift */; };
 		D3754862C735410C0976A985 /* CgmInactiveG7HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 775DD74DF544A5601ADA3056 /* CgmInactiveG7HistoryLog.swift */; };
 		D462A8390D0CC5C256E7EC02 /* DexcomG6CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FF28AAD70A877C29B9E82FA /* DexcomG6CGMHistoryLog.swift */; };
-		D4863F494609FDDE27A23274 /* TandemKitDeliveryLimitsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */; };
 		DA434FB465A9BDAD25930F69 /* TandemKitG7SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */; };
 		DD00000000000000000001B1 /* ActivateShelfMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000001A1 /* ActivateShelfMode.swift */; };
 		DD00000000000000000002B1 /* AdditionalBolus.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD00000000000000000002A1 /* AdditionalBolus.swift */; };
@@ -563,7 +561,6 @@
 		16529562409EAFE1547BDAD9 /* HighestAam.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HighestAam.swift; sourceTree = "<group>"; };
 		16D86AA68009658296C4B33D /* CartridgeRemovedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CartridgeRemovedHistoryLog.swift; sourceTree = "<group>"; };
 		17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitQuickBolusSettingsView.swift; sourceTree = "<group>"; };
-		194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitDeliveryLimitsView.swift; sourceTree = "<group>"; };
 		1A02E3ED2F2C949900203519 /* ErrorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSheet.swift; sourceTree = "<group>"; };
 		1A0E17262ED105CC00E75219 /* NotificationBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBundle.swift; sourceTree = "<group>"; };
 		1A0E17292ED1069F00E75219 /* TandemKitNotificationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitNotificationsViewModel.swift; sourceTree = "<group>"; };
@@ -614,7 +611,6 @@
 		376AE425366FFE71D7A4E384 /* TandemKitG7SetupViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitG7SetupViewModel.swift; sourceTree = "<group>"; };
 		3829D895B627CF4D2AE51934 /* CgmTransmitterIdGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmTransmitterIdGxHistoryLog.swift; sourceTree = "<group>"; };
 		386AF03F69573CA779923396 /* WizardStepContainer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WizardStepContainer.swift; sourceTree = "<group>"; };
-		3A69A63513A247938EEE8FA2 /* TandemKitDeliveryLimitsViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitDeliveryLimitsViewModel.swift; sourceTree = "<group>"; };
 		3B85CC10B746B696C0B39E3E /* AaAutoBolusRejectedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaAutoBolusRejectedHistoryLog.swift; sourceTree = "<group>"; };
 		3C490E05FF0876B00A2571E2 /* AaTdiSettingChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaTdiSettingChangeHistoryLog.swift; sourceTree = "<group>"; };
 		3CA4419347489E3E2289C85B /* AaDeliveryStatusChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaDeliveryStatusChangeHistoryLog.swift; sourceTree = "<group>"; };
@@ -628,6 +624,8 @@
 		3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPumpEvent.swift; sourceTree = "<group>"; };
 		3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseEntry.swift; sourceTree = "<group>"; };
 		3E59CD332F0171A700D78697 /* UnfinalizedDose.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnfinalizedDose.swift; sourceTree = "<group>"; };
+		3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitAlertSettingsViewModel.swift; sourceTree = "<group>"; };
+		3E74810F2F83E98100B09B8E /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		3E7EC3192F49E5B8005157EB /* ReservoirView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReservoirView.swift; sourceTree = "<group>"; };
 		3E945F002F2E0FBE00F38431 /* TandemKitReservoirView.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = TandemKitReservoirView.xib; sourceTree = "<group>"; };
 		3E945F022F2E0FCC00F38431 /* TandemKitReservoirView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitReservoirView.swift; sourceTree = "<group>"; };
@@ -948,7 +946,6 @@
 		B8003BA69CB31003CBE6C860 /* WumpCartridgeFilledHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WumpCartridgeFilledHistoryLog.swift; sourceTree = "<group>"; };
 		BB739377BE92F9DBFEDDB1FE /* CgmUnexpectedGeAlertHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmUnexpectedGeAlertHistoryLog.swift; sourceTree = "<group>"; };
 		BF63688F728ABCA91D4E9048 /* ConfirmCartridgeFilledHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConfirmCartridgeFilledHistoryLog.swift; sourceTree = "<group>"; };
-		C0DF68EC93DA6ECB738F7E19 /* TandemHUDProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemHUDProvider.swift; sourceTree = "<group>"; };
 		C22721CFC4B855CB29BFF1FB /* ReminderDismissedHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReminderDismissedHistoryLog.swift; sourceTree = "<group>"; };
 		C72682F16FA9A1A5C68B8C29 /* ShelfModeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShelfModeHistoryLog.swift; sourceTree = "<group>"; };
 		C8D4C9EA7EFA2ED02F2369E5 /* CgmJoinSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionHistoryLog.swift; sourceTree = "<group>"; };
@@ -1092,6 +1089,7 @@
 		1A55E0E62EC92914006E651D /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */,
 				3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */,
 				67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */,
 				02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */,
@@ -1102,7 +1100,6 @@
 				78F7E00487C785C95C4DD599 /* TandemKitCGMSettingsViewModel.swift */,
 				81DC8A3B85604051225CB808 /* TandemKitControlIQSettingsViewModel.swift */,
 				A1B2C3D4E5F60718293A4B5C /* TandemKitG6SetupViewModel.swift */,
-				3A69A63513A247938EEE8FA2 /* TandemKitDeliveryLimitsViewModel.swift */,
 				63B6DBEF24B35125C1052B7C /* TandemKitQuickBolusSettingsViewModel.swift */,
 				376AE425366FFE71D7A4E384 /* TandemKitG7SetupViewModel.swift */,
 			);
@@ -1195,7 +1192,6 @@
 				0E4291A41EA9B4D652E1DB08 /* TandemKitCGMSettingsView.swift */,
 				844120DA2457989518F91C39 /* TandemKitControlIQSettingsView.swift */,
 				D5E6F7081920A3B4C5D6E7F8 /* TandemKitG6SetupWizardView.swift */,
-				194A773E5679EAFD37CC6B8B /* TandemKitDeliveryLimitsView.swift */,
 				17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */,
 				A9D50A702DDA10EE206F1AA1 /* TandemKitG7SetupWizardView.swift */,
 				29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */,
@@ -1709,9 +1705,9 @@
 				3EEECBC72EC900E90063D7BC /* TandemUICoordinator.swift */,
 				3EEECBC42EC9008E0063D7BC /* TandemPumpManager+UI.swift */,
 				3E945F062F2E107800F38431 /* TandemKitHUDProvider.swift */,
-				3E0F4D412F265C25008290A3 /* blank.wav */,
 				1A55E0F52EC9686A006E651D /* Media.xcassets */,
-				C0DF68EC93DA6ECB738F7E19 /* TandemHUDProvider.swift */,
+				3E0F4D412F265C25008290A3 /* blank.wav */,
+				3E74810F2F83E98100B09B8E /* Localizable.xcstrings */,
 			);
 			name = TandemKitUI;
 			path = Sources/TandemKitUI;
@@ -1973,7 +1969,7 @@
 			files = (
 				1A55E0F62EC9686A006E651D /* Media.xcassets in Resources */,
 				3E0F4D422F265C25008290A3 /* blank.wav in Resources */,
-				3E0811902F803DE600555533 /* Localizable.xcstrings in Resources */,
+				3E7481102F83E98100B09B8E /* Localizable.xcstrings in Resources */,
 				3E945F012F2E0FBE00F38431 /* TandemKitReservoirView.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2055,6 +2051,7 @@
 				A5F67C20D8C9446E958F2AA3 /* TandemKitFillCannulaViewModel.swift in Sources */,
 				1A0E172B2ED1069F00E75219 /* TandemKitNotificationsViewModel.swift in Sources */,
 				1A55E0E82EC92929006E651D /* TandemKitScanViewModel.swift in Sources */,
+				3E74810E2F83E81600B09B8E /* TandemKitAlertSettingsViewModel.swift in Sources */,
 				3E0F4D442F2662B3008290A3 /* TandemKitSoundSettingsViewModel.swift in Sources */,
 				1A2FA96E2EC8FD0800DF080F /* PeripheralManagerTransport.swift in Sources */,
 				1A2FA96F2EC8FD0800DF080F /* PumpCommsError.swift in Sources */,
@@ -2072,11 +2069,8 @@
 				E782A9293A03493E8DF467C9 /* HistoryToDoseMapper.swift in Sources */,
 				74F710225EEC427D90574E55 /* HistoryReconciler.swift in Sources */,
 				DD0000000000000000001EB1 /* PumpAlertConfigurator.swift in Sources */,
-				CC377F51BBE87813431BFCA6 /* TandemHUDProvider.swift in Sources */,
-				AC3DF712D93018810AF3A37E /* TandemKitDeliveryLimitsViewModel.swift in Sources */,
 				4CD71739E6E3622DFB94C690 /* TandemKitQuickBolusSettingsViewModel.swift in Sources */,
 				C0F3354449A6EF05797CEC6C /* SaveButton.swift in Sources */,
-				D4863F494609FDDE27A23274 /* TandemKitDeliveryLimitsView.swift in Sources */,
 				A7595B929BB611B6019A22F7 /* TandemKitQuickBolusSettingsView.swift in Sources */,
 				53D439F11FC5EFE5A17D11B1 /* TandemOnboardingView.swift in Sources */,
 				F0599B3120CC9D2230152186 /* WizardProgressBar.swift in Sources */,

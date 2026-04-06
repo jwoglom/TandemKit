@@ -13,7 +13,11 @@ public class CgmPairingCodeG7HistoryLog: HistoryLog {
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, pairingCode: String) {
-        let payload = CgmPairingCodeG7HistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, pairingCode: pairingCode)
+        let payload = CgmPairingCodeG7HistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            pairingCode: pairingCode
+        )
         self.pairingCode = pairingCode
         super.init(cargo: payload)
     }

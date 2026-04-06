@@ -8,7 +8,7 @@ struct TandemKitG7SetupWizardView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: LocalizedString("Dexcom G7 Setup", comment: "Title for G7 setup wizard"),
+            title: String(localized: "Dexcom G7 Setup", comment: "Title for G7 setup wizard"),
             currentStep: 1,
             totalSteps: 1,
             canCancel: !viewModel.isLoading,
@@ -18,20 +18,20 @@ struct TandemKitG7SetupWizardView: View {
         ) {
             VStack(alignment: .leading, spacing: 20) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(LocalizedString("Pairing Code", comment: "Label for G7 pairing code"))
+                    Text("Pairing Code", comment: "Label for G7 pairing code")
                         .font(.headline)
 
                     TextField(
-                        LocalizedString("Enter pairing code", comment: "Placeholder for G7 pairing code"),
+                        String(localized: "Enter pairing code", comment: "Placeholder for G7 pairing code"),
                         text: $viewModel.pairingCode
                     )
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .keyboardType(.numberPad)
 
-                    Text(LocalizedString(
+                    Text(
                         "The pairing code is displayed on the sensor applicator.",
                         comment: "Help text for G7 pairing code"
-                    ))
+                    )
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
@@ -49,7 +49,7 @@ struct TandemKitG7SetupWizardView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .padding(.trailing, 5)
                         }
-                        Text(LocalizedString("Start G7 Sensor", comment: "Button to start G7 sensor"))
+                        Text("Start G7 Sensor", comment: "Button to start G7 sensor")
                             .fontWeight(.semibold)
                         Spacer()
                     }
@@ -66,7 +66,7 @@ struct TandemKitG7SetupWizardView: View {
             set: { _ in viewModel.error = nil }
         )) { error in
             Alert(
-                title: Text(LocalizedString("Error", comment: "Error alert title")),
+                title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
                 dismissButton: .default(Text("OK"))
             )

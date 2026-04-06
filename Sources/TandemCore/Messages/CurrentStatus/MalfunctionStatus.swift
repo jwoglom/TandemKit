@@ -60,32 +60,32 @@ public class MalfunctionBitmaskStatusResponse: Message {
 
     /// Malfunction subsystem types encoded as bit positions in the bitmask.
     public enum MalfunctionType: UInt64, CaseIterable {
-        case software       = 1
-        case cpuCore        = 2
-        case armMspCom      = 4
-        case sensor         = 8
-        case lipo           = 16
-        case touchscreen    = 32
-        case nvm            = 64
-        case display        = 128
-        case msp            = 256
-        case motor          = 512
-        case externalBins   = 1024
-        case swInit         = 2048
-        case vibe           = 4096
-        case periphPower    = 8192
-        case p2             = 16384
-        case datalog        = 32768
-        case speaker        = 65536
-        case mspSupply      = 131072
-        case calData        = 262144
-        case btle           = 524288
-        case ap             = 1048576
-        case rtc            = 2097152
-        case armBleCom      = 4194304
-        case overtravelStall = 8388608
-        case undertravelStall = 16777216
-        case pushoffStall   = 33554432
+        case software = 1
+        case cpuCore = 2
+        case armMspCom = 4
+        case sensor = 8
+        case lipo = 16
+        case touchscreen = 32
+        case nvm = 64
+        case display = 128
+        case msp = 256
+        case motor = 512
+        case externalBins = 1024
+        case swInit = 2048
+        case vibe = 4096
+        case periphPower = 8192
+        case p2 = 16384
+        case datalog = 32768
+        case speaker = 65536
+        case mspSupply = 131_072
+        case calData = 262_144
+        case btle = 524_288
+        case ap = 1_048_576
+        case rtc = 2_097_152
+        case armBleCom = 4_194_304
+        case overtravelStall = 8_388_608
+        case undertravelStall = 16_777_216
+        case pushoffStall = 33_554_432
 
         public static func fromBitmask(_ bitmask: UInt64) -> Set<MalfunctionType> {
             var result = Set<MalfunctionType>()

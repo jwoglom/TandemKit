@@ -58,7 +58,7 @@ public class LoadStatusResponse: Message {
             UInt8(truncatingIfNeeded: loadStateId),
             UInt8(truncatingIfNeeded: primeStatusId)
         ])
-        self.isLoadingActiveId = isLoadingActive ? 1 : 0
+        isLoadingActiveId = isLoadingActive ? 1 : 0
         self.isLoadingActive = isLoadingActive
         self.loadStateId = loadStateId
         self.primeStatusId = primeStatusId

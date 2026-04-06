@@ -21,11 +21,11 @@ enum CGMSessionState {
 
     var displayText: String {
         switch self {
-        case .stopped: return LocalizedString("Stopped", comment: "CGM session state: stopped")
-        case .startPending: return LocalizedString("Starting...", comment: "CGM session state: starting")
-        case .active: return LocalizedString("Active", comment: "CGM session state: active")
-        case .stopPending: return LocalizedString("Stopping...", comment: "CGM session state: stopping")
-        case .unknown: return LocalizedString("Unknown", comment: "CGM session state: unknown")
+        case .stopped: return String(localized: "Stopped", comment: "CGM session state: stopped")
+        case .startPending: return String(localized: "Starting...", comment: "CGM session state: starting")
+        case .active: return String(localized: "Active", comment: "CGM session state: active")
+        case .stopPending: return String(localized: "Stopping...", comment: "CGM session state: stopping")
+        case .unknown: return String(localized: "Unknown", comment: "CGM session state: unknown")
         }
     }
 
@@ -78,11 +78,11 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
                 let batteryText: String? = {
                     switch response.transmitterBatteryStatus {
-                    case .okay: return LocalizedString("OK", comment: "Transmitter battery: OK")
-                    case .error: return LocalizedString("Error", comment: "Transmitter battery: Error")
-                    case .expired: return LocalizedString("Expired", comment: "Transmitter battery: Expired")
-                    case .outOfRange: return LocalizedString("Out of Range", comment: "Transmitter battery: Out of Range")
-                    case .unavailable: return LocalizedString("Unavailable", comment: "Transmitter battery: Unavailable")
+                    case .okay: return String(localized: "OK", comment: "Transmitter battery: OK")
+                    case .error: return String(localized: "Error", comment: "Transmitter battery: Error")
+                    case .expired: return String(localized: "Expired", comment: "Transmitter battery: Expired")
+                    case .outOfRange: return String(localized: "Out of Range", comment: "Transmitter battery: Out of Range")
+                    case .unavailable: return String(localized: "Unavailable", comment: "Transmitter battery: Unavailable")
                     case .unknown: return nil
                     }
                 }()
@@ -151,7 +151,8 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                 if response?.isStatusOK == true {
                     self.cgmSessionState = .stopPending
                 } else {
-                    self.commandError = LocalizedString(
+                    self.commandError = String(
+                        localized:
                         "Failed to stop CGM sensor. Check pump connection.",
                         comment: "Error when CGM sensor stop fails"
                     )

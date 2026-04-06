@@ -11,7 +11,11 @@ public class AaEnableSettingChangeHistoryLog: HistoryLog {
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, enabled: Bool) {
-        let payload = AaEnableSettingChangeHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, enabled: enabled)
+        let payload = AaEnableSettingChangeHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            enabled: enabled
+        )
         self.enabled = enabled
         super.init(cargo: payload)
     }

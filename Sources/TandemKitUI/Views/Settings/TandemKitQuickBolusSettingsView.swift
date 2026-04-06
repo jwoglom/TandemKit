@@ -7,43 +7,43 @@ struct TandemKitQuickBolusSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text(LocalizedString("Quick Bolus Settings", comment: "Title for quick bolus settings"))
+            Text("Quick Bolus Settings", comment: "Title for quick bolus settings")
                 .font(.title)
                 .bold()
                 .padding(.horizontal)
 
-            Text(LocalizedString(
+            Text(
                 "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin or enter carbs using repeated button presses.",
                 comment: "Description for quick bolus settings"
-            ))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal)
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
 
             Divider()
 
             List {
                 Section {
                     Toggle(isOn: $viewModel.enabled) {
-                        Text(LocalizedString("Quick Bolus Enabled", comment: "Label for quick bolus enabled toggle"))
+                        Text("Quick Bolus Enabled", comment: "Label for quick bolus enabled toggle")
                     }
                 }
 
                 if viewModel.enabled {
-                    Section(header: Text(LocalizedString("Mode", comment: "Header for quick bolus mode"))) {
+                    Section(header: Text("Mode", comment: "Header for quick bolus mode")) {
                         Picker(
-                            LocalizedString("Entry Type", comment: "Label for quick bolus entry type"),
+                            String(localized: "Entry Type", comment: "Label for quick bolus entry type"),
                             selection: $viewModel.modeIndex
                         ) {
-                            Text(LocalizedString("Units", comment: "Quick bolus units mode")).tag(0)
-                            Text(LocalizedString("Carbs", comment: "Quick bolus carbs mode")).tag(1)
+                            Text("Units", comment: "Quick bolus units mode").tag(0)
+                            Text("Carbs", comment: "Quick bolus carbs mode").tag(1)
                         }
                         .pickerStyle(.segmented)
                     }
 
-                    Section(header: Text(LocalizedString("Increment", comment: "Header for quick bolus increment"))) {
+                    Section(header: Text("Increment", comment: "Header for quick bolus increment")) {
                         if viewModel.modeIndex == 0 {
                             Picker(
-                                LocalizedString("Unit Increment", comment: "Label for unit increment picker"),
+                                String(localized: "Unit Increment", comment: "Label for unit increment picker"),
                                 selection: $viewModel.unitsIncrementIndex
                             ) {
                                 ForEach(
@@ -58,7 +58,7 @@ struct TandemKitQuickBolusSettingsView: View {
                             .frame(height: 120)
                         } else {
                             Picker(
-                                LocalizedString("Carb Increment", comment: "Label for carb increment picker"),
+                                String(localized: "Carb Increment", comment: "Label for carb increment picker"),
                                 selection: $viewModel.carbsIncrementIndex
                             ) {
                                 ForEach(
@@ -86,7 +86,7 @@ struct TandemKitQuickBolusSettingsView: View {
             }
 
             ContinueButton(
-                text: LocalizedString("Save", comment: "label for save"),
+                text: Text("Save", comment: "label for save"),
                 loading: $viewModel.isLoading,
                 disabled: Binding(
                     get: { !viewModel.isDirty },

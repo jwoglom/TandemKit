@@ -32,7 +32,8 @@ class TandemKitG7SetupViewModel: ObservableObject {
             guard let self = self, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self?.isLoading = false
-                    self?.error = LocalizedString(
+                    self?.error = String(
+                        localized:
                         "Pump not connected.",
                         comment: "Error when pump is not connected"
                     )
@@ -48,7 +49,8 @@ class TandemKitG7SetupViewModel: ObservableObject {
             guard sensorTypeResponse?.isStatusOK == true else {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set sensor type. Check pump connection and try again.",
                         comment: "Error when setting sensor type fails"
                     )
@@ -66,7 +68,8 @@ class TandemKitG7SetupViewModel: ObservableObject {
                 if response?.isStatusOK == true {
                     self.didComplete = true
                 } else {
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set G7 pairing code. Check pump connection and try again.",
                         comment: "Error when setting G7 pairing code fails"
                     )

@@ -74,10 +74,10 @@ struct TandemKitNotificationsView: View {
 
             if !viewModel.notifications.isEmpty {
                 Section {
-                    Text(LocalizedString(
+                    Text(
                         "To dismiss a pump notification, swipe it away.",
                         comment: "Hint for dismissing notifications"
-                    ))
+                    )
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)

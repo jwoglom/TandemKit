@@ -58,12 +58,14 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             }
 
             // Fetch sleep schedules
-            if let scheduleResponse = pumpManager.sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse {
+            if let scheduleResponse = pumpManager
+                .sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse
+            {
                 let slots = [
                     SleepScheduleSlot(from: scheduleResponse.schedule0),
                     SleepScheduleSlot(from: scheduleResponse.schedule1),
                     SleepScheduleSlot(from: scheduleResponse.schedule2),
-                    SleepScheduleSlot(from: scheduleResponse.schedule3),
+                    SleepScheduleSlot(from: scheduleResponse.schedule3)
                 ]
                 DispatchQueue.main.async {
                     self.sleepSchedules = slots
@@ -101,7 +103,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                     self.originalTDI = self.totalDailyInsulin
                     self.isDirty = false
                 } else {
-                    self.saveError = LocalizedString(
+                    self.saveError = String(
+                        localized:
                         "Failed to update Control-IQ settings. Check pump connection.",
                         comment: "Error when Control-IQ settings save fails"
                     )
@@ -133,7 +136,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isLoading = false
                 if response?.isStatusOK != true {
-                    self.saveError = LocalizedString(
+                    self.saveError = String(
+                        localized:
                         "Failed to update sleep schedule. Check pump connection.",
                         comment: "Error when sleep schedule save fails"
                     )
@@ -158,7 +162,7 @@ struct SleepScheduleSlot: Identifiable {
     var enabled: Bool
     var activeDays: Int
     var startTime: Int // minutes from midnight
-    var endTime: Int   // minutes from midnight
+    var endTime: Int // minutes from midnight
 
     init(from schedule: ControlIQSleepScheduleResponse.SleepSchedule, index: Int = 0) {
         id = index
@@ -202,7 +206,7 @@ struct SleepScheduleSlot: Identifiable {
     var activeDaysText: String {
         let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
         var result: [String] = []
-        for i in 0..<7 {
+        for i in 0 ..< 7 {
             if activeDays & (1 << i) != 0 {
                 result.append(dayLetters[i])
             }

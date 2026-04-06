@@ -58,10 +58,10 @@ public class HighestAamResponse: Message, NotificationMessage, NotificationEnum 
 
     /// Malfunction code pairs that should be ignored (not treated as actual malfunctions).
     public static let IGNORABLE_CODES: [(UInt32, UInt32)] = [
-        (0, 0),       // empty
-        (3, 8230),    // 3-0x2026
-        (18, 8311),   // 18-0x2077
-        (26, 8322)    // 26-0x2082
+        (0, 0), // empty
+        (3, 8230), // 3-0x2026
+        (18, 8311), // 18-0x2077
+        (26, 8322) // 26-0x2082
     ]
 
     /// Formatted malfunction code string if this is a real malfunction.
@@ -112,7 +112,8 @@ public class HighestAamResponse: Message, NotificationMessage, NotificationEnum 
         malfunctionBitmaskStatusResponse: MalfunctionBitmaskStatusResponse?
     ) -> Bool {
         if let bits = activeMalfunctionBits,
-           bits.aamType == .malfunction {
+           bits.aamType == .malfunction
+        {
             return bits.hasActiveBit(Int(aamId))
         }
 

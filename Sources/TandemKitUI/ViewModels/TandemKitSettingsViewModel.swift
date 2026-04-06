@@ -26,6 +26,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openCartridgeChange: () -> Void
     let openFillTubing: () -> Void
     let openFillCannula: () -> Void
+    let openCgmSettings: () -> Void
+    let openControlIQSettings: () -> Void
+    let openQuickBolus: () -> Void
+    let openAlertSettings: () -> Void
 
     @Published var reservoirValue: ReservoirValue?
     @Published var isUpdatingPumpState = false
@@ -39,8 +43,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isConnected: Bool = false
     @Published var isRefreshing: Bool = false
     @Published var useSilentMode: Bool = false
-    @Published var alertSnoozeEnabled: Bool = false
-    @Published var alertSnoozeDurationMins: Int = 10
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
@@ -71,7 +73,11 @@ class TandemKitSettingsViewModel: ObservableObject {
         openSoundSettings: @escaping () -> Void,
         openCartridgeChange: @escaping () -> Void,
         openFillTubing: @escaping () -> Void,
-        openFillCannula: @escaping () -> Void
+        openFillCannula: @escaping () -> Void,
+        openCgmSettings: @escaping () -> Void,
+        openControlIQSettings: @escaping () -> Void,
+        openQuickBolus: @escaping () -> Void,
+        openAlertSettings: @escaping () -> Void
     ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
@@ -81,6 +87,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openCartridgeChange = openCartridgeChange
         self.openFillTubing = openFillTubing
         self.openFillCannula = openFillCannula
+        self.openCgmSettings = openCgmSettings
+        self.openControlIQSettings = openControlIQSettings
+        self.openQuickBolus = openQuickBolus
+        self.openAlertSettings = openAlertSettings
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
@@ -200,8 +210,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         // Dispatch everything off main so the spinner renders immediately
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             pumpManager.ensureCurrentPumpData { _ in }
-            pumpManager.fetchGlobalPumpSettings()
-            pumpManager.fetchDeliveryLimits()
 
             DispatchQueue.main.async {
                 self?.isRefreshing = false
@@ -484,18 +492,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Alert Snooze
-
-    func setAlertSnooze(enabled: Bool, durationMins: Int) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
-            DispatchQueue.main.async {
-                self?.alertSnoozeEnabled = enabled
-                self?.alertSnoozeDurationMins = durationMins
-            }
-        }
-    }
-
     // MARK: - Delivery Limits
 
     var maxBasalRateText: String? {
@@ -528,41 +524,6 @@ class TandemKitSettingsViewModel: ObservableObject {
             let units = Double(unitsMilliunits) / 1000.0
             return String(format: "Units, %.1f U", units)
         }
-    }
-
-    // MARK: - Factory Methods
-
-    func createQuickBolusSettingsViewModel() -> TandemKitQuickBolusSettingsViewModel {
-        TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    func createDeliveryLimitsViewModel() -> TandemKitDeliveryLimitsViewModel {
-        TandemKitDeliveryLimitsViewModel(pumpManager: pumpManager)
-    }
-
-    func createControlIQSettingsViewModel() -> TandemKitControlIQSettingsViewModel {
-        TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    func createCGMSettingsViewModel() -> TandemKitCGMSettingsViewModel {
-        TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
-    }
-
-    // Cartridge operations
-    func createChangeCartridgeViewModel() -> TandemKitChangeCartridgeViewModel {
-        TandemKitChangeCartridgeViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillTubingViewModel() -> TandemKitFillTubingViewModel {
-        TandemKitFillTubingViewModel(pumpManager: pumpManager)
-    }
-
-    func createFillCannulaViewModel() -> TandemKitFillCannulaViewModel {
-        TandemKitFillCannulaViewModel(pumpManager: pumpManager)
-    }
-
-    func createNotificationsViewModel() -> TandemKitNotificationsViewModel {
-        TandemKitNotificationsViewModel(pumpManager)
     }
 
     func removePump() {

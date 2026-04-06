@@ -9,17 +9,17 @@ struct TandemKitControlIQSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text(LocalizedString("Control-IQ Settings", comment: "Title for Control-IQ settings screen"))
+            Text("Control-IQ Settings", comment: "Title for Control-IQ settings screen")
                 .font(.title)
                 .bold()
                 .padding(.horizontal)
 
-            Text(LocalizedString(
+            Text(
                 "Configure the Control-IQ algorithm settings on your pump.",
                 comment: "Description for Control-IQ settings"
-            ))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal)
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal)
 
             Divider()
                 .padding(.vertical)
@@ -29,7 +29,7 @@ struct TandemKitControlIQSettingsView: View {
                     Spacer()
                     ProgressView()
                         .padding()
-                    Text(LocalizedString("Loading settings...", comment: "Loading Control-IQ settings"))
+                    Text("Loading settings...", comment: "Loading Control-IQ settings")
                         .foregroundColor(.secondary)
                     Spacer()
                 }
@@ -47,7 +47,7 @@ struct TandemKitControlIQSettingsView: View {
             set: { _ in viewModel.saveError = nil }
         )) { error in
             Alert(
-                title: Text(LocalizedString("Error", comment: "Error alert title")),
+                title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
                 dismissButton: .default(Text("OK"))
             )
@@ -57,10 +57,10 @@ struct TandemKitControlIQSettingsView: View {
     // MARK: - Control-IQ Settings Section
 
     private var controlIQSection: some View {
-        Section(header: Text(LocalizedString("Control-IQ", comment: "Header for Control-IQ settings section"))) {
+        Section(header: Text("Control-IQ", comment: "Header for Control-IQ settings section")) {
             // Weight
             HStack {
-                Text(LocalizedString("Weight", comment: "Label for weight"))
+                Text("Weight", comment: "Label for weight")
                 Spacer()
                 Text("\(viewModel.weight) lbs")
                     .foregroundColor(isEditingWeight ? .accentColor : .secondary)
@@ -85,7 +85,7 @@ struct TandemKitControlIQSettingsView: View {
 
             // Total Daily Insulin
             HStack {
-                Text(LocalizedString("Total Daily Insulin", comment: "Label for total daily insulin"))
+                Text("Total Daily Insulin", comment: "Label for total daily insulin")
                 Spacer()
                 Text("\(viewModel.totalDailyInsulin) U")
                     .foregroundColor(isEditingTDI ? .accentColor : .secondary)
@@ -119,7 +119,7 @@ struct TandemKitControlIQSettingsView: View {
                             ProgressView()
                                 .padding(.trailing, 5)
                         }
-                        Text(LocalizedString("Save", comment: "Button to save Control-IQ settings"))
+                        Text("Save", comment: "Button to save Control-IQ settings")
                             .fontWeight(.semibold)
                         Spacer()
                     }
@@ -132,22 +132,24 @@ struct TandemKitControlIQSettingsView: View {
     // MARK: - Sleep Schedule Section
 
     private var sleepScheduleSection: some View {
-        Section(header: Text(LocalizedString("Sleep Schedules", comment: "Header for sleep schedule section"))) {
+        Section(header: Text("Sleep Schedules", comment: "Header for sleep schedule section")) {
             if viewModel.sleepSchedules.isEmpty {
-                Text(LocalizedString("No sleep schedules available", comment: "Text when no sleep schedules"))
+                Text("No sleep schedules available", comment: "Text when no sleep schedules")
                     .foregroundColor(.secondary)
             } else {
                 ForEach(Array(viewModel.sleepSchedules.enumerated()), id: \.offset) { index, slot in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(LocalizedString("Schedule", comment: "Sleep schedule label") + " \(index + 1)")
+                            Text(String(localized: "Schedule", comment: "Sleep schedule label") + " \(index + 1)")
                                 .fontWeight(.medium)
                             Spacer()
-                            Text(slot.enabled
-                                ? LocalizedString("Enabled", comment: "Sleep schedule enabled")
-                                : LocalizedString("Disabled", comment: "Sleep schedule disabled"))
-                                .foregroundColor(slot.enabled ? .green : .secondary)
-                                .font(.caption)
+                            Text(
+                                slot.enabled
+                                    ? String(localized: "Enabled", comment: "Sleep schedule enabled")
+                                    : String(localized: "Disabled", comment: "Sleep schedule disabled")
+                            )
+                            .foregroundColor(slot.enabled ? .green : .secondary)
+                            .font(.caption)
                         }
                         if slot.enabled {
                             HStack {

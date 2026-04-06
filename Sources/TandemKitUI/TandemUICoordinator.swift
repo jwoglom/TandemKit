@@ -13,6 +13,10 @@ enum TandemScreen {
     case fillTubing
     case fillCannula
     case notifications
+    case cgmSettings
+    case controlIQSettings
+    case quickBolus
+    case alertSettings
 
     func next() -> TandemScreen? {
         switch self {
@@ -162,7 +166,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 openSoundSettings: { self.navigateTo(.soundSettings) },
                 openCartridgeChange: { self.navigateTo(.changeCartridge) },
                 openFillTubing: { self.navigateTo(.fillTubing) },
-                openFillCannula: { self.navigateTo(.fillCannula) }
+                openFillCannula: { self.navigateTo(.fillCannula) },
+                openCgmSettings: { self.navigateTo(.cgmSettings) },
+                openControlIQSettings: { self.navigateTo(.controlIQSettings) },
+                openQuickBolus: { self.navigateTo(.quickBolus) },
+                openAlertSettings: { self.navigateTo(.alertSettings) }
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
@@ -203,6 +211,22 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         case .notifications:
             let viewModel = TandemKitNotificationsViewModel(pumpManager)
             return hostingController(rootView: TandemKitNotificationsView(viewModel: viewModel))
+
+        case .cgmSettings:
+            let viewModel = TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitCGMSettingsView(viewModel: viewModel))
+
+        case .controlIQSettings:
+            let viewModel = TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitControlIQSettingsView(viewModel: viewModel))
+
+        case .quickBolus:
+            let viewModel = TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitQuickBolusSettingsView(viewModel: viewModel))
+
+        case .alertSettings:
+            let viewModel = TandemKitAlertSettingsViewModel(pumpManager: pumpManager)
+            return hostingController(rootView: TandemKitAlertSettingsView(viewModel: viewModel))
         }
     }
 

@@ -66,8 +66,8 @@ public class DetectingCartridgeStateStreamResponse: Message {
     public init(percentComplete: Int) {
         cargo = Bytes.firstTwoBytesLittleEndian(percentComplete)
         self.percentComplete = percentComplete
-        self.stateId = percentComplete
-        self.loadCartridgeState = false
+        stateId = percentComplete
+        loadCartridgeState = false
     }
 
     public var isComplete: Bool { percentComplete == 100 }

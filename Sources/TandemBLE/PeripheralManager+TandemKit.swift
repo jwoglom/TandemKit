@@ -110,7 +110,7 @@ public extension PeripheralManager {
         return .sentWithAcknowledgment
     }
 
-    public func writeCharacteristicValue(
+    func writeCharacteristicValue(
         _ value: Data,
         to uuid: CharacteristicUUID,
         type: CBCharacteristicWriteType = .withResponse,
