@@ -1686,8 +1686,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(enabled)")
                         throw PumpCommError.errorResponse(
                             context: String(
-                                localized:
-                                "Pump rejected Control-IQ settings change",
+                                localized: "Pump rejected Control-IQ settings change",
                                 comment: "Message when pump rejects ControlIQ settings change"
                             ),
                             request: ChangeControlIQSettingsRequest(
@@ -1975,8 +1974,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         guard permissionResponse.isPermissionGranted else {
                             throw PumpCommError.errorResponse(
                                 context: String(
-                                    localized:
-                                    "Pump rejected bolus permission request",
+                                    localized: "Pump rejected bolus permission request",
                                     comment: "Message when pump disallows bolus from occurring"
                                 ),
                                 request: BolusPermissionRequest(),
@@ -2013,8 +2011,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             self.telemetryLogger.info("[enactBolus] bolus not initiated")
                             throw PumpCommError.errorResponse(
                                 context: String(
-                                    localized:
-                                    "Pump rejected bolus initiate request",
+                                    localized: "Pump rejected bolus initiate request",
                                     comment: "Message when pump disallows bolus from occurring"
                                 ),
                                 request: bolusRequest,
@@ -2107,8 +2104,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 guard response.wasCancelled else {
                     throw PumpCommError.errorResponse(
                         context: String(
-                            localized:
-                            "Pump failed to cancel bolus",
+                            localized: "Pump failed to cancel bolus",
                             comment: "Message when bolus could not be cancelled"
                         ),
                         request: request,
@@ -2212,8 +2208,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             self.log.error("Failed to cancel temp basal - status: \(response.status)")
                             throw PumpCommError.errorResponse(
                                 context: String(
-                                    localized:
-                                    "Pump failed to cancel temp basal",
+                                    localized: "Pump failed to cancel temp basal",
                                     comment: "Message when pump rejects request to stop temp rate"
                                 ),
                                 request: StopTempRateRequest(),
@@ -2309,8 +2304,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                 // There isn't an active temp rate (second check), so there is something wrong with the SetTempRate construction itself
                                 throw PumpCommError.errorResponse(
                                     context: String(
-                                        localized:
-                                        "Pump failed to set temp basal",
+                                        localized: "Pump failed to set temp basal",
                                         comment: "Message when pump rejects request to set temp rate"
                                     ),
                                     request: request,
@@ -2337,8 +2331,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                     )
                                 throw PumpCommError.errorResponse(
                                     context: String(
-                                        localized:
-                                        "Pump failed to cancel temp basal",
+                                        localized: "Pump failed to cancel temp basal",
                                         comment: "Message when pump rejects request to stop temp rate"
                                     ),
                                     request: StopTempRateRequest(),
@@ -2365,8 +2358,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                     )
                                 throw PumpCommError.errorResponse(
                                     context: String(
-                                        localized:
-                                        "Pump failed to cancel temp basal",
+                                        localized: "Pump failed to cancel temp basal",
                                         comment: "Message when pump rejects request to stop temp rate"
                                     ),
                                     request: request,
@@ -2379,8 +2371,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                             throw PumpCommError.errorResponse(
                                 context: String(
-                                    localized:
-                                    "Pump failed to cancel temp basal",
+                                    localized: "Pump failed to cancel temp basal",
                                     comment: "Message when pump rejects request to stop temp rate"
                                 ),
                                 request: request,
@@ -2496,8 +2487,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 guard response.status == 0 else {
                     throw PumpCommError.errorResponse(
                         context: String(
-                            localized:
-                            "Pump failed to suspend delivery",
+                            localized: "Pump failed to suspend delivery",
                             comment: "Message when pump rejects request to suspend insulin delivery"
                         ),
                         request: SuspendPumpingRequest(),
@@ -2576,8 +2566,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 guard response.status == 0 else {
                     throw PumpCommError.errorResponse(
                         context: String(
-                            localized:
-                            "Pump failed to resume delivery",
+                            localized: "Pump failed to resume delivery",
                             comment: "Message when pump rejects request to resume insulin delivery"
                         ),
                         request: ResumePumpingRequest(),
@@ -2773,8 +2762,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     guard response.status == 0 else {
                         throw PumpCommError.errorResponse(
                             context: String(
-                                localized:
-                                "Error syncing basal rates: Pump rejected SetIDPSegment",
+                                localized: "Error syncing basal rates: Pump rejected SetIDPSegment",
                                 comment: "Message when pump rejects SetIDPSegment"
                             ),
                             request: request,
@@ -2936,8 +2924,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                     let error = PumpCommError.errorResponse(
                         context: String(
-                            localized:
-                            "Error syncing time with pump",
+                            localized: "Error syncing time with pump",
                             comment: "Message when pump rejects ChangeTimeDateRequest"
                         ),
                         request: request,
