@@ -2273,17 +2273,6 @@
         }
       }
     },
-    "Pump failed to set temp basal" : {
-      "comment" : "Message when pump rejects request to set temp rate",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pump failed to set temp basal"
-          }
-        }
-      }
-    },
     "Pump failed to suspend delivery" : {
       "comment" : "Message when pump rejects request to suspend insulin delivery",
       "localizations" : {
