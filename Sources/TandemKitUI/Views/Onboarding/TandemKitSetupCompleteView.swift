@@ -8,8 +8,7 @@ struct TandemKitSetupCompleteView: View {
         VStack(alignment: .leading) {
             List {
                 Section(header: SectionHeader(label: String(
-                    localized:
-                    "Your Tandem pump is connected!",
+                    localized: "Your Tandem pump is connected!",
                     comment: "Tandem setup complete message"
                 ))) {
                     HStack {

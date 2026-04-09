@@ -878,16 +878,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
             )
 
-        var pumpEvents: [NewPumpEvent] = []
         if !response.active, let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
             let now = Date.now
-            let cancelledDose = DoseEntry.tempBasal(
-                absoluteUnit: tempRateAbsolute,
-                duration: 0, // Ignored when a dose is finished
-                insulinType: lockedState.value.insulinType,
-                startDate: tempRateStart,
-                endDate: now
-            )
 
             updateStatus { status in
                 status.basalDeliveryState = .active(now)
@@ -923,24 +915,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             managerState.tempRateSyncIdentifier = nil // No history id available...
             lockedState.value = managerState
         }
-
-        if pumpEvents.isEmpty {
-            return
-        }
-
-        recordReconciliation(at: Date.now)
-        pumpDelegate.notify { delegate in
-            guard let delegate = delegate else { return }
-            delegate.pumpManager(
-                self,
-                hasNewPumpEvents: pumpEvents,
-                lastReconciliation: self.lockedState.value.lastReconciliation,
-                replacePendingEvents: true,
-                completion: { _ in }
-            )
-        }
-
-        notifyDelegateStateUpdated()
     }
 
     private func makeBatteryRequest() -> Message {
@@ -1658,9 +1632,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         self.lockedState.value = state
                     }
 
-                    let weight = self.lockedState.value.controlIQWeight ?? 70
-                    let tdi = self.lockedState.value.controlIQTotalDailyInsulin ?? 30
-
                     let response: ChangeControlIQSettingsResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: request,
@@ -1765,9 +1736,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
         if units < 10 {
-            units * TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
+            units / TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
         } else {
-            units * TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
+            units / TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
         }
     }
 
@@ -2026,7 +1997,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                         let dose = UnfinalizedDose(
                             units: units,
-                            duration: self.estimatedDuration(toBolus: units),
+                            duration: self.estimatedDuration(toBolus: units) + .seconds(5), // 5s needed before bolus enacting is started
                             activationType: activationType,
                             insulinType: self.lockedState.value.insulinType
                         )
@@ -2044,10 +2015,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     id: initiateResponse.bolusId,
                     dose: dose
                 )
-
-                self.updateStatus { status in
-                    status.bolusState = .initiating
-                }
 
                 self.recordReconciliation(at: Date.now)
                 self.completeBolus(.success(doseEntry), completion: completion)
@@ -2182,7 +2149,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             do {
                 try self.pumpComm.performOnCommandQueue {
                     // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
-                    self.log.info("Querying pump temp basal state before enacting new temp basal...")
                     let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
                         message: TempRateRequest(),
@@ -2198,7 +2164,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             status.basalDeliveryState = .cancelingTempBasal
                         }
 
-                        self.log.info("Cancelling active temp basal on pump (percent=\(currentTempRate.percentage)%)...")
                         let response: StopTempRateResponse = try self.pumpComm.sendMessage(
                             transport: transport,
                             message: StopTempRateRequest(),
@@ -2261,6 +2226,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             insulinType: self.lockedState.value.insulinType
                         )
                         pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
+                        
+                        self.updateStatus { status in
+                            status.basalDeliveryState = .active(Date.now)
+                        }
 
                         self.recordReconciliation(at: Date.now)
                         self.completeTempBasal(.success(pumpEvents), completion: completion)
@@ -2282,93 +2251,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                                 "ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)"
                             )
                         let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
-                        var response: SetTempRateResponse = try self.pumpComm.sendMessage(
+                        let response: SetTempRateResponse = try self.pumpComm.sendMessage(
                             transport: transport,
                             message: request,
                             expecting: SetTempRateResponse.self
                         )
 
-                        // Fallback: If pump fails to set temp rate, try to stop temp rate and then re-set temp rate
-                        if !response.isStatusOK, response.status == 1 {
-                            self.log
-                                .error(
-                                    "enactTempBasal fallback: SetTempRateResponse returned status=1 (temp basal may be already active). Checking temp basal state..."
-                                )
-
-                            let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
-                                transport: transport,
-                                message: TempRateRequest(),
-                                expecting: TempRateResponse.self
-                            )
-
-                            guard currentTempRate.active else {
-                                // There isn't an active temp rate (second check), so there is something wrong with the SetTempRate construction itself
-                                throw PumpCommError.errorResponse(
-                                    context: String(
-                                        localized: "Pump failed to set temp basal",
-                                        comment: "Message when pump rejects request to set temp rate"
-                                    ),
-                                    request: request,
-                                    response: response
-                                )
-                            }
-
-                            self.log
-                                .info(
-                                    "enactTempBasal fallback: stopping current temp rate since one is active: \(currentTempRate)"
-                                )
-
-                            // Cancel the temp basal
-                            let stopResponse: StopTempRateResponse = try self.pumpComm.sendMessage(
-                                transport: transport,
-                                message: StopTempRateRequest(),
-                                expecting: StopTempRateResponse.self
-                            )
-
-                            guard stopResponse.isStatusOK else {
-                                self.log
-                                    .error(
-                                        "enactTempBasal fallback failed: could not cancel temp basal - status: \(stopResponse.status)"
-                                    )
-                                throw PumpCommError.errorResponse(
-                                    context: String(
-                                        localized: "Pump failed to cancel temp basal",
-                                        comment: "Message when pump rejects request to stop temp rate"
-                                    ),
-                                    request: StopTempRateRequest(),
-                                    response: stopResponse
-                                )
-                            }
-
-                            self.log
-                                .info(
-                                    "enactTempBasal fallback: successfully cancelled temp basal, retrying SetTempRateRequest..."
-                                )
-
-                            // Retry the temp basal request
-                            response = try self.pumpComm.sendMessage(
-                                transport: transport,
-                                message: request,
-                                expecting: SetTempRateResponse.self
-                            )
-
-                            if !response.isStatusOK {
-                                self.log
-                                    .error(
-                                        "enactTempBasal fallback failed: SetTempRateRequest still returned error status: \(response.status)"
-                                    )
-                                throw PumpCommError.errorResponse(
-                                    context: String(
-                                        localized: "Pump failed to cancel temp basal",
-                                        comment: "Message when pump rejects request to stop temp rate"
-                                    ),
-                                    request: request,
-                                    response: response
-                                )
-                            }
-
-                            self.log.info("enactTempBasal fallback success: temp basal enacted after cancellation and retry")
-                        } else if !response.isStatusOK {
+                        if !response.isStatusOK {
                             self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                             throw PumpCommError.errorResponse(
                                 context: String(
@@ -2396,6 +2285,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         state.tempRateDuration = duration
                         state.tempRateSyncIdentifier = dose.syncIdentifier
                         self.lockedState.value = state
+                        
+                        self.updateStatus { status in
+                            status.basalDeliveryState = .tempBasal(dose)
+                        }
 
                         self.recordReconciliation(at: Date.now)
                         self.completeTempBasal(.success(pumpEvents), completion: completion)
