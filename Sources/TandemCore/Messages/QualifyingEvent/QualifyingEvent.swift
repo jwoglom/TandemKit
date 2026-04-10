@@ -115,7 +115,7 @@ public enum QualifyingEvent: CaseIterable {
                 { HomeScreenMirrorRequest() },
                 {
                     ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) }
             ]
         case .pumpSuspend:
             return [
@@ -168,7 +168,7 @@ public enum QualifyingEvent: CaseIterable {
         case .battery:
             return [{
                 CurrentBatteryRequestBuilder
-                    .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }]
+                    .create(apiVersion: PumpStateSupplier.pumpApiVersion) }]
         case .basalIQ:
             return [{ BasalIQSettingsRequest() }]
         case .remainingInsulin:
@@ -184,7 +184,7 @@ public enum QualifyingEvent: CaseIterable {
                 { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
                 {
                     ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) },
+                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) },
                 { ControlIQSleepScheduleRequest() }
             ]
         case .controlIQSleep:
@@ -258,8 +258,7 @@ public enum QualifyingEvent: CaseIterable {
     }
     
     private static func lastBolus() -> Message {
-        let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
-        if apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
+        if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
             return LastBolusStatusV2Request()
         } else {
             return LastBolusStatusRequest()

@@ -12,13 +12,15 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     public static let BOLUS_SPEED_UNDER_10U = 1 / 28.745858684009523
     public static let BOLUS_SPEED_OVER_10U = 1 / 11.200233479381131
 
+    private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
     private let total: Double
     public private(set) var bolusStatedOn: Date?
     private var deliveredUnits: Double = 0
 
-    public init(dose: DoseEntry, activationType: BolusActivationType) {
+    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType) {
+        self.pumpManager = pumpManager
         self.dose = dose
         self.activationType = activationType
         total = dose.programmedUnits
@@ -68,7 +70,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
         }
 
-        deliveredUnits = (runningFor * unitsDeliveredPerSec).roundTo(places: 2)
+        deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: runningFor * unitsDeliveredPerSec)
 
         DispatchQueue.main.async {
             for observer in self.observers {

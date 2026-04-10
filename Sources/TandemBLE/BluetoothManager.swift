@@ -52,16 +52,6 @@ public protocol BluetoothManagerDelegate: AnyObject {
     )
 }
 
-public extension BluetoothManagerDelegate {
-    func bluetoothManager(_: BluetoothManager, didIdentifyPump _: String, model _: String) {}
-    func bluetoothManager(
-        _: BluetoothManager,
-        didDiscoverDevice _: CBPeripheral,
-        advertisementData _: [String: Any]?,
-        rssi _: NSNumber
-    ) {}
-}
-
 public class BluetoothManager: NSObject, @unchecked Sendable {
     var stayConnected: Bool {
         get {
@@ -251,15 +241,13 @@ public class BluetoothManager: NSObject, @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
         guard manager.state == .poweredOn else {
+            log.error("Incorrect manager state: \(manager.state)")
             return
         }
 
         let currentState = peripheral?.state ?? .disconnected
-        guard currentState != .connected else {
-            return
-        }
-
-        guard currentState != .connecting else {
+        guard currentState != .connected, currentState != .connecting else {
+            log.warning("Already connected or connecting to peripheral")
             return
         }
 
@@ -372,25 +360,6 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    public func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
-        dispatchPrecondition(condition: .onQueue(managerQueue))
-        log.info("[centralManager willRestoreState] \(#function): \(dict)")
-
-        if let peripherals = dict["peripherals"] as? [CBPeripheral] {
-            for peripheral in peripherals {
-                if delegate == nil || delegate!.bluetoothManager(
-                    self,
-                    shouldConnectPeripheral: peripheral,
-                    advertisementData: nil
-                ) {
-                    log.info("Restoring peripheral from state: \(peripheral.identifier.uuidString)")
-                    self.peripheral = peripheral
-                    // TODO: Maybe connect to peripheral if its state is disconnected?
-                }
-            }
-        }
-    }
-
     public func centralManager(
         _ central: CBCentralManager,
         didDiscover peripheral: CBPeripheral,
@@ -414,6 +383,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
 
         if shouldConnect {
+            manager.stopScan()
+
             self.peripheral = peripheral
 
             log.debug("[centralManager] connecting to peripheral \(peripheral)")
@@ -424,7 +395,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     public func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
 
-        log.info("\(#function): \(peripheral)")
+        log.info("didConnect: \(peripheral)")
         if central.isScanning {
             central.stopScan()
         }
@@ -438,9 +409,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
     public func centralManager(_: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
-        log.info("\(#function): \(peripheral)")
         if let error = error {
-            log.error("\(#function): \(error)")
+            log.error("Error during disconnect: \(error)")
             if let peripheralManager = peripheralManager {
                 delegate?.bluetoothManager(self, peripheralManager: peripheralManager, isReadyWithError: error)
             }
@@ -448,13 +418,11 @@ extension BluetoothManager: CBCentralManagerDelegate {
 
         // Make sure if permanent disconnect is requested, we are actually permanently clearing the peripheral
         if isPermanentlyDisconnecting {
-            log.debug("isPermanentlyDisconnecting is true - nullifying peripheral")
-            // nullify the peripheral if we don't want it anymore
-            // TODO: check why stayConnected is never set?
             stayConnected = false
-            self.peripheral = nil // this should also nullify peripheralManager and peripheralIdentifier
-            log.debug("isPermanentlyDisconnecting done - setting isPermanentlyDisconnecting to false")
+            self.peripheral = nil
             isPermanentlyDisconnecting = false
+
+            log.debug("isPermanentlyDisconnecting done - setting isPermanentlyDisconnecting to false")
         }
 
         if stayConnected {

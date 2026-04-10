@@ -33,7 +33,8 @@ public class UnfinalizedDose {
                 unit: .units,
                 deliveredUnits: cancelledUnits ?? deliveredUnits,
                 insulinType: insulinType,
-                automatic: automatic
+                automatic: automatic,
+                isMutable: false
             )
         }
 
@@ -45,7 +46,8 @@ public class UnfinalizedDose {
             unit: .units,
             deliveredUnits: value,
             insulinType: insulinType,
-            automatic: automatic
+            automatic: automatic,
+            isMutable: true
         )
     }
 }

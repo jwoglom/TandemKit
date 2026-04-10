@@ -50,12 +50,12 @@ public enum PumpStateSupplier {
     static var jpakeDerivedSecretHex: (() -> String)?
     static var jpakeServerNonceHex: (() -> String)?
     public static var pumpTimeSinceReset: (() -> UInt32)?
-    static var pumpApiVersion: (() -> ApiVersion)?
     static var controlIQSupported: () -> Bool = { false }
     public static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
     public static var currentBolusId: (() -> Int?)?
 
     // Flags mirroring PumpX2 PumpState fields — all accessed through withLock.
+    private static var _pumpApiVersion: ApiVersion = KnownApiVersion.apiV2_5.value
     private static var _tconnectAppConnectionSharing = false
     private static var _sendSharedConnectionResponseMessages = false
     private static var _relyOnConnectionSharingForAuthentication = false
@@ -67,6 +67,11 @@ public enum PumpStateSupplier {
     private static var _processedResponseMessagesFromUs = 0
 
     private static var _pairingCodeType: PairingCodeType = .long16Char
+    
+    public static var pumpApiVersion: ApiVersion {
+        get { withLock { _pumpApiVersion } }
+        set { withLock { _pumpApiVersion = newValue } }
+    }
 
     static var tconnectAppConnectionSharing: Bool {
         get { withLock { _tconnectAppConnectionSharing } }
@@ -115,10 +120,6 @@ public enum PumpStateSupplier {
 
     public static var authenticationKey: () -> Data = {
         determinePumpAuthKey()
-    }
-
-    public static func currentPumpApiVersion() -> ApiVersion? {
-        withLock { pumpApiVersion?() }
     }
 
     private static func determinePumpAuthKey() -> Data {

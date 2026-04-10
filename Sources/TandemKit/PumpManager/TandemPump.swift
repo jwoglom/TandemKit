@@ -188,4 +188,7 @@ extension TandemPump: BluetoothManagerDelegate {
     ) {
         delegate?.tandemPump(self, didDiscoverDevice: peripheral, advertisementData: advertisementData, rssi: rssi)
     }
+    
+    public func bluetoothManager(_ manager: TandemBLE.BluetoothManager, didIdentifyPump manufacturer: String, model: String) {
+    }
 }

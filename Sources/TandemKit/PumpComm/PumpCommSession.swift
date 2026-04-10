@@ -200,6 +200,7 @@ public class PumpCommSession {
             throw PumpCommError.initialStateMessagesFailed
         }
         state.apiVersion = apiVersionResponse.getApiVersion()
+        PumpStateSupplier.pumpApiVersion = apiVersionResponse.getApiVersion()
 
         logger.info("[PumpCommSession] Fetching pump version")
         guard let pumpVersionResponse = try transport.sendMessage(PumpVersionRequest()) as? PumpVersionResponse else {
