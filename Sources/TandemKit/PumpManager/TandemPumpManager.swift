@@ -953,13 +953,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
     private func queryLastBolusDeliveredVolume(transport: PumpMessageTransport, bolusId: Int) -> Double? {
         let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
-        let request = LastBolusStatusRequestBuilder.create(apiVersion: apiVersion)
 
         do {
-            if let v2Request = request as? LastBolusStatusV2Request {
+            if apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
                 let response: LastBolusStatusV2Response = try pumpComm.sendMessage(
                     transport: transport,
-                    message: v2Request,
+                    message: LastBolusStatusV2Request(),
                     expecting: LastBolusStatusV2Response.self
                 )
                 guard response.bolusId == bolusId else {
@@ -969,10 +968,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 let units = Double(response.deliveredVolume) / 1000.0
                 telemetryLogger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
                 return units
-            } else if let v1Request = request as? LastBolusStatusRequest {
+            } else {
                 let response: LastBolusStatusResponse = try pumpComm.sendMessage(
                     transport: transport,
-                    message: v1Request,
+                    message: LastBolusStatusRequest(),
                     expecting: LastBolusStatusResponse.self
                 )
                 guard response.bolusId == bolusId else {
@@ -985,9 +984,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
         } catch {
             telemetryLogger.error("[bolus] Failed to query last bolus status: \(error)")
+            return nil
         }
-
-        return nil
     }
 
     private func fetchBatteryStatus() {
@@ -2115,6 +2113,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 // Query the pump for the actual delivered volume before clearing state
                 let deliveredVolume = self.queryLastBolusDeliveredVolume(transport: transport, bolusId: active.id)
+                let canceledDose = active.dose.toDoseEntry(endDate: Date.now, cancelledUnits: deliveredVolume)
 
                 // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
                 self.telemetryScheduler.cancelAll()
@@ -2123,22 +2122,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 self.updateStatus { status in
                     status.bolusState = .noBolus
-                }
-
-                var canceledDose = active.dose.toDoseEntry(endDate: Date.now)
-                if let deliveredVolume {
-                    // Re-create with pump-reported delivered volume
-                    canceledDose = DoseEntry(
-                        type: canceledDose.type,
-                        startDate: canceledDose.startDate,
-                        endDate: canceledDose.endDate,
-                        value: canceledDose.programmedUnits,
-                        unit: .units,
-                        deliveredUnits: deliveredVolume,
-                        syncIdentifier: canceledDose.syncIdentifier,
-                        insulinType: canceledDose.insulinType,
-                        automatic: canceledDose.automatic
-                    )
                 }
 
                 self.recordReconciliation(at: Date.now)

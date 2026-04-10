@@ -23,7 +23,7 @@ public class UnfinalizedDose {
         automatic = activationType.isAutomatic
     }
 
-    public func toDoseEntry(endDate: Date?, syncIdentifier: String? = nil) -> DoseEntry {
+    public func toDoseEntry(endDate: Date?, cancelledUnits: Double? = nil) -> DoseEntry {
         if let endDate = endDate {
             return DoseEntry(
                 type: .bolus,
@@ -31,8 +31,7 @@ public class UnfinalizedDose {
                 endDate: endDate,
                 value: value,
                 unit: .units,
-                deliveredUnits: deliveredUnits,
-                syncIdentifier: syncIdentifier,
+                deliveredUnits: cancelledUnits ?? deliveredUnits,
                 insulinType: insulinType,
                 automatic: automatic
             )
@@ -45,7 +44,6 @@ public class UnfinalizedDose {
             value: value,
             unit: .units,
             deliveredUnits: value,
-            syncIdentifier: syncIdentifier,
             insulinType: insulinType,
             automatic: automatic
         )

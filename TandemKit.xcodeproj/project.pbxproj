@@ -224,7 +224,6 @@
 		3EE345932EC91299008A07F6 /* RemoteBgEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344702EC91299008A07F6 /* RemoteBgEntry.swift */; };
 		3EE345942EC91299008A07F6 /* CGMHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344E22EC91299008A07F6 /* CGMHistoryLog.swift */; };
 		3EE345952EC91299008A07F6 /* ControlIQInfoV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344A02EC91299008A07F6 /* ControlIQInfoV2.swift */; };
-		3EE345962EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */; };
 		3EE345972EC91299008A07F6 /* InsulinStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344B22EC91299008A07F6 /* InsulinStatus.swift */; };
 		3EE345982EC91299008A07F6 /* SetPumpAlertSnooze.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3447C2EC91299008A07F6 /* SetPumpAlertSnooze.swift */; };
 		3EE345992EC91299008A07F6 /* CGMStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3449C2EC91299008A07F6 /* CGMStatus.swift */; };
@@ -663,7 +662,6 @@
 		3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsulinDeliveryProfileRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOBRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeAuthBuilder.swift; sourceTree = "<group>"; };
-		3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastBolusStatusRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpChallengeRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFeaturesRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344442EC91299008A07F6 /* PumpStateSupplier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpStateSupplier.swift; sourceTree = "<group>"; };
@@ -1266,7 +1264,6 @@
 				3EE346AE2EC91299008A07F6 /* MbedTLSJpakeProvider.swift */,
 				3EE346B02EC91299008A07F6 /* MbedTLSJpake.swift */,
 				3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */,
-				3EE344412EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift */,
 				3EE344422EC91299008A07F6 /* PumpChallengeRequestBuilder.swift */,
 				3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */,
 				3EE344442EC91299008A07F6 /* PumpStateSupplier.swift */,
@@ -2241,7 +2238,6 @@
 				3EE345932EC91299008A07F6 /* RemoteBgEntry.swift in Sources */,
 				3EE345942EC91299008A07F6 /* CGMHistoryLog.swift in Sources */,
 				3EE345952EC91299008A07F6 /* ControlIQInfoV2.swift in Sources */,
-				3EE345962EC91299008A07F6 /* LastBolusStatusRequestBuilder.swift in Sources */,
 				3EE345972EC91299008A07F6 /* InsulinStatus.swift in Sources */,
 				3EE345982EC91299008A07F6 /* SetPumpAlertSnooze.swift in Sources */,
 				3EE345992EC91299008A07F6 /* CGMStatus.swift in Sources */,

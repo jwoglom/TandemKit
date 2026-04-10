@@ -146,18 +146,14 @@ public enum QualifyingEvent: CaseIterable {
             return [
                 { CurrentBolusStatusRequest() },
                 { ExtendedBolusStatusRequest() },
-                {
-                    LastBolusStatusRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                { Self.lastBolus() }
             ]
         case .iobChange:
             return [{ IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) }]
         case .extendedBolusChange:
             return [
                 { ExtendedBolusStatusRequest() },
-                {
-                    LastBolusStatusRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                { Self.lastBolus() }
             ]
         case .profileChange:
             return [{ ProfileStatusRequest() }]
@@ -259,5 +255,14 @@ public enum QualifyingEvent: CaseIterable {
 
     private static func activeAamBitsRequest(aamType: UInt8) -> ActiveAamBitsRequest {
         ActiveAamBitsRequest(cargo: Data([aamType]))
+    }
+    
+    private static func lastBolus() -> Message {
+        let apiVersion = PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value
+        if apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
+            return LastBolusStatusV2Request()
+        } else {
+            return LastBolusStatusRequest()
+        }
     }
 }
