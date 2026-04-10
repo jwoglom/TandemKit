@@ -81,7 +81,7 @@ struct TandemKitFillCannulaView: View {
             }
         case .enterAmount:
             ContinueButton(
-                text: Text("Fill cannula", comment: "Button text"),
+                text: Text("Fill Cannula", comment: "Button text"),
                 loading: $viewModel.loadingFill
             ) {
                 viewModel.fillCannula()

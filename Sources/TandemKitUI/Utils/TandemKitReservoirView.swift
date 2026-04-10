@@ -53,8 +53,7 @@ public final class TandemKitReservoirView: LevelHUDView, NibLoadable {
 
             accessibilityValue = String(
                 format: String(
-                    localized:
-                    "%1$@ units remaining at %2$@",
+                    localized: "%@ units remaining at %@",
                     comment: "Accessibility format string for (1: localized volume)(2: time)"
                 ),
                 units,

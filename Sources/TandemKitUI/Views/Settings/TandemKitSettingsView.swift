@@ -44,7 +44,7 @@ struct TandemKitSettingsView: View {
             ), viewModel.appName)),
             buttons: [
                 .destructive(Text(
-                    "Delete pump",
+                    "Delete Pump",
                     comment: "Button text to confirm Tandem PumpManager deletion"
                 )) {
                     viewModel.removePump()
@@ -522,7 +522,7 @@ struct TandemKitSettingsView: View {
                 )
 
                 navigationLink(
-                    label: Text("Quick Bolus settings", comment: "Label for quick bolus settings"),
+                    label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
                     value: {
                         HStack {
                             if let summary = viewModel.quickBolusSummary {

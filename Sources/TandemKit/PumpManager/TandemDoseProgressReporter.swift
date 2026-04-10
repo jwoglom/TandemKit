@@ -68,7 +68,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
         }
 
-        deliveredUnits = runningFor * unitsDeliveredPerSec
+        deliveredUnits = (runningFor * unitsDeliveredPerSec).roundTo(places: 2)
 
         DispatchQueue.main.async {
             for observer in self.observers {
