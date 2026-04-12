@@ -99,6 +99,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var targetPeripheralIdentifier: UUID?
     private let silentToneManager = TandemSilentToneManager()
 
+    // BLE heartbeat propagation (LoopKit PumpManager protocol)
+    private var provideHeartbeat: Bool = false
+    private var lastHeartbeat: Date = .distantPast
+
     // Post-initialization connection timeout (mirrors PumpX2's checkIfInitialPumpConnectionEstablished)
     private let processedResponseMessages = Locked<Int>(0)
     private var initialConnectionTimeoutWork: DispatchWorkItem?
@@ -1664,9 +1668,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return try? pumpComm.sendMessage(transport: transport, message: message)
     }
 
-    public func setMustProvideBLEHeartbeat(_: Bool) {
-        // Store this setting to control heartbeat behavior
-        // The actual heartbeat logic will be implemented in future pump communication
+    private static let lastHeartbeatDebounceInterval: TimeInterval = 10
+
+    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
+        provideHeartbeat = mustProvideBLEHeartbeat
+    }
+
+    /// Query the delegate to determine whether heartbeats should be enabled.
+    /// Must not be called on the delegate's queue.
+    private func updateBLEHeartbeatPreference() {
+        provideHeartbeat = pumpDelegate.call { delegate in
+            delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
+        }
+    }
+
+    private func updateLastHeartbeatIfNeeded() {
+        if provideHeartbeat, Date().timeIntervalSince(lastHeartbeat) > Self.lastHeartbeatDebounceInterval {
+            pumpDelegate.notify { delegate in
+                delegate?.pumpManagerBLEHeartbeatDidFire(self)
+            }
+            lastHeartbeat = Date()
+        }
     }
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
@@ -1818,7 +1840,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            var permissionBolusId: UInt32?
+            var permissionBolusId: Int?
             var shouldReleasePermissionOnFailure = false
 
             do {
@@ -2853,8 +2875,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         activePeripheralManager = peripheralManager
+        peripheralManager.activityHandler = { [weak self] in
+            self?.updateLastHeartbeatIfNeeded()
+        }
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
 
+        updateBLEHeartbeatPreference()
         scheduleInitialConnectionTimeoutCheck()
     }
 
@@ -3105,11 +3131,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 private extension TandemPumpManager {
-    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: UInt32) {
+    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: Int) {
         do {
             let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
                 transport: transport,
-                message: BolusPermissionReleaseRequest(bolusId: bolusId),
+                message: BolusPermissionReleaseRequest(bolusID: bolusId),
                 expecting: BolusPermissionReleaseResponse.self
             )
 

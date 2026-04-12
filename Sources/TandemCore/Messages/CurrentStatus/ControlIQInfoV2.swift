@@ -45,7 +45,8 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
     public var byte8: Int
     public var controlStateType: Int
     public var exerciseChoice: Int
-    public var exerciseDuration: Int
+    public var exerciseDuration: UInt32
+    public var exerciseTimeRemaining: UInt32
 
     public required init(cargo: Data) {
         closedLoopEnabled = cargo[0] != 0
@@ -58,7 +59,8 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
         byte8 = Int(cargo[8])
         controlStateType = Int(cargo[9])
         exerciseChoice = Int(cargo[10])
-        exerciseDuration = Int(cargo[11])
+        exerciseDuration = Bytes.readUint32(cargo, 11)
+        exerciseTimeRemaining = Bytes.readUint32(cargo, 15)
         super.init(cargo: cargo)
     }
 
@@ -73,7 +75,8 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
         byte8: Int,
         controlStateType: Int,
         exerciseChoice: Int,
-        exerciseDuration: Int
+        exerciseDuration: UInt32,
+        exerciseTimeRemaining: UInt32
     ) {
         let data = Bytes.combine(
             Bytes.firstByteLittleEndian(closedLoopEnabled ? 1 : 0),
@@ -86,8 +89,8 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
             Bytes.firstByteLittleEndian(byte8),
             Bytes.firstByteLittleEndian(controlStateType),
             Bytes.firstByteLittleEndian(exerciseChoice),
-            Bytes.firstByteLittleEndian(exerciseDuration),
-            Bytes.emptyBytes(7)
+            Bytes.toUint32(exerciseDuration),
+            Bytes.toUint32(exerciseTimeRemaining)
         )
         self.closedLoopEnabled = closedLoopEnabled
         self.weight = weight
@@ -100,6 +103,7 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
         self.controlStateType = controlStateType
         self.exerciseChoice = exerciseChoice
         self.exerciseDuration = exerciseDuration
+        self.exerciseTimeRemaining = exerciseTimeRemaining
         super.init(cargo: data)
     }
 
@@ -114,6 +118,6 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
     override public func getControlStateType() -> Int { controlStateType }
 
     override public var description: String {
-        "ControlIQInfoV2Response(cargo=\(cargo.hexadecimalString), closedLoopEnabled=\(closedLoopEnabled), weight=\(weight), weightUnitRaw=\(weightUnitRaw), totalDailyInsulin=\(totalDailyInsulin), currentUserModeTypeRaw=\(currentUserModeTypeRaw), byte6=\(byte6), byte7=\(byte7), byte8=\(byte8), controlStateType=\(controlStateType), exerciseChoice=\(exerciseChoice), exerciseDuration=\(exerciseDuration))"
+        "ControlIQInfoV2Response(cargo=\(cargo.hexadecimalString), closedLoopEnabled=\(closedLoopEnabled), weight=\(weight), weightUnitRaw=\(weightUnitRaw), totalDailyInsulin=\(totalDailyInsulin), currentUserModeTypeRaw=\(currentUserModeTypeRaw), byte6=\(byte6), byte7=\(byte7), byte8=\(byte8), controlStateType=\(controlStateType), exerciseChoice=\(exerciseChoice), exerciseDuration=\(exerciseDuration), exerciseTimeRemaining=\(exerciseTimeRemaining))"
     }
 }

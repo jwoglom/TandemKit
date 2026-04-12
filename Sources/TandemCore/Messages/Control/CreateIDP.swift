@@ -13,23 +13,29 @@ public class CreateIDPRequest: Message {
     )
 
     public var cargo: Data
-    public var profileName: String
-    public var firstSegmentProfileCarbRatio: Int
-    public var firstSegmentProfileBasalRate: Int
-    public var firstSegmentProfileTargetBG: Int
-    public var firstSegmentProfileISF: Int
-    public var profileInsulinDuration: Int
-    public var profileCarbEntry: Int
-    public var sourceIdpId: Int
+    public var profileName: String // 17 bytes at offset 0-16 (null-padded)
+    public var firstSegmentProfileCarbRatio: Int // uint32 at offset 17-20 (milligrams per unit)
+    public var firstSegmentProfileStartTime: Int // uint16 at offset 21-22 (minutes since start of day)
+    public var firstSegmentProfileBasalRate: Int // uint16 at offset 23-24
+    public var firstSegmentProfileTargetBG: Int // uint16 at offset 25-26
+    public var firstSegmentProfileISF: Int // uint16 at offset 27-28
+    public var profileInsulinDuration: Int // uint16 at offset 29-30
+    public var timeSegmentBitmask: Int // uint8 at offset 31. Bitmask: bit0=basalRate(1), bit1=carbRatio(2), bit2=targetBG(4), bit3=correctionFactor(8), bit4=startTime(16). 31=all for new, 0 for duplicate.
+    public var bolusSettingsBitmask: Int // uint8 at offset 32. Bitmask: bit0=insulinDuration(1), bit1=maxBolus(2), bit2=carbEntry(4). 5=insulinDuration+carbEntry for new, 0 for duplicate.
+    public var profileCarbEntry: Int // uint8 at offset 34
+    public var sourceIdpId: Int // uint8 at offset 33
 
     public required init(cargo: Data) {
         self.cargo = cargo
         profileName = Bytes.readString(cargo, 0, 16)
-        firstSegmentProfileCarbRatio = Bytes.readShort(cargo, 17)
+        firstSegmentProfileCarbRatio = Int(Bytes.readUint32(cargo, 17)) // uint32 at offset 17-20
+        firstSegmentProfileStartTime = Bytes.readShort(cargo, 21) // uint16 at offset 21-22
         firstSegmentProfileBasalRate = Bytes.readShort(cargo, 23)
         firstSegmentProfileTargetBG = Bytes.readShort(cargo, 25)
         firstSegmentProfileISF = Bytes.readShort(cargo, 27)
         profileInsulinDuration = Bytes.readShort(cargo, 29)
+        timeSegmentBitmask = Int(cargo[31])
+        bolusSettingsBitmask = Int(cargo[32])
         sourceIdpId = Int(cargo[33])
         profileCarbEntry = Int(cargo[34])
     }
@@ -42,24 +48,32 @@ public class CreateIDPRequest: Message {
         firstSegmentProfileTargetBG: Int,
         firstSegmentProfileISF: Int,
         profileInsulinDuration: Int,
-        profileCarbEntry: Int
+        profileCarbEntry: Int,
+        timeSegmentBitmask: Int = 31,
+        bolusSettingsBitmask: Int = 5
     ) {
         cargo = CreateIDPRequest.buildCargo(
             name: profileName,
             firstSegmentProfileCarbRatio: firstSegmentProfileCarbRatio,
+            firstSegmentProfileStartTime: 0,
             firstSegmentProfileBasalRate: firstSegmentProfileBasalRate,
             firstSegmentProfileTargetBG: firstSegmentProfileTargetBG,
             firstSegmentProfileISF: firstSegmentProfileISF,
             profileInsulinDuration: profileInsulinDuration,
+            timeSegmentBitmask: timeSegmentBitmask,
+            bolusSettingsBitmask: bolusSettingsBitmask,
             carbEntry: profileCarbEntry,
             sourceIdpId: -1
         )
         self.profileName = profileName
         self.firstSegmentProfileCarbRatio = firstSegmentProfileCarbRatio
+        self.firstSegmentProfileStartTime = 0
         self.firstSegmentProfileBasalRate = firstSegmentProfileBasalRate
         self.firstSegmentProfileTargetBG = firstSegmentProfileTargetBG
         self.firstSegmentProfileISF = firstSegmentProfileISF
         self.profileInsulinDuration = profileInsulinDuration
+        self.timeSegmentBitmask = timeSegmentBitmask
+        self.bolusSettingsBitmask = bolusSettingsBitmask
         self.profileCarbEntry = profileCarbEntry
         sourceIdpId = -1
     }
@@ -69,19 +83,25 @@ public class CreateIDPRequest: Message {
         cargo = CreateIDPRequest.buildCargo(
             name: profileName,
             firstSegmentProfileCarbRatio: 0,
+            firstSegmentProfileStartTime: 0,
             firstSegmentProfileBasalRate: 0,
             firstSegmentProfileTargetBG: 0,
             firstSegmentProfileISF: 0,
             profileInsulinDuration: 0,
+            timeSegmentBitmask: 0,
+            bolusSettingsBitmask: 0,
             carbEntry: 0,
             sourceIdpId: sourceIdpId
         )
         self.profileName = profileName
         firstSegmentProfileCarbRatio = 0
+        firstSegmentProfileStartTime = 0
         firstSegmentProfileBasalRate = 0
         firstSegmentProfileTargetBG = 0
         firstSegmentProfileISF = 0
         profileInsulinDuration = 0
+        timeSegmentBitmask = 0
+        bolusSettingsBitmask = 0
         profileCarbEntry = 0
         self.sourceIdpId = sourceIdpId
     }
@@ -89,30 +109,32 @@ public class CreateIDPRequest: Message {
     public static func buildCargo(
         name: String,
         firstSegmentProfileCarbRatio: Int,
+        firstSegmentProfileStartTime: Int = 0,
         firstSegmentProfileBasalRate: Int,
         firstSegmentProfileTargetBG: Int,
         firstSegmentProfileISF: Int,
         profileInsulinDuration: Int,
+        timeSegmentBitmask: Int,
+        bolusSettingsBitmask: Int,
         carbEntry: Int,
         sourceIdpId: Int
     ) -> Data {
         Bytes.combine(
             Bytes.writeString(name, 17),
-            Bytes.firstTwoBytesLittleEndian(firstSegmentProfileCarbRatio),
-            Data([0, 0]),
-            Data([0, 0]),
+            Bytes.toUint32(UInt32(firstSegmentProfileCarbRatio)), // uint32 at offset 17-20
+            Bytes.firstTwoBytesLittleEndian(firstSegmentProfileStartTime), // uint16 at offset 21-22
             Bytes.firstTwoBytesLittleEndian(firstSegmentProfileBasalRate),
             Bytes.firstTwoBytesLittleEndian(firstSegmentProfileTargetBG),
             Bytes.firstTwoBytesLittleEndian(firstSegmentProfileISF),
             Bytes.firstTwoBytesLittleEndian(profileInsulinDuration),
-            sourceIdpId == -1 ? Data([31, 5]) : Data([0, 0]),
+            Data([UInt8(timeSegmentBitmask & 0xFF), UInt8(bolusSettingsBitmask & 0xFF)]),
             Data([UInt8(sourceIdpId & 0xFF)]),
             Data([UInt8(carbEntry & 0xFF)])
         )
     }
 
     public var description: String {
-        "CreateIDPRequest(cargo=\(cargo.hexadecimalString), profileName=\(profileName), firstSegmentProfileCarbRatio=\(firstSegmentProfileCarbRatio), firstSegmentProfileBasalRate=\(firstSegmentProfileBasalRate), firstSegmentProfileTargetBG=\(firstSegmentProfileTargetBG), firstSegmentProfileISF=\(firstSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
+        "CreateIDPRequest(cargo=\(cargo.hexadecimalString), profileName=\(profileName), firstSegmentProfileCarbRatio=\(firstSegmentProfileCarbRatio), firstSegmentProfileStartTime=\(firstSegmentProfileStartTime), firstSegmentProfileBasalRate=\(firstSegmentProfileBasalRate), firstSegmentProfileTargetBG=\(firstSegmentProfileTargetBG), firstSegmentProfileISF=\(firstSegmentProfileISF), profileInsulinDuration=\(profileInsulinDuration), timeSegmentBitmask=\(timeSegmentBitmask), bolusSettingsBitmask=\(bolusSettingsBitmask), profileCarbEntry=\(profileCarbEntry), sourceIdpId=\(sourceIdpId))"
     }
 }
 

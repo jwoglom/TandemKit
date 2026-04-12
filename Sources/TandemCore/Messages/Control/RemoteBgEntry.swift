@@ -1,5 +1,29 @@
 import Foundation
 
+/// The type of blood glucose reading: manually entered or auto-populated from CGM.
+/// Maps to byte[3] of RemoteBgEntryRequest cargo.
+public enum BloodGlucoseReadingType: UInt8 {
+    case manual = 0
+    case auto = 1
+    case unknown = 2
+
+    public init(fromId id: UInt8) {
+        self = BloodGlucoseReadingType(rawValue: id) ?? .unknown
+    }
+}
+
+/// The source of a blood glucose reading: entered on the pump or remotely via BLE.
+/// Maps to byte[4] of RemoteBgEntryRequest cargo.
+public enum BloodGlucoseReadingSource: UInt8 {
+    case pump = 0
+    case remote = 1
+    case unknown = 2
+
+    public init(fromId id: UInt8) {
+        self = BloodGlucoseReadingSource(rawValue: id) ?? .unknown
+    }
+}
+
 /// Request to add a blood glucose entry on the pump during bolusing.
 public class RemoteBgEntryRequest: Message {
     public static let props = MessageProps(
@@ -14,7 +38,8 @@ public class RemoteBgEntryRequest: Message {
     public var cargo: Data
     public var bg: Int
     public var useForCgmCalibration: Bool
-    public var isAutopopBg: Bool
+    public var entryType: BloodGlucoseReadingType
+    public var source: BloodGlucoseReadingSource
     public var pumpTime: UInt32
     public var bolusId: Int
 
@@ -22,29 +47,49 @@ public class RemoteBgEntryRequest: Message {
         self.cargo = cargo
         bg = Bytes.readShort(cargo, 0)
         useForCgmCalibration = cargo[2] == 1
-        isAutopopBg = cargo[4] == 1
+        entryType = BloodGlucoseReadingType(fromId: cargo[3])
+        source = BloodGlucoseReadingSource(fromId: cargo[4])
         pumpTime = Bytes.readUint32(cargo, 5)
         bolusId = Bytes.readShort(cargo, 9)
     }
 
-    public init(bg: Int, useForCgmCalibration: Bool, isAutopopBg: Bool, pumpTime: UInt32, bolusId: Int) {
+    public init(bg: Int, useForCgmCalibration: Bool, entryType: BloodGlucoseReadingType, source: BloodGlucoseReadingSource, pumpTime: UInt32, bolusId: Int) {
         cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(bg),
             Data([useForCgmCalibration ? 1 : 0]),
-            Data([0]),
-            Data([isAutopopBg ? 1 : 0]),
+            Data([entryType.rawValue]),
+            Data([source.rawValue]),
             Bytes.toUint32(pumpTime),
             Bytes.firstTwoBytesLittleEndian(bolusId)
         )
         self.bg = bg
         self.useForCgmCalibration = useForCgmCalibration
-        self.isAutopopBg = isAutopopBg
+        self.entryType = entryType
+        self.source = source
         self.pumpTime = pumpTime
         self.bolusId = bolusId
     }
 
+    /// Deprecated: Use init(bg:useForCgmCalibration:entryType:source:pumpTime:bolusId:) instead.
+    /// This initializer hardcodes entryType to .manual and maps isAutopopBg to source (true=.remote, false=.pump).
+    public convenience init(bg: Int, useForCgmCalibration: Bool, isAutopopBg: Bool, pumpTime: UInt32, bolusId: Int) {
+        self.init(
+            bg: bg,
+            useForCgmCalibration: useForCgmCalibration,
+            entryType: .manual,
+            source: isAutopopBg ? .remote : .pump,
+            pumpTime: pumpTime,
+            bolusId: bolusId
+        )
+    }
+
+    /// Deprecated: Use source instead.
+    public var isAutopopBg: Bool {
+        return source == .remote
+    }
+
     public var description: String {
-        "RemoteBgEntryRequest(cargo=\(cargo.hexadecimalString), bg=\(bg), useForCgmCalibration=\(useForCgmCalibration), isAutopopBg=\(isAutopopBg), pumpTime=\(pumpTime), bolusId=\(bolusId))"
+        "RemoteBgEntryRequest(cargo=\(cargo.hexadecimalString), bg=\(bg), useForCgmCalibration=\(useForCgmCalibration), entryType=\(entryType), source=\(source), pumpTime=\(pumpTime), bolusId=\(bolusId))"
     }
 }
 

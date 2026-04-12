@@ -12,6 +12,7 @@ public class SetIDPSettingsRequest: Message {
 
     public var cargo: Data
     public var idpId: Int
+    public var profileIndex: Int
     public var profileInsulinDuration: Int
     public var profileCarbEntry: Int
     public var changeTypeId: Int
@@ -19,27 +20,30 @@ public class SetIDPSettingsRequest: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         idpId = Int(cargo[0])
+        profileIndex = Int(cargo[1])
         profileInsulinDuration = Bytes.readShort(cargo, 2)
         profileCarbEntry = Int(cargo[4])
         changeTypeId = Int(cargo[5])
     }
 
-    public init(idpId: Int, profileInsulinDuration: Int, profileCarbEntry: Int, changeType: ChangeType) {
+    public init(idpId: Int, profileIndex: Int = 0, profileInsulinDuration: Int, profileCarbEntry: Int, changeType: ChangeType) {
         cargo = SetIDPSettingsRequest.buildCargo(
             idpId: idpId,
+            profileIndex: profileIndex,
             profileInsulinDuration: profileInsulinDuration,
             profileCarbEntry: profileCarbEntry,
             changeTypeId: changeType.rawValue
         )
         self.idpId = idpId
+        self.profileIndex = profileIndex
         self.profileInsulinDuration = profileInsulinDuration
         self.profileCarbEntry = profileCarbEntry
         changeTypeId = changeType.rawValue
     }
 
-    public static func buildCargo(idpId: Int, profileInsulinDuration: Int, profileCarbEntry: Int, changeTypeId: Int) -> Data {
+    public static func buildCargo(idpId: Int, profileIndex: Int, profileInsulinDuration: Int, profileCarbEntry: Int, changeTypeId: Int) -> Data {
         Bytes.combine(
-            Data([UInt8(idpId & 0xFF), 1]),
+            Data([UInt8(idpId & 0xFF), UInt8(profileIndex & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(profileInsulinDuration),
             Data([UInt8(profileCarbEntry & 0xFF), UInt8(changeTypeId & 0xFF)])
         )

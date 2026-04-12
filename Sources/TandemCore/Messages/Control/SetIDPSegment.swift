@@ -12,7 +12,7 @@ public class SetIDPSegmentRequest: Message {
 
     public var cargo: Data
     public var idpId: Int
-    public var unknownId: Int
+    public var profileIndex: Int
     public var segmentIndex: Int
     public var operationId: Int
     public var profileStartTime: Int
@@ -25,7 +25,7 @@ public class SetIDPSegmentRequest: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         idpId = Int(cargo[0])
-        unknownId = Int(cargo[1])
+        profileIndex = Int(cargo[1])
         segmentIndex = Int(cargo[2])
         operationId = Int(cargo[3])
         profileStartTime = Bytes.readShort(cargo, 4)
@@ -38,7 +38,7 @@ public class SetIDPSegmentRequest: Message {
 
     public init(
         idpId: Int,
-        unknownId: Int,
+        profileIndex: Int,
         segmentIndex: Int,
         operation: IDPSegmentOperation,
         profileStartTime: Int,
@@ -50,7 +50,7 @@ public class SetIDPSegmentRequest: Message {
     ) {
         cargo = SetIDPSegmentRequest.buildCargo(
             idpId: idpId,
-            unknownId: unknownId,
+            profileIndex: profileIndex,
             segmentIndex: segmentIndex,
             operationId: operation.rawValue,
             profileStartTime: profileStartTime,
@@ -61,7 +61,7 @@ public class SetIDPSegmentRequest: Message {
             idpStatusId: idpStatusId
         )
         self.idpId = idpId
-        self.unknownId = unknownId
+        self.profileIndex = profileIndex
         self.segmentIndex = segmentIndex
         operationId = operation.rawValue
         self.profileStartTime = profileStartTime
@@ -74,7 +74,7 @@ public class SetIDPSegmentRequest: Message {
 
     public static func buildCargo(
         idpId: Int,
-        unknownId: Int,
+        profileIndex: Int,
         segmentIndex: Int,
         operationId: Int,
         profileStartTime: Int,
@@ -85,7 +85,7 @@ public class SetIDPSegmentRequest: Message {
         idpStatusId: Int
     ) -> Data {
         Bytes.combine(
-            Data([UInt8(idpId & 0xFF), UInt8(unknownId & 0xFF)]),
+            Data([UInt8(idpId & 0xFF), UInt8(profileIndex & 0xFF)]),
             Data([UInt8(segmentIndex & 0xFF), UInt8(operationId & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(profileStartTime),
             Bytes.firstTwoBytesLittleEndian(profileBasalRate),
@@ -107,7 +107,7 @@ public class SetIDPSegmentRequest: Message {
     }
 
     public var description: String {
-        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), unknownId=\(unknownId), segmentIndex=\(segmentIndex), operation=\(String(describing: operation)), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
+        "SetIDPSegmentRequest(cargo=\(cargo.hexadecimalString), idpId=\(idpId), profileIndex=\(profileIndex), segmentIndex=\(segmentIndex), operation=\(String(describing: operation)), operationId=\(operationId), profileStartTime=\(profileStartTime), profileBasalRate=\(profileBasalRate), profileCarbRatio=\(profileCarbRatio), profileTargetBG=\(profileTargetBG), profileISF=\(profileISF), idpStatusId=\(idpStatusId))"
     }
 }
 
