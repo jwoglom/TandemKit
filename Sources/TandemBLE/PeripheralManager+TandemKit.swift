@@ -35,7 +35,6 @@ public extension PeripheralManager {
 
     func enableNotifications() throws {
         dispatchPrecondition(condition: .onQueue(queue))
-        logInfo("[PeripheralManager] enableNotifications begin")
 
         for uuid in TandemNotificationOrder {
             guard let characteristic = peripheral.characteristic(for: uuid) else {
@@ -59,7 +58,6 @@ public extension PeripheralManager {
                 continue
             }
 
-            logDebug("[PeripheralManager]   enabling notifications for \(uuid.prettyName)")
             try setNotifyValue(true, for: characteristic, timeout: .seconds(2))
             subscribedCharacteristicUUIDs.insert(uuid)
             logDebug("[PeripheralManager]   notifications enabled for \(uuid.prettyName)")
@@ -75,8 +73,6 @@ public extension PeripheralManager {
         if !subscribedCharacteristicUUIDs.contains(.SERVICE_CHANGED) {
             logDebug("[PeripheralManager]   service-changed notifications assumed active by spec")
         }
-
-        logInfo("[PeripheralManager] enableNotifications complete")
     }
 
     func sendMessagePackets(_ packets: [Packet], characteristic uuid: CharacteristicUUID) -> SendMessageResult {

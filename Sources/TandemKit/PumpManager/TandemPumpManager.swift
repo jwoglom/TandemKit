@@ -923,12 +923,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchBatteryStatus() {
-        guard let transport = telemetryTransportIfReady(for: .battery) else {
-            telemetryLogger.error("Transport not available for battery telemetry")
-            return
-        }
-
+    private func fetchBatteryStatus(transport: PumpMessageTransport) {
         do {
             let request = makeBatteryRequest()
 
@@ -959,12 +954,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchReservoirStatus() {
-        guard let transport = telemetryTransportIfReady(for: .reservoir) else {
-            telemetryLogger.error("Transport not available for reservoir telemetry")
-            return
-        }
-
+    private func fetchReservoirStatus(transport: PumpMessageTransport) {
         do {
             let response = try pumpComm.sendMessage(
                 transport: transport,
@@ -978,12 +968,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchDeliveryLimits() {
-        guard let transport = pairedTransport else {
-            telemetryLogger.error("Transport not available for delivery limits fetch")
-            return
-        }
-
+    private func fetchDeliveryLimits(transport: PumpMessageTransport) {
         do {
             let (basalResponse, bolusResponse) = try pumpComm
                 .performOnCommandQueue { () -> (BasalLimitSettingsResponse, GlobalMaxBolusSettingsResponse) in
@@ -1015,12 +1000,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchBasalStatus() {
-        guard let transport = telemetryTransportIfReady(for: .basal) else {
-            telemetryLogger.error("Transport not available for basal telemetry")
-            return
-        }
-
+    private func fetchBasalStatus(transport: PumpMessageTransport) {
         do {
             let response: TempRateResponse = try pumpComm.sendMessage(
                 transport: transport,
@@ -1034,11 +1014,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func fetchBolusStatus() {
-        guard let transport = telemetryTransportIfReady(for: .bolus) else {
-            return
-        }
-
+    func fetchBolusStatus(transport: PumpMessageTransport) {
         do {
             let response: CurrentBolusStatusResponse = try pumpComm.sendMessage(
                 transport: transport,
@@ -1052,11 +1028,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchTimeSinceReset() {
-        guard let transport = telemetryTransportIfReady(for: .timeSinceReset) else {
-            return
-        }
-
+    private func fetchTimeSinceReset(transport: PumpMessageTransport) {
         do {
             let response: TimeSinceResetResponse = try pumpComm.sendMessage(
                 transport: transport,
@@ -1070,11 +1042,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchControlIQStatus() {
-        guard let transport = telemetryTransportIfReady(for: .controlIQ) else {
-            return
-        }
-
+    private func fetchControlIQStatus(transport: PumpMessageTransport) {
         do {
             let response: ControlIQInfoV2Response = try pumpComm.sendMessage(
                 transport: transport,
@@ -1088,11 +1056,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchHomeScreenStatus() {
-        guard let transport = telemetryTransportIfReady(for: .homeScreen) else {
-            return
-        }
-
+    private func fetchHomeScreenStatus(transport: PumpMessageTransport) {
         do {
             let response: HomeScreenMirrorResponse = try pumpComm.sendMessage(
                 transport: transport,
@@ -1106,11 +1070,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func fetchNotificationCount() {
-        guard let transport = telemetryTransportIfReady(for: .notifications) else {
-            return
-        }
-
+    private func fetchNotificationCount(transport: PumpMessageTransport) {
         let bundle = NotificationBundle()
         do {
             try pumpComm.performOnCommandQueue {
@@ -1622,16 +1582,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         do {
             try pumpComm.performOnCommandQueue {
-                self.fetchDeliveryLimits()
-                self.fetchBasalStatus()
-                self.fetchReservoirStatus()
-                self.fetchBatteryStatus()
-                self.fetchBolusStatus()
-                self.fetchHomeScreenStatus()
-                self.fetchControlIQStatus()
-                self.fetchNotificationCount()
-                self.fetchTimeSinceReset()
-                self.fetchGlobalPumpSettings()
+                guard let transport = pairedTransport else {
+                    telemetryLogger.error("Skipping current Pump data -> Transporter not ready")
+                    completion?(nil)
+                    return
+                }
+                
+                self.fetchDeliveryLimits(transport: transport)
+                self.fetchBasalStatus(transport: transport)
+                self.fetchReservoirStatus(transport: transport)
+                self.fetchBatteryStatus(transport: transport)
+                self.fetchBolusStatus(transport: transport)
+                self.fetchHomeScreenStatus(transport: transport)
+                self.fetchControlIQStatus(transport: transport)
+                self.fetchNotificationCount(transport: transport)
+                self.fetchTimeSinceReset(transport: transport)
+                self.fetchGlobalPumpSettings(transport: transport)
             }
         } catch {
             log.error("ensureCurrentPumpData failed: \(error)")
@@ -1642,12 +1608,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         completion?(lockedState.value.lastReconciliation)
     }
 
-    public func fetchGlobalPumpSettings() {
-        guard let transport = transportLock.value else {
-            telemetryLogger.error("Transport not available for pump global telemetry")
-            return
-        }
-
+    public func fetchGlobalPumpSettings(transport: PumpMessageTransport) {
         do {
             let response: PumpGlobalsResponse = try pumpComm.sendMessage(
                 transport: transport,
@@ -1677,8 +1638,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Query the delegate to determine whether heartbeats should be enabled.
     /// Must not be called on the delegate's queue.
     private func updateBLEHeartbeatPreference() {
-        provideHeartbeat = pumpDelegate.call { delegate in
-            delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
+        pumpDelegate.notify { delegate in
+            self.provideHeartbeat = delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
         }
     }
 
@@ -1863,7 +1824,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             )
                         }
 
-                        permissionBolusId = UInt32(clamping: permissionResponse.bolusId)
+                        permissionBolusId = permissionResponse.bolusId
                         shouldReleasePermissionOnFailure = true
 
                         let milliUnits = max(0, Int((units * 1000).rounded()))
@@ -1920,7 +1881,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     dose: doseEntry,
                     activationType: activationType
                 )
-                telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5), handler: fetchBolusStatus)
+                telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5)) {
+                    guard let transport = self.pairedTransport else { return }
+                    self.fetchBolusStatus(transport: transport)
+                }
 
                 self.activeBolus.value = ActiveBolus(
                     id: initiateResponse.bolusId,
@@ -2764,7 +2728,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Allow the patch to set values
             Thread.sleep(forTimeInterval: .seconds(1))
-            fetchGlobalPumpSettings()
+            fetchGlobalPumpSettings(transport: transport)
         } catch {
             telemetryLogger.error("Failed to pump sounds: \(error.localizedDescription)")
         }
@@ -2836,7 +2800,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             Thread.sleep(forTimeInterval: .seconds(1))
-            fetchGlobalPumpSettings()
+            fetchGlobalPumpSettings(transport: transport)
         } catch {
             telemetryLogger.error("Failed to set quick bolus settings: \(error.localizedDescription)")
         }
