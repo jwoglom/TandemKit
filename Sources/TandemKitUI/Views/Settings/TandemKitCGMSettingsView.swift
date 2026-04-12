@@ -54,6 +54,7 @@ struct TandemKitCGMSettingsView: View {
                 .listStyle(InsetGroupedListStyle())
             }
         }
+        .navigationTitle(Text("CGM Settings", comment: "Label for CGM settings"))
         .onAppear {
             viewModel.fetchCGMStatus()
         }

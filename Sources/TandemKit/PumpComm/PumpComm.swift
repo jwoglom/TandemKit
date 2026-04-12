@@ -17,13 +17,11 @@ public protocol PumpCommDelegate: AnyObject {
 }
 
 public class PumpComm: CustomDebugStringConvertible {
-    var manager: Any? // TODO: Replace with actual PeripheralManager type when available
-
     public weak var delegate: PumpCommDelegate?
 
     public let log = TandemLogger(category: "PumpComm")
 
-    public var retryPolicy: PumpCommRetryPolicy
+    public var retryPolicy: ExponentialPumpCommRetryPolicy
     private let delayHandler: (TimeInterval) -> Void
 
     // Serial command queue — only one pump message round-trip at a time
@@ -62,7 +60,7 @@ public class PumpComm: CustomDebugStringConvertible {
     // TODO(jwoglom): device name or PIN?
     public init(
         pumpState: PumpState?,
-        retryPolicy: PumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
+        retryPolicy: ExponentialPumpCommRetryPolicy = ExponentialPumpCommRetryPolicy(),
         delayHandler: ((TimeInterval) -> Void)? = nil
     ) {
         delegate = nil
@@ -82,37 +80,35 @@ public class PumpComm: CustomDebugStringConvertible {
         Thread.sleep(forTimeInterval: interval)
     }
 
-    #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
-        public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
-            let session = ensureSession()
-            log.debug("PumpComm pair started")
-            try session.runSynchronously(withName: "Pairing") {
-                try session.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
-            }
-            log.debug("PumpComm pair finished")
+    public func pair(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
+        let session = ensureSession()
+        log.debug("PumpComm pair started")
+        try session.runSynchronously(withName: "Pairing") {
+            try session.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: pairingCode)
+        }
+        log.debug("PumpComm pair finished")
+    }
+
+    public func confirmAuthentication(
+        transport: PumpMessageTransport,
+        peripheralUuid: String,
+        derivedSecret: Data
+    ) throws {
+        guard !peripheralUuid.isEmpty, !derivedSecret.isEmpty else {
+            throw PumpCommError.missingAuthenticationKey
         }
 
-        public func confirmAuthentication(
-            transport: PumpMessageTransport,
-            peripheralUuid: String,
-            derivedSecret: Data
-        ) throws {
-            guard !peripheralUuid.isEmpty, !derivedSecret.isEmpty else {
-                throw PumpCommError.missingAuthenticationKey
-            }
-
-            let session = ensureSession()
-            log.debug("PumpComm confirmAuthentication started")
-            try session.runSynchronously(withName: "ConfirmAuthentication") {
-                try session.confirmAuthentication(
-                    transport: transport,
-                    peripheralUuid: peripheralUuid,
-                    derivedSecret: derivedSecret
-                )
-            }
-            log.debug("PumpComm confirmAuthentication finished")
+        let session = ensureSession()
+        log.debug("PumpComm confirmAuthentication started")
+        try session.runSynchronously(withName: "ConfirmAuthentication") {
+            try session.confirmAuthentication(
+                transport: transport,
+                peripheralUuid: peripheralUuid,
+                derivedSecret: derivedSecret
+            )
         }
-    #endif
+        log.debug("PumpComm confirmAuthentication finished")
+    }
 
     private func ensureSession() -> PumpCommSession {
         if let session = session {
@@ -213,10 +209,6 @@ public class PumpComm: CustomDebugStringConvertible {
 
         switch decision {
         case let .retry(delay):
-            log
-                .debug(
-                    "sendMessage: scheduling retry for fault code \(response.errorCodeId) after \(String(format: "%.2f", delay)) s"
-                )
             delayHandler(delay)
             return .retry
         case .doNotRetry:

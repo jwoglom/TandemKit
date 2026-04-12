@@ -36,6 +36,9 @@ struct TandemKitFillCannulaView: View {
         .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
             resumeInsulinSheet
         }
+        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
+            suspendInsulinSheet
+        }
         .task {
             guard !didLoad else { return }
             didLoad = true
@@ -74,9 +77,6 @@ struct TandemKitFillCannulaView: View {
                     loading: $viewModel.loadingSuspend
                 ) {
                     viewModel.showingSuspendConfirmation = true
-                }
-                .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-                    suspendInsulinSheet
                 }
             }
         case .enterAmount:

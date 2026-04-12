@@ -212,19 +212,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func updateTransport(_ transport: PumpMessageTransport?) {
-        if let transport = transport {
-            let instanceId = ObjectIdentifier(transport as AnyObject)
-            log.info("updateTransport: setting transport instance=\(instanceId)")
-        } else {
-            log.info("updateTransport: clearing transport (nil)")
-        }
         transportLock.value = transport
-
-        if let peripheralManager = activePeripheralManager, transport != nil {
-            pumpComm.manager = peripheralManager
-        } else if transport == nil {
-            pumpComm.manager = nil
-        }
 
         if let activeTransport = transport {
             telemetryLogger.debug("Transport available – checking authentication before telemetry")
@@ -647,7 +635,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
-        let timestamp = Date()
+        let timestamp = Date.now
         let newBasalState: PumpManagerStatus.BasalDeliveryState
 
         if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue ||
@@ -659,13 +647,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue {
             newBasalState = .suspended(timestamp)
-        } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.tempRate.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.zeroTempRate.rawValue
-        {
-            // not updated here, instead see handleTempRateResponse
-            return
         } else {
-            // unknown state
             return
         }
 
@@ -1505,7 +1487,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             notificationRouter.stop(with: manager)
             activePeripheralManager = nil
         }
-        pumpComm.manager = nil
         updateTransport(nil)
         tandemPump.disconnect()
     }
@@ -2872,7 +2853,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         activePeripheralManager = peripheralManager
-        pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
 
         scheduleInitialConnectionTimeoutCheck()
@@ -2981,7 +2961,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             activePeripheralManager = nil
         }
 
-        pumpComm.manager = nil
         updateTransport(nil)
 
         updateStatus { status in

@@ -22,10 +22,6 @@ public class PumpCommSession {
     private let logger = TandemLogger(category: "PumpCommSession")
     private static let fallbackPairingCode = "000000"
 
-    #if DEBUG
-        static var testOverrideJpakeArtifacts: (() -> (derivedSecret: Data, serverNonce: Data))?
-    #endif
-
     init(pumpState: PumpState, delegate: PumpCommSessionDelegate? = nil) {
         state = pumpState
         self.delegate = delegate
@@ -105,7 +101,6 @@ public class PumpCommSession {
         logger.debug("[PumpCommSession] PumpChallenge centralChallengeRequest ready")
 
         let responseMessage = try transport.sendMessage(challengeRequest)
-        logger.debug("[PumpCommSession] Received central challenge response: \(type(of: responseMessage))")
         guard let centralResponse = responseMessage as? CentralChallengeResponse else {
             logger
                 .error("[PumpCommSession] Unexpected central challenge response payload: \(String(describing: responseMessage))")
@@ -126,7 +121,6 @@ public class PumpCommSession {
         logger.debug("[PumpCommSession] Sending PumpChallengeRequest")
 
         let pumpChallengeResponseMessage = try transport.sendMessage(pumpChallengeRequest)
-        logger.debug("[PumpCommSession] Received pump challenge response: \(type(of: pumpChallengeResponseMessage))")
         guard let pumpChallengeResponse = pumpChallengeResponseMessage as? PumpChallengeResponse,
               pumpChallengeResponse.success
         else {
@@ -141,7 +135,6 @@ public class PumpCommSession {
         state.derivedSecret = nil
         state.serverNonce = nil
         delegate?.pumpCommSession(self, didChange: state)
-        logger.debug("[PumpCommSession] delegate notified of PumpState change (legacy)")
     }
 
     private func pairUsingJpake(transport: PumpMessageTransport, peripheralUuid: String, pairingCode: String) throws {
@@ -161,14 +154,14 @@ public class PumpCommSession {
         let builder = JpakeAuthBuilder.initializeWithPairingCode(pairingCode, provider: provider)
         logger.debug("[PumpCommSession] initial state: done=\(builder.done()) invalid=\(builder.invalid())")
         while !builder.done(), !builder.invalid() {
-            let maybeRequest = builder.nextRequest()
-            logger.debug("[PumpCommSession] nextRequest -> \(String(describing: maybeRequest))")
-            guard let request = maybeRequest else { break }
-            logger.debug("[PumpCommSession] Sending JPAKE request: \(request)")
+            guard let request = builder.nextRequest() else {
+                break
+            }
+            
             let response = try transport.sendMessage(request)
-            logger.debug("[PumpCommSession] Received JPAKE response: \(response)")
+            logger.debug("[PumpCommSession] JPAKE request: \(request), response: \(response)")
+
             builder.processResponse(response)
-            logger.debug("[PumpCommSession] initial state: done=\(builder.done()) invalid=\(builder.invalid())")
             logger.debug("[PumpCommSession] builder state: done=\(builder.done()) invalid=\(builder.invalid())")
         }
         guard builder.done(), let secret = builder.getDerivedSecret(), let serverNonce = builder.getServerNonce() else {
@@ -179,14 +172,13 @@ public class PumpCommSession {
             throw PumpCommError.missingAuthenticationKey
         }
 
-        logger.info("[PumpCommSession] JPAKE pairing succeeded; waiting 250ms before session initialization")
+        // JPAKE pairing succeeded; waiting 250ms before session initialization
         Thread.sleep(forTimeInterval: 0.25)
 
         // Temporarily store artifacts so we can send TimeSinceResetRequest
         PumpStateSupplier.storePairingArtifacts(derivedSecret: secret, serverNonce: serverNonce)
 
         // Fetch timeSinceReset to initialize the session properly
-        logger.info("[PumpCommSession] Fetching timeSinceReset to initialize authenticated session")
         let timeSinceResetResponse = try transport.sendMessage(TimeSinceResetRequest())
         guard let response = timeSinceResetResponse as? TimeSinceResetResponse else {
             logger.error("[PumpCommSession] Failed to get timeSinceReset response")
@@ -194,7 +186,6 @@ public class PumpCommSession {
         }
 
         // Fetch API version and pump version for session initialization
-        logger.info("[PumpCommSession] Fetching API version")
         guard let apiVersionResponse = try transport.sendMessage(ApiVersionRequest()) as? ApiVersionResponse else {
             logger.error("[PumpCommSession] Failed to get ApiVersionResponse")
             throw PumpCommError.initialStateMessagesFailed
@@ -202,7 +193,6 @@ public class PumpCommSession {
         state.apiVersion = apiVersionResponse.getApiVersion()
         PumpStateSupplier.pumpApiVersion = apiVersionResponse.getApiVersion()
 
-        logger.info("[PumpCommSession] Fetching pump version")
         guard let pumpVersionResponse = try transport.sendMessage(PumpVersionRequest()) as? PumpVersionResponse else {
             logger.error("[PumpCommSession] Failed to get PumpVersionResponse")
             throw PumpCommError.initialStateMessagesFailed
@@ -223,7 +213,6 @@ public class PumpCommSession {
         state.peripheralUuid = peripheralUuid
         state.timeSinceReset = response.pumpTimeSinceReset
         delegate?.pumpCommSession(self, didChange: state)
-        logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE)")
     }
 
     func confirmAuthentication(
@@ -265,10 +254,13 @@ public class PumpCommSession {
         logger.debug("[PumpCommSession] authentication state: done=\(builder.done()) invalid=\(builder.invalid())")
 
         while !builder.done(), !builder.invalid() {
-            guard let request = builder.nextRequest() else { break }
-            logger.debug("[PumpCommSession] Sending JPAKE confirm request: \(request)")
+            guard let request = builder.nextRequest() else {
+                break
+            }
+
             let response = try transport.sendMessage(request)
-            logger.debug("[PumpCommSession] Received JPAKE confirm response: \(response)")
+            logger.debug("[PumpCommSession] JPAKE confirm request: \(request), response: \(response)")
+
             builder.processResponse(response)
             logger.debug("[PumpCommSession] authentication state: done=\(builder.done()) invalid=\(builder.invalid())")
         }
@@ -286,6 +278,5 @@ public class PumpCommSession {
         state.serverNonce = serverNonce
         state.peripheralUuid = peripheralUuid
         delegate?.pumpCommSession(self, didChange: state)
-        logger.debug("[PumpCommSession] delegate notified of PumpState change (JPAKE confirm)")
     }
 }
