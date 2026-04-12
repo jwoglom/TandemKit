@@ -1921,6 +1921,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         provideHeartbeat = mustProvideBLEHeartbeat
     }
 
+    /// Query the delegate to determine whether heartbeats should be enabled.
+    /// Must not be called on the delegate's queue.
+    private func updateBLEHeartbeatPreference() {
+        provideHeartbeat = pumpDelegate.call { delegate in
+            delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
+        }
+    }
+
     private func updateLastHeartbeatIfNeeded() {
         if provideHeartbeat, Date().timeIntervalSince(lastHeartbeat) > Self.lastHeartbeatDebounceInterval {
             pumpDelegate.notify { delegate in
@@ -3290,9 +3298,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         activePeripheralManager = peripheralManager
+        peripheralManager.activityHandler = { [weak self] in
+            self?.updateLastHeartbeatIfNeeded()
+        }
         pumpComm.manager = peripheralManager
         notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
 
+        updateBLEHeartbeatPreference()
         scheduleInitialConnectionTimeoutCheck()
     }
 
@@ -3485,8 +3497,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
         notificationLogger.info("[notification] Received qualifying events: \(events)")
-
-        updateLastHeartbeatIfNeeded()
 
         // Fetch suggested status messages for these events on a background queue,
         // routing through pumpComm.sendMessage so they go through the serial command queue.

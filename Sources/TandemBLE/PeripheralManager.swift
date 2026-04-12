@@ -74,6 +74,12 @@ public class PeripheralManager: NSObject {
     weak var delegate: PeripheralManagerDelegate?
     public weak var notificationHandler: PeripheralManagerNotificationHandler?
 
+    /// Updated every time data is received from the pump on any characteristic.
+    public private(set) var lastActivityDate: Date = .distantPast
+
+    /// Called every time data is received from the pump on any characteristic.
+    public var activityHandler: (() -> Void)?
+
     init(peripheral: CBPeripheral, configuration: Configuration, centralManager: CBCentralManager) {
         self.peripheral = peripheral
         central = centralManager
@@ -556,9 +562,14 @@ extension PeripheralManager: CBPeripheralDelegate {
 
         if error == nil {
             notificationValue = characteristic.value
+            lastActivityDate = Date()
         }
 
         commandLock.unlock()
+
+        if notificationValue != nil {
+            activityHandler?()
+        }
 
         if let handler = notificationHandler, let value = notificationValue {
             handler.peripheralManager(self, didReceiveNotification: value, for: characteristic)
