@@ -109,6 +109,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var targetPeripheralIdentifier: UUID?
     private let silentToneManager = TandemSilentToneManager()
 
+    // BLE heartbeat propagation (LoopKit PumpManager protocol)
+    private var provideHeartbeat: Bool = false
+    private var lastHeartbeat: Date = .distantPast
+
     // Post-initialization connection timeout (mirrors PumpX2's checkIfInitialPumpConnectionEstablished)
     private let processedResponseMessages = Locked<Int>(0)
     private var initialConnectionTimeoutWork: DispatchWorkItem?
@@ -1911,9 +1915,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return try? pumpComm.sendMessage(transport: transport, message: message)
     }
 
-    public func setMustProvideBLEHeartbeat(_: Bool) {
-        // Store this setting to control heartbeat behavior
-        // The actual heartbeat logic will be implemented in future pump communication
+    private static let lastHeartbeatDebounceInterval: TimeInterval = 10
+
+    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
+        provideHeartbeat = mustProvideBLEHeartbeat
+    }
+
+    private func updateLastHeartbeatIfNeeded() {
+        if provideHeartbeat, Date().timeIntervalSince(lastHeartbeat) > Self.lastHeartbeatDebounceInterval {
+            pumpDelegate.notify { delegate in
+                delegate?.pumpManagerBLEHeartbeatDidFire(self)
+            }
+            lastHeartbeat = Date()
+        }
     }
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
@@ -3471,6 +3485,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
         notificationLogger.info("[notification] Received qualifying events: \(events)")
+
+        updateLastHeartbeatIfNeeded()
 
         // Fetch suggested status messages for these events on a background queue,
         // routing through pumpComm.sendMessage so they go through the serial command queue.
