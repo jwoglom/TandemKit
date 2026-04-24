@@ -54,7 +54,13 @@ public class SetBgReminderRequest: Message {
         self.bitmask = bitmask
     }
 
-    public static func buildCargo(reminderType: Int, enabledBGReminder: Bool, reminderThreshold: Int, reminderMinutes: UInt32, bitmask: Int) -> Data {
+    public static func buildCargo(
+        reminderType: Int,
+        enabledBGReminder: Bool,
+        reminderThreshold: Int,
+        reminderMinutes: UInt32,
+        bitmask: Int
+    ) -> Data {
         Bytes.combine(
             Data([UInt8(reminderType & 0xFF)]),
             Data([enabledBGReminder ? 1 : 0]),

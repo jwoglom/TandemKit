@@ -6,7 +6,7 @@ struct TandemKitInsulinType: View {
     @Environment(\.dismissAction) private var dismiss
 
     @State private var insulinType: InsulinType?
-    private var label: String
+    private var label: Text
     private var supportedInsulinTypes: [InsulinType]
     private var didConfirm: (InsulinType) -> Void
 
@@ -18,7 +18,7 @@ struct TandemKitInsulinType: View {
     ) {
         insulinType = initialValue
         self.supportedInsulinTypes = supportedInsulinTypes
-        self.label = label
+        self.label = Text(label)
         self.didConfirm = didConfirm
     }
 
@@ -32,11 +32,11 @@ struct TandemKitInsulinType: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            title
-
-            ScrollView {
-                InsulinTypeChooser(insulinType: $insulinType, supportedInsulinTypes: supportedInsulinTypes)
-                    .padding(.horizontal)
+            List {
+                Section {
+                    InsulinTypeChooser(insulinType: $insulinType, supportedInsulinTypes: supportedInsulinTypes)
+                        .padding(.horizontal)
+                }
             }
 
             Spacer()
@@ -48,22 +48,6 @@ struct TandemKitInsulinType: View {
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
-    }
-
-    @ViewBuilder private var title: some View {
-        Text(LocalizedString("Select insulin type", comment: "Title for insulin type"))
-            .font(.title)
-            .bold()
-            .padding(.horizontal)
-
-        Text(LocalizedString(
-            "Select the type of insulin used in this pump",
-            comment: "Title text for insulin type confirmation page"
-        ))
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal)
-
-        Divider()
-            .padding(.vertical)
+        .navigationTitle(String(localized: "Select insulin type", comment: "Title for insulin type"))
     }
 }

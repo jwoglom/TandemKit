@@ -6,40 +6,40 @@ struct TandemKitSetupCompleteView: View {
 
     var body: some View {
         VStack(alignment: .leading) {
-            title
-            VStack(alignment: .leading, spacing: 20) {
-                Text(LocalizedString(
-                    "Your Tandem pump is connected!",
+            List {
+                Section(header: SectionHeader(label: String(
+                    localized: "Your Tandem pump is connected!",
                     comment: "Tandem setup complete message"
-                ))
-                    .padding(.horizontal)
+                ))) {
+                    HStack {
+                        Spacer()
+                        Image(imageName: "tandem_mobi")
+                            .resizable()
+                            .rotationEffect(.degrees(90))
+                            .scaledToFit()
+                            .padding(.horizontal)
+                            .frame(height: 200)
+                        Spacer()
+                    }
 
-                Spacer()
-
-                HStack {
-                    Spacer()
-                    Image(imageName: "tandem_mobi")
-                        .resizable()
-                        .rotationEffect(.degrees(90))
-                        .scaledToFit()
-                        .padding(.horizontal)
-                        .frame(height: 200)
-                    Spacer()
+                    Text(
+                        "You can now use your Tandem pump with this app. Make sure to keep your pump nearby and within Bluetooth range.",
+                        comment: "Tandem setup complete instructions"
+                    )
                 }
-
-                Spacer()
-
-                Text(String(format: LocalizedString(
-                    "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range.",
-                    comment: "Tandem setup complete instructions"
-                ), HostApp.current.appName))
-                    .padding(.all)
             }
 
             Spacer()
 
+            Text(String(format: String(
+                localized:
+                "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range.",
+                comment: "Tandem setup complete instructions"
+            ), HostApp.current.appName))
+                .padding(.all)
+
             ContinueButton(
-                text: LocalizedString("Finish", comment: "Text for finish button")
+                text: Text("Finish", comment: "Text for finish button")
             ) {
                 finish?()
             }
@@ -47,16 +47,7 @@ struct TandemKitSetupCompleteView: View {
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
-    }
-
-    @ViewBuilder private var title: some View {
-        Text(LocalizedString("Setup Complete", comment: "Title for setup complete"))
-            .font(.title)
-            .bold()
-            .padding(.horizontal)
-
-        Divider()
-            .padding(.bottom)
+        .navigationTitle(String(localized: "Setup Complete", comment: "Title for setup complete"))
     }
 }
 

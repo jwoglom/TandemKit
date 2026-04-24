@@ -192,7 +192,7 @@ public struct NotificationItem: Identifiable, Hashable {
     public let notificationDescription: String?
 
     public init(type: NotificationType, id notificationId: UInt32, name: String, notificationDescription: String? = nil) {
-        self.id = UUID()
+        id = UUID()
         self.type = type
         self.notificationId = notificationId
         self.name = name

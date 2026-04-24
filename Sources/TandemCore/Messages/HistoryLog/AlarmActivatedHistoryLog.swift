@@ -32,6 +32,6 @@ public class AlarmActivatedHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "AlarmActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alarmResponseType=\(alarmResponseType), alarmId=\(alarmId))"
+        "AlarmActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alarmResponseType=\(String(describing: alarmResponseType)), alarmId=\(alarmId))"
     }
 }

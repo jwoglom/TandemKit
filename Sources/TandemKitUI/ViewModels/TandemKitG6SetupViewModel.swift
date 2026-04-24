@@ -68,7 +68,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
             guard let self = self, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self?.isLoading = false
-                    self?.error = LocalizedString(
+                    self?.error = String(
+                        localized:
                         "Pump not connected.",
                         comment: "Error when pump is not connected"
                     )
@@ -84,7 +85,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
             guard sensorTypeResponse?.isStatusOK == true else {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set sensor type. Check pump connection and try again.",
                         comment: "Error when setting sensor type fails"
                     )
@@ -102,7 +104,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 if txResponse?.isStatusOK == true {
                     self.didComplete = true
                 } else {
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set transmitter ID. Check pump connection and try again.",
                         comment: "Error when setting G6 transmitter ID fails"
                     )
@@ -126,7 +129,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
             guard let self = self, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self?.isLoading = false
-                    self?.error = LocalizedString(
+                    self?.error = String(
+                        localized:
                         "Pump not connected.",
                         comment: "Error when pump is not connected"
                     )
@@ -142,7 +146,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
             guard sensorTypeResponse?.isStatusOK == true else {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set sensor type. Check pump connection and try again.",
                         comment: "Error when setting sensor type fails"
                     )
@@ -158,7 +163,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
             guard txResponse?.isStatusOK == true else {
                 DispatchQueue.main.async {
                     self.isLoading = false
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to set transmitter ID. Check pump connection and try again.",
                         comment: "Error when setting G6 transmitter ID fails"
                     )
@@ -176,7 +182,8 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 if startResponse?.isStatusOK == true {
                     self.didComplete = true
                 } else {
-                    self.error = LocalizedString(
+                    self.error = String(
+                        localized:
                         "Failed to start CGM sensor. Check pump connection and try again.",
                         comment: "Error when starting G6 sensor fails"
                     )

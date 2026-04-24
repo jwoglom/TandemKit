@@ -19,13 +19,8 @@ public enum PumpCommRetryDecision: Equatable {
     }
 }
 
-/// Strategy object used to determine retry behavior for pump faults.
-public protocol PumpCommRetryPolicy {
-    func decision(for fault: PumpFaultCode, attempt: Int) -> PumpCommRetryDecision
-}
-
 /// Default exponential backoff policy tuned for BLE message retries.
-public struct ExponentialPumpCommRetryPolicy: PumpCommRetryPolicy {
+public struct ExponentialPumpCommRetryPolicy {
     public let maxAttempts: Int
     public let initialDelay: TimeInterval
     public let multiplier: Double

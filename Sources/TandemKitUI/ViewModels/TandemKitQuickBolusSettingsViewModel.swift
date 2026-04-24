@@ -23,14 +23,14 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         ("0.5 U", .units0_5),
         ("1.0 U", .units1_0),
         ("2.0 U", .units2_0),
-        ("5.0 U", .units5_0),
+        ("5.0 U", .units5_0)
     ]
 
     static let carbIncrements: [(label: String, increment: QuickBolusIncrement)] = [
         ("2 g", .carbs2g),
         ("5 g", .carbs5g),
         ("10 g", .carbs10g),
-        ("15 g", .carbs15g),
+        ("15 g", .carbs15g)
     ]
 
     init(pumpManager: TandemPumpManager?) {
@@ -72,8 +72,8 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         // 500 = 0.5U, 1000 = 1.0U, 2000 = 2.0U, 5000 = 5.0U
         switch milliunits {
         case ...500: return 0
-        case 501...1000: return 1
-        case 1001...2000: return 2
+        case 501 ... 1000: return 1
+        case 1001 ... 2000: return 2
         default: return 3
         }
     }
@@ -83,8 +83,8 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         // 2000 = 2g, 5000 = 5g, 10000 = 10g, 15000 = 15g
         switch milliunits {
         case ...2000: return 0
-        case 2001...5000: return 1
-        case 5001...10000: return 2
+        case 2001 ... 5000: return 1
+        case 5001 ... 10000: return 2
         default: return 3
         }
     }

@@ -65,8 +65,8 @@ public class ExitFillTubingModeStateStreamResponse: Message {
     public init(stateId: Int) {
         cargo = Data([UInt8(stateId & 0xFF)])
         self.stateId = stateId
-        self.isPumpingStateSetAfterStartUp = false
-        self.stateBitmask = 0
+        isPumpingStateSetAfterStartUp = false
+        stateBitmask = 0
     }
 
     public init(isPumpingStateSetAfterStartUp: Bool, stateBitmask: UInt32) {
@@ -74,7 +74,7 @@ public class ExitFillTubingModeStateStreamResponse: Message {
             Data([isPumpingStateSetAfterStartUp ? 1 : 0]),
             Bytes.toUint32(stateBitmask)
         )
-        self.stateId = Int(cargo[0] & 0xFF)
+        stateId = Int(cargo[0] & 0xFF)
         self.isPumpingStateSetAfterStartUp = isPumpingStateSetAfterStartUp
         self.stateBitmask = stateBitmask
     }
@@ -89,22 +89,22 @@ public class ExitFillTubingModeStateStreamResponse: Message {
     }
 
     public enum PumpingState: UInt32, CaseIterable {
-        case isDeliveringTherapy    = 1
-        case canResumeTherapy       = 2
-        case canAutoResume          = 4
-        case bolusAllowed           = 8
-        case tubingFilled           = 16
-        case deliveringBasal        = 32
-        case deliveringBolus        = 64
-        case deliveringNormalBolus  = 128
-        case isFillTubingAllowed    = 256
-        case isBasalState           = 512
-        case isPrepCartridgeState   = 1024
-        case isLoadCartridgeState   = 2048
-        case isFillState            = 4096
-        case isEstimateState        = 8192
-        case cartridgeIsInstalled   = 16384
-        case canSnooze              = 32768
+        case isDeliveringTherapy = 1
+        case canResumeTherapy = 2
+        case canAutoResume = 4
+        case bolusAllowed = 8
+        case tubingFilled = 16
+        case deliveringBasal = 32
+        case deliveringBolus = 64
+        case deliveringNormalBolus = 128
+        case isFillTubingAllowed = 256
+        case isBasalState = 512
+        case isPrepCartridgeState = 1024
+        case isLoadCartridgeState = 2048
+        case isFillState = 4096
+        case isEstimateState = 8192
+        case cartridgeIsInstalled = 16384
+        case canSnooze = 32768
 
         public static func fromBitmask(_ bitmask: UInt32) -> Set<PumpingState> {
             var result = Set<PumpingState>()

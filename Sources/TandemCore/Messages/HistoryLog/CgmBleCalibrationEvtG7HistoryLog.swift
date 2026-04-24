@@ -11,7 +11,11 @@ public class CgmBleCalibrationEvtG7HistoryLog: HistoryLog {
     }
 
     public init(pumpTimeSec: UInt32, sequenceNum: UInt32, isCalibrationAccepted: Bool) {
-        let payload = CgmBleCalibrationEvtG7HistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, isCalibrationAccepted: isCalibrationAccepted)
+        let payload = CgmBleCalibrationEvtG7HistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            isCalibrationAccepted: isCalibrationAccepted
+        )
         self.isCalibrationAccepted = isCalibrationAccepted
         super.init(cargo: payload)
     }

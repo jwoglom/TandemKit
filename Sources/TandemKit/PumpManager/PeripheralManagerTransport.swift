@@ -297,5 +297,4 @@ public final class PeripheralManagerTransport: PumpMessageTransport {
         defer { historyLock.unlock() }
         requestResponseHistory.removeAll()
     }
-
 }

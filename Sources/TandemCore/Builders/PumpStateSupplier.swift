@@ -9,13 +9,13 @@ extension PumpPairingCodeValidationError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .empty:
-            return LocalizedString(
-                "Enter the pairing code shown on your pump.",
+            return String(
+                localized: "Enter the pairing code shown on your pump.",
                 comment: "Error message when pairing code text field is empty"
             )
         case .invalidLength:
-            return LocalizedString(
-                "Pairing codes are 6 digits long.",
+            return String(
+                localized: "Pairing codes are 6 digits long.",
                 comment: "Error message when pairing code entry has the wrong length"
             )
         }
@@ -24,13 +24,13 @@ extension PumpPairingCodeValidationError: LocalizedError {
     public var recoverySuggestion: String? {
         switch self {
         case .empty:
-            return LocalizedString(
-                "Type the code displayed on the pump screen.",
+            return String(
+                localized: "Type the code displayed on the pump screen.",
                 comment: "Recovery suggestion when pairing code text field is empty"
             )
         case .invalidLength:
-            return LocalizedString(
-                "Check the code on the pump and try again.",
+            return String(
+                localized: "Check the code on the pump and try again.",
                 comment: "Recovery suggestion when pairing code entry has the wrong length"
             )
         }
@@ -50,12 +50,12 @@ public enum PumpStateSupplier {
     static var jpakeDerivedSecretHex: (() -> String)?
     static var jpakeServerNonceHex: (() -> String)?
     public static var pumpTimeSinceReset: (() -> UInt32)?
-    static var pumpApiVersion: (() -> ApiVersion)?
     static var controlIQSupported: () -> Bool = { false }
     public static var actionsAffectingInsulinDeliveryEnabled: () -> Bool = { false }
     public static var currentBolusId: (() -> Int?)?
 
     // Flags mirroring PumpX2 PumpState fields — all accessed through withLock.
+    private static var _pumpApiVersion: ApiVersion = KnownApiVersion.apiV2_5.value
     private static var _tconnectAppConnectionSharing = false
     private static var _sendSharedConnectionResponseMessages = false
     private static var _relyOnConnectionSharingForAuthentication = false
@@ -67,6 +67,11 @@ public enum PumpStateSupplier {
     private static var _processedResponseMessagesFromUs = 0
 
     private static var _pairingCodeType: PairingCodeType = .long16Char
+    
+    public static var pumpApiVersion: ApiVersion {
+        get { withLock { _pumpApiVersion } }
+        set { withLock { _pumpApiVersion = newValue } }
+    }
 
     static var tconnectAppConnectionSharing: Bool {
         get { withLock { _tconnectAppConnectionSharing } }
@@ -115,10 +120,6 @@ public enum PumpStateSupplier {
 
     public static var authenticationKey: () -> Data = {
         determinePumpAuthKey()
-    }
-
-    public static func currentPumpApiVersion() -> ApiVersion? {
-        withLock { pumpApiVersion?() }
     }
 
     private static func determinePumpAuthKey() -> Data {

@@ -53,7 +53,14 @@ public class SetMissedMealBolusReminderRequest: Message {
         self.bitmask = bitmask
     }
 
-    public static func buildCargo(reminderIndex: Int, enabledReminder: Bool, startTime: Int, endTime: Int, selectedDays: Int, bitmask: Int) -> Data {
+    public static func buildCargo(
+        reminderIndex: Int,
+        enabledReminder: Bool,
+        startTime: Int,
+        endTime: Int,
+        selectedDays: Int,
+        bitmask: Int
+    ) -> Data {
         Bytes.combine(
             Data([UInt8(reminderIndex & 0xFF)]),
             Data([enabledReminder ? 1 : 0]),

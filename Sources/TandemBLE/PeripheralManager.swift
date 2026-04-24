@@ -172,8 +172,6 @@ extension PeripheralManager {
 
                 if let delegate = delegate {
                     try delegate.completeConfiguration(for: self)
-
-                    log.info("Delegate configuration notified")
                 }
 
                 log.info("Peripheral configuration completed")
@@ -214,26 +212,17 @@ extension PeripheralManager {
 
         let targetMTU: UInt16 = 185
         let maxWithResponse = peripheral.maximumWriteValueLength(for: .withResponse)
-        let maxWithoutResponse = peripheral.maximumWriteValueLength(for: .withoutResponse)
-
-        logDebug(
-            "[PeripheralManager]   requested MTU=\(targetMTU) withResponseCapacity=\(maxWithResponse) withoutResponseCapacity=\(maxWithoutResponse)"
-        )
 
         if maxWithResponse < Int(targetMTU - 3) { // Approximate payload length after headers
             logWarning("[PeripheralManager]   MTU verification failed – pump likely not in pairing mode")
             throw PeripheralManagerError.notReady
         }
 
-        logDebug("[PeripheralManager]   MTU verification succeeded")
-
         if let central = central {
             let selector = NSSelectorFromString("setDesiredConnectionLatency:forPeripheral:")
             if central.responds(to: selector) {
                 logDebug("[PeripheralManager]   setting connection priority HIGH")
-                let latencyValue = NSNumber(value: 0) // CBPeripheralConnectionLatency.low
-                central.perform(selector, with: latencyValue, with: peripheral)
-                logDebug("[PeripheralManager]   connection priority set")
+                central.perform(selector, with: 0 as NSNumber, with: peripheral) // CBPeripheralConnectionLatency.low
             } else {
                 logWarning("[PeripheralManager]   central manager does not support connection latency adjustment")
             }

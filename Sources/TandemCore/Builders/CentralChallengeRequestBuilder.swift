@@ -2,8 +2,7 @@ import Foundation
 
 public enum CentralChallengeRequestBuilder {
     public static func create(appInstanceId: Int) -> CentralChallengeRequest? {
-        let apiVersion = PumpStateSupplier.currentPumpApiVersion()
-        if let apiVersion, apiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {
+        if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV3_2.value) {
             return nil
         } else {
             return createV1(appInstanceId: appInstanceId)

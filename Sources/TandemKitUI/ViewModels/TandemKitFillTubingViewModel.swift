@@ -34,10 +34,12 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var loadingSuspend = false
     @Published var loadingEnterMode = false
     @Published var loadingExitMode = false
+    @Published var loadingResume = false
 
     @Published var failedSuspend = false
     @Published var failedEnterMode = false
     @Published var failedExitMode = false
+    @Published var failedResume = false
 
     @Published var buttonDown = false
     @Published var hasDisplayedFlow = false
@@ -45,7 +47,10 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     @Published var showingSuspendConfirmation = false
     @Published var showingCancelConfirmation = false
+    @Published var showingResumeConfirmation = false
 
+    let done: () -> Void
+    let toFillingCannula: () -> Void
     private let pumpManager: TandemPumpManager?
     private let processQueue = DispatchQueue(label: "TandemKit.tubing.processQueue")
 
@@ -58,8 +63,10 @@ class TandemKitFillTubingViewModel: ObservableObject {
         !notificationsViewModel.notifications.isEmpty
     }
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillingCannula: @escaping () -> Void) {
         self.pumpManager = pumpManager
+        self.done = done
+        self.toFillingCannula = toFillingCannula
         notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
 
         // Forward child ViewModel changes to parent
@@ -218,6 +225,25 @@ class TandemKitFillTubingViewModel: ObservableObject {
         // Advance to exiting step to show loading screen
         currentStep = currentStep.nextStep() ?? .done
         exitFillTubingMode()
+    }
+
+    func resumeDelivery() {
+        loadingResume = true
+        failedResume = false
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self, let pumpManager = self.pumpManager else { return }
+
+            pumpManager.resumeDelivery { error in
+                DispatchQueue.main.async {
+                    if let _ = error {
+                        self.failedResume = true
+                    } else {
+                        self.done()
+                    }
+                }
+            }
+        }
     }
 
     func exitFillTubingMode() {

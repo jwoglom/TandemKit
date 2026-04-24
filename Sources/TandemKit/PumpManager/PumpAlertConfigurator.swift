@@ -8,7 +8,6 @@ import TandemCore
 /// responsible for sending the returned request through `PumpComm` or the
 /// transport layer.
 public enum PumpAlertConfigurator {
-
     // MARK: - Auto-Off Alert
 
     /// Construct a request to enable/disable the auto-off alert and set its duration.
@@ -67,7 +66,7 @@ public enum PumpAlertConfigurator {
     public static func makeSetLowInsulinAlertRequest(
         threshold: Int
     ) -> SetLowInsulinAlertRequest {
-        return SetLowInsulinAlertRequest(insulinThreshold: threshold)
+        SetLowInsulinAlertRequest(insulinThreshold: threshold)
     }
 
     // MARK: - Site Change Reminder

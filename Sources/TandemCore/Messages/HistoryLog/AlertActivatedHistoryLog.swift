@@ -41,6 +41,6 @@ public class AlertActivatedHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(alertResponseType), alertId=\(alertId))"
+        "AlertActivatedHistoryLog(cargo=\(cargo.hexadecimalString), alertResponseType=\(String(describing: alertResponseType)), alertId=\(alertId))"
     }
 }

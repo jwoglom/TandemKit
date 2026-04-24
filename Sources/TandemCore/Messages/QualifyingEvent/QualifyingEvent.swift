@@ -115,7 +115,7 @@ public enum QualifyingEvent: CaseIterable {
                 { HomeScreenMirrorRequest() },
                 {
                     ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) }
             ]
         case .pumpSuspend:
             return [
@@ -146,18 +146,14 @@ public enum QualifyingEvent: CaseIterable {
             return [
                 { CurrentBolusStatusRequest() },
                 { ExtendedBolusStatusRequest() },
-                {
-                    LastBolusStatusRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                { Self.lastBolus() }
             ]
         case .iobChange:
             return [{ IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) }]
         case .extendedBolusChange:
             return [
                 { ExtendedBolusStatusRequest() },
-                {
-                    LastBolusStatusRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }
+                { Self.lastBolus() }
             ]
         case .profileChange:
             return [{ ProfileStatusRequest() }]
@@ -172,7 +168,7 @@ public enum QualifyingEvent: CaseIterable {
         case .battery:
             return [{
                 CurrentBatteryRequestBuilder
-                    .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) }]
+                    .create(apiVersion: PumpStateSupplier.pumpApiVersion) }]
         case .basalIQ:
             return [{ BasalIQSettingsRequest() }]
         case .remainingInsulin:
@@ -188,7 +184,7 @@ public enum QualifyingEvent: CaseIterable {
                 { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
                 {
                     ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.currentPumpApiVersion() ?? KnownApiVersion.apiV2_1.value) },
+                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) },
                 { ControlIQSleepScheduleRequest() }
             ]
         case .controlIQSleep:
@@ -259,5 +255,13 @@ public enum QualifyingEvent: CaseIterable {
 
     private static func activeAamBitsRequest(aamType: UInt8) -> ActiveAamBitsRequest {
         ActiveAamBitsRequest(cargo: Data([aamType]))
+    }
+    
+    private static func lastBolus() -> Message {
+        if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
+            return LastBolusStatusV2Request()
+        } else {
+            return LastBolusStatusRequest()
+        }
     }
 }

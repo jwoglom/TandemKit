@@ -203,7 +203,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var lastHistorySequenceNum: UInt32?
     public var lastHistoryReconciliation: Date?
     public var pendingDoses: [PendingDose]
-    public var fetchedRanges: [FetchedRange]
 
     public init(
         onboarded: Bool = false,
@@ -261,7 +260,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         lastHistorySequenceNum: UInt32? = nil,
         lastHistoryReconciliation: Date? = nil,
         pendingDoses: [PendingDose] = [],
-        fetchedRanges: [FetchedRange] = []
     ) {
         self.onboarded = onboarded
         self.pumpState = pumpState
@@ -318,7 +316,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.lastHistorySequenceNum = lastHistorySequenceNum
         self.lastHistoryReconciliation = lastHistoryReconciliation
         self.pendingDoses = pendingDoses
-        self.fetchedRanges = fetchedRanges
     }
 
     public init?(rawValue: RawValue) {
@@ -510,14 +507,6 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         } else {
             pendingDoses = []
         }
-
-        if let rangesData = rawValue["fetchedRanges"] as? Data,
-           let decoded = try? PropertyListDecoder().decode([FetchedRange].self, from: rangesData)
-        {
-            fetchedRanges = decoded
-        } else {
-            fetchedRanges = []
-        }
     }
 
     public var rawValue: RawValue {
@@ -598,22 +587,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
             raw["bolusState"] = encodedBolusState
         }
 
-        if let basalRateSchedule = basalRateSchedule,
-           let encodedSchedule = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
-        {
-            raw["basalRateSchedule"] = encodedSchedule
+        if let basalRateSchedule = basalRateSchedule {
+            raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
         }
 
         if !pendingDoses.isEmpty,
            let encoded = try? PropertyListEncoder().encode(pendingDoses)
         {
             raw["pendingDoses"] = encoded
-        }
-
-        if !fetchedRanges.isEmpty,
-           let encoded = try? PropertyListEncoder().encode(fetchedRanges)
-        {
-            raw["fetchedRanges"] = encoded
         }
 
         return raw
@@ -731,7 +712,6 @@ public extension TandemPumpManagerState {
             lhs.lastHistorySequenceNum == rhs.lastHistorySequenceNum &&
             lhs.lastHistoryReconciliation == rhs.lastHistoryReconciliation &&
             lhs.pendingDoses == rhs.pendingDoses &&
-            lhs.fetchedRanges == rhs.fetchedRanges &&
             lhs.quickBolusEnabled == rhs.quickBolusEnabled &&
             lhs.quickBolusEntryType == rhs.quickBolusEntryType &&
             lhs.quickBolusIncrementUnits == rhs.quickBolusIncrementUnits &&
@@ -893,7 +873,7 @@ private extension TandemPumpManagerState {
         return nil
     }
 
-    static func encodeBasalSchedule(_ schedule: BasalRateSchedule) -> [String: Any]? {
+    static func encodeBasalSchedule(_ schedule: BasalRateSchedule) -> [String: Any] {
         let items = schedule.items.map { item -> [String: Any] in
             [
                 "startTime": item.startTime,

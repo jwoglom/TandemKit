@@ -1,4 +1,5 @@
 import Foundation
+import LoopKitUI
 import SwiftUI
 import UIKit
 
@@ -31,21 +32,9 @@ struct ErrorSheetView: View {
             Button(action: {
                 dismiss()
             }) {
-                ZStack {
-                    Text(LocalizedString(
-                        "OK",
-                        comment: "OK button"
-                    ))
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(tint)
-                .foregroundColor(.primary)
-                .cornerRadius(12)
-                .contentShape(Rectangle())
+                Text("OK", comment: "OK button")
             }
-            .buttonStyle(.plain)
-            .tint(tint)
+            .buttonStyle(ActionButtonStyle())
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .padding(24)
