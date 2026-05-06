@@ -4,6 +4,7 @@ import TandemCore
 
 struct TandemKitFillCannulaView: View {
     @Environment(\.guidanceColors) private var guidanceColors
+    @Environment(\.dismissAction) private var dismiss
     @StateObject var viewModel: TandemKitFillCannulaViewModel
     @State private var didLoad = false
 
@@ -46,7 +47,7 @@ struct TandemKitFillCannulaView: View {
         }
         .onChange(of: viewModel.resumeSucceeded) { succeeded in
             if succeeded {
-                viewModel.done()
+                dismiss()
             }
         }
     }
