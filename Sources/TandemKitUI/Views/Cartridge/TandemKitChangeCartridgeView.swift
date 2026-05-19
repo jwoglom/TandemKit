@@ -4,7 +4,9 @@ import SwiftUI
 struct TandemKitChangeCartridgeView: View {
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitChangeCartridgeViewModel
+    
     @State private var didLoad = false
+    @State private var actionSheet: CartridgeActionSheet?
 
     var body: some View {
         WizardStepContainer(
@@ -27,11 +29,11 @@ struct TandemKitChangeCartridgeView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
+        .actionSheet(item: $actionSheet) { sheet in
+            switch sheet {
+            case .cancel: return cancelOperationSheet
+            case .suspend: return suspendInsulinSheet
+            }
         }
         .task {
             guard !didLoad else { return }
@@ -71,7 +73,7 @@ struct TandemKitChangeCartridgeView: View {
                     text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
-                    viewModel.showingSuspendConfirmation = true
+                    actionSheet = .suspend
                 }
             }
         case .enterMode:
@@ -506,7 +508,7 @@ struct TandemKitChangeCartridgeView: View {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
             viewModel.done()
         } else {
-            viewModel.showingCancelConfirmation = true
+            actionSheet = .cancel
         }
     }
 
@@ -544,6 +546,12 @@ struct TandemKitChangeCartridgeView: View {
             ]
         )
     }
+}
+
+enum CartridgeActionSheet : Identifiable {
+    case cancel
+    case suspend
+    var id: Self { self }
 }
 
 // MARK: - Preview Helpers

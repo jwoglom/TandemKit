@@ -33,11 +33,6 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var failedSuspend = false
     @Published var failedFill = false
     @Published var failedResume = false
-    @Published var resumeSucceeded = false
-
-    @Published var showingSuspendConfirmation = false
-    @Published var showingCancelConfirmation = false
-    @Published var showingResumeConfirmation = false
 
     let done: () -> Void
     private let pumpManager: TandemPumpManager?
@@ -142,7 +137,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
                     } else {
                         self.failedResume = false
                         self.isSuspended = false
-                        self.resumeSucceeded = true
+                        self.done()
                     }
                 }
             }

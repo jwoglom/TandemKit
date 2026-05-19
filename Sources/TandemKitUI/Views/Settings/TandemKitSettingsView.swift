@@ -226,6 +226,8 @@ struct TandemKitSettingsView: View {
                             .onTapGesture {
                                 activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
                             }
+                    } else {
+                        Spacer()
                     }
                     reservoirStatus
                         .frame(maxWidth: .infinity)
@@ -804,6 +806,7 @@ struct TandemKitSettingsView: View {
                     .opacity(0.35)
                     .padding(.leading)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

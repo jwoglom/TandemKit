@@ -5,7 +5,9 @@ struct TandemKitFillTubingView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitFillTubingViewModel
+
     @State private var didLoad = false
+    @State private var actionSheet: TubingActionSheet?
 
     var body: some View {
         WizardStepContainer(
@@ -28,14 +30,12 @@ struct TandemKitFillTubingView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-            resumeOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
+        .actionSheet(item: $actionSheet) { sheet in
+            switch sheet {
+            case .cancel: return cancelOperationSheet
+            case .resume: return resumeOperationSheet
+            case .suspend: return suspendInsulinSheet
+            }
         }
         .task {
             guard !didLoad else { return }
@@ -500,6 +500,13 @@ struct TandemKitFillTubingView: View {
             ]
         )
     }
+}
+
+enum TubingActionSheet: Identifiable {
+    case cancel
+    case resume
+    case suspend
+    var id: Self { self }
 }
 
 // MARK: - Insulin Flow Indicator

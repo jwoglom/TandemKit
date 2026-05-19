@@ -6,6 +6,8 @@ struct TandemKitFillCannulaView: View {
     @StateObject var viewModel: TandemKitFillCannulaViewModel
     @State private var didLoad = false
 
+    @State var actionSheet: CannulaActiveSheet?
+
     let unitText = String(localized: "U", comment: "Insulin unit")
 
     var body: some View {
@@ -29,24 +31,17 @@ struct TandemKitFillCannulaView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-            resumeInsulinSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
+        .actionSheet(item: $actionSheet) { sheet in
+            switch sheet {
+            case .cancel: return cancelOperationSheet
+            case .resume: return resumeInsulinSheet
+            case .suspend: return suspendInsulinSheet
+            }
         }
         .task {
             guard !didLoad else { return }
             didLoad = true
             viewModel.checkSuspendedStatus()
-        }
-        .onChange(of: viewModel.resumeSucceeded) { succeeded in
-            if succeeded {
-                viewModel.done()
-            }
         }
     }
 
@@ -75,7 +70,7 @@ struct TandemKitFillCannulaView: View {
                     text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
-                    viewModel.showingSuspendConfirmation = true
+                    actionSheet = .suspend
                 }
             }
         case .enterAmount:
@@ -90,7 +85,7 @@ struct TandemKitFillCannulaView: View {
                 text: Text("Resume insulin delivery", comment: "Button text"),
                 loading: $viewModel.loadingResume
             ) {
-                viewModel.showingResumeConfirmation = true
+                actionSheet = .resume
             }
         }
     }
@@ -99,7 +94,6 @@ struct TandemKitFillCannulaView: View {
 
     private var suspendStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Warning banner
             HStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(guidanceColors.warning)
@@ -141,18 +135,16 @@ struct TandemKitFillCannulaView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(12)
-            } else {
-                if viewModel.failedSuspend {
-                    Label(
-                        String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
-                        systemImage: "exclamationmark.circle.fill"
-                    )
-                    .foregroundColor(guidanceColors.critical)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(guidanceColors.critical.opacity(0.1))
-                    .cornerRadius(12)
-                }
+            } else if viewModel.failedSuspend {
+                Label(
+                    String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
             }
         }
     }
@@ -260,7 +252,7 @@ struct TandemKitFillCannulaView: View {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
             viewModel.done()
         } else {
-            viewModel.showingCancelConfirmation = true
+            actionSheet = .cancel
         }
     }
 
@@ -293,7 +285,7 @@ struct TandemKitFillCannulaView: View {
                 .default(Text("Yes, Resume Insulin", comment: "Confirm button")) {
                     viewModel.resumePumping()
                 },
-                .destructive(Text("Cancel", comment: "Cancel button"))
+                .cancel(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
@@ -313,6 +305,13 @@ struct TandemKitFillCannulaView: View {
             ]
         )
     }
+}
+
+enum CannulaActiveSheet: Identifiable {
+    case cancel
+    case resume
+    case suspend
+    var id: Self { self }
 }
 
 // MARK: - Preview Helpers
