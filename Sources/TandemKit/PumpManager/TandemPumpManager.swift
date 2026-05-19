@@ -4,8 +4,7 @@ import Dispatch
 import Foundation
 import HealthKit
 import LoopKit
-import TandemBLE
-import TandemCore
+
 import UIKit
 
 // MARK: - Scan Device Observer Protocol
@@ -20,29 +19,6 @@ public struct TandemPumpScan {
 
 public protocol StateObserver: AnyObject {
     func deviceScanDidUpdate(_ device: TandemPumpScan)
-}
-
-// Simple Locked wrapper
-public class Locked<Value> {
-    private var _value: Value
-    private let lock = NSLock()
-
-    init(_ value: Value) {
-        _value = value
-    }
-
-    var value: Value {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return _value
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            _value = newValue
-        }
-    }
 }
 
 private struct ActiveBolus {
@@ -882,7 +858,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func makeBatteryRequest() -> Message {
-        return CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.pumpApiVersion)
+        CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.pumpApiVersion)
     }
 
     /// Queries the pump for the actual delivered volume of the last bolus.
@@ -1007,7 +983,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 message: TempRateRequest(),
                 expecting: TempRateResponse.self
             )
-            
+
             handleTempRateResponse(response, source: .telemetry)
         } catch {
             telemetryLogger.error("Temp basal telemetry request failed: \(error)")
@@ -1587,7 +1563,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion?(nil)
                     return
                 }
-                
+
                 self.fetchDeliveryLimits(transport: transport)
                 self.fetchBasalStatus(transport: transport)
                 self.fetchReservoirStatus(transport: transport)
@@ -1867,7 +1843,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                         let dose = UnfinalizedDose(
                             units: units,
-                            duration: self.estimatedDuration(toBolus: units) + .seconds(5), // 5s needed before bolus enacting is started
+                            duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                            // 5s needed before bolus enacting is started
                             activationType: activationType,
                             insulinType: self.lockedState.value.insulinType
                         )
@@ -1954,11 +1931,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         response: response
                     )
                 }
-                
+
                 self.updateStatus { status in
                     status.bolusState = .noBolus
                 }
-                
+
                 // Allow the Mobi to store the bolus in storage
                 Thread.sleep(forTimeInterval: .seconds(2))
 
@@ -2089,7 +2066,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             insulinType: self.lockedState.value.insulinType
                         )
                         pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
-                        
+
                         self.updateStatus { status in
                             status.basalDeliveryState = .active(Date.now)
                         }
@@ -2148,7 +2125,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         state.tempRateDuration = duration
                         state.tempRateSyncIdentifier = dose.syncIdentifier
                         self.lockedState.value = state
-                        
+
                         self.updateStatus { status in
                             status.basalDeliveryState = .tempBasal(dose)
                         }
@@ -2235,6 +2212,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let self = self else { return }
 
             do {
+                let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: TempRateRequest(),
+                    expecting: TempRateResponse.self
+                )
+
+                if currentTempRate.active {
+                    _ = try self.pumpComm.sendMessage(
+                        transport: transport,
+                        message: StopTempRateRequest()
+                    )
+                }
+
                 let response: SuspendPumpingResponse = try self.pumpComm.sendMessage(
                     transport: transport,
                     message: SuspendPumpingRequest(),

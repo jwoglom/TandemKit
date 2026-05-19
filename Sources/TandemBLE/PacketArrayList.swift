@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 private let packetArrayLogger = TandemLogger(category: "PacketArrayList")
 

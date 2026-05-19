@@ -1,4 +1,0 @@
-module MbedTLS {
-    header "MbedTLS.h"
-    export *
-}

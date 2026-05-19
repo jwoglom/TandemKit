@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Container for data received from the pump over BLE.
 /// Mirrors PumpX2 `PumpResponseMessage` but simplified.

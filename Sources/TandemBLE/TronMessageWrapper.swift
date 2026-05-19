@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 private let tronLogger = TandemLogger(category: "TronMessageWrapper")
 

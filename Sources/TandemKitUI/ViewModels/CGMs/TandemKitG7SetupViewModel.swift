@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 class TandemKitG7SetupViewModel: ObservableObject {
     enum Step: Int {

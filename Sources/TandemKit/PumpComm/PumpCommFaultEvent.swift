@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Context describing a pump fault encountered during a request cycle.
 public struct PumpCommFaultEvent {

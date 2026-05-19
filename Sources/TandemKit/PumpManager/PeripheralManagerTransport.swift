@@ -1,7 +1,5 @@
 import Dispatch
 import Foundation
-import TandemBLE
-import TandemCore
 
 private let transportLogger = TandemLogger(category: "PeripheralManagerTransport")
 

@@ -256,7 +256,7 @@ public enum QualifyingEvent: CaseIterable {
     private static func activeAamBitsRequest(aamType: UInt8) -> ActiveAamBitsRequest {
         ActiveAamBitsRequest(cargo: Data([aamType]))
     }
-    
+
     private static func lastBolus() -> Message {
         if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
             return LastBolusStatusV2Request()

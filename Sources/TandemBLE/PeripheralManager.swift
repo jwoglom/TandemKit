@@ -1,6 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemCore
 
 public class PeripheralManager: NSObject {
     private let log = TandemLogger(category: "PeripheralManager")

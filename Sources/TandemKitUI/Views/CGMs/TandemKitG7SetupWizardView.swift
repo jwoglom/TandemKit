@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 struct TandemKitG7SetupWizardView: View {
     @StateObject var viewModel: TandemKitG7SetupViewModel

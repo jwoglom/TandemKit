@@ -1,24 +1,26 @@
 import Combine
 import LoopKit
 import SwiftUI
-import TandemCore
 
-enum TubingFillStep: Int {
+enum CartridgeChangeStep: Int {
     case suspend = 0
     case enterMode = 1
-    case filling = 2
-    case exiting = 3
-    case done = 4
+    case waitingForReady = 2
+    case physicalChange = 3
+    case detecting = 4
+    case done = 5
 
-    func nextStep() -> TubingFillStep? {
+    func nextStep() -> CartridgeChangeStep? {
         switch self {
         case .suspend:
             return .enterMode
         case .enterMode:
-            return .filling
-        case .filling:
-            return .exiting
-        case .exiting:
+            return .waitingForReady
+        case .waitingForReady:
+            return .physicalChange
+        case .physicalChange:
+            return .detecting
+        case .detecting:
             return .done
         case .done:
             return nil
@@ -26,33 +28,30 @@ enum TubingFillStep: Int {
     }
 }
 
-class TandemKitFillTubingViewModel: ObservableObject {
-    @Published var currentStep: TubingFillStep = .suspend
+class TandemKitChangeCartridgeViewModel: ObservableObject {
+    @Published var currentStep: CartridgeChangeStep = .suspend
     @Published var isSuspended: Bool? = nil
     @Published var isProcessing = false
 
     @Published var loadingSuspend = false
     @Published var loadingEnterMode = false
     @Published var loadingExitMode = false
-    @Published var loadingResume = false
 
     @Published var failedSuspend = false
     @Published var failedEnterMode = false
     @Published var failedExitMode = false
-    @Published var failedResume = false
 
-    @Published var buttonDown = false
-    @Published var hasDisplayedFlow = false
-    @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
+    @Published var changeCartridgeState: EnterChangeCartridgeModeStateStreamResponse.ChangeCartridgeState?
+    @Published var detectingProgress: Int = 0
+    @Published var isDetecting = false
 
     @Published var showingSuspendConfirmation = false
     @Published var showingCancelConfirmation = false
-    @Published var showingResumeConfirmation = false
 
     let done: () -> Void
-    let toFillingCannula: () -> Void
+    let toFillTubing: () -> Void
     private let pumpManager: TandemPumpManager?
-    private let processQueue = DispatchQueue(label: "TandemKit.tubing.processQueue")
+    private let processQueue = DispatchQueue(label: "TandemKit.cartridge.processQueue")
 
     // Notifications
     @Published var notificationsViewModel: TandemKitNotificationsViewModel
@@ -63,10 +62,10 @@ class TandemKitFillTubingViewModel: ObservableObject {
         !notificationsViewModel.notifications.isEmpty
     }
 
-    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillingCannula: @escaping () -> Void) {
+    init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillTubing: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.done = done
-        self.toFillingCannula = toFillingCannula
+        self.toFillTubing = toFillTubing
         notificationsViewModel = TandemKitNotificationsViewModel(pumpManager)
 
         // Forward child ViewModel changes to parent
@@ -115,14 +114,38 @@ class TandemKitFillTubingViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
+            guard let transport = self.pumpManager?.pairedTransport else {
+                DispatchQueue.main.async {
+                    self.isSuspended = nil
+                }
+                return
+            }
+
+            do {
+                guard let mirror = try transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse else {
+                    DispatchQueue.main.async {
+                        self.isSuspended = nil
+                    }
+                    return
+                }
 
                 DispatchQueue.main.async {
-                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+                    // Check for any suspended state (manual suspend or BasalIQ hypo suspend)
+                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue ||
+                        mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
+
+                    print(
+                        "TandemKit Change Cartridge: Checked suspend status - isSuspended=\(self.isSuspended ?? false), basalStatusIconId=\(mirror.basalStatusIconId)"
+                    )
+
                     if self.isSuspended == true, self.currentStep == .suspend {
                         self.currentStep = .enterMode
                     }
+                }
+            } catch {
+                print("TandemKit Change Cartridge: Error checking suspend status: \(error)")
+                DispatchQueue.main.async {
+                    self.isSuspended = nil
                 }
             }
         }
@@ -132,35 +155,22 @@ class TandemKitFillTubingViewModel: ObservableObject {
         loadingSuspend = true
         failedSuspend = false
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(SuspendPumpingRequest())
-
-                Thread.sleep(forTimeInterval: 1.0)
-                self.checkSuspendedStatus()
-
-                DispatchQueue.main.async {
-                    self.loadingSuspend = false
-                    if let _ = response {
-                        self.failedSuspend = false
-                        self.isSuspended = true
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        self.failedSuspend = true
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingSuspend = false
+        pumpManager?.suspendDelivery { error in
+            DispatchQueue.main.async {
+                self.loadingSuspend = false
+                if let _ = error {
                     self.failedSuspend = true
+
+                } else {
+                    self.failedSuspend = false
+                    self.isSuspended = true
+                    self.currentStep = self.currentStep.nextStep() ?? .done
                 }
             }
         }
     }
 
-    func enterFillTubingMode() {
+    func enterChangeCartridgeMode() {
         guard isSuspended == true else {
             failedEnterMode = true
             return
@@ -174,14 +184,14 @@ class TandemKitFillTubingViewModel: ObservableObject {
             guard let self = self else { return }
 
             if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(EnterFillTubingModeRequest()) as? EnterFillTubingModeResponse
+                let response = try? transport.sendMessage(EnterChangeCartridgeModeRequest()) as? EnterChangeCartridgeModeResponse
 
                 DispatchQueue.main.async {
                     self.loadingEnterMode = false
                     if let response = response, response.status == 0 {
                         self.failedEnterMode = false
                         self.currentStep = self.currentStep.nextStep() ?? .done
-                        self.startMonitoringButtonState()
+                        self.startMonitoringChangeState()
                     } else {
                         self.failedEnterMode = true
                         self.isProcessing = false
@@ -197,56 +207,54 @@ class TandemKitFillTubingViewModel: ObservableObject {
         }
     }
 
-    func startMonitoringButtonState() {
-        // Subscribe to FillTubingStateStreamResponse from the pump manager
-        guard let pumpManager = pumpManager else { return }
-
-        pumpManager.fillTubingStateStream
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] response in
-                self?.buttonDown = response.buttonDown
-                if response.buttonDown {
-                    self?.hasDisplayedFlow = true
-                } else {
-                    self?.requestAlertStatus()
-                }
-            }
-            .store(in: &cancellables)
-    }
-
-    private func requestAlertStatus() {
-        processQueue.async { [weak self] in
-            guard let transport = self?.pumpManager?.pairedTransport else { return }
-            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
+    func startMonitoringChangeState() {
+        // Monitor for ready state
+        // In a real implementation, this would subscribe to the control stream
+        // For now, simulate state progression
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            self?.changeCartridgeState = .readyToChange
+            self?.currentStep = self?.currentStep.nextStep() ?? .done
         }
     }
 
-    func tubingFilled() {
-        // Advance to exiting step to show loading screen
+    func cartridgeInserted() {
         currentStep = currentStep.nextStep() ?? .done
-        exitFillTubingMode()
+        startDetectingCartridge()
     }
 
-    func resumeDelivery() {
-        loadingResume = true
-        failedResume = false
+    func startDetectingCartridge() {
+        isDetecting = true
+        detectingProgress = 0
+        failedExitMode = false
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self, let pumpManager = self.pumpManager else { return }
+        // Monitor detection progress
+        // In a real implementation, this would subscribe to DetectingCartridgeStateStreamResponse
+        // For now, simulate progress
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
 
-            pumpManager.resumeDelivery { error in
-                DispatchQueue.main.async {
-                    if let _ = error {
-                        self.failedResume = true
-                    } else {
-                        self.done()
-                    }
+            DispatchQueue.main.async {
+                self.detectingProgress += 10
+
+                if self.detectingProgress >= 100 {
+                    timer.invalidate()
+                    self.isDetecting = false
+                    // Exit change cartridge mode before completing
+                    self.exitChangeCartridgeMode()
                 }
             }
         }
     }
 
-    func exitFillTubingMode() {
+    func retryExitCartridgeMode() {
+        failedExitMode = false
+        exitChangeCartridgeMode()
+    }
+
+    func exitChangeCartridgeMode() {
         loadingExitMode = true
         failedExitMode = false
 
@@ -254,19 +262,18 @@ class TandemKitFillTubingViewModel: ObservableObject {
             guard let self = self else { return }
 
             if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(ExitFillTubingModeRequest()) as? ExitFillTubingModeResponse
+                let response = try? transport.sendMessage(ExitChangeCartridgeModeRequest()) as? ExitChangeCartridgeModeResponse
 
                 DispatchQueue.main.async {
                     self.loadingExitMode = false
                     self.isProcessing = false
                     if let response = response, response.status == 0 {
                         self.failedExitMode = false
-                        self.exitState = .tubingFilled
                         self.currentStep = self.currentStep.nextStep() ?? .done
                     } else {
-                        // Exit failed - go back to filling step and show error
+                        // Exit failed - go back to detecting step and show error
                         self.failedExitMode = true
-                        self.currentStep = .filling
+                        self.currentStep = .detecting
                     }
                 }
             } else {
@@ -274,19 +281,19 @@ class TandemKitFillTubingViewModel: ObservableObject {
                     self.loadingExitMode = false
                     self.failedExitMode = true
                     self.isProcessing = false
-                    // No transport - go back to filling step
-                    self.currentStep = .filling
+                    // No transport - go back to detecting step
+                    self.currentStep = .detecting
                 }
             }
         }
     }
 
     func cancelOperation() {
-        // Attempt to exit fill tubing mode if we're in it
-        if currentStep.rawValue >= TubingFillStep.enterMode.rawValue,
-           currentStep.rawValue < TubingFillStep.done.rawValue
+        // Attempt to exit change cartridge mode if we're in it
+        if currentStep.rawValue >= CartridgeChangeStep.enterMode.rawValue,
+           currentStep.rawValue < CartridgeChangeStep.done.rawValue
         {
-            exitFillTubingMode()
+            exitChangeCartridgeMode()
         }
     }
 }

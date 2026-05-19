@@ -1,7 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemBLE
-import TandemCore
 
 final class PumpNotificationRouter: PeripheralManagerNotificationHandler {
     private static let clearQualifyingEventsValue = Data([0, 0, 0, 0])

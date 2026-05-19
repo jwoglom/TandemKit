@@ -1,7 +1,6 @@
 import CoreBluetooth
 import Foundation
 import LoopKit
-import TandemCore
 
 public protocol BluetoothManagerDelegate: AnyObject {
     /**
@@ -407,7 +406,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-    public func centralManager(_: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+    public func centralManager(_: CBCentralManager, didDisconnectPeripheral _: CBPeripheral, error: Error?) {
         dispatchPrecondition(condition: .onQueue(managerQueue))
         if let error = error {
             log.error("Error during disconnect: \(error)")
@@ -419,14 +418,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
         // Make sure if permanent disconnect is requested, we are actually permanently clearing the peripheral
         if isPermanentlyDisconnecting {
             stayConnected = false
-            self.peripheral = nil
+            peripheral = nil
             isPermanentlyDisconnecting = false
 
             log.debug("isPermanentlyDisconnecting done - setting isPermanentlyDisconnecting to false")
         }
 
         if stayConnected {
-            self.peripheral = nil
+            peripheral = nil
             scanAfterDelay()
         }
     }

@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 struct TandemKitControlIQSettingsView: View {
     @StateObject var viewModel: TandemKitControlIQSettingsViewModel

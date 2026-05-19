@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 struct TandemKitFillCannulaView: View {
     @Environment(\.guidanceColors) private var guidanceColors

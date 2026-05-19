@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Decision returned by a retry policy when handling a pump fault.
 public enum PumpCommRetryDecision: Equatable {

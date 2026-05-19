@@ -1,6 +1,6 @@
 import Foundation
 
-final class Locked<Value> {
+public final class Locked<Value> {
     private var valueStorage: Value
     private let lock = NSLock()
 

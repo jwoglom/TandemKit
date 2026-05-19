@@ -5,7 +5,6 @@
 //  Created by James Woglom on 1/13/25.
 //
 import CoreBluetooth
-import TandemCore
 
 // MARK: - CBUUID definition
 

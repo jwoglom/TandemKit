@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Represents a paired request-response exchange with the pump
 public struct RequestResponsePair {

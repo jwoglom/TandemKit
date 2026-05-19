@@ -67,7 +67,7 @@ public class CreateIDPRequest: Message {
         )
         self.profileName = profileName
         self.firstSegmentProfileCarbRatio = firstSegmentProfileCarbRatio
-        self.firstSegmentProfileStartTime = 0
+        firstSegmentProfileStartTime = 0
         self.firstSegmentProfileBasalRate = firstSegmentProfileBasalRate
         self.firstSegmentProfileTargetBG = firstSegmentProfileTargetBG
         self.firstSegmentProfileISF = firstSegmentProfileISF

@@ -1,6 +1,5 @@
 import Dispatch
 import Foundation
-import TandemCore
 
 protocol PumpCommSessionDelegate: AnyObject {
     func pumpCommSession(_ pumpCommSession: PumpCommSession, didChange state: PumpState)
@@ -157,7 +156,7 @@ public class PumpCommSession {
             guard let request = builder.nextRequest() else {
                 break
             }
-            
+
             let response = try transport.sendMessage(request)
             logger.debug("[PumpCommSession] JPAKE request: \(request), response: \(response)")
 

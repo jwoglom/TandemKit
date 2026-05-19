@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 public enum PumpCommError: Error {
     case pumpNotConnected

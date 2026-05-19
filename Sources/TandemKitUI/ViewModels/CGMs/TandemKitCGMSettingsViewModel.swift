@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 enum CGMSessionState {
     case stopped

@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Stateless factory for constructing pump alert and reminder configuration requests.
 ///

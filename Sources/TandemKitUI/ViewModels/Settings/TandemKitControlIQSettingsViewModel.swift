@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 class TandemKitControlIQSettingsViewModel: ObservableObject {
     @Published var controlIQEnabled = false { didSet { checkDirtyState() } }

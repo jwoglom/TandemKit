@@ -53,7 +53,14 @@ public class RemoteBgEntryRequest: Message {
         bolusId = Bytes.readShort(cargo, 9)
     }
 
-    public init(bg: Int, useForCgmCalibration: Bool, entryType: BloodGlucoseReadingType, source: BloodGlucoseReadingSource, pumpTime: UInt32, bolusId: Int) {
+    public init(
+        bg: Int,
+        useForCgmCalibration: Bool,
+        entryType: BloodGlucoseReadingType,
+        source: BloodGlucoseReadingSource,
+        pumpTime: UInt32,
+        bolusId: Int
+    ) {
         cargo = Bytes.combine(
             Bytes.firstTwoBytesLittleEndian(bg),
             Data([useForCgmCalibration ? 1 : 0]),
@@ -85,7 +92,7 @@ public class RemoteBgEntryRequest: Message {
 
     /// Deprecated: Use source instead.
     public var isAutopopBg: Bool {
-        return source == .remote
+        source == .remote
     }
 
     public var description: String {

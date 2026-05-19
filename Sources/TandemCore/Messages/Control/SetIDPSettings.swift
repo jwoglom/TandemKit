@@ -41,7 +41,13 @@ public class SetIDPSettingsRequest: Message {
         changeTypeId = changeType.rawValue
     }
 
-    public static func buildCargo(idpId: Int, profileIndex: Int, profileInsulinDuration: Int, profileCarbEntry: Int, changeTypeId: Int) -> Data {
+    public static func buildCargo(
+        idpId: Int,
+        profileIndex: Int,
+        profileInsulinDuration: Int,
+        profileCarbEntry: Int,
+        changeTypeId: Int
+    ) -> Data {
         Bytes.combine(
             Data([UInt8(idpId & 0xFF), UInt8(profileIndex & 0xFF)]),
             Bytes.firstTwoBytesLittleEndian(profileInsulinDuration),

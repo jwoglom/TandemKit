@@ -67,7 +67,7 @@ public enum PumpStateSupplier {
     private static var _processedResponseMessagesFromUs = 0
 
     private static var _pairingCodeType: PairingCodeType = .long16Char
-    
+
     public static var pumpApiVersion: ApiVersion {
         get { withLock { _pumpApiVersion } }
         set { withLock { _pumpApiVersion = newValue } }

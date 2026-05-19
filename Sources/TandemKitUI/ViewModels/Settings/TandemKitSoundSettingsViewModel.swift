@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 class TandemKitSoundSettingsViewModel: ObservableObject {
     @Published var generalAnnun: Int = 0 { didSet { checkDirtyState() } }

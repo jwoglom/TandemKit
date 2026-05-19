@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 struct TandemKitQuickBolusSettingsView: View {
     @ObservedObject var viewModel: TandemKitQuickBolusSettingsViewModel

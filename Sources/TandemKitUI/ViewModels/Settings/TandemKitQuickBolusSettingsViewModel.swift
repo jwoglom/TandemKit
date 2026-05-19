@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 class TandemKitQuickBolusSettingsViewModel: ObservableObject {
     @Published var enabled: Bool = false { didSet { checkDirtyState() } }

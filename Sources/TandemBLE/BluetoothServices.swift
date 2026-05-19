@@ -1,6 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemCore
 
 extension PeripheralManager.Configuration {
     static var tandemPeripheral: PeripheralManager.Configuration {

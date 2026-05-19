@@ -1,7 +1,6 @@
 import CoreBluetooth
 import LoopKit
 import SwiftUI
-import TandemCore
 
 enum PairingPhase: Int {
     case mobiOnPad = 0

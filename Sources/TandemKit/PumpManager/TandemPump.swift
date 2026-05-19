@@ -1,7 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemBLE
-import TandemCore
 
 public protocol TandemPumpDelegate: AnyObject {
     func tandemPump(_ pump: TandemPump, shouldConnect peripheral: CBPeripheral, advertisementData: [String: Any]?) -> Bool
@@ -188,7 +186,6 @@ extension TandemPump: BluetoothManagerDelegate {
     ) {
         delegate?.tandemPump(self, didDiscoverDevice: peripheral, advertisementData: advertisementData, rssi: rssi)
     }
-    
-    public func bluetoothManager(_ manager: TandemBLE.BluetoothManager, didIdentifyPump manufacturer: String, model: String) {
-    }
+
+    public func bluetoothManager(_: BluetoothManager, didIdentifyPump _: String, model _: String) {}
 }

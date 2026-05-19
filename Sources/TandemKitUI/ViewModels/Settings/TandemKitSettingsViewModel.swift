@@ -1,7 +1,6 @@
 import CoreBluetooth
 import LoopKit
 import SwiftUI
-import TandemCore
 
 enum CommandFailure: Int, Identifiable {
     case resume

@@ -379,6 +379,9 @@
         }
       }
     },
+    "Authentication required" : {
+
+    },
     "Authentication with the pump failed. Try reconnecting or re-pairing your pump." : {
       "comment" : "Recovery suggestion when pump fault is authentication related",
       "localizations" : {
@@ -412,6 +415,9 @@
         }
       }
     },
+    "Basal" : {
+
+    },
     "Beep" : {
       "comment" : "sound setting audioHigh",
       "localizations" : {
@@ -433,6 +439,9 @@
           }
         }
       }
+    },
+    "Bolus" : {
+
     },
     "Cancel" : {
       "comment" : "Cancel button\nCancel button title",
@@ -588,6 +597,9 @@
         }
       }
     },
+    "Check the code on the pump and try again." : {
+
+    },
     "Checked at" : {
       "comment" : "Text for pump time synced at",
       "localizations" : {
@@ -609,6 +621,9 @@
           }
         }
       }
+    },
+    "Checksum mismatch" : {
+
     },
     "Clear all notifications before completing tubing fill" : {
       "comment" : "Warning message",
@@ -1061,6 +1076,9 @@
           }
         }
       }
+    },
+    "Enter the pairing code shown on your pump." : {
+
     },
     "Entry Type" : {
       "comment" : "Label for quick bolus entry type",
@@ -1657,6 +1675,12 @@
         }
       }
     },
+    "Invalid parameter" : {
+
+    },
+    "Invalid payload length" : {
+
+    },
     "Invalid scheduled basal rate" : {
       "comment" : "Error when scheduled basal rate is invalid",
       "localizations" : {
@@ -2031,6 +2055,9 @@
         }
       }
     },
+    "Pairing codes are 6 digits long." : {
+
+    },
     "Pairing with " : {
       "comment" : "Pairing with device prefix text",
       "localizations" : {
@@ -2295,6 +2322,9 @@
         }
       }
     },
+    "Pump is busy" : {
+
+    },
     "Pump is ready" : {
       "comment" : "Status text",
       "localizations" : {
@@ -2515,6 +2545,9 @@
           }
         }
       }
+    },
+    "Resume" : {
+
     },
     "Resume insulin delivery" : {
       "comment" : "Button text",
@@ -2978,6 +3011,9 @@
           }
         }
       }
+    },
+    "Suspend" : {
+
     },
     "Suspend insulin delivery" : {
       "comment" : "Button to suspend",
@@ -3529,6 +3565,9 @@
         }
       }
     },
+    "Transaction identifier mismatch" : {
+
+    },
     "Transmitter Battery" : {
       "comment" : "Label for transmitter battery",
       "localizations" : {
@@ -3573,6 +3612,9 @@
         }
       }
     },
+    "Type the code displayed on the pump screen." : {
+
+    },
     "U" : {
       "comment" : "Insulin unit",
       "localizations" : {
@@ -3606,6 +3648,9 @@
           }
         }
       }
+    },
+    "Undefined pump error" : {
+
     },
     "Unexpected pump response (expected %@, received %@)" : {
       "comment" : "Unexpected pump response type",
@@ -3651,6 +3696,9 @@
         }
       }
     },
+    "Unknown pump error (%d)" : {
+
+    },
     "Unpaired the pump from any other apps" : {
       "comment" : "Pump not detected tip 1",
       "localizations" : {
@@ -3661,6 +3709,9 @@
           }
         }
       }
+    },
+    "Unsupported opcode" : {
+
     },
     "Updating..." : {
       "comment" : "Text shown when updating pump state",

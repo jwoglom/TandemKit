@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 // Helper to chunk an array into fixed-size subarrays.
 extension Array {

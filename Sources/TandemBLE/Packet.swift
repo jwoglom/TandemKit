@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /**
  * Packet represents the raw byte string included within a single Bluetooth response packet

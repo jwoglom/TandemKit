@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 enum G6SetupStep: Int {
     case landing = 0

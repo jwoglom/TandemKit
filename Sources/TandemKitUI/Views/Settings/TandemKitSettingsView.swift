@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 private enum SettingsAlertType: Identifiable {
     case switchToCIQ

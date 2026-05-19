@@ -1,6 +1,5 @@
 import LoopKit
 import SwiftUI
-import TandemCore
 
 enum CannulaFillStep: Int {
     case suspend = 0
@@ -70,29 +69,16 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         loadingSuspend = true
         failedSuspend = false
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(SuspendPumpingRequest())
-
-                Thread.sleep(forTimeInterval: 1.0)
-                self.checkSuspendedStatus()
-
-                DispatchQueue.main.async {
-                    self.loadingSuspend = false
-                    if let _ = response {
-                        self.failedSuspend = false
-                        self.isSuspended = true
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        self.failedSuspend = true
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingSuspend = false
+        pumpManager?.suspendDelivery { error in
+            DispatchQueue.main.async {
+                self.loadingSuspend = false
+                if let _ = error {
                     self.failedSuspend = true
+
+                } else {
+                    self.failedSuspend = false
+                    self.isSuspended = true
+                    self.currentStep = self.currentStep.nextStep() ?? .done
                 }
             }
         }

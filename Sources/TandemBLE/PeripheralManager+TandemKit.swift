@@ -1,7 +1,6 @@
 import CoreBluetooth
 import Dispatch
 import Foundation
-import TandemCore
 
 public enum SendMessageResult {
     /// The packet was sent and the pump acknowledged receipt.

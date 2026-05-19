@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertible {
     public typealias RawValue = [String: Any]

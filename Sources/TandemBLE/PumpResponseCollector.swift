@@ -1,6 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemCore
 
 private let pumpCollectorLogger = TandemLogger(category: "PumpResponseCollector")
 

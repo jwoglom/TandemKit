@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemBLE
 
 struct TandemKitSoundSettingsView: View {
     @ObservedObject var viewModel: TandemKitSoundSettingsViewModel

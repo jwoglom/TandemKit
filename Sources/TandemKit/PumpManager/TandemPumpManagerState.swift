@@ -1,6 +1,5 @@
 import Foundation
 import LoopKit
-import TandemCore
 
 public struct PendingDose: Codable, Equatable {
     public let syncIdentifier: String

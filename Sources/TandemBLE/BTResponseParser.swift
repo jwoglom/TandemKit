@@ -1,6 +1,5 @@
 import CoreBluetooth
 import Foundation
-import TandemCore
 
 private let responseParserLogger = TandemLogger(category: "BTResponseParser")
 
