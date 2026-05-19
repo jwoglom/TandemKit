@@ -8,6 +8,14 @@ class TandemKitAlertSettingsViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+
+        guard let pumpManager else {
+            return
+        }
+
+        autoAcknowledgeBasalAlerts = pumpManager.state.autoAcknowledgeBasalAlerts
+        alertSnoozeEnabled = pumpManager.state.alertSnoozeEnabled
+        alertSnoozeDurationMins = Int(pumpManager.state.alertSnoozeDuration.minutes)
     }
 
     func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
@@ -17,10 +25,14 @@ class TandemKitAlertSettingsViewModel: ObservableObject {
 
     func setAlertSnooze(enabled: Bool, durationMins: Int) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
+            guard let self else {
+                return
+            }
+
+            self.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
             DispatchQueue.main.async {
-                self?.alertSnoozeEnabled = enabled
-                self?.alertSnoozeDurationMins = durationMins
+                self.alertSnoozeEnabled = enabled
+                self.alertSnoozeDurationMins = durationMins
             }
         }
     }

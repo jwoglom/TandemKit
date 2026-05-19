@@ -2763,6 +2763,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            var managerState = lockedState.value
+            managerState.alertSnoozeEnabled = enabled
+            managerState.alertSnoozeDuration = TimeInterval(minutes: Double(durationMins))
+            lockedState.value = managerState
+            notifyDelegateStateUpdated()
+
             telemetryLogger.info("Alert snooze set: enabled=\(enabled), duration=\(durationMins)m")
         } catch {
             telemetryLogger.error("Failed to set alert snooze: \(error.localizedDescription)")

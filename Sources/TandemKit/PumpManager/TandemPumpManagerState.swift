@@ -179,6 +179,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
     public var controlIQTotalDailyInsulin: Int?
     public var lastControlIQUpdate: Date?
 
+    // Alert snooze settings
+    public var alertSnoozeEnabled: Bool
+    public var alertSnoozeDuration: TimeInterval
+
     // Temp rate (additional detail beyond existing basal state)
     public var tempRatePercentage: Int?
     public var tempRateAbsolute: Double?
@@ -248,6 +252,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateDuration: Double? = nil,
         tempRateStart: Date? = nil,
         tempRateSyncIdentifier: String? = nil,
+        alertSnoozeEnabled: Bool? = nil,
+        alertSnoozeDuration: TimeInterval? = nil,
         currentBasalRate: Double? = nil,
         lastBasalRateUpdate: Date? = nil,
         basalStatusIcon: HomeScreenBasalStatus? = nil,
@@ -304,6 +310,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         self.tempRateStart = tempRateStart
         self.tempRateDuration = tempRateDuration
         self.tempRateSyncIdentifier = tempRateSyncIdentifier
+        self.alertSnoozeEnabled = alertSnoozeEnabled ?? false
+        self.alertSnoozeDuration = alertSnoozeDuration ?? .minutes(10)
         currentProfileBaseBasalRate = currentBasalRate
         lastProfileBasalRateUpdate = lastBasalRateUpdate
         self.basalStatusIcon = basalStatusIcon
@@ -335,6 +343,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         tempRateStart = rawValue["tempRateStart"] as? Date
         tempRateDuration = rawValue["tempRateDuration"] as? Double
         tempRateSyncIdentifier = rawValue["tempRateSyncIdentifier"] as? String
+        alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
+        alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
         currentProfileBaseBasalRate = rawValue["currentProfileBaseBasalRate"] as? Double
         notificationCount = rawValue["notificationCount"] as? Int
         lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
@@ -547,6 +557,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable, CustomDebugSt
         raw["tempRateStart"] = tempRateStart
         raw["tempRateDuration"] = tempRateDuration
         raw["tempRateSyncIdentifier"] = tempRateSyncIdentifier
+        raw["alertSnoozeEnabled"] = alertSnoozeEnabled
+        raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["currentProfileBaseBasalRate"] = currentProfileBaseBasalRate
         raw["lastProfileBasalRateUpdate"] = lastProfileBasalRateUpdate?.timeIntervalSinceReferenceDate
         raw["basalStatusIcon"] = basalStatusIcon?.rawValue
