@@ -218,7 +218,6 @@ struct TandemKitSettingsView: View {
 
                 HStack(alignment: .firstTextBaseline) {
                     deliveryStatus
-                        .frame(maxWidth: .infinity)
                     if viewModel.isSuspended != true {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
@@ -230,7 +229,6 @@ struct TandemKitSettingsView: View {
                         Spacer()
                     }
                     reservoirStatus
-                        .frame(maxWidth: .infinity)
                 }
                 .padding(.bottom, 5)
                 .alert(item: $activeAlert) { alertType in

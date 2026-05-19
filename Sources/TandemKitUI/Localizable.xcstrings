@@ -1664,6 +1664,9 @@
         }
       }
     },
+    "Insulin Suspended" : {
+
+    },
     "Insulin type" : {
       "comment" : "Label for button to view insulin type of pump",
       "localizations" : {

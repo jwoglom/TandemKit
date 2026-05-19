@@ -4,7 +4,7 @@ import SwiftUI
 struct TandemKitChangeCartridgeView: View {
     @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitChangeCartridgeViewModel
-    
+
     @State private var didLoad = false
     @State private var actionSheet: CartridgeActionSheet?
 
@@ -548,7 +548,7 @@ struct TandemKitChangeCartridgeView: View {
     }
 }
 
-enum CartridgeActionSheet : Identifiable {
+enum CartridgeActionSheet: Identifiable {
     case cancel
     case suspend
     var id: Self { self }
