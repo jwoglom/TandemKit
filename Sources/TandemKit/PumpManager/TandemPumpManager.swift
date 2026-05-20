@@ -45,7 +45,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var onboardingSupportedMaximumBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
     private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
-    public let lockedState: Locked<TandemPumpManagerState>
+    private var oldState: TandemPumpManagerState
+    public var state: TandemPumpManagerState
     private let transportLock = Locked<PumpMessageTransport?>(nil)
     public let tandemPump: TandemPump
     private let log = TandemLogger(category: "TandemPumpManager")
@@ -59,7 +60,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
     private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
     private let inScanningMode = Locked<Bool>(false)
-    private let lockedStatus: Locked<PumpManagerStatus>
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
@@ -68,7 +68,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let sessionBootstrapInProgress = Locked<Bool>(false)
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     private let activeBolus = Locked<ActiveBolus?>(nil)
-    private let lockedReservoirValue: Locked<ReservoirValue?>
     private var bolusProgressReport: TandemDoseProgressReporter?
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
@@ -108,7 +107,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         // Set the timeSinceReset closure to provide the value from pump state
         PumpStateSupplier.pumpTimeSinceReset = { [weak self] in
-            self?.lockedState.value.pumpState?.timeSinceReset ?? 0
+            self?.state.pumpState?.timeSinceReset ?? 0
         }
     }
 
@@ -119,8 +118,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func clearStalePairingArtifactsIfNeeded() {
-        var currentState = lockedState.value
-        guard var pumpState = currentState.pumpState,
+        guard var pumpState = state.pumpState,
               pumpState.derivedSecret != nil || pumpState.serverNonce != nil || pumpState.timeSinceReset != nil
         else {
             // Still clear the global supplier so transports stop signing with old keys.
@@ -132,45 +130,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         pumpState.derivedSecret = nil
         pumpState.serverNonce = nil
         pumpState.timeSinceReset = nil
-        currentState.pumpState = pumpState
-        lockedState.value = currentState
-        pumpComm.syncPumpState(currentState.pumpState)
+        state.pumpState = pumpState
+        pumpComm.syncPumpState(state.pumpState)
         updatePairingArtifacts(with: pumpState)
-    }
-
-    private func resetManagerStateAfterDeactivation() {
-        telemetryLogger.debug("Resetting stored pump state after deactivation")
-        let now = Date()
-        updateStatus { status in
-            status.pumpBatteryChargeRemaining = nil
-            status.bolusState = .noBolus
-            status.basalDeliveryState = .suspended(now)
-            status.deliveryIsUncertain = true
-        }
-
-        lockedReservoirValue.value = nil
-        activeBolus.value = nil
-
-        var managerState = lockedState.value
-        managerState.pumpState = nil
-        managerState.lastReconciliation = nil
-        managerState.lastReservoirReading = nil
-        managerState.lastBatteryReading = nil
-        managerState.lastBasalStatusDate = nil
-        managerState.latestInsulinOnBoard = nil
-        managerState.basalRateSchedule = nil
-        lockedState.value = managerState
-
-        needsSessionInitialization.value = false
-
-        PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
-        PumpStateSupplier.pumpTimeSinceReset = { 0 }
-
-        let refreshedPumpComm = PumpComm(pumpState: nil, retryPolicy: pumpComm.retryPolicy)
-        refreshedPumpComm.delegate = self
-        tandemPump.pumpComm = refreshedPumpComm
-
-        notifyPumpManagerDelegateDidUpdateState()
     }
 
     public var delegateQueue: DispatchQueue! {
@@ -196,12 +158,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         if let activeTransport = transport {
             telemetryLogger.debug("Transport available – checking authentication before telemetry")
-            updateStatus { status in
-                status.deliveryIsUncertain = false
-            }
 
             // Only trigger telemetry if we're already authenticated
-            if let pumpState = lockedState.value.pumpState,
+            if let pumpState = state.pumpState,
                pumpState.derivedSecret != nil,
                pumpState.serverNonce != nil
             {
@@ -211,10 +170,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
         } else {
             telemetryLogger.debug("Transport cleared – telemetry will pause until reconnect")
-            updateStatus { status in
-                status.deliveryIsUncertain = true
-            }
-            needsSessionInitialization.value = lockedState.value.pumpState?.valid == true
+            needsSessionInitialization.value = state.pumpState?.valid == true
         }
     }
 
@@ -270,7 +226,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func reauthenticateIfNeeded(on transport: PumpMessageTransport) throws {
-        guard let pumpState = lockedState.value.pumpState,
+        guard let pumpState = state.pumpState,
               let derivedSecret = pumpState.derivedSecret,
               let peripheralUuid = pumpState.peripheralUuid
         else {
@@ -301,11 +257,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func setPumpCommForTesting(_ pumpComm: PumpComm) {
-        pumpComm.delegate = self
-        tandemPump.pumpComm = pumpComm
-    }
-
     private enum ResponseSource {
         case telemetry
         case notification
@@ -329,41 +280,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private static func makeDefaultStatus() -> PumpManagerStatus {
-        PumpManagerStatus(
+    private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
+        return PumpManagerStatus(
             timeZone: TimeZone.current,
-            device: HKDevice(
-                name: "TandemPump",
-                manufacturer: "Tandem",
-                model: "Mobi",
-                hardwareVersion: nil as String?,
-                firmwareVersion: nil as String?,
-                softwareVersion: nil as String?,
-                localIdentifier: nil as String?,
-                udiDeviceIdentifier: nil as String?
-            ),
-            pumpBatteryChargeRemaining: nil,
-            basalDeliveryState: .active(Date()),
-            bolusState: .noBolus,
-            insulinType: nil,
+            device: state.deviceInfo,
+            pumpBatteryChargeRemaining: state.lastBatteryReading?.chargeRemaining,
+            basalDeliveryState: state.basalDeliveryState,
+            bolusState: state.bolusState,
+            insulinType: state.insulinType,
             deliveryIsUncertain: false
         )
     }
 
-    private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
-        var status = makeDefaultStatus()
-        // TODO(jwoglom): add hardware/firmware/software versions from hardwareinforequest
-        status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
-        status.bolusState = state.bolusState
-        status.deliveryIsUncertain = state.deliveryIsUncertain
-        status.pumpBatteryChargeRemaining = state.lastBatteryReading?.chargeRemaining
-        return status
-    }
-
     public init(state: TandemPumpManagerState) {
-        lockedState = Locked(state)
-        lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedReservoirValue = Locked(state.lastReservoirReading)
+        self.state = state
+        oldState = TandemPumpManagerState(rawValue: state.rawValue)
         tandemPump = TandemPump(pumpState: state.pumpState)
         needsSessionInitialization.value = state.pumpState?.valid == true
 
@@ -389,65 +320,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
-    public required init?(rawState: RawStateValue) {
-        guard let state = TandemPumpManagerState(rawValue: rawState) else {
-            return nil
-        }
-
-        lockedState = Locked(state)
-        lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedReservoirValue = Locked(state.lastReservoirReading)
-        tandemPump = TandemPump(pumpState: state.pumpState)
-        needsSessionInitialization.value = state.pumpState?.valid == true
-
-        tandemPump.delegate = self
-        pumpComm.delegate = self
-        updatePairingArtifacts(with: state.pumpState)
-        tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
-        tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
-        configureStateSuppliers()
-
-        log.debug("Initialized TandemPumpManager: state=\(state)")
-
-        if state.pumpState?.valid == true {
-            // start connection
-            tandemPump.startScanning()
-        }
-
-        let nc = NotificationCenter.default
-        nc.addObserver(
-            self,
-            selector: #selector(appMovedToBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        nc.addObserver(
-            self,
-            selector: #selector(appMovedToForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+    public required convenience init?(rawState: RawStateValue) {
+        self.init(state: TandemPumpManagerState(rawValue: rawState))
     }
 
     public var rawState: RawStateValue {
-        lockedState.value.rawValue
+        state.rawValue
     }
 
-    public var state: TandemPumpManagerState {
-        lockedState.value
+    public var status: PumpManagerStatus {
+        TandemPumpManager.makeStatus(from: state)
     }
 
     public var debugDescription: String {
-        "TandemPumpManager(state: \(lockedState.value))"
+        "TandemPumpManager(state: \(state))"
     }
 
-    // TODO(jwoglom): replace with connectedAndPaired?
     public var isOnboarded: Bool {
-        lockedState.value.pumpState != nil
+        state.pumpState != nil
     }
 
     private var hasPairedPumpState: Bool {
-        lockedState.value.pumpState?.valid == true
+        state.pumpState?.valid == true
     }
 
     public var connectedAndPaired: Bool {
@@ -459,7 +353,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public var pairedTransport: PumpMessageTransport? {
         guard let transport = transportLock.value,
-              lockedState.value.pumpState?.valid == true,
+              state.pumpState?.valid == true,
               needsSessionInitialization.value == false
         else {
             return nil
@@ -510,7 +404,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var pumpRecordsBasalProfileStartEvents: Bool {
-        false // TODO(jwoglom): TBD
+        false
     }
 
     public var pumpReservoirCapacity: Double {
@@ -527,31 +421,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var lastSync: Date? {
-        lockedState.value.lastReconciliation
-    }
-
-    public var status: PumpManagerStatus {
-        lockedStatus.value
-    }
-
-    public var pumpStatus: PumpManagerStatus {
-        lockedStatus.value
+        state.lastReconciliation
     }
 
     public var reservoirLevel: ReservoirValue? {
-        lockedReservoirValue.value
+        state.lastReservoirReading
     }
 
     public var insulinDeliveryActionsEnabled: Bool {
-        lockedState.value.insulinDeliveryActionsEnabled
+        state.insulinDeliveryActionsEnabled
     }
 
     public var connectionSharingEnabled: Bool {
-        lockedState.value.connectionSharingEnabled
+        state.connectionSharingEnabled
     }
 
     public var autoAcknowledgeBasalAlerts: Bool {
-        lockedState.value.autoAcknowledgeBasalAlerts
+        state.autoAcknowledgeBasalAlerts
     }
 
     /// The shared notification bundle that aggregates all notification status responses.
@@ -565,48 +451,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func updateNotificationBundle(_ bundle: NotificationBundle) {
         lockedNotificationBundle.value = bundle
 
-        var managerState = lockedState.value
+        var managerState = state
         managerState.notificationCount = bundle.getNotificationCount()
         managerState.lastNotificationUpdate = Date()
-        lockedState.value = managerState
+        state = managerState
 
         notifyDelegateStateUpdated()
     }
 
     private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
         let percent = Double(response.batteryPercent) / 100.0
-        let timestamp = Date()
+        let timestamp = Date.now
 
         logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
 
-        updateStatus { status in
-            status.pumpBatteryChargeRemaining = percent
-        }
-
-        var managerState = lockedState.value
-        managerState.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
-        lockedState.value = managerState
-
+        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
         notifyDelegateStateUpdated()
     }
 
     private func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
-        // integer units
         let units = Double(response.currentInsulinAmount)
-        let timestamp = Date()
+        logger(for: source).debug("[\(source.label)] Reservoir updated: \(String(format: "%.2f", units)) U remaining")
+        
+        let timestamp = Date.now
         let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
-        lockedReservoirValue.value = reservoirValue
-
-        logger(for: source).debug("[\(source.label)] Reservoir updated: \(String(format: "%.2f", units)) U remaining")
-
-        var managerState = lockedState.value
-        managerState.lastReconciliation = timestamp
-        managerState.lastReservoirReading = reservoirValue
-        lockedState.value = managerState
-
-        notifyDelegateOfReservoir(reservoirValue)
+        state.lastReconciliation = timestamp
+        state.lastReservoirReading = reservoirValue
         notifyDelegateStateUpdated()
+        
+        notifyDelegateOfReservoir(reservoirValue)
     }
 
     private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
@@ -635,7 +509,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             status.basalDeliveryState = newBasalState
         }
 
-        var managerState = lockedState.value
+        var managerState = state
         managerState.basalDeliveryState = newBasalState
         managerState.lastBasalStatusDate = timestamp
 
@@ -645,19 +519,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             managerState.basalStatusIcon = nil
         }
 
-        if let bolusStatusIcon = response.bolusStatusIcon {
-            managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus.fromBolusStatusIcon(bolusStatusIcon)
-        } else {
-            managerState.bolusStatusIcon = nil
-        }
-
-        if let cgmAlertIcon = response.cgmAlertIcon {
-            managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert.fromCGMAlertIcon(cgmAlertIcon)
-        } else {
-            managerState.cgmAlertIcon = nil
-        }
-
-        lockedState.value = managerState
+        state = managerState
 
         notifyDelegateStateUpdated()
     }
@@ -668,25 +530,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
             )
 
-        var managerState = lockedState.value
-        managerState.controlIQEnabled = response.closedLoopEnabled
+        state.controlIQEnabled = response.closedLoopEnabled
 
         // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
         // sync useControlIQ so dosing guards activate and Trio disables closed loop
-        if response.closedLoopEnabled, !managerState.useControlIQ {
+        if response.closedLoopEnabled, !state.useControlIQ {
             log.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
-            managerState.useControlIQ = true
+            state.useControlIQ = true
         }
 
         if let userMode = response.currentUserModeType {
-            managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
+            state.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
         } else {
-            managerState.controlIQUserMode = nil
+            state.controlIQUserMode = nil
         }
-        managerState.controlIQWeight = response.weight
-        managerState.controlIQTotalDailyInsulin = response.totalDailyInsulin
-        managerState.lastControlIQUpdate = Date()
-        lockedState.value = managerState
+
+        state.controlIQWeight = response.weight
+        state.controlIQTotalDailyInsulin = response.totalDailyInsulin
+        state.lastControlIQUpdate = Date.now
 
         notifyDelegateStateUpdated()
     }
@@ -698,13 +559,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         logger(for: source).debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
 
-        var managerState = lockedState.value
-        if var pumpState = managerState.pumpState {
+        if var pumpState = state.pumpState {
             pumpState.timeSinceReset = timeSinceReset
-            managerState.pumpState = pumpState
-            managerState.currentPumpTime = currentPumpTime
-            managerState.lastPumpTimeCheckDate = checkedAt
-            lockedState.value = managerState
+            state.pumpState = pumpState
+            state.currentPumpTime = currentPumpTime
+            state.lastPumpTimeCheckDate = checkedAt
             pumpComm.syncPumpState(pumpState)
             needsSessionInitialization.value = false
 
@@ -718,19 +577,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
         logger(for: source).debug("[\(source.label)] Pump Global updated -> \(response.description)")
 
-        var managerState = lockedState.value
-        managerState.quickBolusAnnun = response.quickBolusAnnouncement
-        managerState.reminderAnnun = response.reminderAnnouncement
-        managerState.alarmAnnun = response.alarmAnnouncement
-        managerState.alertAnnun = response.alertAnnouncement
-        managerState.generalAnnun = response.generalAnnouncement
-        managerState.quickBolusEnabled = response.isQuickBolusEnabled()
-        managerState.quickBolusEntryType = response.quickBolusEntryType
-        managerState.quickBolusIncrementUnits = response.quickBolusIncrementUnits
-        managerState.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
-        managerState.quickBolusStatus = response.quickBolusStatus
-        lockedState.value = managerState
-
+        state.quickBolusAnnun = response.quickBolusAnnouncement
+        state.reminderAnnun = response.reminderAnnouncement
+        state.alarmAnnun = response.alarmAnnouncement
+        state.alertAnnun = response.alertAnnouncement
+        state.generalAnnun = response.generalAnnouncement
+        state.quickBolusEnabled = response.isQuickBolusEnabled()
+        state.quickBolusEntryType = response.quickBolusEntryType
+        state.quickBolusIncrementUnits = response.quickBolusIncrementUnits
+        state.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
+        state.quickBolusStatus = response.quickBolusStatus
         notifyDelegateStateUpdated()
     }
 
@@ -742,9 +598,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         // Normal CurrentBolusStatus fetch
         if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
             return
         }
 
@@ -753,10 +606,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         if response.status == .delivering {
-            if status.bolusState == .initiating, let bolusState = activeBolus.value {
-                updateStatus { status in
-                    status.bolusState = .inProgress(bolusState.dose.toDoseEntry(endDate: nil))
-                }
+            if state.bolusState == .initiating, let activeBolus = activeBolus.value {
+                state.bolusState = .inProgress(activeBolus.dose.toDoseEntry())
+                self.notifyDelegateStateUpdated()
             }
 
             progressReport.notify()
@@ -767,48 +619,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Bolus is finished
             telemetryScheduler.cancelAll()
 
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-
             // Query the pump for actual delivered volume rather than assuming full delivery
             var actualDelivered: Double?
             if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
                 actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
             }
 
-            var events = [progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered)]
+            var events = self.getActivePumpEvents()
+            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
+            
             bolusProgressReport = nil
             activeBolus.value = nil
 
-            if let tempRateAbsolute = state.tempRateAbsolute, let tempRateDuration = state.tempRateDuration,
-               let tempRateStart = state.tempRateStart
-            {
-                events.append(
-                    NewPumpEvent.tempBasal(
-                        dose: DoseEntry.tempBasal(
-                            absoluteUnit: tempRateAbsolute,
-                            duration: tempRateDuration,
-                            insulinType: state.insulinType,
-                            startDate: tempRateStart
-                        ),
-                        date: tempRateStart
-                    )
-                )
-            }
-
-            recordReconciliation(at: Date.now)
-
-            pumpDelegate.notify { delegate in
-                guard let delegate = delegate else { return }
-                delegate.pumpManager(
-                    self,
-                    hasNewPumpEvents: events,
-                    lastReconciliation: self.lockedState.value.lastReconciliation,
-                    replacePendingEvents: true,
-                    completion: { _ in }
-                )
-            }
+            state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
         }
     }
 
@@ -825,7 +650,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 status.basalDeliveryState = .active(now)
             }
 
-            var managerState = lockedState.value
+            var managerState = state
             managerState.basalDeliveryState = .active(now)
             managerState.lastBasalStatusDate = now
             managerState.tempRateAbsolute = nil
@@ -833,7 +658,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             managerState.tempRateStart = nil
             managerState.tempRateDuration = nil
             managerState.tempRateSyncIdentifier = nil
-            lockedState.value = managerState
+            state = managerState
 
         } else if response.active, state.tempRateAbsolute == nil {
             let now = Date.now
@@ -845,7 +670,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: response.startTime
             )
 
-            var managerState = lockedState.value
+            var managerState = state
             managerState.basalDeliveryState = .tempBasal(dose)
             managerState.lastBasalStatusDate = now
             managerState.tempRateAbsolute = absolute
@@ -853,7 +678,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             managerState.tempRateStart = response.startTime
             managerState.tempRateDuration = Double(response.duration)
             managerState.tempRateSyncIdentifier = nil // No history id available...
-            lockedState.value = managerState
+            state = managerState
         }
     }
 
@@ -946,30 +771,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     private func fetchDeliveryLimits(transport: PumpMessageTransport) {
         do {
-            let (basalResponse, bolusResponse) = try pumpComm
-                .performOnCommandQueue { () -> (BasalLimitSettingsResponse, GlobalMaxBolusSettingsResponse) in
-                    let basalResponse: BasalLimitSettingsResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: BasalLimitSettingsRequest(),
-                        expecting: BasalLimitSettingsResponse.self
-                    )
+            let basalResponse: BasalLimitSettingsResponse = try self.pumpComm.sendMessage(
+                transport: transport,
+                message: BasalLimitSettingsRequest(),
+                expecting: BasalLimitSettingsResponse.self
+            )
 
-                    let bolusResponse: GlobalMaxBolusSettingsResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: GlobalMaxBolusSettingsRequest(),
-                        expecting: GlobalMaxBolusSettingsResponse.self
-                    )
+            let bolusResponse: GlobalMaxBolusSettingsResponse = try self.pumpComm.sendMessage(
+                transport: transport,
+                message: GlobalMaxBolusSettingsRequest(),
+                expecting: GlobalMaxBolusSettingsResponse.self
+            )
 
-                    return (basalResponse, bolusResponse)
-                }
-
-            var managerState = lockedState.value
-            managerState.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
-            managerState.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
-            managerState.maxBolusLimitMilliunits = bolusResponse.maxBolus
-            managerState.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
-            lockedState.value = managerState
-
+            state.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
+            state.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
+            state.maxBolusLimitMilliunits = bolusResponse.maxBolus
+            state.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
             notifyDelegateStateUpdated()
         } catch {
             telemetryLogger.error("Failed to fetch delivery limits: \(error.localizedDescription)")
@@ -1102,22 +919,29 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private func notifyDelegateStateUpdated() {
-        guard let delegate = pumpManagerDelegate else { return }
-        pumpDelegate.queue.async { [weak self] in
-            guard let self = self else { return }
-            delegate.pumpManagerDidUpdateState(self)
+        let status = TandemPumpManager.makeStatus(from: self.state)
+        let oldStatus = TandemPumpManager.makeStatus(from: self.oldState)
+        
+        if let delegate = pumpManagerDelegate {
+            pumpDelegate.queue.async { [weak self] in
+                guard let self = self else { return }
+                
+                delegate.pumpManagerDidUpdateState(self)
+                delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
+            }
         }
 
-        let status = status
         for (_, statusObserver) in statusObservers.value {
             statusObserver.queue.async {
                 statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
             }
         }
+        
+        self.oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
     private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
-        if let lastSequence = lockedState.value.lastHistorySequenceNum {
+        if let lastSequence = state.lastHistorySequenceNum {
             return lastSequence &+ 1
         }
 
@@ -1195,175 +1019,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func updateStatus(_ update: (inout PumpManagerStatus) -> Void) {
-        let oldStatus = lockedStatus.value
-        var newStatus = oldStatus
-        update(&newStatus)
-        lockedStatus.value = newStatus
-
-        var managerState = lockedState.value
-        managerState.basalDeliveryState = newStatus.basalDeliveryState
-        managerState.bolusState = newStatus.bolusState
-        managerState.deliveryIsUncertain = newStatus.deliveryIsUncertain
-        lockedState.value = managerState
-
-        notifyStatusObservers(oldStatus: oldStatus, newStatus: newStatus)
-    }
-
     private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
         guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
         queue.async {
             delegate.pumpManager(self, didError: PumpManagerError.communication(error))
-        }
-    }
-
-    private func recordReconciliation(at date: Date) {
-        var state = lockedState.value
-        state.lastReconciliation = date
-        lockedState.value = state
-        notifyPumpManagerDelegateDidUpdateState()
-    }
-
-    func notifyPumpManagerDelegateDidUpdateState() {
-        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
-        queue.async {
-            delegate.pumpManagerDidUpdateState(self)
-        }
-    }
-
-    private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            switch result {
-            case let .success(dose):
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: [NewPumpEvent.bolus(dose: dose, units: dose.programmedUnits, date: dose.startDate)],
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: false, // Do not replace pending events while bolus is running
-                        completion: { _ in }
-                    )
-                }
-
-                completion(nil)
-            case let .failure(error):
-                completion(error)
-            }
-        }
-    }
-
-    private func completeCancelBolus(
-        _ result: PumpManagerResult<DoseEntry?>,
-        completion: @escaping (PumpManagerResult<DoseEntry?>) -> Void
-    ) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if case let .success(dose) = result, let dose = dose {
-                var events = [
-                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
-                ]
-
-                if let tempRateAbsolute = self.state.tempRateAbsolute,
-                   let tempRateDuration = self.state.tempRateDuration,
-                   let tempRateStart = self.state.tempRateStart
-                {
-                    events.append(
-                        NewPumpEvent.tempBasal(
-                            dose: DoseEntry.tempBasal(
-                                absoluteUnit: tempRateAbsolute,
-                                duration: tempRateDuration,
-                                insulinType: self.state.insulinType,
-                                startDate: tempRateStart
-                            ),
-                            date: tempRateStart
-                        )
-                    )
-                }
-
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: events,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result)
-        }
-    }
-
-    private func completeTempBasal(
-        _ result: PumpManagerResult<[NewPumpEvent]>,
-        completion: @escaping (PumpManagerError?) -> Void
-    ) {
-        guard let queue = delegateQueue else { return }
-
-        queue.async {
-            switch result {
-            case let .success(events):
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: events,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-
-                completion(nil)
-            case let .failure(error):
-                completion(error)
-            }
-        }
-    }
-
-    private func completeSuspend(_ result: (Error?, [NewPumpEvent]), completion: @escaping (Error?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if result.0 == nil, !result.1.isEmpty {
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: result.1,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result.0)
-        }
-    }
-
-    private func completeResume(_ result: (Error?, [NewPumpEvent]), completion: @escaping (Error?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if result.0 == nil, !result.1.isEmpty {
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: result.1,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result.0)
         }
     }
 
@@ -1390,9 +1049,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         if transportLock.value != nil {
             telemetryLogger.debug("connect() called while transport already available – refreshing telemetry")
-            updateStatus { status in
-                status.deliveryIsUncertain = false
-            }
             return
         }
 
@@ -1400,10 +1056,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             log.error("connect() requested before pump is paired")
             notifyPumpManagerDelegateOfError(.missingAuthenticationKey)
             return
-        }
-
-        updateStatus { status in
-            status.deliveryIsUncertain = true
         }
 
         tandemPump.startScanning()
@@ -1434,49 +1086,35 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func configureDeliveryActions(_ enabled: Bool) {
         tandemPump.configureDeliveryActions(enabled: enabled)
 
-        var state = lockedState.value
-        guard state.insulinDeliveryActionsEnabled != enabled else { return }
         state.insulinDeliveryActionsEnabled = enabled
-        lockedState.value = state
-
         notifyDelegateStateUpdated()
     }
 
     public func configureConnectionSharing(_ enabled: Bool) {
         tandemPump.configureConnectionSharing(enabled: enabled)
 
-        var state = lockedState.value
-        guard state.connectionSharingEnabled != enabled else { return }
         state.connectionSharingEnabled = enabled
-        lockedState.value = state
-
         notifyDelegateStateUpdated()
     }
 
     public func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
-        var state = lockedState.value
-        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
         state.autoAcknowledgeBasalAlerts = enabled
-        lockedState.value = state
-
-        telemetryLogger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
         notifyDelegateStateUpdated()
+        
+        telemetryLogger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
     }
 
     public func configureSilentMode(_ enabled: Bool) {
-        var state = lockedState.value
-        guard state.useSilentTones != enabled else { return }
         state.useSilentTones = enabled
-        lockedState.value = state
-
-        telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
         notifyDelegateStateUpdated()
+        
+        telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
     }
 
     // MARK: - Control-IQ / DIY Algorithm Mode
 
     private var isControlIQModeActive: Bool {
-        lockedState.value.useControlIQ
+        state.useControlIQ
     }
 
     public func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool) -> Void) {
@@ -1494,7 +1132,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             do {
                 try self.pumpComm.performOnCommandQueue {
                     // When switching to ControlIQ, cancel any active DIY temp basal first
-                    if request.enabled, self.state.tempRateAbsolute != nil {
+                    if request.enabled, self.state.basalDose.type == .tempBasal {
                         self.log.info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
                         let _: StopTempRateResponse = try self.pumpComm.sendMessage(
                             transport: transport,
@@ -1502,13 +1140,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             expecting: StopTempRateResponse.self
                         )
 
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = nil
-                        state.tempRateAbsolute = nil
-                        state.tempRateStart = nil
-                        state.tempRateDuration = nil
-                        state.tempRateSyncIdentifier = nil
-                        self.lockedState.value = state
+                        let dose = UnfinalizedDose(
+                            basalRate: self.getScheduledBasalRate(),
+                            insulinType: self.state.insulinType,
+                            startDate: Date.now
+                        )
+                        var events = self.getActivePumpEvents(endDate: dose.startDate)
+                        events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+                        
+                        self.state.basalDose = dose
+                        self.state.lastReconciliation = Date.now
+                        self.notifyDelegateStateUpdated()
+                        self.emitPumpEvents(events)
                     }
 
                     let response: ChangeControlIQSettingsResponse = try self.pumpComm.sendMessage(
@@ -1531,25 +1174,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             } catch {
                 self.log.error("[configureControlIQMode] Failed: \(error.localizedDescription)")
-                DispatchQueue.main.async { completion(false) }
+                DispatchQueue.main.async {
+                    completion(false)
+                }
                 return
             }
 
             // Pump accepted -- update local preference
-            var state = self.lockedState.value
             state.useControlIQ = request.enabled
             state.controlIQWeight = request.weightLbs
             state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
-            self.lockedState.value = state
+            self.notifyDelegateStateUpdated()
 
             self.telemetryLogger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
 
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
-            self.ensureCurrentPumpData { _ in }
-
-            self.notifyDelegateStateUpdated()
-            DispatchQueue.main.async { completion(true) }
+            self.ensureCurrentPumpData { _ in
+                DispatchQueue.main.async {
+                    completion(true)
+                }
+            }
         }
     }
 
@@ -1574,14 +1219,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchNotificationCount(transport: transport)
                 self.fetchTimeSinceReset(transport: transport)
                 self.fetchGlobalPumpSettings(transport: transport)
+                
+                state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+
+                completion?(state.lastReconciliation)
             }
         } catch {
             log.error("ensureCurrentPumpData failed: \(error)")
         }
-
-        recordReconciliation(at: Date.now)
-
-        completion?(lockedState.value.lastReconciliation)
     }
 
     public func fetchGlobalPumpSettings(transport: PumpMessageTransport) {
@@ -1654,7 +1300,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         // Auto-acknowledge basal alerts if enabled
-        if lockedState.value.autoAcknowledgeBasalAlerts {
+        if state.autoAcknowledgeBasalAlerts {
             autoAcknowledgeBasalAlertsIfNeeded(alertResponse: alertResponse, transport: transport)
         }
     }
@@ -1749,29 +1395,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
         activationType: BolusActivationType,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
+        log.info("Enacting bolus - units \(units)U")
+
         guard let transport = pairedTransport else {
-            telemetryLogger.error("[enactBolus] could not enact bolus because no paired transport")
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeBolus(.failure(.communication(error)), completion: completion)
+            log.error("[enactBolus] could not enact bolus because no paired transport")
+            completion(.communication(PumpCommError.pumpNotConnected))
             return
         }
 
         if let error = validateBolusRequest(units: units, activationType) {
-            telemetryLogger
-                .error("[enactBolus] could not validate bolus request: units=\(units) activationType=\(activationType)")
-            completeBolus(.failure(error), completion: completion)
+            log.error("[enactBolus] could not validate bolus request: units=\(units) activationType=\(activationType)")
+            completion(error)
             return
         }
 
         if isControlIQModeActive, activationType.isAutomatic {
-            log.info("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
-            completeBolus(.failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)), completion: completion)
+            log.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
+            completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
-        }
-
-        updateStatus { status in
-            status.bolusState = .initiating
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -1781,78 +1422,73 @@ public class TandemPumpManager: PumpManager, Pluggable {
             var shouldReleasePermissionOnFailure = false
 
             do {
-                let (initiateResponse, dose) = try self.pumpComm
-                    .performOnCommandQueue { () -> (InitiateBolusResponse, UnfinalizedDose) in
-                        let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: BolusPermissionRequest(),
-                            expecting: BolusPermissionResponse.self
-                        )
+                let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: BolusPermissionRequest(),
+                    expecting: BolusPermissionResponse.self
+                )
 
-                        guard permissionResponse.isPermissionGranted else {
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump rejected bolus permission request",
-                                    comment: "Message when pump disallows bolus from occurring"
-                                ),
-                                request: BolusPermissionRequest(),
-                                response: permissionResponse
-                            )
-                        }
+                guard permissionResponse.isPermissionGranted else {
+                    throw PumpCommError.errorResponse(
+                        context: String(
+                            localized: "Pump rejected bolus permission request",
+                            comment: "Message when pump disallows bolus from occurring"
+                        ),
+                        request: BolusPermissionRequest(),
+                        response: permissionResponse
+                    )
+                }
 
-                        permissionBolusId = permissionResponse.bolusId
-                        shouldReleasePermissionOnFailure = true
+                permissionBolusId = permissionResponse.bolusId
+                shouldReleasePermissionOnFailure = true
 
-                        let milliUnits = max(0, Int((units * 1000).rounded()))
-                        let totalVolume = UInt32(clamping: milliUnits)
+                let milliUnits = max(0, Int((units * 1000).rounded()))
+                let totalVolume = UInt32(clamping: milliUnits)
 
-                        let bolusRequest = InitiateBolusRequest(
-                            totalVolume: totalVolume,
-                            bolusID: permissionResponse.bolusId,
-                            bolusTypeBitmask: BolusType.toBitmask([.food2]),
-                            foodVolume: totalVolume,
-                            correctionVolume: 0,
-                            bolusCarbs: 0,
-                            bolusBG: 0,
-                            bolusIOB: 0
-                        )
+                let bolusRequest = InitiateBolusRequest(
+                    totalVolume: totalVolume,
+                    bolusID: permissionResponse.bolusId,
+                    bolusTypeBitmask: BolusType.toBitmask([.food2]),
+                    foodVolume: totalVolume,
+                    correctionVolume: 0,
+                    bolusCarbs: 0,
+                    bolusBG: 0,
+                    bolusIOB: 0
+                )
 
-                        self.telemetryLogger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
+                self.telemetryLogger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
 
-                        let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: bolusRequest,
-                            expecting: InitiateBolusResponse.self
-                        )
+                let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: bolusRequest,
+                    expecting: InitiateBolusResponse.self
+                )
 
-                        guard initiateResponse.wasBolusInitiated else {
-                            self.telemetryLogger.info("[enactBolus] bolus not initiated")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump rejected bolus initiate request",
-                                    comment: "Message when pump disallows bolus from occurring"
-                                ),
-                                request: bolusRequest,
-                                response: initiateResponse
-                            )
-                        }
+                guard initiateResponse.wasBolusInitiated else {
+                    self.telemetryLogger.info("[enactBolus] bolus not initiated")
+                    throw PumpCommError.errorResponse(
+                        context: String(
+                            localized: "Pump rejected bolus initiate request",
+                            comment: "Message when pump disallows bolus from occurring"
+                        ),
+                        request: bolusRequest,
+                        response: initiateResponse
+                    )
+                }
 
-                        self.telemetryLogger.info("[enactBolus] bolus started")
+                self.telemetryLogger.info("[enactBolus] bolus started")
 
-                        shouldReleasePermissionOnFailure = false
+                shouldReleasePermissionOnFailure = false
 
-                        let dose = UnfinalizedDose(
-                            units: units,
-                            duration: self.estimatedDuration(toBolus: units) + .seconds(5),
-                            // 5s needed before bolus enacting is started
-                            activationType: activationType,
-                            insulinType: self.lockedState.value.insulinType
-                        )
+                let dose = UnfinalizedDose(
+                    units: units,
+                    // 5s needed before bolus enacting is started
+                    duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                    activationType: activationType,
+                    insulinType: self.state.insulinType
+                )
 
-                        return (initiateResponse, dose)
-                    }
-
-                let doseEntry = dose.toDoseEntry(endDate: nil)
+                let doseEntry = dose.toDoseEntry()
                 bolusProgressReport = TandemDoseProgressReporter(
                     pumpManager: self,
                     dose: doseEntry,
@@ -1868,45 +1504,35 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     dose: dose
                 )
 
-                self.recordReconciliation(at: Date.now)
-                self.completeBolus(.success(doseEntry), completion: completion)
+                state.bolusState = .initiating
+                state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents([NewPumpEvent.bolus(dose: doseEntry, units: units)], replacePendingEvents: false)
+                
+                completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
                     self.releaseBolusPermission(transport: transport, bolusId: bolusId)
                 }
-                self.activeBolus.value = nil
-                self.updateStatus { status in
-                    status.bolusState = .noBolus
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeBolus(.failure(.communication(pumpError)), completion: completion)
+                
+                completion(.communication(pumpError))
             }
         }
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
-        updateStatus { status in
-            status.bolusState = .canceling
-        }
+        log.info("Cancelling bolus...")
 
         guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(.communication(error)), completion: completion)
+            log.error("Pump not connected...")
+            completion(.failure(.communication(PumpCommError.pumpNotConnected)))
             return
         }
 
         guard let active = activeBolus.value else {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            let error = PumpCommError.noActiveBolus
-            notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(.communication(error)), completion: completion)
+            log.error("No active bolus...")
+            completion(.failure(.communication(PumpCommError.noActiveBolus)))
             return
         }
 
@@ -1922,6 +1548,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.wasCancelled else {
+                    log.error("Failed to cancel bolus")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to cancel bolus",
@@ -1932,31 +1559,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
                 }
 
-                self.updateStatus { status in
-                    status.bolusState = .noBolus
-                }
-
                 // Allow the Mobi to store the bolus in storage
                 Thread.sleep(forTimeInterval: .seconds(2))
 
                 // Query the pump for the actual delivered volume before clearing state
-                let deliveredVolume = self.queryLastBolusDeliveredVolume(transport: transport, bolusId: active.id)
-                let canceledDose = active.dose.toDoseEntry(endDate: Date.now, cancelledUnits: deliveredVolume)
+                active.dose.deliveredUnits = self.queryLastBolusDeliveredVolume(transport: transport, bolusId: active.id) ?? 0
+                let canceledDose = active.dose.toDoseEntry(endDate: Date.now)
 
                 // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
                 self.telemetryScheduler.cancelAll()
                 self.bolusProgressReport = nil
                 self.activeBolus.value = nil
+                
+                var events = getActivePumpEvents()
+                events.append(NewPumpEvent.bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate))
 
-                self.recordReconciliation(at: Date.now)
-                self.completeCancelBolus(.success(canceledDose), completion: completion)
+                self.state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.bolusState = .inProgress(active.dose.toDoseEntry(endDate: nil))
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeCancelBolus(.failure(.communication(pumpError)), completion: completion)
+                completion(.failure(.communication(pumpError)))
             }
         }
     }
@@ -1966,203 +1589,136 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
-        if isControlIQModeActive {
-            log.info("[enactTempBasal] Blocked: Control-IQ mode is active")
-            completeTempBasal(
-                .failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)),
-                completion: completion
-            )
+        log.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
+        guard !isControlIQModeActive else {
+            log.warning("[enactTempBasal] Blocked: Control-IQ mode is active")
+            completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
 
         guard let transport = pairedTransport else {
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeTempBasal(.failure(.communication(error)), completion: completion)
+            log.error("Pump not connected...")
+            completion(.communication(PumpCommError.pumpNotConnected))
             return
         }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            var pumpEvents: [NewPumpEvent] = []
             do {
-                try self.pumpComm.performOnCommandQueue {
-                    // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
-                    let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
+                let baselineRate = self.getScheduledBasalRate()
+                guard baselineRate > 0 else {
+                    self.log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+                    throw PumpCommError.invalidScheduledBasalRate
+                }
+                
+                // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
+                let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: TempRateRequest(),
+                    expecting: TempRateResponse.self
+                )
+
+                if currentTempRate.active {
+                    let response: StopTempRateResponse = try self.pumpComm.sendMessage(
                         transport: transport,
-                        message: TempRateRequest(),
-                        expecting: TempRateResponse.self
+                        message: StopTempRateRequest(),
+                        expecting: StopTempRateResponse.self
                     )
 
-                    self.log
-                        .info("Pump temp basal state: active=\(currentTempRate.active), percent=\(currentTempRate.percentage)%")
-
-                    // Cancel any active temp basal on the pump (whether we know about it or not)
-                    if currentTempRate.active {
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .cancelingTempBasal
-                        }
-
-                        let response: StopTempRateResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: StopTempRateRequest(),
-                            expecting: StopTempRateResponse.self
-                        )
-
-                        guard response.isStatusOK else {
-                            self.log.error("Failed to cancel temp basal - status: \(response.status)")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump failed to cancel temp basal",
-                                    comment: "Message when pump rejects request to stop temp rate"
-                                ),
-                                request: StopTempRateRequest(),
-                                response: response
-                            )
-                        }
-
-                        // Create cancellation event using either local state or pump-reported values
-                        let tempRateAbsolute = self.state
-                            .tempRateAbsolute ?? (self.getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
-                        let tempRateStart = self.state.tempRateStart ?? currentTempRate.startTime
-                        let cancelledDose = DoseEntry.tempBasal(
-                            absoluteUnit: tempRateAbsolute,
-                            duration: 0, // Ignored when a dose is finished
-                            insulinType: self.lockedState.value.insulinType,
-                            startDate: tempRateStart,
-                            endDate: Date.now
-                        )
-                        pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
-
-                        // Clear local temp basal state
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = nil
-                        state.tempRateAbsolute = nil
-                        state.tempRateStart = nil
-                        state.tempRateDuration = nil
-                        state.tempRateSyncIdentifier = nil
-                        self.lockedState.value = state
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-                    }
-
-                    let baselineRate = self.getScheduledBasalRate()
-                    guard baselineRate > 0 else {
-                        self.log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
-                        throw PumpCommError.invalidScheduledBasalRate
-                    }
-
-                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-                    let absoluteRate = self
-                        .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
-
-                    if duration <= 0 || percent == 100 {
-                        // Loop wants us to only cancel the temp basal
-                        let basalDose = DoseEntry.basal(
-                            rate: self.getScheduledBasalRate(),
-                            insulinType: self.lockedState.value.insulinType
-                        )
-                        pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                    } else {
-                        // Enact new temp basal
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .initiatingTempBasal
-                        }
-
-                        if absoluteRate < unitsPerHour {
-                            self.log
-                                .warning(
-                                    "Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr"
-                                )
-                        }
-
-                        self.log
-                            .info(
-                                "ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)"
-                            )
-                        let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
-                        let response: SetTempRateResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: request,
-                            expecting: SetTempRateResponse.self
-                        )
-
-                        if !response.isStatusOK {
-                            self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump failed to cancel temp basal",
-                                    comment: "Message when pump rejects request to stop temp rate"
-                                ),
-                                request: request,
-                                response: response
-                            )
-                        }
-
-                        let startTime = Date.now
-                        let dose = DoseEntry.tempBasal(
-                            absoluteUnit: absoluteRate,
-                            duration: duration,
-                            insulinType: self.lockedState.value.insulinType,
-                            startDate: startTime
-                        )
-                        pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
-
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = percent
-                        state.tempRateAbsolute = absoluteRate
-                        state.tempRateStart = startTime
-                        state.tempRateDuration = duration
-                        state.tempRateSyncIdentifier = dose.syncIdentifier
-                        self.lockedState.value = state
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .tempBasal(dose)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                    }
-                } // end performOnCommandQueue
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-
-                if !pumpEvents.isEmpty {
-                    // Ensure all events are commited to Loopkit
-                    self.pumpDelegate.notify { delegate in
-                        guard let delegate = delegate else { return }
-                        delegate.pumpManager(
-                            self,
-                            hasNewPumpEvents: pumpEvents,
-                            lastReconciliation: self.lockedState.value.lastReconciliation,
-                            replacePendingEvents: true,
-                            completion: { _ in }
+                    guard response.isStatusOK else {
+                        self.log.error("Failed to cancel temp basal - status: \(response.status)")
+                        throw PumpCommError.errorResponse(
+                            context: String(
+                                localized: "Pump failed to cancel temp basal",
+                                comment: "Message when pump rejects request to stop temp rate"
+                            ),
+                            request: StopTempRateRequest(),
+                            response: response
                         )
                     }
+                    
+                    log.info("Canceled running temp basal!")
                 }
 
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeTempBasal(.failure(.communication(pumpError)), completion: completion)
+                let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+                let absoluteRate = self
+                    .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
+
+                if duration < .ulpOfOne || percent == 100 {
+                    // We only needed to cancel any current temp basal
+                    let dose = UnfinalizedDose(
+                        basalRate: baselineRate,
+                        insulinType: state.insulinType,
+                        startDate: Date.now
+                    )
+                    var events = self.getActivePumpEvents(endDate: dose.startDate)
+                    events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+                    
+                    state.basalDose = dose
+                    state.lastReconciliation = Date.now
+                    self.notifyDelegateStateUpdated()
+                    self.emitPumpEvents(events)
+                    completion(nil)
+                    return
+                }
+
+                if absoluteRate < unitsPerHour {
+                    self.log
+                        .warning(
+                            "Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr"
+                        )
+                }
+
+                let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
+                let response: SetTempRateResponse = try self.pumpComm.sendMessage(
+                    transport: transport,
+                    message: request,
+                    expecting: SetTempRateResponse.self
+                )
+
+                if !response.isStatusOK {
+                    self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
+                    throw PumpCommError.errorResponse(
+                        context: String(
+                            localized: "Pump failed to cancel temp basal",
+                            comment: "Message when pump rejects request to stop temp rate"
+                        ),
+                        request: request,
+                        response: response
+                    )
+                }
+
+                let dose = UnfinalizedDose(
+                    tempRate: absoluteRate,
+                    duration: duration,
+                    automatic: true,
+                    insulinType: state.insulinType,
+                )
+                var events = self.getActivePumpEvents(endDate: dose.startDate)
+                events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(), date: dose.startDate))
+
+                state.basalDose = dose
+                state.lastReconciliation = dose.startDate
+
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+                
+                log.info("Temp basal enacted!")
+                completion(nil)
+            } catch {
+                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
+                completion(.communication(pumpError))
             }
         }
     }
 
     private var currentSettings: TandemPumpManagerSettings {
-        lockedState.value.settings
+        state.settings
     }
 
     private var latestInsulinOnBoard: Double? {
-        lockedState.value.latestInsulinOnBoard
+        state.latestInsulinOnBoard
     }
 
     private func validateBolusRequest(units: Double, _: BolusActivationType) -> PumpManagerError? {
@@ -2193,18 +1749,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - Delivery Control Methods
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        let previousStatus = lockedStatus.value
-        updateStatus { status in
-            status.basalDeliveryState = .suspending
-        }
+        log.info("Suspend Insulin Delivery...")
 
         guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.basalDeliveryState = previousStatus.basalDeliveryState
-            }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeSuspend((error, []), completion: completion)
+            log.error("Pump not connected...")
+            completion(PumpCommError.pumpNotConnected)
             return
         }
 
@@ -2232,6 +1781,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
+                    log.error("Pump rejected suspend delivery...")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to suspend delivery",
@@ -2242,61 +1792,31 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
                 }
 
-                var doses = [
-                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now))
-                ]
+                let suspendDose = UnfinalizedDose(suspendStartTime: Date.now)
+                var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
+                events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
-                if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
-                    let tempBasalDose = DoseEntry.tempBasal(
-                        absoluteUnit: tempRateAbsolute,
-                        duration: 0,
-                        insulinType: lockedState.value.insulinType,
-                        startDate: tempRateStart,
-                        endDate: Date.now
-                    )
-                    doses.append(
-                        NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
-                    )
+                state.basalDose = suspendDose
+                state.lastReconciliation = Date.now
+                
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
 
-                    var state = lockedState.value
-                    state.tempRatePercentage = nil
-                    state.tempRateAbsolute = nil
-                    state.tempRateStart = nil
-                    state.tempRateDuration = nil
-                    lockedState.value = state
-                }
-
-                self.updateStatus { status in
-                    status.basalDeliveryState = .suspended(Date.now)
-                    status.bolusState = .noBolus
-                }
-
-                self.recordReconciliation(at: Date.now)
-                self.completeSuspend((nil, doses), completion: completion)
+                log.info("Insulin Delivery Suspended!")
+                completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.basalDeliveryState = previousStatus.basalDeliveryState
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeSuspend((pumpError, []), completion: completion)
+                completion(pumpError)
             }
         }
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        let previousStatus = lockedStatus.value
-        updateStatus { status in
-            status.basalDeliveryState = .resuming
-        }
-
+        log.info("Resume Insulin Delivery...")
+        
         guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.basalDeliveryState = previousStatus.basalDeliveryState
-            }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeResume((error, []), completion: completion)
+            log.error("Pump not connected")
+            completion(PumpCommError.pumpNotConnected)
             return
         }
 
@@ -2311,6 +1831,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
+                    log.error("Pump rejected resume delivery...")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to resume delivery",
@@ -2321,35 +1842,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
                 }
 
+                let dose = UnfinalizedDose(resumeStartTime: Date.now, insulinType: state.insulinType)
                 let events = [
-                    NewPumpEvent.resume(dose: DoseEntry.resume(insulinType: lockedState.value.insulinType)),
-                    NewPumpEvent
-                        .basal(
-                            dose: DoseEntry
-                                .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
-                        )
+                    NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate),
                 ]
 
-                var state = lockedState.value
-                state.tempRatePercentage = nil
-                state.tempRateAbsolute = nil
-                state.tempRateStart = nil
-                state.tempRateDuration = nil
-                lockedState.value = state
-
-                self.updateStatus { status in
-                    status.basalDeliveryState = .active(Date.now)
-                }
-
-                self.recordReconciliation(at: Date.now)
-                self.completeResume((nil, events), completion: completion)
+                state.basalDose = dose
+                state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+                
+                log.info("Insulin Delivery Resumed!")
+                completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.basalDeliveryState = previousStatus.basalDeliveryState
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeResume((pumpError, []), completion: completion)
+                completion(pumpError)
             }
         }
     }
@@ -2518,28 +2025,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 }
 
-                // Step 7: Update local state
-                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
+                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone) ?? state.basalRateSchedule
 
-                var managerState = self.lockedState.value
+                var managerState = self.state
                 managerState.basalRateSchedule = schedule
                 managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
-                self.lockedState.value = managerState
+                self.state = managerState
 
                 self.notifyDelegateStateUpdated()
-
-                if let schedule = schedule {
-                    self.delegateQueue.async {
-                        completion(.success(schedule))
-                    }
-                } else {
-                    completion(
-                        .failure(
-                            PumpManagerError.communication(
-                                PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
-                            )
-                        )
-                    )
+                self.delegateQueue.async {
+                    completion(.success(schedule))
                 }
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -2621,10 +2116,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
-                var managerState = self.lockedState.value
+                var managerState = self.state
                 managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRate?.doubleValue(for: hkUnit)
                 managerState.settings.maxBolus = appliedLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
-                self.lockedState.value = managerState
+                self.state = managerState
 
                 self.notifyDelegateStateUpdated()
 
@@ -2696,7 +2191,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         tandemPump.stopScanning()
         targetPeripheralIdentifier = nil
         inScanningMode.value = false
-        resetManagerStateAfterDeactivation()
 
         notifyDelegateOfDeactivation {
             completion(nil)
@@ -2763,10 +2257,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            var managerState = lockedState.value
+            var managerState = state
             managerState.alertSnoozeEnabled = enabled
             managerState.alertSnoozeDuration = TimeInterval(minutes: Double(durationMins))
-            lockedState.value = managerState
+            state = managerState
             notifyDelegateStateUpdated()
 
             telemetryLogger.info("Alert snooze set: enabled=\(enabled), duration=\(durationMins)m")
@@ -2804,8 +2298,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 // MARK: - TandemPumpDelegate Conformance
-
-@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: TandemPumpDelegate {
+extension TandemPumpManager: TandemPumpDelegate {
     public func tandemPump(
         _: TandemPump,
         shouldConnect peripheral: CBPeripheral,
@@ -2962,12 +2455,42 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
 // MARK: - PumpCommDelegate Conformance
 
-@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: PumpCommDelegate {
+extension TandemPumpManager: PumpCommDelegate {
+    private func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
+        guard state.basalDose.type == .tempBasal else {
+            return []
+        }
+
+        let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)
+        return [
+            NewPumpEvent.tempBasal(
+                dose: basalEntry,
+                date: basalEntry.startDate
+            )
+        ]
+    }
+    
+    private func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+        pumpDelegate.notify { delegate in
+            guard let delegate = delegate else {
+                self.log.warning("No pump delegate, not notifying...")
+                return
+            }
+
+            delegate.pumpManager(
+                self,
+                hasNewPumpEvents: events,
+                lastReconciliation: self.state.lastReconciliation,
+                replacePendingEvents: replacePendingEvents
+            ) { _ in }
+        }
+    }
+    
     public func pumpComm(_: PumpComm, didChange pumpState: PumpState) {
         // Update the stored state when pump state changes (e.g., after pairing)
-        var currentState = lockedState.value
-        currentState.pumpState = pumpState
-        lockedState.value = currentState
+        state.pumpState = pumpState
+        notifyDelegateStateUpdated()
+
         pumpComm.syncPumpState(pumpState)
         if pumpState.valid {
             needsSessionInitialization.value = false
@@ -2975,11 +2498,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         // Update pairing artifacts so messages will be signed with the derived secret
         updatePairingArtifacts(with: pumpState)
-
-        notifyPumpManagerDelegateDidUpdateState()
-
-        // The state change will be automatically persisted by Loop/Trio
-        // when it calls rawState during the next cycle
     }
 
     public func pumpComm(
@@ -3078,7 +2596,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     func getScheduledBasalRate() -> Double {
-        guard let schedule = lockedState.value.basalRateSchedule, !schedule.items.isEmpty else {
+        let schedule = state.basalRateSchedule
+        guard !schedule.items.isEmpty else {
             return 0
         }
 
