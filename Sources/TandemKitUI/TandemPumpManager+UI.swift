@@ -108,11 +108,10 @@ extension TandemPumpManager {
     }
 
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
-        if state.basalStatusIcon == .suspended {
+        if state.basalDose.type == .suspend {
             return PumpStatusHighlight(
                 localizedMessage: String(
-                    localized:
-                    "Insulin Suspended",
+                    localized: "Insulin Suspended",
                     comment: "Status highlight that insulin delivery was suspended."
                 ),
                 imageName: "pause.circle.fill",
@@ -122,7 +121,10 @@ extension TandemPumpManager {
 
         if let reservoirLevel = reservoirLevel, reservoirLevel.unitVolume < 1 {
             return PumpStatusHighlight(
-                localizedMessage: String(localized: "No Insulin", comment: "Status highlight that a pump is out of insulin."),
+                localizedMessage: String(
+                    localized: "No Insulin",
+                    comment: "Status highlight that a pump is out of insulin."
+                ),
                 imageName: "exclamationmark.circle.fill",
                 state: .critical
             )

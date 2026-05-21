@@ -4,7 +4,6 @@ import Dispatch
 import Foundation
 import HealthKit
 import LoopKit
-
 import UIKit
 
 // MARK: - Scan Device Observer Protocol
@@ -21,9 +20,23 @@ public protocol StateObserver: AnyObject {
     func deviceScanDidUpdate(_ device: TandemPumpScan)
 }
 
-private struct ActiveBolus {
+struct ActiveBolus {
     let id: Int
     let dose: UnfinalizedDose
+}
+
+enum ResponseSource {
+    case telemetry
+    case notification
+
+    var label: String {
+        switch self {
+        case .telemetry:
+            return "telemetry"
+        case .notification:
+            return "notification"
+        }
+    }
 }
 
 public class TandemPumpManager: PumpManager, Pluggable {
@@ -44,17 +57,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public static var onboardingSupportedMaximumBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
-    private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
+    internal let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     private var oldState: TandemPumpManagerState
     public var state: TandemPumpManagerState
-    private let transportLock = Locked<PumpMessageTransport?>(nil)
+    internal let transportLock = Locked<PumpMessageTransport?>(nil)
     public let tandemPump: TandemPump
-    private let log = TandemLogger(category: "TandemPumpManager")
     private let telemetryLogger = TandemLogger(category: "TandemPumpManager.Telemetry")
     private let notificationRouter = PumpNotificationRouter()
     private let notificationLogger = TandemLogger(category: "TandemPumpManager.Notifications")
     private let lockedNotificationBundle = Locked<NotificationBundle>(NotificationBundle())
-    private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
+    internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
     // Status tracking
     private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
@@ -64,11 +76,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
-    private let needsSessionInitialization = Locked<Bool>(false)
+    internal let needsSessionInitialization = Locked<Bool>(false)
     private let sessionBootstrapInProgress = Locked<Bool>(false)
     private let sessionBootstrapRetryAttempt = Locked<Int>(0)
-    private let activeBolus = Locked<ActiveBolus?>(nil)
-    private var bolusProgressReport: TandemDoseProgressReporter?
+    internal let activeBolus = Locked<ActiveBolus?>(nil)
+    internal var bolusProgressReport: TandemDoseProgressReporter?
     private var telemetryConfigured = false
     private weak var activePeripheralManager: PeripheralManager?
     private var targetPeripheralIdentifier: UUID?
@@ -90,7 +102,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
-            log.info("Starting silent tones")
+            telemetryLogger.info("Starting silent tones")
             silentToneManager.startBackgroundTask()
         }
     }
@@ -99,7 +111,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         silentToneManager.stopBackgroundTask()
     }
 
-    private func updatePairingArtifacts(with pumpState: PumpState?) {
+    func updatePairingArtifacts(with pumpState: PumpState?) {
         PumpStateSupplier.storePairingArtifacts(
             derivedSecret: pumpState?.derivedSecret,
             serverNonce: pumpState?.serverNonce
@@ -144,7 +156,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private var pumpComm: PumpComm {
+    var pumpComm: PumpComm {
         get {
             tandemPump.pumpComm
         }
@@ -257,21 +269,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private enum ResponseSource {
-        case telemetry
-        case notification
-
-        var label: String {
-            switch self {
-            case .telemetry:
-                return "telemetry"
-            case .notification:
-                return "notification"
-            }
-        }
-    }
-
-    private func logger(for source: ResponseSource) -> TandemLogger {
+    func logger(for source: ResponseSource) -> TandemLogger {
         switch source {
         case .telemetry:
             return telemetryLogger
@@ -281,7 +279,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
-        return PumpManagerStatus(
+        PumpManagerStatus(
             timeZone: TimeZone.current,
             device: state.deviceInfo,
             pumpBatteryChargeRemaining: state.lastBatteryReading?.chargeRemaining,
@@ -451,436 +449,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func updateNotificationBundle(_ bundle: NotificationBundle) {
         lockedNotificationBundle.value = bundle
 
-        var managerState = state
-        managerState.notificationCount = bundle.getNotificationCount()
-        managerState.lastNotificationUpdate = Date()
-        state = managerState
-
+        state.notificationCount = bundle.getNotificationCount()
+        state.lastNotificationUpdate = Date.now
         notifyDelegateStateUpdated()
-    }
-
-    private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
-        let percent = Double(response.batteryPercent) / 100.0
-        let timestamp = Date.now
-
-        logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
-
-        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
-        let units = Double(response.currentInsulinAmount)
-        logger(for: source).debug("[\(source.label)] Reservoir updated: \(String(format: "%.2f", units)) U remaining")
-        
-        let timestamp = Date.now
-        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
-
-        state.lastReconciliation = timestamp
-        state.lastReservoirReading = reservoirValue
-        notifyDelegateStateUpdated()
-        
-        notifyDelegateOfReservoir(reservoirValue)
     }
 
     private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
         notificationLogger.debug("[notification] Fill tubing button state: \(response.buttonDown)")
         fillTubingStateStream.send(response)
-    }
-
-    private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
-        let timestamp = Date.now
-        let newBasalState: PumpManagerStatus.BasalDeliveryState
-
-        if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.zeroBasal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.increaseBasal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.attenuatedBasal.rawValue
-        {
-            newBasalState = .active(timestamp)
-
-        } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue {
-            newBasalState = .suspended(timestamp)
-        } else {
-            return
-        }
-
-        updateStatus { status in
-            status.basalDeliveryState = newBasalState
-        }
-
-        var managerState = state
-        managerState.basalDeliveryState = newBasalState
-        managerState.lastBasalStatusDate = timestamp
-
-        if let basalStatusIcon = response.basalStatusIcon {
-            managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus.fromBasalStatusIcon(basalStatusIcon)
-        } else {
-            managerState.basalStatusIcon = nil
-        }
-
-        state = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
-            )
-
-        state.controlIQEnabled = response.closedLoopEnabled
-
-        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
-        // sync useControlIQ so dosing guards activate and Trio disables closed loop
-        if response.closedLoopEnabled, !state.useControlIQ {
-            log.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
-            state.useControlIQ = true
-        }
-
-        if let userMode = response.currentUserModeType {
-            state.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
-        } else {
-            state.controlIQUserMode = nil
-        }
-
-        state.controlIQWeight = response.weight
-        state.controlIQTotalDailyInsulin = response.totalDailyInsulin
-        state.lastControlIQUpdate = Date.now
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleTimeSinceResetResponse(_ response: TimeSinceResetResponse, source: ResponseSource) {
-        let timeSinceReset = response.pumpTimeSinceReset
-        let currentPumpTime = response.currentTimeDate
-        let checkedAt = Date.now
-
-        logger(for: source).debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
-
-        if var pumpState = state.pumpState {
-            pumpState.timeSinceReset = timeSinceReset
-            state.pumpState = pumpState
-            state.currentPumpTime = currentPumpTime
-            state.lastPumpTimeCheckDate = checkedAt
-            pumpComm.syncPumpState(pumpState)
-            needsSessionInitialization.value = false
-
-            // Update the PumpStateSupplier with the new value
-            updatePairingArtifacts(with: pumpState)
-
-            notifyDelegateStateUpdated()
-        }
-    }
-
-    private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
-        logger(for: source).debug("[\(source.label)] Pump Global updated -> \(response.description)")
-
-        state.quickBolusAnnun = response.quickBolusAnnouncement
-        state.reminderAnnun = response.reminderAnnouncement
-        state.alarmAnnun = response.alarmAnnouncement
-        state.alertAnnun = response.alertAnnouncement
-        state.generalAnnun = response.generalAnnouncement
-        state.quickBolusEnabled = response.isQuickBolusEnabled()
-        state.quickBolusEntryType = response.quickBolusEntryType
-        state.quickBolusIncrementUnits = response.quickBolusIncrementUnits
-        state.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
-        state.quickBolusStatus = response.quickBolusStatus
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
-            )
-
-        // Normal CurrentBolusStatus fetch
-        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            return
-        }
-
-        guard let progressReport = bolusProgressReport else {
-            return
-        }
-
-        if response.status == .delivering {
-            if state.bolusState == .initiating, let activeBolus = activeBolus.value {
-                state.bolusState = .inProgress(activeBolus.dose.toDoseEntry())
-                self.notifyDelegateStateUpdated()
-            }
-
-            progressReport.notify()
-            return
-        }
-
-        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
-            // Bolus is finished
-            telemetryScheduler.cancelAll()
-
-            // Query the pump for actual delivered volume rather than assuming full delivery
-            var actualDelivered: Double?
-            if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
-                actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
-            }
-
-            var events = self.getActivePumpEvents()
-            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
-            
-            bolusProgressReport = nil
-            activeBolus.value = nil
-
-            state.lastReconciliation = Date.now
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(events)
-        }
-    }
-
-    private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
-            )
-
-        if !response.active, let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
-            let now = Date.now
-
-            updateStatus { status in
-                status.basalDeliveryState = .active(now)
-            }
-
-            var managerState = state
-            managerState.basalDeliveryState = .active(now)
-            managerState.lastBasalStatusDate = now
-            managerState.tempRateAbsolute = nil
-            managerState.tempRatePercentage = nil
-            managerState.tempRateStart = nil
-            managerState.tempRateDuration = nil
-            managerState.tempRateSyncIdentifier = nil
-            state = managerState
-
-        } else if response.active, state.tempRateAbsolute == nil {
-            let now = Date.now
-            let absolute = getScheduledBasalRate() * (Double(response.percentage) / 100)
-            let dose = DoseEntry.tempBasal(
-                absoluteUnit: absolute,
-                duration: Double(response.duration),
-                insulinType: state.insulinType,
-                startDate: response.startTime
-            )
-
-            var managerState = state
-            managerState.basalDeliveryState = .tempBasal(dose)
-            managerState.lastBasalStatusDate = now
-            managerState.tempRateAbsolute = absolute
-            managerState.tempRatePercentage = response.percentage
-            managerState.tempRateStart = response.startTime
-            managerState.tempRateDuration = Double(response.duration)
-            managerState.tempRateSyncIdentifier = nil // No history id available...
-            state = managerState
-        }
-    }
-
-    private func makeBatteryRequest() -> Message {
-        CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.pumpApiVersion)
-    }
-
-    /// Queries the pump for the actual delivered volume of the last bolus.
-    /// Used after both cancellation and natural completion to get the real delivered amount.
-    /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
-    private func queryLastBolusDeliveredVolume(transport: PumpMessageTransport, bolusId: Int) -> Double? {
-        do {
-            if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
-                let response: LastBolusStatusV2Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: LastBolusStatusV2Request(),
-                    expecting: LastBolusStatusV2Response.self
-                )
-                guard response.bolusId == bolusId else {
-                    telemetryLogger.warning("[bolus] LastBolusStatusV2 bolusId \(response.bolusId) != expected \(bolusId)")
-                    return nil
-                }
-                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-                telemetryLogger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-                return units == 0 ? nil : units
-            } else {
-                let response: LastBolusStatusResponse = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: LastBolusStatusRequest(),
-                    expecting: LastBolusStatusResponse.self
-                )
-                guard response.bolusId == bolusId else {
-                    telemetryLogger.warning("[bolus] LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
-                    return nil
-                }
-                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-                telemetryLogger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-                return units == 0 ? nil : units
-            }
-        } catch {
-            telemetryLogger.error("[bolus] Failed to query last bolus status: \(error)")
-            return nil
-        }
-    }
-
-    private func fetchBatteryStatus(transport: PumpMessageTransport) {
-        do {
-            let request = makeBatteryRequest()
-
-            if let v2Request = request as? CurrentBatteryV2Request {
-                let response: CurrentBatteryV2Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: v2Request,
-                    expecting: CurrentBatteryV2Response.self
-                )
-
-                handleBatteryResponse(response, source: .telemetry)
-            } else if let v1Request = request as? CurrentBatteryV1Request {
-                let response: CurrentBatteryV1Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: v1Request,
-                    expecting: CurrentBatteryV1Response.self
-                )
-
-                handleBatteryResponse(response, source: .telemetry)
-            } else {
-                telemetryLogger
-                    .error(
-                        "Battery telemetry request builder returned unsupported type: \(String(describing: type(of: request)))"
-                    )
-            }
-        } catch {
-            telemetryLogger.error("Battery telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchReservoirStatus(transport: PumpMessageTransport) {
-        do {
-            let response = try pumpComm.sendMessage(
-                transport: transport,
-                message: InsulinStatusRequest(),
-                expecting: InsulinStatusResponse.self
-            )
-
-            handleReservoirResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Reservoir telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchDeliveryLimits(transport: PumpMessageTransport) {
-        do {
-            let basalResponse: BasalLimitSettingsResponse = try self.pumpComm.sendMessage(
-                transport: transport,
-                message: BasalLimitSettingsRequest(),
-                expecting: BasalLimitSettingsResponse.self
-            )
-
-            let bolusResponse: GlobalMaxBolusSettingsResponse = try self.pumpComm.sendMessage(
-                transport: transport,
-                message: GlobalMaxBolusSettingsRequest(),
-                expecting: GlobalMaxBolusSettingsResponse.self
-            )
-
-            state.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
-            state.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
-            state.maxBolusLimitMilliunits = bolusResponse.maxBolus
-            state.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
-            notifyDelegateStateUpdated()
-        } catch {
-            telemetryLogger.error("Failed to fetch delivery limits: \(error.localizedDescription)")
-        }
-    }
-
-    private func fetchBasalStatus(transport: PumpMessageTransport) {
-        do {
-            let response: TempRateResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            )
-
-            handleTempRateResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Temp basal telemetry request failed: \(error)")
-        }
-    }
-
-    func fetchBolusStatus(transport: PumpMessageTransport) {
-        do {
-            let response: CurrentBolusStatusResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: CurrentBolusStatusRequest(),
-                expecting: CurrentBolusStatusResponse.self
-            )
-
-            handleBolusResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Bolus telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchTimeSinceReset(transport: PumpMessageTransport) {
-        do {
-            let response: TimeSinceResetResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TimeSinceResetRequest(),
-                expecting: TimeSinceResetResponse.self
-            )
-
-            handleTimeSinceResetResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("TimeSinceReset telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchControlIQStatus(transport: PumpMessageTransport) {
-        do {
-            let response: ControlIQInfoV2Response = try pumpComm.sendMessage(
-                transport: transport,
-                message: ControlIQInfoV2Request(),
-                expecting: ControlIQInfoV2Response.self
-            )
-
-            handleControlIQResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("ControlIQ status telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchHomeScreenStatus(transport: PumpMessageTransport) {
-        do {
-            let response: HomeScreenMirrorResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: HomeScreenMirrorRequest(),
-                expecting: HomeScreenMirrorResponse.self
-            )
-
-            handleHomeScreenMirrorResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("HomeScreen telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchNotificationCount(transport: PumpMessageTransport) {
-        let bundle = NotificationBundle()
-        do {
-            try pumpComm.performOnCommandQueue {
-                for request in NotificationBundle.allRequests() {
-                    if let response = try? self.pumpComm.sendMessage(transport: transport, message: request),
-                       NotificationBundle.isNotificationResponse(response)
-                    {
-                        bundle.add(response)
-                    }
-                }
-            }
-        } catch {
-            telemetryLogger.error("fetchNotificationCount failed: \(error)")
-        }
-
-        // Use the shared update method to keep the notification bundle and count in sync
-        updateNotificationBundle(bundle)
     }
 
     private func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse, transport: PumpMessageTransport) {
@@ -918,14 +494,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func notifyDelegateStateUpdated() {
-        let status = TandemPumpManager.makeStatus(from: self.state)
-        let oldStatus = TandemPumpManager.makeStatus(from: self.oldState)
-        
+    internal func notifyDelegateStateUpdated() {
+        let status = TandemPumpManager.makeStatus(from: state)
+        let oldStatus = TandemPumpManager.makeStatus(from: oldState)
+
         if let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
-                
+
                 delegate.pumpManagerDidUpdateState(self)
                 delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
@@ -936,8 +512,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
             }
         }
-        
-        self.oldState = TandemPumpManagerState(rawValue: state.rawValue)
+
+        oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
     private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
@@ -955,22 +531,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         return nil
-    }
-
-    private func notifyDelegateOfReservoir(_ value: ReservoirValue) {
-        guard let delegate = pumpManagerDelegate else { return }
-        pumpDelegate.queue.async { [weak self] in
-            guard let self = self else { return }
-            delegate.pumpManager(self, didReadReservoirValue: value.unitVolume, at: value.startDate) { [weak self] result in
-                guard let self = self else { return }
-                switch result {
-                case .success:
-                    self.telemetryLogger.debug("Delegate accepted reservoir update")
-                case let .failure(error):
-                    self.telemetryLogger.warning("Delegate failed to store reservoir update: \(error)")
-                }
-            }
-        }
     }
 
     // MARK: - Status Observers
@@ -1053,7 +613,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         guard isOnboarded else {
-            log.error("connect() requested before pump is paired")
+            telemetryLogger.error("connect() requested before pump is paired")
             notifyPumpManagerDelegateOfError(.missingAuthenticationKey)
             return
         }
@@ -1071,7 +631,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     expecting: DisconnectPumpResponse.self
                 )
             } catch {
-                log.debug("Graceful disconnect request failed (non-fatal): \(error.localizedDescription)")
+                telemetryLogger.debug("Graceful disconnect request failed (non-fatal): \(error.localizedDescription)")
             }
         }
 
@@ -1100,14 +660,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
         state.autoAcknowledgeBasalAlerts = enabled
         notifyDelegateStateUpdated()
-        
+
         telemetryLogger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
     }
 
     public func configureSilentMode(_ enabled: Bool) {
         state.useSilentTones = enabled
         notifyDelegateStateUpdated()
-        
+
         telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
     }
 
@@ -1133,7 +693,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 try self.pumpComm.performOnCommandQueue {
                     // When switching to ControlIQ, cancel any active DIY temp basal first
                     if request.enabled, self.state.basalDose.type == .tempBasal {
-                        self.log.info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
+                        self.telemetryLogger
+                            .info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
                         let _: StopTempRateResponse = try self.pumpComm.sendMessage(
                             transport: transport,
                             message: StopTempRateRequest(),
@@ -1147,7 +708,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         )
                         var events = self.getActivePumpEvents(endDate: dose.startDate)
                         events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
-                        
+
                         self.state.basalDose = dose
                         self.state.lastReconciliation = Date.now
                         self.notifyDelegateStateUpdated()
@@ -1161,7 +722,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
 
                     guard response.isStatusOK else {
-                        self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(request.enabled)")
+                        self.telemetryLogger
+                            .error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(request.enabled)")
                         throw PumpCommError.errorResponse(
                             context: String(
                                 localized: "Pump rejected Control-IQ settings change",
@@ -1173,7 +735,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 }
             } catch {
-                self.log.error("[configureControlIQMode] Failed: \(error.localizedDescription)")
+                self.telemetryLogger.error("[configureControlIQMode] Failed: \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(false)
                 }
@@ -1210,7 +772,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 self.fetchDeliveryLimits(transport: transport)
-                self.fetchBasalStatus(transport: transport)
                 self.fetchReservoirStatus(transport: transport)
                 self.fetchBatteryStatus(transport: transport)
                 self.fetchBolusStatus(transport: transport)
@@ -1219,28 +780,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchNotificationCount(transport: transport)
                 self.fetchTimeSinceReset(transport: transport)
                 self.fetchGlobalPumpSettings(transport: transport)
-                
+
                 state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
 
                 completion?(state.lastReconciliation)
             }
         } catch {
-            log.error("ensureCurrentPumpData failed: \(error)")
-        }
-    }
-
-    public func fetchGlobalPumpSettings(transport: PumpMessageTransport) {
-        do {
-            let response: PumpGlobalsResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: PumpGlobalsRequest(),
-                expecting: PumpGlobalsResponse.self
-            )
-
-            handleGlobalPumpSettingsResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Pump global telemetry request failed: \(error)")
+            telemetryLogger.error("ensureCurrentPumpData failed: \(error)")
         }
     }
 
@@ -1328,7 +875,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 var tries = 0
                 while peripheral.state != .connected {
                     try await Task.sleep(nanoseconds: 100_000_000)
-                    log.debug("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
+                    telemetryLogger
+                        .debug("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
                     tries += 1
 
                     if tries >= 50 {
@@ -1345,7 +893,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 tries = 0
                 while transportLock.value == nil {
                     try await Task.sleep(nanoseconds: 100_000_000)
-                    log.debug("Waiting for transport to be initialized...")
+                    telemetryLogger.debug("Waiting for transport to be initialized...")
                     tries += 1
 
                     if tries >= 50 {
@@ -1359,7 +907,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 guard let transport = transportLock.value else {
-                    log.error("pumpNotConnected during pairing")
+                    telemetryLogger.error("pumpNotConnected during pairing")
                     pairingInProgress.value = false
                     completion(.failure(PumpCommError.pumpNotConnected))
                     return
@@ -1371,18 +919,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 initialConnectionTimeoutWork?.cancel()
                 initialConnectionTimeoutWork = nil
                 pairingInProgress.value = true
-                log.info("Pairing started – connection timeout cancelled")
+                telemetryLogger.info("Pairing started – connection timeout cancelled")
 
                 // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
                 try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
 
                 pairingInProgress.value = false
                 processedResponseMessages.value += 1
-                log.info("Succesfully paired!")
+                telemetryLogger.info("Succesfully paired!")
                 completion(.success(()))
             } catch {
                 pairingInProgress.value = false
-                log.error("Failed to pair: \(error.localizedDescription)")
+                telemetryLogger.error("Failed to pair: \(error.localizedDescription)")
                 completion(.failure(error))
             }
         }
@@ -1395,22 +943,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         activationType: BolusActivationType,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
-        log.info("Enacting bolus - units \(units)U")
+        telemetryLogger.info("Enacting bolus - units \(units)U")
 
         guard let transport = pairedTransport else {
-            log.error("[enactBolus] could not enact bolus because no paired transport")
+            telemetryLogger.error("[enactBolus] could not enact bolus because no paired transport")
             completion(.communication(PumpCommError.pumpNotConnected))
             return
         }
 
         if let error = validateBolusRequest(units: units, activationType) {
-            log.error("[enactBolus] could not validate bolus request: units=\(units) activationType=\(activationType)")
+            telemetryLogger
+                .error("[enactBolus] could not validate bolus request: units=\(units) activationType=\(activationType)")
             completion(error)
             return
         }
 
         if isControlIQModeActive, activationType.isAutomatic {
-            log.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
+            telemetryLogger.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
@@ -1508,30 +1057,30 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents([NewPumpEvent.bolus(dose: doseEntry, units: units)], replacePendingEvents: false)
-                
+
                 completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
                     self.releaseBolusPermission(transport: transport, bolusId: bolusId)
                 }
-                
+
                 completion(.communication(pumpError))
             }
         }
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
-        log.info("Cancelling bolus...")
+        telemetryLogger.info("Cancelling bolus...")
 
         guard let transport = pairedTransport else {
-            log.error("Pump not connected...")
+            telemetryLogger.error("Pump not connected...")
             completion(.failure(.communication(PumpCommError.pumpNotConnected)))
             return
         }
 
         guard let active = activeBolus.value else {
-            log.error("No active bolus...")
+            telemetryLogger.error("No active bolus...")
             completion(.failure(.communication(PumpCommError.noActiveBolus)))
             return
         }
@@ -1548,7 +1097,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.wasCancelled else {
-                    log.error("Failed to cancel bolus")
+                    telemetryLogger.error("Failed to cancel bolus")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to cancel bolus",
@@ -1570,9 +1119,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.telemetryScheduler.cancelAll()
                 self.bolusProgressReport = nil
                 self.activeBolus.value = nil
-                
+
                 var events = getActivePumpEvents()
-                events.append(NewPumpEvent.bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate))
+                events
+                    .append(
+                        NewPumpEvent
+                            .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
+                    )
 
                 self.state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
@@ -1589,15 +1142,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
-        log.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
+        telemetryLogger.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
         guard !isControlIQModeActive else {
-            log.warning("[enactTempBasal] Blocked: Control-IQ mode is active")
+            telemetryLogger.warning("[enactTempBasal] Blocked: Control-IQ mode is active")
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
 
         guard let transport = pairedTransport else {
-            log.error("Pump not connected...")
+            telemetryLogger.error("Pump not connected...")
             completion(.communication(PumpCommError.pumpNotConnected))
             return
         }
@@ -1608,10 +1161,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             do {
                 let baselineRate = self.getScheduledBasalRate()
                 guard baselineRate > 0 else {
-                    self.log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+                    self.telemetryLogger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
                     throw PumpCommError.invalidScheduledBasalRate
                 }
-                
+
                 // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
                 let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
                     transport: transport,
@@ -1627,7 +1180,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
 
                     guard response.isStatusOK else {
-                        self.log.error("Failed to cancel temp basal - status: \(response.status)")
+                        self.telemetryLogger.error("Failed to cancel temp basal - status: \(response.status)")
                         throw PumpCommError.errorResponse(
                             context: String(
                                 localized: "Pump failed to cancel temp basal",
@@ -1637,8 +1190,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                             response: response
                         )
                     }
-                    
-                    log.info("Canceled running temp basal!")
+
+                    telemetryLogger.info("Canceled running temp basal!")
                 }
 
                 let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
@@ -1654,7 +1207,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     )
                     var events = self.getActivePumpEvents(endDate: dose.startDate)
                     events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
-                    
+
                     state.basalDose = dose
                     state.lastReconciliation = Date.now
                     self.notifyDelegateStateUpdated()
@@ -1664,7 +1217,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 if absoluteRate < unitsPerHour {
-                    self.log
+                    self.telemetryLogger
                         .warning(
                             "Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr"
                         )
@@ -1678,7 +1231,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 if !response.isStatusOK {
-                    self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
+                    self.telemetryLogger.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to cancel temp basal",
@@ -1703,8 +1256,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
-                
-                log.info("Temp basal enacted!")
+
+                telemetryLogger.info("Temp basal enacted!")
                 completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -1749,10 +1302,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - Delivery Control Methods
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        log.info("Suspend Insulin Delivery...")
+        telemetryLogger.info("Suspend Insulin Delivery...")
 
         guard let transport = pairedTransport else {
-            log.error("Pump not connected...")
+            telemetryLogger.error("Pump not connected...")
             completion(PumpCommError.pumpNotConnected)
             return
         }
@@ -1781,7 +1334,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
-                    log.error("Pump rejected suspend delivery...")
+                    telemetryLogger.error("Pump rejected suspend delivery...")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to suspend delivery",
@@ -1798,11 +1351,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 state.basalDose = suspendDose
                 state.lastReconciliation = Date.now
-                
+
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
 
-                log.info("Insulin Delivery Suspended!")
+                telemetryLogger.info("Insulin Delivery Suspended!")
                 completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -1812,10 +1365,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        log.info("Resume Insulin Delivery...")
-        
+        telemetryLogger.info("Resume Insulin Delivery...")
+
         guard let transport = pairedTransport else {
-            log.error("Pump not connected")
+            telemetryLogger.error("Pump not connected")
             completion(PumpCommError.pumpNotConnected)
             return
         }
@@ -1831,7 +1384,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 guard response.status == 0 else {
-                    log.error("Pump rejected resume delivery...")
+                    telemetryLogger.error("Pump rejected resume delivery...")
                     throw PumpCommError.errorResponse(
                         context: String(
                             localized: "Pump failed to resume delivery",
@@ -1844,15 +1397,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 let dose = UnfinalizedDose(resumeStartTime: Date.now, insulinType: state.insulinType)
                 let events = [
-                    NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate),
+                    NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)
                 ]
 
                 state.basalDose = dose
                 state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
-                
-                log.info("Insulin Delivery Resumed!")
+
+                telemetryLogger.info("Insulin Delivery Resumed!")
                 completion(nil)
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -2025,7 +1578,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     }
                 }
 
-                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone) ?? state.basalRateSchedule
+                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? state.basalRateSchedule
 
                 var managerState = self.state
                 managerState.basalRateSchedule = schedule
@@ -2039,7 +1592,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.notifyPumpManagerDelegateOfError(pumpError)
-                log.error("Received error during basal sync: \(pumpError.errorDescription ?? "")")
+                telemetryLogger.error("Received error during basal sync: \(pumpError.errorDescription ?? "")")
                 completion(.failure(PumpManagerError.communication(pumpError)))
             }
         }
@@ -2137,10 +1690,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
-        log.info("Syncing pump time")
+        telemetryLogger.info("Syncing pump time")
 
         guard let transport = pairedTransport else {
-            log.error("Pump not connected...")
+            telemetryLogger.error("Pump not connected...")
             let error = PumpCommError.pumpNotConnected
             notifyPumpManagerDelegateOfError(error)
             delegateQueue.async {
@@ -2162,7 +1715,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
 
                 if !response.isStatusOK {
-                    log.error("Pump time sync failed, status NOK!")
+                    telemetryLogger.error("Pump time sync failed, status NOK!")
 
                     let error = PumpCommError.errorResponse(
                         context: String(
@@ -2177,7 +1730,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion(.success(()))
                 }
             } catch {
-                log.error("Failed to sync pump time: \(error.localizedDescription)")
+                telemetryLogger.error("Failed to sync pump time: \(error.localizedDescription)")
 
                 let pumpError = PumpCommError.other
                 completion(.failure(PumpManagerError.communication(pumpError)))
@@ -2298,6 +1851,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 // MARK: - TandemPumpDelegate Conformance
+
 extension TandemPumpManager: TandemPumpDelegate {
     public func tandemPump(
         _: TandemPump,
@@ -2320,11 +1874,11 @@ extension TandemPumpManager: TandemPumpDelegate {
         let needsNewTransport = transportLock.value == nil || activePeripheralManager !== peripheralManager
 
         if needsNewTransport {
-            log.info("Creating new transport for peripheral manager")
+            telemetryLogger.info("Creating new transport for peripheral manager")
             let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
             updateTransport(transport)
         } else {
-            log.info("Reusing existing transport - peripheral manager unchanged")
+            telemetryLogger.info("Reusing existing transport - peripheral manager unchanged")
         }
 
         activePeripheralManager = peripheralManager
@@ -2365,24 +1919,24 @@ extension TandemPumpManager: TandemPumpDelegate {
             let attempt = self.initialConnectionTimeoutAttempts.value
 
             if repliesReceived > 0 {
-                self.log.info(
+                self.telemetryLogger.info(
                     "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
                 )
             } else if pairing {
                 // JPAKE handshake is in progress (first SwiftECC round can take >10s).
                 // Do not disconnect — pairing manages its own lifecycle.
-                self.log.info(
+                self.telemetryLogger.info(
                     "InitialConnectionTimeout: pairing in progress – skipping disconnect"
                 )
             } else if bootstrapRunning, attempt < self.initialConnectionTimeoutMaxAttempts {
                 self.initialConnectionTimeoutAttempts.value += 1
-                self.log.info(
+                self.telemetryLogger.info(
                     "InitialConnectionTimeout: auth bootstrap still in progress (attempt \(attempt + 1)/\(self.initialConnectionTimeoutMaxAttempts)) – extending timeout"
                 )
                 self.scheduleNextInitialConnectionTimeout()
                 return
             } else {
-                self.log.error(
+                self.telemetryLogger.error(
                     "InitialConnectionTimeout: no responses received (bootstrap=\(bootstrapRunning), attempt=\(attempt)) – soft disconnecting for retry"
                 )
                 self.tandemPump.softDisconnect()
@@ -2412,12 +1966,12 @@ extension TandemPumpManager: TandemPumpDelegate {
             notifyScanDeviceDidChange(device)
         } else if inScanningMode.value == false {
             configureDeliveryActions(true)
-            log
+            telemetryLogger
                 .info(
                     "[tandemPump didDiscoverDevice] expected pumpComm.pumpPeripheralUuid=\(String(describing: pumpComm.pumpPeripheralUuid))"
                 )
             if peripheral.identifier.uuidString == pumpComm.pumpPeripheralUuid {
-                log.info("[tandemPump didDiscoverDevice] set targetPeripheralIdentifier")
+                telemetryLogger.info("[tandemPump didDiscoverDevice] set targetPeripheralIdentifier")
                 targetPeripheralIdentifier = peripheral.identifier
             }
         }
@@ -2427,7 +1981,7 @@ extension TandemPumpManager: TandemPumpDelegate {
         _: TandemPump,
         didDisconnectWithError error: Error?
     ) {
-        log.error("Pump disconnected with error: \(String(describing: error))")
+        telemetryLogger.error("Pump disconnected with error: \(String(describing: error))")
 
         // Cancel any pending initial connection timeout check
         initialConnectionTimeoutWork?.cancel()
@@ -2442,10 +1996,6 @@ extension TandemPumpManager: TandemPumpDelegate {
 
         updateTransport(nil)
 
-        updateStatus { status in
-            status.deliveryIsUncertain = true
-        }
-
         if isOnboarded {
             telemetryLogger.debug("Pump disconnected – restarting scan to reconnect")
             tandemPump.startScanning()
@@ -2456,7 +2006,7 @@ extension TandemPumpManager: TandemPumpDelegate {
 // MARK: - PumpCommDelegate Conformance
 
 extension TandemPumpManager: PumpCommDelegate {
-    private func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
+    internal func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
         guard state.basalDose.type == .tempBasal else {
             return []
         }
@@ -2469,11 +2019,11 @@ extension TandemPumpManager: PumpCommDelegate {
             )
         ]
     }
-    
-    private func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+
+    internal func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
-                self.log.warning("No pump delegate, not notifying...")
+                self.telemetryLogger.warning("No pump delegate, not notifying...")
                 return
             }
 
@@ -2485,7 +2035,7 @@ extension TandemPumpManager: PumpCommDelegate {
             ) { _ in }
         }
     }
-    
+
     public func pumpComm(_: PumpComm, didChange pumpState: PumpState) {
         // Update the stored state when pump state changes (e.g., after pairing)
         state.pumpState = pumpState
@@ -2619,10 +2169,10 @@ private extension TandemPumpManager {
             )
 
             if response.status != 0 {
-                log.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
+                telemetryLogger.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
             }
         } catch {
-            log.error("Error releasing bolus permission for id \(bolusId): \(String(describing: error))")
+            telemetryLogger.error("Error releasing bolus permission for id \(bolusId): \(String(describing: error))")
         }
     }
 }

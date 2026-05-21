@@ -52,7 +52,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
 
     private let colorPalette: LoopUIColorPalette
 
-    private var pumpManager: TandemPumpManager?
+    private var pumpManager: TandemPumpManager
 
     private var allowedInsulinTypes: [InsulinType]
 
@@ -66,15 +66,14 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         allowedInsulinTypes: [InsulinType] = []
     )
     {
-        if pumpManager == nil {
-            self.pumpManager =
-                TandemPumpManager(state: TandemPumpManagerState(
-                    pumpState: nil,
-                    basalDeliveryState: .active(Date.now),
-                    basalRateSchedule: pumpManagerSettings?.basalSchedule,
-                ))
-        } else {
+        if let pumpManager {
             self.pumpManager = pumpManager
+        } else {
+            let state = TandemPumpManagerState(
+                basalRateSchedule: pumpManagerSettings?
+                    .basalSchedule ?? BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
+            )
+            self.pumpManager = TandemPumpManager(state: state)
         }
 
         self.colorPalette = colorPalette
@@ -121,34 +120,27 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
             return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
         case .setupComplete:
-            pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager!)
+            pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager)
             let returnToMainScreen: () -> Void = {
-                guard let pumpManager = self.pumpManager else {
-                    return
-                }
+                self.pumpManager.state.onboarded = true
+                self.pumpManager.notifyDelegateStateUpdated()
 
-                var state = pumpManager.state
-                state.onboarded = true
-                pumpManager.lockedState.value = state
-
-                self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: pumpManager)
+                self.pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didCreatePumpManager: self.pumpManager)
                 self.completionDelegate?.completionNotifyingDidComplete(self)
             }
 
             let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
             return hostingController(rootView: view)
         case .insulinType:
-            let isOnboarded = pumpManager?.isOnboarded ?? false
+            let isOnboarded = pumpManager.isOnboarded
             let view = TandemKitInsulinType(
-                initialValue: pumpManager?.state.insulinType ?? allowedInsulinTypes.first,
+                initialValue: pumpManager.state.insulinType ?? allowedInsulinTypes.first,
                 supportedInsulinTypes: allowedInsulinTypes,
                 label: !isOnboarded ? String(localized: "Continue", comment: "continue") :
                     String(localized: "Save", comment: "save"),
                 didConfirm: { type in
-                    guard let pumpManager = self.pumpManager else { return }
-
-                    pumpManager.lockedState.value.insulinType = type
-                    pumpManager.notifyPumpManagerDelegateDidUpdateState()
+                    self.pumpManager.state.insulinType = type
+                    self.pumpManager.notifyDelegateStateUpdated()
 
                     if !isOnboarded {
                         self.navigateTo(.soundSettings)
@@ -175,7 +167,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view)
         case .soundSettings:
-            let isOnboarded = pumpManager?.isOnboarded ?? false
+            let isOnboarded = pumpManager.isOnboarded
             let onSubmit = !isOnboarded ? {
                 self.navigateTo(.deviceScanning)
             } : nil
@@ -234,7 +226,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         if let nextStep = currentScreen.next() {
             navigateTo(nextStep)
         } else {
-            pumpManager?.prepareForDeactivation { _ in
+            pumpManager.prepareForDeactivation { _ in
                 DispatchQueue.main.async {
                     self.completionDelegate?.completionNotifyingDidComplete(self)
                 }
@@ -243,10 +235,6 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
     }
 
     func getInitialScreen() -> TandemScreen {
-        guard let pumpManager = pumpManager else {
-            return .setup
-        }
-
         if pumpManager.isOnboarded {
             // If already onboarded, skip to settings or complete
             return .pumpSettings

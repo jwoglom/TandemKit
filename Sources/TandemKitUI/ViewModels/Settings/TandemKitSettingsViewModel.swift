@@ -36,6 +36,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isUpdatingTime = false
     @Published var showingTimeSyncConfirmation = false
     @Published var commandFailure: CommandFailure?
+    @Published var basalDose: UnfinalizedDose?
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
@@ -96,6 +97,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = pumpManager?.connectedAndPaired ?? false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
+        basalDose = pumpManager?.state.basalDose
 
         self.pumpManager?.addStatusObserver(self, queue: .main)
 
@@ -140,32 +142,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.state.controlIQUserMode
     }
 
-    var tempRateActive: Bool {
-        pumpManager?.state.tempRateAbsolute != nil
-    }
-
-    var tempRateAbsolute: Double? {
-        pumpManager?.state.tempRateAbsolute
-    }
-
-    var tempRatePercentage: Int? {
-        pumpManager?.state.tempRatePercentage
-    }
-
-    var tempRateDuration: Double? {
-        pumpManager?.state.tempRateDuration
-    }
-
-    var tempRateStart: Date? {
-        pumpManager?.state.tempRateStart
-    }
-
-    var tempRateRemainingSeconds: Double? {
-        guard let start = tempRateStart, let duration = tempRateDuration else { return nil }
-        let remaining = duration - Date().timeIntervalSince(start)
-        return remaining > 0 ? remaining : nil
-    }
-
     var batteryPercentage: String? {
         guard let battery = pumpManager?.state.lastBatteryReading?.chargeRemaining else {
             return nil
@@ -185,11 +161,6 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var notificationCount: Int {
         pumpManager?.state.notificationCount ?? 0
-    }
-
-    var isSuspended: Bool? {
-        guard let icon = pumpManager?.state.basalStatusIcon else { return nil }
-        return icon == .suspended
     }
 
     // MARK: - Refresh Methods
@@ -230,14 +201,14 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
                 return
             }
-            guard let isSuspended = self.isSuspended, let pumpManager = self.pumpManager else {
+            guard let dose = basalDose, let pumpManager = self.pumpManager else {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                 }
                 return
             }
 
-            if isSuspended {
+            if dose.type == .suspend {
                 pumpManager.resumeDelivery { error in
                     if let _ = error {
                         DispatchQueue.main.async {
@@ -451,12 +422,15 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     var suspendResumeText: String? {
-        if isSuspended == true {
-            return "Resume insulin delivery"
-        } else if isSuspended == false {
-            return "Suspend insulin delivery"
+        guard let dose = basalDose else {
+            return nil
         }
-        return nil
+
+        if dose.type == .suspend {
+            return String(localized: "Resume insulin delivery", comment: "resume delivery")
+        }
+
+        return String(localized: "Suspend insulin delivery", comment: "suspend delivery")
     }
 
     var appName: String { HostApp.current.appName }

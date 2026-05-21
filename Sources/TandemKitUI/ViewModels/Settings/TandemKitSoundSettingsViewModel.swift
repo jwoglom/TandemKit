@@ -46,13 +46,12 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
                 return
             }
 
-            var state = pumpManager.state
-            state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? .audioHigh
-            state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? .audioHigh
-            state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? .audioHigh
-            state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? .audioHigh
-            state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? .audioHigh
-            pumpManager.lockedState.value = state
+            pumpManager.state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? .audioHigh
+            pumpManager.state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? .audioHigh
+            pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? .audioHigh
+            pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? .audioHigh
+            pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? .audioHigh
+            pumpManager.notifyDelegateStateUpdated()
 
             onSubmit()
             return

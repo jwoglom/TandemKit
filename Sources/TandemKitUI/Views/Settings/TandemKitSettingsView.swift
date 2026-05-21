@@ -218,16 +218,18 @@ struct TandemKitSettingsView: View {
 
                 HStack(alignment: .firstTextBaseline) {
                     deliveryStatus
-                    if viewModel.isSuspended != true {
+
+                    if let dose = viewModel.basalDose, dose.type == .suspend {
+                        Spacer()
+                    } else {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
                             }
-                    } else {
-                        Spacer()
                     }
+
                     reservoirStatus
                 }
                 .padding(.bottom, 5)
@@ -487,19 +489,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
 
-                if viewModel.tempRateActive,
-                   let percentage = viewModel.tempRatePercentage,
-                   let duration = viewModel.tempRateDuration
-                {
-                    HStack {
-                        Text("Temp rate", comment: "Text for temp rate")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text("\(percentage)% (\(formatDuration(duration)))")
-                            .foregroundColor(.secondary)
-                    }
-                }
-
                 navigationLink(
                     label: Text("Insulin type", comment: "Label for button to view insulin type of pump"),
                     action: { viewModel.openInsulinType() }
@@ -691,72 +680,47 @@ struct TandemKitSettingsView: View {
             Text(deliverySectionTitle)
                 .foregroundColor(Color(UIColor.secondaryLabel))
                 .lineLimit(1)
-            if viewModel.isUpdatingPumpState {
-                HStack(alignment: .center) {
-                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                    Text("Updating...", comment: "Text shown when updating pump state")
-                        .fontWeight(.bold)
-                        .fixedSize()
-                }
-            } else if viewModel.isSuspended == true {
-                HStack(alignment: .center) {
-                    Image(systemName: "pause.circle.fill")
-                        .font(.system(size: 34))
-                        .fixedSize()
-                        .foregroundColor(guidanceColors.warning)
-                    Text("Insulin\nSuspended", comment: "Text shown when insulin suspended")
-                        .fontWeight(.bold)
-                        .fixedSize()
-                }
-            } else if viewModel.isSuspended == false {
-                HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    if let rate = viewModel.tempRateAbsolute {
-                        Text(String(format: "%.2f", rate))
-                            .font(.system(size: 28))
-                            .fontWeight(.heavy)
-                            .fixedSize()
-                    } else {
-                        Text(viewModel.currentBasalRateForDisplay)
-                            .font(.system(size: 28))
-                            .fontWeight(.heavy)
-                            .fixedSize()
-                    }
 
-                    Text("U/hr")
-                        .foregroundColor(.secondary)
-                        .fixedSize()
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if viewModel.tempRateActive {
-                        activeAlert = .stopTempRate
+            if let dose = viewModel.basalDose {
+                switch dose.type {
+                case .suspend:
+                    HStack(alignment: .center) {
+                        Image(systemName: "pause.circle.fill")
+                            .font(.system(size: 34))
+                            .fixedSize()
+                            .foregroundColor(guidanceColors.warning)
+                        Text("Insulin\nSuspended", comment: "Text shown when insulin suspended")
+                            .fontWeight(.bold)
+                            .fixedSize()
                     }
-                }
-            } else {
-                HStack(alignment: .center) {
-                    Image(systemName: "questionmark.square.dashed")
-                        .font(.system(size: 34))
-                        .fixedSize()
-                        .foregroundColor(.accentColor)
-                    Text("Unknown", comment: "Text shown when insulin status unknown")
-                        .fontWeight(.bold)
-                        .fixedSize()
+                default:
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(String(format: "%.2f", dose.value))
+                            .font(.system(size: 28))
+                            .fontWeight(.heavy)
+                            .fixedSize()
+
+                        Text("U/hr")
+                            .foregroundColor(.secondary)
+                            .fixedSize()
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if dose.type == .tempBasal {
+                            activeAlert = .stopTempRate
+                        }
+                    }
                 }
             }
         }
     }
 
     var stopTempRateMessage: String {
-        let rateText: String
-        if let rate = viewModel.tempRateAbsolute {
-            rateText = String(format: "%.2f U/hr", rate)
-        } else {
-            rateText = "unknown"
-        }
+        let rateText = String(format: "%.2f U/hr", viewModel.basalDose?.value ?? 0)
 
         let durationText: String
-        if let remaining = viewModel.tempRateRemainingSeconds {
-            let minutes = Int(remaining) / 60
+        if let start = viewModel.basalDose?.startDate, let end = viewModel.basalDose?.estimatedEndDate {
+            let minutes = Int(end.timeIntervalSince(start)) / 60
             let hours = minutes / 60
             let mins = minutes % 60
             if hours > 0 {
@@ -772,11 +736,16 @@ struct TandemKitSettingsView: View {
     }
 
     var deliverySectionTitle: String {
-        if viewModel.isSuspended == true {
-            return String(localized: "Insulin Delivery", comment: "Title of insulin delivery section")
-        } else if viewModel.tempRateActive {
+        guard let dose = viewModel.basalDose else {
+            return ""
+        }
+
+        switch dose.type {
+        case .tempBasal:
             return String(localized: "Temp Basal", comment: "Title for temp rate")
-        } else {
+        case .suspend:
+            return String(localized: "Insulin Delivery", comment: "Title of insulin delivery section")
+        default:
             return String(localized: "Profile Basal", comment: "Title of insulin delivery section")
         }
     }

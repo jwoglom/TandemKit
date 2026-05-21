@@ -78,7 +78,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     }
 
     public var onboarded: Bool = false
-    public var pumpState: PumpState? = nil
+    public var pumpState: PumpState?
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
     public var latestInsulinOnBoard: Double?
@@ -131,9 +131,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var alertSnoozeEnabled: Bool = false
     public var alertSnoozeDuration: TimeInterval = .minutes(10)
 
-    // Status icons from HomeScreenMirror
-    public var basalStatusIcon: HomeScreenBasalStatus?
-
     // Notification count
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
@@ -143,7 +140,7 @@ public struct TandemPumpManagerState: RawRepresentable {
 
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
-        self.basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
+        basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
     }
 
     public init(rawValue: RawValue) {
@@ -211,7 +208,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         } else {
             bolusState = .noBolus
         }
-        
+
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
         } else {
@@ -219,11 +216,13 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         if let scheduleRaw = rawValue["basalRateSchedule"] as? [String: Any] {
-            basalRateSchedule = TandemPumpManagerState.decodeBasalSchedule(from: scheduleRaw) ?? BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
+            basalRateSchedule = TandemPumpManagerState
+                .decodeBasalSchedule(from: scheduleRaw) ??
+                BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
         } else {
             basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
         }
-        
+
         if let rawDoseEntry = rawValue["basalDose"] as? UnfinalizedDose.RawValue {
             basalDose = UnfinalizedDose(rawValue: rawDoseEntry) ?? UnfinalizedDose
                 .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: insulinType)
@@ -283,12 +282,6 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastControlIQUpdate = nil
         }
 
-        if let basalIconRaw = rawValue["basalStatusIcon"] as? Int {
-            basalStatusIcon = HomeScreenBasalStatus(rawValue: basalIconRaw)
-        } else {
-            basalStatusIcon = nil
-        }
-
         if let lastNotificationInterval = rawValue["lastNotificationUpdate"] as? TimeInterval {
             lastNotificationUpdate = Date(timeIntervalSinceReferenceDate: lastNotificationInterval)
         } else {
@@ -344,7 +337,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
         raw["alertSnoozeEnabled"] = alertSnoozeEnabled
         raw["alertSnoozeDuration"] = alertSnoozeDuration
-        raw["basalStatusIcon"] = basalStatusIcon?.rawValue
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["insulinType"] = insulinType?.rawValue
@@ -418,7 +410,6 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* controlIQWeight: \(String(describing: controlIQWeight))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
-            "* basalStatusIcon: \(String(describing: basalStatusIcon))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
@@ -429,7 +420,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* maxBolusLimitMilliunits: \(String(describing: maxBolusLimitMilliunits))"
         ].joined(separator: "\n")
     }
-    
+
     public var basalDeliveryState: PumpManagerStatus.BasalDeliveryState {
         switch basalDose.type {
         case .basal,
@@ -442,7 +433,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             return .tempBasal(basalDose.toDoseEntry(isMutable: true))
         }
     }
-    
+
     public var deviceInfo: HKDevice {
         HKDevice(
             name: "TandemPump",

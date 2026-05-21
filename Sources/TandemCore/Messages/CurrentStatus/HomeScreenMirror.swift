@@ -1,4 +1,5 @@
 import Foundation
+import LoopKit
 
 /// Request basic home screen status info.
 public class HomeScreenMirrorRequest: Message {
@@ -158,6 +159,20 @@ public extension HomeScreenMirrorResponse {
         case increaseBasal = 6
         case attenuatedBasal = 7
         case hide = 200
+
+        var type: DoseType {
+            switch self {
+            case .attenuatedBasal,
+                 .basal,
+                 .hide,
+                 .increaseBasal,
+                 .zeroBasal: return .basal
+            case .tempRate,
+                 .zeroTempRate: return .tempBasal
+            case .hypoSuspendBasalIQ,
+                 .suspend: return .suspend
+            }
+        }
     }
 
     enum ApControlStateIcon: Int {
