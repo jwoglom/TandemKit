@@ -6,7 +6,7 @@ public class CentralChallengeRequest: AbstractCentralChallengeRequest {
         opCode: 16,
         size: 10,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -44,7 +44,7 @@ public class CentralChallengeResponse: AbstractCentralChallengeResponse {
         opCode: 17,
         size: 30,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS
     )
 
     public var cargo: Data

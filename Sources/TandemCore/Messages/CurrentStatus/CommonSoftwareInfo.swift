@@ -6,7 +6,7 @@ public class CommonSoftwareInfoRequest: Message {
         opCode: UInt8(bitPattern: Int8(-114)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true,
         minApi: .apiFuture
     )
@@ -32,7 +32,7 @@ public class CommonSoftwareInfoResponse: Message {
         opCode: UInt8(bitPattern: Int8(-113)),
         size: 60,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true,
         minApi: .apiFuture
     )

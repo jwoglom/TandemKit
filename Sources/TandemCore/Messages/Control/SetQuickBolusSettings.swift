@@ -6,7 +6,7 @@ public class SetQuickBolusSettingsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-46)),
         size: 7,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -108,7 +108,7 @@ public class SetQuickBolusSettingsResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-45)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

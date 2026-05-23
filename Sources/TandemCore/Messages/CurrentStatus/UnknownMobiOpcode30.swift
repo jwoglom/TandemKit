@@ -5,7 +5,7 @@ public class UnknownMobiOpcode30Request: Message {
         opCode: 30,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -28,7 +28,7 @@ public class UnknownMobiOpcode30Response: Message {
         opCode: 31,
         size: 16,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

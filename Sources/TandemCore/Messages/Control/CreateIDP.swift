@@ -6,7 +6,7 @@ public class CreateIDPRequest: Message {
         opCode: UInt8(bitPattern: Int8(-26)),
         size: 35,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly
@@ -144,7 +144,7 @@ public class CreateIDPResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-25)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly

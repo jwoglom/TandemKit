@@ -6,7 +6,7 @@ public class ActivateShelfModeRequest: Message {
         opCode: UInt8(bitPattern: Int8(-70)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -31,7 +31,7 @@ public class ActivateShelfModeResponse: Message {
         opCode: UInt8(bitPattern: Int8(-69)),
         size: 0,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

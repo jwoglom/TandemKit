@@ -30,7 +30,7 @@ public class RemoteBgEntryRequest: Message {
         opCode: UInt8(bitPattern: Int8(-74)),
         size: 11,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )
@@ -106,7 +106,7 @@ public class RemoteBgEntryResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-73)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )

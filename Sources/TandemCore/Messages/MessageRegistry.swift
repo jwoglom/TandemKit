@@ -1,12 +1,13 @@
+import CoreBluetooth
 import Foundation
 
-public struct MessageMetadata: Sendable {
+public struct MessageMetadata {
     public let type: Message.Type
     public let name: String
     public let opCode: UInt8
     public let size: Int
     public let messageType: MessageType
-    public let characteristic: CharacteristicUUID
+    public let characteristic: CBUUID
     public let signed: Bool
     public let variableSize: Bool
     public let stream: Bool
@@ -418,7 +419,7 @@ public enum MessageRegistry {
         metadataByName[name.lowercased()]
     }
 
-    public static func matches(opCode: UInt8, characteristic: CharacteristicUUID? = nil) -> [MessageMetadata] {
+    public static func matches(opCode: UInt8, characteristic: CBUUID? = nil) -> [MessageMetadata] {
         all.filter { meta in
             guard meta.opCode == opCode else { return false }
             if let characteristic = characteristic,
@@ -431,7 +432,7 @@ public enum MessageRegistry {
         }
     }
 
-    public static func bestMatches(opCode: UInt8, characteristic: CharacteristicUUID?, payloadLength: Int) -> [MessageMetadata] {
+    public static func bestMatches(opCode: UInt8, characteristic: CBUUID?, payloadLength: Int) -> [MessageMetadata] {
         var candidates = matches(opCode: opCode, characteristic: characteristic)
         let filtered = candidates.filter { $0.matches(payloadLength: payloadLength) }
         if !filtered.isEmpty {
@@ -512,7 +513,7 @@ public enum MessageRegistry {
         // Check for opcode conflicts within the same characteristic
         var opcodeMap: [String: [MessageMetadata]] = [:]
         for meta in all {
-            let key = "\(meta.characteristic.rawValue):\(meta.opCode)"
+            let key = "\(meta.characteristic):\(meta.opCode)"
             opcodeMap[key, default: []].append(meta)
         }
 

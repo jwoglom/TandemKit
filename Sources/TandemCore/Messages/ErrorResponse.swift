@@ -6,7 +6,7 @@ public final class ErrorResponse: Message {
         opCode: 77,
         size: 2,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true,
         signed: true
     )

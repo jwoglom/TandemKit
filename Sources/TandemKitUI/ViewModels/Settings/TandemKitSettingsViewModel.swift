@@ -37,6 +37,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showingTimeSyncConfirmation = false
     @Published var commandFailure: CommandFailure?
     @Published var basalDose: UnfinalizedDose?
+    @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
     @Published var autoAcknowledgeBasalAlerts: Bool = false
@@ -95,7 +96,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
-        isConnected = pumpManager?.connectedAndPaired ?? false
+        isConnected = false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalDose = pumpManager?.state.basalDose
 
@@ -122,10 +123,6 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     var pumpState: PumpState? {
         pumpManager?.state.pumpState
-    }
-
-    var pumpComm: PumpComm? {
-        pumpManager?.tandemPump.pumpComm
     }
 
     // MARK: - Computed Properties from Manager State
@@ -166,7 +163,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     // MARK: - Refresh Methods
 
     func refreshPumpStatus() {
-        guard let pumpManager, pumpManager.connectedAndPaired else {
+        guard let pumpManager else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
             pendingRefreshOnReconnect = true
             return
@@ -216,8 +213,6 @@ class TandemKitSettingsViewModel: ObservableObject {
                             self.commandFailure = .resume
                         }
                     } else {
-                        pumpManager.ensureCurrentPumpData { _ in }
-
                         DispatchQueue.main.async {
                             self.isUpdatingPumpState = false
                         }
@@ -231,8 +226,6 @@ class TandemKitSettingsViewModel: ObservableObject {
                             self.commandFailure = .suspend
                         }
                     } else {
-                        pumpManager.ensureCurrentPumpData { _ in }
-
                         DispatchQueue.main.async {
                             self.isUpdatingPumpState = false
                         }
@@ -250,32 +243,32 @@ class TandemKitSettingsViewModel: ObservableObject {
             weightLbs: pumpManager?.state.controlIQWeight ?? 30,
             totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
         )
-        pumpManager?.configureControlIQMode(request) { success in
-            if success {
-                // Check CGM status on background thread
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let cgmResponse = self.pumpManager?.sendMessage(
-                        message: CGMStatusV2Request()
-                    ) as? CGMStatusV2Response
-
-                    let cgmActive = cgmResponse?.sessionState == .active
-
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.useControlIQ = true
-                        self.isCGMActiveOnPump = cgmActive
-                        if !cgmActive {
-                            self.showNoCGMWarning = true
-                        }
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                    self.commandFailure = .controlIQ
-                }
-            }
-        }
+//        pumpManager?.configureControlIQMode(request) { success in
+//            if success {
+//                // Check CGM status on background thread
+//                DispatchQueue.global(qos: .userInitiated).async {
+//                    let cgmResponse = self.pumpManager?.sendMessage(
+//                        message: CGMStatusV2Request()
+//                    ) as? CGMStatusV2Response
+//
+//                    let cgmActive = cgmResponse?.sessionState == .active
+//
+//                    DispatchQueue.main.async {
+//                        self.isUpdatingPumpState = false
+//                        self.useControlIQ = true
+//                        self.isCGMActiveOnPump = cgmActive
+//                        if !cgmActive {
+//                            self.showNoCGMWarning = true
+//                        }
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.isUpdatingPumpState = false
+//                    self.commandFailure = .controlIQ
+//                }
+//            }
+//        }
     }
 
     func switchAlgorithmToDIY() {
@@ -311,15 +304,15 @@ class TandemKitSettingsViewModel: ObservableObject {
 
             let isExerciseOn = self.controlIQUserMode?.rawValue == 3
             let command: SetModesRequest.ModeCommand = isExerciseOn ? .exerciseModeOff : .exerciseModeOn
-            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
-
-            guard response?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                    self.commandFailure = .exerciseMode
-                }
-                return
-            }
+//            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
+//
+//            guard response?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isUpdatingPumpState = false
+//                    self.commandFailure = .exerciseMode
+//                }
+//                return
+//            }
 
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in }
@@ -341,16 +334,16 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             let isSleepOn = self.controlIQUserMode?.rawValue == 2
-            let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
-            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
-
-            guard response?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                    self.commandFailure = .sleepMode
-                }
-                return
-            }
+//            let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
+//            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
+//
+//            guard response?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isUpdatingPumpState = false
+//                    self.commandFailure = .sleepMode
+//                }
+//                return
+//            }
 
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in }
@@ -510,21 +503,22 @@ class TandemKitSettingsViewModel: ObservableObject {
 
 extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
     func pumpManager(
-        _ loopkitPumpManager: any LoopKit.PumpManager,
+        _: any LoopKit.PumpManager,
         didUpdate _: LoopKit.PumpManagerStatus,
         oldStatus _: LoopKit.PumpManagerStatus
     ) {
-        guard let pumpManager = loopkitPumpManager as? TandemPumpManager else {
+        guard let pumpManager else {
             return
         }
 
         DispatchQueue.main.async {
-            self.isConnected = pumpManager.connectedAndPaired
+            self.isConnected = false
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
+            self.scheduledBasal = pumpManager.getScheduledBasalRate()
 
-            if self.pendingRefreshOnReconnect, pumpManager.connectedAndPaired {
+            if self.pendingRefreshOnReconnect {
                 self.pendingRefreshOnReconnect = false
                 self.refreshPumpStatus()
             }

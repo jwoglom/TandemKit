@@ -6,7 +6,7 @@ public class SendTipsControlGenericTestRequest: Message {
         opCode: 118,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -31,7 +31,7 @@ public class SendTipsControlGenericTestResponse: Message, StatusMessage {
         opCode: 119,
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

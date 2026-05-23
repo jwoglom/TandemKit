@@ -6,7 +6,7 @@ public class PumpChallengeRequest: Message {
         opCode: 18,
         size: 22,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -44,7 +44,7 @@ public class PumpChallengeResponse: Message {
         opCode: 19,
         size: 3,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS
     )
 
     public var cargo: Data

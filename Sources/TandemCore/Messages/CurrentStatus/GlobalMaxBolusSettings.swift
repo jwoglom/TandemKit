@@ -6,7 +6,7 @@ public class GlobalMaxBolusSettingsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-116)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class GlobalMaxBolusSettingsResponse: Message {
         opCode: UInt8(bitPattern: Int8(-115)),
         size: 4,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

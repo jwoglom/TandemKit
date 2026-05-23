@@ -6,7 +6,7 @@ public class PlaySoundRequest: Message {
         opCode: UInt8(bitPattern: Int8(-12)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -31,7 +31,7 @@ public class PlaySoundResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-11)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

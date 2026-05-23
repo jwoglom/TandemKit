@@ -6,7 +6,7 @@ public class Jpake4KeyConfirmationRequest: Message {
         opCode: 40,
         size: 50,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 
@@ -62,7 +62,7 @@ public class Jpake4KeyConfirmationResponse: Message {
         opCode: 41,
         size: 50,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 

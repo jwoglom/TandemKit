@@ -6,7 +6,7 @@ public class LastBolusStatusV3Request: Message {
         opCode: UInt8(bitPattern: Int8(-70)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )
@@ -58,7 +58,7 @@ public class LastBolusStatusV3Response: Message {
         opCode: UInt8(bitPattern: Int8(-69)),
         size: 53,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )

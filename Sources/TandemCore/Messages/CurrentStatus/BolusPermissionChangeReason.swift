@@ -6,7 +6,7 @@ public class BolusPermissionChangeReasonRequest: Message {
         opCode: 168,
         size: 2,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiFuture
     )
 
@@ -34,7 +34,7 @@ public class BolusPermissionChangeReasonResponse: Message {
         opCode: 169,
         size: 5,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiFuture
     )
 

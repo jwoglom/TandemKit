@@ -6,7 +6,7 @@ public class BolusPermissionReleaseRequest: Message {
         opCode: UInt8(bitPattern: Int8(-16)),
         size: 4,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )
@@ -45,7 +45,7 @@ public class BolusPermissionReleaseResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-15)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )

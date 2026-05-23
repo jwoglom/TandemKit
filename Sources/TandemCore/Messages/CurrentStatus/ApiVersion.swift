@@ -8,7 +8,7 @@ public class ApiVersionRequest: Message {
         opCode: 32,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true
     )
 
@@ -38,7 +38,7 @@ public class ApiVersionResponse: Message {
         opCode: 33,
         size: 4,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

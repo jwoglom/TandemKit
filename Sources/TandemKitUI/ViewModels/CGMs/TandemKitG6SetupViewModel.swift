@@ -77,39 +77,39 @@ class TandemKitG6SetupViewModel: ObservableObject {
             }
 
             // Set sensor type to G6
-            let sensorTypeResponse = pumpManager.sendMessage(
-                message: SetSensorTypeRequest(sensorType: .dexcomG6)
-            ) as? SetSensorTypeResponse
+//            let sensorTypeResponse = pumpManager.sendMessage(
+//                message: SetSensorTypeRequest(sensorType: .dexcomG6)
+//            ) as? SetSensorTypeResponse
+//
+//            guard sensorTypeResponse?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isLoading = false
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set sensor type. Check pump connection and try again.",
+//                        comment: "Error when setting sensor type fails"
+//                    )
+//                }
+//                return
+//            }
+//
+//            // Set transmitter ID
+//            let txResponse = pumpManager.sendMessage(
+//                message: SetG6TransmitterIdRequest(txId: txId)
+//            ) as? SetG6TransmitterIdResponse
 
-            guard sensorTypeResponse?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    self.error = String(
-                        localized:
-                        "Failed to set sensor type. Check pump connection and try again.",
-                        comment: "Error when setting sensor type fails"
-                    )
-                }
-                return
-            }
-
-            // Set transmitter ID
-            let txResponse = pumpManager.sendMessage(
-                message: SetG6TransmitterIdRequest(txId: txId)
-            ) as? SetG6TransmitterIdResponse
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if txResponse?.isStatusOK == true {
-                    self.didComplete = true
-                } else {
-                    self.error = String(
-                        localized:
-                        "Failed to set transmitter ID. Check pump connection and try again.",
-                        comment: "Error when setting G6 transmitter ID fails"
-                    )
-                }
-            }
+//            DispatchQueue.main.async {
+//                self.isLoading = false
+//                if txResponse?.isStatusOK == true {
+//                    self.didComplete = true
+//                } else {
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set transmitter ID. Check pump connection and try again.",
+//                        comment: "Error when setting G6 transmitter ID fails"
+//                    )
+//                }
+//            }
         }
     }
 
@@ -138,56 +138,56 @@ class TandemKitG6SetupViewModel: ObservableObject {
             }
 
             // Step 1: Set sensor type to G6
-            let sensorTypeResponse = pumpManager.sendMessage(
-                message: SetSensorTypeRequest(sensorType: .dexcomG6)
-            ) as? SetSensorTypeResponse
-
-            guard sensorTypeResponse?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    self.error = String(
-                        localized:
-                        "Failed to set sensor type. Check pump connection and try again.",
-                        comment: "Error when setting sensor type fails"
-                    )
-                }
-                return
-            }
-
-            // Step 2: Set transmitter ID
-            let txResponse = pumpManager.sendMessage(
-                message: SetG6TransmitterIdRequest(txId: txId)
-            ) as? SetG6TransmitterIdResponse
-
-            guard txResponse?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    self.error = String(
-                        localized:
-                        "Failed to set transmitter ID. Check pump connection and try again.",
-                        comment: "Error when setting G6 transmitter ID fails"
-                    )
-                }
-                return
-            }
-
-            // Step 3: Start sensor session
-            let startResponse = pumpManager.sendMessage(
-                message: StartDexcomG6SensorSessionRequest(sensorCode: code)
-            ) as? StartDexcomG6SensorSessionResponse
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if startResponse?.isStatusOK == true {
-                    self.didComplete = true
-                } else {
-                    self.error = String(
-                        localized:
-                        "Failed to start CGM sensor. Check pump connection and try again.",
-                        comment: "Error when starting G6 sensor fails"
-                    )
-                }
-            }
+//            let sensorTypeResponse = pumpManager.sendMessage(
+//                message: SetSensorTypeRequest(sensorType: .dexcomG6)
+//            ) as? SetSensorTypeResponse
+//
+//            guard sensorTypeResponse?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isLoading = false
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set sensor type. Check pump connection and try again.",
+//                        comment: "Error when setting sensor type fails"
+//                    )
+//                }
+//                return
+//            }
+//
+//            // Step 2: Set transmitter ID
+//            let txResponse = pumpManager.sendMessage(
+//                message: SetG6TransmitterIdRequest(txId: txId)
+//            ) as? SetG6TransmitterIdResponse
+//
+//            guard txResponse?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isLoading = false
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set transmitter ID. Check pump connection and try again.",
+//                        comment: "Error when setting G6 transmitter ID fails"
+//                    )
+//                }
+//                return
+//            }
+//
+//            // Step 3: Start sensor session
+//            let startResponse = pumpManager.sendMessage(
+//                message: StartDexcomG6SensorSessionRequest(sensorCode: code)
+//            ) as? StartDexcomG6SensorSessionResponse
+//
+//            DispatchQueue.main.async {
+//                self.isLoading = false
+//                if startResponse?.isStatusOK == true {
+//                    self.didComplete = true
+//                } else {
+//                    self.error = String(
+//                        localized:
+//                        "Failed to start CGM sensor. Check pump connection and try again.",
+//                        comment: "Error when starting G6 sensor fails"
+//                    )
+//                }
+//            }
         }
     }
 }

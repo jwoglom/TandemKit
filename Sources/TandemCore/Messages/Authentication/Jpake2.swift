@@ -6,7 +6,7 @@ public class Jpake2Request: Message {
         opCode: 36,
         size: 167,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 
@@ -48,7 +48,7 @@ public class Jpake2Response: Message {
         opCode: 37,
         size: 170,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 

@@ -6,7 +6,7 @@ public class GetG6TransmitterHardwareInfoRequest: Message {
         opCode: UInt8(bitPattern: Int8(-60)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class GetG6TransmitterHardwareInfoResponse: Message {
         opCode: UInt8(bitPattern: Int8(-59)),
         size: 96,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

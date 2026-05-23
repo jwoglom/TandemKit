@@ -5,7 +5,7 @@ public class HighestAamRequest: Message {
         opCode: 120,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -29,7 +29,7 @@ public class HighestAamResponse: Message, NotificationMessage, NotificationEnum 
         opCode: 121,
         size: 11,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true
     )
 

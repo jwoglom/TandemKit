@@ -11,7 +11,7 @@ public class CgmOutOfRangeAlertRequest: Message {
         opCode: UInt8(bitPattern: Int8(-58)),
         size: 3,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -53,7 +53,7 @@ public class CgmOutOfRangeAlertResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-57)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

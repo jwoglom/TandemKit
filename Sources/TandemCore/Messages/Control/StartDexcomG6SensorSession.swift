@@ -6,7 +6,7 @@ public class StartDexcomG6SensorSessionRequest: Message {
         opCode: UInt8(bitPattern: Int8(-78)),
         size: 2,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -34,7 +34,7 @@ public class StartDexcomG6SensorSessionResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-77)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

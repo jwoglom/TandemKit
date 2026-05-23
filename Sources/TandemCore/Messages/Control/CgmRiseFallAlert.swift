@@ -12,7 +12,7 @@ public class CgmRiseFallAlertRequest: Message {
         opCode: UInt8(bitPattern: Int8(-60)),
         size: 4,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -63,7 +63,7 @@ public class CgmRiseFallAlertResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-59)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

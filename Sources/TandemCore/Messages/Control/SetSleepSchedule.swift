@@ -6,7 +6,7 @@ public class SetSleepScheduleRequest: Message {
         opCode: UInt8(bitPattern: Int8(-50)),
         size: 8,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
@@ -54,7 +54,7 @@ public class SetSleepScheduleResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-49)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly

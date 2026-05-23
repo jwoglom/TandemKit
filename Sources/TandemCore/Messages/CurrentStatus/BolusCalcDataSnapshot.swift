@@ -6,7 +6,7 @@ public class BolusCalcDataSnapshotRequest: Message {
         opCode: 114,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 
@@ -31,7 +31,7 @@ public class BolusCalcDataSnapshotResponse: Message {
         opCode: 115,
         size: 46,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 

@@ -6,7 +6,7 @@ public class IDPSettingsRequest: Message {
         opCode: 64,
         size: 1,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -33,7 +33,7 @@ public class IDPSettingsResponse: Message {
         opCode: 65,
         size: 23,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

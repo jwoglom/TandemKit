@@ -6,7 +6,7 @@ public class FactoryResetRequest: Message {
         opCode: UInt8(bitPattern: Int8(-24)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -31,7 +31,7 @@ public class FactoryResetResponse: Message {
         opCode: UInt8(bitPattern: Int8(-23)),
         size: 0,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

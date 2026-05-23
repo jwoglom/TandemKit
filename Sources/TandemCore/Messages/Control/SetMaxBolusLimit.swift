@@ -6,7 +6,7 @@ public class SetMaxBolusLimitRequest: Message {
         opCode: UInt8(bitPattern: Int8(-122)),
         size: 2,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -34,7 +34,7 @@ public class SetMaxBolusLimitResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-121)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

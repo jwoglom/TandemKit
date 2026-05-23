@@ -1,13 +1,3 @@
-//
-//  NonexistentDetectingCartridgeStateStream.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of NonexistentDetectingCartridgeStateStreamRequest and DetectingCartridgeStateStreamResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentDetectingCartridgeStateStreamRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/DetectingCartridgeStateStreamResponse.java
-//
 import Foundation
 
 /// Placeholder request for DetectingCartridgeStateStreamResponse which has no originating request.
@@ -16,7 +6,7 @@ public class NonexistentDetectingCartridgeStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -39,7 +29,7 @@ public class DetectingCartridgeStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-29)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         variableSize: true,
         stream: true,
         signed: true

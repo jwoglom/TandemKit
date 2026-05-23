@@ -6,7 +6,7 @@ public class ExtendedBolusStatusV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-74)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -41,7 +41,7 @@ public class ExtendedBolusStatusV2Response: Message {
         opCode: UInt8(bitPattern: Int8(-73)),
         size: 22,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

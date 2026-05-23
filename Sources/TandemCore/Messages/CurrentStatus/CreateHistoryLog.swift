@@ -6,7 +6,7 @@ public class CreateHistoryLogRequest: Message {
         opCode: 126,
         size: 4,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -33,7 +33,7 @@ public class CreateHistoryLogResponse: Message {
         opCode: 127,
         size: 2,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

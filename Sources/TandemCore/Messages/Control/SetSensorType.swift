@@ -6,7 +6,7 @@ public class SetSensorTypeRequest: Message {
         opCode: UInt8(bitPattern: Int8(-64)),
         size: 1,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -44,7 +44,7 @@ public class SetSensorTypeResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-63)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

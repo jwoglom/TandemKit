@@ -13,7 +13,7 @@ public class CgmHighLowAlertRequest: Message {
         opCode: UInt8(bitPattern: Int8(-62)),
         size: 7,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -80,7 +80,7 @@ public class CgmHighLowAlertResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-61)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

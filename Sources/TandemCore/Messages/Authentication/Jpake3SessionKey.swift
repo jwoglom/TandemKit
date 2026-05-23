@@ -6,7 +6,7 @@ public class Jpake3SessionKeyRequest: Message {
         opCode: 38,
         size: 2,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 
@@ -38,7 +38,7 @@ public class Jpake3SessionKeyResponse: Message {
         opCode: 39,
         size: 18,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 

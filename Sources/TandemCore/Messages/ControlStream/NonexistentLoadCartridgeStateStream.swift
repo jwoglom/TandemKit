@@ -6,7 +6,7 @@ public class NonexistentLoadCartridgeStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -30,7 +30,7 @@ public class LoadCartridgeStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-29)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )

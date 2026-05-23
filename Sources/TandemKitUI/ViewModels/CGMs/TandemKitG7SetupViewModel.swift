@@ -53,39 +53,39 @@ class TandemKitG7SetupViewModel: ObservableObject {
             }
 
             // Set sensor type to G7
-            let sensorTypeResponse = pumpManager.sendMessage(
-                message: SetSensorTypeRequest(sensorType: .dexcomG7)
-            ) as? SetSensorTypeResponse
-
-            guard sensorTypeResponse?.isStatusOK == true else {
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    self.error = String(
-                        localized:
-                        "Failed to set sensor type. Check pump connection and try again.",
-                        comment: "Error when setting sensor type fails"
-                    )
-                }
-                return
-            }
-
-            // Set G7 pairing code
-            let response = pumpManager.sendMessage(
-                message: SetDexcomG7PairingCodeRequest(pairingCode: code)
-            ) as? SetDexcomG7PairingCodeResponse
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if response?.isStatusOK == true {
-                    self.didComplete = true
-                } else {
-                    self.error = String(
-                        localized:
-                        "Failed to set G7 pairing code. Check pump connection and try again.",
-                        comment: "Error when setting G7 pairing code fails"
-                    )
-                }
-            }
+//            let sensorTypeResponse = pumpManager.sendMessage(
+//                message: SetSensorTypeRequest(sensorType: .dexcomG7)
+//            ) as? SetSensorTypeResponse
+//
+//            guard sensorTypeResponse?.isStatusOK == true else {
+//                DispatchQueue.main.async {
+//                    self.isLoading = false
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set sensor type. Check pump connection and try again.",
+//                        comment: "Error when setting sensor type fails"
+//                    )
+//                }
+//                return
+//            }
+//
+//            // Set G7 pairing code
+//            let response = pumpManager.sendMessage(
+//                message: SetDexcomG7PairingCodeRequest(pairingCode: code)
+//            ) as? SetDexcomG7PairingCodeResponse
+//
+//            DispatchQueue.main.async {
+//                self.isLoading = false
+//                if response?.isStatusOK == true {
+//                    self.didComplete = true
+//                } else {
+//                    self.error = String(
+//                        localized:
+//                        "Failed to set G7 pairing code. Check pump connection and try again.",
+//                        comment: "Error when setting G7 pairing code fails"
+//                    )
+//                }
+//            }
         }
     }
 }

@@ -6,7 +6,7 @@ public class SetDexcomG7PairingCodeRequest: Message {
         opCode: UInt8(bitPattern: Int8(-4)),
         size: 8,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -37,7 +37,7 @@ public class SetDexcomG7PairingCodeResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-3)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

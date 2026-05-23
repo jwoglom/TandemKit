@@ -1,36 +1,24 @@
 import CoreBluetooth
 
-public enum ServiceUUID: String, Sendable {
+public class ServiceUUID {
     // All pump operations
-    case PUMP_SERVICE = "0000fdfb-0000-1000-8000-00805f9b34fb"
+    static let PUMP_SERVICE = CBUUID(string: "0000fdfb-0000-1000-8000-00805f9b34fb")
 
     // Tandem Device Update service
-    case TDU_SERVICE = "0000fdfa-0000-1000-8000-00805f9b34fb"
+    static let TDU_SERVICE = CBUUID(string: "0000fdfa-0000-1000-8000-00805f9b34fb")
 
     // Bluetooth Device Information service (DIS)
-    case DIS_SERVICE = "0000180A-0000-1000-8000-00805f9b34fb"
+    static let DIS_SERVICE = CBUUID(string: "0000180A-0000-1000-8000-00805f9b34fb")
 
     // Generic Access service
-    case GENERIC_ACCESS_SERVICE = "00001800-0000-1000-8000-00805f9b34fb"
+    static let GENERIC_ACCESS_SERVICE = CBUUID(string: "00001800-0000-1000-8000-00805f9b34fb")
 
     // Generic Attribute service
-    case GENERIC_ATTRIBUTE_SERVICE = "00001801-0000-1000-8000-00805f9b34fb"
-}
-
-public let AllServiceUUIDs: [ServiceUUID] = [
-    .PUMP_SERVICE,
-    .TDU_SERVICE,
-    .DIS_SERVICE,
-    .GENERIC_ACCESS_SERVICE,
-    .GENERIC_ATTRIBUTE_SERVICE
-]
-
-public extension ServiceUUID {
-    var cbUUID: CBUUID {
-        #if os(Linux)
-            return CBUUID(uuidString: rawValue)
-        #else
-            return CBUUID(string: rawValue)
-        #endif
-    }
+    static let GENERIC_ATTRIBUTE_SERVICE = CBUUID(string: "00001801-0000-1000-8000-00805f9b34fb")
+    
+    static let all: [CBUUID] = [
+        PUMP_SERVICE,
+        DIS_SERVICE,
+        GENERIC_ATTRIBUTE_SERVICE
+    ]
 }

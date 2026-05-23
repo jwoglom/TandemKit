@@ -1,13 +1,3 @@
-//
-//  NonexistentFillCannulaStateStream.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of NonexistentFillCannulaStateStreamRequest and FillCannulaStateStreamResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentFillCannulaStateStreamRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/FillCannulaStateStreamResponse.java
-//
 import Foundation
 
 /// Placeholder request for FillCannulaStateStreamResponse which has no originating request.
@@ -16,7 +6,7 @@ public class NonexistentFillCannulaStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -38,7 +28,7 @@ public class FillCannulaStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-25)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )

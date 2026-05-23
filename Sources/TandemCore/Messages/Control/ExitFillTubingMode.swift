@@ -6,7 +6,7 @@ public class ExitFillTubingModeRequest: Message {
         opCode: UInt8(bitPattern: Int8(-106)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -31,7 +31,7 @@ public class ExitFillTubingModeResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-105)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

@@ -5,7 +5,7 @@ public enum PumpCommError: Error {
     case noResponse
     case missingAuthenticationKey
     case errorResponse(context: String? = nil, request: (any Message)? = nil, response: (any Message)? = nil)
-    case pumpFault(event: PumpCommFaultEvent)
+    case pumpFault
     case notImplemented
     case pumpChallengeError
     case invalidPacket
@@ -63,11 +63,8 @@ extension PumpCommError: LocalizedError {
                     comment: "Error message shown when pump returns an error for a command"
                 )
             }
-        case let .pumpFault(event):
-            return String(
-                format: String(localized: "Pump fault: %@", comment: "Error shown when pump returns a fault code"),
-                event.code.localizedDescription
-            )
+        case .pumpFault:
+            return String(localized: "Pump fault: %@", comment: "Error shown when pump returns a fault code")
         case .notImplemented:
             return String(
                 localized: "Feature not implemented",
@@ -183,29 +180,29 @@ extension PumpCommError: LocalizedError {
                 localized: "No bolus is running.",
                 comment: "Recovery suggestion when cancel bolus is called without an active bolus"
             )
-        case let .pumpFault(event):
-            switch event.category {
-            case .transient:
-                return String(
-                    localized: "The pump reported a temporary fault. TandemKit will retry automatically.",
-                    comment: "Recovery suggestion when pump fault is transient"
-                )
-            case .authentication:
-                return String(
-                    localized: "Authentication with the pump failed. Try reconnecting or re-pairing your pump.",
-                    comment: "Recovery suggestion when pump fault is authentication related"
-                )
-            case .permanent:
-                return String(
-                    localized: "The pump rejected the request. Verify parameters and try again.",
-                    comment: "Recovery suggestion when pump fault is permanent"
-                )
-            case .unknown:
+        case .pumpFault:
+//            switch event.category {
+//            case .transient:
+//                return String(
+//                    localized: "The pump reported a temporary fault. TandemKit will retry automatically.",
+//                    comment: "Recovery suggestion when pump fault is transient"
+//                )
+//            case .authentication:
+//                return String(
+//                    localized: "Authentication with the pump failed. Try reconnecting or re-pairing your pump.",
+//                    comment: "Recovery suggestion when pump fault is authentication related"
+//                )
+//            case .permanent:
+//                return String(
+//                    localized: "The pump rejected the request. Verify parameters and try again.",
+//                    comment: "Recovery suggestion when pump fault is permanent"
+//                )
+//            case .unknown:
                 return String(
                     localized: "The pump returned an unknown fault code.",
                     comment: "Recovery suggestion when pump fault is unknown"
                 )
-            }
+//            }
 
         case .invalidScheduledBasalRate:
             return String(

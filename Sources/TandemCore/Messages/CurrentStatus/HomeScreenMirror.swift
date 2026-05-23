@@ -7,7 +7,7 @@ public class HomeScreenMirrorRequest: Message {
         opCode: 56,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -31,7 +31,7 @@ public class HomeScreenMirrorResponse: Message {
         opCode: 57,
         size: 9,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

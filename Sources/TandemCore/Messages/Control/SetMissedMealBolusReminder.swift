@@ -14,7 +14,7 @@ public class SetMissedMealBolusReminderRequest: Message {
         opCode: UInt8(bitPattern: Int8(-38)),
         size: 8,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -82,7 +82,7 @@ public class SetMissedMealBolusReminderResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-37)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

@@ -6,7 +6,7 @@ public class StopTempRateRequest: Message {
         opCode: UInt8(bitPattern: Int8(-90)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         minApi: .mobiApiV3_5,
@@ -34,7 +34,7 @@ public class StopTempRateResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-89)),
         size: 3,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly

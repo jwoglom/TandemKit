@@ -6,7 +6,7 @@ public class SetIDPSettingsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-84)),
         size: 6,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -73,7 +73,7 @@ public class SetIDPSettingsResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-83)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

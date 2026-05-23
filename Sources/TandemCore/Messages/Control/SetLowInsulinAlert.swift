@@ -9,7 +9,7 @@ public class SetLowInsulinAlertRequest: Message {
         opCode: UInt8(bitPattern: Int8(-34)),
         size: 1,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -37,7 +37,7 @@ public class SetLowInsulinAlertResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-33)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

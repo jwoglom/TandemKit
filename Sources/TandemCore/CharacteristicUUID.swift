@@ -1,100 +1,50 @@
 import CoreBluetooth
 
-public enum CharacteristicUUID: String, Sendable {
+public class CharacteristicUUID {
     // For reading pump state
-    case CURRENT_STATUS_CHARACTERISTICS = "7B83FFF6-9F77-4E5C-8064-AAE2C24838B9"
-    case QUALIFYING_EVENTS_CHARACTERISTICS = "7B83FFF7-9F77-4E5C-8064-AAE2C24838B9"
-    case HISTORY_LOG_CHARACTERISTICS = "7B83FFF8-9F77-4E5C-8064-AAE2C24838B9"
+    static let CURRENT_STATUS_CHARACTERISTICS = CBUUID(string: "7B83FFF6-9F77-4E5C-8064-AAE2C24838B9")
+    static let QUALIFYING_EVENTS_CHARACTERISTICS = CBUUID(string: "7B83FFF7-9F77-4E5C-8064-AAE2C24838B9")
+    static let HISTORY_LOG_CHARACTERISTICS = CBUUID(string: "7B83FFF8-9F77-4E5C-8064-AAE2C24838B9")
 
     // For authentication
-    case AUTHORIZATION_CHARACTERISTICS = "7B83FFF9-9F77-4E5C-8064-AAE2C24838B9"
+    static let AUTHORIZATION_CHARACTERISTICS = CBUUID(string: "7B83FFF9-9F77-4E5C-8064-AAE2C24838B9")
 
     // For signed messages
-    case CONTROL_CHARACTERISTICS = "7B83FFFC-9F77-4E5C-8064-AAE2C24838B9"
-    case CONTROL_STREAM_CHARACTERISTICS = "7B83FFFD-9F77-4E5C-8064-AAE2C24838B9"
+    static let CONTROL_CHARACTERISTICS = CBUUID(string: "7B83FFFC-9F77-4E5C-8064-AAE2C24838B9")
+    static let CONTROL_STREAM_CHARACTERISTICS = CBUUID(string: "7B83FFFD-9F77-4E5C-8064-AAE2C24838B9")
 
     // Generic Attribute service
-    case SERVICE_CHANGED = "00002A05-0000-1000-8000-00805F9B34FB"
+    static let SERVICE_CHANGED = CBUUID(string: "00002A05-0000-1000-8000-00805F9B34FB")
 
     // Device Information Service
-    case DIS_MANUFACTURER_NAME = "00002A29-0000-1000-8000-00805F9B34FB"
-    case DIS_MODEL_NUMBER = "00002A24-0000-1000-8000-00805F9B34FB"
+    static let DIS_MANUFACTURER_NAME = CBUUID(string: "00002A29-0000-1000-8000-00805F9B34FB")
+    static let DIS_MODEL_NUMBER = CBUUID(string: "00002A24-0000-1000-8000-00805F9B34FB")
 
     // Tandem Device Update characteristics
-    case TDU_FILE_POINT_CHARACTERISTICS = "7B83FFE7-9F77-4E5C-8064-AAE2C24838B9"
-    case TDU_CONTROL_POINT_CHARACTERISTICS = "7B83FFE8-9F77-4E5C-8064-AAE2C24838B9"
-}
-
-public let AllPumpCharacteristicUUIDs: [CharacteristicUUID] = [
-    .CURRENT_STATUS_CHARACTERISTICS,
-    .QUALIFYING_EVENTS_CHARACTERISTICS,
-    .HISTORY_LOG_CHARACTERISTICS,
-    .AUTHORIZATION_CHARACTERISTICS,
-    .CONTROL_CHARACTERISTICS,
-    .CONTROL_STREAM_CHARACTERISTICS
-]
-
-public let AllTandemNotificationCharacteristicUUIDs: [CharacteristicUUID] = AllPumpCharacteristicUUIDs
-
-public let TandemNotificationOrder: [CharacteristicUUID] = [
-    .AUTHORIZATION_CHARACTERISTICS,
-    .CURRENT_STATUS_CHARACTERISTICS,
-    .HISTORY_LOG_CHARACTERISTICS,
-    .CONTROL_CHARACTERISTICS,
-    .CONTROL_STREAM_CHARACTERISTICS,
-    .QUALIFYING_EVENTS_CHARACTERISTICS,
-    .SERVICE_CHANGED
-]
-
-public enum DeviceInformationCharacteristicUUID: String, Sendable {
-    case manufacturerName = "00002A29-0000-1000-8000-00805F9B34FB"
-    case modelNumber = "00002A24-0000-1000-8000-00805F9B34FB"
-}
-
-public let DeviceInformationCharacteristics: [DeviceInformationCharacteristicUUID] = [
-    .manufacturerName,
-    .modelNumber
-]
-
-public extension DeviceInformationCharacteristicUUID {
-    var cbUUID: CBUUID {
-        #if os(Linux)
-            return CBUUID(uuidString: rawValue)
-        #else
-            return CBUUID(string: rawValue)
-        #endif
-    }
-
-    var prettyName: String {
-        switch self {
-        case .manufacturerName: return "ManufacturerName"
-        case .modelNumber: return "ModelNumber"
-        }
-    }
-}
-
-public extension CharacteristicUUID {
-    var cbUUID: CBUUID {
-        #if os(Linux)
-            return CBUUID(uuidString: rawValue)
-        #else
-            return CBUUID(string: rawValue)
-        #endif
-    }
-
-    var prettyName: String {
-        switch self {
-        case .CURRENT_STATUS_CHARACTERISTICS: return "CurrentStatus"
-        case .QUALIFYING_EVENTS_CHARACTERISTICS: return "QualifyingEvents"
-        case .HISTORY_LOG_CHARACTERISTICS: return "HistoryLog"
-        case .AUTHORIZATION_CHARACTERISTICS: return "Authorization"
-        case .CONTROL_CHARACTERISTICS: return "Control"
-        case .CONTROL_STREAM_CHARACTERISTICS: return "ControlStream"
-        case .SERVICE_CHANGED: return "ServiceChanged"
-        case .DIS_MANUFACTURER_NAME: return "ManufacturerName"
-        case .DIS_MODEL_NUMBER: return "ModelNumber"
-        case .TDU_FILE_POINT_CHARACTERISTICS: return "TDUFilePoint"
-        case .TDU_CONTROL_POINT_CHARACTERISTICS: return "TDUControlPoint"
-        }
-    }
+    static let TDU_FILE_POINT_CHARACTERISTICS = CBUUID(string: "7B83FFE7-9F77-4E5C-8064-AAE2C24838B9")
+    static let TDU_CONTROL_POINT_CHARACTERISTICS = CBUUID(string: "7B83FFE8-9F77-4E5C-8064-AAE2C24838B9")
+    
+    static let allPumpCharacteristics: [CBUUID] = [
+        CURRENT_STATUS_CHARACTERISTICS,
+        QUALIFYING_EVENTS_CHARACTERISTICS,
+        HISTORY_LOG_CHARACTERISTICS,
+        AUTHORIZATION_CHARACTERISTICS,
+        CONTROL_CHARACTERISTICS,
+        CONTROL_STREAM_CHARACTERISTICS
+    ]
+    
+    static let allDeviceInfoCharacteristics: [CBUUID] = [
+        DIS_MANUFACTURER_NAME,
+        DIS_MODEL_NUMBER
+    ]
+    
+    static let notificationCharacteristics: [(CBUUID, CBUUID)] = [
+        (ServiceUUID.PUMP_SERVICE, AUTHORIZATION_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, CURRENT_STATUS_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, HISTORY_LOG_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, CONTROL_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, CONTROL_STREAM_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, QUALIFYING_EVENTS_CHARACTERISTICS),
+        (ServiceUUID.PUMP_SERVICE, SERVICE_CHANGED)
+    ]
 }

@@ -6,7 +6,7 @@ public class ChangeControlIQSettingsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-54)),
         size: 6,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -44,7 +44,7 @@ public class ChangeControlIQSettingsResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-53)),
         size: 3,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

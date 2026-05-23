@@ -6,7 +6,7 @@ public class CurrentBatteryV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-112)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 
@@ -31,7 +31,7 @@ public class CurrentBatteryV2Response: Message {
         opCode: UInt8(bitPattern: Int8(-111)),
         size: 11,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 

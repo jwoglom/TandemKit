@@ -6,7 +6,7 @@ public class StreamDataReadinessRequest: Message {
         opCode: UInt8(bitPattern: Int8(-58)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -34,7 +34,7 @@ public class StreamDataReadinessResponse: Message {
         opCode: UInt8(bitPattern: Int8(-57)),
         size: 2,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

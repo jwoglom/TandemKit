@@ -1,13 +1,3 @@
-//
-//  NonexistentFillTubingStateStream.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of NonexistentFillTubingStateStreamRequest and FillTubingStateStreamResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentFillTubingStateStreamRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/FillTubingStateStreamResponse.java
-//
 import Foundation
 
 /// Placeholder request for FillTubingStateStreamResponse which has no originating request.
@@ -16,7 +6,7 @@ public class NonexistentFillTubingStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -38,7 +28,7 @@ public class FillTubingStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-27)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )

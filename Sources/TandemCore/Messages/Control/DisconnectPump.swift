@@ -6,7 +6,7 @@ public class DisconnectPumpRequest: Message {
         opCode: UInt8(bitPattern: Int8(-66)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5
     )
@@ -32,7 +32,7 @@ public class DisconnectPumpResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-65)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5
     )

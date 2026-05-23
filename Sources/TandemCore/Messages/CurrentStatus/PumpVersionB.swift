@@ -6,7 +6,7 @@ public class PumpVersionBRequest: Message {
         opCode: UInt8(bitPattern: Int8(-124)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -41,7 +41,7 @@ public class PumpVersionBResponse: Message {
         opCode: UInt8(bitPattern: Int8(-123)),
         size: 60,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

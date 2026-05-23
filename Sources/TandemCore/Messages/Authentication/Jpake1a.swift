@@ -6,7 +6,7 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest {
         opCode: 32,
         size: 167,
         type: .Request,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 
@@ -56,7 +56,7 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
         opCode: 33,
         size: 167,
         type: .Response,
-        characteristic: .AUTHORIZATION_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS,
         minApi: .apiV3_2
     )
 

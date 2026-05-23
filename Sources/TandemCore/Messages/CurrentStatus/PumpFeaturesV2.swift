@@ -6,7 +6,7 @@ public class PumpFeaturesV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-96)),
         size: 1,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 
@@ -35,7 +35,7 @@ public class PumpFeaturesV2Response: Message {
         opCode: UInt8(bitPattern: Int8(-95)),
         size: 6,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 

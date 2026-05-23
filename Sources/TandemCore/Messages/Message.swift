@@ -1,6 +1,6 @@
 import Foundation
+import CoreBluetooth
 
-// https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/Message.java
 public protocol Message: CustomStringConvertible {
     static var props: MessageProps { get }
 
@@ -19,12 +19,11 @@ public enum MessageType: Sendable {
     case Response
 }
 
-// https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/annotations/MessageProps.java
-public struct MessageProps: Sendable {
+public struct MessageProps {
     public let opCode: UInt8
     public let size: UInt8
     public let type: MessageType
-    public let characteristic: CharacteristicUUID
+    public let characteristic: CBUUID
     public let variableSize: Bool
     public let stream: Bool
     public let signed: Bool
@@ -36,7 +35,7 @@ public struct MessageProps: Sendable {
         opCode: UInt8,
         size: UInt8,
         type: MessageType,
-        characteristic: CharacteristicUUID,
+        characteristic: CBUUID,
         variableSize: Bool = false,
         stream: Bool = false,
         signed: Bool = false,
