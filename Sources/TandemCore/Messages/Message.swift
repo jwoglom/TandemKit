@@ -1,5 +1,5 @@
-import Foundation
 import CoreBluetooth
+import Foundation
 
 public protocol Message: CustomStringConvertible {
     static var props: MessageProps { get }

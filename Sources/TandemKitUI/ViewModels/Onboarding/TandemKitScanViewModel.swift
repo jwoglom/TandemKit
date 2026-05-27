@@ -30,13 +30,14 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func startScan() {
-        pumpManager?.setScanningMode(true)
-        pumpManager?.tandemPump.startScanning()
+        guard let pumpManager, pumpManager.bluetooth.startScan(deviceScanDidUpdate) else {
+            log.error("Failed to start scan")
+            return
+        }
     }
 
     func stopScan() {
-        pumpManager?.setScanningMode(false)
-        pumpManager?.tandemPump.stopScanning()
+        pumpManager?.bluetooth.stopScan()
     }
 
     func cancelPinPrompt() {
@@ -44,12 +45,8 @@ class TandemKitScanViewModel: ObservableObject {
         selectedPeripheral = nil
         devicePinCode = ""
 
-        // Clear the target peripheral filter
-        pumpManager?.setTargetPeripheral(nil)
-
         // Restart scanning
-        pumpManager?.setScanningMode(true)
-        pumpManager?.tandemPump.startScanning()
+        _ = pumpManager?.bluetooth.startScan(deviceScanDidUpdate)
     }
 
     func processPinPrompt() {
@@ -73,16 +70,14 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
-        // Set the target peripheral so the manager only connects to this specific device
-        pumpManager.setTargetPeripheral(peripheral.identifier)
-
-        pumpManager.pairPump(with: devicePinCode, peripheral: peripheral) { result in
-            switch result {
-            case let .failure(error):
-                self.onPairFailure(error: error)
-            case .success:
-                self.onPairSuccess()
+        pumpManager.pairPump(code: devicePinCode, peripheral: peripheral) { error in
+            if let error {
+                self.log.error("Error during pairing: \(error.localizedDescription)")
+                return
             }
+
+            self.log.info("Pairing successful")
+            self.onPairSuccess()
         }
     }
 
@@ -132,8 +127,6 @@ class TandemKitScanViewModel: ObservableObject {
 
     func onPairFailure(error: Error) {
         DispatchQueue.main.async {
-            self.pumpManager?.setTargetPeripheral(nil)
-
             self.log.error("Pairing failed: \(error.localizedDescription)")
             self.isConnectionError = true
             self.connectionErrorMessage = error.localizedDescription
@@ -151,7 +144,9 @@ extension TandemKitScanViewModel: StateObserver {
     func deviceScanDidUpdate(_ device: TandemPumpScan) {
         if selectedPeripheral == nil {
             selectedPeripheral = device.peripheral
-            connectingTo = device.name
+            DispatchQueue.main.async {
+                self.connectingTo = device.name
+            }
         } else if let selectedPeripheral = selectedPeripheral, selectedPeripheral.identifier != device.peripheral.identifier {
             // Ignore other device
             // TODO: Show error if we detect multiple Mobi's
@@ -166,19 +161,25 @@ extension TandemKitScanViewModel: StateObserver {
         }
 
         if pairingState == 0x10 {
-            currentPhase = .mobiOnPad
+            DispatchQueue.main.async {
+                self.currentPhase = .mobiOnPad
+            }
             return
         }
 
         if pairingState == 0x11 {
-            currentPhase = .doubleTap
+            DispatchQueue.main.async {
+                self.currentPhase = .doubleTap
+            }
             return
         }
 
         if pairingState == 0x12 {
             log.info("Enter pincode state!")
             stopScan()
-            isPromptingPincode = true
+            DispatchQueue.main.async {
+                self.isPromptingPincode = true
+            }
             return
         }
     }

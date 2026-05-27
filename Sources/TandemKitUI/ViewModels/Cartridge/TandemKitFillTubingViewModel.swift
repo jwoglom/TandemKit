@@ -110,16 +110,16 @@ class TandemKitFillTubingViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
-
-                DispatchQueue.main.async {
-                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-                    if self.isSuspended == true, self.currentStep == .suspend {
-                        self.currentStep = .enterMode
-                    }
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
+//
+//                DispatchQueue.main.async {
+//                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+//                    if self.isSuspended == true, self.currentStep == .suspend {
+//                        self.currentStep = .enterMode
+//                    }
+//                }
+//            }
         }
     }
 
@@ -155,27 +155,27 @@ class TandemKitFillTubingViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(EnterFillTubingModeRequest()) as? EnterFillTubingModeResponse
-
-                DispatchQueue.main.async {
-                    self.loadingEnterMode = false
-                    if let response = response, response.status == 0 {
-                        self.failedEnterMode = false
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                        self.startMonitoringButtonState()
-                    } else {
-                        self.failedEnterMode = true
-                        self.isProcessing = false
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingEnterMode = false
-                    self.failedEnterMode = true
-                    self.isProcessing = false
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let response = try? transport.sendMessage(EnterFillTubingModeRequest()) as? EnterFillTubingModeResponse
+//
+//                DispatchQueue.main.async {
+//                    self.loadingEnterMode = false
+//                    if let response = response, response.status == 0 {
+//                        self.failedEnterMode = false
+//                        self.currentStep = self.currentStep.nextStep() ?? .done
+//                        self.startMonitoringButtonState()
+//                    } else {
+//                        self.failedEnterMode = true
+//                        self.isProcessing = false
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.loadingEnterMode = false
+//                    self.failedEnterMode = true
+//                    self.isProcessing = false
+//                }
+//            }
         }
     }
 
@@ -198,8 +198,8 @@ class TandemKitFillTubingViewModel: ObservableObject {
 
     private func requestAlertStatus() {
         processQueue.async { [weak self] in
-            guard let transport = self?.pumpManager?.pairedTransport else { return }
-            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
+//            guard let transport = self?.pumpManager?.pairedTransport else { return }
+//            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
         }
     }
 
@@ -235,31 +235,31 @@ class TandemKitFillTubingViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(ExitFillTubingModeRequest()) as? ExitFillTubingModeResponse
-
-                DispatchQueue.main.async {
-                    self.loadingExitMode = false
-                    self.isProcessing = false
-                    if let response = response, response.status == 0 {
-                        self.failedExitMode = false
-                        self.exitState = .tubingFilled
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        // Exit failed - go back to filling step and show error
-                        self.failedExitMode = true
-                        self.currentStep = .filling
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingExitMode = false
-                    self.failedExitMode = true
-                    self.isProcessing = false
-                    // No transport - go back to filling step
-                    self.currentStep = .filling
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let response = try? transport.sendMessage(ExitFillTubingModeRequest()) as? ExitFillTubingModeResponse
+//
+//                DispatchQueue.main.async {
+//                    self.loadingExitMode = false
+//                    self.isProcessing = false
+//                    if let response = response, response.status == 0 {
+//                        self.failedExitMode = false
+//                        self.exitState = .tubingFilled
+//                        self.currentStep = self.currentStep.nextStep() ?? .done
+//                    } else {
+//                        // Exit failed - go back to filling step and show error
+//                        self.failedExitMode = true
+//                        self.currentStep = .filling
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.loadingExitMode = false
+//                    self.failedExitMode = true
+//                    self.isProcessing = false
+//                    // No transport - go back to filling step
+//                    self.currentStep = .filling
+//                }
+//            }
         }
     }
 

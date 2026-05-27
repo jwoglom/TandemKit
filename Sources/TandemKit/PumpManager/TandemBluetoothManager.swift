@@ -1,42 +1,40 @@
 import CoreBluetooth
 
-class TandemBluetoothManager : NSObject {
+class TandemBluetoothManager: NSObject {
     private let logger = TandemLogger(category: "TandemBluetoothManager")
     private let managerQueue = DispatchQueue(label: "com.DanaKit.bluetoothManagerQueue", qos: .unspecified)
-    
+
     public var pumpManager: TandemPumpManager?
 
-    private var manager: CBCentralManager?
+    private(set) var manager: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var peripheralManager: TandemPeripheralManager?
-    
+
     private var scanCompletion: ((_ result: TandemPumpScan) -> Void)?
     private var connectCompletion: ((Error?) -> Void)?
-    
+
     override init() {
         super.init()
-        
+
         managerQueue.sync {
             self.manager = CBCentralManager(
                 delegate: self,
                 queue: managerQueue,
-                options: [CBCentralManagerOptionRestoreIdentifierKey: "com.jwoglom.TandemKit.bluetoothManager"]
+//                options: [CBCentralManagerOptionRestoreIdentifierKey: "com.jwoglom.TandemKit.bluetoothManager"]
             )
         }
     }
-    
+
     deinit {
         self.manager = nil
     }
-    
+
     func startScan(_ completion: @escaping (_ result: TandemPumpScan) -> Void) -> Bool {
         guard let manager, manager.state == .poweredOn else {
             return false
         }
 
-        if !manager.isScanning {
-            manager.stopScan()
-        }
+        stopScan()
 
         scanCompletion = completion
         manager.scanForPeripherals(
@@ -47,38 +45,100 @@ class TandemBluetoothManager : NSObject {
         logger.info("Started scanning")
         return true
     }
-    
+
+    func stopScan() {
+        guard let manager else {
+            logger.error("No CBCentralManager")
+            return
+        }
+
+        if manager.isScanning {
+            manager.stopScan()
+            scanCompletion = nil
+        }
+    }
+
     func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
         guard let manager else {
             logger.error("No CBCentralManager")
             return
         }
-        
-        if manager.isScanning {
-            manager.stopScan()
-            scanCompletion = nil
-        }
+
+        stopScan()
 
         logger.info("Connecting to \(peripheral)")
 
         self.peripheral = peripheral
-        self.connectCompletion = completion
-        
+        connectCompletion = completion
+
         manager.connect(peripheral)
     }
-    
+
+    func ensureConnected(completion: @escaping (Error?) -> Void) {
+        if let peripheral = peripheral, peripheral.state == .connected {
+            completion(nil)
+            return
+        }
+
+        if let peripheral = peripheral {
+            // We've the peripheral reference to a previous connection
+            // Just try to reconnect
+            connect(peripheral) { error in
+                completion(error)
+            }
+            return
+        }
+
+        let connectedDevices = manager?.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]) ?? []
+        if let peripheral = connectedDevices.first {
+            // Phone is already connected, but the app is not
+            connect(peripheral) { error in
+                completion(error)
+            }
+            return
+        }
+
+        guard let indentifier = pumpManager?.state.pumpState.peripheralUuid else {
+            logger.error("No identifier available to scan for...")
+            completion(PumpCommError.pumpNotConnected)
+            return
+        }
+
+        let scanStarted = startScan { result in
+            guard result.bleIdentifier == indentifier else {
+                return
+            }
+
+            self.logger.debug("Found pump, reconnecting! \(result.peripheral)")
+            self.connect(result.peripheral) { error in
+                completion(error)
+            }
+        }
+
+        if !scanStarted {
+            completion(PumpCommError.pumpNotConnected)
+            return
+        }
+    }
+
     func disconnect() {
-        /*
-         _ = try pumpComm.sendMessage(
-             transport: transport,
-             message: DisconnectPumpRequest(),
-             expecting: DisconnectPumpResponse.self
-         )
-         */
+        if let peripheralManager {
+            _ = peripheralManager.write(message: DisconnectPumpRequest(), expecting: DisconnectPumpResponse.self)
+        }
+
+        if let manager {
+            if manager.isScanning {
+                manager.stopScan()
+            }
+
+            if let peripheral {
+                manager.cancelPeripheralConnection(peripheral)
+            }
+        }
     }
 }
 
-extension TandemBluetoothManager : CBCentralManagerDelegate {
+extension TandemBluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         logger.info("\(String(describing: central.state.rawValue))")
         guard central.state == .poweredOn else {
@@ -87,26 +147,26 @@ extension TandemBluetoothManager : CBCentralManagerDelegate {
 
         if let peripheral = self.peripheral {
             logger.info("Reconnecting to restored state...")
-            
+
             connect(peripheral) { error in
                 if let error {
-                    self.logger.error("Failed to auto reconnect...")
+                    self.logger.error("Failed to auto reconnect: \(error.localizedDescription)")
                 }
             }
             return
         }
     }
-    
-    func centralManager(_ centralManager: CBCentralManager, willRestoreState dict: [String: Any]) {
-        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
-        guard let peripheral = peripherals.first else {
-            logger.warning("No restored peripherals!")
-            return
-        }
 
-        self.peripheral = peripheral
-    }
-    
+//    func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
+//        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+//        guard let peripheral = peripherals.first else {
+//            logger.warning("No restored peripherals!")
+//            return
+//        }
+//
+//        self.peripheral = peripheral
+//    }
+
     func centralManager(
         _: CBCentralManager,
         didDiscover peripheral: CBPeripheral,
@@ -117,7 +177,7 @@ extension TandemBluetoothManager : CBCentralManagerDelegate {
             logger.warning("Pump found without name... \(peripheral)")
             return
         }
-        
+
         scanCompletion?(TandemPumpScan(
             bleIdentifier: peripheral.identifier.uuidString,
             name: name,
@@ -125,8 +185,8 @@ extension TandemBluetoothManager : CBCentralManagerDelegate {
             advertisementData: advertisementData
         ))
     }
-    
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+
+    func centralManager(_: CBCentralManager, didConnect peripheral: CBPeripheral) {
         logger.info("Connected to pump: \(peripheral.name ?? "<NO_NAME>")!")
 
         guard let pumpManager = pumpManager else {
@@ -139,23 +199,23 @@ extension TandemBluetoothManager : CBCentralManagerDelegate {
         }
 
         self.peripheral = peripheral
-        peripheralManager = TandemPeripheralManager(peripheral, pumpManager, completion)
+        peripheralManager = TandemPeripheralManager(self, peripheral, pumpManager, completion)
 
         peripheral.discoverServices(ServiceUUID.all)
     }
-    
+
     func centralManager(_: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         logger.info(
-                "Device disconnected, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
-            )
+            "Device disconnected, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
+        )
 
 //        if forcedDisconnect {
 //            forcedDisconnect = false
 //            return
 //        }
 
-        if let peripheralManager {
-            self.peripheralManager = nil
+        if peripheralManager != nil {
+            peripheralManager = nil
         }
 
         if let connectCompletion {
@@ -164,17 +224,17 @@ extension TandemBluetoothManager : CBCentralManagerDelegate {
 
         } else {
             logger.debug("Auto reconnect...")
-//            ensureConnected { error in
-//                if let error = error {
-//                    self.logger.warning("Failed to auto-reconnect: \(error)")
-//                }
-//            }
+            ensureConnected { error in
+                if let error = error {
+                    self.logger.warning("Failed to auto-reconnect: \(error)")
+                }
+            }
         }
     }
-    
+
     func centralManager(_: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         logger.info(
-                "Device connect error, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
-            )
+            "Device connect error, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
+        )
     }
 }

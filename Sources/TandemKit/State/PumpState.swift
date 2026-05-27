@@ -4,6 +4,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     public typealias RawValue = [String: Any]
 
     public var peripheralUuid: String?
+    public var pincode: String?
     public var derivedSecret: Data?
     public var serverNonce: Data?
     public var timeSinceReset: UInt32?
@@ -46,11 +47,9 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         )
     }
 
-    public init?(rawValue: RawValue) {
-        guard let peripheralUuid = rawValue["peripheralUuid"] as? String
-        else { return nil }
-
-        self.peripheralUuid = peripheralUuid
+    public init(rawValue: RawValue) {
+        peripheralUuid = rawValue["peripheralUuid"] as? String
+        pincode = rawValue["pincode"] as? String
         derivedSecret = rawValue["derivedSecret"] as? Data
         serverNonce = rawValue["serverNonce"] as? Data
         timeSinceReset = rawValue["timeSinceReset"] as? UInt32
@@ -67,6 +66,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         var rawValue: RawValue = [:]
 
         rawValue["peripheralUuid"] = peripheralUuid
+        rawValue["pincode"] = pincode
         rawValue["derivedSecret"] = derivedSecret
         rawValue["serverNonce"] = serverNonce
         if let timeSinceReset = timeSinceReset {
@@ -83,6 +83,17 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         }
 
         return rawValue
+    }
+
+    func getAuthKey() -> Data {
+        if let derivedSecret, let serverNonce {
+            return Hkdf.build(nonce: serverNonce, keyMaterial: derivedSecret)
+        }
+
+//        if let code = code {
+//            return Data(code.utf8)
+//        }
+        return Data()
     }
 
     public var debugDescription: String {

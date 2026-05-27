@@ -47,16 +47,16 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
-
-                DispatchQueue.main.async {
-                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-                    if self.isSuspended == true, self.currentStep == .suspend {
-                        self.currentStep = .enterAmount
-                    }
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
+//
+//                DispatchQueue.main.async {
+//                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
+//                    if self.isSuspended == true, self.currentStep == .suspend {
+//                        self.currentStep = .enterAmount
+//                    }
+//                }
+//            }
         }
     }
 
@@ -94,28 +94,28 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                // This blocks until the prime completes and returns the response
-                let response = try? transport
-                    .sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
-
-                DispatchQueue.main.async {
-                    self.loadingFill = false
-                    self.isProcessing = false
-                    if let response = response, response.status == 0 {
-                        self.failedFill = false
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        self.failedFill = true
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingFill = false
-                    self.failedFill = true
-                    self.isProcessing = false
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                // This blocks until the prime completes and returns the response
+//                let response = try? transport
+//                    .sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
+//
+//                DispatchQueue.main.async {
+//                    self.loadingFill = false
+//                    self.isProcessing = false
+//                    if let response = response, response.status == 0 {
+//                        self.failedFill = false
+//                        self.currentStep = self.currentStep.nextStep() ?? .done
+//                    } else {
+//                        self.failedFill = true
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.loadingFill = false
+//                    self.failedFill = true
+//                    self.isProcessing = false
+//                }
+//            }
         }
     }
 

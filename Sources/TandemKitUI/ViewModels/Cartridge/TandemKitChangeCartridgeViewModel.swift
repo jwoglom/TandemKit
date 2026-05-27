@@ -111,34 +111,27 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            guard let transport = self.pumpManager?.pairedTransport else {
-                DispatchQueue.main.async {
-                    self.isSuspended = nil
-                }
-                return
-            }
-
             do {
-                guard let mirror = try transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse else {
-                    DispatchQueue.main.async {
-                        self.isSuspended = nil
-                    }
-                    return
-                }
-
-                DispatchQueue.main.async {
-                    // Check for any suspended state (manual suspend or BasalIQ hypo suspend)
-                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue ||
-                        mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
-
-                    print(
-                        "TandemKit Change Cartridge: Checked suspend status - isSuspended=\(self.isSuspended ?? false), basalStatusIconId=\(mirror.basalStatusIconId)"
-                    )
-
-                    if self.isSuspended == true, self.currentStep == .suspend {
-                        self.currentStep = .enterMode
-                    }
-                }
+//                guard let mirror = try transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse else {
+//                    DispatchQueue.main.async {
+//                        self.isSuspended = nil
+//                    }
+//                    return
+//                }
+//
+//                DispatchQueue.main.async {
+//                    // Check for any suspended state (manual suspend or BasalIQ hypo suspend)
+//                    self.isSuspended = mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue ||
+//                        mirror.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
+//
+//                    print(
+//                        "TandemKit Change Cartridge: Checked suspend status - isSuspended=\(self.isSuspended ?? false), basalStatusIconId=\(mirror.basalStatusIconId)"
+//                    )
+//
+//                    if self.isSuspended == true, self.currentStep == .suspend {
+//                        self.currentStep = .enterMode
+//                    }
+//                }
             } catch {
                 print("TandemKit Change Cartridge: Error checking suspend status: \(error)")
                 DispatchQueue.main.async {
@@ -180,27 +173,27 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(EnterChangeCartridgeModeRequest()) as? EnterChangeCartridgeModeResponse
-
-                DispatchQueue.main.async {
-                    self.loadingEnterMode = false
-                    if let response = response, response.status == 0 {
-                        self.failedEnterMode = false
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                        self.startMonitoringChangeState()
-                    } else {
-                        self.failedEnterMode = true
-                        self.isProcessing = false
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingEnterMode = false
-                    self.failedEnterMode = true
-                    self.isProcessing = false
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let response = try? transport.sendMessage(EnterChangeCartridgeModeRequest()) as? EnterChangeCartridgeModeResponse
+//
+//                DispatchQueue.main.async {
+//                    self.loadingEnterMode = false
+//                    if let response = response, response.status == 0 {
+//                        self.failedEnterMode = false
+//                        self.currentStep = self.currentStep.nextStep() ?? .done
+//                        self.startMonitoringChangeState()
+//                    } else {
+//                        self.failedEnterMode = true
+//                        self.isProcessing = false
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.loadingEnterMode = false
+//                    self.failedEnterMode = true
+//                    self.isProcessing = false
+//                }
+//            }
         }
     }
 
@@ -258,30 +251,30 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
-            if let transport = self.pumpManager?.pairedTransport {
-                let response = try? transport.sendMessage(ExitChangeCartridgeModeRequest()) as? ExitChangeCartridgeModeResponse
-
-                DispatchQueue.main.async {
-                    self.loadingExitMode = false
-                    self.isProcessing = false
-                    if let response = response, response.status == 0 {
-                        self.failedExitMode = false
-                        self.currentStep = self.currentStep.nextStep() ?? .done
-                    } else {
-                        // Exit failed - go back to detecting step and show error
-                        self.failedExitMode = true
-                        self.currentStep = .detecting
-                    }
-                }
-            } else {
-                DispatchQueue.main.async {
-                    self.loadingExitMode = false
-                    self.failedExitMode = true
-                    self.isProcessing = false
-                    // No transport - go back to detecting step
-                    self.currentStep = .detecting
-                }
-            }
+//            if let transport = self.pumpManager?.pairedTransport {
+//                let response = try? transport.sendMessage(ExitChangeCartridgeModeRequest()) as? ExitChangeCartridgeModeResponse
+//
+//                DispatchQueue.main.async {
+//                    self.loadingExitMode = false
+//                    self.isProcessing = false
+//                    if let response = response, response.status == 0 {
+//                        self.failedExitMode = false
+//                        self.currentStep = self.currentStep.nextStep() ?? .done
+//                    } else {
+//                        // Exit failed - go back to detecting step and show error
+//                        self.failedExitMode = true
+//                        self.currentStep = .detecting
+//                    }
+//                }
+//            } else {
+//                DispatchQueue.main.async {
+//                    self.loadingExitMode = false
+//                    self.failedExitMode = true
+//                    self.isProcessing = false
+//                    // No transport - go back to detecting step
+//                    self.currentStep = .detecting
+//                }
+//            }
         }
     }
 

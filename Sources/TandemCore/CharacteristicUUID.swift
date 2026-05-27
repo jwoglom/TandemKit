@@ -1,6 +1,6 @@
 import CoreBluetooth
 
-public class CharacteristicUUID {
+public enum CharacteristicUUID {
     // For reading pump state
     static let CURRENT_STATUS_CHARACTERISTICS = CBUUID(string: "7B83FFF6-9F77-4E5C-8064-AAE2C24838B9")
     static let QUALIFYING_EVENTS_CHARACTERISTICS = CBUUID(string: "7B83FFF7-9F77-4E5C-8064-AAE2C24838B9")
@@ -23,7 +23,7 @@ public class CharacteristicUUID {
     // Tandem Device Update characteristics
     static let TDU_FILE_POINT_CHARACTERISTICS = CBUUID(string: "7B83FFE7-9F77-4E5C-8064-AAE2C24838B9")
     static let TDU_CONTROL_POINT_CHARACTERISTICS = CBUUID(string: "7B83FFE8-9F77-4E5C-8064-AAE2C24838B9")
-    
+
     static let allPumpCharacteristics: [CBUUID] = [
         CURRENT_STATUS_CHARACTERISTICS,
         QUALIFYING_EVENTS_CHARACTERISTICS,
@@ -32,19 +32,18 @@ public class CharacteristicUUID {
         CONTROL_CHARACTERISTICS,
         CONTROL_STREAM_CHARACTERISTICS
     ]
-    
+
     static let allDeviceInfoCharacteristics: [CBUUID] = [
         DIS_MANUFACTURER_NAME,
         DIS_MODEL_NUMBER
     ]
-    
+
     static let notificationCharacteristics: [(CBUUID, CBUUID)] = [
         (ServiceUUID.PUMP_SERVICE, AUTHORIZATION_CHARACTERISTICS),
         (ServiceUUID.PUMP_SERVICE, CURRENT_STATUS_CHARACTERISTICS),
         (ServiceUUID.PUMP_SERVICE, HISTORY_LOG_CHARACTERISTICS),
         (ServiceUUID.PUMP_SERVICE, CONTROL_CHARACTERISTICS),
         (ServiceUUID.PUMP_SERVICE, CONTROL_STREAM_CHARACTERISTICS),
-        (ServiceUUID.PUMP_SERVICE, QUALIFYING_EVENTS_CHARACTERISTICS),
-        (ServiceUUID.PUMP_SERVICE, SERVICE_CHANGED)
+        (ServiceUUID.PUMP_SERVICE, QUALIFYING_EVENTS_CHARACTERISTICS)
     ]
 }

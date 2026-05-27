@@ -366,6 +366,10 @@ public enum MessageRegistry {
         UserInteractionResponse.self
     ]
 
+    public static func findResponse(opCode: UInt8, characteristic: CBUUID) -> Message.Type? {
+        allTypes.first(where: { $0.props.opCode == opCode && $0.props.characteristic == characteristic })
+    }
+
     public static let all: [MessageMetadata] = {
         // First pass: create metadata with associations
         var metadata: [MessageMetadata] = []

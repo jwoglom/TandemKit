@@ -1,6 +1,6 @@
 import CoreBluetooth
 
-public class ServiceUUID {
+public enum ServiceUUID {
     // All pump operations
     static let PUMP_SERVICE = CBUUID(string: "0000fdfb-0000-1000-8000-00805f9b34fb")
 
@@ -15,10 +15,12 @@ public class ServiceUUID {
 
     // Generic Attribute service
     static let GENERIC_ATTRIBUTE_SERVICE = CBUUID(string: "00001801-0000-1000-8000-00805f9b34fb")
-    
+
     static let all: [CBUUID] = [
         PUMP_SERVICE,
+        TDU_SERVICE,
         DIS_SERVICE,
+        GENERIC_ACCESS_SERVICE,
         GENERIC_ATTRIBUTE_SERVICE
     ]
 }

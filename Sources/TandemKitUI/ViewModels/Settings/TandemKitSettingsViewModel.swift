@@ -401,7 +401,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func getLogs() -> [URL] {
-        TandemLogger.getDebugLogs()
+        log.getDebugLogs()
     }
 
     func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {

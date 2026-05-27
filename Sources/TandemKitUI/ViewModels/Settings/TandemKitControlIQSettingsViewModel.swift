@@ -51,36 +51,36 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             }
 
             // Fetch ControlIQ info
-            if let ciqResponse = pumpManager.sendMessage(message: ControlIQInfoV2Request()) as? ControlIQInfoV2Response {
-                DispatchQueue.main.async {
-                    self.controlIQEnabled = ciqResponse.closedLoopEnabled
-                    self.weight = ciqResponse.weight
-                    self.originalEnabled = ciqResponse.closedLoopEnabled
-                    self.originalWeight = ciqResponse.weight
-                    self.totalDailyInsulin = ciqResponse.totalDailyInsulin
-                    self.originalTDI = ciqResponse.totalDailyInsulin
-                    self.isDirty = false
-                }
-            }
-
-            // Fetch sleep schedules
-            if let scheduleResponse = pumpManager
-                .sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse
-            {
-                let slots = [
-                    SleepScheduleSlot(from: scheduleResponse.schedule0),
-                    SleepScheduleSlot(from: scheduleResponse.schedule1),
-                    SleepScheduleSlot(from: scheduleResponse.schedule2),
-                    SleepScheduleSlot(from: scheduleResponse.schedule3)
-                ]
-                DispatchQueue.main.async {
-                    self.sleepSchedules = slots
-                }
-            }
-
-            DispatchQueue.main.async {
-                self.isFetching = false
-            }
+//            if let ciqResponse = pumpManager.sendMessage(message: ControlIQInfoV2Request()) as? ControlIQInfoV2Response {
+//                DispatchQueue.main.async {
+//                    self.controlIQEnabled = ciqResponse.closedLoopEnabled
+//                    self.weight = ciqResponse.weight
+//                    self.originalEnabled = ciqResponse.closedLoopEnabled
+//                    self.originalWeight = ciqResponse.weight
+//                    self.totalDailyInsulin = ciqResponse.totalDailyInsulin
+//                    self.originalTDI = ciqResponse.totalDailyInsulin
+//                    self.isDirty = false
+//                }
+//            }
+//
+//            // Fetch sleep schedules
+//            if let scheduleResponse = pumpManager
+//                .sendMessage(message: ControlIQSleepScheduleRequest()) as? ControlIQSleepScheduleResponse
+//            {
+//                let slots = [
+//                    SleepScheduleSlot(from: scheduleResponse.schedule0),
+//                    SleepScheduleSlot(from: scheduleResponse.schedule1),
+//                    SleepScheduleSlot(from: scheduleResponse.schedule2),
+//                    SleepScheduleSlot(from: scheduleResponse.schedule3)
+//                ]
+//                DispatchQueue.main.async {
+//                    self.sleepSchedules = slots
+//                }
+//            }
+//
+//            DispatchQueue.main.async {
+//                self.isFetching = false
+//            }
         }
     }
 
@@ -135,22 +135,22 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                 return
             }
 
-            let response = self.pumpManager?.sendMessage(message: SetSleepScheduleRequest(
-                slot: slot,
-                schedule: schedule,
-                flag: 1
-            )) as? SetSleepScheduleResponse
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if response?.isStatusOK != true {
-                    self.saveError = String(
-                        localized:
-                        "Failed to update sleep schedule. Check pump connection.",
-                        comment: "Error when sleep schedule save fails"
-                    )
-                }
-            }
+//            let response = self.pumpManager?.sendMessage(message: SetSleepScheduleRequest(
+//                slot: slot,
+//                schedule: schedule,
+//                flag: 1
+//            )) as? SetSleepScheduleResponse
+//
+//            DispatchQueue.main.async {
+//                self.isLoading = false
+//                if response?.isStatusOK != true {
+//                    self.saveError = String(
+//                        localized:
+//                        "Failed to update sleep schedule. Check pump connection.",
+//                        comment: "Error when sleep schedule save fails"
+//                    )
+//                }
+//            }
         }
     }
 

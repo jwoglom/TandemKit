@@ -68,44 +68,44 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                 return
             }
 
-            if let response = pumpManager.sendMessage(message: CGMStatusV2Request()) as? CGMStatusV2Response {
-                let sensorType: String? = {
-                    switch response.cgmSensorType {
-                    case .dexcomG6: return "Dexcom G6"
-                    case .dexcomG7: return "Dexcom G7"
-                    default: return nil
-                    }
-                }()
-
-                let batteryText: String? = {
-                    switch response.transmitterBatteryStatus {
-                    case .okay: return String(localized: "OK", comment: "Transmitter battery: OK")
-                    case .error: return String(localized: "Error", comment: "Transmitter battery: Error")
-                    case .expired: return String(localized: "Expired", comment: "Transmitter battery: Expired")
-                    case .outOfRange: return String(localized: "Out of Range", comment: "Transmitter battery: Out of Range")
-                    case .unavailable: return String(localized: "Unavailable", comment: "Transmitter battery: Unavailable")
-                    case .unknown: return nil
-                    }
-                }()
-
-                let duration = Self.formatDuration(seconds: response.sessionDurationSeconds)
-                let remaining = Self.formatDuration(seconds: response.sessionTimeRemainingSeconds)
-                let startedDate = response.sensorStartedTimestamp > 0 ? response.sensorStartedDate : nil
-
-                DispatchQueue.main.async {
-                    self.cgmSessionState = CGMSessionState(from: response.sessionStateId)
-                    self.sensorTypeText = sensorType
-                    self.sensorStartedDate = startedDate
-                    self.sessionDuration = response.sessionDurationSeconds > 0 ? duration : nil
-                    self.sessionTimeRemaining = response.sessionTimeRemainingSeconds > 0 ? remaining : nil
-                    self.transmitterBattery = batteryText
-                    self.gracePeriod = response.gracePeriod
-                }
-            }
-
-            DispatchQueue.main.async {
-                self.isFetching = false
-            }
+//            if let response = pumpManager.sendMessage(message: CGMStatusV2Request()) as? CGMStatusV2Response {
+//                let sensorType: String? = {
+//                    switch response.cgmSensorType {
+//                    case .dexcomG6: return "Dexcom G6"
+//                    case .dexcomG7: return "Dexcom G7"
+//                    default: return nil
+//                    }
+//                }()
+//
+//                let batteryText: String? = {
+//                    switch response.transmitterBatteryStatus {
+//                    case .okay: return String(localized: "OK", comment: "Transmitter battery: OK")
+//                    case .error: return String(localized: "Error", comment: "Transmitter battery: Error")
+//                    case .expired: return String(localized: "Expired", comment: "Transmitter battery: Expired")
+//                    case .outOfRange: return String(localized: "Out of Range", comment: "Transmitter battery: Out of Range")
+//                    case .unavailable: return String(localized: "Unavailable", comment: "Transmitter battery: Unavailable")
+//                    case .unknown: return nil
+//                    }
+//                }()
+//
+//                let duration = Self.formatDuration(seconds: response.sessionDurationSeconds)
+//                let remaining = Self.formatDuration(seconds: response.sessionTimeRemainingSeconds)
+//                let startedDate = response.sensorStartedTimestamp > 0 ? response.sensorStartedDate : nil
+//
+//                DispatchQueue.main.async {
+//                    self.cgmSessionState = CGMSessionState(from: response.sessionStateId)
+//                    self.sensorTypeText = sensorType
+//                    self.sensorStartedDate = startedDate
+//                    self.sessionDuration = response.sessionDurationSeconds > 0 ? duration : nil
+//                    self.sessionTimeRemaining = response.sessionTimeRemainingSeconds > 0 ? remaining : nil
+//                    self.transmitterBattery = batteryText
+//                    self.gracePeriod = response.gracePeriod
+//                }
+//            }
+//
+//            DispatchQueue.main.async {
+//                self.isFetching = false
+//            }
         }
     }
 
@@ -143,22 +143,22 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                 return
             }
 
-            let response = self.pumpManager?.sendMessage(
-                message: StopDexcomCGMSensorSessionRequest()
-            ) as? StopDexcomCGMSensorSessionResponse
-
-            DispatchQueue.main.async {
-                self.isLoading = false
-                if response?.isStatusOK == true {
-                    self.cgmSessionState = .stopPending
-                } else {
-                    self.commandError = String(
-                        localized:
-                        "Failed to stop CGM sensor. Check pump connection.",
-                        comment: "Error when CGM sensor stop fails"
-                    )
-                }
-            }
+//            let response = self.pumpManager?.sendMessage(
+//                message: StopDexcomCGMSensorSessionRequest()
+//            ) as? StopDexcomCGMSensorSessionResponse
+//
+//            DispatchQueue.main.async {
+//                self.isLoading = false
+//                if response?.isStatusOK == true {
+//                    self.cgmSessionState = .stopPending
+//                } else {
+//                    self.commandError = String(
+//                        localized:
+//                        "Failed to stop CGM sensor. Check pump connection.",
+//                        comment: "Error when CGM sensor stop fails"
+//                    )
+//                }
+//            }
         }
     }
 }

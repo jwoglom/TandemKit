@@ -78,7 +78,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     }
 
     public var onboarded: Bool = false
-    public var pumpState: PumpState?
+    public var pumpState: PumpState
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
     public var latestInsulinOnBoard: Double?
@@ -140,6 +140,7 @@ public struct TandemPumpManagerState: RawRepresentable {
 
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
+        pumpState = PumpState()
         basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
     }
 
@@ -164,9 +165,9 @@ public struct TandemPumpManagerState: RawRepresentable {
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
-            pumpState = PumpState(rawValue: pumpStateRaw)
+            pumpState = PumpState(rawValue: pumpStateRaw) ?? PumpState()
         } else {
-            pumpState = nil
+            pumpState = PumpState()
         }
 
         if let lastReconciliationInterval = rawValue["lastReconciliation"] as? TimeInterval {
@@ -305,7 +306,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         var raw: RawValue = [:]
 
         raw["onboarded"] = onboarded
-        raw["pumpState"] = pumpState?.rawValue
+        raw["pumpState"] = pumpState.rawValue
         raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
         raw["latestInsulinOnBoard"] = latestInsulinOnBoard
         raw["deliveryIsUncertain"] = deliveryIsUncertain
@@ -382,7 +383,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         [
             "### TandemPumpManagerState",
             "* onboarded: \(onboarded)",
-            "* pumpState: \(String(describing: pumpState?.debugDescription))",
+            "* pumpState: \(String(describing: pumpState.debugDescription))",
             "* lastReconciliation: \(String(describing: lastReconciliation))",
             "* settings: \(settings)",
             "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",

@@ -202,8 +202,8 @@ extension TandemPumpManager {
 
     func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
         logger.debug(
-                "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
-            )
+            "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
+        )
 
         state.controlIQEnabled = response.closedLoopEnabled
 
@@ -234,19 +234,16 @@ extension TandemPumpManager {
 
         logger.debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
 
-        if var pumpState = state.pumpState {
-            pumpState.timeSinceReset = timeSinceReset
-            state.pumpState = pumpState
-            state.currentPumpTime = currentPumpTime
-            state.lastPumpTimeCheckDate = checkedAt
+        state.pumpState.timeSinceReset = timeSinceReset
+        state.currentPumpTime = currentPumpTime
+        state.lastPumpTimeCheckDate = checkedAt
 //            pumpComm.syncPumpState(pumpState)
-            needsSessionInitialization.value = false
+        needsSessionInitialization.value = false
 
-            // Update the PumpStateSupplier with the new value
+        // Update the PumpStateSupplier with the new value
 //            updatePairingArtifacts(with: pumpState)
 
-            notifyDelegateStateUpdated()
-        }
+        notifyDelegateStateUpdated()
     }
 
     func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
@@ -267,8 +264,8 @@ extension TandemPumpManager {
 
     func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
         logger.debug(
-                "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
-            )
+            "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
+        )
 
         // Normal CurrentBolusStatus fetch
         if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
@@ -350,7 +347,7 @@ extension TandemPumpManager {
     /// Queries the pump for the actual delivered volume of the last bolus.
     /// Used after both cancellation and natural completion to get the real delivered amount.
     /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
-    func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
+    func queryLastBolusDeliveredVolume(bolusId _: Int) -> Double? {
         do {
 //            if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
 //                let response: LastBolusStatusV2Response = try pumpComm.sendMessage(

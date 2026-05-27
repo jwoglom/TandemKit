@@ -44,8 +44,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public var localizedTitle: String = "TandemPumpManager"
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
-    
-    private let bluetooth: TandemBluetoothManager
+
+    let bluetooth: TandemBluetoothManager
 
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
@@ -151,11 +151,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var isOnboarded: Bool {
-        state.pumpState != nil
+        state.pumpState.derivedSecret != nil
     }
 
     private var hasPairedPumpState: Bool {
-        state.pumpState?.valid == true
+        state.pumpState.valid == true
     }
 
     // MARK: - Pump Capabilities
@@ -704,7 +704,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 //                self.state.lastReconciliation = Date.now
 //                self.notifyDelegateStateUpdated()
 //                self.emitPumpEvents(events)
-                
+
                 completion(.success(nil))
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
@@ -1127,7 +1127,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 //                self.state = managerState
 //
 //                self.notifyDelegateStateUpdated()
-                completion(.success(BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? state.basalRateSchedule))
+                completion(.success(
+                    BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? state
+                        .basalRateSchedule
+                ))
             } catch {
                 let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
                 self.notifyPumpManagerDelegateOfError(pumpError)
@@ -1138,7 +1141,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func syncDeliveryLimits(
-        limits deliveryLimits: DeliveryLimits,
+        limits _: DeliveryLimits,
         completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void
     ) {
         logger.info("syncDeliveryLimits...")
@@ -1254,6 +1257,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    func pairPump(code: String, peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
+        state.pumpState.pincode = code
+        bluetooth.connect(peripheral, completion: completion)
+    }
+
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
         logger.debug("Preparing for pump deactivation – tearing down transport")
         bluetooth.disconnect()
@@ -1263,7 +1271,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func setPumpSound(request: SetPumpSoundsRequest) {
+    func setPumpSound(request _: SetPumpSoundsRequest) {
         do {
 //            _ = try pumpComm.sendMessage(
 //                transport: transport,
@@ -1295,7 +1303,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Alert Snooze
 
-    func setAlertSnooze(enabled: Bool, durationMins: Int) {
+    func setAlertSnooze(enabled _: Bool, durationMins _: Int) {
         do {
 //            let response: SetPumpAlertSnoozeResponse = try pumpComm.sendMessage(
 //                transport: transport,
@@ -1322,7 +1330,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Quick Bolus Settings
 
-    func setQuickBolusSettings(enabled: Bool, mode: QuickBolusMode, increment: QuickBolusIncrement) {
+    func setQuickBolusSettings(enabled _: Bool, mode _: QuickBolusMode, increment _: QuickBolusIncrement) {
         do {
 //            let response: SetQuickBolusSettingsResponse = try pumpComm.sendMessage(
 //                transport: transport,

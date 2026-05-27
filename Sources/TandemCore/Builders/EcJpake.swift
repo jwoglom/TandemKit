@@ -1,11 +1,8 @@
-import Foundation
-
 import BigInt
+import Foundation
 import SwiftECC
 
 public final class EcJpake {
-    private let log = TandemLogger(category: "EcJpake")
-
     public enum Role {
         case client
         case server
@@ -44,13 +41,9 @@ public final class EcJpake {
     }
 
     public init(role: Role, password: Data, random: @escaping RandomBytesGenerator) {
-        log.trace("[EcJpake.init] START")
         self.role = role
-        log.trace("[EcJpake.init] role set")
         rand = random
-        log.trace("[EcJpake.init] rand set")
         s = BInt(magnitude: [UInt8](password))
-        log.trace("[EcJpake.init] s (password BInt) set")
 
         let domain = Domain.instance(curve: .EC256r1)
         domainInstance = domain
@@ -61,87 +54,56 @@ public final class EcJpake {
         if role == .client {
             myId = Data("client".utf8)
             peerId = Data("server".utf8)
-            log.trace("[EcJpake.init] client IDs set")
         } else {
             myId = Data("server".utf8)
             peerId = Data("client".utf8)
-            log.trace("[EcJpake.init] server IDs set")
         }
-
-        log.trace("[EcJpake.init] COMPLETE")
     }
 
     public func getRound1() -> Data {
-        log.trace("[EcJpake.getRound1] ENTERED FUNCTION")
-
         if let data = myRound1 {
-            log.trace("[EcJpake.getRound1] Returning cached data")
             return data
         }
 
-        log.trace("[EcJpake.getRound1] No cache, starting generation")
-
         var out = Data()
-
-        log.trace("[EcJpake.getRound1] Generating first key pair")
         let kp1 = genKeyPair(domainGenerator)
         xm1 = kp1.priv
         Xm1 = kp1.pub
-        log.trace("[EcJpake.getRound1] First key pair done")
 
-        log.trace("[EcJpake.getRound1] Writing first point")
         writePoint(Xm1!, to: &out)
-        log.trace("[EcJpake.getRound1] First point written")
-
-        log.trace("[EcJpake.getRound1] Writing first ZKP")
         writeZkp(&out, base: domainGenerator, x: xm1!, X: Xm1!, id: myId)
-        log.trace("[EcJpake.getRound1] First ZKP done")
 
-        log.trace("[EcJpake.getRound1] Generating second key pair")
         let kp2 = genKeyPair(domainGenerator)
         xm2 = kp2.priv
         Xm2 = kp2.pub
-        log.trace("[EcJpake.getRound1] Second key pair done")
 
-        log.trace("[EcJpake.getRound1] Writing second point")
         writePoint(Xm2!, to: &out)
-        log.trace("[EcJpake.getRound1] Second point written")
-
-        log.trace("[EcJpake.getRound1] Writing second ZKP")
         writeZkp(&out, base: domainGenerator, x: xm2!, X: Xm2!, id: myId)
-        log.trace("[EcJpake.getRound1] Second ZKP done")
 
         myRound1 = out
         return out
     }
 
     func getRound1_original() -> Data {
-        log.trace("[EcJpake.getRound1] ENTERED FUNCTION")
-        if let data = myRound1 { return data }
-        log.trace("[EcJpake.getRound1] Starting")
-        log.trace("[EcJpake.getRound1] About to access domain.g...")
+        if let data = myRound1 {
+            return data
+        }
+
         let g = domain.g
-        log.trace("[EcJpake.getRound1] domain.g accessed: \(g)")
         var out = Data()
-        log.trace("[EcJpake.getRound1] Generating first key pair")
         let kp1 = genKeyPair(g)
-        log.trace("[EcJpake.getRound1] First key pair generated")
+
         xm1 = kp1.priv
         Xm1 = kp1.pub
-        log.trace("[EcJpake.getRound1] Writing first point")
         writePoint(Xm1!, to: &out)
-        log.trace("[EcJpake.getRound1] Writing first ZKP")
         writeZkp(&out, base: domain.g, x: xm1!, X: Xm1!, id: myId)
-        log.trace("[EcJpake.getRound1] First ZKP written, generating second key pair")
+
         let kp2 = genKeyPair(domain.g)
-        log.trace("[EcJpake.getRound1] Second key pair generated")
         xm2 = kp2.priv
         Xm2 = kp2.pub
-        log.trace("[EcJpake.getRound1] Writing second point")
         writePoint(Xm2!, to: &out)
-        log.trace("[EcJpake.getRound1] Writing second ZKP")
         writeZkp(&out, base: domain.g, x: xm2!, X: Xm2!, id: myId)
-        log.trace("[EcJpake.getRound1] Second ZKP written, done!")
+
         myRound1 = out
         return out
     }
@@ -210,55 +172,27 @@ public final class EcJpake {
     }
 
     private func writeZkp(_ out: inout Data, base: Point, x: BInt, X: Point, id: Data) {
-        log.trace("[writeZkp] START")
-
-        log.trace("[writeZkp] Calling genKeyPair")
         let kp = genKeyPair(base)
-        log.trace("[writeZkp] genKeyPair returned")
-
         let v = kp.priv
         let V = kp.pub
 
-        log.trace("[writeZkp] Calling zkpHash")
         let h = zkpHash(base: base, V: V, X: X, id: id)
-        log.trace("[writeZkp] zkpHash returned")
-
-        log.trace("[writeZkp] Computing r with mod")
         let r = (v - x * h).mod(domainOrder)
-        log.trace("[writeZkp] Mod complete")
 
-        log.trace("[writeZkp] Writing point V")
         writePoint(V, to: &out)
-        log.trace("[writeZkp] Writing num r")
         writeNum(r, to: &out)
-        log.trace("[writeZkp] DONE")
     }
 
     private func zkpHash(base: Point, V: Point, X: Point, id: Data) -> BInt {
-        log.trace("[zkpHash] START")
-
         var out = Data()
-
-        log.trace("[zkpHash] Writing base point")
         writeZkpHashPoint(base, to: &out)
-        log.trace("[zkpHash] Base point written")
-
-        log.trace("[zkpHash] Writing V point")
         writeZkpHashPoint(V, to: &out)
-        log.trace("[zkpHash] V point written")
-
-        log.trace("[zkpHash] Writing X point")
         writeZkpHashPoint(X, to: &out)
-        log.trace("[zkpHash] X point written")
-
-        log.trace("[zkpHash] Appending id")
         out.appendUInt32BE(UInt32(id.count))
         out.append(id)
-        log.trace("[zkpHash] Computing SHA256")
+
         let h = SHA256.hash(out)
-        log.trace("[zkpHash] Computing mod")
         let result = BInt(magnitude: [UInt8](h)).mod(domainOrder)
-        log.trace("[zkpHash] DONE")
         return result
     }
 

@@ -374,6 +374,7 @@
     },
     "Authentication with the pump failed. Try reconnecting or re-pairing your pump." : {
       "comment" : "Recovery suggestion when pump fault is authentication related",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -586,9 +587,6 @@
           }
         }
       }
-    },
-    "Check the code on the pump and try again." : {
-
     },
     "Checked at" : {
       "comment" : "Text for pump time synced at",
@@ -1067,9 +1065,6 @@
         }
       }
     },
-    "Enter the pairing code shown on your pump." : {
-
-    },
     "Entry Type" : {
       "comment" : "Label for quick bolus entry type",
       "localizations" : {
@@ -1094,6 +1089,7 @@
     },
     "Error setting max basal limit" : {
       "comment" : "Message when pump rejects SetMaxBasalLimit",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1105,6 +1101,7 @@
     },
     "Error setting max bolus limit" : {
       "comment" : "Message when pump rejects SetMaxBolusLimit",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1116,6 +1113,7 @@
     },
     "Error syncing basal rates: Pump rejected SetIDPSegment" : {
       "comment" : "Message when pump rejects SetIDPSegment",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1127,6 +1125,7 @@
     },
     "Error syncing time with pump" : {
       "comment" : "Message when pump rejects ChangeTimeDateRequest",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1171,6 +1170,7 @@
     },
     "Expired" : {
       "comment" : "Transmitter battery: Expired",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1270,6 +1270,7 @@
     },
     "Failed to set G7 pairing code. Check pump connection and try again." : {
       "comment" : "Error when setting G7 pairing code fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1281,6 +1282,7 @@
     },
     "Failed to set sensor type. Check pump connection and try again." : {
       "comment" : "Error when setting sensor type fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1292,6 +1294,7 @@
     },
     "Failed to set transmitter ID. Check pump connection and try again." : {
       "comment" : "Error when setting G6 transmitter ID fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1303,6 +1306,7 @@
     },
     "Failed to start CGM sensor. Check pump connection and try again." : {
       "comment" : "Error when starting G6 sensor fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1314,6 +1318,7 @@
     },
     "Failed to stop CGM sensor. Check pump connection." : {
       "comment" : "Error when CGM sensor stop fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1347,6 +1352,7 @@
     },
     "Failed to update sleep schedule. Check pump connection." : {
       "comment" : "Error when sleep schedule save fails",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1753,6 +1759,7 @@
     },
     "Make sure your pump is nearby" : {
       "comment" : "Recovery when pump not nearby",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1885,6 +1892,7 @@
     },
     "No pump paired" : {
       "comment" : "Error when no pump is paired",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2017,6 +2025,7 @@
     },
     "Out of Range" : {
       "comment" : "Transmitter battery: Out of Range",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2047,9 +2056,6 @@
           }
         }
       }
-    },
-    "Pairing codes are 6 digits long." : {
-
     },
     "Pairing with " : {
       "comment" : "Pairing with device prefix text",
@@ -2262,6 +2268,7 @@
     },
     "Pump failed to cancel bolus" : {
       "comment" : "Message when bolus could not be cancelled",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2273,6 +2280,7 @@
     },
     "Pump failed to cancel temp basal" : {
       "comment" : "Message when pump rejects request to stop temp rate",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2284,6 +2292,7 @@
     },
     "Pump failed to resume delivery" : {
       "comment" : "Message when pump rejects request to resume insulin delivery",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2295,6 +2304,7 @@
     },
     "Pump failed to suspend delivery" : {
       "comment" : "Message when pump rejects request to suspend insulin delivery",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2375,6 +2385,7 @@
     },
     "Pump rejected bolus initiate request" : {
       "comment" : "Message when pump disallows bolus from occurring",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2386,6 +2397,7 @@
     },
     "Pump rejected bolus permission request" : {
       "comment" : "Message when pump disallows bolus from occurring",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2397,6 +2409,7 @@
     },
     "Pump rejected Control-IQ settings change" : {
       "comment" : "Message when pump rejects ControlIQ settings change",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3286,6 +3299,7 @@
     },
     "The pump rejected the request. Verify parameters and try again." : {
       "comment" : "Recovery suggestion when pump fault is permanent",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3308,6 +3322,7 @@
     },
     "The pump reported a temporary fault. TandemKit will retry automatically." : {
       "comment" : "Recovery suggestion when pump fault is transient",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3606,9 +3621,6 @@
         }
       }
     },
-    "Type the code displayed on the pump screen." : {
-
-    },
     "U" : {
       "comment" : "Insulin unit",
       "localizations" : {
@@ -3634,6 +3646,7 @@
     },
     "Unavailable" : {
       "comment" : "Transmitter battery: Unavailable",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

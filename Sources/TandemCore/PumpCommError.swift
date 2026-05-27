@@ -198,10 +198,10 @@ extension PumpCommError: LocalizedError {
 //                    comment: "Recovery suggestion when pump fault is permanent"
 //                )
 //            case .unknown:
-                return String(
-                    localized: "The pump returned an unknown fault code.",
-                    comment: "Recovery suggestion when pump fault is unknown"
-                )
+            return String(
+                localized: "The pump returned an unknown fault code.",
+                comment: "Recovery suggestion when pump fault is unknown"
+            )
 //            }
 
         case .invalidScheduledBasalRate:

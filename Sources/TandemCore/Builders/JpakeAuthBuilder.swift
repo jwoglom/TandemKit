@@ -4,9 +4,7 @@ public class JpakeAuthBuilder {
     private let log = TandemLogger(category: "JpakeAuthBuilder")
     private static var instance: JpakeAuthBuilder?
 
-    public static var providerFactory: JpakeProviderFactory = DefaultJpakeProviderFactory()
-
-    let cryptoProvider: JpakeProvider
+    let cryptoProvider: SwiftECCJpakeProvider
     public private(set) var sentMessages: [Message]
     public private(set) var receivedMessages: [Message]
     var step: JpakeStep
@@ -20,7 +18,7 @@ public class JpakeAuthBuilder {
     private var serverHashDigest4: Data?
     private var serverNonce4: Data?
 
-    init(provider: JpakeProvider, derivedSecret: Data?) {
+    init(provider: SwiftECCJpakeProvider, derivedSecret: Data?) {
         cryptoProvider = provider
         self.derivedSecret = derivedSecret
         step = Self.decideInitialStep(derivedSecret: derivedSecret)
@@ -28,18 +26,16 @@ public class JpakeAuthBuilder {
         receivedMessages = []
     }
 
-    public static func initializeWithPairingCode(_ pairingCode: String) -> JpakeAuthBuilder {
-        guard let provider = providerFactory.make(
+    static func initializeWithPairingCode(_ pairingCode: String) -> JpakeAuthBuilder {
+        let provider = SwiftECCJpakeProvider(
             pairingCode: pairingCode,
             derivedSecret: nil,
-            random: defaultRandom
-        ) else {
-            fatalError("JPAKE provider unavailable")
-        }
+            rand: defaultRandom
+        )
         return initializeWithPairingCode(pairingCode, provider: provider)
     }
 
-    public static func initializeWithPairingCode(_ pairingCode: String, provider: JpakeProvider) -> JpakeAuthBuilder {
+    static func initializeWithPairingCode(_ pairingCode: String, provider: SwiftECCJpakeProvider) -> JpakeAuthBuilder {
         if let inst = instance, inst.cryptoProvider.pairingCode == pairingCode {
             return inst
         }
@@ -47,21 +43,19 @@ public class JpakeAuthBuilder {
         return instance!
     }
 
-    public static func initializeWithDerivedSecret(pairingCode: String, derivedSecret: Data) -> JpakeAuthBuilder {
-        guard let provider = providerFactory.make(
+    static func initializeWithDerivedSecret(pairingCode: String, derivedSecret: Data) -> JpakeAuthBuilder {
+        let provider = SwiftECCJpakeProvider(
             pairingCode: pairingCode,
             derivedSecret: derivedSecret,
-            random: defaultRandom
-        ) else {
-            fatalError("JPAKE provider unavailable")
-        }
+            rand: defaultRandom
+        )
         return initializeWithDerivedSecret(pairingCode: pairingCode, derivedSecret: derivedSecret, provider: provider)
     }
 
-    public static func initializeWithDerivedSecret(
+    static func initializeWithDerivedSecret(
         pairingCode _: String,
         derivedSecret: Data,
-        provider: JpakeProvider
+        provider: SwiftECCJpakeProvider
     ) -> JpakeAuthBuilder {
         instance = JpakeAuthBuilder(provider: provider, derivedSecret: derivedSecret)
         return instance!
@@ -78,15 +72,21 @@ public class JpakeAuthBuilder {
         instance = nil
     }
 
-    public func nextRequest() -> Message? {
-        log.trace("[JpakeAuthBuilder] nextRequest start")
-        var request: Message?
+    public func resetStep() {
+        step = Self.decideInitialStep(derivedSecret: derivedSecret)
+    }
+
+    public func nextRequest() -> (Message, Message.Type)? {
+        var request: (Message, Message.Type)?
         switch step {
         case .BOOTSTRAP_INITIAL:
             clientRound1 = cryptoProvider.makeRound1()
             if let round1 = clientRound1, round1.count >= 165 {
                 let challenge = round1.subdata(in: 0 ..< 165)
-                request = Jpake1aRequest(appInstanceId: 0, centralChallenge: challenge)
+                request = (
+                    Jpake1aRequest(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake1aResponse.self
+                )
                 step = .ROUND_1A_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 1 payload missing")
@@ -95,7 +95,10 @@ public class JpakeAuthBuilder {
         case .ROUND_1A_RECEIVED:
             if let round1 = clientRound1, round1.count >= 330 {
                 let challenge = round1.subdata(in: 165 ..< 330)
-                request = Jpake1bRequest(appInstanceId: 0, centralChallenge: challenge)
+                request = (
+                    Jpake1bRequest(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake1bResponse.self
+                )
                 step = .ROUND_1B_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 1 client material missing for 1b request")
@@ -105,14 +108,20 @@ public class JpakeAuthBuilder {
             clientRound2 = cryptoProvider.makeRound2()
             if let round2 = clientRound2, round2.count >= 165 {
                 let challenge = round2.subdata(in: 0 ..< 165)
-                request = Jpake2Request(appInstanceId: 0, centralChallenge: challenge)
+                request = (
+                    Jpake2Request(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake2Response.self
+                )
                 step = .ROUND_2_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 2 payload missing")
                 step = .INVALID
             }
         case .ROUND_2_RECEIVED:
-            request = Jpake3SessionKeyRequest(challengeParam: 0)
+            request = (
+                Jpake3SessionKeyRequest(challengeParam: 0),
+                Jpake3SessionKeyResponse.self
+            )
             derivedSecret = cryptoProvider.deriveSecret()
             step = .CONFIRM_3_SENT
         case .CONFIRM_INITIAL:
@@ -121,7 +130,10 @@ public class JpakeAuthBuilder {
                 step = .INVALID
                 break
             }
-            request = Jpake3SessionKeyRequest(challengeParam: 0)
+            request = (
+                Jpake3SessionKeyRequest(challengeParam: 0),
+                Jpake3SessionKeyResponse.self
+            )
             step = .CONFIRM_3_SENT
         case .CONFIRM_3_RECEIVED:
             guard let serverNonce3, let derivedSecret else {
@@ -134,11 +146,14 @@ public class JpakeAuthBuilder {
                 clientNonce4!,
                 key: Hkdf.build(nonce: serverNonce3, keyMaterial: derivedSecret)
             )
-            request = Jpake4KeyConfirmationRequest(
-                appInstanceId: 0,
-                nonce: clientNonce4!,
-                reserved: Jpake4KeyConfirmationRequest.RESERVED,
-                hashDigest: hashDigest3
+            request = (
+                Jpake4KeyConfirmationRequest(
+                    appInstanceId: 0,
+                    nonce: clientNonce4!,
+                    reserved: Jpake4KeyConfirmationRequest.RESERVED,
+                    hashDigest: hashDigest3
+                ),
+                Jpake4KeyConfirmationResponse.self
             )
             step = .CONFIRM_4_SENT
         case .CONFIRM_4_RECEIVED:
@@ -154,19 +169,18 @@ public class JpakeAuthBuilder {
             step = serverHashDigest4 == hashDigest4 ? .COMPLETE : .INVALID
             request = nil
         default:
-            log.trace("[JpakeAuthBuilder] nextRequest returning nil for step=\(step)")
+            log.debug("[JpakeAuthBuilder] nextRequest returning nil for step=\(step)")
             request = nil
         }
         if let request {
-            sentMessages.append(request)
+            sentMessages.append(request.0)
         }
-        log.trace("[JpakeAuthBuilder] nextRequest end step=\(step)")
+        log.debug("[JpakeAuthBuilder] nextRequest end step=\(step)")
         return request
     }
 
     public func processResponse(_ response: Message) {
         receivedMessages.append(response)
-        log.trace("[JpakeAuthBuilder] processResponse \(type(of: response)) step(before)=\(step)")
         if let m = response as? Jpake1aResponse {
             serverRound1 = m.centralChallengeHash
             step = .ROUND_1A_RECEIVED
@@ -189,7 +203,7 @@ public class JpakeAuthBuilder {
             serverHashDigest4 = m.hashDigest
             step = .CONFIRM_4_RECEIVED
         }
-        log.trace("[JpakeAuthBuilder] processResponse step(after)=\(step)")
+        log.debug("[JpakeAuthBuilder] processResponse step(after)=\(step)")
     }
 
     public func done() -> Bool {
@@ -250,7 +264,6 @@ public class JpakeAuthBuilder {
 }
 
 private final class NonBlockingRandom {
-    private let log = TandemLogger(category: "NonBlockingRandom")
     static let shared = NonBlockingRandom()
 
     private let lock = NSLock()
@@ -264,21 +277,6 @@ private final class NonBlockingRandom {
         defer { lock.unlock() }
 
         var data = Data(count: count)
-
-        #if canImport(Darwin)
-            // Use Apple's secure random API which is guaranteed non-blocking
-            let result = data.withUnsafeMutableBytes { bufferPtr in
-                SecRandomCopyBytes(kSecRandomDefault, count, bufferPtr.baseAddress!)
-            }
-
-            if result == errSecSuccess {
-                return data
-            }
-
-            log.warning(
-                "[NonBlockingRandom] Warning: SecRandomCopyBytes failed with \(result), falling back to SystemRandomNumberGenerator"
-            )
-        #endif
 
         // Fallback to SystemRandomNumberGenerator
         var generator = SystemRandomNumberGenerator()
