@@ -102,6 +102,7 @@ class TandemPeripheralManager: NSObject {
             commandLock?.wait(timeout: .now() + .seconds(2))
         }
 
+        currentTxId = currentTxId &+ 1
         while response.needsMorePacket {
             // Wait for result from pump
             guard let result = writeQ.wait(timeout: .now() + .seconds(10)) else {
@@ -125,6 +126,7 @@ class TandemPeripheralManager: NSObject {
             }
         }
 
+        logger.debug("Received message: \(response.message?.description ?? "nil")")
         return response.message
     }
 
@@ -210,8 +212,6 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        logger.debug("Received data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
-
         if let (readQueue, readCharacteristic) = readQueue,
            readCharacteristic == characteristic.uuid
         {
@@ -224,23 +224,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS {
-            var response = ResponseMessage()
-            BTResponseParser.parse(
-                data: Data(data),
-                characteristic: characteristic.uuid,
-                authKey: nil,
-                response: &response
-            )
-
-            if let message = response.message {
-                logger.debug("Received auth: \(message.description)")
-                authBuilder.processResponse(message)
-                return
-            }
-        }
-
-        logger.warning("Not handler for message")
+        logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
     }
 
     func peripheral(_: CBPeripheral, didWriteValueFor _: CBCharacteristic, error: (any Error)?) {
@@ -262,11 +246,6 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 
 extension TandemPeripheralManager {
     func performInitialSetup() {
-//        guard let derivedSecret = pumpManager.state.pumpState?.derivedSecret else {
-//            logger.error("no derived secret available")
-//            return
-//        }
-
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -313,20 +292,22 @@ extension TandemPeripheralManager {
             logger.debug("Notify completed!")
 
             // Step 4: Authenticate
-
-            // JPAKE pairing succeeded; waiting 500ms before session initialization
-            Thread.sleep(forTimeInterval: 0.5)
+            Thread.sleep(forTimeInterval: .milliseconds(500))
 
             if !authBuilder.done() {
                 logger.info("Doing jpake pairing")
                 JpakeAuthBuilder.clearInstance()
 
-                let storedPairingCode = pumpManager.state.pumpState.pincode
-                authBuilder = JpakeAuthBuilder.initializeWithPairingCode(storedPairingCode ?? self.fallbackPairingCode)
+                let pincode = pumpManager.state.pumpState.pincode ?? self.fallbackPairingCode
+                if let derivedSecret = pumpManager.state.pumpState.derivedSecret {
+                    authBuilder = JpakeAuthBuilder.initializeWithDerivedSecret(pairingCode: pincode, derivedSecret: derivedSecret)
+                } else {
+                    authBuilder = JpakeAuthBuilder.initializeWithPairingCode(pincode)
+                }
 
                 while let (request, expectedResponse) = authBuilder.nextRequest() {
                     guard let response = write(message: request, expecting: expectedResponse) else {
-                        logger.error("Failed to send JPAKE confirm...")
+                        logger.error("Failed to send JPAKE confirm")
                         bluetoothManager.disconnect()
                         connectCompletion?(PumpCommError.noResponse)
                         return

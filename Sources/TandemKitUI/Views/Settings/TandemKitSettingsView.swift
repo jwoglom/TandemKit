@@ -208,7 +208,7 @@ struct TandemKitSettingsView: View {
                                     }
                             }
                             .buttonStyle(.borderless)
-                            .disabled(!viewModel.isConnected || viewModel.isRefreshing)
+//                            .disabled(!viewModel.isConnected || viewModel.isRefreshing)
                             .opacity(viewModel.isConnected ? 1.0 : 0.4)
                         }
                         .padding(.top, 4)

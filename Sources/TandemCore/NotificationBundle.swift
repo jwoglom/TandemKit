@@ -19,15 +19,15 @@ public class NotificationBundle {
     public init() {}
 
     /// Returns a list of request message types needed to populate the bundle.
-    public static func allRequests() -> [Message] {
+    public static func allRequests() -> [(Message, Message.Type)] {
         [
-            AlertStatusRequest(),
-            ReminderStatusRequest(),
-            AlarmStatusRequest(),
-            CGMAlertStatusRequest(),
-            HighestAamRequest(),
-            OtherNotificationStatusRequest(),
-            OtherNotification2StatusRequest()
+            (AlertStatusRequest(), AlertStatusResponse.self),
+            (ReminderStatusRequest(), ReminderStatusResponse.self),
+            (AlarmStatusRequest(), AlarmStatusResponse.self),
+            (CGMAlertStatusRequest(), CGMAlertStatusResponse.self),
+            (HighestAamRequest(), HighestAamResponse.self),
+            (OtherNotificationStatusRequest(), OtherNotificationStatusResponse.self),
+            (OtherNotification2StatusRequest(), OtherNotification2StatusResponse.self)
         ]
     }
 
@@ -42,17 +42,6 @@ public class NotificationBundle {
             OtherNotificationStatusResponse.self,
             OtherNotification2StatusResponse.self
         ]
-    }
-
-    /// Validates whether a given message is one of the recognized notification response types.
-    public static func isNotificationResponse(_ message: Message) -> Bool {
-        message is AlertStatusResponse ||
-            message is ReminderStatusResponse ||
-            message is AlarmStatusResponse ||
-            message is CGMAlertStatusResponse ||
-            message is HighestAamResponse ||
-            message is OtherNotificationStatusResponse ||
-            message is OtherNotification2StatusResponse
     }
 
     /// Accepts a notification response, stores it in the appropriate field, and records the current timestamp.

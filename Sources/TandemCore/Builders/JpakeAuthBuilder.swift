@@ -32,15 +32,7 @@ public class JpakeAuthBuilder {
             derivedSecret: nil,
             rand: defaultRandom
         )
-        return initializeWithPairingCode(pairingCode, provider: provider)
-    }
-
-    static func initializeWithPairingCode(_ pairingCode: String, provider: SwiftECCJpakeProvider) -> JpakeAuthBuilder {
-        if let inst = instance, inst.cryptoProvider.pairingCode == pairingCode {
-            return inst
-        }
-        instance = JpakeAuthBuilder(provider: provider, derivedSecret: nil)
-        return instance!
+        return JpakeAuthBuilder(provider: provider, derivedSecret: nil)
     }
 
     static func initializeWithDerivedSecret(pairingCode: String, derivedSecret: Data) -> JpakeAuthBuilder {

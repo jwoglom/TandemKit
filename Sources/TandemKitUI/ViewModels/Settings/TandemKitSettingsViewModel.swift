@@ -174,12 +174,9 @@ class TandemKitSettingsViewModel: ObservableObject {
         pendingRefreshOnReconnect = false
         isRefreshing = true
 
-        // Dispatch everything off main so the spinner renders immediately
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            pumpManager.ensureCurrentPumpData { _ in }
-
+        pumpManager.ensureCurrentPumpData { _ in
             DispatchQueue.main.async {
-                self?.isRefreshing = false
+                self.isRefreshing = false
             }
         }
     }

@@ -20,7 +20,7 @@ class TandemBluetoothManager: NSObject {
             self.manager = CBCentralManager(
                 delegate: self,
                 queue: managerQueue,
-//                options: [CBCentralManagerOptionRestoreIdentifierKey: "com.jwoglom.TandemKit.bluetoothManager"]
+                options: [CBCentralManagerOptionRestoreIdentifierKey: "com.jwoglom.TandemKit.bluetoothManager"]
             )
         }
     }
@@ -74,17 +74,32 @@ class TandemBluetoothManager: NSObject {
         manager.connect(peripheral)
     }
 
+    func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+        guard let peripheralManager else {
+            logger.error("No peripheralManager -> Not connected...")
+            return nil
+        }
+
+        return peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
+    }
+
     func ensureConnected(completion: @escaping (Error?) -> Void) {
-        if let peripheral = peripheral, peripheral.state == .connected {
-            completion(nil)
+        let localCompletion: (Error?) -> Void = { error in
+            DispatchQueue.global(qos: .userInitiated).async {
+                completion(error)
+            }
+        }
+
+        if let peripheral, peripheral.state == .connected {
+            localCompletion(nil)
             return
         }
 
-        if let peripheral = peripheral {
+        if let peripheral {
             // We've the peripheral reference to a previous connection
             // Just try to reconnect
             connect(peripheral) { error in
-                completion(error)
+                localCompletion(error)
             }
             return
         }
@@ -93,14 +108,14 @@ class TandemBluetoothManager: NSObject {
         if let peripheral = connectedDevices.first {
             // Phone is already connected, but the app is not
             connect(peripheral) { error in
-                completion(error)
+                localCompletion(error)
             }
             return
         }
 
         guard let indentifier = pumpManager?.state.pumpState.peripheralUuid else {
             logger.error("No identifier available to scan for...")
-            completion(PumpCommError.pumpNotConnected)
+            localCompletion(PumpCommError.pumpNotConnected)
             return
         }
 
@@ -111,12 +126,12 @@ class TandemBluetoothManager: NSObject {
 
             self.logger.debug("Found pump, reconnecting! \(result.peripheral)")
             self.connect(result.peripheral) { error in
-                completion(error)
+                localCompletion(error)
             }
         }
 
         if !scanStarted {
-            completion(PumpCommError.pumpNotConnected)
+            localCompletion(PumpCommError.pumpNotConnected)
             return
         }
     }
@@ -157,15 +172,15 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         }
     }
 
-//    func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
-//        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
-//        guard let peripheral = peripherals.first else {
-//            logger.warning("No restored peripherals!")
-//            return
-//        }
-//
-//        self.peripheral = peripheral
-//    }
+    func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
+        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        guard let peripheral = peripherals.first else {
+            logger.warning("No restored peripherals!")
+            return
+        }
+
+        self.peripheral = peripheral
+    }
 
     func centralManager(
         _: CBCentralManager,
@@ -214,9 +229,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
 //            return
 //        }
 
-        if peripheralManager != nil {
-            peripheralManager = nil
-        }
+        peripheralManager = nil
 
         if let connectCompletion {
             connectCompletion(PumpCommError.pumpNotConnected)

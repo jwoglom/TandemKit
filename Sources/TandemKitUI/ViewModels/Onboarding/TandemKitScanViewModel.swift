@@ -76,7 +76,6 @@ class TandemKitScanViewModel: ObservableObject {
                 return
             }
 
-            self.log.info("Pairing successful")
             self.onPairSuccess()
         }
     }

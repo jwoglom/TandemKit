@@ -3,158 +3,235 @@ import LoopKit
 
 extension TandemPumpManager {
     func fetchTimeSinceReset() {
-        do {
-//            let response: TimeSinceResetResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: TimeSinceResetRequest(),
-//                expecting: TimeSinceResetResponse.self
-//            )
-//
-//            handleTimeSinceResetResponse(response, source: .telemetry)
-        } catch {
-            logger.error("TimeSinceReset telemetry request failed: \(error)")
+        guard let response = bluetooth.write(
+            message: TimeSinceResetRequest(),
+            expecting: TimeSinceResetResponse.self
+        ) as? TimeSinceResetResponse else {
+            logger.error("Failed to fetch ControlIQ info: \(type(of: TimeSinceResetRequest.self))")
+            return
         }
+
+        let timeSinceReset = response.pumpTimeSinceReset
+        let currentPumpTime = response.currentTimeDate
+        let checkedAt = Date.now
+
+        logger.debug("TimeSinceReset updated: \(timeSinceReset)")
+
+        state.pumpState.timeSinceReset = timeSinceReset
+        state.currentPumpTime = currentPumpTime
+        state.lastPumpTimeCheckDate = checkedAt
+        needsSessionInitialization.value = false
+
+        notifyDelegateStateUpdated()
     }
 
     func fetchControlIQStatus() {
-        do {
-//            let response: ControlIQInfoV2Response = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: ControlIQInfoV2Request(),
-//                expecting: ControlIQInfoV2Response.self
-//            )
-//
-//            handleControlIQResponse(response, source: .telemetry)
-        } catch {
-            logger.error("ControlIQ status telemetry request failed: \(error)")
+        let (request, expecting) = ControlIQInfoRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        guard let response = bluetooth.write(message: request, expecting: expecting) as? ControlIQInfoAbstractResponse else {
+            logger.error("Failed to fetch ControlIQ info: \(type(of: request))")
+            return
         }
+
+        logger.debug(
+            " ControlIQ updated: enabled=\(response.getClosedLoopEnabled()), mode=\(response.getCurrentUserModeTypeId())"
+        )
+
+        state.controlIQEnabled = response.getClosedLoopEnabled()
+
+        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
+        // sync useControlIQ so dosing guards activate and Trio disables closed loop
+        if response.getClosedLoopEnabled(), !state.useControlIQ {
+            logger.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
+            state.useControlIQ = true
+        }
+
+        if let userMode = response.currentUserModeType {
+            state.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
+        } else {
+            state.controlIQUserMode = nil
+        }
+
+        state.controlIQWeight = response.getWeight()
+        state.controlIQTotalDailyInsulin = response.getTotalDailyInsulin()
+        state.lastControlIQUpdate = Date.now
+
+        notifyDelegateStateUpdated()
     }
 
     func fetchHomeScreenStatus() {
-        do {
-//            let response: HomeScreenMirrorResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: HomeScreenMirrorRequest(),
-//                expecting: HomeScreenMirrorResponse.self
-//            )
-//
-//            handleHomeScreenMirrorResponse(response, source: .telemetry)
-        } catch {
-            logger.error("HomeScreen telemetry request failed: \(error)")
+        guard let response = bluetooth.write(
+            message: HomeScreenMirrorRequest(),
+            expecting: HomeScreenMirrorResponse.self
+        ) as? HomeScreenMirrorResponse else {
+            logger.error("Failed to fetch homeScreen Status: \(type(of: HomeScreenMirrorRequest.self))")
+            return
         }
     }
 
     func fetchBolusStatus() {
-        do {
-//            let response: CurrentBolusStatusResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: CurrentBolusStatusRequest(),
-//                expecting: CurrentBolusStatusResponse.self
-//            )
-//
-//            handleBolusResponse(response, source: .telemetry)
-        } catch {
-            logger.error("Bolus telemetry request failed: \(error)")
+        guard let response = bluetooth.write(
+            message: CurrentBolusStatusRequest(),
+            expecting: CurrentBolusStatusResponse.self
+        ) as? CurrentBolusStatusResponse else {
+            logger.error("Failed to fetch bolus status: \(type(of: CurrentBolusStatusRequest.self))")
+            return
         }
+
+        logger.debug(
+            "Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
+        )
+
+        // Normal CurrentBolusStatus fetch
+//        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
+//            return
+//        }
+//
+//        guard let progressReport = bolusProgressReport else {
+//            return
+//        }
+//
+//        if response.status == .delivering {
+        ////            if state.bolusState == .initiating, let activeBolus = activeBolus.value {
+        ////                state.bolusState = .inProgress(activeBolus.dose.toDoseEntry())
+        ////                notifyDelegateStateUpdated()
+        ////            }
+//
+//            progressReport.notify()
+//            return
+//        }
+//
+//        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
+//            // Bolus is finished
+//            telemetryScheduler.cancelAll()
+//
+//            // Query the pump for actual delivered volume rather than assuming full delivery
+//            var actualDelivered: Double?
+        ////            if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
+        ////                actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
+        ////            }
+//
+//            var events = getActivePumpEvents()
+//            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
+//
+//            bolusProgressReport = nil
+        ////            activeBolus.value = nil
+//
+//            state.lastReconciliation = Date.now
+//            notifyDelegateStateUpdated()
+//            emitPumpEvents(events)
+//        }
     }
 
     func fetchNotificationCount() {
-        do {
-//            let bundle = NotificationBundle()
-//            for request in NotificationBundle.allRequests() {
-//                if let response = try? self.pumpComm.sendMessage(transport: transport, message: request),
-//                   NotificationBundle.isNotificationResponse(response)
-//                {
-//                    bundle.add(response)
-//                }
-//            }
-//
-//            updateNotificationBundle(bundle)
-        } catch {
-            logger.error("fetchNotificationCount failed: \(error)")
+        let bundle = NotificationBundle()
+        for (request, expecting) in NotificationBundle.allRequests() {
+            guard let response = bluetooth.write(message: request, expecting: expecting) else {
+                logger.error("Failed to fetch notification status of \(type(of: request))")
+                continue
+            }
+
+            bundle.add(response)
         }
+
+        state.notificationCount = bundle.getNotificationCount()
+        state.lastNotificationUpdate = Date.now
+        notifyDelegateStateUpdated()
     }
 
     func fetchDeliveryLimits() {
-        do {
-//            let basalResponse: BasalLimitSettingsResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: BasalLimitSettingsRequest(),
-//                expecting: BasalLimitSettingsResponse.self
-//            )
-//
-//            let bolusResponse: GlobalMaxBolusSettingsResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: GlobalMaxBolusSettingsRequest(),
-//                expecting: GlobalMaxBolusSettingsResponse.self
-//            )
-//
-//            state.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
-//            state.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
-//            state.maxBolusLimitMilliunits = bolusResponse.maxBolus
-//            state.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
-//            notifyDelegateStateUpdated()
-        } catch {
-            logger.error("Failed to fetch delivery limits: \(error.localizedDescription)")
+        guard let basalResponse = bluetooth.write(
+            message: BasalLimitSettingsRequest(),
+            expecting: BasalLimitSettingsResponse.self
+        ) as? BasalLimitSettingsResponse else {
+            logger.error("Failed to fetch basal limits: \(type(of: BasalLimitSettingsRequest.self))")
+            return
         }
+
+        guard let bolusResponse = bluetooth.write(
+            message: GlobalMaxBolusSettingsRequest(),
+            expecting: GlobalMaxBolusSettingsResponse.self
+        ) as? GlobalMaxBolusSettingsResponse else {
+            logger.error("Failed to fetch bolus limits: \(type(of: GlobalMaxBolusSettingsRequest.self))")
+            return
+        }
+
+        state.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
+        state.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
+        state.maxBolusLimitMilliunits = bolusResponse.maxBolus
+        state.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
+        notifyDelegateStateUpdated()
     }
 
     func fetchGlobalPumpSettings() {
-        do {
-//            let response: PumpGlobalsResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: PumpGlobalsRequest(),
-//                expecting: PumpGlobalsResponse.self
-//            )
-//
-//            handleGlobalPumpSettingsResponse(response, source: .telemetry)
-        } catch {
-            logger.error("Pump global telemetry request failed: \(error)")
+        guard let response = bluetooth.write(
+            message: PumpGlobalsRequest(),
+            expecting: PumpGlobalsResponse.self
+        ) as? PumpGlobalsResponse else {
+            logger.error("Failed to fetch global pump settings: \(type(of: PumpGlobalsRequest.self))")
+            return
         }
+
+        state.quickBolusAnnun = response.quickBolusAnnouncement
+        state.reminderAnnun = response.reminderAnnouncement
+        state.alarmAnnun = response.alarmAnnouncement
+        state.alertAnnun = response.alertAnnouncement
+        state.generalAnnun = response.generalAnnouncement
+        state.quickBolusEnabled = response.isQuickBolusEnabled()
+        state.quickBolusEntryType = response.quickBolusEntryType
+        state.quickBolusIncrementUnits = response.quickBolusIncrementUnits
+        state.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
+        state.quickBolusStatus = response.quickBolusStatus
+        notifyDelegateStateUpdated()
     }
 
     func fetchReservoirStatus() {
-        do {
-//            let response = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: InsulinStatusRequest(),
-//                expecting: InsulinStatusResponse.self
-//            )
-//
-//            handleReservoirResponse(response, source: .telemetry)
-        } catch {
-            logger.error("Reservoir telemetry request failed: \(error)")
+        guard let response = bluetooth.write(
+            message: InsulinStatusRequest(),
+            expecting: InsulinStatusResponse.self
+        ) as? InsulinStatusResponse else {
+            logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
+            return
+        }
+
+        let timestamp = Date.now
+        let units = Double(response.currentInsulinAmount)
+        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
+
+        logger.debug("Reservoir updated: \(String(format: "%.2f", units)) U remaining")
+
+        state.lastReconciliation = timestamp
+        state.lastReservoirReading = reservoirValue
+        notifyDelegateStateUpdated()
+
+        pumpDelegate.notify { delegate in
+            guard let delegate = delegate else {
+                self.logger.warning("No pump delegate, not notifying...")
+                return
+            }
+
+            delegate.pumpManager(
+                self,
+                didReadReservoirValue: units,
+                at: timestamp,
+                completion: { _ in }
+            )
         }
     }
 
     func fetchBatteryStatus() {
-        do {
-//            let request = CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.pumpApiVersion)
-//            if let v2Request = request as? CurrentBatteryV2Request {
-//                let response: CurrentBatteryV2Response = try pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: v2Request,
-//                    expecting: CurrentBatteryV2Response.self
-//                )
-//
-//                handleBatteryResponse(response, source: .telemetry)
-//            } else if let v1Request = request as? CurrentBatteryV1Request {
-//                let response: CurrentBatteryV1Response = try pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: v1Request,
-//                    expecting: CurrentBatteryV1Response.self
-//                )
-//
-//                handleBatteryResponse(response, source: .telemetry)
-//            } else {
-//                logger
-//                    .error(
-//                        "Battery telemetry request builder returned unsupported type: \(String(describing: type(of: request)))"
-//                    )
-//            }
-        } catch {
-            logger.error("Battery telemetry request failed: \(error)")
+        let (request, expecting) = CurrentBatteryRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        guard let response = bluetooth.write(message: request, expecting: expecting) as? CurrentBatteryAbstractResponse else {
+            logger.error("Failed to fetch Battery status: \(type(of: request))")
+            return
         }
+
+        let percent = Double(response.batteryPercent) / 100.0
+        let timestamp = Date.now
+
+        logger.debug("Battery updated: \(percent * 100)% remaining")
+
+        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
+        notifyDelegateStateUpdated()
     }
 
     func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
@@ -197,150 +274,6 @@ extension TandemPumpManager {
             state.basalDose = dose
             notifyDelegateStateUpdated()
             emitPumpEvents(events)
-        }
-    }
-
-    func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
-        logger.debug(
-            "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
-        )
-
-        state.controlIQEnabled = response.closedLoopEnabled
-
-        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
-        // sync useControlIQ so dosing guards activate and Trio disables closed loop
-        if response.closedLoopEnabled, !state.useControlIQ {
-            logger.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
-            state.useControlIQ = true
-        }
-
-        if let userMode = response.currentUserModeType {
-            state.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
-        } else {
-            state.controlIQUserMode = nil
-        }
-
-        state.controlIQWeight = response.weight
-        state.controlIQTotalDailyInsulin = response.totalDailyInsulin
-        state.lastControlIQUpdate = Date.now
-
-        notifyDelegateStateUpdated()
-    }
-
-    func handleTimeSinceResetResponse(_ response: TimeSinceResetResponse, source: ResponseSource) {
-        let timeSinceReset = response.pumpTimeSinceReset
-        let currentPumpTime = response.currentTimeDate
-        let checkedAt = Date.now
-
-        logger.debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
-
-        state.pumpState.timeSinceReset = timeSinceReset
-        state.currentPumpTime = currentPumpTime
-        state.lastPumpTimeCheckDate = checkedAt
-//            pumpComm.syncPumpState(pumpState)
-        needsSessionInitialization.value = false
-
-        // Update the PumpStateSupplier with the new value
-//            updatePairingArtifacts(with: pumpState)
-
-        notifyDelegateStateUpdated()
-    }
-
-    func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
-        logger.debug("[\(source.label)] Pump Global updated -> \(response.description)")
-
-        state.quickBolusAnnun = response.quickBolusAnnouncement
-        state.reminderAnnun = response.reminderAnnouncement
-        state.alarmAnnun = response.alarmAnnouncement
-        state.alertAnnun = response.alertAnnouncement
-        state.generalAnnun = response.generalAnnouncement
-        state.quickBolusEnabled = response.isQuickBolusEnabled()
-        state.quickBolusEntryType = response.quickBolusEntryType
-        state.quickBolusIncrementUnits = response.quickBolusIncrementUnits
-        state.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
-        state.quickBolusStatus = response.quickBolusStatus
-        notifyDelegateStateUpdated()
-    }
-
-    func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
-        logger.debug(
-            "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
-        )
-
-        // Normal CurrentBolusStatus fetch
-        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            return
-        }
-
-        guard let progressReport = bolusProgressReport else {
-            return
-        }
-
-        if response.status == .delivering {
-//            if state.bolusState == .initiating, let activeBolus = activeBolus.value {
-//                state.bolusState = .inProgress(activeBolus.dose.toDoseEntry())
-//                notifyDelegateStateUpdated()
-//            }
-
-            progressReport.notify()
-            return
-        }
-
-        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
-            // Bolus is finished
-            telemetryScheduler.cancelAll()
-
-            // Query the pump for actual delivered volume rather than assuming full delivery
-            var actualDelivered: Double?
-//            if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
-//                actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
-//            }
-
-            var events = getActivePumpEvents()
-            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
-
-            bolusProgressReport = nil
-//            activeBolus.value = nil
-
-            state.lastReconciliation = Date.now
-            notifyDelegateStateUpdated()
-            emitPumpEvents(events)
-        }
-    }
-
-    func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
-        let percent = Double(response.batteryPercent) / 100.0
-        let timestamp = Date.now
-
-        logger.debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
-
-        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
-        notifyDelegateStateUpdated()
-    }
-
-    func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
-        let units = Double(response.currentInsulinAmount)
-        logger.debug("[\(source.label)] Reservoir updated: \(String(format: "%.2f", units)) U remaining")
-
-        let timestamp = Date.now
-        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
-
-        state.lastReconciliation = timestamp
-        state.lastReservoirReading = reservoirValue
-        notifyDelegateStateUpdated()
-
-        pumpDelegate.notify { delegate in
-            guard let delegate = delegate else {
-                self.logger.warning("No pump delegate, not notifying...")
-                return
-            }
-
-            delegate.pumpManager(
-                self,
-                didReadReservoirValue: units,
-                at: timestamp,
-                completion: { _ in }
-            )
         }
     }
 

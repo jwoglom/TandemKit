@@ -65,7 +65,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
     // Status tracking
-    private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
+    private let statusObservers = WeakSynchronizedSet<PumpManagerStatusObserver>()
     private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
 
     // Stream message publishers
@@ -270,10 +270,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
         }
 
-        for (_, statusObserver) in statusObservers.value {
-            statusObserver.queue.async {
-                statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
-            }
+        statusObservers.forEach { observer in
+            observer.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
         }
 
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
@@ -299,31 +297,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - Status Observers
 
     public func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue) {
-        let uuid = UUID()
-        statusObservers.value[uuid] = (observer, queue)
+        statusObservers.insert(observer, queue: queue)
     }
 
     public func removeStatusObserver(_ observer: PumpManagerStatusObserver) {
-        statusObservers.value = statusObservers.value.filter { _, value in
-            value.observer !== observer
-        }
-    }
-
-    private func notifyStatusObservers(oldStatus: PumpManagerStatus, newStatus: PumpManagerStatus) {
-        guard oldStatus != newStatus else { return }
-
-        for (_, observerInfo) in statusObservers.value {
-            observerInfo.queue.async {
-                observerInfo.observer.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
-            }
-        }
-
-        // Also notify the main delegate
-        if let delegate = pumpManagerDelegate {
-            pumpDelegate.queue.async {
-                delegate.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
-            }
-        }
+        statusObservers.removeElement(observer)
     }
 
     // MARK: - Scan Device Observers
@@ -467,23 +445,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        bluetooth.ensureConnected { error in
+            if let error {
+                completion?(self.state.lastReconciliation)
+            }
 
-//            self.fetchDeliveryLimits(transport: transport)
-//            self.fetchReservoirStatus(transport: transport)
-//            self.fetchBatteryStatus(transport: transport)
-//            self.fetchBolusStatus(transport: transport)
-//            self.fetchHomeScreenStatus(transport: transport)
-//            self.fetchControlIQStatus(transport: transport)
-//            self.fetchNotificationCount(transport: transport)
-//            self.fetchTimeSinceReset(transport: transport)
-//            self.fetchGlobalPumpSettings(transport: transport)
+            self.fetchDeliveryLimits()
+            self.fetchReservoirStatus()
+            self.fetchBatteryStatus()
+            self.fetchBolusStatus()
+            self.fetchHomeScreenStatus()
+            self.fetchControlIQStatus()
+            self.fetchNotificationCount()
+            self.fetchTimeSinceReset()
+            self.fetchGlobalPumpSettings()
 
-//            state.lastReconciliation = Date.now
-//            self.notifyDelegateStateUpdated()
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
 
-            completion?(state.lastReconciliation)
+            completion?(self.state.lastReconciliation)
         }
     }
 
@@ -874,91 +854,84 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
         logger.info("Suspend Insulin Delivery...")
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-//                let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: TempRateRequest(),
-//                    expecting: TempRateResponse.self
-//                )
-//
-//                if currentTempRate.active {
-//                    _ = try self.pumpComm.sendMessage(
-//                        transport: transport,
-//                        message: StopTempRateRequest()
-//                    )
-//                }
-//
-//                let response: SuspendPumpingResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: SuspendPumpingRequest(),
-//                    expecting: SuspendPumpingResponse.self
-//                )
-//
-//                guard response.status == 0 else {
-//                    logger.error("Pump rejected suspend delivery...")
-//                    throw PumpCommError.errorResponse(
-//                        context: String(
-//                            localized: "Pump failed to suspend delivery",
-//                            comment: "Message when pump rejects request to suspend insulin delivery"
-//                        ),
-//                        request: SuspendPumpingRequest(),
-//                        response: response
-//                    )
-//                }
-//
-//                let suspendDose = UnfinalizedDose(suspendStartTime: Date.now)
-//                var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
-//                events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
-//
-//                state.basalDose = suspendDose
-//                state.lastReconciliation = Date.now
-//
-//                self.notifyDelegateStateUpdated()
-//                self.emitPumpEvents(events)
-//
-//                logger.info("Insulin Delivery Suspended!")
-                completion(nil)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                completion(pumpError)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
+                completion(error)
+                return
             }
+
+            guard let currentTempResponse = self.bluetooth.write(
+                message: TempRateRequest(),
+                expecting: TempRateResponse.self
+            ) as? TempRateResponse else {
+                self.logger.error("Failed to get currentTempRate...")
+                completion(PumpCommError.noResponse)
+                return
+            }
+            if currentTempResponse.active {
+                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateRequest.self)
+            }
+
+            let response = self.bluetooth.write(
+                message: SuspendPumpingRequest(),
+                expecting: SuspendPumpingResponse.self
+            ) as? SuspendPumpingResponse
+            guard let response, response.status == 0 else {
+                self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
+                completion(PumpCommError.noResponse)
+                return
+            }
+
+            let suspendDose = UnfinalizedDose(suspendStartTime: Date.now)
+            var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
+            events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
+
+            self.state.basalDose = suspendDose
+            self.state.lastReconciliation = Date.now
+
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
+
+            self.logger.info("Insulin Delivery Suspended!")
+            completion(nil)
         }
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
         logger.info("Resume Insulin Delivery...")
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-//                let response: ResumePumpingResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: ResumePumpingRequest(),
-//                    expecting: ResumePumpingResponse.self
-//                )
-//
-//                guard response.status == 0 else {
-//                    logger.error("Pump rejected resume delivery...")
-//                    throw PumpCommError.errorResponse(
-//                        context: String(
-//                            localized: "Pump failed to resume delivery",
-//                            comment: "Message when pump rejects request to resume insulin delivery"
-//                        ),
-//                        request: ResumePumpingRequest(),
-//                        response: response
-//                    )
-//                }
-//
-//                logger.info("Insulin Delivery Resumed!")
-                completion(nil)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                completion(pumpError)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
+                completion(error)
+                return
             }
+
+            let response = self.bluetooth.write(
+                message: ResumePumpingRequest(),
+                expecting: ResumePumpingResponse.self
+            ) as? ResumePumpingResponse
+            guard let response, response.status == 0 else {
+                self.logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
+                completion(PumpCommError.noResponse)
+                return
+            }
+
+            let dose = UnfinalizedDose(
+                resumeStartTime: Date.now,
+                insulinType: self.state.insulinType
+            )
+            let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
+
+            self.state.basalDose = dose
+            self.state.lastReconciliation = Date.now
+
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
+
+            self.logger.info("Insulin Delivery Resumed!")
+            completion(nil)
         }
     }
 
