@@ -20,7 +20,6 @@ extension TandemPumpManager {
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
-        needsSessionInitialization.value = false
 
         notifyDelegateStateUpdated()
     }
@@ -234,7 +233,7 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
+    func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse) {
         guard let basalIcon = response.basalStatusIcon else {
             return
         }
@@ -280,41 +279,22 @@ extension TandemPumpManager {
     /// Queries the pump for the actual delivered volume of the last bolus.
     /// Used after both cancellation and natural completion to get the real delivered amount.
     /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
-    func queryLastBolusDeliveredVolume(bolusId _: Int) -> Double? {
-        do {
-//            if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
-//                let response: LastBolusStatusV2Response = try pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: LastBolusStatusV2Request(),
-//                    expecting: LastBolusStatusV2Response.self
-//                )
-//                guard response.bolusId == bolusId else {
-//                    logger
-//                        .warning("[bolus] LastBolusStatusV2 bolusId \(response.bolusId) != expected \(bolusId)")
-//                    return nil
-//                }
-//                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-//                logger
-//                    .info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-//                return units == 0 ? nil : units
-//            } else {
-//                let response: LastBolusStatusResponse = try pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: LastBolusStatusRequest(),
-//                    expecting: LastBolusStatusResponse.self
-//                )
-//                guard response.bolusId == bolusId else {
-//                    logger.warning("[bolus] LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
-//                    return nil
-//                }
-//                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-//                logger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-//                return units == 0 ? nil : units
-//            }
-            return nil
-        } catch {
-            logger.error("[bolus] Failed to query last bolus status: \(error)")
+    func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
+        let (request, expecting) = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+
+        guard let response = bluetooth.write(
+            message: request,
+            expecting: expecting
+        ) as? LastBolusStatusAbstractResponse else {
+            logger.error("Failed to get lastBolusStatus: \(type(of: request))")
             return nil
         }
+
+        guard response.bolusId == bolusId else {
+            logger.warning("LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
+            return nil
+        }
+
+        return roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
     }
 }

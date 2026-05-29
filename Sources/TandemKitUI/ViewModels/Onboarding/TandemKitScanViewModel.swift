@@ -25,8 +25,6 @@ class TandemKitScanViewModel: ObservableObject {
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
-
-        self.pumpManager?.addScanDeviceObserver(self, queue: .main)
     }
 
     func startScan() {
@@ -133,13 +131,9 @@ class TandemKitScanViewModel: ObservableObject {
             self.devicePinCode = ""
         }
     }
-
-    deinit {
-        pumpManager?.removeScanDeviceObserver(self)
-    }
 }
 
-extension TandemKitScanViewModel: StateObserver {
+extension TandemKitScanViewModel {
     func deviceScanDidUpdate(_ device: TandemPumpScan) {
         if selectedPeripheral == nil {
             selectedPeripheral = device.peripheral

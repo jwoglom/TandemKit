@@ -15,29 +15,6 @@ public struct TandemPumpScan {
     public let advertisementData: [String: Any]?
 }
 
-public protocol StateObserver: AnyObject {
-    func deviceScanDidUpdate(_ device: TandemPumpScan)
-}
-
-struct ActiveBolus {
-    let id: Int
-    let dose: UnfinalizedDose
-}
-
-enum ResponseSource {
-    case telemetry
-    case notification
-
-    var label: String {
-        switch self {
-        case .telemetry:
-            return "telemetry"
-        case .notification:
-            return "notification"
-        }
-    }
-}
-
 public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
@@ -66,14 +43,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Status tracking
     private let statusObservers = WeakSynchronizedSet<PumpManagerStatusObserver>()
-    private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
-    internal let needsSessionInitialization = Locked<Bool>(false)
-    private let sessionBootstrapInProgress = Locked<Bool>(false)
-    private let sessionBootstrapRetryAttempt = Locked<Int>(0)
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
 
@@ -233,26 +206,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         logger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
 
-        for alert in basalAlertsToAck {
-            do {
-//                let request = DismissNotificationRequest(
-//                    notificationType: .alert,
-//                    notificationId: UInt32(alert.rawValue)
-//                )
-//
-//                let response: DismissNotificationResponse = try pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: request,
-//                    expecting: DismissNotificationResponse.self
-//                )
-//
-//                if response.status == 0 {
-//                    logger.info("[auto-ack] Successfully acknowledged \(alert)")
-//                } else {
-//                    logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
-//                }
-            } catch {
-                logger.error("[auto-ack] Error acknowledging \(alert): \(error)")
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for autoAck: \(error.localizedDescription)")
+                return
+            }
+
+            for alert in basalAlertsToAck {
+                guard let response = self.bluetooth.write(
+                    message: DismissNotificationRequest(
+                        notificationType: .alert,
+                        notificationId: UInt32(alert.rawValue)
+                    ),
+                    expecting: DismissNotificationResponse.self
+                ) as? DismissNotificationResponse else {
+                    self.logger.error("Failed to send DismissNotificationRequest")
+                    return
+                }
+
+                if response.status != 0 {
+                    self.logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
+                }
             }
         }
     }
@@ -277,23 +251,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
-    private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
-        if let lastSequence = state.lastHistorySequenceNum {
-            return lastSequence &+ 1
-        }
-
-        let effectiveStartDate = startDate ?? pumpManagerDelegate?.startDateToFilterNewPumpEvents(for: self)
-
-        // Without a known sequence number, fall back to the earliest available sequence number reported
-        // by `HistoryLogStatusResponse`. Returning UInt32.min ensures the history fetch session maps the
-        // start to `firstSequenceNum` when logs exist.
-        if effectiveStartDate != nil {
-            return UInt32.min
-        }
-
-        return nil
-    }
-
     // MARK: - Status Observers
 
     public func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue) {
@@ -302,22 +259,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func removeStatusObserver(_ observer: PumpManagerStatusObserver) {
         statusObservers.removeElement(observer)
-    }
-
-    // MARK: - Scan Device Observers
-
-    public func addScanDeviceObserver(_ observer: StateObserver, queue: DispatchQueue) {
-        scanDeviceObservers.insert(observer, queue: queue)
-    }
-
-    public func removeScanDeviceObserver(_ observer: StateObserver) {
-        scanDeviceObservers.removeElement(observer)
-    }
-
-    func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
-        scanDeviceObservers.forEach { observer in
-            observer.deviceScanDidUpdate(device)
-        }
     }
 
     private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
@@ -524,172 +465,143 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var permissionBolusId: Int?
-            var shouldReleasePermissionOnFailure = false
-
-            do {
-//                let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: BolusPermissionRequest(),
-//                    expecting: BolusPermissionResponse.self
-//                )
-//
-//                guard permissionResponse.isPermissionGranted else {
-//                    throw PumpCommError.errorResponse(
-//                        context: String(
-//                            localized: "Pump rejected bolus permission request",
-//                            comment: "Message when pump disallows bolus from occurring"
-//                        ),
-//                        request: BolusPermissionRequest(),
-//                        response: permissionResponse
-//                    )
-//                }
-//
-//                permissionBolusId = permissionResponse.bolusId
-//                shouldReleasePermissionOnFailure = true
-//
-//                let milliUnits = max(0, Int((units * 1000).rounded()))
-//                let totalVolume = UInt32(clamping: milliUnits)
-//
-//                let bolusRequest = InitiateBolusRequest(
-//                    totalVolume: totalVolume,
-//                    bolusID: permissionResponse.bolusId,
-//                    bolusTypeBitmask: BolusType.toBitmask([.food2]),
-//                    foodVolume: totalVolume,
-//                    correctionVolume: 0,
-//                    bolusCarbs: 0,
-//                    bolusBG: 0,
-//                    bolusIOB: 0
-//                )
-//
-//                self.logger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
-//
-//                let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: bolusRequest,
-//                    expecting: InitiateBolusResponse.self
-//                )
-//
-//                guard initiateResponse.wasBolusInitiated else {
-//                    self.telemetryLogger.info("[enactBolus] bolus not initiated")
-//                    throw PumpCommError.errorResponse(
-//                        context: String(
-//                            localized: "Pump rejected bolus initiate request",
-//                            comment: "Message when pump disallows bolus from occurring"
-//                        ),
-//                        request: bolusRequest,
-//                        response: initiateResponse
-//                    )
-//                }
-//
-//                self.logger.info("[enactBolus] bolus started")
-//
-//                shouldReleasePermissionOnFailure = false
-//
-//                let dose = UnfinalizedDose(
-//                    units: units,
-//                    // 5s needed before bolus enacting is started
-//                    duration: self.estimatedDuration(toBolus: units) + .seconds(5),
-//                    activationType: activationType,
-//                    insulinType: self.state.insulinType
-//                )
-//
-//                let doseEntry = dose.toDoseEntry()
-//                bolusProgressReport = TandemDoseProgressReporter(
-//                    pumpManager: self,
-//                    dose: doseEntry,
-//                    activationType: activationType
-//                )
-//                telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5)) {
-//                    guard let transport = self.pairedTransport else { return }
-//                    self.fetchBolusStatus(transport: transport)
-//                }
-//
-//                self.activeBolus.value = ActiveBolus(
-//                    id: initiateResponse.bolusId,
-//                    dose: dose
-//                )
-//
-//                state.bolusState = .initiating
-//                state.lastReconciliation = Date.now
-//                self.notifyDelegateStateUpdated()
-//                self.emitPumpEvents([NewPumpEvent.bolus(dose: doseEntry, units: units)], replacePendingEvents: false)
-
-                completion(nil)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-//                if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
-//                    self.releaseBolusPermission(transport: transport, bolusId: bolusId)
-//                }
-
-                completion(.communication(pumpError))
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for bolus: \(error.localizedDescription)")
+                completion(.communication(PumpCommError.pumpNotConnected))
+                return
             }
+
+            guard let permissionResponse = self.bluetooth.write(
+                message: BolusPermissionRequest(),
+                expecting: BolusPermissionResponse.self
+            ) as? BolusPermissionResponse else {
+                self.logger.error("Failed to request bolus permission")
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            guard permissionResponse.isPermissionGranted else {
+                self.logger.error("Pump rejected bolus permission request")
+                completion(.communication(PumpCommError.invalidPacket))
+                return
+            }
+
+            let milliUnits = max(0, Int((units * 1000).rounded()))
+            let totalVolume = UInt32(clamping: milliUnits)
+
+            let bolusRequest = InitiateBolusRequest(
+                totalVolume: totalVolume,
+                bolusID: permissionResponse.bolusId,
+                bolusTypeBitmask: BolusType.toBitmask([.food2]),
+                foodVolume: totalVolume,
+                correctionVolume: 0,
+                bolusCarbs: 0,
+                bolusBG: 0,
+                bolusIOB: 0
+            )
+            guard let initiateResponse = self.bluetooth.write(
+                message: bolusRequest,
+                expecting: InitiateBolusResponse.self
+            ) as? InitiateBolusResponse else {
+                self.logger.error("Failed to initiate bolus")
+                self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            guard initiateResponse.wasBolusInitiated else {
+                self.logger.error("Bolus was not initiated")
+                self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
+                completion(.communication(PumpCommError.invalidPacket))
+                return
+            }
+
+            let dose = UnfinalizedDose(
+                units: units,
+                // 5s needed before bolus enacting is started
+                duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                activationType: activationType,
+                insulinType: self.state.insulinType,
+                bolusId: permissionResponse.bolusId
+            )
+
+            let doseEntry = dose.toDoseEntry()
+            self.bolusProgressReport = TandemDoseProgressReporter(
+                pumpManager: self,
+                dose: doseEntry,
+                activationType: activationType
+            )
+            self.telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5)) {
+                self.fetchBolusStatus()
+            }
+
+            self.state.bolusDose = dose
+            self.state.bolusState = .initiating
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents([NewPumpEvent.bolus(dose: doseEntry, units: units)], replacePendingEvents: false)
+
+            completion(nil)
         }
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
         logger.info("Cancelling bolus...")
 
-//        guard let active = activeBolus.value else {
-//            logger.error("No active bolus...")
-//            completion(.failure(.communication(PumpCommError.noActiveBolus)))
-//            return
-//        }
+        guard let bolusDose = state.bolusDose, let bolusId = bolusDose.bolusId else {
+            logger.error("No active bolus...")
+            completion(.failure(.communication(PumpCommError.noActiveBolus)))
+            return
+        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-//                let request = CancelBolusRequest(bolusId: active.id)
-//                let response: CancelBolusResponse = try self.pumpComm.sendMessage(
-//                    transport: transport,
-//                    message: request,
-//                    expecting: CancelBolusResponse.self
-//                )
-//
-//                guard response.wasCancelled else {
-//                    logger.error("Failed to cancel bolus")
-//                    throw PumpCommError.errorResponse(
-//                        context: String(
-//                            localized: "Pump failed to cancel bolus",
-//                            comment: "Message when bolus could not be cancelled"
-//                        ),
-//                        request: request,
-//                        response: response
-//                    )
-//                }
-//
-//                // Allow the Mobi to store the bolus in storage
-//                Thread.sleep(forTimeInterval: .seconds(2))
-//
-//                // Query the pump for the actual delivered volume before clearing state
-//                active.dose.deliveredUnits = self.queryLastBolusDeliveredVolume(transport: transport, bolusId: active.id) ?? 0
-//                let canceledDose = active.dose.toDoseEntry(endDate: Date.now)
-//
-//                // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
-//                self.telemetryScheduler.cancelAll()
-//                self.bolusProgressReport = nil
-//                self.activeBolus.value = nil
-//
-//                var events = getActivePumpEvents()
-//                events
-//                    .append(
-//                        NewPumpEvent
-//                            .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
-//                    )
-//
-//                self.state.lastReconciliation = Date.now
-//                self.notifyDelegateStateUpdated()
-//                self.emitPumpEvents(events)
-
-                completion(.success(nil))
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                completion(.failure(.communication(pumpError)))
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for cancel bolus: \(error.localizedDescription)")
+                completion(.failure(.communication(PumpCommError.pumpNotConnected)))
+                return
             }
+
+            guard let response = self.bluetooth.write(
+                message: CancelBolusRequest(bolusId: bolusId),
+                expecting: CancelBolusResponse.self
+            ) as? CancelBolusResponse else {
+                self.logger.error("Failed to cancel bolus")
+                completion(.failure(.communication(PumpCommError.noResponse)))
+                return
+            }
+
+            guard response.wasCancelled else {
+                self.logger.error("Pump failed to cancel bolus")
+                completion(.failure(.communication(PumpCommError.invalidPacket)))
+                return
+            }
+
+            // Allow the Mobi to store the bolus in storage
+            Thread.sleep(forTimeInterval: .seconds(2))
+
+            // Query the pump for the actual delivered volume before clearing state
+            bolusDose.deliveredUnits = self.queryLastBolusDeliveredVolume(bolusId: bolusId) ?? 0
+
+            let canceledDose = bolusDose.toDoseEntry(endDate: Date.now)
+
+            // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
+            self.telemetryScheduler.cancelAll()
+            self.bolusProgressReport = nil
+            self.state.bolusDose = nil
+
+            var events = self.getActivePumpEvents()
+            events
+                .append(
+                    NewPumpEvent
+                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
+                )
+
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
+
+            completion(.success(nil))
         }
     }
 
@@ -1502,18 +1414,16 @@ extension TandemPumpManager {
 
 private extension TandemPumpManager {
     func releaseBolusPermission(bolusId: Int) {
-        do {
-//            let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
-//                transport: transport,
-//                message: BolusPermissionReleaseRequest(bolusID: bolusId),
-//                expecting: BolusPermissionReleaseResponse.self
-//            )
-//
-//            if response.status != 0 {
-//                logger.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
-//            }
-        } catch {
-            logger.error("Error releasing bolus permission for id \(bolusId): \(String(describing: error))")
+        guard let response = bluetooth.write(
+            message: BolusPermissionReleaseRequest(bolusID: bolusId),
+            expecting: BolusPermissionReleaseResponse.self
+        ) as? BolusPermissionReleaseResponse else {
+            logger.error("Error releasing bolus permission for id \(bolusId)")
+            return
+        }
+
+        if response.status != 0 {
+            logger.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
         }
     }
 }

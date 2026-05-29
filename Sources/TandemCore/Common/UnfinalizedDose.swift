@@ -6,6 +6,7 @@ public class UnfinalizedDose {
 
     private let logger = TandemLogger(category: "UnfinalizedDose")
 
+    public var bolusId: Int?
     public let type: DoseType
     public let startDate: Date
     public let estimatedEndDate: Date
@@ -14,7 +15,13 @@ public class UnfinalizedDose {
     public let insulinType: InsulinType?
     public let automatic: Bool
 
-    public init(units: Double, duration: TimeInterval, activationType: BolusActivationType, insulinType: InsulinType?) {
+    public init(
+        units: Double,
+        duration: TimeInterval,
+        activationType: BolusActivationType,
+        insulinType: InsulinType?,
+        bolusId: Int
+    ) {
         var estimatedEndDate = Date.now
         estimatedEndDate.addTimeInterval(duration)
 
@@ -24,6 +31,7 @@ public class UnfinalizedDose {
         self.estimatedEndDate = estimatedEndDate
         self.insulinType = insulinType
         automatic = activationType.isAutomatic
+        self.bolusId = bolusId
     }
 
     public init(basalRate: Double, insulinType: InsulinType?, startDate: Date = Date.now) {
@@ -112,6 +120,12 @@ public class UnfinalizedDose {
             logger.warning("Couldn't convert automatic")
             return nil
         }
+
+        if let bolusIdRaw = rawValue["bolusId"] as? Int {
+            bolusId = bolusIdRaw
+        } else {
+            bolusId = nil
+        }
     }
 
     public var rawValue: RawValue {
@@ -124,6 +138,7 @@ public class UnfinalizedDose {
         raw["deliveredUnits"] = deliveredUnits
         raw["insulinType"] = insulinType?.rawValue
         raw["automatic"] = automatic
+        raw["bolusId"] = bolusId
 
         return raw
     }

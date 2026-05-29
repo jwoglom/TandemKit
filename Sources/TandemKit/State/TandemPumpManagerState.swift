@@ -87,6 +87,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastBasalStatusDate: Date?
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var deliveryIsUncertain: Bool = false
+    public var bolusDose: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     public var insulinDeliveryActionsEnabled: Bool = false
@@ -165,7 +166,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
-            pumpState = PumpState(rawValue: pumpStateRaw) ?? PumpState()
+            pumpState = PumpState(rawValue: pumpStateRaw)
         } else {
             pumpState = PumpState()
         }
@@ -200,6 +201,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastBasalStatusDate = Date(timeIntervalSinceReferenceDate: lastBasalDateInterval)
         } else {
             lastBasalStatusDate = nil
+        }
+
+        if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
+            bolusDose = UnfinalizedDose(rawValue: bolusDoseRaw)
+        } else {
+            bolusDose = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -365,6 +372,10 @@ public struct TandemPumpManagerState: RawRepresentable {
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
             raw["bolusState"] = encodedBolusState
+        }
+
+        if let bolusDose {
+            raw["bolusDose"] = bolusDose.rawValue
         }
 
         return raw
