@@ -44,19 +44,14 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     }
 
     func checkSuspendedStatus() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        pumpManager?.fetchSuspendStatus { isSuspended in
+            DispatchQueue.main.async {
+                self.isSuspended = isSuspended
 
-//            if let transport = self.pumpManager?.pairedTransport {
-//                let mirror = try? transport.sendMessage(HomeScreenMirrorRequest()) as? HomeScreenMirrorResponse
-//
-//                DispatchQueue.main.async {
-//                    self.isSuspended = mirror?.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue
-//                    if self.isSuspended == true, self.currentStep == .suspend {
-//                        self.currentStep = .enterAmount
-//                    }
-//                }
-//            }
+                if self.isSuspended == true, self.currentStep == .suspend {
+                    self.currentStep = .enterAmount
+                }
+            }
         }
     }
 
@@ -89,33 +84,17 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         failedFill = false
         isProcessing = true
 
-        let milliUnits = Int(primeAmount * 1000)
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-//            if let transport = self.pumpManager?.pairedTransport {
-//                // This blocks until the prime completes and returns the response
-//                let response = try? transport
-//                    .sendMessage(FillCannulaRequest(primeSizeMilliUnits: milliUnits)) as? FillCannulaResponse
-//
-//                DispatchQueue.main.async {
-//                    self.loadingFill = false
-//                    self.isProcessing = false
-//                    if let response = response, response.status == 0 {
-//                        self.failedFill = false
-//                        self.currentStep = self.currentStep.nextStep() ?? .done
-//                    } else {
-//                        self.failedFill = true
-//                    }
-//                }
-//            } else {
-//                DispatchQueue.main.async {
-//                    self.loadingFill = false
-//                    self.failedFill = true
-//                    self.isProcessing = false
-//                }
-//            }
+        pumpManager?.primeCanulla(amount: primeAmount) { response in
+            DispatchQueue.main.async {
+                self.loadingFill = false
+                self.isProcessing = false
+                if let response = response, response.status == 0 {
+                    self.failedFill = false
+                    self.currentStep = self.currentStep.nextStep() ?? .done
+                } else {
+                    self.failedFill = true
+                }
+            }
         }
     }
 
@@ -123,22 +102,18 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         loadingResume = true
         failedResume = false
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self, let pumpManager = self.pumpManager else { return }
+        pumpManager?.resumeDelivery { error in
+            self.checkSuspendedStatus()
 
-            pumpManager.resumeDelivery { error in
-                self.checkSuspendedStatus()
+            DispatchQueue.main.async {
+                self.loadingResume = false
+                if let _ = error {
+                    self.failedResume = true
 
-                DispatchQueue.main.async {
-                    self.loadingResume = false
-                    if let _ = error {
-                        self.failedResume = true
-
-                    } else {
-                        self.failedResume = false
-                        self.isSuspended = false
-                        self.done()
-                    }
+                } else {
+                    self.failedResume = false
+                    self.isSuspended = false
+                    self.done()
                 }
             }
         }

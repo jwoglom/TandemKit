@@ -107,18 +107,11 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         saveError = nil
         isLoading = true
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self, let pumpManager = self.pumpManager else {
-                DispatchQueue.main.async { self?.isLoading = false }
-                return
-            }
-
-            pumpManager.setQuickBolusSettings(
-                enabled: self.enabled,
-                mode: self.selectedMode,
-                increment: self.selectedIncrement
-            )
-
+        pumpManager?.setQuickBolusSettings(
+            enabled: enabled,
+            mode: selectedMode,
+            increment: selectedIncrement
+        ) { _ in
             DispatchQueue.main.async {
                 self.isLoading = false
                 self.originalEnabled = self.enabled

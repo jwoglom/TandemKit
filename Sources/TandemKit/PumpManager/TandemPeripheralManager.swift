@@ -224,6 +224,21 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == FillTubingStateStreamResponse.props.characteristic,
+           data[2] == FillTubingStateStreamResponse.props.opCode
+        {
+            let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.fillTubingStateStream.send(response)
+            return
+        }
+
+        if characteristic.uuid == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
+            let events = QualifyingEvent.fromRawBytes(data)
+            logger.error("Recieved qualifying events: \(events)")
+            // TODO: Handle qualifying event...
+            return
+        }
+
         logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
     }
 

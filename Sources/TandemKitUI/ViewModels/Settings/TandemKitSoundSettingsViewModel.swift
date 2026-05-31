@@ -81,15 +81,17 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
 
         isDirty = false
         isLoading = true
-        pumpManager?.setPumpSound(request: request)
+        pumpManager?.setPumpSound(request: request) {
+            DispatchQueue.main.async {
+                self.isLoading = false
 
-        isLoading = false
-
-        originalGeneralAnnun = generalAnnun
-        originalQuickBolusAnnun = quickBolusAnnun
-        originalReminderAnnun = reminderAnnun
-        originalAlertAnnun = alertAnnun
-        originalAlarmAnnun = alarmAnnun
+                self.originalGeneralAnnun = self.generalAnnun
+                self.originalQuickBolusAnnun = self.quickBolusAnnun
+                self.originalReminderAnnun = self.reminderAnnun
+                self.originalAlertAnnun = self.alertAnnun
+                self.originalAlarmAnnun = self.alarmAnnun
+            }
+        }
     }
 
     func checkDirtyState() {

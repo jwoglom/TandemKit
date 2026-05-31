@@ -57,6 +57,29 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
+    func fetchSuspendStatus(completion: @escaping (Bool?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for suspend status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: HomeScreenMirrorRequest(),
+                expecting: HomeScreenMirrorResponse.self
+            ) as? HomeScreenMirrorResponse else {
+                self.logger.error("Failed to fetch homeScreen Status: \(type(of: HomeScreenMirrorRequest.self))")
+                completion(nil)
+                return
+            }
+
+            let suspended = response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue || response
+                .basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
+            completion(suspended)
+        }
+    }
+
     func fetchHomeScreenStatus() {
         guard let response = bluetooth.write(
             message: HomeScreenMirrorRequest(),
@@ -126,6 +149,11 @@ extension TandemPumpManager {
         for (request, expecting) in NotificationBundle.allRequests() {
             guard let response = bluetooth.write(message: request, expecting: expecting) else {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
+                continue
+            }
+            
+            if let response = response as? AlertStatusResponse {
+                autoAcknowledgeBasalAlertsIfNeeded(alertResponse: response)
                 continue
             }
 
@@ -296,5 +324,37 @@ extension TandemPumpManager {
         }
 
         return roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
+    }
+    
+    func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {
+        guard state.autoAcknowledgeBasalAlerts else {
+            return
+        }
+
+        let basalAlertsToAck = alertResponse.alerts.intersection(
+            AlertStatusResponse.AlertResponseType.basalAlertsToIgnoreWhenLooping
+        )
+
+        guard !basalAlertsToAck.isEmpty else {
+            return
+        }
+
+        logger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
+        for alert in basalAlertsToAck {
+            guard let response = self.bluetooth.write(
+                message: DismissNotificationRequest(
+                    notificationType: .alert,
+                    notificationId: UInt32(alert.rawValue)
+                ),
+                expecting: DismissNotificationResponse.self
+            ) as? DismissNotificationResponse else {
+                self.logger.error("Failed to send DismissNotificationRequest")
+                return
+            }
+
+            if response.status != 0 {
+                self.logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
+            }
+        }
     }
 }

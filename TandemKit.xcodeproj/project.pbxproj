@@ -29,6 +29,7 @@
 		3E0F4D422F265C25008290A3 /* blank.wav in Resources */ = {isa = PBXBuildFile; fileRef = 3E0F4D412F265C25008290A3 /* blank.wav */; };
 		3E0F4D442F2662B3008290A3 /* TandemKitSoundSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */; };
 		3E0F4D462F2662BC008290A3 /* TandemKitSoundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */; };
+		3E3A71672FCC8332008F5FC2 /* TandemPumpScan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3A71662FCC8332008F5FC2 /* TandemPumpScan.swift */; };
 		3E53DB842F13E81800D84398 /* TandemKitInsulinType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */; };
 		3E61F1032FBE389500DD98E6 /* UnfinalizedDose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E61F1022FBE389500DD98E6 /* UnfinalizedDose.swift */; };
 		3E74810E2F83E81600B09B8E /* TandemKitAlertSettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */; };
@@ -515,6 +516,7 @@
 		3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsViewModel.swift; sourceTree = "<group>"; };
 		3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitSoundSettingsView.swift; sourceTree = "<group>"; };
 		3E17103B473BDFB0F08D27E0 /* CgmPairingCodeG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmPairingCodeG7HistoryLog.swift; sourceTree = "<group>"; };
+		3E3A71662FCC8332008F5FC2 /* TandemPumpScan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemPumpScan.swift; sourceTree = "<group>"; };
 		3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitInsulinType.swift; sourceTree = "<group>"; };
 		3E59CA192F002E0E00D78697 /* NewPumpEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewPumpEvent.swift; sourceTree = "<group>"; };
 		3E59CA1B2F002F7D00D78697 /* DoseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoseEntry.swift; sourceTree = "<group>"; };
@@ -1528,6 +1530,7 @@
 				3EE345142EC91299008A07F6 /* ServiceUUID.swift */,
 				1A0E17262ED105CC00E75219 /* NotificationBundle.swift */,
 				1A2FA94E2EC8FD0800DF080F /* PumpCommError.swift */,
+				3E3A71662FCC8332008F5FC2 /* TandemPumpScan.swift */,
 			);
 			name = TandemCore;
 			path = Sources/TandemCore;
@@ -1855,6 +1858,7 @@
 				3EB807692FBCDCD70075D19E /* CannulaFilledHistoryLog.swift in Sources */,
 				3EB8076A2FBCDCD70075D19E /* CgmCalibrationGxHistoryLog.swift in Sources */,
 				3EB8076B2FBCDCD70075D19E /* CgmRejoinSessionHistoryLog.swift in Sources */,
+				3E3A71672FCC8332008F5FC2 /* TandemPumpScan.swift in Sources */,
 				3EB8076C2FBCDCD70075D19E /* CgmHgaSettingsHistoryLog.swift in Sources */,
 				3EB8076D2FBCDCD70075D19E /* DailyBasalHistoryLog.swift in Sources */,
 				3EB8076E2FBCDCD70075D19E /* FillEstimateFinalHistoryLog.swift in Sources */,

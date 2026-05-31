@@ -24,12 +24,7 @@ class TandemKitAlertSettingsViewModel: ObservableObject {
     }
 
     func setAlertSnooze(enabled: Bool, durationMins: Int) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else {
-                return
-            }
-
-            self.pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins)
+        pumpManager?.setAlertSnooze(enabled: enabled, durationMins: durationMins) { _ in
             DispatchQueue.main.async {
                 self.alertSnoozeEnabled = enabled
                 self.alertSnoozeDurationMins = durationMins

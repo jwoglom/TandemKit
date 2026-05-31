@@ -1125,7 +1125,6 @@
     },
     "Error syncing time with pump" : {
       "comment" : "Message when pump rejects ChangeTimeDateRequest",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

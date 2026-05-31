@@ -90,8 +90,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusDose: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
-    public var insulinDeliveryActionsEnabled: Bool = false
-    public var connectionSharingEnabled: Bool = false
     public var autoAcknowledgeBasalAlerts: Bool = false
     public var useSilentTones: Bool = false
 
@@ -150,8 +148,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
         deliveryIsUncertain = rawValue["deliveryIsUncertain"] as? Bool ?? false
-        insulinDeliveryActionsEnabled = rawValue["insulinDeliveryActionsEnabled"] as? Bool ?? false
-        connectionSharingEnabled = rawValue["connectionSharingEnabled"] as? Bool ?? false
         autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool ?? false
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
@@ -317,8 +313,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
         raw["latestInsulinOnBoard"] = latestInsulinOnBoard
         raw["deliveryIsUncertain"] = deliveryIsUncertain
-        raw["insulinDeliveryActionsEnabled"] = insulinDeliveryActionsEnabled
-        raw["connectionSharingEnabled"] = connectionSharingEnabled
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
@@ -404,8 +398,6 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* bolusState: \(bolusState)",
             "* deliveryIsUncertain: \(deliveryIsUncertain)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
-            "* insulinDeliveryActionsEnabled: \(insulinDeliveryActionsEnabled)",
-            "* connectionSharingEnabled: \(connectionSharingEnabled)",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",
             "* currentPumpTime: \(String(describing: currentPumpTime))",
