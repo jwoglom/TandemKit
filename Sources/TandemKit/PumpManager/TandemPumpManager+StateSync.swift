@@ -145,7 +145,7 @@ extension TandemPumpManager {
     }
 
     func fetchNotificationCount() {
-        let bundle = NotificationBundle()
+        notificationBundle = NotificationBundle()
         for (request, expecting) in NotificationBundle.allRequests() {
             guard let response = bluetooth.write(message: request, expecting: expecting) else {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
@@ -157,10 +157,10 @@ extension TandemPumpManager {
                 continue
             }
 
-            bundle.add(response)
+            notificationBundle.add(response)
         }
 
-        state.notificationCount = bundle.getNotificationCount()
+        state.notificationCount = notificationBundle.getNotificationCount()
         state.lastNotificationUpdate = Date.now
         notifyDelegateStateUpdated()
     }

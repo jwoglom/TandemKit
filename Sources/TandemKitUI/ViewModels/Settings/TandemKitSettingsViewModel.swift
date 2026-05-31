@@ -240,32 +240,25 @@ class TandemKitSettingsViewModel: ObservableObject {
             weightLbs: pumpManager?.state.controlIQWeight ?? 30,
             totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
         )
-//        pumpManager?.configureControlIQMode(request) { success in
-//            if success {
-//                // Check CGM status on background thread
-//                DispatchQueue.global(qos: .userInitiated).async {
-//                    let cgmResponse = self.pumpManager?.sendMessage(
-//                        message: CGMStatusV2Request()
-//                    ) as? CGMStatusV2Response
-//
-//                    let cgmActive = cgmResponse?.sessionState == .active
-//
-//                    DispatchQueue.main.async {
-//                        self.isUpdatingPumpState = false
-//                        self.useControlIQ = true
-//                        self.isCGMActiveOnPump = cgmActive
-//                        if !cgmActive {
-//                            self.showNoCGMWarning = true
-//                        }
-//                    }
-//                }
-//            } else {
-//                DispatchQueue.main.async {
-//                    self.isUpdatingPumpState = false
-//                    self.commandFailure = .controlIQ
-//                }
-//            }
-//        }
+        pumpManager?.configureControlIQMode(request) { success, cgmResponse in
+            if success {
+                let cgmActive = cgmResponse?.sessionState == .active
+
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                    self.useControlIQ = true
+                    self.isCGMActiveOnPump = cgmActive
+                    if !cgmActive {
+                        self.showNoCGMWarning = true
+                    }
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .controlIQ
+                }
+            }
+        }
     }
 
     func switchAlgorithmToDIY() {
@@ -276,7 +269,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             weightLbs: pumpManager?.state.controlIQWeight ?? 30,
             totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
         )
-        pumpManager?.configureControlIQMode(request) { success in
+        pumpManager?.configureControlIQMode(request) { success, _ in
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
                 if success {
@@ -291,90 +284,64 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func toggleExerciseMode() {
         isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
+        
+        let isExerciseOn = self.controlIQUserMode?.rawValue == 3
+        pumpManager?.setControlIQMode(mode: isExerciseOn ? .exerciseModeOff : .exerciseModeOn) { success in
+            guard success else {
                 DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .exerciseMode
                 }
                 return
             }
-
-            let isExerciseOn = self.controlIQUserMode?.rawValue == 3
-            let command: SetModesRequest.ModeCommand = isExerciseOn ? .exerciseModeOff : .exerciseModeOn
-//            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
-//
-//            guard response?.isStatusOK == true else {
-//                DispatchQueue.main.async {
-//                    self.isUpdatingPumpState = false
-//                    self.commandFailure = .exerciseMode
-//                }
-//                return
-//            }
-
+            
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
+            self.pumpManager?.ensureCurrentPumpData { _ in
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
             }
         }
     }
 
     func toggleSleepMode() {
         isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
+
+        let isSleepOn = self.controlIQUserMode?.rawValue == 2
+        pumpManager?.setControlIQMode(mode: isSleepOn ? .sleepModeOff : .sleepModeOn) { success in
+            guard success else {
                 DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .sleepMode
                 }
                 return
             }
-
-            let isSleepOn = self.controlIQUserMode?.rawValue == 2
-//            let command: SetModesRequest.ModeCommand = isSleepOn ? .sleepModeOff : .sleepModeOn
-//            let response = self.pumpManager?.sendMessage(message: SetModesRequest(command: command)) as? SetModesResponse
-//
-//            guard response?.isStatusOK == true else {
-//                DispatchQueue.main.async {
-//                    self.isUpdatingPumpState = false
-//                    self.commandFailure = .sleepMode
-//                }
-//                return
-//            }
-
+            
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
+            self.pumpManager?.ensureCurrentPumpData { _ in
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
             }
         }
     }
 
     func stopTempRate() {
         isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
+
+        pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { error in
+            if error != nil {
                 DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
+                    self.isUpdatingPumpState = false
+                    self.commandFailure = .stopTempRate
                 }
                 return
             }
+            Thread.sleep(forTimeInterval: 1.0)
+            self.pumpManager?.ensureCurrentPumpData { _ in }
 
-            self.pumpManager?.enactTempBasal(unitsPerHour: 0, for: 0) { error in
-                if error != nil {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
-                        self.commandFailure = .stopTempRate
-                    }
-                    return
-                }
-                Thread.sleep(forTimeInterval: 1.0)
-                self.pumpManager?.ensureCurrentPumpData { _ in }
-
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                }
+            DispatchQueue.main.async {
+                self.isUpdatingPumpState = false
             }
         }
     }
@@ -455,10 +422,10 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func playSound() {
         isPlayingSound = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.pumpManager?.playSound()
+
+        pumpManager?.playSound {
             DispatchQueue.main.async {
-                self?.isPlayingSound = false
+                self.isPlayingSound = false
             }
         }
     }

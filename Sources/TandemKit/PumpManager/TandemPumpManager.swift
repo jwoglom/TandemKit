@@ -40,6 +40,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
+    var notificationBundle = NotificationBundle()
 
     // BLE heartbeat propagation (LoopKit PumpManager protocol)
     private var provideHeartbeat: Bool = false
@@ -1045,16 +1046,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func playSound() {
+    func playSound(completion: @escaping () -> Void) {
         logger.info("Play pump sound...")
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for play sound: \(error.localizedDescription)")
+                completion()
                 return
             }
 
             _ = self.bluetooth.write(message: PlaySoundRequest(), expecting: PlaySoundResponse.self)
+            completion()
         }
     }
 
@@ -1131,13 +1134,60 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
     
-    func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool) -> Void) {
-        logger.info("Configure controlIQ mode: \(request.enabled)")
+    func getControlIQData(completion: @escaping (ControlIQInfoV2Response?, ControlIQSleepScheduleResponse?) -> Void) {
+        logger.info("Getting controlIQ info")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for getting controlIQ data: \(error.localizedDescription)")
+                completion(nil, nil)
+                return
+            }
+            
+            let iqInfo = self.bluetooth.write(
+                message: ControlIQInfoV2Request(),
+                expecting: ControlIQInfoV2Response.self
+            ) as? ControlIQInfoV2Response
+            
+            let scheduleInfo = self.bluetooth.write(
+                message: ControlIQSleepScheduleRequest(),
+                expecting: ControlIQSleepScheduleResponse.self
+            ) as? ControlIQSleepScheduleResponse
+            
+            completion(iqInfo, scheduleInfo)
+        }
+    }
+    
+    func setControlIQMode(mode: SetModesRequest.ModeCommand, completion: @escaping (Bool) -> Void) {
+        logger.info("Configure controlIQ mode - mode: \(mode)")
         
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
                 completion(false)
+                return
+            }
+            
+            guard let response = self.bluetooth.write(
+                message: SetModesRequest(command: mode),
+                expecting: SetModesResponse.self
+            ) as? SetModesResponse else {
+                self.logger.error("Failed to set controlIQ mode")
+                completion(false)
+                return
+            }
+            
+            completion(response.isStatusOK)
+        }
+    }
+    
+    func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool, CGMStatusV2Response?) -> Void) {
+        logger.info("Configure controlIQ mode: \(request.enabled)")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
+                completion(false, nil)
                 return
             }
             
@@ -1163,15 +1213,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 expecting: ChangeControlIQSettingsResponse.self
             ) as? ChangeControlIQSettingsResponse else {
                 self.logger.error("Failed to change controlIQ mode")
-                completion(false)
+                completion(false, nil)
                 return
             }
             
             guard response.isStatusOK else {
                 self.logger.error("Failed to change controlIQ mode - Status: \(response.status)")
-                completion(false)
+                completion(false, nil)
                 return
             }
+            
+            let cgmResponse = self.bluetooth.write(
+                message: CGMStatusV2Request(),
+                expecting: CGMStatusV2Response.self
+            ) as? CGMStatusV2Response
             
             // Pump accepted -- update local preference
             self.state.useControlIQ = request.enabled
@@ -1184,10 +1239,221 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
             self.ensureCurrentPumpData { _ in
-                DispatchQueue.main.async {
-                    completion(true)
+                completion(true, cgmResponse)
+            }
+        }
+    }
+    
+    func setSleepSchedule(slot: Int, schedule: ControlIQSleepScheduleResponse.SleepSchedule, completion: @escaping (Bool) -> Void) {
+        logger.info("Setting sleep schedule")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for sleep schedule: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            guard let response = self.bluetooth.write(
+                message: SetSleepScheduleRequest(
+                    slot: slot,
+                    schedule: schedule,
+                    flag: 1
+                ),
+                expecting: SetSleepScheduleResponse.self
+            ) as? SetSleepScheduleResponse else {
+                self.logger.error("Failed to set sleep schedule")
+                completion(false)
+                return
+            }
+            
+            if !response.isStatusOK {
+                self.logger.error("Failed to set sleep schedule - Status: \(response.status)")
+            }
+            
+            completion(response.isStatusOK)
+        }
+    }
+    
+    func dismissNotification(notification item: NotificationItem, completion: @escaping (Bool) -> Void) {
+        logger.info("Dismissing notification - type: \(item.type)")
+        
+        guard let dismissType = item.type.dismissType else {
+            logger.error("Cannot dismiss notification of type \(item.type)")
+            completion(false)
+            return
+        }
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for dismiss notification: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            guard let response = self.bluetooth.write(
+                message: DismissNotificationRequest(
+                    notificationType: dismissType,
+                    notificationId: item.notificationId
+                ),
+                expecting: DismissNotificationResponse.self
+            ) as? DismissNotificationResponse else {
+                self.logger.error("Failed to dismiss notification")
+                completion(false)
+                return
+            }
+            
+            if !response.isStatusOK {
+                self.logger.error("Failed to dismiss notification - Status: \(response.status)")
+            }
+            completion(response.isStatusOK)
+        }
+    }
+    
+    func getCGMStatus(completion: @escaping (CGMStatusV2Response?) -> Void) {
+        logger.info("Fetching CGM status...")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            
+            let response = self.bluetooth.write(
+                message: CGMStatusV2Request(),
+                expecting: CGMStatusV2Response.self
+            ) as? CGMStatusV2Response
+            
+            completion(response)
+        }
+    }
+    
+    func stopCGMSensor(completion: @escaping (Bool) -> Void) {
+        logger.info("Stopping CGM Session")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            guard let response = self.bluetooth.write(
+                message: StopDexcomCGMSensorSessionRequest(),
+                expecting: StopDexcomCGMSensorSessionResponse.self
+            ) as? StopDexcomCGMSensorSessionResponse else {
+                self.logger.error("Failed to stop CGM session")
+                completion(false)
+                return
+            }
+            
+            completion(response.isStatusOK)
+        }
+    }
+    
+    func connectToG6CGM(txId: String, code: Int?, completion: @escaping (Bool) -> Void) {
+        logger.info("Connecting to G6 CGM...")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for G6: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            guard let sensorTypeResponse = self.bluetooth.write(
+                message: SetSensorTypeRequest(sensorType: .dexcomG6),
+                expecting: SetSensorTypeResponse.self
+            ) as? SetSensorTypeResponse else {
+                self.logger.error("Failed to set Sensortype to G6")
+                completion(false)
+                return
+            }
+            
+            guard sensorTypeResponse.isStatusOK else {
+                self.logger.error("Failed to set Sensortype to G6 - Status: \(sensorTypeResponse.status)")
+                completion(false)
+                return
+            }
+            
+            guard let transmitterResponse = self.bluetooth.write(
+                message: SetG6TransmitterIdRequest(txId: txId),
+                expecting: SetG6TransmitterIdResponse.self
+            ) as? SetG6TransmitterIdResponse else {
+                self.logger.error("Failed to set transmitterId for G6")
+                completion(false)
+                return
+            }
+            
+            guard transmitterResponse.isStatusOK else {
+                self.logger.error("Failed to set transmitterId for G6 - Status: \(transmitterResponse.status)")
+                completion(false)
+                return
+            }
+            
+            if let code {
+                guard let startSensorResponse = self.bluetooth.write(
+                    message: StartDexcomG6SensorSessionRequest(sensorCode: code),
+                    expecting: StartDexcomG6SensorSessionResponse.self
+                ) as? StartDexcomG6SensorSessionResponse else {
+                    self.logger.error("Failed to set start G6")
+                    completion(false)
+                    return
+                }
+                
+                guard startSensorResponse.isStatusOK else {
+                    self.logger.error("Failed to set start G6 - Status: \(startSensorResponse.status)")
+                    completion(false)
+                    return
                 }
             }
+            
+            completion(true)
+        }
+    }
+    
+    func connectToG7CGM(code: Int, completion: @escaping (Bool) -> Void) {
+        logger.info("Connecting to G7 CGM...")
+        
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for G7: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+            
+            guard let sensorTypeResponse = self.bluetooth.write(
+                message: SetSensorTypeRequest(sensorType: .dexcomG7),
+                expecting: SetSensorTypeResponse.self
+            ) as? SetSensorTypeResponse else {
+                self.logger.error("Failed to set Sensortype to G7")
+                completion(false)
+                return
+            }
+            
+            guard sensorTypeResponse.isStatusOK else {
+                self.logger.error("Failed to set Sensortype to G7 - Status: \(sensorTypeResponse.status)")
+                completion(false)
+                return
+            }
+            
+            guard let startG7 = self.bluetooth.write(
+                message: SetDexcomG7PairingCodeRequest(pairingCode: code),
+                expecting: SetDexcomG7PairingCodeResponse.self
+            ) as? SetDexcomG7PairingCodeResponse else {
+                self.logger.error("Failed to start G7")
+                completion(false)
+                return
+            }
+            
+            guard startG7.isStatusOK else {
+                self.logger.error("Failed to start G7 - Status: \(startG7.status)")
+                completion(false)
+                return
+            }
+            
+            completion(true)
         }
     }
 }
