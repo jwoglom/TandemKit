@@ -28,17 +28,17 @@ class TandemKitNotificationsViewModel: ObservableObject {
             log.info("[TIMING] Already refreshing notifications, skipping duplicate request")
             return
         }
-        
+
         log.info("[TIMING] refreshNotifications() called, isRefreshing=\(isRefreshing)")
 
         guard let pumpManager else {
             log.error("No pumpManager")
             return
         }
-        
+
         isRefreshing = true
         errorMessage = nil
-        
+
         pumpManager.ensureCurrentPumpData { _ in
             DispatchQueue.main.async {
                 self.notifications = pumpManager.notificationBundle.get()
@@ -55,7 +55,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
                 }
                 return
             }
-            
+
             DispatchQueue.main.async {
                 self.notifications.removeAll { $0.id == item.id }
             }

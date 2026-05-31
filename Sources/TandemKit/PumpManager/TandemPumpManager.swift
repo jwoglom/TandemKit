@@ -468,14 +468,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
-        
-        let baselineRate = self.getScheduledBasalRate()
+
+        let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
             completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
             return
         }
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
@@ -491,7 +491,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
-            
+
             if currentTempRate.active {
                 guard let stopCurrentRate = self.bluetooth.write(
                     message: StopTempRateRequest(),
@@ -501,14 +501,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion(.communication(PumpCommError.noResponse))
                     return
                 }
-                
+
                 guard stopCurrentRate.isStatusOK else {
                     self.logger.error("Failed to stop temp rate - Status: \(stopCurrentRate.status)")
                     completion(.communication(PumpCommError.invalidPacket))
                     return
                 }
             }
-            
+
             let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
             let absoluteRate = self
                 .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
@@ -519,7 +519,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(nil)
                 return
             }
-            
+
             let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
             guard let response = self.bluetooth.write(
                 message: request,
@@ -529,13 +529,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
-            
+
             guard response.isStatusOK else {
                 self.logger.error("Failed to set temp rate - Status: \(response.status)")
                 completion(.communication(PumpCommError.invalidPacket))
                 return
             }
-            
+
             let dose = UnfinalizedDose(
                 tempRate: absoluteRate,
                 duration: duration,
@@ -637,184 +637,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.logger.info("Insulin Delivery Resumed!")
             completion(nil)
-        }
-    }
-
-    public func syncBasalRateSchedule(
-        items scheduleItems: [RepeatingScheduleValue<Double>],
-        completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void
-    ) {
-        logger.info("Sync basal schedule...")
-        guard !scheduleItems.isEmpty else {
-            logger.error("Basal schedule is empty")
-            completion(.failure(PumpManagerError.configuration(nil)))
-            return
-        }
-
-        let sortedItems = scheduleItems.sorted { $0.startTime < $1.startTime }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                // Step 1: Fetch current profile data using IDPManager
-                let idpManager = IDPManager()
-
-                // Fetch all IDP data until complete
-//                while !idpManager.isComplete {
-//                    let messages = idpManager.nextMessages()
-//                    if messages.isEmpty, !idpManager.isComplete {
-//                        throw PumpCommError.requestConstructionFailed(
-//                            reason: "Invalid IDPManager state in syncBasalRateSchedule"
-//                        )
-//                    }
-//                    for message in messages {
-//                        let response = try self.pumpComm.sendMessage(
-//                            transport: transport,
-//                            message: message
-//                        )
-//                        idpManager.processMessage(response)
-//                    }
-//                }
-//
-//                if idpManager.getProfiles().isEmpty == true {
-//                    self.telemetryLogger.info("No profiles in IDPManager, creating initial profile for Trio")
-//                    // TODO(jwoglom): read correct profile defaults
-//                    let message = idpManager.createNewProfileMessage(
-//                        profileName: "TandemKitProfile",
-//                        defaultCarbRatio: 10,
-//                        defaultBasalRateUnits: scheduleItems.first?.value ?? 0,
-//                        defaultTargetBG: 110,
-//                        defaultISF: 40,
-//                        defaultInsulinDurationMinutes: 240,
-//                        profileCarbEntryEnabled: false
-//                    )
-//                    let newlyCreatedProfile = try self.pumpComm.sendMessage(
-//                        transport: transport,
-//                        message: message
-//                    )
-//
-//                    guard let newlyCreatedProfile = newlyCreatedProfile as? CreateIDPResponse else {
-//                        throw PumpCommError
-//                            .requestConstructionFailed(
-//                                reason: "No active profile found and got unexpected response creating initial profile"
-//                            )
-//                    }
-//
-//                    guard newlyCreatedProfile.isStatusOK else {
-//                        throw PumpCommError
-//                            .requestConstructionFailed(reason: "No active profile found and failed to create initial profile")
-//                    }
-//
-//                    self.telemetryLogger
-//                        .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
-//
-//                    // Return to step 1: Reset idpManager
-//                    idpManager.clear()
-//
-//                    // Fetch all IDP data until complete
-//                    while !idpManager.isComplete {
-//                        let messages = idpManager.nextMessages()
-//                        for message in messages {
-//                            let response = try self.pumpComm.sendMessage(
-//                                transport: transport,
-//                                message: message
-//                            )
-//                            idpManager.processMessage(response)
-//                        }
-//                    }
-//                }
-//
-//                // Step 2: Get the active profile
-//                guard let activeProfile = idpManager.getActiveProfile() else {
-//                    throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
-//                }
-//
-//                // Step 3: Get current segments to preserve non-basal fields
-//                let currentSegments = activeProfile.getSegments()
-//
-//                // Step 4: Build modify requests for each new basal schedule item
-//                var modifyRequests: [SetIDPSegmentRequest] = []
-//
-//                for (index, scheduleItem) in sortedItems.enumerated() {
-//                    let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
-//                    let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
-//
-//                    if index < currentSegments.count {
-//                        // Check if existing segment needs modification
-//                        let currentSegment = currentSegments[index]
-//                        let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-//                            currentSegment.profileBasalRate != basalMilliunits
-//
-//                        if needsUpdate {
-//                            let segment = currentSegment
-//                            segment.profileStartTime = startMinutes
-//                            segment.profileBasalRate = basalMilliunits
-//                            let request = activeProfile.modifySegmentMessage(segment: segment)
-//                            modifyRequests.append(request)
-//                        }
-//                    } else {
-//                        // Create new segment with default values from first segment
-//                        let firstSegment = currentSegments.first!
-//                        let request = activeProfile.createSegmentMessage(
-//                            profileStartTime: startMinutes,
-//                            profileBasalRate: basalMilliunits,
-//                            profileCarbRatio: firstSegment.profileCarbRatio,
-//                            profileTargetBG: Int(firstSegment.profileTargetBG),
-//                            profileISF: firstSegment.profileISF
-//                        )
-//                        modifyRequests.append(request)
-//                    }
-//                }
-//
-//                // Step 5: If we have fewer items than current segments, delete extra segments
-//                if sortedItems.count < currentSegments.count {
-//                    for i in sortedItems.count ..< currentSegments.count {
-//                        if i > 0 { // Can't delete segment 0
-//                            let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
-//                            modifyRequests.append(deleteRequest)
-//                        }
-//                    }
-//                }
-//
-//                // Step 6: Send all modification requests
-//                for request in modifyRequests {
-//                    let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
-//                        transport: transport,
-//                        message: request,
-//                        expecting: SetIDPSegmentResponse.self
-//                    )
-//
-//                    guard response.status == 0 else {
-//                        throw PumpCommError.errorResponse(
-//                            context: String(
-//                                localized: "Error syncing basal rates: Pump rejected SetIDPSegment",
-//                                comment: "Message when pump rejects SetIDPSegment"
-//                            ),
-//                            request: request,
-//                            response: response
-//                        )
-//                    }
-//                }
-//
-//                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? state.basalRateSchedule
-//
-//                var managerState = self.state
-//                managerState.basalRateSchedule = schedule
-//                managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
-//                self.state = managerState
-//
-//                self.notifyDelegateStateUpdated()
-                completion(.success(
-                    BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? state
-                        .basalRateSchedule
-                ))
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                logger.error("Received error during basal sync: \(pumpError.errorDescription ?? "")")
-                completion(.failure(PumpManagerError.communication(pumpError)))
-            }
         }
     }
 
@@ -1133,41 +955,41 @@ public class TandemPumpManager: PumpManager, Pluggable {
             completion(true)
         }
     }
-    
+
     func getControlIQData(completion: @escaping (ControlIQInfoV2Response?, ControlIQSleepScheduleResponse?) -> Void) {
         logger.info("Getting controlIQ info")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for getting controlIQ data: \(error.localizedDescription)")
                 completion(nil, nil)
                 return
             }
-            
+
             let iqInfo = self.bluetooth.write(
                 message: ControlIQInfoV2Request(),
                 expecting: ControlIQInfoV2Response.self
             ) as? ControlIQInfoV2Response
-            
+
             let scheduleInfo = self.bluetooth.write(
                 message: ControlIQSleepScheduleRequest(),
                 expecting: ControlIQSleepScheduleResponse.self
             ) as? ControlIQSleepScheduleResponse
-            
+
             completion(iqInfo, scheduleInfo)
         }
     }
-    
+
     func setControlIQMode(mode: SetModesRequest.ModeCommand, completion: @escaping (Bool) -> Void) {
         logger.info("Configure controlIQ mode - mode: \(mode)")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let response = self.bluetooth.write(
                 message: SetModesRequest(command: mode),
                 expecting: SetModesResponse.self
@@ -1176,24 +998,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             completion(response.isStatusOK)
         }
     }
-    
-    func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool, CGMStatusV2Response?) -> Void) {
+
+    func configureControlIQMode(
+        _ request: ChangeControlIQSettingsRequest,
+        completion: @escaping (Bool, CGMStatusV2Response?) -> Void
+    ) {
         logger.info("Configure controlIQ mode: \(request.enabled)")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
                 completion(false, nil)
                 return
             }
-            
+
             if request.enabled, self.state.basalDose.type == .tempBasal {
-                let _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateResponse.self)
-                
+                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateResponse.self)
+
                 let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
@@ -1201,13 +1026,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 )
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
-                
+
                 self.state.basalDose = dose
                 self.state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
             }
-            
+
             guard let response = self.bluetooth.write(
                 message: request,
                 expecting: ChangeControlIQSettingsResponse.self
@@ -1216,26 +1041,26 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false, nil)
                 return
             }
-            
+
             guard response.isStatusOK else {
                 self.logger.error("Failed to change controlIQ mode - Status: \(response.status)")
                 completion(false, nil)
                 return
             }
-            
+
             let cgmResponse = self.bluetooth.write(
                 message: CGMStatusV2Request(),
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
-            
+
             // Pump accepted -- update local preference
             self.state.useControlIQ = request.enabled
             self.state.controlIQWeight = request.weightLbs
             self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
             self.notifyDelegateStateUpdated()
-            
+
             self.logger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
-            
+
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
             self.ensureCurrentPumpData { _ in
@@ -1243,17 +1068,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
         }
     }
-    
-    func setSleepSchedule(slot: Int, schedule: ControlIQSleepScheduleResponse.SleepSchedule, completion: @escaping (Bool) -> Void) {
+
+    func setSleepSchedule(
+        slot: Int,
+        schedule: ControlIQSleepScheduleResponse.SleepSchedule,
+        completion: @escaping (Bool) -> Void
+    ) {
         logger.info("Setting sleep schedule")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sleep schedule: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let response = self.bluetooth.write(
                 message: SetSleepScheduleRequest(
                     slot: slot,
@@ -1266,31 +1095,31 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             if !response.isStatusOK {
                 self.logger.error("Failed to set sleep schedule - Status: \(response.status)")
             }
-            
+
             completion(response.isStatusOK)
         }
     }
-    
+
     func dismissNotification(notification item: NotificationItem, completion: @escaping (Bool) -> Void) {
         logger.info("Dismissing notification - type: \(item.type)")
-        
+
         guard let dismissType = item.type.dismissType else {
             logger.error("Cannot dismiss notification of type \(item.type)")
             completion(false)
             return
         }
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for dismiss notification: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let response = self.bluetooth.write(
                 message: DismissNotificationRequest(
                     notificationType: dismissType,
@@ -1302,43 +1131,43 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             if !response.isStatusOK {
                 self.logger.error("Failed to dismiss notification - Status: \(response.status)")
             }
             completion(response.isStatusOK)
         }
     }
-    
+
     func getCGMStatus(completion: @escaping (CGMStatusV2Response?) -> Void) {
         logger.info("Fetching CGM status...")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
                 completion(nil)
                 return
             }
-            
+
             let response = self.bluetooth.write(
                 message: CGMStatusV2Request(),
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
-            
+
             completion(response)
         }
     }
-    
+
     func stopCGMSensor(completion: @escaping (Bool) -> Void) {
         logger.info("Stopping CGM Session")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let response = self.bluetooth.write(
                 message: StopDexcomCGMSensorSessionRequest(),
                 expecting: StopDexcomCGMSensorSessionResponse.self
@@ -1347,21 +1176,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             completion(response.isStatusOK)
         }
     }
-    
+
     func connectToG6CGM(txId: String, code: Int?, completion: @escaping (Bool) -> Void) {
         logger.info("Connecting to G6 CGM...")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for G6: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let sensorTypeResponse = self.bluetooth.write(
                 message: SetSensorTypeRequest(sensorType: .dexcomG6),
                 expecting: SetSensorTypeResponse.self
@@ -1370,13 +1199,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             guard sensorTypeResponse.isStatusOK else {
                 self.logger.error("Failed to set Sensortype to G6 - Status: \(sensorTypeResponse.status)")
                 completion(false)
                 return
             }
-            
+
             guard let transmitterResponse = self.bluetooth.write(
                 message: SetG6TransmitterIdRequest(txId: txId),
                 expecting: SetG6TransmitterIdResponse.self
@@ -1385,13 +1214,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             guard transmitterResponse.isStatusOK else {
                 self.logger.error("Failed to set transmitterId for G6 - Status: \(transmitterResponse.status)")
                 completion(false)
                 return
             }
-            
+
             if let code {
                 guard let startSensorResponse = self.bluetooth.write(
                     message: StartDexcomG6SensorSessionRequest(sensorCode: code),
@@ -1401,28 +1230,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion(false)
                     return
                 }
-                
+
                 guard startSensorResponse.isStatusOK else {
                     self.logger.error("Failed to set start G6 - Status: \(startSensorResponse.status)")
                     completion(false)
                     return
                 }
             }
-            
+
             completion(true)
         }
     }
-    
+
     func connectToG7CGM(code: Int, completion: @escaping (Bool) -> Void) {
         logger.info("Connecting to G7 CGM...")
-        
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for G7: \(error.localizedDescription)")
                 completion(false)
                 return
             }
-            
+
             guard let sensorTypeResponse = self.bluetooth.write(
                 message: SetSensorTypeRequest(sensorType: .dexcomG7),
                 expecting: SetSensorTypeResponse.self
@@ -1431,13 +1260,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             guard sensorTypeResponse.isStatusOK else {
                 self.logger.error("Failed to set Sensortype to G7 - Status: \(sensorTypeResponse.status)")
                 completion(false)
                 return
             }
-            
+
             guard let startG7 = self.bluetooth.write(
                 message: SetDexcomG7PairingCodeRequest(pairingCode: code),
                 expecting: SetDexcomG7PairingCodeResponse.self
@@ -1446,13 +1275,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(false)
                 return
             }
-            
+
             guard startG7.isStatusOK else {
                 self.logger.error("Failed to start G7 - Status: \(startG7.status)")
                 completion(false)
                 return
             }
-            
+
             completion(true)
         }
     }

@@ -38,12 +38,12 @@ class TandemKitG7SetupViewModel: ObservableObject {
 
         error = nil
         isLoading = true
-        
+
         pumpManager?.connectToG7CGM(code: code) { success in
             DispatchQueue.main.async {
                 self.isLoading = false
                 self.didComplete = success
-                
+
                 if !success {
                     self.error = String(
                         localized: "Failed to set G7 pairing code",

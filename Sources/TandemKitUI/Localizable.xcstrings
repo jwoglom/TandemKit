@@ -1113,7 +1113,6 @@
     },
     "Error syncing basal rates: Pump rejected SetIDPSegment" : {
       "comment" : "Message when pump rejects SetIDPSegment",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1169,7 +1168,6 @@
     },
     "Expired" : {
       "comment" : "Transmitter battery: Expired",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1211,6 +1209,9 @@
           }
         }
       }
+    },
+    "Failed to dismiss notification" : {
+
     },
     "Failed to enter change mode. Ensure insulin delivery is suspended and check pump notifications." : {
       "comment" : "Error message",
@@ -1267,6 +1268,9 @@
         }
       }
     },
+    "Failed to set G7 pairing code" : {
+
+    },
     "Failed to set G7 pairing code. Check pump connection and try again." : {
       "comment" : "Error when setting G7 pairing code fails",
       "extractionState" : "stale",
@@ -1303,6 +1307,12 @@
         }
       }
     },
+    "Failed to set transmitter." : {
+
+    },
+    "Failed to start CGM sensor" : {
+
+    },
     "Failed to start CGM sensor. Check pump connection and try again." : {
       "comment" : "Error when starting G6 sensor fails",
       "extractionState" : "stale",
@@ -1317,7 +1327,6 @@
     },
     "Failed to stop CGM sensor. Check pump connection." : {
       "comment" : "Error when CGM sensor stop fails",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1351,7 +1360,6 @@
     },
     "Failed to update sleep schedule. Check pump connection." : {
       "comment" : "Error when sleep schedule save fails",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2024,7 +2032,6 @@
     },
     "Out of Range" : {
       "comment" : "Transmitter battery: Out of Range",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2351,6 +2358,7 @@
     },
     "Pump not connected." : {
       "comment" : "Error when pump is not connected",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3645,7 +3653,6 @@
     },
     "Unavailable" : {
       "comment" : "Transmitter battery: Unavailable",
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

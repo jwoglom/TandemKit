@@ -43,7 +43,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     func fetchCurrentSettings() {
         isFetching = true
-        
+
         pumpManager?.getControlIQData { ciqResponse, scheduleResponse in
             DispatchQueue.main.async {
                 if let ciqResponse {
@@ -55,7 +55,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                     self.originalTDI = ciqResponse.totalDailyInsulin
                     self.isDirty = false
                 }
-                
+
                 if let scheduleResponse {
                     let slots = [
                         SleepScheduleSlot(from: scheduleResponse.schedule0),
@@ -65,7 +65,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
                     ]
                     self.sleepSchedules = slots
                 }
-                
+
                 self.isFetching = false
             }
         }
@@ -79,8 +79,8 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
         let request = ChangeControlIQSettingsRequest(
             enabled: controlIQEnabled,
-            weightLbs: self.weight,
-            totalDailyInsulinUnits: self.totalDailyInsulin
+            weightLbs: weight,
+            totalDailyInsulinUnits: totalDailyInsulin
         )
 
         pumpManager?.configureControlIQMode(request) { success, _ in

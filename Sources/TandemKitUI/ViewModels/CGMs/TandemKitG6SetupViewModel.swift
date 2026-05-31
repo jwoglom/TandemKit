@@ -66,7 +66,7 @@ class TandemKitG6SetupViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isLoading = false
                 self.didComplete = success
-                
+
                 if !success {
                     self.error = String(
                         localized: "Failed to set transmitter.",
@@ -91,7 +91,7 @@ class TandemKitG6SetupViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isLoading = false
                 self.didComplete = success
-                
+
                 if !success {
                     self.error = String(
                         localized: "Failed to start CGM sensor",

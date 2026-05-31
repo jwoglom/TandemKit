@@ -151,7 +151,7 @@ extension TandemPumpManager {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
                 continue
             }
-            
+
             if let response = response as? AlertStatusResponse {
                 autoAcknowledgeBasalAlertsIfNeeded(alertResponse: response)
                 continue
@@ -325,7 +325,7 @@ extension TandemPumpManager {
 
         return roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
     }
-    
+
     func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {
         guard state.autoAcknowledgeBasalAlerts else {
             return
@@ -341,19 +341,19 @@ extension TandemPumpManager {
 
         logger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
         for alert in basalAlertsToAck {
-            guard let response = self.bluetooth.write(
+            guard let response = bluetooth.write(
                 message: DismissNotificationRequest(
                     notificationType: .alert,
                     notificationId: UInt32(alert.rawValue)
                 ),
                 expecting: DismissNotificationResponse.self
             ) as? DismissNotificationResponse else {
-                self.logger.error("Failed to send DismissNotificationRequest")
+                logger.error("Failed to send DismissNotificationRequest")
                 return
             }
 
             if response.status != 0 {
-                self.logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
+                logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
             }
         }
     }

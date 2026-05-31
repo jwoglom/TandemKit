@@ -61,15 +61,15 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         guard !hasFetched || force else { return }
         hasFetched = true
         isFetching = true
-        
+
         pumpManager?.getCGMStatus { response in
             DispatchQueue.main.async {
                 self.isFetching = false
-                
+
                 guard let response else {
                     return
                 }
-                
+
                 let sensorType: String? = {
                     switch response.cgmSensorType {
                     case .dexcomG6: return "Dexcom G6"
@@ -92,7 +92,7 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                 let duration = Self.formatDuration(seconds: response.sessionDurationSeconds)
                 let remaining = Self.formatDuration(seconds: response.sessionTimeRemainingSeconds)
                 let startedDate = response.sensorStartedTimestamp > 0 ? response.sensorStartedDate : nil
-                
+
                 self.cgmSessionState = CGMSessionState(from: response.sessionStateId)
                 self.sensorTypeText = sensorType
                 self.sensorStartedDate = startedDate
@@ -131,12 +131,12 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
     func stopCGMSensor() {
         commandError = nil
         isLoading = true
-        
+
         pumpManager?.stopCGMSensor { success in
             DispatchQueue.main.async {
                 self.isLoading = false
             }
-            
+
             if success {
                 self.cgmSessionState = .stopPending
             } else {

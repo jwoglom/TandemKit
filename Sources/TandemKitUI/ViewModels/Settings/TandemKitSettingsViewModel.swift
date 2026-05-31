@@ -284,8 +284,8 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func toggleExerciseMode() {
         isUpdatingPumpState = true
-        
-        let isExerciseOn = self.controlIQUserMode?.rawValue == 3
+
+        let isExerciseOn = controlIQUserMode?.rawValue == 3
         pumpManager?.setControlIQMode(mode: isExerciseOn ? .exerciseModeOff : .exerciseModeOn) { success in
             guard success else {
                 DispatchQueue.main.async {
@@ -294,7 +294,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
                 return
             }
-            
+
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in
                 DispatchQueue.main.async {
@@ -307,7 +307,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     func toggleSleepMode() {
         isUpdatingPumpState = true
 
-        let isSleepOn = self.controlIQUserMode?.rawValue == 2
+        let isSleepOn = controlIQUserMode?.rawValue == 2
         pumpManager?.setControlIQMode(mode: isSleepOn ? .sleepModeOff : .sleepModeOn) { success in
             guard success else {
                 DispatchQueue.main.async {
@@ -316,7 +316,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                 }
                 return
             }
-            
+
             Thread.sleep(forTimeInterval: 1.0)
             self.pumpManager?.ensureCurrentPumpData { _ in
                 DispatchQueue.main.async {
