@@ -2,7 +2,7 @@ import CoreBluetooth
 
 class TandemBluetoothManager: NSObject {
     private let logger = TandemLogger(category: "TandemBluetoothManager")
-    private let managerQueue = DispatchQueue(label: "com.DanaKit.bluetoothManagerQueue", qos: .unspecified)
+    private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.bluetoothManagerQueue", qos: .unspecified)
 
     public var pumpManager: TandemPumpManager?
 
@@ -19,8 +19,7 @@ class TandemBluetoothManager: NSObject {
         managerQueue.sync {
             self.manager = CBCentralManager(
                 delegate: self,
-                queue: managerQueue,
-                options: [CBCentralManagerOptionRestoreIdentifierKey: "com.jwoglom.TandemKit.bluetoothManager"]
+                queue: managerQueue
             )
         }
     }
@@ -156,30 +155,6 @@ class TandemBluetoothManager: NSObject {
 extension TandemBluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         logger.info("\(String(describing: central.state.rawValue))")
-        guard central.state == .poweredOn else {
-            return
-        }
-
-        if let peripheral = self.peripheral {
-            logger.info("Reconnecting to restored state...")
-
-            connect(peripheral) { error in
-                if let error {
-                    self.logger.error("Failed to auto reconnect: \(error.localizedDescription)")
-                }
-            }
-            return
-        }
-    }
-
-    func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
-        let peripherals = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
-        guard let peripheral = peripherals.first else {
-            logger.warning("No restored peripherals!")
-            return
-        }
-
-        self.peripheral = peripheral
     }
 
     func centralManager(
@@ -223,6 +198,11 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         logger.info(
             "Device disconnected, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
         )
+
+        if let pumpManager {
+            pumpManager.state.isConnected = true
+            pumpManager.notifyDelegateStateUpdated()
+        }
 
 //        if forcedDisconnect {
 //            forcedDisconnect = false

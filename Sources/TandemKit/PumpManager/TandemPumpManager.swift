@@ -37,7 +37,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
-    private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -378,7 +377,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 bolusId: permissionResponse.bolusId
             )
 
-            let doseEntry = dose.toDoseEntry()
+            let doseEntry = dose.toDoseEntry(isMutable: true)
             self.bolusProgressReport = TandemDoseProgressReporter(
                 pumpManager: self,
                 dose: doseEntry,
@@ -392,7 +391,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.bolusState = .initiating
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
-            self.emitPumpEvents([NewPumpEvent.bolus(dose: doseEntry, units: units)], replacePendingEvents: false)
+            self.emitPumpEvents(
+                [NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)],
+                replacePendingEvents: false
+            )
 
             completion(nil)
         }
@@ -543,7 +545,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 insulinType: self.state.insulinType,
             )
             var events = self.getActivePumpEvents(endDate: dose.startDate)
-            events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(), date: dose.startDate))
+            events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
 
             self.state.basalDose = dose
             self.state.lastReconciliation = dose.startDate
@@ -829,7 +831,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.failure(PumpManagerError.communication(error)))
 
             } else {
-                completion(.success(()))
+                self.ensureCurrentPumpData { _ in
+                    completion(.success(()))
+                }
             }
         }
     }

@@ -104,44 +104,45 @@ extension TandemPumpManager {
         )
 
         // Normal CurrentBolusStatus fetch
-//        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-//            return
-//        }
-//
-//        guard let progressReport = bolusProgressReport else {
-//            return
-//        }
-//
-//        if response.status == .delivering {
-        ////            if state.bolusState == .initiating, let activeBolus = activeBolus.value {
-        ////                state.bolusState = .inProgress(activeBolus.dose.toDoseEntry())
-        ////                notifyDelegateStateUpdated()
-        ////            }
-//
-//            progressReport.notify()
-//            return
-//        }
-//
-//        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
-//            // Bolus is finished
-//            telemetryScheduler.cancelAll()
-//
-//            // Query the pump for actual delivered volume rather than assuming full delivery
-//            var actualDelivered: Double?
-        ////            if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
-        ////                actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
-        ////            }
-//
-//            var events = getActivePumpEvents()
-//            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
-//
-//            bolusProgressReport = nil
-        ////            activeBolus.value = nil
-//
-//            state.lastReconciliation = Date.now
-//            notifyDelegateStateUpdated()
-//            emitPumpEvents(events)
-//        }
+        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
+            if state.bolusState != .noBolus || state.bolusDose != nil {
+                state.bolusDose = nil
+                state.bolusState = .noBolus
+                notifyDelegateStateUpdated()
+            }
+            return
+        }
+
+        guard let progressReport = bolusProgressReport else {
+            return
+        }
+
+        if response.status == .delivering {
+            progressReport.notify()
+            return
+        }
+
+        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
+            // Bolus is finished
+            telemetryScheduler.cancelAll()
+
+            // Query the pump for actual delivered volume rather than assuming full delivery
+            var actualDelivered: Double?
+            if let bolusId = state.bolusDose?.bolusId {
+                actualDelivered = queryLastBolusDeliveredVolume(bolusId: bolusId)
+            }
+
+            var events = getActivePumpEvents()
+            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
+
+            bolusProgressReport = nil
+            state.bolusDose = nil
+            state.bolusState = .noBolus
+            state.lastReconciliation = Date.now
+            notifyDelegateStateUpdated()
+
+            emitPumpEvents(events)
+        }
     }
 
     func fetchNotificationCount() {

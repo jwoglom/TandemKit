@@ -208,8 +208,7 @@ struct TandemKitSettingsView: View {
                                     }
                             }
                             .buttonStyle(.borderless)
-//                            .disabled(!viewModel.isConnected || viewModel.isRefreshing)
-                            .opacity(viewModel.isConnected ? 1.0 : 0.4)
+                            .disabled(viewModel.isRefreshing)
                         }
                         .padding(.top, 4)
                         Spacer()
@@ -511,14 +510,6 @@ struct TandemKitSettingsView: View {
 
                 navigationLink(
                     label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
-                    value: {
-                        HStack {
-                            if let summary = viewModel.quickBolusSummary {
-                                Text(summary)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    },
                     action: { viewModel.openQuickBolus() }
                 )
 

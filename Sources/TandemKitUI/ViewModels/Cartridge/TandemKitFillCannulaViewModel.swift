@@ -36,7 +36,6 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
     let done: () -> Void
     private let pumpManager: TandemPumpManager?
-    private let processQueue = DispatchQueue(label: "TandemKit.cannula.processQueue")
 
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager

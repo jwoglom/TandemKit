@@ -79,6 +79,7 @@ public struct TandemPumpManagerState: RawRepresentable {
 
     public var onboarded: Bool = false
     public var pumpState: PumpState
+    public var isConnected: Bool = false
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
     public var latestInsulinOnBoard: Double?
@@ -145,6 +146,7 @@ public struct TandemPumpManagerState: RawRepresentable {
 
     public init(rawValue: RawValue) {
         onboarded = rawValue["onboarded"] as? Bool ?? false
+        isConnected = false // To prevent having an old isConnected state
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
         deliveryIsUncertain = rawValue["deliveryIsUncertain"] as? Bool ?? false
@@ -332,6 +334,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["useControlIQ"] = useControlIQ
         raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
+        raw["basalDose"] = basalDose.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
         raw["controlIQWeight"] = controlIQWeight

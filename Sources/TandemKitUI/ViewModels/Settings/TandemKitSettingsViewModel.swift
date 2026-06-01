@@ -30,7 +30,27 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openQuickBolus: () -> Void
     let openAlertSettings: () -> Void
 
+    var appName: String { HostApp.current.appName }
+    var algorithmName: String { HostApp.current.diyAlgorithmName }
+
+    @Published var pumpState: PumpState? = nil
+    @Published var controlIQEnabled: Bool = false
+    @Published var isClosedLoopEnabled: Bool = false
+    @Published var currentProfileBaseBasalRate: Double? = nil
+    @Published var currentBasalRateForDisplay: String = ""
+    @Published var batteryPercentage: String? = nil
+    @Published var pumpTimeCheckedAt: String = ""
+    @Published var currentPumpTime: String = ""
+    @Published var reservoirUnitsText: String? = nil
+    @Published var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? = nil
     @Published var reservoirValue: ReservoirValue?
+    @Published var quickBolusEnabled: Bool? = nil
+    @Published var notificationCount: Int = 0
+    @Published var suspendResumeText: String? = nil
+    @Published var algorithmModeText: String = ""
+    @Published var sleepModeText: String = ""
+    @Published var exerciseModeText: String = ""
+    @Published var controlIqModeText: String = ""
     @Published var isUpdatingPumpState = false
     @Published var showPumpTimeSyncWarning = false
     @Published var isUpdatingTime = false
@@ -50,8 +70,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showNoCGMWarning: Bool = false
     @Published var isCGMActiveOnPump: Bool = false
     @Published var pendingEnableClosedLoop: Bool = false
-
-    private var pendingRefreshOnReconnect = false
 
     private var numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -100,64 +118,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalDose = pumpManager?.state.basalDose
 
-        self.pumpManager?.addStatusObserver(self, queue: .main)
-
-        refreshPumpStatus()
-    }
-
-    var currentPumpTime: String {
-        guard let currentPumpTime = pumpManager?.state.currentPumpTime else {
-            return ""
+        if let pumpManager {
+            pumpManager.addStatusObserver(self, queue: .main)
+            self.pumpManager(pumpManager, didUpdate: pumpManager.status, oldStatus: pumpManager.status)
         }
-
-        return dateFormatter.string(from: currentPumpTime)
-    }
-
-    var pumpTimeCheckedAt: String {
-        guard let lastPumpTimeCheckDate = pumpManager?.state.lastPumpTimeCheckDate else {
-            return ""
-        }
-
-        return dateFormatter.string(from: lastPumpTimeCheckDate)
-    }
-
-    var pumpState: PumpState? {
-        pumpManager?.state.pumpState
-    }
-
-    // MARK: - Computed Properties from Manager State
-
-    var controlIQEnabled: Bool {
-        pumpManager?.state.controlIQEnabled ?? false
-    }
-
-    var isClosedLoopEnabled: Bool {
-        pumpManager?.pumpManagerDelegate?.automaticDosingEnabled ?? false
-    }
-
-    var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? {
-        pumpManager?.state.controlIQUserMode
-    }
-
-    var batteryPercentage: String? {
-        guard let battery = pumpManager?.state.lastBatteryReading?.chargeRemaining else {
-            return nil
-        }
-
-        return numberFormatter.string(from: (battery * 100) as NSNumber)
-    }
-
-    var currentProfileBaseBasalRate: Double? {
-        pumpManager?.getScheduledBasalRate()
-    }
-
-    var currentBasalRateForDisplay: String {
-        guard let rate = currentProfileBaseBasalRate else { return "" }
-        return String(format: "%.2f", rate)
-    }
-
-    var notificationCount: Int {
-        pumpManager?.state.notificationCount ?? 0
     }
 
     // MARK: - Refresh Methods
@@ -165,13 +129,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     func refreshPumpStatus() {
         guard let pumpManager else {
             log.debug("Skipping TandemPumpSettings refresh – pump not connected/paired")
-            pendingRefreshOnReconnect = true
             return
         }
 
         guard !isRefreshing else { return }
-
-        pendingRefreshOnReconnect = false
         isRefreshing = true
 
         pumpManager.ensureCurrentPumpData { _ in
@@ -181,51 +142,35 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    var reservoirUnitsText: String? {
-        guard let reservoirValue else { return nil }
-        return String(format: "%.0f", reservoirValue.unitVolume)
-    }
-
     func suspendResumeButtonPressed() {
-        isUpdatingPumpState = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                DispatchQueue.main.async {
-                    self?.isUpdatingPumpState = false
-                }
-                return
-            }
-            guard let dose = basalDose, let pumpManager = self.pumpManager else {
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-                }
-                return
-            }
+        guard let pumpManager else {
+            return
+        }
 
-            if dose.type == .suspend {
-                pumpManager.resumeDelivery { error in
-                    if let _ = error {
-                        DispatchQueue.main.async {
-                            self.isUpdatingPumpState = false
-                            self.commandFailure = .resume
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            self.isUpdatingPumpState = false
-                        }
+        isUpdatingPumpState = true
+        if pumpManager.state.basalDose.type == .suspend {
+            pumpManager.resumeDelivery { error in
+                if let _ = error {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.commandFailure = .resume
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
                     }
                 }
-            } else {
-                pumpManager.suspendDelivery { error in
-                    if let _ = error {
-                        DispatchQueue.main.async {
-                            self.isUpdatingPumpState = false
-                            self.commandFailure = .suspend
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            self.isUpdatingPumpState = false
-                        }
+            }
+        } else {
+            pumpManager.suspendDelivery { error in
+                if let _ = error {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
+                        self.commandFailure = .suspend
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.isUpdatingPumpState = false
                     }
                 }
             }
@@ -378,48 +323,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         useSilentMode = enabled
     }
 
-    var suspendResumeText: String? {
-        guard let dose = basalDose else {
-            return nil
-        }
-
-        if dose.type == .suspend {
-            return String(localized: "Resume insulin delivery", comment: "resume delivery")
-        }
-
-        return String(localized: "Suspend insulin delivery", comment: "suspend delivery")
-    }
-
-    var appName: String { HostApp.current.appName }
-    var algorithmName: String { HostApp.current.diyAlgorithmName }
-
-    var algorithmModeText: String {
-        useControlIQ ? "CIQ" : algorithmName
-    }
-
-    var controlIqModeText: String {
-        if controlIQEnabled {
-            return "Disable ControlIQ"
-        }
-        return "Enable ControlIQ"
-    }
-
-    var exerciseModeText: String {
-        if controlIQUserMode?.rawValue == 3 {
-            return "Disable exercise mode"
-        }
-        return "Enable exercise mode"
-    }
-
-    var sleepModeText: String {
-        if controlIQUserMode?.rawValue == 2 {
-            return "Disable sleep mode"
-        }
-        return "Enable sleep mode"
-    }
-
-    // MARK: - Find My Pump
-
     func playSound() {
         isPlayingSound = true
 
@@ -427,28 +330,6 @@ class TandemKitSettingsViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isPlayingSound = false
             }
-        }
-    }
-
-    // MARK: - Quick Bolus
-
-    var quickBolusEnabled: Bool? {
-        pumpManager?.state.quickBolusEnabled
-    }
-
-    var quickBolusSummary: String? {
-        guard let enabled = pumpManager?.state.quickBolusEnabled else { return nil }
-        if !enabled { return "Disabled" }
-
-        let entryType = pumpManager?.state.quickBolusEntryType ?? 0
-        if entryType == 1 {
-            let carbsMilliunits = pumpManager?.state.quickBolusIncrementCarbs ?? 0
-            let carbs = Double(carbsMilliunits) / 1000.0
-            return String(format: "Carbs, %.0f g", carbs)
-        } else {
-            let unitsMilliunits = pumpManager?.state.quickBolusIncrementUnits ?? 0
-            let units = Double(unitsMilliunits) / 1000.0
-            return String(format: "Units, %.1f U", units)
         }
     }
 
@@ -476,15 +357,63 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
-            self.isConnected = false
+            self.isConnected = pumpManager.state.isConnected
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
+            self.pumpState = pumpManager.state.pumpState
+            self.controlIQEnabled = pumpManager.state.controlIQEnabled ?? false
+            self.isClosedLoopEnabled = pumpManager.pumpManagerDelegate?.automaticDosingEnabled ?? false
+            self.controlIQUserMode = pumpManager.state.controlIQUserMode
+            self.currentProfileBaseBasalRate = pumpManager.getScheduledBasalRate()
+            self.notificationCount = pumpManager.state.notificationCount ?? 0
+            self.quickBolusEnabled = pumpManager.state.quickBolusEnabled
+            self.algorithmModeText = self.useControlIQ ? "CIQ" : self.algorithmName
+            self.basalDose = pumpManager.state.basalDose
 
-            if self.pendingRefreshOnReconnect {
-                self.pendingRefreshOnReconnect = false
-                self.refreshPumpStatus()
+            if pumpManager.state.basalDose.type == .suspend {
+                self.suspendResumeText = String(localized: "Resume insulin delivery", comment: "resume delivery")
+            } else {
+                self.suspendResumeText = String(localized: "Suspend insulin delivery", comment: "suspend delivery")
+            }
+
+            if let battery = pumpManager.state.lastBatteryReading?.chargeRemaining {
+                self.batteryPercentage = self.numberFormatter.string(from: (battery * 100) as NSNumber)
+            }
+
+            if let lastPumpTimeCheckDate = pumpManager.state.lastPumpTimeCheckDate {
+                self.pumpTimeCheckedAt = self.dateFormatter.string(from: lastPumpTimeCheckDate)
+            }
+
+            if let currentPumpTime = pumpManager.state.currentPumpTime {
+                self.currentPumpTime = self.dateFormatter.string(from: currentPumpTime)
+            }
+
+            if let reservoirLevel = pumpManager.reservoirLevel {
+                self.reservoirUnitsText = String(format: "%.0f", reservoirLevel.unitVolume)
+            }
+
+            if let rate = self.currentProfileBaseBasalRate {
+                self.currentBasalRateForDisplay = String(format: "%.2f", rate)
+            }
+
+            if self.controlIQUserMode?.rawValue == 2 {
+                self.sleepModeText = String(localized: "Disable sleep mode", comment: "")
+            } else {
+                self.sleepModeText = String(localized: "Enable sleep mode", comment: "")
+            }
+
+            if self.controlIQUserMode?.rawValue == 3 {
+                self.exerciseModeText = String(localized: "Disable exercise mode", comment: "")
+            } else {
+                self.exerciseModeText = String(localized: "Enable exercise mode", comment: "")
+            }
+
+            if self.controlIQEnabled {
+                self.controlIqModeText = String(localized: "Disable ControlIQ", comment: "")
+            } else {
+                self.controlIqModeText = String(localized: "Enable ControlIQ", comment: "")
             }
         }
     }

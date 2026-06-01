@@ -48,7 +48,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     let done: () -> Void
     let toFillTubing: () -> Void
     private let pumpManager: TandemPumpManager?
-    private let processQueue = DispatchQueue(label: "TandemKit.cartridge.processQueue")
 
     // Notifications
     @Published var notificationsViewModel: TandemKitNotificationsViewModel

@@ -356,6 +356,7 @@ extension TandemPeripheralManager {
                 return
             }
 
+            pumpManager.state.isConnected = true
             pumpManager.state.pumpState.timeSinceReset = response.pumpTimeSinceReset
             pumpManager.notifyDelegateStateUpdated()
 
