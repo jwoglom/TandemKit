@@ -41,10 +41,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
 
-    // BLE heartbeat propagation (LoopKit PumpManager protocol)
-    private var provideHeartbeat: Bool = false
-    private var lastHeartbeat: Date = .distantPast
-
     @objc func appMovedToBackground() {
         if state.useSilentTones {
             logger.info("Starting silent tones")
@@ -268,28 +264,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private static let lastHeartbeatDebounceInterval: TimeInterval = 10
-
-    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
-        provideHeartbeat = mustProvideBLEHeartbeat
-    }
-
-    /// Query the delegate to determine whether heartbeats should be enabled.
-    /// Must not be called on the delegate's queue.
-    private func updateBLEHeartbeatPreference() {
-        pumpDelegate.notify { delegate in
-            self.provideHeartbeat = delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
-        }
-    }
-
-    private func updateLastHeartbeatIfNeeded() {
-        if provideHeartbeat, Date().timeIntervalSince(lastHeartbeat) > Self.lastHeartbeatDebounceInterval {
-            pumpDelegate.notify { delegate in
-                delegate?.pumpManagerBLEHeartbeatDidFire(self)
-            }
-            lastHeartbeat = Date()
-        }
-    }
+    public func setMustProvideBLEHeartbeat(_: Bool) {}
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
         bolusProgressReport
@@ -1291,8 +1266,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 }
 
-// MARK: - PumpCommDelegate Conformance
-
 extension TandemPumpManager {
     func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
         guard state.basalDose.type == .tempBasal else {
@@ -1300,12 +1273,29 @@ extension TandemPumpManager {
         }
 
         let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)
-        return [
+        var events = [
             NewPumpEvent.tempBasal(
                 dose: basalEntry,
                 date: basalEntry.startDate
             )
         ]
+
+        if basalEntry.endDate == state.basalDose.estimatedEndDate {
+            let dose = UnfinalizedDose(
+                basalRate: getScheduledBasalRate(),
+                insulinType: state.insulinType,
+                startDate: basalEntry.endDate
+            )
+            events.append(NewPumpEvent.basal(
+                dose: dose.toDoseEntry(),
+                date: basalEntry.endDate
+            ))
+
+            state.basalDose = dose
+            notifyDelegateStateUpdated()
+        }
+
+        return events
     }
 
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {

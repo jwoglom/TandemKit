@@ -88,6 +88,54 @@ extension TandemPumpManager {
             logger.error("Failed to fetch homeScreen Status: \(type(of: HomeScreenMirrorRequest.self))")
             return
         }
+
+        guard let activeBasalType = response.basalStatusIcon?.type else {
+            logger.error("Invalid basal status icon: \(response.basalStatusIconId)")
+            return
+        }
+
+        if activeBasalType != state.basalDose.type {
+            logger.debug("Updating new basal dose: \(activeBasalType)")
+            let now = Date.now
+            var events = getActivePumpEvents(endDate: now)
+
+            if activeBasalType == .suspend {
+                let dose = UnfinalizedDose(suspendStartTime: now)
+                events.append(NewPumpEvent.suspend(
+                    dose: dose.toDoseEntry(),
+                    date: dose.startDate
+                ))
+
+                state.basalDose = dose
+                state.lastReconciliation = Date.now
+
+                emitPumpEvents(events)
+                notifyDelegateStateUpdated()
+                return
+            }
+
+            if activeBasalType == .basal {
+                if !events.contains(where: { $0.type == .basal }) {
+                    let dose = UnfinalizedDose(
+                        basalRate: getScheduledBasalRate(),
+                        insulinType: state.insulinType,
+                        startDate: now
+                    )
+                    events.append(NewPumpEvent.basal(
+                        dose: dose.toDoseEntry(),
+                        date: dose.startDate
+                    ))
+
+                    state.basalDose = dose
+                }
+
+                state.lastReconciliation = Date.now
+
+                emitPumpEvents(events)
+                notifyDelegateStateUpdated()
+                return
+            }
+        }
     }
 
     func fetchBolusStatus() {
@@ -253,12 +301,12 @@ extension TandemPumpManager {
             return
         }
 
-        let percent = Double(response.batteryPercent) / 100.0
-        let timestamp = Date.now
+        logger.debug("Battery updated: \(response.batteryPercent)% remaining")
 
-        logger.debug("Battery updated: \(percent * 100)% remaining")
-
-        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
+        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
+            date: Date.now,
+            chargeRemaining: Double(response.batteryPercent) / 100.0
+        )
         notifyDelegateStateUpdated()
     }
 

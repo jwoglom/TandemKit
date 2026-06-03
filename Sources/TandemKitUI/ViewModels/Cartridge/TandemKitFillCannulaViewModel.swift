@@ -102,16 +102,15 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         failedResume = false
 
         pumpManager?.resumeDelivery { error in
-            self.checkSuspendedStatus()
-
-            DispatchQueue.main.async {
-                self.loadingResume = false
-                if let _ = error {
+            if error != nil {
+                DispatchQueue.main.async {
                     self.failedResume = true
+                }
+                return
+            }
 
-                } else {
-                    self.failedResume = false
-                    self.isSuspended = false
+            self.pumpManager?.ensureCurrentPumpData { _ in
+                DispatchQueue.main.async {
                     self.done()
                 }
             }

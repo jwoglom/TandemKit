@@ -174,7 +174,12 @@ public class UnfinalizedDose {
             )
 
         case .tempBasal:
-            let actualEndDate = isMutable ? estimatedEndDate : endDate
+            var actualEndDate = isMutable ? estimatedEndDate : endDate
+            if !isMutable, actualEndDate > estimatedEndDate {
+                // Limit temp basal endDate till duration
+                actualEndDate = estimatedEndDate
+            }
+
             let duration = actualEndDate.timeIntervalSince(startDate)
             return DoseEntry(
                 type: .tempBasal,

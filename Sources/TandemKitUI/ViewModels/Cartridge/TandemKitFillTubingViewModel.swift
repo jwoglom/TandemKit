@@ -197,10 +197,15 @@ class TandemKitFillTubingViewModel: ObservableObject {
         failedResume = false
 
         pumpManager?.resumeDelivery { error in
-            DispatchQueue.main.async {
-                if let _ = error {
+            if error != nil {
+                DispatchQueue.main.async {
                     self.failedResume = true
-                } else {
+                }
+                return
+            }
+
+            self.pumpManager?.ensureCurrentPumpData { _ in
+                DispatchQueue.main.async {
                     self.done()
                 }
             }
