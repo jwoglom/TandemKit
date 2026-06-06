@@ -109,7 +109,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
                 return
             }
 
-            self.pumpManager?.ensureCurrentPumpData { _ in
+            self.pumpManager?.syncPumpData { _ in
                 DispatchQueue.main.async {
                     self.done()
                 }

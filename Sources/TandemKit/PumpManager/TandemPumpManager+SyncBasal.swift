@@ -148,7 +148,7 @@ public extension TandemPumpManager {
                 for i in sortedItems.count ..< currentSegments.count {
                     if i > 0 { // Can't delete segment 0
                         let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
-                        
+
                         // Prepent delete actions
                         modifyRequests.insert(deleteRequest, at: 0)
                     }

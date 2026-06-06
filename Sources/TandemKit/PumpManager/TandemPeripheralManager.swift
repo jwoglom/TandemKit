@@ -45,6 +45,8 @@ class TandemPeripheralManager: NSObject {
             return nil
         }
 
+        logger.info("Reading characteristic: \(characteristic.uuid)")
+
         let readQ = TandemDispatchGroup()
         readQ.enter()
         readQueue = (readQ, characteristicUUID)
@@ -87,7 +89,7 @@ class TandemPeripheralManager: NSObject {
             authKey = pumpManager.state.pumpState.getAuthKey()
         }
 
-        logger.debug("Writing message: \(message.description)")
+        logger.info("Writing message: \(message.description)")
         for item in Packetize.parse(
             message: message,
             authenticationKey: authKey,
@@ -122,11 +124,11 @@ class TandemPeripheralManager: NSObject {
                 writeQ.enter()
                 writeQueue = (writeQ, expecting.props.opCode)
 
-                logger.debug("Waiting for more data...")
+                logger.info("Waiting for more data...")
             }
         }
 
-        logger.debug("Received message: \(response.message?.description ?? "nil")")
+        logger.info("Received message: \(response.message?.description ?? "nil")")
         return response.message
     }
 
@@ -234,8 +236,15 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 
         if characteristic.uuid == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
             let events = QualifyingEvent.fromRawBytes(data)
-            logger.error("Recieved qualifying events: \(events)")
-            // TODO: Handle qualifying event...
+            guard !events.isEmpty else {
+                logger.info("Received empty qualifying events")
+                return
+            }
+
+            pumpManager.handleQualifyingEvents(events: events) {
+                // Acknowledge qualifying events
+                self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse)
+            }
             return
         }
 

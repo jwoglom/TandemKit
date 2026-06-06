@@ -135,7 +135,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         guard !isRefreshing else { return }
         isRefreshing = true
 
-        pumpManager.ensureCurrentPumpData { _ in
+        pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 self.isRefreshing = false
             }
@@ -147,30 +147,23 @@ class TandemKitSettingsViewModel: ObservableObject {
             return
         }
 
-        isUpdatingPumpState = true
         if pumpManager.state.basalDose.type == .suspend {
             pumpManager.resumeDelivery { error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+
+                    if let _ = error {
                         self.commandFailure = .resume
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
                     }
                 }
             }
         } else {
             pumpManager.suspendDelivery { error in
-                if let _ = error {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+
+                    if let _ = error {
                         self.commandFailure = .suspend
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        self.isUpdatingPumpState = false
                     }
                 }
             }
@@ -241,7 +234,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in
+            self.pumpManager?.syncPumpData { _ in
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                 }
@@ -263,7 +256,7 @@ class TandemKitSettingsViewModel: ObservableObject {
             }
 
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in
+            self.pumpManager?.syncPumpData { _ in
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                 }
@@ -283,10 +276,10 @@ class TandemKitSettingsViewModel: ObservableObject {
                 return
             }
             Thread.sleep(forTimeInterval: 1.0)
-            self.pumpManager?.ensureCurrentPumpData { _ in }
-
-            DispatchQueue.main.async {
-                self.isUpdatingPumpState = false
+            self.pumpManager?.syncPumpData { _ in
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
+                }
             }
         }
     }

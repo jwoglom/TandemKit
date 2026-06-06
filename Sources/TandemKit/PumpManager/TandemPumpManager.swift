@@ -240,6 +240,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
+        logger.info("Sync pump data...")
+
+        if let lastSync = state.lastReconciliation, Date.now.timeIntervalSince(lastSync) < .minutes(4.5) {
+            logger.warning("State already in sync: \(Date.now.timeIntervalSince(lastSync)) sec")
+            completion?(lastSync)
+            return
+        }
+
+        syncPumpData(completion: completion)
+    }
+
+    func syncPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sync: \(error.localizedDescription)")
@@ -251,9 +263,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus()
-            self.fetchHomeScreenStatus()
+            self.fetchBasalStatus()
             self.fetchControlIQStatus()
-            self.fetchNotificationCount()
+            self.fetchNotifications()
             self.fetchTimeSinceReset()
             self.fetchGlobalPumpSettings()
 
@@ -358,9 +370,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 dose: doseEntry,
                 activationType: activationType
             )
-            self.telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5)) {
-                self.fetchBolusStatus()
-            }
 
             self.state.bolusDose = dose
             self.state.bolusState = .initiating
@@ -439,7 +448,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
+        let unitsPerHour = roundToSupportedBasalRate(unitsPerHour: unitsPerHour)
         logger.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
+
         guard !state.useControlIQ else {
             logger.warning("[enactTempBasal] Blocked: Control-IQ mode is active")
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
@@ -460,16 +471,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let currentTempRate = self.bluetooth.write(
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            ) as? TempRateResponse else {
+            guard let currentBasal = self.bluetooth.write(
+                message: CurrentBasalStatusRequest(),
+                expecting: CurrentBasalStatusResponse.self
+            ) as? CurrentBasalStatusResponse else {
                 self.logger.error("Failed to fetch current temp rate")
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
 
-            if currentTempRate.active {
+            if currentBasal.basalType == .tempBasal {
                 guard let stopCurrentRate = self.bluetooth.write(
                     message: StopTempRateRequest(),
                     expecting: StopTempRateResponse.self
@@ -484,6 +495,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     completion(.communication(PumpCommError.invalidPacket))
                     return
                 }
+
+                self.logger.info("Current temp basal cancelled!")
             }
 
             let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
@@ -493,6 +506,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if duration < .ulpOfOne || percent == 100 {
                 // We only needed to cancel any current temp basal
                 // Qualifying events will handle state update
+                self.logger.info("Enact completed! (no basal rate change)")
                 completion(nil)
                 return
             }
@@ -508,7 +522,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             guard response.isStatusOK else {
-                self.logger.error("Failed to set temp rate - Status: \(response.status)")
+                self.logger
+                    .error(
+                        "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(duration.minutes)min"
+                    )
                 completion(.communication(PumpCommError.invalidPacket))
                 return
             }
@@ -806,7 +823,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.failure(PumpManagerError.communication(error)))
 
             } else {
-                self.ensureCurrentPumpData { _ in
+                self.syncPumpData { _ in
                     completion(.success(()))
                 }
             }
@@ -1042,7 +1059,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
-            self.ensureCurrentPumpData { _ in
+            self.syncPumpData { _ in
                 completion(true, cgmResponse)
             }
         }
@@ -1262,6 +1279,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             completion(true)
+        }
+    }
+
+    func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.logger.info("Received qualifying events: \(events)")
+
+            for qualifyingEvent in events {
+                switch qualifyingEvent {
+                case .bolusChange:
+                    self.fetchBolusStatus()
+                case .basalChange:
+                    self.fetchBasalStatus()
+                case .alert:
+                    self.fetchNotifications()
+                default:
+                    self.logger.info("Skipping event: \(qualifyingEvent)")
+                }
+            }
+
+            completion()
         }
     }
 }

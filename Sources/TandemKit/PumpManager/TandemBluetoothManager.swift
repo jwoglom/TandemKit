@@ -84,6 +84,8 @@ class TandemBluetoothManager: NSObject {
 
     func ensureConnected(completion: @escaping (Error?) -> Void) {
         let localCompletion: (Error?) -> Void = { error in
+            self.connectCompletion = nil
+
             DispatchQueue.global(qos: .userInitiated).async {
                 completion(error)
             }
@@ -163,14 +165,9 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi _: NSNumber
     ) {
-        guard let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String else {
-            logger.warning("Pump found without name... \(peripheral)")
-            return
-        }
-
         scanCompletion?(TandemPumpScan(
             bleIdentifier: peripheral.identifier.uuidString,
-            name: name,
+            name: peripheral.name ?? "",
             peripheral: peripheral,
             advertisementData: advertisementData
         ))

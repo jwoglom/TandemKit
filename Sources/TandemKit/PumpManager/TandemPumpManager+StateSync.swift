@@ -66,35 +66,34 @@ extension TandemPumpManager {
             }
 
             guard let response = self.bluetooth.write(
-                message: HomeScreenMirrorRequest(),
-                expecting: HomeScreenMirrorResponse.self
-            ) as? HomeScreenMirrorResponse else {
-                self.logger.error("Failed to fetch homeScreen Status: \(type(of: HomeScreenMirrorRequest.self))")
+                message: CurrentBasalStatusRequest(),
+                expecting: CurrentBasalStatusResponse.self
+            ) as? CurrentBasalStatusResponse else {
+                self.logger.error("Failed to fetch basal Status for suspend: \(type(of: HomeScreenMirrorRequest.self))")
                 completion(nil)
                 return
             }
 
-            let suspended = response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue || response
-                .basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.hypoSuspendBasalIQ.rawValue
-            completion(suspended)
+            completion(response.basalType == .suspend)
         }
     }
 
-    func fetchHomeScreenStatus() {
+    func fetchBasalStatus() {
         guard let response = bluetooth.write(
-            message: HomeScreenMirrorRequest(),
-            expecting: HomeScreenMirrorResponse.self
-        ) as? HomeScreenMirrorResponse else {
-            logger.error("Failed to fetch homeScreen Status: \(type(of: HomeScreenMirrorRequest.self))")
+            message: CurrentBasalStatusRequest(),
+            expecting: CurrentBasalStatusResponse.self
+        ) as? CurrentBasalStatusResponse else {
+            logger.error("Failed to fetch basal Status: \(type(of: HomeScreenMirrorRequest.self))")
             return
         }
 
-        guard let activeBasalType = response.basalStatusIcon?.type else {
-            logger.error("Invalid basal status icon: \(response.basalStatusIconId)")
-            return
-        }
-
+        let activeBasalType = response.basalType
         if activeBasalType != state.basalDose.type {
+            if activeBasalType == .basal, state.basalDose.type == .resume {
+                // This is also the same
+                return
+            }
+
             logger.debug("Updating new basal dose: \(activeBasalType)")
             let now = Date.now
             var events = getActivePumpEvents(endDate: now)
@@ -147,10 +146,6 @@ extension TandemPumpManager {
             return
         }
 
-        logger.debug(
-            "Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
-        )
-
         // Normal CurrentBolusStatus fetch
         if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
             if state.bolusState != .noBolus || state.bolusDose != nil {
@@ -166,11 +161,21 @@ extension TandemPumpManager {
         }
 
         if response.status == .delivering {
+            if let dose = state.bolusDose {
+                state.bolusState = .inProgress(dose.toDoseEntry(isMutable: true))
+                notifyDelegateStateUpdated()
+            }
+
             progressReport.notify()
+
+            telemetryScheduler.cancelAll()
+            telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) {
+                self.bolusProgressReport?.notify()
+            }
             return
         }
 
-        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
+        if response.bolusId == 0 {
             // Bolus is finished
             telemetryScheduler.cancelAll()
 
@@ -193,7 +198,7 @@ extension TandemPumpManager {
         }
     }
 
-    func fetchNotificationCount() {
+    func fetchNotifications() {
         notificationBundle = NotificationBundle()
         for (request, expecting) in NotificationBundle.allRequests() {
             guard let response = bluetooth.write(message: request, expecting: expecting) else {

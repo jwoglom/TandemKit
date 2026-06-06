@@ -39,7 +39,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
         isRefreshing = true
         errorMessage = nil
 
-        pumpManager.ensureCurrentPumpData { _ in
+        pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 self.notifications = pumpManager.notificationBundle.get()
                 self.isRefreshing = false

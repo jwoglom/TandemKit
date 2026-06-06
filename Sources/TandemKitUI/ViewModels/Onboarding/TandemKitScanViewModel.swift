@@ -88,7 +88,7 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
-        pumpManager.ensureCurrentPumpData { _ in
+        pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 self.log.info("Pairing successful")
                 self.nextStep()
