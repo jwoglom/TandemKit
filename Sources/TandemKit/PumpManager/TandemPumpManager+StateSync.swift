@@ -15,8 +15,6 @@ extension TandemPumpManager {
         let currentPumpTime = response.currentTimeDate
         let checkedAt = Date.now
 
-        logger.debug("TimeSinceReset updated: \(timeSinceReset)")
-
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
@@ -30,10 +28,6 @@ extension TandemPumpManager {
             logger.error("Failed to fetch ControlIQ info: \(type(of: request))")
             return
         }
-
-        logger.debug(
-            " ControlIQ updated: enabled=\(response.getClosedLoopEnabled()), mode=\(response.getCurrentUserModeTypeId())"
-        )
 
         state.controlIQEnabled = response.getClosedLoopEnabled()
 
@@ -55,6 +49,34 @@ extension TandemPumpManager {
         state.lastControlIQUpdate = Date.now
 
         notifyDelegateStateUpdated()
+    }
+
+    func fetchPumpInformation() {
+        guard let apiResponse = bluetooth.write(
+            message: ApiVersionRequest(),
+            expecting: ApiVersionResponse.self
+        ) as? ApiVersionResponse else {
+            logger.error("Failed to fetch apiVersion")
+            return
+        }
+
+        state.pumpState.apiVersion = apiResponse.getApiVersion()
+
+        guard let pumpVersionResponse = bluetooth.write(
+            message: PumpVersionBRequest(),
+            expecting: PumpVersionBResponse.self
+        ) as? PumpVersionBResponse else {
+            logger.error("Failed to fetch PumpVersionB")
+            return
+        }
+
+        state.pumpState.pumpSerial = pumpVersionResponse.serialNumber
+        state.pumpState.softwareName = pumpVersionResponse.softwareName
+        state.pumpState.pumpModel = PumpModel(rawValue: pumpVersionResponse.modelNumber)
+
+//        BleSoftwareInfoRequest
+        // PumpVersionBRequest
+        // ApiVersionRequest
     }
 
     func fetchSuspendStatus(completion: @escaping (Bool?) -> Void) {

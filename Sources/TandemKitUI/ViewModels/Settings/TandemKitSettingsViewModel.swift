@@ -19,6 +19,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitSettingsViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
+    let openPumpInformation: () -> Void
     let openNotifications: () -> Void
     let openInsulinType: () -> Void
     let openSoundSettings: () -> Void
@@ -87,6 +88,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     init(
         _ pumpManager: TandemPumpManager? = nil,
         nextStep: @escaping () -> Void,
+        openPumpInformation: @escaping () -> Void,
         openNotifications: @escaping () -> Void,
         openInsulinType: @escaping () -> Void,
         openSoundSettings: @escaping () -> Void,
@@ -100,6 +102,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
+        self.openPumpInformation = openPumpInformation
         self.openNotifications = openNotifications
         self.openInsulinType = openInsulinType
         self.openSoundSettings = openSoundSettings
@@ -366,9 +369,9 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.basalDose = pumpManager.state.basalDose
 
             if pumpManager.state.basalDose.type == .suspend {
-                self.suspendResumeText = String(localized: "Resume insulin delivery", comment: "resume delivery")
+                self.suspendResumeText = String(localized: "Resume Insulin Delivery", comment: "resume delivery")
             } else {
-                self.suspendResumeText = String(localized: "Suspend insulin delivery", comment: "suspend delivery")
+                self.suspendResumeText = String(localized: "Suspend Insulin Delivery", comment: "suspend delivery")
             }
 
             if let battery = pumpManager.state.lastBatteryReading?.chargeRemaining {

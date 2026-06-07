@@ -10,6 +10,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
     public var timeSinceReset: UInt32?
     public var apiVersion: ApiVersion?
     public var pumpSerial: UInt32?
+    public var softwareName: String?
     public var pumpModel: PumpModel?
 
     // other fields are technically not required by other parts of the driver
@@ -24,6 +25,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         timeSinceReset: UInt32? = nil,
         apiVersion: ApiVersion? = nil,
         pumpSerial: UInt32? = nil,
+        softwareName _: String? = nil,
         pumpModel: PumpModel? = nil
     ) {
         self.peripheralUuid = peripheralUuid
@@ -33,18 +35,6 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         self.apiVersion = apiVersion
         self.pumpSerial = pumpSerial
         self.pumpModel = pumpModel
-    }
-
-    public init() {
-        self.init(
-            peripheralUuid: nil,
-            derivedSecret: nil,
-            serverNonce: nil,
-            timeSinceReset: nil,
-            apiVersion: nil,
-            pumpSerial: nil,
-            pumpModel: nil
-        )
     }
 
     public init(rawValue: RawValue) {
@@ -57,6 +47,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
             apiVersion = ApiVersion(rawValue: apiVersionRaw)
         }
         pumpSerial = rawValue["pumpSerial"] as? UInt32
+        softwareName = rawValue["softwareName"] as? String
         if let pumpModelRaw = rawValue["pumpModel"] as? PumpModel.RawValue {
             pumpModel = PumpModel(rawValue: pumpModelRaw)
         }
@@ -69,6 +60,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
         rawValue["pincode"] = pincode
         rawValue["derivedSecret"] = derivedSecret
         rawValue["serverNonce"] = serverNonce
+        rawValue["softwareName"] = softwareName
         if let timeSinceReset = timeSinceReset {
             rawValue["timeSinceReset"] = timeSinceReset
         }
@@ -90,9 +82,6 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
             return Hkdf.build(nonce: serverNonce, keyMaterial: derivedSecret)
         }
 
-//        if let code = code {
-//            return Data(code.utf8)
-//        }
         return Data()
     }
 
@@ -105,6 +94,7 @@ public struct PumpState: RawRepresentable, Equatable, CustomDebugStringConvertib
             "* timeSinceReset: \(String(describing: timeSinceReset))",
             "* apiVersion: \(String(describing: apiVersion))",
             "* pumpSerial: \(String(describing: pumpSerial))",
+            "* softwareName: \(String(describing: softwareName))",
             "* pumpModel: \(String(describing: pumpModel))"
         ].joined(separator: "\n")
     }

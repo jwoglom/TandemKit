@@ -226,14 +226,6 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == FillTubingStateStreamResponse.props.characteristic,
-           data[2] == FillTubingStateStreamResponse.props.opCode
-        {
-            let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
-            pumpManager.fillTubingStateStream.send(response)
-            return
-        }
-
         if characteristic.uuid == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
             let events = QualifyingEvent.fromRawBytes(data)
             guard !events.isEmpty else {
@@ -245,6 +237,22 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
                 // Acknowledge qualifying events
                 self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse)
             }
+            return
+        }
+
+        if characteristic.uuid == FillTubingStateStreamResponse.props.characteristic,
+           data[2] == FillTubingStateStreamResponse.props.opCode
+        {
+            let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.fillTubingStateStream.send(response)
+            return
+        }
+
+        if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+           data[2] == ErrorResponse.props.opCode
+        {
+            let response = ErrorResponse(cargo: Data(data.dropFirst(5)))
+            logger.error("Received error message: \(response.description)")
             return
         }
 

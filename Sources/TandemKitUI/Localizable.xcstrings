@@ -324,6 +324,9 @@
         }
       }
     },
+    "Api Version" : {
+
+    },
     "Are you starting a new sensor or connecting to an existing session?" : {
       "comment" : "G6 setup prompt",
       "localizations" : {
@@ -1469,6 +1472,9 @@
         }
       }
     },
+    "Find My Pump" : {
+
+    },
     "Finish" : {
       "comment" : "Text for finish button",
       "localizations" : {
@@ -2342,6 +2348,9 @@
         }
       }
     },
+    "Pump Information" : {
+
+    },
     "Pump is busy" : {
 
     },
@@ -2584,6 +2593,9 @@
         }
       }
     },
+    "Resume Insulin Delivery" : {
+
+    },
     "Resume insulin delivery?" : {
       "comment" : "Action sheet title",
       "localizations" : {
@@ -2683,6 +2695,9 @@
         }
       }
     },
+    "Serial Number" : {
+
+    },
     "Session Duration" : {
       "comment" : "Label for session duration",
       "localizations" : {
@@ -2781,6 +2796,9 @@
           }
         }
       }
+    },
+    "Software Version" : {
+
     },
     "Sound settings" : {
       "comment" : "Label for button to view sound settings of pump",
@@ -3050,6 +3068,9 @@
         }
       }
     },
+    "Suspend Insulin Delivery" : {
+
+    },
     "Suspend insulin delivery?" : {
       "comment" : "Action sheet title",
       "localizations" : {
@@ -3093,6 +3114,9 @@
           }
         }
       }
+    },
+    "Sync Pump Data" : {
+
     },
     "Tandem Mobi Pairing" : {
       "comment" : "Title for Mobi pairing",

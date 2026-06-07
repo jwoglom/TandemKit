@@ -191,24 +191,6 @@ struct TandemKitSettingsView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
-
-                            Spacer()
-
-                            Button(action: {
-                                viewModel.refreshPumpStatus()
-                            }) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundColor(.accentColor)
-                                    .opacity(viewModel.isRefreshing ? 0 : 1)
-                                    .overlay {
-                                        if viewModel.isRefreshing {
-                                            ProgressView()
-                                        }
-                                    }
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(viewModel.isRefreshing)
                         }
                         .padding(.top, 4)
                         Spacer()
@@ -460,11 +442,15 @@ struct TandemKitSettingsView: View {
                     }.disabled(true)
                 }
 
+                Button(action: { viewModel.refreshPumpStatus() }) {
+                    Text("Sync Pump Data", comment: "refresh pump data")
+                }
+
                 Button(action: {
                     activeAlert = .findPump
                 }) {
                     HStack {
-                        Text("Find my pump", comment: "Tandem find my pump")
+                        Text("Find My Pump", comment: "Tandem find my pump")
                         Spacer()
                         if viewModel.isPlayingSound {
                             ActivityIndicator(isAnimating: .constant(true), style: .medium)
@@ -478,6 +464,11 @@ struct TandemKitSettingsView: View {
                 "Pump Settings",
                 comment: "The title of the pump settings section in TandemKit settings"
             ))) {
+                navigationLink(
+                    label: Text("Pump Information", comment: "Title for pump information"),
+                    action: { viewModel.openPumpInformation() }
+                )
+
                 if viewModel.controlIQEnabled, let mode = viewModel.controlIQUserMode {
                     HStack {
                         Text("Control-IQ User mode", comment: "Text for Control-IQ user mode")
@@ -853,6 +844,7 @@ private extension TandemKitSettingsViewModel {
         // TODO: Create mock TandemPumpManager with populated state for preview
         let viewModel = PreviewTandemKitSettingsViewModel(
             nextStep: {},
+            openPumpInformation: {},
             openNotifications: {},
             openInsulinType: {},
             openSoundSettings: {},
@@ -871,6 +863,7 @@ private extension TandemKitSettingsViewModel {
     static var previewDataInProgress: TandemKitSettingsViewModel {
         let viewModel = PreviewTandemKitSettingsViewModel(
             nextStep: {},
+            openPumpInformation: {},
             openNotifications: {},
             openInsulinType: {},
             openSoundSettings: {},

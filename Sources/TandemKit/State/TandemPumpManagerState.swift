@@ -34,49 +34,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
     }
 
-    public enum HomeScreenBasalStatus: Int, RawRepresentable, Equatable {
-        case active = 0
-        case tempRate = 2
-        case suspended = 4
-
-        public static func fromBasalStatusIcon(
-            _ basalStatusIcon: HomeScreenMirrorResponse
-                .BasalStatusIcon
-        ) -> HomeScreenBasalStatus? {
-            switch basalStatusIcon {
-            case .basal:
-                return .active
-            case .tempRate,
-                 .zeroBasal,
-                 .zeroTempRate:
-                return .tempRate
-            case .hypoSuspendBasalIQ,
-                 .suspend:
-                return .suspended
-            default:
-                return nil as HomeScreenBasalStatus?
-            }
-        }
-    }
-
-    public enum HomeScreenBolusStatus: Int, RawRepresentable, Equatable {
-        case none = 200
-        case bolus = 0
-
-        public static func fromBolusStatusIcon(
-            _ bolusStatusIcon: HomeScreenMirrorResponse
-                .BolusStatusIcon
-        ) -> HomeScreenBolusStatus? {
-            switch bolusStatusIcon {
-            case .autoBolus,
-                 .bolus:
-                return .bolus
-            default:
-                return TandemPumpManagerState.HomeScreenBolusStatus.none
-            }
-        }
-    }
-
     public var onboarded: Bool = false
     public var pumpState: PumpState
     public var isConnected: Bool = false
@@ -87,7 +44,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
-    public var deliveryIsUncertain: Bool = false
+    public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
@@ -99,6 +56,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastPumpTimeCheckDate: Date?
 
     // Pump global settings
+    public var lastSettingsCheckedAt: Date?
     public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum?
@@ -134,9 +92,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     // Notification count
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
-    public var insulinType: InsulinType?
-    public var lastHistorySequenceNum: UInt32?
-    public var lastHistoryReconciliation: Date?
 
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
@@ -149,7 +104,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         isConnected = false // To prevent having an old isConnected state
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
-        deliveryIsUncertain = rawValue["deliveryIsUncertain"] as? Bool ?? false
         autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool ?? false
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
@@ -159,7 +113,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
         notificationCount = rawValue["notificationCount"] as? Int
-        lastHistorySequenceNum = rawValue["lastHistorySequenceNum"] as? UInt32
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
 
@@ -299,12 +252,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         } else {
             insulinType = nil
         }
-
-        if let lastHistoryInterval = rawValue["lastHistoryReconciliation"] as? TimeInterval {
-            lastHistoryReconciliation = Date(timeIntervalSinceReferenceDate: lastHistoryInterval)
-        } else {
-            lastHistoryReconciliation = nil
-        }
     }
 
     public var rawValue: RawValue {
@@ -314,7 +261,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["pumpState"] = pumpState.rawValue
         raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
         raw["latestInsulinOnBoard"] = latestInsulinOnBoard
-        raw["deliveryIsUncertain"] = deliveryIsUncertain
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
@@ -346,8 +292,6 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
-        raw["lastHistorySequenceNum"] = lastHistorySequenceNum
-        raw["lastHistoryReconciliation"] = lastHistoryReconciliation?.timeIntervalSinceReferenceDate
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
 
         let settingsRaw = settings.rawValue
@@ -399,7 +343,6 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* bolusState: \(bolusState)",
-            "* deliveryIsUncertain: \(deliveryIsUncertain)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",
@@ -641,16 +584,5 @@ private extension TandemPumpManagerState {
 
         let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
         return BasalRateSchedule(dailyItems: items, timeZone: timeZone)
-    }
-
-    static func reservoirValuesEqual(_ lhs: ReservoirValue?, _ rhs: ReservoirValue?) -> Bool {
-        switch (lhs, rhs) {
-        case (nil, nil):
-            return true
-        case let (left?, right?):
-            return left.startDate == right.startDate && left.unitVolume == right.unitVolume
-        default:
-            return false
-        }
     }
 }

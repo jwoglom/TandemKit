@@ -380,6 +380,8 @@
 		3EBE93E32FC494180048A57F /* Packetizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EBE93E22FC494130048A57F /* Packetizer.swift */; };
 		3EBE93E72FC4A0300048A57F /* BTResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EBE93E62FC4A02C0048A57F /* BTResponseParser.swift */; };
 		3ECD42E22F142F92007ADED9 /* ActivityViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */; };
+		3EDA3D912FD58EFC006EAD12 /* TandemKitPumpInformationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EDA3D902FD58EF4006EAD12 /* TandemKitPumpInformationView.swift */; };
+		3EDA3D932FD59E48006EAD12 /* TandemKitPumpInformationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EDA3D922FD59E40006EAD12 /* TandemKitPumpInformationViewModel.swift */; };
 		3EE345ED2EC912AE008A07F6 /* TandemKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345EB2EC912AE008A07F6 /* TandemKitPlugin.swift */; };
 		3EE345EF2EC912AE008A07F6 /* TandemKitPlugin.h in Headers */ = {isa = PBXBuildFile; fileRef = 3EE345EA2EC912AE008A07F6 /* TandemKitPlugin.h */; };
 		3EE345F52EC9130B008A07F6 /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
@@ -540,6 +542,8 @@
 		3EBE93E22FC494130048A57F /* Packetizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Packetizer.swift; sourceTree = "<group>"; };
 		3EBE93E62FC4A02C0048A57F /* BTResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BTResponseParser.swift; sourceTree = "<group>"; };
 		3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityViewController.swift; sourceTree = "<group>"; };
+		3EDA3D902FD58EF4006EAD12 /* TandemKitPumpInformationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPumpInformationView.swift; sourceTree = "<group>"; };
+		3EDA3D922FD59E40006EAD12 /* TandemKitPumpInformationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPumpInformationViewModel.swift; sourceTree = "<group>"; };
 		3EE344162EC91286008A07F6 /* Locked.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Locked.swift; sourceTree = "<group>"; };
 		3EE344392EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlIQInfoRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443A2EC91299008A07F6 /* CurrentBatteryRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentBatteryRequestBuilder.swift; sourceTree = "<group>"; };
@@ -1008,6 +1012,7 @@
 			isa = PBXGroup;
 			children = (
 				1A55E0F12EC9666F006E651D /* TandemKitSettingsView.swift */,
+				3EDA3D902FD58EF4006EAD12 /* TandemKitPumpInformationView.swift */,
 				DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */,
 				3E53DB832F13E81800D84398 /* TandemKitInsulinType.swift */,
 				3E0F4D452F2662BC008290A3 /* TandemKitSoundSettingsView.swift */,
@@ -1039,6 +1044,7 @@
 		3EB8073E2FBCDAD70075D19E /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				3EDA3D922FD59E40006EAD12 /* TandemKitPumpInformationViewModel.swift */,
 				3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */,
 				3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */,
 				1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */,
@@ -1927,6 +1933,7 @@
 				3EB808522FBCDCF50075D19E /* SetLowInsulinAlert.swift in Sources */,
 				3EB808532FBCDCF50075D19E /* StartDexcomG6SensorSession.swift in Sources */,
 				3EB808542FBCDCF50075D19E /* StopDexcomCGMSensorSession.swift in Sources */,
+				3EDA3D912FD58EFC006EAD12 /* TandemKitPumpInformationView.swift in Sources */,
 				3EB808552FBCDCF50075D19E /* SetSensorType.swift in Sources */,
 				3EB808562FBCDCF50075D19E /* SetMissedMealBolusReminder.swift in Sources */,
 				3EB808572FBCDCF50075D19E /* SetMaxBasalLimit.swift in Sources */,
@@ -2043,6 +2050,7 @@
 				3EB807CF2FBCDCD70075D19E /* AlertActivatedHistoryLog.swift in Sources */,
 				3EB807D02FBCDCD70075D19E /* CgmAnnuSettingsHistoryLog.swift in Sources */,
 				3EB807D12FBCDCD70075D19E /* NewDayHistoryLog.swift in Sources */,
+				3EDA3D932FD59E48006EAD12 /* TandemKitPumpInformationViewModel.swift in Sources */,
 				3EBE93E32FC494180048A57F /* Packetizer.swift in Sources */,
 				3EB807D22FBCDCD70075D19E /* HypoMinimizerSuspendHistoryLog.swift in Sources */,
 				3EB807D32FBCDCD70075D19E /* CgmSensorTypeChangeHistoryLog.swift in Sources */,

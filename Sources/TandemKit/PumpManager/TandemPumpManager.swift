@@ -259,15 +259,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            self.fetchDeliveryLimits()
+            let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
+            if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
+                self.fetchControlIQStatus()
+                self.fetchDeliveryLimits()
+                self.fetchGlobalPumpSettings()
+                self.fetchPumpInformation()
+
+                self.state.lastSettingsCheckedAt = Date.now
+            }
+
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus()
             self.fetchBasalStatus()
-            self.fetchControlIQStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
-            self.fetchGlobalPumpSettings()
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
@@ -507,6 +514,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 // We only needed to cancel any current temp basal
                 // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
+
+                let dose = UnfinalizedDose(
+                    basalRate: self.getScheduledBasalRate(),
+                    insulinType: self.state.insulinType,
+                    startDate: Date.now
+                )
+                var events = self.getActivePumpEvents(endDate: dose.startDate)
+                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+
+                self.state.basalDose = dose
+                self.state.lastReconciliation = dose.startDate
+
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+
                 completion(nil)
                 return
             }
