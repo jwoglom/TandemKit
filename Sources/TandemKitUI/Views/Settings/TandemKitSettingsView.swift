@@ -443,10 +443,12 @@ struct TandemKitSettingsView: View {
                 }
 
                 Button(action: { viewModel.refreshPumpStatus() }) {
-                    Text("Sync Pump Data", comment: "refresh pump data")
-                    Spacer()
-                    if viewModel.isRefreshing {
-                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    HStack {
+                        Text("Sync Pump Data", comment: "refresh pump data")
+                        Spacer()
+                        if viewModel.isRefreshing {
+                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                        }
                     }
                 }
                 .disabled(viewModel.isRefreshing)

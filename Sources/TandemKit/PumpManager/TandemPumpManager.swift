@@ -521,7 +521,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     startDate: Date.now
                 )
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
                 self.state.basalDose = dose
                 self.state.lastReconciliation = dose.startDate
