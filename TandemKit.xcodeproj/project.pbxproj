@@ -356,19 +356,14 @@
 		3EB8087B2FBCDD060075D19E /* Dates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444D2EC91299008A07F6 /* Dates.swift */; };
 		3EB8087C2FBCDD060075D19E /* TimeInterval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344492EC91299008A07F6 /* TimeInterval.swift */; };
 		3EB8087E2FBCDD060075D19E /* Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344482EC91299008A07F6 /* Data.swift */; };
-		3EB808802FBCDD110075D19E /* InsulinDeliveryProfileRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */; };
-		3EB808812FBCDD110075D19E /* IOBRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */; };
 		3EB808832FBCDD110075D19E /* CurrentBatteryRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443A2EC91299008A07F6 /* CurrentBatteryRequestBuilder.swift */; };
 		3EB808852FBCDD110075D19E /* Hkdf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443C2EC91299008A07F6 /* Hkdf.swift */; };
-		3EB808862FBCDD110075D19E /* PumpFeaturesRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */; };
 		3EB808872FBCDD110075D19E /* SwiftECCJpakeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */; };
-		3EB808882FBCDD110075D19E /* SwiftECCPreloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344452EC91299008A07F6 /* SwiftECCPreloader.swift */; };
 		3EB8088A2FBCDD110075D19E /* HmacSha256.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443D2EC91299008A07F6 /* HmacSha256.swift */; };
 		3EB8088B2FBCDD110075D19E /* EcJpake.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443B2EC91299008A07F6 /* EcJpake.swift */; };
 		3EB8088C2FBCDD110075D19E /* ControlIQInfoRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344392EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift */; };
 		3EB808902FBCDD110075D19E /* IDPManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066632B7C69B4CEFB5782A14 /* IDPManager.swift */; };
 		3EB808912FBCDD110075D19E /* JpakeAuthBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */; };
-		3EB808982FBCDD2E0075D19E /* Locked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344162EC91286008A07F6 /* Locked.swift */; };
 		3EB808A52FBCDE230075D19E /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = 3EB808A42FBCDE230075D19E /* SwiftECC */; };
 		3EB808A72FBCDE290075D19E /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 3EB808A62FBCDE290075D19E /* BigInt */; };
 		3EB808A92FBCDE360075D19E /* Digest in Frameworks */ = {isa = PBXBuildFile; productRef = 3EB808A82FBCDE360075D19E /* Digest */; };
@@ -544,17 +539,12 @@
 		3ECD42E12F142F92007ADED9 /* ActivityViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityViewController.swift; sourceTree = "<group>"; };
 		3EDA3D902FD58EF4006EAD12 /* TandemKitPumpInformationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPumpInformationView.swift; sourceTree = "<group>"; };
 		3EDA3D922FD59E40006EAD12 /* TandemKitPumpInformationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitPumpInformationViewModel.swift; sourceTree = "<group>"; };
-		3EE344162EC91286008A07F6 /* Locked.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Locked.swift; sourceTree = "<group>"; };
 		3EE344392EC91299008A07F6 /* ControlIQInfoRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlIQInfoRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443A2EC91299008A07F6 /* CurrentBatteryRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentBatteryRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE3443B2EC91299008A07F6 /* EcJpake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EcJpake.swift; sourceTree = "<group>"; };
 		3EE3443C2EC91299008A07F6 /* Hkdf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hkdf.swift; sourceTree = "<group>"; };
 		3EE3443D2EC91299008A07F6 /* HmacSha256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HmacSha256.swift; sourceTree = "<group>"; };
-		3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsulinDeliveryProfileRequestBuilder.swift; sourceTree = "<group>"; };
-		3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOBRequestBuilder.swift; sourceTree = "<group>"; };
 		3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JpakeAuthBuilder.swift; sourceTree = "<group>"; };
-		3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFeaturesRequestBuilder.swift; sourceTree = "<group>"; };
-		3EE344452EC91299008A07F6 /* SwiftECCPreloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftECCPreloader.swift; sourceTree = "<group>"; };
 		3EE344472EC91299008A07F6 /* Collection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Collection.swift; sourceTree = "<group>"; };
 		3EE344482EC91299008A07F6 /* Data.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Data.swift; sourceTree = "<group>"; };
 		3EE344492EC91299008A07F6 /* TimeInterval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeInterval.swift; sourceTree = "<group>"; };
@@ -1123,14 +1113,10 @@
 				3EE3443B2EC91299008A07F6 /* EcJpake.swift */,
 				3EE3443C2EC91299008A07F6 /* Hkdf.swift */,
 				3EE3443D2EC91299008A07F6 /* HmacSha256.swift */,
-				3EE3443E2EC91299008A07F6 /* InsulinDeliveryProfileRequestBuilder.swift */,
 				066632B7C69B4CEFB5782A14 /* IDPManager.swift */,
-				3EE3443F2EC91299008A07F6 /* IOBRequestBuilder.swift */,
 				3EE344402EC91299008A07F6 /* JpakeAuthBuilder.swift */,
 				3EBE93E02FC490780048A57F /* JpakeStep.swift */,
 				3EE346AC2EC91299008A07F6 /* SwiftECCJpakeProvider.swift */,
-				3EE344432EC91299008A07F6 /* PumpFeaturesRequestBuilder.swift */,
-				3EE344452EC91299008A07F6 /* SwiftECCPreloader.swift */,
 			);
 			path = Builders;
 			sourceTree = "<group>";
@@ -1163,7 +1149,6 @@
 				3EE344532EC91299008A07F6 /* SHA256.swift */,
 				3E61F1022FBE389500DD98E6 /* UnfinalizedDose.swift */,
 				0285725C1CCC62600819B327 /* SimpleReservoirValue.swift */,
-				3EE344162EC91286008A07F6 /* Locked.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -1912,13 +1897,9 @@
 				3EB808492FBCDCF50075D19E /* CancelBolus.swift in Sources */,
 				3EB8084A2FBCDCF50075D19E /* DisconnectPump.swift in Sources */,
 				3EB8084B2FBCDCF50075D19E /* AdditionalBolus.swift in Sources */,
-				3EB808802FBCDD110075D19E /* InsulinDeliveryProfileRequestBuilder.swift in Sources */,
-				3EB808812FBCDD110075D19E /* IOBRequestBuilder.swift in Sources */,
 				3EB808832FBCDD110075D19E /* CurrentBatteryRequestBuilder.swift in Sources */,
 				3EB808852FBCDD110075D19E /* Hkdf.swift in Sources */,
-				3EB808862FBCDD110075D19E /* PumpFeaturesRequestBuilder.swift in Sources */,
 				3EB808872FBCDD110075D19E /* SwiftECCJpakeProvider.swift in Sources */,
-				3EB808882FBCDD110075D19E /* SwiftECCPreloader.swift in Sources */,
 				3EB8088A2FBCDD110075D19E /* HmacSha256.swift in Sources */,
 				3EB8088B2FBCDD110075D19E /* EcJpake.swift in Sources */,
 				3EB8088C2FBCDD110075D19E /* ControlIQInfoRequestBuilder.swift in Sources */,
@@ -2073,7 +2054,6 @@
 				3EB807442FBCDCAB0075D19E /* NotificationBundle.swift in Sources */,
 				3E945F052F2E103300F38431 /* NibLoadable.swift in Sources */,
 				3ECD42E22F142F92007ADED9 /* ActivityViewController.swift in Sources */,
-				3EB808982FBCDD2E0075D19E /* Locked.swift in Sources */,
 				1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */,
 				16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */,
 				D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */,

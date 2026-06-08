@@ -179,22 +179,19 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    VStack {
-                        HStack {
-                            if let battery = viewModel.batteryPercentage {
-                                HStack(spacing: 4) {
-                                    Image(systemName: batteryIconName(battery))
-                                        .font(.system(size: 16))
-                                        .foregroundColor(batteryColor(battery))
-                                    Text("\(battery)")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.secondary)
-                                }
+                    VStack(alignment: .leading) {
+                        if let battery = viewModel.batteryPercentage {
+                            HStack(alignment: .top, spacing: 4) {
+                                Image(systemName: batteryIconName(battery))
+                                    .font(.system(size: 16))
+                                    .foregroundColor(batteryColor(battery))
+                                Text("\(battery)")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.secondary)
                             }
                         }
-                        .padding(.top, 4)
-                        Spacer()
                     }
+                    .padding(.top, 4)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
@@ -214,141 +211,6 @@ struct TandemKitSettingsView: View {
                     reservoirStatus
                 }
                 .padding(.bottom, 5)
-                .alert(item: $activeAlert) { alertType in
-                    switch alertType {
-                    case .switchToCIQ:
-                        return Alert(
-                            title: Text(String(
-                                format: String(
-                                    localized: "Disable %@ Algorithm",
-                                    comment: "Title for alert to switch from DIY to Control-IQ"
-                                ),
-                                viewModel.algorithmName
-                            )),
-                            message: Text(String(
-                                format: String(
-                                    localized: "This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?",
-                                    comment: "Message for alert to switch from DIY to Control-IQ"
-                                ),
-                                viewModel.appName,
-                                viewModel.appName
-                            )),
-                            primaryButton: .default(Text(
-                                "Switch to Control-IQ",
-                                comment: "Button to confirm switching to Control-IQ algorithm"
-                            )) {
-                                viewModel.switchAlgorithmToControlIQ()
-                            },
-                            secondaryButton: .cancel()
-                        )
-                    case .switchToDIY:
-                        return Alert(
-                            title: Text(String(
-                                format: String(
-                                    localized: "Enable %@ Algorithm",
-                                    comment: "Title for alert to switch from Control-IQ to DIY"
-                                ),
-                                viewModel.algorithmName
-                            )),
-                            message: Text(String(
-                                format: String(
-                                    localized: "This will disable Control-IQ on your pump and allow %@ to resume %@ closed-loop dosing.",
-                                    comment: "Message for alert to switch from Control-IQ to DIY"
-                                ),
-                                viewModel.appName,
-                                viewModel.algorithmName
-                            )),
-                            primaryButton: .default(Text(String(
-                                format: String(
-                                    localized: "Switch to %@",
-                                    comment: "Button to confirm switching to DIY algorithm"
-                                ),
-                                viewModel.algorithmName
-                            ))) {
-                                viewModel.switchAlgorithmToDIY()
-                            },
-                            secondaryButton: .cancel()
-                        )
-                    case .diyRestored:
-                        return Alert(
-                            title: Text(String(format: String(
-                                localized: "%@ Mode Restored",
-                                comment: "Title for DIY mode restored notice"
-                            ), viewModel.algorithmName)),
-                            message: Text(String(format: String(
-                                localized:
-                                "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
-                                comment: "Message for DIY mode restored notice"
-                            ), viewModel.algorithmName)),
-                            dismissButton: .default(Text("OK"))
-                        )
-                    case .noCGMConnected:
-                        return Alert(
-                            title: Text("No CGM Connected", comment: "Title for no CGM connected warning"),
-                            message: Text(
-                                "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below.",
-                                comment: "Message for no CGM connected warning after enabling Control-IQ"
-                            ),
-                            dismissButton: .default(Text("OK"))
-                        )
-                    case .findPump:
-                        return Alert(
-                            title: Text("Find my pump", comment: "Find pump alert title"),
-                            message: Text(
-                                "The pump will vibrate and make sounds to help you identify its location.",
-                                comment: "Find pump alert message"
-                            ),
-                            primaryButton: .default(
-                                Text("Continue", comment: "Continue button"),
-                                action: { viewModel.playSound() }
-                            ),
-                            secondaryButton: .cancel()
-                        )
-                    case .stopTempRate:
-                        return Alert(
-                            title: Text("Temp Basal Active", comment: "Stop temp rate alert title"),
-                            message: Text(stopTempRateMessage),
-                            primaryButton: .destructive(
-                                Text("Stop Temp Rate", comment: "Stop temp rate button"),
-                                action: {
-                                    if viewModel.isClosedLoopEnabled {
-                                        DispatchQueue.main.async {
-                                            activeAlert = .stopTempRateClosedLoopWarning
-                                        }
-                                    } else {
-                                        viewModel.stopTempRate()
-                                    }
-                                }
-                            ),
-                            secondaryButton: .cancel()
-                        )
-                    case .stopTempRateClosedLoopWarning:
-                        return Alert(
-                            title: Text("WARNING", comment: "Closed loop temp rate warning title"),
-                            message: Text(
-                                "Closed loop is currently enabled. Cancelling the active temp rate on the pump will NOT place you in open-loop mode, and the next run of the oref algorithm will set a new temp rate.",
-                                comment: "Closed loop temp rate warning message"
-                            ),
-                            primaryButton: .destructive(
-                                Text("I Understand", comment: "Closed loop temp rate warning confirm button"),
-                                action: { viewModel.stopTempRate() }
-                            ),
-                            secondaryButton: .cancel()
-                        )
-                    }
-                }
-                .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
-                    if show {
-                        activeAlert = .diyRestored
-                        viewModel.showReenableClosedLoopPrompt = false
-                    }
-                }
-                .onChange(of: viewModel.showNoCGMWarning) { show in
-                    if show {
-                        activeAlert = .noCGMConnected
-                        viewModel.showNoCGMWarning = false
-                    }
-                }
 
                 if !viewModel.isConnected {
                     statusBanner(
@@ -600,6 +462,141 @@ struct TandemKitSettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .sheet(item: $viewModel.commandFailure) { failure in
             errorSheetView(for: failure)
+        }
+        .alert(item: $activeAlert) { alertType in
+            switch alertType {
+            case .switchToCIQ:
+                return Alert(
+                    title: Text(String(
+                        format: String(
+                            localized: "Disable %@ Algorithm",
+                            comment: "Title for alert to switch from DIY to Control-IQ"
+                        ),
+                        viewModel.algorithmName
+                    )),
+                    message: Text(String(
+                        format: String(
+                            localized: "This will DISABLE %@ in favor of the Control-IQ algorithm built-in to your pump.\n\n%@ will stop issuing temp basals and boluses. Are you sure?",
+                            comment: "Message for alert to switch from DIY to Control-IQ"
+                        ),
+                        viewModel.appName,
+                        viewModel.appName
+                    )),
+                    primaryButton: .default(Text(
+                        "Switch to Control-IQ",
+                        comment: "Button to confirm switching to Control-IQ algorithm"
+                    )) {
+                        viewModel.switchAlgorithmToControlIQ()
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .switchToDIY:
+                return Alert(
+                    title: Text(String(
+                        format: String(
+                            localized: "Enable %@ Algorithm",
+                            comment: "Title for alert to switch from Control-IQ to DIY"
+                        ),
+                        viewModel.algorithmName
+                    )),
+                    message: Text(String(
+                        format: String(
+                            localized: "This will disable Control-IQ on your pump and allow %@ to resume %@ closed-loop dosing.",
+                            comment: "Message for alert to switch from Control-IQ to DIY"
+                        ),
+                        viewModel.appName,
+                        viewModel.algorithmName
+                    )),
+                    primaryButton: .default(Text(String(
+                        format: String(
+                            localized: "Switch to %@",
+                            comment: "Button to confirm switching to DIY algorithm"
+                        ),
+                        viewModel.algorithmName
+                    ))) {
+                        viewModel.switchAlgorithmToDIY()
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .diyRestored:
+                return Alert(
+                    title: Text(String(format: String(
+                        localized: "%@ Mode Restored",
+                        comment: "Title for DIY mode restored notice"
+                    ), viewModel.algorithmName)),
+                    message: Text(String(format: String(
+                        localized:
+                        "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
+                        comment: "Message for DIY mode restored notice"
+                    ), viewModel.algorithmName)),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .noCGMConnected:
+                return Alert(
+                    title: Text("No CGM Connected", comment: "Title for no CGM connected warning"),
+                    message: Text(
+                        "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below.",
+                        comment: "Message for no CGM connected warning after enabling Control-IQ"
+                    ),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .findPump:
+                return Alert(
+                    title: Text("Find my pump", comment: "Find pump alert title"),
+                    message: Text(
+                        "The pump will vibrate and make sounds to help you identify its location.",
+                        comment: "Find pump alert message"
+                    ),
+                    primaryButton: .default(
+                        Text("Continue", comment: "Continue button"),
+                        action: { viewModel.playSound() }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            case .stopTempRate:
+                return Alert(
+                    title: Text("Temp Basal Active", comment: "Stop temp rate alert title"),
+                    message: Text(stopTempRateMessage),
+                    primaryButton: .destructive(
+                        Text("Stop Temp Rate", comment: "Stop temp rate button"),
+                        action: {
+                            if viewModel.isClosedLoopEnabled {
+                                DispatchQueue.main.async {
+                                    activeAlert = .stopTempRateClosedLoopWarning
+                                }
+                            } else {
+                                viewModel.stopTempRate()
+                            }
+                        }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            case .stopTempRateClosedLoopWarning:
+                return Alert(
+                    title: Text("WARNING", comment: "Closed loop temp rate warning title"),
+                    message: Text(
+                        "Closed loop is currently enabled. Cancelling the active temp rate on the pump will NOT place you in open-loop mode, and the next run of the oref algorithm will set a new temp rate.",
+                        comment: "Closed loop temp rate warning message"
+                    ),
+                    primaryButton: .destructive(
+                        Text("I Understand", comment: "Closed loop temp rate warning confirm button"),
+                        action: { viewModel.stopTempRate() }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            }
+        }
+        .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
+            if show {
+                activeAlert = .diyRestored
+                viewModel.showReenableClosedLoopPrompt = false
+            }
+        }
+        .onChange(of: viewModel.showNoCGMWarning) { show in
+            if show {
+                activeAlert = .noCGMConnected
+                viewModel.showNoCGMWarning = false
+            }
         }
         .navigationBarItems(trailing: doneButton)
         .navigationBarTitle(navigationTitle)
