@@ -287,11 +287,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func toggleSilentMode() {
-        pumpManager?.configureSilentMode(!useSilentMode)
-        useSilentMode = !useSilentMode
-    }
-
     func syncPumpTime() {
         guard let pumpManager = pumpManager else {
             return

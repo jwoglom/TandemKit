@@ -165,6 +165,18 @@ class TandemBluetoothManager: NSObject {
 extension TandemBluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         logger.info("\(String(describing: central.state.rawValue))")
+        
+        guard central.state == .poweredOn else {
+            return
+        }
+
+        ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to auto-reconnect: \(error)")
+            } else {
+                self.logger.info("Auto-reconnected completed!")
+            }
+        }
     }
 
     func centralManager(

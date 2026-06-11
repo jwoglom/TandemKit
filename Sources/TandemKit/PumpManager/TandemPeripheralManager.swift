@@ -11,6 +11,7 @@ class TandemPeripheralManager: NSObject {
 
     private var readQueue: (TandemDispatchGroup, CBUUID)?
     private var writeQueue: (TandemDispatchGroup, UInt8)?
+    private let writeSemaphore = DispatchSemaphore(value: 1)
     private var commandLock: TandemDispatchGroup?
     private var currentTxId: UInt8 = 0
 
@@ -63,6 +64,9 @@ class TandemPeripheralManager: NSObject {
     }
 
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+        // Wait until previous write calls have been completed
+        self.writeSemaphore.wait()
+        
         let requestProps = type(of: message).props
         guard let characteristic = getCharacteristic(
             serviceUUID: ServiceUUID.PUMP_SERVICE,
@@ -81,6 +85,7 @@ class TandemPeripheralManager: NSObject {
 
         defer {
             writeQueue = nil
+            writeSemaphore.signal()
         }
 
         var response = ResponseMessage()
