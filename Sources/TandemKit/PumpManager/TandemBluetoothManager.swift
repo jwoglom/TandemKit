@@ -12,6 +12,8 @@ class TandemBluetoothManager: NSObject {
 
     private var scanCompletion: ((_ result: TandemPumpScan) -> Void)?
     private var connectCompletion: ((Error?) -> Void)?
+    private let connectionQueue = DispatchQueue(label: "com.jwoglom.TandemKit.ensureConnected")
+    private let connectionSemaphore = DispatchSemaphore(value: 1)
 
     override init() {
         super.init()
@@ -83,57 +85,63 @@ class TandemBluetoothManager: NSObject {
     }
 
     func ensureConnected(completion: @escaping (Error?) -> Void) {
-        let localCompletion: (Error?) -> Void = { error in
-            self.connectCompletion = nil
+        connectionQueue.async {
+            // Wait until previous ensureConnected calls have been completed
+            self.connectionSemaphore.wait()
 
-            DispatchQueue.global(qos: .userInitiated).async {
-                completion(error)
+            let localCompletion: (Error?) -> Void = { error in
+                self.connectCompletion = nil
+                
+                DispatchQueue.global(qos: .userInitiated).async {
+                    completion(error)
+                    self.connectionSemaphore.signal()
+                }
             }
-        }
-
-        if let peripheral, peripheral.state == .connected {
-            localCompletion(nil)
-            return
-        }
-
-        if let peripheral {
-            // We've the peripheral reference to a previous connection
-            // Just try to reconnect
-            connect(peripheral) { error in
-                localCompletion(error)
-            }
-            return
-        }
-
-        let connectedDevices = manager?.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]) ?? []
-        if let peripheral = connectedDevices.first {
-            // Phone is already connected, but the app is not
-            connect(peripheral) { error in
-                localCompletion(error)
-            }
-            return
-        }
-
-        guard let indentifier = pumpManager?.state.pumpState.peripheralUuid else {
-            logger.error("No identifier available to scan for...")
-            localCompletion(PumpCommError.pumpNotConnected)
-            return
-        }
-
-        let scanStarted = startScan { result in
-            guard result.bleIdentifier == indentifier else {
+            
+            if let peripheral = self.peripheral, peripheral.state == .connected {
+                localCompletion(nil)
                 return
             }
-
-            self.logger.debug("Found pump, reconnecting! \(result.peripheral)")
-            self.connect(result.peripheral) { error in
-                localCompletion(error)
+            
+            if let peripheral = self.peripheral {
+                // We've the peripheral reference to a previous connection
+                // Just try to reconnect
+                self.connect(peripheral) { error in
+                    localCompletion(error)
+                }
+                return
             }
-        }
-
-        if !scanStarted {
-            localCompletion(PumpCommError.pumpNotConnected)
-            return
+            
+            let connectedDevices = self.manager?.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]) ?? []
+            if let peripheral = connectedDevices.first {
+                // Phone is already connected, but the app is not
+                self.connect(peripheral) { error in
+                    localCompletion(error)
+                }
+                return
+            }
+            
+            guard let indentifier = self.pumpManager?.state.pumpState.peripheralUuid else {
+                self.logger.error("No identifier available to scan for...")
+                localCompletion(PumpCommError.pumpNotConnected)
+                return
+            }
+            
+            let scanStarted = self.startScan { result in
+                guard result.bleIdentifier == indentifier else {
+                    return
+                }
+                
+                self.logger.debug("Found pump, reconnecting! \(result.peripheral)")
+                self.connect(result.peripheral) { error in
+                    localCompletion(error)
+                }
+            }
+            
+            if !scanStarted {
+                localCompletion(PumpCommError.pumpNotConnected)
+                return
+            }
         }
     }
 

@@ -1316,6 +1316,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     self.fetchBasalStatus()
                 case .alert:
                     self.fetchNotifications()
+                case .battery:
+                    self.fetchBatteryStatus()
                 default:
                     self.logger.info("Skipping event: \(qualifyingEvent)")
                 }
