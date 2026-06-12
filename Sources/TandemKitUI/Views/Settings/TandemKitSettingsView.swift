@@ -169,7 +169,7 @@ struct TandemKitSettingsView: View {
     var body: some View {
         List {
             Section {
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     Image(imageName: "tandem_mobi")
                         .resizable()
                         .rotationEffect(.degrees(90))
