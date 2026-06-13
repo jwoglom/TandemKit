@@ -703,6 +703,12 @@
         }
       }
     },
+    "ConfigA Bits" : {
+
+    },
+    "ConfigB Bits" : {
+
+    },
     "Configure how your pump handles alerts and notifications." : {
       "comment" : "Description for alert settings",
       "localizations" : {
@@ -2091,6 +2097,9 @@
         }
       }
     },
+    "PCBA serial" : {
+
+    },
     "Pick up your pump, wait a second, then double-press the T button" : {
       "comment" : "Double-tap explanation",
       "localizations" : {
@@ -2445,6 +2454,9 @@
           }
         }
       }
+    },
+    "Pump serial" : {
+
     },
     "Pump Settings" : {
       "comment" : "The title of the pump settings section in TandemKit settings",

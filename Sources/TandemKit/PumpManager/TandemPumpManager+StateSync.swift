@@ -71,7 +71,11 @@ extension TandemPumpManager {
         }
 
         state.pumpState.pumpSerial = pumpVersionResponse.serialNumber
+        state.pumpState.modelNumber = pumpVersionResponse.modelNumber
         state.pumpState.softwareName = pumpVersionResponse.softwareName
+        state.pumpState.controlBitsA = pumpVersionResponse.configurationBitsA
+        state.pumpState.controlBitsB = pumpVersionResponse.configurationBitsB
+        state.pumpState.pcbSerialNumber = pumpVersionResponse.pcbSerialNumberA
         state.pumpState.pumpModel = PumpModel(rawValue: pumpVersionResponse.modelNumber)
 
 //        BleSoftwareInfoRequest
