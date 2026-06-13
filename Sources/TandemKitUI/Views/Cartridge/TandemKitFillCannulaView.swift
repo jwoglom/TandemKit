@@ -12,7 +12,6 @@ struct TandemKitFillCannulaView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: String(localized: "Fill Cannula", comment: "Title for fill cannula"),
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 3,
             canCancel: !viewModel.isProcessing && viewModel.currentStep != .done,

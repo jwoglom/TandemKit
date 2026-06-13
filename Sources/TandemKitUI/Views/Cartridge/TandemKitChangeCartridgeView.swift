@@ -10,7 +10,6 @@ struct TandemKitChangeCartridgeView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: String(localized: "Change Cartridge", comment: "Title for change cartridge"),
             currentStep: viewModel.currentStep.rawValue + 1,
             totalSteps: 6,
             canCancel: !viewModel.isProcessing,

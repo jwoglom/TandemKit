@@ -2,7 +2,7 @@ import SwiftUI
 
 /// A container view for wizard-style flows that displays step progress and manages navigation.
 struct WizardStepContainer<Content: View>: View {
-    let title: String
+    let title: String?
     let currentStep: Int
     let totalSteps: Int
     let canCancel: Bool
@@ -12,7 +12,7 @@ struct WizardStepContainer<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     init(
-        title: String,
+        title: String? = nil,
         currentStep: Int,
         totalSteps: Int,
         canCancel: Bool,
@@ -32,6 +32,14 @@ struct WizardStepContainer<Content: View>: View {
     }
 
     var body: some View {
+        if let title {
+            steps.navigationBarTitle(title, displayMode: .inline)
+        } else {
+            steps
+        }
+    }
+
+    private var steps: some View {
         VStack(spacing: 0) {
             WizardProgressBar(current: currentStep, total: totalSteps)
 
@@ -44,7 +52,6 @@ struct WizardStepContainer<Content: View>: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(modalLocker)
-        .navigationBarTitle(title, displayMode: .inline)
         .navigationBarBackButtonHidden(!canCancel)
         .navigationBarItems(trailing: canCancel ? cancelButton : nil)
         .interactiveDismissDisabled(disableInteractiveDismiss || !canCancel)
