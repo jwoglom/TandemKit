@@ -34,7 +34,7 @@ struct TandemKitControlIQSettingsView: View {
                 ContinueButton(
                     text: Text("Save", comment: "Save action"),
                     loading: $viewModel.isLoading,
-                    disabled: $viewModel.isDirty,
+                    disabled: $viewModel.disabled,
                 ) {
                     viewModel.saveControlIQSettings()
                 }
