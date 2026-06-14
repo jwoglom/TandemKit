@@ -46,7 +46,8 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var detectingProgress: Int = 0
     @Published var isDetecting = false
 
-    @Published var activeActionSheet: FillCannulaActionSheet?
+    @Published var showingSuspendConfirmation = false
+    @Published var showingCancelConfirmation = false
 
     let done: () -> Void
     let toFillTubing: () -> Void

@@ -19,14 +19,6 @@ enum CannulaFillStep: Int {
     }
 }
 
-enum FillCannulaActionSheet: Int, Identifiable {
-    case suspend
-    case resume
-    case cancel
-
-    var id: Int { rawValue }
-}
-
 class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var currentStep: CannulaFillStep = .suspend
     @Published var isSuspended: Bool? = nil
@@ -44,7 +36,9 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var failedResume = false
     @Published var resumeSucceeded = false
 
-    @Published var activeActionSheet: FillCannulaActionSheet?
+    @Published var showingSuspendConfirmation = false
+    @Published var showingCancelConfirmation = false
+    @Published var showingResumeConfirmation = false
 
     let done: () -> Void
     private let pumpManager: TandemPumpManager?
