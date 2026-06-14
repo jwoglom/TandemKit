@@ -45,9 +45,7 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var hasDisplayedFlow = false
     @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
 
-    @Published var showingSuspendConfirmation = false
-    @Published var showingCancelConfirmation = false
-    @Published var showingResumeConfirmation = false
+    @Published var activeActionSheet: FillCannulaActionSheet?
 
     let done: () -> Void
     let toFillingCannula: () -> Void

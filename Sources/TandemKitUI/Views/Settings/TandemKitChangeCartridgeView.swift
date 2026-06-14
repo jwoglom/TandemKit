@@ -28,11 +28,15 @@ struct TandemKitChangeCartridgeView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
+        .actionSheet(item: $viewModel.activeActionSheet) { sheet in
+            switch sheet {
+            case .suspend:
+                return suspendInsulinSheet
+            case .cancel:
+                return cancelOperationSheet
+            case .resume:
+                return cancelOperationSheet
+            }
         }
         .task {
             guard !didLoad else { return }
@@ -72,7 +76,7 @@ struct TandemKitChangeCartridgeView: View {
                     text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
-                    viewModel.showingSuspendConfirmation = true
+                    viewModel.activeActionSheet = .suspend
                 }
             }
         case .enterMode:
@@ -507,7 +511,7 @@ struct TandemKitChangeCartridgeView: View {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
             viewModel.done()
         } else {
-            viewModel.showingCancelConfirmation = true
+            viewModel.activeActionSheet = .cancel
         }
     }
 

@@ -31,14 +31,15 @@ struct TandemKitFillCannulaView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(isPresented: $viewModel.showingCancelConfirmation) {
-            cancelOperationSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingResumeConfirmation) {
-            resumeInsulinSheet
-        }
-        .actionSheet(isPresented: $viewModel.showingSuspendConfirmation) {
-            suspendInsulinSheet
+        .actionSheet(item: $viewModel.activeActionSheet) { sheet in
+            switch sheet {
+            case .suspend:
+                return suspendInsulinSheet
+            case .resume:
+                return resumeInsulinSheet
+            case .cancel:
+                return cancelOperationSheet
+            }
         }
         .task {
             guard !didLoad else { return }
@@ -77,7 +78,7 @@ struct TandemKitFillCannulaView: View {
                     text: Text("Suspend insulin delivery", comment: "Button to suspend"),
                     loading: $viewModel.loadingSuspend
                 ) {
-                    viewModel.showingSuspendConfirmation = true
+                    viewModel.activeActionSheet = .suspend
                 }
             }
         case .enterAmount:
@@ -92,7 +93,7 @@ struct TandemKitFillCannulaView: View {
                 text: Text("Resume insulin delivery", comment: "Button text"),
                 loading: $viewModel.loadingResume
             ) {
-                viewModel.showingResumeConfirmation = true
+                viewModel.activeActionSheet = .resume
             }
         }
     }
@@ -262,7 +263,7 @@ struct TandemKitFillCannulaView: View {
         if viewModel.currentStep == .suspend || viewModel.currentStep == .done {
             viewModel.done()
         } else {
-            viewModel.showingCancelConfirmation = true
+            viewModel.activeActionSheet = .cancel
         }
     }
 
