@@ -6,7 +6,7 @@ public final class NonexistentErrorRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         variableSize: true
     )
 

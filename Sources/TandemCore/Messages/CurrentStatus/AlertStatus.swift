@@ -6,7 +6,7 @@ public class AlertStatusRequest: Message {
         opCode: 68,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class AlertStatusResponse: Message, NotificationMessage {
         opCode: 69,
         size: 8,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

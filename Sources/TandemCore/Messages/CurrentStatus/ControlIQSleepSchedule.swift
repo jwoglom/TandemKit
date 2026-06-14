@@ -6,7 +6,7 @@ public class ControlIQSleepScheduleRequest: Message {
         opCode: 106,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class ControlIQSleepScheduleResponse: Message {
         opCode: 107,
         size: 24,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

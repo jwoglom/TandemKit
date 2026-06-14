@@ -1,262 +1,139 @@
 import Foundation
-#if canImport(os)
-    import os.log
-#endif
+import OSLog
 
-/// Unified logging system for TandemKit with file persistence.
-/// Modeled after DanaKit and MedtrumKit logging implementations.
 public final class TandemLogger {
-    private let category: String
-    private static let subsystem = "com.jwoglom.TandemKit"
-
-    #if canImport(os)
-        private let osLog: os.Logger
-    #endif
-
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        return formatter
-    }()
-
-    private static let fileManager = FileManager.default
-    private static let fileQueue = DispatchQueue(label: "com.jwoglom.TandemKit.logger.file")
-
-    public enum Level: Int, CaseIterable, Comparable {
-        case trace = 0
-        case debug = 1
-        case info = 2
-        case warning = 3
-        case error = 4
-
-        public var description: String {
-            switch self {
-            case .trace: return "TRACE"
-            case .debug: return "DEBUG"
-            case .info: return "INFO"
-            case .warning: return "WARN"
-            case .error: return "ERROR"
-            }
-        }
-
-        #if canImport(os)
-            var osLogType: OSLogType {
-                switch self {
-                case .trace: return .debug
-                case .debug: return .debug
-                case .info: return .info
-                case .warning: return .default
-                case .error: return .error
-                }
-            }
-        #endif
-
-        public static func < (lhs: Level, rhs: Level) -> Bool {
-            lhs.rawValue < rhs.rawValue
-        }
-    }
+    private let logger: Logger
+    private let fileManager = FileManager.default
 
     public init(category: String) {
-        self.category = category
-        #if canImport(os)
-            osLog = os.Logger(subsystem: TandemLogger.subsystem, category: category)
-        #endif
+        logger = Logger(subsystem: "com.jwoglom.TandemKit", category: category)
     }
 
-    // MARK: - Public Logging Methods
-
-    /// Trace-level logging. Written to file only, not console.
-    public func trace(
-        _ message: @autoclosure () -> String,
-        file: String = #file,
-        function: String = #function,
-        line: Int = #line
-    ) {
-        log(.trace, message(), file: file, function: function, line: line)
+    public func debug(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        let message = "\(file.file) - \(function)#\(line): \(msg)"
+        logger.debug("\(message, privacy: .public)")
     }
 
-    /// Debug-level logging. Written to both console and file.
-    public func debug(
-        _ message: @autoclosure () -> String,
-        file: String = #file,
-        function: String = #function,
-        line: Int = #line
-    ) {
-        log(.debug, message(), file: file, function: function, line: line)
+    public func info(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        let message = "\(file.file) - \(function)#\(line): \(msg)"
+        logger.info("\(message, privacy: .public)")
+        writeToFile(message, .info)
     }
 
-    /// Info-level logging. Written to both console and file.
-    public func info(
-        _ message: @autoclosure () -> String,
-        file: String = #file,
-        function: String = #function,
-        line: Int = #line
-    ) {
-        log(.info, message(), file: file, function: function, line: line)
+    public func warning(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        let message = "\(file.file) - \(function)#\(line): \(msg)"
+        logger.warning("\(message, privacy: .public)")
+        writeToFile(message, .notice)
     }
 
-    /// Warning-level logging. Written to both console and file.
-    public func warning(
-        _ message: @autoclosure () -> String,
-        file: String = #file,
-        function: String = #function,
-        line: Int = #line
-    ) {
-        log(.warning, message(), file: file, function: function, line: line)
+    public func error(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        let message = "\(file.file) - \(function)#\(line): \(msg)"
+        logger.error("\(message, privacy: .public)")
+        writeToFile(message, .error)
     }
 
-    /// Error-level logging. Written to both console and file.
-    public func error(
-        _ message: @autoclosure () -> String,
-        file: String = #file,
-        function: String = #function,
-        line: Int = #line
-    ) {
-        log(.error, message(), file: file, function: function, line: line)
-    }
-
-    // MARK: - Core Logging
-
-    private func log(
-        _ level: Level,
-        _ message: String,
-        file: String,
-        function: String,
-        line: Int
-    ) {
-        let filename = file.file
-        let formattedMessage = "[\(category)] \(message) (\(filename):\(function):\(line))"
-
-        // Write to console (OSLog) - except for trace level
-        if level != .trace {
-            #if canImport(os)
-                osLog.log(level: level.osLogType, "\(formattedMessage, privacy: .public)")
-            #else
-                print("[\(level.description)] \(formattedMessage)")
-            #endif
+    private func writeToFile(_ msg: String, _ type: OSLogEntryLog.Level) {
+        if !fileManager.fileExists(atPath: logDir) {
+            try? fileManager.createDirectory(
+                atPath: logDir,
+                withIntermediateDirectories: false,
+                attributes: nil
+            )
         }
 
-        // Always write to file
-        let timestamp = TandemLogger.dateFormatter.string(from: Date())
-        let fileEntry = "[\(timestamp) \(level.description)] \(formattedMessage)\n"
-        TandemLogger.writeToFile(fileEntry)
+        if !fileManager.fileExists(atPath: logFile) {
+            createFile(at: startOfDay)
+        } else if let attributes = try? fileManager.attributesOfItem(atPath: logFile),
+                  let creationDate = attributes[.creationDate] as? Date, creationDate < startOfDay
+        {
+            try? fileManager.removeItem(atPath: logFilePrev)
+            try? fileManager.moveItem(atPath: logFile, toPath: logFilePrev)
+            createFile(at: startOfDay)
+        }
+
+        let logEntry = "[\(dateFormatter.string(from: Date())) \(getLevel(type))] \(msg)\n"
+        let data = logEntry.data(using: .utf8)!
+        try? data.append(fileURL: URL(fileURLWithPath: logFile))
     }
 
-    // MARK: - File Management
-
-    private static func getDocumentsDirectory() -> URL {
-        fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    private var logFile: String {
+        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log.txt").path
     }
 
-    private static func getLogDirectory() -> URL {
-        getDocumentsDirectory().appendingPathComponent("tandemkit", isDirectory: true)
+    private var logDir: String {
+        getDocumentsDirectory().appendingPathComponent("tandem").path
     }
 
-    private static var logFile: URL {
-        getLogDirectory().appendingPathComponent("tandemkit_log.txt")
+    private var logFilePrev: String {
+        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log_prev.txt").path
     }
 
-    private static var prevLogFile: URL {
-        getLogDirectory().appendingPathComponent("tandemkit_log_prev.txt")
+    private var startOfDay: Date {
+        Calendar.current.startOfDay(for: Date())
     }
 
-    private static func writeToFile(_ entry: String) {
-        fileQueue.async {
-            do {
-                let logDir = getLogDirectory()
+    private func getDocumentsDirectory() -> URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let documentsDirectory = paths[0]
+        return documentsDirectory
+    }
 
-                // Create directory if needed
-                if !fileManager.fileExists(atPath: logDir.path) {
-                    try fileManager.createDirectory(at: logDir, withIntermediateDirectories: true)
-                }
+    private var dateFormatter: DateFormatter {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+        return dateFormatter
+    }
 
-                let logFileURL = logFile
+    private func createFile(at date: Date) {
+        fileManager.createFile(atPath: logFile, contents: nil, attributes: [.creationDate: date])
+    }
 
-                // Check if we need to rotate logs (new day)
-                if fileManager.fileExists(atPath: logFileURL.path) {
-                    if let attrs = try? fileManager.attributesOfItem(atPath: logFileURL.path),
-                       let creationDate = attrs[.creationDate] as? Date,
-                       !Calendar.current.isDateInToday(creationDate)
-                    {
-                        // Rotate: move current to prev
-                        let prevURL = prevLogFile
-                        if fileManager.fileExists(atPath: prevURL.path) {
-                            try? fileManager.removeItem(at: prevURL)
-                        }
-                        try? fileManager.moveItem(at: logFileURL, to: prevURL)
-                    }
-                }
-
-                // Create file if needed
-                if !fileManager.fileExists(atPath: logFileURL.path) {
-                    let header = "TandemKit Log - Created \(dateFormatter.string(from: Date()))\n"
-                    try header.data(using: .utf8)?.write(to: logFileURL)
-                }
-
-                // Append entry
-                if let data = entry.data(using: .utf8) {
-                    try data.append(to: logFileURL)
-                }
-            } catch {
-                // Silently fail - don't want logging to crash the app
-                #if DEBUG
-                    print("TandemLogger file write error: \(error)")
-                #endif
-            }
+    private func getLevel(_ type: OSLogEntryLog.Level) -> String {
+        switch type {
+        case .info:
+            return "INFO"
+        case .notice:
+            return "WARNING"
+        case .error:
+            return "ERROR"
+        case .fault:
+            return "FAULT"
+        case .debug:
+            return "DEBUG"
+        default:
+            return "UNKNOWN"
         }
     }
 
-    /// Returns URLs for available log files (current and previous).
-    public static func getDebugLogs() -> [URL] {
-        var logs: [URL] = []
-        if fileManager.fileExists(atPath: logFile.path) {
-            logs.append(logFile)
-        }
-        if fileManager.fileExists(atPath: prevLogFile.path) {
-            logs.append(prevLogFile)
-        }
-        return logs
-    }
+    func getDebugLogs() -> [URL] {
+        var items: [URL] = []
 
-    /// Returns combined content of all log files.
-    public static func getDebugLogContent() -> String {
-        var content = ""
-        for url in getDebugLogs() {
-            if let data = try? Data(contentsOf: url),
-               let text = String(data: data, encoding: .utf8)
-            {
-                content += text
-                content += "\n--- End of \(url.lastPathComponent) ---\n\n"
-            }
+        if fileManager.fileExists(atPath: logFile) {
+            items.append(URL(fileURLWithPath: logFile))
         }
-        return content
-    }
 
-    /// Clears all log files.
-    public static func clearLogs() {
-        fileQueue.async {
-            try? fileManager.removeItem(at: logFile)
-            try? fileManager.removeItem(at: prevLogFile)
+        if fileManager.fileExists(atPath: logFilePrev) {
+            items.append(URL(fileURLWithPath: logFilePrev))
         }
+
+        return items
     }
 }
 
-// MARK: - Extensions
-
 private extension Data {
-    func append(to url: URL) throws {
-        if let fileHandle = try? FileHandle(forWritingTo: url) {
-            defer { try? fileHandle.close() }
+    func append(fileURL: URL) throws {
+        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
+            defer {
+                fileHandle.closeFile()
+            }
             fileHandle.seekToEndOfFile()
             fileHandle.write(self)
         } else {
-            try write(to: url)
+            try write(to: fileURL, options: .atomic)
         }
     }
 }
 
 private extension String {
-    var file: String {
-        (self as NSString).lastPathComponent.replacingOccurrences(of: ".swift", with: "")
-    }
+    var file: String { components(separatedBy: "/").last ?? "" }
 }

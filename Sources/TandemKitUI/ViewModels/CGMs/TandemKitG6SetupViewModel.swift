@@ -1,0 +1,104 @@
+import LoopKit
+import SwiftUI
+
+enum G6SetupStep: Int {
+    case landing = 0
+    case sensorDetails = 1
+    case connectExisting = 2
+}
+
+class TandemKitG6SetupViewModel: ObservableObject {
+    @Published var currentStep: G6SetupStep = .landing
+    @Published var transmitterId: String = ""
+    @Published var sensorCode: String = ""
+    @Published var isLoading: Bool = false
+    @Published var error: String?
+    @Published var didComplete: Bool = false
+
+    private let pumpManager: TandemPumpManager?
+
+    init(pumpManager: TandemPumpManager?) {
+        self.pumpManager = pumpManager
+    }
+
+    // MARK: - Navigation
+
+    func goToSensorDetails() {
+        withAnimation {
+            currentStep = .sensorDetails
+        }
+    }
+
+    func goToConnectExisting() {
+        withAnimation {
+            currentStep = .connectExisting
+        }
+    }
+
+    // MARK: - Validation
+
+    var isTransmitterIdValid: Bool {
+        transmitterId.count == 6 && transmitterId.allSatisfy { $0.isLetter || $0.isNumber }
+    }
+
+    var isSensorCodeValid: Bool {
+        sensorCode.count == 4 && sensorCode.allSatisfy { $0.isNumber }
+    }
+
+    var canStartSensor: Bool {
+        isTransmitterIdValid && isSensorCodeValid
+    }
+
+    var canConnectExisting: Bool {
+        isTransmitterIdValid
+    }
+
+    // MARK: - Connect to Existing Session
+
+    func connectToExistingSession() {
+        guard canConnectExisting else { return }
+
+        error = nil
+        isLoading = true
+
+        let txId = transmitterId.uppercased()
+        pumpManager?.connectToG6CGM(txId: txId, code: nil) { success in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.didComplete = success
+
+                if !success {
+                    self.error = String(
+                        localized: "Failed to set transmitter.",
+                        comment: "Error when pump is not connected"
+                    )
+                }
+            }
+        }
+    }
+
+    // MARK: - Start Sensor
+
+    func startNewSensor() {
+        guard canStartSensor else { return }
+
+        error = nil
+        isLoading = true
+
+        let txId = transmitterId.uppercased()
+        let code = Int(sensorCode) ?? 0
+        pumpManager?.connectToG6CGM(txId: txId, code: code) { success in
+            DispatchQueue.main.async {
+                self.isLoading = false
+                self.didComplete = success
+
+                if !success {
+                    self.error = String(
+                        localized: "Failed to start CGM sensor",
+                        comment: "Error when pump is not connected"
+                    )
+                }
+            }
+        }
+    }
+}

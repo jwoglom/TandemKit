@@ -6,7 +6,7 @@ public class CGMRateAlertSettingsRequest: Message {
         opCode: 92,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class CGMRateAlertSettingsResponse: Message {
         opCode: 93,
         size: 6,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

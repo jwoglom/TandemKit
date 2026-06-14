@@ -6,7 +6,7 @@ public class CGMStatusRequest: Message {
         opCode: 80,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class CGMStatusResponse: Message {
         opCode: 81,
         size: 10,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

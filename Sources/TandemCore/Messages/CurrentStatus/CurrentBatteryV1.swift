@@ -6,7 +6,7 @@ public class CurrentBatteryV1Request: Message {
         opCode: 52,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class CurrentBatteryV1Response: Message {
         opCode: 53,
         size: 2,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

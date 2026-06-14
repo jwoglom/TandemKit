@@ -6,7 +6,7 @@ public class PrimeTubingSuspendRequest: Message {
         opCode: UInt8(bitPattern: Int8(-18)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -36,7 +36,7 @@ public class PrimeTubingSuspendResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-17)),
         size: 3,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

@@ -1,4 +1,5 @@
 import Foundation
+import LoopKit
 
 /// Request information about the current basal delivery rate.
 public class CurrentBasalStatusRequest: Message {
@@ -6,7 +7,7 @@ public class CurrentBasalStatusRequest: Message {
         opCode: 40,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,18 +31,37 @@ public class CurrentBasalStatusResponse: Message {
         opCode: 41,
         size: 9,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
-    public var profileBasalRate: UInt32
-    public var currentBasalRate: UInt32
     public var basalModifiedBitmask: Int
+    private var rawProfileBasalRate: UInt32
+    private var rawCurrentBasalRate: UInt32
+
+    public var basalType: DoseType {
+        switch basalModifiedBitmask {
+        case 0x01:
+            return .suspend
+        case 0x02:
+            return .tempBasal
+        default:
+            return .basal
+        }
+    }
+
+    public var profileBasalRate: Double {
+        Double(rawProfileBasalRate) / 1000.0
+    }
+
+    public var currentBasalRate: Double {
+        Double(rawCurrentBasalRate) / 1000.0
+    }
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        profileBasalRate = Bytes.readUint32(cargo, 0)
-        currentBasalRate = Bytes.readUint32(cargo, 4)
+        rawProfileBasalRate = Bytes.readUint32(cargo, 0)
+        rawCurrentBasalRate = Bytes.readUint32(cargo, 4)
         basalModifiedBitmask = Int(cargo[8])
     }
 
@@ -51,14 +71,9 @@ public class CurrentBasalStatusResponse: Message {
             Bytes.toUint32(currentBasalRate),
             Bytes.firstByteLittleEndian(basalModifiedBitmask)
         )
-        self.profileBasalRate = profileBasalRate
-        self.currentBasalRate = currentBasalRate
+        rawProfileBasalRate = profileBasalRate
+        rawCurrentBasalRate = currentBasalRate
         self.basalModifiedBitmask = basalModifiedBitmask
-    }
-
-    /// Human-readable representation of the current basal rate in units per hour.
-    public var currentBasalRateForDisplay: String {
-        String(format: "%.2f U/hr", Double(currentBasalRate) / 1000.0)
     }
 
     public var description: String {

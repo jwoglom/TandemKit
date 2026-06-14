@@ -6,7 +6,7 @@ public class ControlIQInfoV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-78)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -31,7 +31,7 @@ public class ControlIQInfoV2Response: ControlIQInfoAbstractResponse {
             opCode: UInt8(bitPattern: Int8(-77)),
             size: 19,
             type: .Response,
-            characteristic: .CURRENT_STATUS_CHARACTERISTICS
+            characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
         )
     }
 

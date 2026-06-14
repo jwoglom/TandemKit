@@ -6,7 +6,7 @@ public class NonexistentPrimeNudgeStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -31,7 +31,7 @@ public class PrimeNudgeStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-23)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )

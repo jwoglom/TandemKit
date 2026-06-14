@@ -7,7 +7,7 @@ public class ControlIQInfoAbstractResponse: Message {
             opCode: 0,
             size: 0,
             type: .Response,
-            characteristic: .CURRENT_STATUS_CHARACTERISTICS
+            characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
         )
     }
 

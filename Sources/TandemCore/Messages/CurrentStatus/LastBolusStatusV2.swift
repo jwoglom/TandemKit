@@ -6,7 +6,7 @@ public class LastBolusStatusV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-92)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 
@@ -31,7 +31,7 @@ public class LastBolusStatusV2Response: Message, LastBolusStatusAbstractResponse
         opCode: UInt8(bitPattern: Int8(-91)),
         size: 24,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiV2_5
     )
 

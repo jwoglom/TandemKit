@@ -6,7 +6,7 @@ public class CurrentActiveIdpValuesRequest: Message {
         opCode: UInt8(bitPattern: Int8(-106)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -41,7 +41,7 @@ public class CurrentActiveIdpValuesResponse: Message {
         opCode: UInt8(bitPattern: Int8(-105)),
         size: 10,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

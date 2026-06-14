@@ -6,7 +6,7 @@ public class CancelBolusRequest: Message {
         opCode: UInt8(bitPattern: Int8(-96)),
         size: 4,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )
@@ -38,7 +38,7 @@ public class CancelBolusResponse: Message {
         opCode: UInt8(bitPattern: Int8(-95)),
         size: 5,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )

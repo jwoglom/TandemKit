@@ -5,7 +5,7 @@ public class ActiveAamBitsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-110)),
         size: 1,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5
     )
 
@@ -29,7 +29,7 @@ public class ActiveAamBitsResponse: Message {
         opCode: UInt8(bitPattern: Int8(-109)),
         size: 17,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5
     )
 

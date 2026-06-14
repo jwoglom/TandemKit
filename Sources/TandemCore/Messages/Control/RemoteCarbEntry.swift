@@ -6,7 +6,7 @@ public class RemoteCarbEntryRequest: Message {
         opCode: UInt8(bitPattern: Int8(-14)),
         size: 9,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )
@@ -49,7 +49,7 @@ public class RemoteCarbEntryResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-13)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .apiV2_5
     )

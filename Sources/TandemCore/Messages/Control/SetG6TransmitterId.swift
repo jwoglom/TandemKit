@@ -6,7 +6,7 @@ public class SetG6TransmitterIdRequest: Message {
         opCode: UInt8(bitPattern: Int8(-80)),
         size: 16,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
@@ -41,7 +41,7 @@ public class SetG6TransmitterIdResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-79)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly

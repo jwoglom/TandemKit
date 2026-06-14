@@ -1,19 +1,5 @@
-//
-//  QualifyingEvent.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Swift representation of PumpX2's QualifyingEvent enumeration.
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/qualifyingEvent/QualifyingEvent.java
-//
 import Foundation
 
-/// Message factories used to fetch additional details for a qualifying event.
-public typealias MessageFactory = () -> Message
-
-/// A list of events which can be emitted by the pump, along with suggested
-/// request messages that may be sent to obtain further details.
 public enum QualifyingEvent: CaseIterable {
     case alert
     case alarm
@@ -46,7 +32,6 @@ public enum QualifyingEvent: CaseIterable {
     case heartbeat
     case bolusPermissionRevoked
 
-    /// Identifier used in bitmasks from the pump.
     public var id: UInt32 {
         switch self {
         case .alert: return 1
@@ -81,187 +66,18 @@ public enum QualifyingEvent: CaseIterable {
         case .bolusPermissionRevoked: return 2_147_483_648
         }
     }
-
-    /// Suggested request messages to handle this event. These mirror the
-    /// behavior of Tandem's mobile applications which, upon receiving a
-    /// qualifying event, issue follow-up requests for additional context.
-    ///
-    /// The factories return concrete `Message` types which may be dispatched
-    /// to the pump to retrieve those details.
-    @MainActor public var suggestedHandlers: [MessageFactory] {
-        switch self {
-        case .alert:
-            return [{ AlertStatusRequest() }]
-        case .alarm:
-            return [
-                { AlarmStatusRequest() },
-                { HighestAamRequest() },
-                { Self.activeAamBitsRequest(aamType: 2) }
-            ]
-        case .reminder:
-            return [{ ReminderStatusRequest() }]
-        case .malfunction:
-            return [
-                { MalfunctionStatusRequest() },
-                { HighestAamRequest() },
-                { Self.activeAamBitsRequest(aamType: 4) }
-            ]
-        case .cgmAlert:
-            return [{ CGMAlertStatusRequest() }]
-        case .homeScreenChange:
-            return [
-                { CurrentBasalStatusRequest() },
-                { CurrentEGVGuiDataRequest() },
-                { HomeScreenMirrorRequest() },
-                {
-                    ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) }
-            ]
-        case .pumpSuspend:
-            return [
-                { InsulinStatusRequest() },
-                { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) }
-            ]
-        case .pumpResume:
-            return [
-                { InsulinStatusRequest() },
-                { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
-                { CurrentEGVGuiDataRequest() },
-                { ProfileStatusRequest() }
-            ]
-        case .timeChange:
-            return [
-                { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
-                { CGMStatusRequest() },
-                { TimeSinceResetRequest() }
-            ]
-        case .basalChange:
-            return [
-                { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
-                { HomeScreenMirrorRequest() },
-                { CurrentBasalStatusRequest() },
-                { TempRateRequest() }
-            ]
-        case .bolusChange:
-            return [
-                { CurrentBolusStatusRequest() },
-                { ExtendedBolusStatusRequest() },
-                { Self.lastBolus() }
-            ]
-        case .iobChange:
-            return [{ IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) }]
-        case .extendedBolusChange:
-            return [
-                { ExtendedBolusStatusRequest() },
-                { Self.lastBolus() }
-            ]
-        case .profileChange:
-            return [{ ProfileStatusRequest() }]
-        case .bg:
-            return [{ LastBGRequest() }]
-        case .cgmChange:
-            return [
-                { CGMStatusRequest() },
-                { CurrentEGVGuiDataRequest() },
-                { HomeScreenMirrorRequest() }
-            ]
-        case .battery:
-            return [{
-                CurrentBatteryRequestBuilder
-                    .create(apiVersion: PumpStateSupplier.pumpApiVersion) }]
-        case .basalIQ:
-            return [{ BasalIQSettingsRequest() }]
-        case .remainingInsulin:
-            return [{ InsulinStatusRequest() }]
-        case .pumpCommunicationsSuspended:
-            return []
-        case .activeProfileSegmentChange:
-            return [{ ProfileStatusRequest() }]
-        case .basalIQStatus:
-            return [{ BasalIQSettingsRequest() }, { BasalIQStatusRequest() }]
-        case .controlIQInfo:
-            return [
-                { IOBRequestBuilder.create(controlIQ: PumpStateSupplier.controlIQSupported()) },
-                {
-                    ControlIQInfoRequestBuilder
-                        .create(apiVersion: PumpStateSupplier.pumpApiVersion) },
-                { ControlIQSleepScheduleRequest() }
-            ]
-        case .controlIQSleep:
-            return [{ ControlIQSleepScheduleRequest() }]
-        case .globalPumpSettings:
-            return [
-                { GlobalMaxBolusSettingsRequest() },
-                { BasalLimitSettingsRequest() },
-                { LocalizationRequest() },
-                { PumpGlobalsRequest() },
-                { PumpSettingsRequest() }
-            ]
-        case .snoozeStatus:
-            return []
-        case .pumpingStatus:
-            return [{ LoadStatusRequest() }]
-        case .pumpReset:
-            return []
-        case .heartbeat:
-            return []
-        case .bolusPermissionRevoked:
-            return [{
-                let bolusId = PumpStateSupplier.currentBolusId?() ?? 0
-                return BolusPermissionChangeReasonRequest(bolusId: bolusId)
-            }]
-        }
-    }
-
-    /// Convert a bitmask into a set of QualifyingEvents.
-    public static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
-        var ret: Set<QualifyingEvent> = []
-        for event in QualifyingEvent.allCases {
-            if (bitmask & event.id) != 0 {
-                ret.insert(event)
-            }
-        }
-        return ret
-    }
-
-    /// Parse a 4-byte little-endian bitmask from raw Bluetooth data.
+    
     public static func fromRawBytes(_ raw: Data) -> Set<QualifyingEvent> {
         fromBitmask(Bytes.readUint32(raw, 0))
     }
-
-    /// Return suggested request messages for a set of events.
-    @MainActor public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
-        var messages: [Message] = []
-        for e in events {
-            for factory in e.suggestedHandlers {
-                messages.append(factory())
-            }
-        }
-        // remove duplicates by opcode
-        var seen: Set<UInt8> = []
-        messages = messages.filter { msg in
-            let op = type(of: msg).props.opCode
-            if seen.contains(op) { return false }
-            seen.insert(op)
-            return true
-        }
-        return messages
-    }
-
-    /// Construct a bitmask from multiple events.
-    public static func toBitmask(_ events: [QualifyingEvent]) -> UInt32 {
-        events.reduce(0) { $0 | $1.id }
-    }
-
-    private static func activeAamBitsRequest(aamType: UInt8) -> ActiveAamBitsRequest {
-        ActiveAamBitsRequest(cargo: Data([aamType]))
-    }
     
-    private static func lastBolus() -> Message {
-        if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
-            return LastBolusStatusV2Request()
-        } else {
-            return LastBolusStatusRequest()
-        }
-    }
+    private static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
+       var ret: Set<QualifyingEvent> = []
+       for event in QualifyingEvent.allCases {
+           if (bitmask & event.id) != 0 {
+               ret.insert(event)
+           }
+       }
+       return ret
+   }
 }

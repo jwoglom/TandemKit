@@ -5,7 +5,7 @@ public class UnknownMobiOpcodeNeg124Request: Message {
         opCode: UInt8(bitPattern: Int8(-124)),
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
@@ -31,7 +31,7 @@ public class UnknownMobiOpcodeNeg124Response: Message {
         opCode: UInt8(bitPattern: Int8(-123)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly

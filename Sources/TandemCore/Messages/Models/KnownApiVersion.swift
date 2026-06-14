@@ -22,6 +22,10 @@ public struct ApiVersion: Sendable, RawRepresentable, Equatable {
 
         return rawValue
     }
+
+    public var description: String {
+        "\(major).\(minor)"
+    }
 }
 
 /// Known API versions

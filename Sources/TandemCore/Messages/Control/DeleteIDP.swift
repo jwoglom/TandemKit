@@ -6,7 +6,7 @@ public class DeleteIDPRequest: Message {
         opCode: UInt8(bitPattern: Int8(-82)),
         size: 2,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly
@@ -42,7 +42,7 @@ public class DeleteIDPResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-81)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly

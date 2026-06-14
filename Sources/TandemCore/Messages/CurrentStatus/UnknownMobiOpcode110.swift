@@ -6,7 +6,7 @@ public class UnknownMobiOpcode110Request: Message {
         opCode: 110,
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )
@@ -32,7 +32,7 @@ public class UnknownMobiOpcode110Response: Message {
         opCode: 111,
         size: 4,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )

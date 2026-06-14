@@ -6,7 +6,7 @@ public class CGMStatusV2Request: Message {
         opCode: UInt8(bitPattern: Int8(-66)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )
@@ -42,7 +42,7 @@ public class CGMStatusV2Response: Message {
         opCode: UInt8(bitPattern: Int8(-65)),
         size: 20,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly
     )

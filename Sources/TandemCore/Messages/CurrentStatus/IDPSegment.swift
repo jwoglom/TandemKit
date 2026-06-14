@@ -6,7 +6,7 @@ public class IDPSegmentRequest: Message {
         opCode: 66,
         size: 2,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -39,7 +39,7 @@ public class IDPSegmentResponse: Message {
         opCode: 67,
         size: 15,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

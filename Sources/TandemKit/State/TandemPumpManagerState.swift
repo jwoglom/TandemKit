@@ -1,0 +1,588 @@
+import Foundation
+import HealthKit
+import LoopKit
+
+public struct TandemPumpManagerState: RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public struct BatteryReading: Equatable {
+        public let date: Date
+        public let chargeRemaining: Double
+
+        public init(date: Date, chargeRemaining: Double) {
+            self.date = date
+            self.chargeRemaining = chargeRemaining
+        }
+    }
+
+    public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
+        case standard = 0
+        case sleep = 1
+        case exercise = 2
+
+        public static func fromUserModeType(_ userModeType: ControlIQInfoAbstractResponse.UserModeType) -> ControlIQUserMode? {
+            switch userModeType {
+            case .standard:
+                return .standard
+            case .sleep:
+                return .sleep
+            case .exercise:
+                return .exercise
+            default:
+                return nil as ControlIQUserMode?
+            }
+        }
+    }
+
+    public var onboarded: Bool = false
+    public var pumpState: PumpState
+    public var isConnected: Bool = false
+    public var lastReconciliation: Date?
+    public var settings: TandemPumpManagerSettings = .default
+    public var latestInsulinOnBoard: Double?
+    public var lastReservoirReading: ReservoirValue?
+    public var lastBatteryReading: BatteryReading?
+    public var lastBasalStatusDate: Date?
+    public var bolusState: PumpManagerStatus.BolusState = .noBolus
+    public var insulinType: InsulinType?
+    public var bolusDose: UnfinalizedDose?
+    public var basalDose: UnfinalizedDose
+    public var basalRateSchedule: BasalRateSchedule
+    public var autoAcknowledgeBasalAlerts: Bool = false
+    public var useSilentTones: Bool = false
+
+    // Pump time
+    public var currentPumpTime: Date?
+    public var lastPumpTimeCheckDate: Date?
+
+    // Pump global settings
+    public var lastSettingsCheckedAt: Date?
+    public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum?
+
+    // Quick bolus settings (from PumpGlobalsResponse)
+    public var quickBolusEnabled: Bool?
+    public var quickBolusEntryType: Int?
+    public var quickBolusIncrementUnits: Int?
+    public var quickBolusIncrementCarbs: Int?
+    public var quickBolusStatus: Int?
+
+    // Delivery limits (from BasalLimitSettingsResponse / GlobalMaxBolusSettingsResponse)
+    public var maxBasalLimitMilliunits: Int?
+    public var maxBasalLimitDefaultMilliunits: Int?
+    public var maxBolusLimitMilliunits: Int?
+    public var maxBolusLimitDefaultMilliunits: Int?
+
+    // Control-IQ state
+    public var useControlIQ: Bool = false
+    public var pendingEnableClosedLoop: Bool = false
+    public var controlIQEnabled: Bool?
+    public var controlIQUserMode: ControlIQUserMode?
+    public var controlIQWeight: Int?
+    public var controlIQTotalDailyInsulin: Int?
+    public var lastControlIQUpdate: Date?
+
+    // Alert snooze settings
+    public var alertSnoozeEnabled: Bool = false
+    public var alertSnoozeDuration: TimeInterval = .minutes(10)
+
+    // Notification count
+    public var notificationCount: Int?
+    public var lastNotificationUpdate: Date?
+
+    public init(basalRateSchedule: BasalRateSchedule) {
+        self.basalRateSchedule = basalRateSchedule
+        pumpState = PumpState()
+        basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
+    }
+
+    public init(rawValue: RawValue) {
+        onboarded = rawValue["onboarded"] as? Bool ?? false
+        isConnected = false // To prevent having an old isConnected state
+        latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
+        useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
+        autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool ?? false
+        useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
+        pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
+        controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
+        controlIQWeight = rawValue["controlIQWeight"] as? Int
+        controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
+        alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
+        alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
+        notificationCount = rawValue["notificationCount"] as? Int
+        currentPumpTime = rawValue["currentPumpTime"] as? Date
+        lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
+
+        if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
+            pumpState = PumpState(rawValue: pumpStateRaw)
+        } else {
+            pumpState = PumpState()
+        }
+
+        if let lastReconciliationInterval = rawValue["lastReconciliation"] as? TimeInterval {
+            lastReconciliation = Date(timeIntervalSinceReferenceDate: lastReconciliationInterval)
+        } else {
+            lastReconciliation = nil
+        }
+
+        if let settingsRaw = rawValue["settings"] as? TandemPumpManagerSettings.RawValue,
+           let decodedSettings = TandemPumpManagerSettings(rawValue: settingsRaw)
+        {
+            settings = decodedSettings
+        } else {
+            settings = .default
+        }
+
+        if let reservoirRaw = rawValue["lastReservoirReading"] as? [String: Any] {
+            lastReservoirReading = TandemPumpManagerState.decodeReservoirValue(from: reservoirRaw)
+        } else {
+            lastReservoirReading = nil
+        }
+
+        if let batteryRaw = rawValue["lastBatteryReading"] as? [String: Any] {
+            lastBatteryReading = TandemPumpManagerState.decodeBatteryReading(from: batteryRaw)
+        } else {
+            lastBatteryReading = nil
+        }
+
+        if let lastBasalDateInterval = rawValue["lastBasalStatusDate"] as? TimeInterval {
+            lastBasalStatusDate = Date(timeIntervalSinceReferenceDate: lastBasalDateInterval)
+        } else {
+            lastBasalStatusDate = nil
+        }
+
+        if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
+            bolusDose = UnfinalizedDose(rawValue: bolusDoseRaw)
+        } else {
+            bolusDose = nil
+        }
+
+        if let bolusRaw = rawValue["bolusState"] as? [String: Any],
+           let decodedBolusState = TandemPumpManagerState.decodeBolusState(from: bolusRaw)
+        {
+            bolusState = decodedBolusState
+        } else {
+            bolusState = .noBolus
+        }
+
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
+        }
+
+        if let scheduleRaw = rawValue["basalRateSchedule"] as? [String: Any] {
+            basalRateSchedule = TandemPumpManagerState
+                .decodeBasalSchedule(from: scheduleRaw) ??
+                BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
+        } else {
+            basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
+        }
+
+        if let rawDoseEntry = rawValue["basalDose"] as? UnfinalizedDose.RawValue {
+            basalDose = UnfinalizedDose(rawValue: rawDoseEntry) ?? UnfinalizedDose
+                .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: insulinType)
+        } else {
+            basalDose = UnfinalizedDose.defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: insulinType)
+        }
+
+        if let modeRaw = rawValue["controlIQUserMode"] as? Int {
+            controlIQUserMode = ControlIQUserMode(rawValue: modeRaw)
+        } else {
+            controlIQUserMode = nil
+        }
+
+        if let quickBolusAnnunRaw = rawValue["quickBolusAnnun"] as? Int {
+            quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnunRaw)
+        } else {
+            quickBolusAnnun = nil
+        }
+
+        if let reminderAnnunRaw = rawValue["reminderAnnun"] as? Int {
+            reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnunRaw)
+        } else {
+            reminderAnnun = nil
+        }
+
+        if let alertAnnunRaw = rawValue["alertAnnun"] as? Int {
+            alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnunRaw)
+        } else {
+            alertAnnun = nil
+        }
+
+        if let alarmAnnunRaw = rawValue["alarmAnnun"] as? Int {
+            alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnunRaw)
+        } else {
+            alarmAnnun = nil
+        }
+
+        if let generalAnnunRaw = rawValue["generalAnnun"] as? Int {
+            generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnunRaw)
+        } else {
+            generalAnnun = nil
+        }
+
+        quickBolusEnabled = rawValue["quickBolusEnabled"] as? Bool
+        quickBolusEntryType = rawValue["quickBolusEntryType"] as? Int
+        quickBolusIncrementUnits = rawValue["quickBolusIncrementUnits"] as? Int
+        quickBolusIncrementCarbs = rawValue["quickBolusIncrementCarbs"] as? Int
+        quickBolusStatus = rawValue["quickBolusStatus"] as? Int
+        maxBasalLimitMilliunits = rawValue["maxBasalLimitMilliunits"] as? Int
+        maxBasalLimitDefaultMilliunits = rawValue["maxBasalLimitDefaultMilliunits"] as? Int
+        maxBolusLimitMilliunits = rawValue["maxBolusLimitMilliunits"] as? Int
+        maxBolusLimitDefaultMilliunits = rawValue["maxBolusLimitDefaultMilliunits"] as? Int
+
+        if let lastControlIQInterval = rawValue["lastControlIQUpdate"] as? TimeInterval {
+            lastControlIQUpdate = Date(timeIntervalSinceReferenceDate: lastControlIQInterval)
+        } else {
+            lastControlIQUpdate = nil
+        }
+
+        if let lastNotificationInterval = rawValue["lastNotificationUpdate"] as? TimeInterval {
+            lastNotificationUpdate = Date(timeIntervalSinceReferenceDate: lastNotificationInterval)
+        } else {
+            lastNotificationUpdate = nil
+        }
+
+        if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
+            insulinType = InsulinType(rawValue: rawInsulinType)
+        } else {
+            insulinType = nil
+        }
+    }
+
+    public var rawValue: RawValue {
+        var raw: RawValue = [:]
+
+        raw["onboarded"] = onboarded
+        raw["pumpState"] = pumpState.rawValue
+        raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
+        raw["latestInsulinOnBoard"] = latestInsulinOnBoard
+        raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
+        raw["currentPumpTime"] = currentPumpTime
+        raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
+        raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
+        raw["reminderAnnun"] = reminderAnnun?.rawValue
+        raw["alertAnnun"] = alertAnnun?.rawValue
+        raw["alarmAnnun"] = alarmAnnun?.rawValue
+        raw["generalAnnun"] = generalAnnun?.rawValue
+        raw["quickBolusEnabled"] = quickBolusEnabled
+        raw["quickBolusEntryType"] = quickBolusEntryType
+        raw["quickBolusIncrementUnits"] = quickBolusIncrementUnits
+        raw["quickBolusIncrementCarbs"] = quickBolusIncrementCarbs
+        raw["quickBolusStatus"] = quickBolusStatus
+        raw["maxBasalLimitMilliunits"] = maxBasalLimitMilliunits
+        raw["maxBasalLimitDefaultMilliunits"] = maxBasalLimitDefaultMilliunits
+        raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
+        raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
+        raw["useControlIQ"] = useControlIQ
+        raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
+        raw["basalDose"] = basalDose.rawValue
+        raw["controlIQEnabled"] = controlIQEnabled
+        raw["controlIQUserMode"] = controlIQUserMode?.rawValue
+        raw["controlIQWeight"] = controlIQWeight
+        raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
+        raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
+        raw["alertSnoozeEnabled"] = alertSnoozeEnabled
+        raw["alertSnoozeDuration"] = alertSnoozeDuration
+        raw["notificationCount"] = notificationCount
+        raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
+        raw["insulinType"] = insulinType?.rawValue
+        raw["useSilentTones"] = useSilentTones
+        raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
+
+        let settingsRaw = settings.rawValue
+        if !settingsRaw.isEmpty {
+            raw["settings"] = settingsRaw
+        }
+
+        if let lastReservoirReading = lastReservoirReading {
+            raw["lastReservoirReading"] = TandemPumpManagerState.encodeReservoirValue(lastReservoirReading)
+        }
+
+        if let lastBatteryReading = lastBatteryReading {
+            raw["lastBatteryReading"] = TandemPumpManagerState.encodeBatteryReading(lastBatteryReading)
+        }
+
+        if let lastBasalStatusDate = lastBasalStatusDate {
+            raw["lastBasalStatusDate"] = lastBasalStatusDate.timeIntervalSinceReferenceDate
+        }
+
+        if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
+            raw["bolusState"] = encodedBolusState
+        }
+
+        if let bolusDose {
+            raw["bolusDose"] = bolusDose.rawValue
+        }
+
+        return raw
+    }
+
+    public var showPumpTimeSyncWarning: Bool {
+        guard let currentPumpTime, let lastPumpTimeCheckDate else {
+            return false
+        }
+
+        // Allow 10s time drift
+        return abs(currentPumpTime.timeIntervalSince1970 - lastPumpTimeCheckDate.timeIntervalSince1970) > .seconds(10)
+    }
+
+    public var debugDescription: String {
+        [
+            "### TandemPumpManagerState",
+            "* onboarded: \(onboarded)",
+            "* pumpState: \(String(describing: pumpState.debugDescription))",
+            "* lastReconciliation: \(String(describing: lastReconciliation))",
+            "* settings: \(settings)",
+            "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
+            "* lastReservoirReading: \(String(describing: lastReservoirReading))",
+            "* lastBatteryReading: \(String(describing: lastBatteryReading))",
+            "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
+            "* bolusState: \(bolusState)",
+            "* basalRateSchedule: \(String(describing: basalRateSchedule))",
+            "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
+            "* useSilentTones: \(useSilentTones)",
+            "* currentPumpTime: \(String(describing: currentPumpTime))",
+            "* lastPumpTimeCheckDate: \(String(describing: lastPumpTimeCheckDate))",
+            "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
+            "* reminderAnnun: \(String(describing: reminderAnnun))",
+            "* alertAnnun: \(String(describing: alertAnnun))",
+            "* alarmAnnun: \(String(describing: alarmAnnun))",
+            "* generalAnnun: \(String(describing: generalAnnun))",
+            "* useControlIQ: \(useControlIQ)",
+            "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
+            "* controlIQEnabled: \(String(describing: controlIQEnabled))",
+            "* controlIQUserMode: \(String(describing: controlIQUserMode))",
+            "* controlIQWeight: \(String(describing: controlIQWeight))",
+            "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
+            "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
+            "* notificationCount: \(String(describing: notificationCount))",
+            "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
+            "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
+            "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
+            "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",
+            "* quickBolusIncrementCarbs: \(String(describing: quickBolusIncrementCarbs))",
+            "* maxBasalLimitMilliunits: \(String(describing: maxBasalLimitMilliunits))",
+            "* maxBolusLimitMilliunits: \(String(describing: maxBolusLimitMilliunits))"
+        ].joined(separator: "\n")
+    }
+
+    public var basalDeliveryState: PumpManagerStatus.BasalDeliveryState {
+        switch basalDose.type {
+        case .basal,
+             .bolus,
+             .resume:
+            return .active(basalDose.startDate)
+        case .suspend:
+            return .suspended(basalDose.startDate)
+        case .tempBasal:
+            return .tempBasal(basalDose.toDoseEntry(isMutable: true))
+        }
+    }
+
+    public var deviceInfo: HKDevice {
+        HKDevice(
+            name: "TandemPump",
+            manufacturer: "Tandem",
+            model: "Mobi",
+            hardwareVersion: nil,
+            firmwareVersion: nil,
+            softwareVersion: nil,
+            localIdentifier: nil,
+            udiDeviceIdentifier: nil
+        )
+    }
+}
+
+private extension TandemPumpManagerState {
+    static func encodeReservoirValue(_ value: ReservoirValue) -> [String: Any] {
+        [
+            "startDate": value.startDate.timeIntervalSinceReferenceDate,
+            "unitVolume": value.unitVolume
+        ]
+    }
+
+    static func decodeReservoirValue(from raw: [String: Any]) -> ReservoirValue? {
+        guard let startInterval = raw["startDate"] as? TimeInterval,
+              let unitVolume = raw["unitVolume"] as? Double
+        else {
+            return nil
+        }
+
+        return SimpleReservoirValue(
+            startDate: Date(timeIntervalSinceReferenceDate: startInterval),
+            unitVolume: unitVolume
+        )
+    }
+
+    static func encodeBatteryReading(_ reading: BatteryReading) -> [String: Any] {
+        [
+            "date": reading.date.timeIntervalSinceReferenceDate,
+            "chargeRemaining": reading.chargeRemaining
+        ]
+    }
+
+    static func decodeBatteryReading(from raw: [String: Any]) -> BatteryReading? {
+        guard let timestamp = raw["date"] as? TimeInterval,
+              let chargeRemaining = raw["chargeRemaining"] as? Double
+        else {
+            return nil
+        }
+
+        return BatteryReading(
+            date: Date(timeIntervalSinceReferenceDate: timestamp),
+            chargeRemaining: chargeRemaining
+        )
+    }
+
+    static func encodeBasalState(_ state: PumpManagerStatus.BasalDeliveryState) -> [String: Any]? {
+        var raw: [String: Any] = [:]
+
+        switch state {
+        case let .active(date):
+            raw["case"] = "active"
+            raw["date"] = date.timeIntervalSinceReferenceDate
+        case .initiatingTempBasal:
+            raw["case"] = "initiatingTempBasal"
+        case let .tempBasal(dose):
+            raw["case"] = "tempBasal"
+            if let data = try? PropertyListEncoder().encode(dose) {
+                raw["dose"] = data
+            }
+        case .cancelingTempBasal:
+            raw["case"] = "cancelingTempBasal"
+        case .suspending:
+            raw["case"] = "suspending"
+        case let .suspended(date):
+            raw["case"] = "suspended"
+            raw["date"] = date.timeIntervalSinceReferenceDate
+        case .resuming:
+            raw["case"] = "resuming"
+        }
+
+        return raw
+    }
+
+    static func decodeBasalState(from raw: [String: Any]) -> PumpManagerStatus.BasalDeliveryState? {
+        guard let caseName = raw["case"] as? String else {
+            return nil
+        }
+
+        switch caseName {
+        case "active":
+            if let interval = raw["date"] as? TimeInterval {
+                return .active(Date(timeIntervalSinceReferenceDate: interval))
+            }
+        case "initiatingTempBasal":
+            return .initiatingTempBasal
+        case "tempBasal":
+            if let data = raw["dose"] as? Data,
+               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data)
+            {
+                return .tempBasal(dose)
+            }
+        case "cancelingTempBasal":
+            return .cancelingTempBasal
+        case "suspending":
+            return .suspending
+        case "suspended":
+            if let interval = raw["date"] as? TimeInterval {
+                return .suspended(Date(timeIntervalSinceReferenceDate: interval))
+            }
+        case "resuming":
+            return .resuming
+        default:
+            return nil
+        }
+
+        return nil
+    }
+
+    static func encodeBolusState(_ state: PumpManagerStatus.BolusState) -> [String: Any]? {
+        var raw: [String: Any] = [:]
+
+        switch state {
+        case .noBolus:
+            raw["case"] = "noBolus"
+        case .initiating:
+            raw["case"] = "initiating"
+        case let .inProgress(dose):
+            raw["case"] = "inProgress"
+            if let data = try? PropertyListEncoder().encode(dose) {
+                raw["dose"] = data
+            }
+        case .canceling:
+            raw["case"] = "canceling"
+        }
+
+        return raw
+    }
+
+    static func decodeBolusState(from raw: [String: Any]) -> PumpManagerStatus.BolusState? {
+        guard let caseName = raw["case"] as? String else {
+            return nil
+        }
+
+        switch caseName {
+        case "noBolus":
+            return .noBolus
+        case "initiating":
+            return .initiating
+        case "inProgress":
+            if let data = raw["dose"] as? Data,
+               let dose = try? PropertyListDecoder().decode(DoseEntry.self, from: data)
+            {
+                return .inProgress(dose)
+            }
+        case "canceling":
+            return .canceling
+        default:
+            return nil
+        }
+
+        return nil
+    }
+
+    static func encodeBasalSchedule(_ schedule: BasalRateSchedule) -> [String: Any] {
+        let items = schedule.items.map { item -> [String: Any] in
+            [
+                "startTime": item.startTime,
+                "value": item.value
+            ]
+        }
+
+        return [
+            "items": items,
+            "timeZoneIdentifier": schedule.timeZone.identifier
+        ]
+    }
+
+    static func decodeBasalSchedule(from raw: [String: Any]) -> BasalRateSchedule? {
+        guard let itemDictionaries = raw["items"] as? [[String: Any]],
+              let timeZoneIdentifier = raw["timeZoneIdentifier"] as? String
+        else {
+            return nil
+        }
+
+        let items: [RepeatingScheduleValue<Double>] = itemDictionaries.compactMap { entry in
+            guard let startTime = entry["startTime"] as? TimeInterval,
+                  let value = entry["value"] as? Double
+            else {
+                return nil
+            }
+
+            return RepeatingScheduleValue(startTime: startTime, value: value)
+        }
+
+        guard !items.isEmpty else {
+            return nil
+        }
+
+        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? .current
+        return BasalRateSchedule(dailyItems: items, timeZone: timeZone)
+    }
+}

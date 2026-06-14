@@ -6,7 +6,7 @@ public class CGMSupportPackageStatusRequest: Message {
         opCode: UInt8(bitPattern: Int8(-56)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiFuture
     )
 
@@ -35,7 +35,7 @@ public class CGMSupportPackageStatusResponse: Message {
         opCode: UInt8(bitPattern: Int8(-55)),
         size: 2,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
         minApi: .apiFuture
     )
 

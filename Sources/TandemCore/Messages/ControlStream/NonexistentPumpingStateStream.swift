@@ -1,13 +1,3 @@
-//
-//  NonexistentPumpingStateStream.swift
-//  TandemKit
-//
-//  Created by OpenAI's ChatGPT.
-//
-//  Swift representations of NonexistentPumpingStateStreamRequest and PumpingStateStreamResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentPumpingStateStreamRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/PumpingStateStreamResponse.java
-//
 import Foundation
 
 /// Placeholder request for PumpingStateStreamResponse which has no originating request.
@@ -16,7 +6,7 @@ public class NonexistentPumpingStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -38,7 +28,7 @@ public class PumpingStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-23)),
         size: 5,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )

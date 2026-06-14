@@ -6,7 +6,7 @@ public class NonexistentHistoryLogStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .HISTORY_LOG_CHARACTERISTICS
+        characteristic: CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -30,7 +30,7 @@ public class HistoryLogStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-127)),
         size: 28,
         type: .Response,
-        characteristic: .HISTORY_LOG_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS,
         variableSize: true,
         stream: true
     )

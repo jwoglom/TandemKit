@@ -1,13 +1,3 @@
-//
-//  NonexistentExitFillTubingModeStateStream.swift
-//  TandemKit
-//
-//  Created by OpenAI's Codex.
-//
-//  Swift representations of NonexistentExitFillTubingModeStateStreamRequest and ExitFillTubingModeStateStreamResponse based on
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/request/controlStream/NonexistentExitFillTubingModeStateStreamRequest.java
-//  https://github.com/jwoglom/pumpX2/blob/main/messages/src/main/java/com/jwoglom/pumpx2/pump/messages/response/controlStream/ExitFillTubingModeStateStreamResponse.java
-//
 import Foundation
 
 /// Placeholder request for ExitFillTubingModeStateStreamResponse which has no originating request.
@@ -16,7 +6,7 @@ public class NonexistentExitFillTubingModeStateStreamRequest: Message {
         opCode: 0,
         size: 0,
         type: .Request,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         stream: true,
         signed: true
     )
@@ -39,7 +29,7 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         opCode: UInt8(bitPattern: Int8(-23)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_STREAM_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS,
         variableSize: true,
         stream: true,
         signed: true

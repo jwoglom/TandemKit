@@ -6,7 +6,7 @@ public class SecretMenuRequest: Message {
         opCode: UInt8(bitPattern: Int8(-68)),
         size: 0,
         type: .Request,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data
@@ -34,7 +34,7 @@ public class SecretMenuResponse: Message {
         opCode: UInt8(bitPattern: Int8(-67)),
         size: 8,
         type: .Response,
-        characteristic: .CURRENT_STATUS_CHARACTERISTICS
+        characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
     )
 
     public var cargo: Data

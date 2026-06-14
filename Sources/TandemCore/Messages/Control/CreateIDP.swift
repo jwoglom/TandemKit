@@ -6,7 +6,7 @@ public class CreateIDPRequest: Message {
         opCode: UInt8(bitPattern: Int8(-26)),
         size: 35,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly
@@ -67,7 +67,7 @@ public class CreateIDPRequest: Message {
         )
         self.profileName = profileName
         self.firstSegmentProfileCarbRatio = firstSegmentProfileCarbRatio
-        self.firstSegmentProfileStartTime = 0
+        firstSegmentProfileStartTime = 0
         self.firstSegmentProfileBasalRate = firstSegmentProfileBasalRate
         self.firstSegmentProfileTargetBG = firstSegmentProfileTargetBG
         self.firstSegmentProfileISF = firstSegmentProfileISF
@@ -144,7 +144,7 @@ public class CreateIDPResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-25)),
         size: 2,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         supportedDevices: .mobiOnly

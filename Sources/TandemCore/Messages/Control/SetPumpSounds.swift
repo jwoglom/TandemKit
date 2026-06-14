@@ -6,7 +6,7 @@ public class SetPumpSoundsRequest: Message {
         opCode: UInt8(bitPattern: Int8(-28)),
         size: 9,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -160,7 +160,7 @@ public class SetPumpSoundsResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-27)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

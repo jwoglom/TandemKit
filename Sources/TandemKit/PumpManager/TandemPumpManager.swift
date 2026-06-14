@@ -4,58 +4,16 @@ import Dispatch
 import Foundation
 import HealthKit
 import LoopKit
-import TandemBLE
-import TandemCore
 import UIKit
-
-// MARK: - Scan Device Observer Protocol
-
-public struct TandemPumpScan {
-    public let bleIdentifier: String
-    public let name: String
-    public let peripheral: CBPeripheral
-    public let advertisementData: [String: Any]?
-    public let rssi: NSNumber
-}
-
-public protocol StateObserver: AnyObject {
-    func deviceScanDidUpdate(_ device: TandemPumpScan)
-}
-
-// Simple Locked wrapper
-public class Locked<Value> {
-    private var _value: Value
-    private let lock = NSLock()
-
-    init(_ value: Value) {
-        _value = value
-    }
-
-    var value: Value {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return _value
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            _value = newValue
-        }
-    }
-}
-
-private struct ActiveBolus {
-    let id: Int
-    let dose: UnfinalizedDose
-}
 
 public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
 
-    public var localizedTitle: String = "TandemPumpManager"
+    public var localizedTitle: String = "Tandem mobi"
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
+
+    let bluetooth: TandemBluetoothManager
 
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
@@ -68,133 +26,30 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public static var onboardingSupportedMaximumBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
-    private let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
-    public let lockedState: Locked<TandemPumpManagerState>
-    private let transportLock = Locked<PumpMessageTransport?>(nil)
-    public let tandemPump: TandemPump
-    private let log = TandemLogger(category: "TandemPumpManager")
-    private let telemetryLogger = TandemLogger(category: "TandemPumpManager.Telemetry")
-    private let notificationRouter = PumpNotificationRouter()
-    private let notificationLogger = TandemLogger(category: "TandemPumpManager.Notifications")
-    private let lockedNotificationBundle = Locked<NotificationBundle>(NotificationBundle())
-    private let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
+    internal let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
+    private var oldState: TandemPumpManagerState
+    public var state: TandemPumpManagerState
+    internal let logger = TandemLogger(category: "TandemPumpManager")
+    internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
     // Status tracking
-    private let statusObservers = Locked<[UUID: (observer: PumpManagerStatusObserver, queue: DispatchQueue)]>([:])
-    private let scanDeviceObservers = WeakSynchronizedSet<StateObserver>()
-    private let inScanningMode = Locked<Bool>(false)
-    private let lockedStatus: Locked<PumpManagerStatus>
+    private let statusObservers = WeakSynchronizedSet<PumpManagerStatusObserver>()
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
-    private let sessionInitializationQueue = DispatchQueue(label: "com.jwoglom.TandemKit.sessionInit")
-    private let needsSessionInitialization = Locked<Bool>(false)
-    private let sessionBootstrapInProgress = Locked<Bool>(false)
-    private let sessionBootstrapRetryAttempt = Locked<Int>(0)
-    private let activeBolus = Locked<ActiveBolus?>(nil)
-    private let lockedReservoirValue: Locked<ReservoirValue?>
-    private var bolusProgressReport: TandemDoseProgressReporter?
-    private var telemetryConfigured = false
-    private weak var activePeripheralManager: PeripheralManager?
-    private var targetPeripheralIdentifier: UUID?
+    internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
-
-    // BLE heartbeat propagation (LoopKit PumpManager protocol)
-    private var provideHeartbeat: Bool = false
-    private var lastHeartbeat: Date = .distantPast
-
-    // Post-initialization connection timeout (mirrors PumpX2's checkIfInitialPumpConnectionEstablished)
-    private let processedResponseMessages = Locked<Int>(0)
-    private var initialConnectionTimeoutWork: DispatchWorkItem?
-    private let initialConnectionTimeoutAttempts = Locked<Int>(0)
-    private let initialConnectionTimeoutMaxAttempts = 3
-
-    // Pairing-in-progress flag: prevents the connection timeout from
-    // soft-disconnecting the pump while the JPAKE handshake is running.
-    private let pairingInProgress = Locked<Bool>(false)
+    var notificationBundle = NotificationBundle()
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
-            log.info("Starting silent tones")
+            logger.info("Starting silent tones")
             silentToneManager.startBackgroundTask()
         }
     }
 
     @objc func appMovedToForeground() {
         silentToneManager.stopBackgroundTask()
-    }
-
-    private func updatePairingArtifacts(with pumpState: PumpState?) {
-        PumpStateSupplier.storePairingArtifacts(
-            derivedSecret: pumpState?.derivedSecret,
-            serverNonce: pumpState?.serverNonce
-        )
-
-        // Set the timeSinceReset closure to provide the value from pump state
-        PumpStateSupplier.pumpTimeSinceReset = { [weak self] in
-            self?.lockedState.value.pumpState?.timeSinceReset ?? 0
-        }
-    }
-
-    private func configureStateSuppliers() {
-        PumpStateSupplier.currentBolusId = { [weak self] in
-            self?.activeBolus.value?.id
-        }
-    }
-
-    private func clearStalePairingArtifactsIfNeeded() {
-        var currentState = lockedState.value
-        guard var pumpState = currentState.pumpState,
-              pumpState.derivedSecret != nil || pumpState.serverNonce != nil || pumpState.timeSinceReset != nil
-        else {
-            // Still clear the global supplier so transports stop signing with old keys.
-            PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
-            return
-        }
-
-        telemetryLogger.debug("Clearing stored authentication artifacts before pairing")
-        pumpState.derivedSecret = nil
-        pumpState.serverNonce = nil
-        pumpState.timeSinceReset = nil
-        currentState.pumpState = pumpState
-        lockedState.value = currentState
-        pumpComm.syncPumpState(currentState.pumpState)
-        updatePairingArtifacts(with: pumpState)
-    }
-
-    private func resetManagerStateAfterDeactivation() {
-        telemetryLogger.debug("Resetting stored pump state after deactivation")
-        let now = Date()
-        updateStatus { status in
-            status.pumpBatteryChargeRemaining = nil
-            status.bolusState = .noBolus
-            status.basalDeliveryState = .suspended(now)
-            status.deliveryIsUncertain = true
-        }
-
-        lockedReservoirValue.value = nil
-        activeBolus.value = nil
-
-        var managerState = lockedState.value
-        managerState.pumpState = nil
-        managerState.lastReconciliation = nil
-        managerState.lastReservoirReading = nil
-        managerState.lastBatteryReading = nil
-        managerState.lastBasalStatusDate = nil
-        managerState.latestInsulinOnBoard = nil
-        managerState.basalRateSchedule = nil
-        lockedState.value = managerState
-
-        needsSessionInitialization.value = false
-
-        PumpStateSupplier.storePairingArtifacts(derivedSecret: nil, serverNonce: nil)
-        PumpStateSupplier.pumpTimeSinceReset = { 0 }
-
-        let refreshedPumpComm = PumpComm(pumpState: nil, retryPolicy: pumpComm.retryPolicy)
-        refreshedPumpComm.delegate = self
-        tandemPump.pumpComm = refreshedPumpComm
-
-        notifyPumpManagerDelegateDidUpdateState()
     }
 
     public var delegateQueue: DispatchQueue! {
@@ -206,197 +61,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private var pumpComm: PumpComm {
-        get {
-            tandemPump.pumpComm
-        }
-        set {
-            tandemPump.pumpComm = newValue
-        }
-    }
-
-    public func updateTransport(_ transport: PumpMessageTransport?) {
-        transportLock.value = transport
-
-        if let activeTransport = transport {
-            telemetryLogger.debug("Transport available – checking authentication before telemetry")
-            updateStatus { status in
-                status.deliveryIsUncertain = false
-            }
-
-            // Only trigger telemetry if we're already authenticated
-            if let pumpState = lockedState.value.pumpState,
-               pumpState.derivedSecret != nil,
-               pumpState.serverNonce != nil
-            {
-                bootstrapAuthenticatedSessionIfNeeded(on: activeTransport)
-            } else {
-                telemetryLogger.debug("Not authenticated yet – skipping telemetry until pairing completes")
-            }
-        } else {
-            telemetryLogger.debug("Transport cleared – telemetry will pause until reconnect")
-            updateStatus { status in
-                status.deliveryIsUncertain = true
-            }
-            needsSessionInitialization.value = lockedState.value.pumpState?.valid == true
-        }
-    }
-
-    private func bootstrapAuthenticatedSessionIfNeeded(on transport: PumpMessageTransport) {
-        if needsSessionInitialization.value == false {
-            telemetryLogger.debug("Authenticated session already initialized – triggering telemetry refresh")
-            ensureCurrentPumpData { _ in }
-            telemetryScheduler.trigger(kind: .history)
-            return
-        }
-
-        if sessionBootstrapInProgress.value {
-            telemetryLogger.debug("Session bootstrap already in progress; skipping duplicate trigger")
-            return
-        }
-
-        sessionBootstrapInProgress.value = true
-
-        sessionInitializationQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.telemetryLogger.debug("Running authenticated session bootstrap to refresh credentials and TimeSinceReset")
-
-            do {
-                try self.reauthenticateIfNeeded(on: transport)
-                let response: TimeSinceResetResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: TimeSinceResetRequest(),
-                    expecting: TimeSinceResetResponse.self
-                )
-
-                self.handleTimeSinceResetResponse(response, source: .telemetry)
-                self.needsSessionInitialization.value = false
-                self.sessionBootstrapRetryAttempt.value = 0
-
-                // Auth + TimeSinceReset succeeded: pump is alive.
-                // Cancel initial connection timeout and mark responses received.
-                self.processedResponseMessages.value += 1
-                self.initialConnectionTimeoutWork?.cancel()
-                self.initialConnectionTimeoutWork = nil
-
-                self.telemetryLogger.debug("Session bootstrap complete – triggering telemetry refresh")
-                self.ensureCurrentPumpData { _ in }
-                self.telemetryScheduler.trigger(kind: .history)
-                self.sessionBootstrapInProgress.value = false
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.telemetryLogger.error("Session bootstrap failed: \(pumpError)")
-                self.needsSessionInitialization.value = true
-                self.sessionBootstrapInProgress.value = false
-                self.scheduleBootstrapRetry(afterFailureWith: pumpError, transport: transport)
-            }
-        }
-    }
-
-    private func reauthenticateIfNeeded(on transport: PumpMessageTransport) throws {
-        guard let pumpState = lockedState.value.pumpState,
-              let derivedSecret = pumpState.derivedSecret,
-              let peripheralUuid = pumpState.peripheralUuid
-        else {
-            telemetryLogger
-                .error("Stored pump state missing authentication artifacts; cannot reauthenticate before telemetry")
-            throw PumpCommError.missingAuthenticationKey
-        }
-
-        telemetryLogger.debug("Authenticating reconnect session using stored derived secret")
-        try pumpComm.confirmAuthentication(
-            transport: transport,
-            peripheralUuid: peripheralUuid,
-            derivedSecret: derivedSecret
-        )
-    }
-
-    private func scheduleBootstrapRetry(afterFailureWith _: PumpCommError, transport: PumpMessageTransport) {
-        var nextAttempt = sessionBootstrapRetryAttempt.value + 1
-        if nextAttempt > 10 { nextAttempt = 10 }
-        sessionBootstrapRetryAttempt.value = nextAttempt
-
-        let delay = min(pow(2.0, Double(nextAttempt - 1)), 60.0)
-        telemetryLogger.debug("Scheduling session bootstrap retry in \(delay)s (attempt \(nextAttempt))")
-
-        sessionInitializationQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            self.bootstrapAuthenticatedSessionIfNeeded(on: transport)
-        }
-    }
-
-    func setPumpCommForTesting(_ pumpComm: PumpComm) {
-        pumpComm.delegate = self
-        tandemPump.pumpComm = pumpComm
-    }
-
-    private enum ResponseSource {
-        case telemetry
-        case notification
-
-        var label: String {
-            switch self {
-            case .telemetry:
-                return "telemetry"
-            case .notification:
-                return "notification"
-            }
-        }
-    }
-
-    private func logger(for source: ResponseSource) -> TandemLogger {
-        switch source {
-        case .telemetry:
-            return telemetryLogger
-        case .notification:
-            return notificationLogger
-        }
-    }
-
-    private static func makeDefaultStatus() -> PumpManagerStatus {
+    private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         PumpManagerStatus(
             timeZone: TimeZone.current,
-            device: HKDevice(
-                name: "TandemPump",
-                manufacturer: "Tandem",
-                model: "Mobi",
-                hardwareVersion: nil as String?,
-                firmwareVersion: nil as String?,
-                softwareVersion: nil as String?,
-                localIdentifier: nil as String?,
-                udiDeviceIdentifier: nil as String?
-            ),
-            pumpBatteryChargeRemaining: nil,
-            basalDeliveryState: .active(Date()),
-            bolusState: .noBolus,
-            insulinType: nil,
+            device: state.deviceInfo,
+            pumpBatteryChargeRemaining: state.lastBatteryReading?.chargeRemaining,
+            basalDeliveryState: state.basalDeliveryState,
+            bolusState: state.bolusState,
+            insulinType: state.insulinType,
             deliveryIsUncertain: false
         )
     }
 
-    private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
-        var status = makeDefaultStatus()
-        // TODO(jwoglom): add hardware/firmware/software versions from hardwareinforequest
-        status.basalDeliveryState = state.basalDeliveryState ?? status.basalDeliveryState
-        status.bolusState = state.bolusState
-        status.deliveryIsUncertain = state.deliveryIsUncertain
-        status.pumpBatteryChargeRemaining = state.lastBatteryReading?.chargeRemaining
-        return status
-    }
-
     public init(state: TandemPumpManagerState) {
-        lockedState = Locked(state)
-        lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedReservoirValue = Locked(state.lastReservoirReading)
-        tandemPump = TandemPump(pumpState: state.pumpState)
-        needsSessionInitialization.value = state.pumpState?.valid == true
-
-        tandemPump.delegate = self
-        pumpComm.delegate = self
-        updatePairingArtifacts(with: state.pumpState)
-        tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
-        tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
-        configureStateSuppliers()
+        self.state = state
+        oldState = TandemPumpManagerState(rawValue: state.rawValue)
+        bluetooth = TandemBluetoothManager()
+        bluetooth.pumpManager = self
 
         let nc = NotificationCenter.default
         nc.addObserver(
@@ -413,102 +94,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
-    public required init?(rawState: RawStateValue) {
-        guard let state = TandemPumpManagerState(rawValue: rawState) else {
-            return nil
-        }
-
-        lockedState = Locked(state)
-        lockedStatus = Locked(TandemPumpManager.makeStatus(from: state))
-        lockedReservoirValue = Locked(state.lastReservoirReading)
-        tandemPump = TandemPump(pumpState: state.pumpState)
-        needsSessionInitialization.value = state.pumpState?.valid == true
-
-        tandemPump.delegate = self
-        pumpComm.delegate = self
-        updatePairingArtifacts(with: state.pumpState)
-        tandemPump.configureDeliveryActions(enabled: state.insulinDeliveryActionsEnabled)
-        tandemPump.configureConnectionSharing(enabled: state.connectionSharingEnabled)
-        configureStateSuppliers()
-
-        log.debug("Initialized TandemPumpManager: state=\(state)")
-
-        if state.pumpState?.valid == true {
-            // start connection
-            tandemPump.startScanning()
-        }
-
-        let nc = NotificationCenter.default
-        nc.addObserver(
-            self,
-            selector: #selector(appMovedToBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
-        nc.addObserver(
-            self,
-            selector: #selector(appMovedToForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+    public required convenience init?(rawState: RawStateValue) {
+        self.init(state: TandemPumpManagerState(rawValue: rawState))
     }
 
     public var rawState: RawStateValue {
-        lockedState.value.rawValue
+        state.rawValue
     }
 
-    public var state: TandemPumpManagerState {
-        lockedState.value
+    public var status: PumpManagerStatus {
+        TandemPumpManager.makeStatus(from: state)
     }
 
     public var debugDescription: String {
-        "TandemPumpManager(state: \(lockedState.value))"
+        "TandemPumpManager(state: \(state))"
     }
 
-    // TODO(jwoglom): replace with connectedAndPaired?
     public var isOnboarded: Bool {
-        lockedState.value.pumpState != nil
+        state.pumpState.derivedSecret != nil
     }
 
     private var hasPairedPumpState: Bool {
-        lockedState.value.pumpState?.valid == true
-    }
-
-    public var connectedAndPaired: Bool {
-        guard let _ = transportLock.value else {
-            return false
-        }
-        return hasPairedPumpState
-    }
-
-    public var pairedTransport: PumpMessageTransport? {
-        guard let transport = transportLock.value,
-              lockedState.value.pumpState?.valid == true,
-              needsSessionInitialization.value == false
-        else {
-            return nil
-        }
-
-        return transport
-    }
-
-    private func telemetryTransportIfReady(for kind: PumpTelemetryKind) -> PumpMessageTransport? {
-        guard connectedAndPaired else {
-            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – pump not connected/paired")
-            return nil
-        }
-
-        guard activePeripheralManager != nil else {
-            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – no active peripheral manager")
-            return nil
-        }
-
-        guard let transport = pairedTransport else {
-            telemetryLogger.debug("Skipping \(kind.logDescription) telemetry – paired transport unavailable")
-            return nil
-        }
-
-        return transport
+        state.pumpState.valid
     }
 
     // MARK: - Pump Capabilities
@@ -530,11 +137,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var minimumBasalScheduleEntryDuration: TimeInterval {
-        10 * 60 // 10 minutes in seconds
+        .minutes(10)
     }
 
     public var pumpRecordsBasalProfileStartEvents: Bool {
-        false // TODO(jwoglom): TBD
+        false
     }
 
     public var pumpReservoirCapacity: Double {
@@ -551,843 +158,51 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public var lastSync: Date? {
-        lockedState.value.lastReconciliation
-    }
-
-    public var status: PumpManagerStatus {
-        lockedStatus.value
-    }
-
-    public var pumpStatus: PumpManagerStatus {
-        lockedStatus.value
+        state.lastReconciliation
     }
 
     public var reservoirLevel: ReservoirValue? {
-        lockedReservoirValue.value
-    }
-
-    public var insulinDeliveryActionsEnabled: Bool {
-        lockedState.value.insulinDeliveryActionsEnabled
-    }
-
-    public var connectionSharingEnabled: Bool {
-        lockedState.value.connectionSharingEnabled
+        state.lastReservoirReading
     }
 
     public var autoAcknowledgeBasalAlerts: Bool {
-        lockedState.value.autoAcknowledgeBasalAlerts
+        state.autoAcknowledgeBasalAlerts
     }
 
-    /// The shared notification bundle that aggregates all notification status responses.
-    /// UI components should use this bundle to ensure the badge count and list stay in sync.
-    public var notificationBundle: NotificationBundle {
-        lockedNotificationBundle.value
-    }
-
-    /// Updates the shared notification bundle and syncs the notification count to manager state.
-    /// Call this after fetching fresh notification data to keep the badge count accurate.
-    public func updateNotificationBundle(_ bundle: NotificationBundle) {
-        lockedNotificationBundle.value = bundle
-
-        var managerState = lockedState.value
-        managerState.notificationCount = bundle.getNotificationCount()
-        managerState.lastNotificationUpdate = Date()
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleBatteryResponse(_ response: CurrentBatteryAbstractResponse, source: ResponseSource) {
-        let percent = Double(response.batteryPercent) / 100.0
-        let timestamp = Date()
-
-        logger(for: source).debug("[\(source.label)] Battery updated: \(percent * 100)% remaining")
-
-        updateStatus { status in
-            status.pumpBatteryChargeRemaining = percent
-        }
-
-        var managerState = lockedState.value
-        managerState.lastBatteryReading = TandemPumpManagerState.BatteryReading(date: timestamp, chargeRemaining: percent)
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleReservoirResponse(_ response: InsulinStatusResponse, source: ResponseSource) {
-        // integer units
-        let units = Double(response.currentInsulinAmount)
-        let timestamp = Date()
-        let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
-
-        lockedReservoirValue.value = reservoirValue
-
-        logger(for: source).debug("[\(source.label)] Reservoir updated: \(String(format: "%.2f", units)) U remaining")
-
-        var managerState = lockedState.value
-        managerState.lastReconciliation = timestamp
-        managerState.lastReservoirReading = reservoirValue
-        lockedState.value = managerState
-
-        notifyDelegateOfReservoir(reservoirValue)
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleFillTubingStateStream(_ response: FillTubingStateStreamResponse) {
-        notificationLogger.debug("[notification] Fill tubing button state: \(response.buttonDown)")
-        fillTubingStateStream.send(response)
-    }
-
-    private func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse, source _: ResponseSource) {
-        let timestamp = Date.now
-        let newBasalState: PumpManagerStatus.BasalDeliveryState
-
-        if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.basal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.zeroBasal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.increaseBasal.rawValue ||
-            response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.attenuatedBasal.rawValue
-        {
-            newBasalState = .active(timestamp)
-
-        } else if response.basalStatusIconId == HomeScreenMirrorResponse.BasalStatusIcon.suspend.rawValue {
-            newBasalState = .suspended(timestamp)
-        } else {
-            return
-        }
-
-        updateStatus { status in
-            status.basalDeliveryState = newBasalState
-        }
-
-        var managerState = lockedState.value
-        managerState.basalDeliveryState = newBasalState
-        managerState.lastBasalStatusDate = timestamp
-
-        if let basalStatusIcon = response.basalStatusIcon {
-            managerState.basalStatusIcon = TandemPumpManagerState.HomeScreenBasalStatus.fromBasalStatusIcon(basalStatusIcon)
-        } else {
-            managerState.basalStatusIcon = nil
-        }
-
-        if let bolusStatusIcon = response.bolusStatusIcon {
-            managerState.bolusStatusIcon = TandemPumpManagerState.HomeScreenBolusStatus.fromBolusStatusIcon(bolusStatusIcon)
-        } else {
-            managerState.bolusStatusIcon = nil
-        }
-
-        if let cgmAlertIcon = response.cgmAlertIcon {
-            managerState.cgmAlertIcon = TandemPumpManagerState.HomeScreenCGMAlert.fromCGMAlertIcon(cgmAlertIcon)
-        } else {
-            managerState.cgmAlertIcon = nil
-        }
-
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleControlIQResponse(_ response: ControlIQInfoV2Response, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] ControlIQ updated: enabled=\(response.closedLoopEnabled), mode=\(response.currentUserModeTypeRaw)"
-            )
-
-        var managerState = lockedState.value
-        managerState.controlIQEnabled = response.closedLoopEnabled
-
-        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
-        // sync useControlIQ so dosing guards activate and Trio disables closed loop
-        if response.closedLoopEnabled, !managerState.useControlIQ {
-            log.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
-            managerState.useControlIQ = true
-        }
-
-        if let userMode = response.currentUserModeType {
-            managerState.controlIQUserMode = TandemPumpManagerState.ControlIQUserMode.fromUserModeType(userMode)
-        } else {
-            managerState.controlIQUserMode = nil
-        }
-        managerState.controlIQWeight = response.weight
-        managerState.controlIQTotalDailyInsulin = response.totalDailyInsulin
-        managerState.lastControlIQUpdate = Date()
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleTimeSinceResetResponse(_ response: TimeSinceResetResponse, source: ResponseSource) {
-        let timeSinceReset = response.pumpTimeSinceReset
-        let currentPumpTime = response.currentTimeDate
-        let checkedAt = Date.now
-
-        logger(for: source).debug("[\(source.label)] TimeSinceReset updated: \(timeSinceReset)")
-
-        var managerState = lockedState.value
-        if var pumpState = managerState.pumpState {
-            pumpState.timeSinceReset = timeSinceReset
-            managerState.pumpState = pumpState
-            managerState.currentPumpTime = currentPumpTime
-            managerState.lastPumpTimeCheckDate = checkedAt
-            lockedState.value = managerState
-            pumpComm.syncPumpState(pumpState)
-            needsSessionInitialization.value = false
-
-            // Update the PumpStateSupplier with the new value
-            updatePairingArtifacts(with: pumpState)
-
-            notifyDelegateStateUpdated()
-        }
-    }
-
-    private func handleGlobalPumpSettingsResponse(_ response: PumpGlobalsResponse, source: ResponseSource) {
-        logger(for: source).debug("[\(source.label)] Pump Global updated -> \(response.description)")
-
-        var managerState = lockedState.value
-        managerState.quickBolusAnnun = response.quickBolusAnnouncement
-        managerState.reminderAnnun = response.reminderAnnouncement
-        managerState.alarmAnnun = response.alarmAnnouncement
-        managerState.alertAnnun = response.alertAnnouncement
-        managerState.generalAnnun = response.generalAnnouncement
-        managerState.quickBolusEnabled = response.isQuickBolusEnabled()
-        managerState.quickBolusEntryType = response.quickBolusEntryType
-        managerState.quickBolusIncrementUnits = response.quickBolusIncrementUnits
-        managerState.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
-        managerState.quickBolusStatus = response.quickBolusStatus
-        lockedState.value = managerState
-
-        notifyDelegateStateUpdated()
-    }
-
-    private func handleBolusResponse(_ response: CurrentBolusStatusResponse, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] Bolus updated - status: \(String(describing: response.status)) id: \(response.bolusId)"
-            )
-
-        // Normal CurrentBolusStatus fetch
-        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            return
-        }
-
-        guard let progressReport = bolusProgressReport else {
-            return
-        }
-
-        if response.status == .delivering {
-            if status.bolusState == .initiating, let bolusState = activeBolus.value {
-                updateStatus { status in
-                    status.bolusState = .inProgress(bolusState.dose.toDoseEntry(endDate: nil))
-                }
-            }
-
-            progressReport.notify()
-            return
-        }
-
-        if response.bolusId == 0, progressReport.bolusStatedOn != nil {
-            // Bolus is finished
-            telemetryScheduler.cancelAll()
-
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-
-            // Query the pump for actual delivered volume rather than assuming full delivery
-            var actualDelivered: Double?
-            if let bolusId = activeBolus.value?.id, let transport = transportLock.value {
-                actualDelivered = queryLastBolusDeliveredVolume(transport: transport, bolusId: bolusId)
-            }
-
-            var events = [progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered)]
-            bolusProgressReport = nil
-            activeBolus.value = nil
-
-            if let tempRateAbsolute = state.tempRateAbsolute, let tempRateDuration = state.tempRateDuration,
-               let tempRateStart = state.tempRateStart
-            {
-                events.append(
-                    NewPumpEvent.tempBasal(
-                        dose: DoseEntry.tempBasal(
-                            absoluteUnit: tempRateAbsolute,
-                            duration: tempRateDuration,
-                            insulinType: state.insulinType,
-                            startDate: tempRateStart
-                        ),
-                        date: tempRateStart
-                    )
-                )
-            }
-
-            recordReconciliation(at: Date.now)
-
-            pumpDelegate.notify { delegate in
-                guard let delegate = delegate else { return }
-                delegate.pumpManager(
-                    self,
-                    hasNewPumpEvents: events,
-                    lastReconciliation: self.lockedState.value.lastReconciliation,
-                    replacePendingEvents: true,
-                    completion: { _ in }
-                )
-            }
-        }
-    }
-
-    private func handleTempRateResponse(_ response: TempRateResponse, source: ResponseSource) {
-        logger(for: source)
-            .debug(
-                "[\(source.label)] TempRate updated: active=\(response.active) percent=\(response.percentage) duration=\(response.duration)min startTime=\(response.startTime)"
-            )
-
-        if !response.active, let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
-            let now = Date.now
-
-            updateStatus { status in
-                status.basalDeliveryState = .active(now)
-            }
-
-            var managerState = lockedState.value
-            managerState.basalDeliveryState = .active(now)
-            managerState.lastBasalStatusDate = now
-            managerState.tempRateAbsolute = nil
-            managerState.tempRatePercentage = nil
-            managerState.tempRateStart = nil
-            managerState.tempRateDuration = nil
-            managerState.tempRateSyncIdentifier = nil
-            lockedState.value = managerState
-
-        } else if response.active, state.tempRateAbsolute == nil {
-            let now = Date.now
-            let absolute = getScheduledBasalRate() * (Double(response.percentage) / 100)
-            let dose = DoseEntry.tempBasal(
-                absoluteUnit: absolute,
-                duration: Double(response.duration),
-                insulinType: state.insulinType,
-                startDate: response.startTime
-            )
-
-            var managerState = lockedState.value
-            managerState.basalDeliveryState = .tempBasal(dose)
-            managerState.lastBasalStatusDate = now
-            managerState.tempRateAbsolute = absolute
-            managerState.tempRatePercentage = response.percentage
-            managerState.tempRateStart = response.startTime
-            managerState.tempRateDuration = Double(response.duration)
-            managerState.tempRateSyncIdentifier = nil // No history id available...
-            lockedState.value = managerState
-        }
-    }
-
-    private func makeBatteryRequest() -> Message {
-        return CurrentBatteryRequestBuilder.create(apiVersion: PumpStateSupplier.pumpApiVersion)
-    }
-
-    /// Queries the pump for the actual delivered volume of the last bolus.
-    /// Used after both cancellation and natural completion to get the real delivered amount.
-    /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
-    private func queryLastBolusDeliveredVolume(transport: PumpMessageTransport, bolusId: Int) -> Double? {
-        do {
-            if PumpStateSupplier.pumpApiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
-                let response: LastBolusStatusV2Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: LastBolusStatusV2Request(),
-                    expecting: LastBolusStatusV2Response.self
-                )
-                guard response.bolusId == bolusId else {
-                    telemetryLogger.warning("[bolus] LastBolusStatusV2 bolusId \(response.bolusId) != expected \(bolusId)")
-                    return nil
-                }
-                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-                telemetryLogger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-                return units == 0 ? nil : units
-            } else {
-                let response: LastBolusStatusResponse = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: LastBolusStatusRequest(),
-                    expecting: LastBolusStatusResponse.self
-                )
-                guard response.bolusId == bolusId else {
-                    telemetryLogger.warning("[bolus] LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
-                    return nil
-                }
-                let units = roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
-                telemetryLogger.info("[bolus] Pump reported delivered volume: \(units)U (raw: \(response.deliveredVolume))")
-                return units == 0 ? nil : units
-            }
-        } catch {
-            telemetryLogger.error("[bolus] Failed to query last bolus status: \(error)")
-            return nil
-        }
-    }
-
-    private func fetchBatteryStatus(transport: PumpMessageTransport) {
-        do {
-            let request = makeBatteryRequest()
-
-            if let v2Request = request as? CurrentBatteryV2Request {
-                let response: CurrentBatteryV2Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: v2Request,
-                    expecting: CurrentBatteryV2Response.self
-                )
-
-                handleBatteryResponse(response, source: .telemetry)
-            } else if let v1Request = request as? CurrentBatteryV1Request {
-                let response: CurrentBatteryV1Response = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: v1Request,
-                    expecting: CurrentBatteryV1Response.self
-                )
-
-                handleBatteryResponse(response, source: .telemetry)
-            } else {
-                telemetryLogger
-                    .error(
-                        "Battery telemetry request builder returned unsupported type: \(String(describing: type(of: request)))"
-                    )
-            }
-        } catch {
-            telemetryLogger.error("Battery telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchReservoirStatus(transport: PumpMessageTransport) {
-        do {
-            let response = try pumpComm.sendMessage(
-                transport: transport,
-                message: InsulinStatusRequest(),
-                expecting: InsulinStatusResponse.self
-            )
-
-            handleReservoirResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Reservoir telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchDeliveryLimits(transport: PumpMessageTransport) {
-        do {
-            let (basalResponse, bolusResponse) = try pumpComm
-                .performOnCommandQueue { () -> (BasalLimitSettingsResponse, GlobalMaxBolusSettingsResponse) in
-                    let basalResponse: BasalLimitSettingsResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: BasalLimitSettingsRequest(),
-                        expecting: BasalLimitSettingsResponse.self
-                    )
-
-                    let bolusResponse: GlobalMaxBolusSettingsResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: GlobalMaxBolusSettingsRequest(),
-                        expecting: GlobalMaxBolusSettingsResponse.self
-                    )
-
-                    return (basalResponse, bolusResponse)
-                }
-
-            var managerState = lockedState.value
-            managerState.maxBasalLimitMilliunits = Int(basalResponse.basalLimit)
-            managerState.maxBasalLimitDefaultMilliunits = Int(basalResponse.basalLimitDefault)
-            managerState.maxBolusLimitMilliunits = bolusResponse.maxBolus
-            managerState.maxBolusLimitDefaultMilliunits = bolusResponse.maxBolusDefault
-            lockedState.value = managerState
-
-            notifyDelegateStateUpdated()
-        } catch {
-            telemetryLogger.error("Failed to fetch delivery limits: \(error.localizedDescription)")
-        }
-    }
-
-    private func fetchBasalStatus(transport: PumpMessageTransport) {
-        do {
-            let response: TempRateResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            )
-            
-            handleTempRateResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Temp basal telemetry request failed: \(error)")
-        }
-    }
-
-    func fetchBolusStatus(transport: PumpMessageTransport) {
-        do {
-            let response: CurrentBolusStatusResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: CurrentBolusStatusRequest(),
-                expecting: CurrentBolusStatusResponse.self
-            )
-
-            handleBolusResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Bolus telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchTimeSinceReset(transport: PumpMessageTransport) {
-        do {
-            let response: TimeSinceResetResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: TimeSinceResetRequest(),
-                expecting: TimeSinceResetResponse.self
-            )
-
-            handleTimeSinceResetResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("TimeSinceReset telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchControlIQStatus(transport: PumpMessageTransport) {
-        do {
-            let response: ControlIQInfoV2Response = try pumpComm.sendMessage(
-                transport: transport,
-                message: ControlIQInfoV2Request(),
-                expecting: ControlIQInfoV2Response.self
-            )
-
-            handleControlIQResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("ControlIQ status telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchHomeScreenStatus(transport: PumpMessageTransport) {
-        do {
-            let response: HomeScreenMirrorResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: HomeScreenMirrorRequest(),
-                expecting: HomeScreenMirrorResponse.self
-            )
-
-            handleHomeScreenMirrorResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("HomeScreen telemetry request failed: \(error)")
-        }
-    }
-
-    private func fetchNotificationCount(transport: PumpMessageTransport) {
-        let bundle = NotificationBundle()
-        do {
-            try pumpComm.performOnCommandQueue {
-                for request in NotificationBundle.allRequests() {
-                    if let response = try? self.pumpComm.sendMessage(transport: transport, message: request),
-                       NotificationBundle.isNotificationResponse(response)
-                    {
-                        bundle.add(response)
-                    }
-                }
-            }
-        } catch {
-            telemetryLogger.error("fetchNotificationCount failed: \(error)")
-        }
-
-        // Use the shared update method to keep the notification bundle and count in sync
-        updateNotificationBundle(bundle)
-    }
-
-    private func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse, transport: PumpMessageTransport) {
-        let basalAlertsToAck = alertResponse.alerts.intersection(
-            AlertStatusResponse.AlertResponseType.basalAlertsToIgnoreWhenLooping
-        )
-
-        guard !basalAlertsToAck.isEmpty else {
-            return
-        }
-
-        telemetryLogger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
-
-        for alert in basalAlertsToAck {
-            do {
-                let request = DismissNotificationRequest(
-                    notificationType: .alert,
-                    notificationId: UInt32(alert.rawValue)
-                )
-
-                let response: DismissNotificationResponse = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: request,
-                    expecting: DismissNotificationResponse.self
-                )
-
-                if response.status == 0 {
-                    telemetryLogger.info("[auto-ack] Successfully acknowledged \(alert)")
-                } else {
-                    telemetryLogger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
-                }
-            } catch {
-                telemetryLogger.error("[auto-ack] Error acknowledging \(alert): \(error)")
-            }
-        }
-    }
-
-    private func notifyDelegateStateUpdated() {
-        guard let delegate = pumpManagerDelegate else { return }
-        pumpDelegate.queue.async { [weak self] in
-            guard let self = self else { return }
-            delegate.pumpManagerDidUpdateState(self)
-        }
-
-        let status = status
-        for (_, statusObserver) in statusObservers.value {
-            statusObserver.queue.async {
-                statusObserver.observer.pumpManager(self, didUpdate: status, oldStatus: status)
-            }
-        }
-    }
-
-    private func resolvedStartSequence(after startDate: Date?) -> UInt32? {
-        if let lastSequence = lockedState.value.lastHistorySequenceNum {
-            return lastSequence &+ 1
-        }
-
-        let effectiveStartDate = startDate ?? pumpManagerDelegate?.startDateToFilterNewPumpEvents(for: self)
-
-        // Without a known sequence number, fall back to the earliest available sequence number reported
-        // by `HistoryLogStatusResponse`. Returning UInt32.min ensures the history fetch session maps the
-        // start to `firstSequenceNum` when logs exist.
-        if effectiveStartDate != nil {
-            return UInt32.min
-        }
-
-        return nil
-    }
-
-    private func notifyDelegateOfReservoir(_ value: ReservoirValue) {
-        guard let delegate = pumpManagerDelegate else { return }
-        pumpDelegate.queue.async { [weak self] in
-            guard let self = self else { return }
-            delegate.pumpManager(self, didReadReservoirValue: value.unitVolume, at: value.startDate) { [weak self] result in
+    internal func notifyDelegateStateUpdated() {
+        let status = TandemPumpManager.makeStatus(from: state)
+        let oldStatus = TandemPumpManager.makeStatus(from: oldState)
+
+        if let delegate = pumpManagerDelegate {
+            pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
-                switch result {
-                case .success:
-                    self.telemetryLogger.debug("Delegate accepted reservoir update")
-                case let .failure(error):
-                    self.telemetryLogger.warning("Delegate failed to store reservoir update: \(error)")
-                }
+
+                delegate.pumpManagerDidUpdateState(self)
+                delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
         }
+
+        statusObservers.forEach { observer in
+            observer.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
+        }
+
+        oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
     // MARK: - Status Observers
 
     public func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue) {
-        let uuid = UUID()
-        statusObservers.value[uuid] = (observer, queue)
+        statusObservers.insert(observer, queue: queue)
     }
 
     public func removeStatusObserver(_ observer: PumpManagerStatusObserver) {
-        statusObservers.value = statusObservers.value.filter { _, value in
-            value.observer !== observer
-        }
-    }
-
-    private func notifyStatusObservers(oldStatus: PumpManagerStatus, newStatus: PumpManagerStatus) {
-        guard oldStatus != newStatus else { return }
-
-        for (_, observerInfo) in statusObservers.value {
-            observerInfo.queue.async {
-                observerInfo.observer.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
-            }
-        }
-
-        // Also notify the main delegate
-        if let delegate = pumpManagerDelegate {
-            pumpDelegate.queue.async {
-                delegate.pumpManager(self, didUpdate: newStatus, oldStatus: oldStatus)
-            }
-        }
-    }
-
-    // MARK: - Scan Device Observers
-
-    public func addScanDeviceObserver(_ observer: StateObserver, queue: DispatchQueue) {
-        scanDeviceObservers.insert(observer, queue: queue)
-    }
-
-    public func removeScanDeviceObserver(_ observer: StateObserver) {
-        scanDeviceObservers.removeElement(observer)
-    }
-
-    func notifyScanDeviceDidChange(_ device: TandemPumpScan) {
-        scanDeviceObservers.forEach { observer in
-            observer.deviceScanDidUpdate(device)
-        }
-    }
-
-    private func updateStatus(_ update: (inout PumpManagerStatus) -> Void) {
-        let oldStatus = lockedStatus.value
-        var newStatus = oldStatus
-        update(&newStatus)
-        lockedStatus.value = newStatus
-
-        var managerState = lockedState.value
-        managerState.basalDeliveryState = newStatus.basalDeliveryState
-        managerState.bolusState = newStatus.bolusState
-        managerState.deliveryIsUncertain = newStatus.deliveryIsUncertain
-        lockedState.value = managerState
-
-        notifyStatusObservers(oldStatus: oldStatus, newStatus: newStatus)
+        statusObservers.removeElement(observer)
     }
 
     private func notifyPumpManagerDelegateOfError(_ error: PumpCommError) {
         guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
         queue.async {
             delegate.pumpManager(self, didError: PumpManagerError.communication(error))
-        }
-    }
-
-    private func recordReconciliation(at date: Date) {
-        var state = lockedState.value
-        state.lastReconciliation = date
-        lockedState.value = state
-        notifyPumpManagerDelegateDidUpdateState()
-    }
-
-    func notifyPumpManagerDelegateDidUpdateState() {
-        guard let delegate = pumpManagerDelegate, let queue = delegateQueue else { return }
-        queue.async {
-            delegate.pumpManagerDidUpdateState(self)
-        }
-    }
-
-    private func completeBolus(_ result: PumpManagerResult<DoseEntry>, completion: @escaping (PumpManagerError?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            switch result {
-            case let .success(dose):
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: [NewPumpEvent.bolus(dose: dose, units: dose.programmedUnits, date: dose.startDate)],
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: false, // Do not replace pending events while bolus is running
-                        completion: { _ in }
-                    )
-                }
-
-                completion(nil)
-            case let .failure(error):
-                completion(error)
-            }
-        }
-    }
-
-    private func completeCancelBolus(
-        _ result: PumpManagerResult<DoseEntry?>,
-        completion: @escaping (PumpManagerResult<DoseEntry?>) -> Void
-    ) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if case let .success(dose) = result, let dose = dose {
-                var events = [
-                    NewPumpEvent.bolus(dose: dose, units: dose.deliveredUnits ?? 0, date: dose.startDate)
-                ]
-
-                if let tempRateAbsolute = self.state.tempRateAbsolute,
-                   let tempRateDuration = self.state.tempRateDuration,
-                   let tempRateStart = self.state.tempRateStart
-                {
-                    events.append(
-                        NewPumpEvent.tempBasal(
-                            dose: DoseEntry.tempBasal(
-                                absoluteUnit: tempRateAbsolute,
-                                duration: tempRateDuration,
-                                insulinType: self.state.insulinType,
-                                startDate: tempRateStart
-                            ),
-                            date: tempRateStart
-                        )
-                    )
-                }
-
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: events,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result)
-        }
-    }
-
-    private func completeTempBasal(
-        _ result: PumpManagerResult<[NewPumpEvent]>,
-        completion: @escaping (PumpManagerError?) -> Void
-    ) {
-        guard let queue = delegateQueue else { return }
-
-        queue.async {
-            switch result {
-            case let .success(events):
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: events,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-
-                completion(nil)
-            case let .failure(error):
-                completion(error)
-            }
-        }
-    }
-
-    private func completeSuspend(_ result: (Error?, [NewPumpEvent]), completion: @escaping (Error?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if result.0 == nil, !result.1.isEmpty {
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: result.1,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result.0)
-        }
-    }
-
-    private func completeResume(_ result: (Error?, [NewPumpEvent]), completion: @escaping (Error?) -> Void) {
-        guard let queue = delegateQueue else { return }
-        queue.async {
-            if result.0 == nil, !result.1.isEmpty {
-                self.pumpDelegate.notify { delegate in
-                    guard let delegate = delegate else { return }
-
-                    delegate.pumpManager(
-                        self,
-                        hasNewPumpEvents: result.1,
-                        lastReconciliation: self.lockedState.value.lastReconciliation,
-                        replacePendingEvents: true,
-                        completion: { _ in }
-                    )
-                }
-            }
-
-            completion(result.0)
         }
     }
 
@@ -1408,249 +223,67 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func connect() {
-        tandemPump.delegate = self
-        pumpComm.delegate = self
-
-        if transportLock.value != nil {
-            telemetryLogger.debug("connect() called while transport already available – refreshing telemetry")
-            updateStatus { status in
-                status.deliveryIsUncertain = false
-            }
-            return
-        }
-
-        guard isOnboarded else {
-            log.error("connect() requested before pump is paired")
-            notifyPumpManagerDelegateOfError(.missingAuthenticationKey)
-            return
-        }
-
-        updateStatus { status in
-            status.deliveryIsUncertain = true
-        }
-
-        tandemPump.startScanning()
-    }
-
-    public func disconnect() {
-        // Send graceful disconnect to pump before tearing down BLE
-        if let transport = pairedTransport {
-            do {
-                _ = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: DisconnectPumpRequest(),
-                    expecting: DisconnectPumpResponse.self
-                )
-            } catch {
-                log.debug("Graceful disconnect request failed (non-fatal): \(error.localizedDescription)")
-            }
-        }
-
-        if let manager = activePeripheralManager {
-            notificationRouter.stop(with: manager)
-            activePeripheralManager = nil
-        }
-        updateTransport(nil)
-        tandemPump.disconnect()
-    }
-
-    public func configureDeliveryActions(_ enabled: Bool) {
-        tandemPump.configureDeliveryActions(enabled: enabled)
-
-        var state = lockedState.value
-        guard state.insulinDeliveryActionsEnabled != enabled else { return }
-        state.insulinDeliveryActionsEnabled = enabled
-        lockedState.value = state
-
-        notifyDelegateStateUpdated()
-    }
-
-    public func configureConnectionSharing(_ enabled: Bool) {
-        tandemPump.configureConnectionSharing(enabled: enabled)
-
-        var state = lockedState.value
-        guard state.connectionSharingEnabled != enabled else { return }
-        state.connectionSharingEnabled = enabled
-        lockedState.value = state
-
-        notifyDelegateStateUpdated()
-    }
-
     public func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
-        var state = lockedState.value
-        guard state.autoAcknowledgeBasalAlerts != enabled else { return }
         state.autoAcknowledgeBasalAlerts = enabled
-        lockedState.value = state
-
-        telemetryLogger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
         notifyDelegateStateUpdated()
+
+        logger.info("Auto-acknowledge basal alerts \(enabled ? "enabled" : "disabled")")
     }
 
     public func configureSilentMode(_ enabled: Bool) {
-        var state = lockedState.value
-        guard state.useSilentTones != enabled else { return }
         state.useSilentTones = enabled
-        lockedState.value = state
-
-        telemetryLogger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
         notifyDelegateStateUpdated()
-    }
 
-    // MARK: - Control-IQ / DIY Algorithm Mode
-
-    private var isControlIQModeActive: Bool {
-        lockedState.value.useControlIQ
-    }
-
-    public func configureControlIQMode(_ request: ChangeControlIQSettingsRequest, completion: @escaping (Bool) -> Void) {
-        guard let transport = pairedTransport else {
-            completion(false)
-            return
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                completion(false)
-                return
-            }
-
-            do {
-                try self.pumpComm.performOnCommandQueue {
-                    // When switching to ControlIQ, cancel any active DIY temp basal first
-                    if request.enabled, self.state.tempRateAbsolute != nil {
-                        self.log.info("[configureControlIQMode] Cancelling active DIY temp basal before enabling ControlIQ")
-                        let _: StopTempRateResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: StopTempRateRequest(),
-                            expecting: StopTempRateResponse.self
-                        )
-
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = nil
-                        state.tempRateAbsolute = nil
-                        state.tempRateStart = nil
-                        state.tempRateDuration = nil
-                        state.tempRateSyncIdentifier = nil
-                        self.lockedState.value = state
-                    }
-
-                    let response: ChangeControlIQSettingsResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: ChangeControlIQSettingsResponse.self
-                    )
-
-                    guard response.isStatusOK else {
-                        self.log.error("[configureControlIQMode] Pump rejected ControlIQ change to enabled=\(request.enabled)")
-                        throw PumpCommError.errorResponse(
-                            context: String(
-                                localized: "Pump rejected Control-IQ settings change",
-                                comment: "Message when pump rejects ControlIQ settings change"
-                            ),
-                            request: request,
-                            response: response
-                        )
-                    }
-                }
-            } catch {
-                self.log.error("[configureControlIQMode] Failed: \(error.localizedDescription)")
-                DispatchQueue.main.async { completion(false) }
-                return
-            }
-
-            // Pump accepted -- update local preference
-            var state = self.lockedState.value
-            state.useControlIQ = request.enabled
-            state.controlIQWeight = request.weightLbs
-            state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
-            self.lockedState.value = state
-
-            self.telemetryLogger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
-
-            // Refresh pump state to confirm ControlIQ status
-            Thread.sleep(forTimeInterval: 1.0)
-            self.ensureCurrentPumpData { _ in }
-
-            self.notifyDelegateStateUpdated()
-            DispatchQueue.main.async { completion(true) }
-        }
+        logger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
     }
 
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
-        do {
-            try pumpComm.performOnCommandQueue {
-                guard let transport = pairedTransport else {
-                    telemetryLogger.error("Skipping current Pump data -> Transporter not ready")
-                    completion?(nil)
-                    return
-                }
-                
-                self.fetchDeliveryLimits(transport: transport)
-                self.fetchBasalStatus(transport: transport)
-                self.fetchReservoirStatus(transport: transport)
-                self.fetchBatteryStatus(transport: transport)
-                self.fetchBolusStatus(transport: transport)
-                self.fetchHomeScreenStatus(transport: transport)
-                self.fetchControlIQStatus(transport: transport)
-                self.fetchNotificationCount(transport: transport)
-                self.fetchTimeSinceReset(transport: transport)
-                self.fetchGlobalPumpSettings(transport: transport)
+        logger.info("Sync pump data...")
+
+        if let lastSync = state.lastReconciliation, Date.now.timeIntervalSince(lastSync) < .minutes(4.5) {
+            logger.warning("State already in sync: \(Date.now.timeIntervalSince(lastSync)) sec")
+            completion?(lastSync)
+            return
+        }
+
+        syncPumpData(completion: completion)
+    }
+
+    func syncPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for sync: \(error.localizedDescription)")
+                completion?(self.state.lastReconciliation)
+                return
             }
-        } catch {
-            log.error("ensureCurrentPumpData failed: \(error)")
-        }
 
-        recordReconciliation(at: Date.now)
+            let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
+            if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
+                self.fetchControlIQStatus()
+                self.fetchDeliveryLimits()
+                self.fetchGlobalPumpSettings()
+                self.fetchPumpInformation()
 
-        completion?(lockedState.value.lastReconciliation)
-    }
-
-    public func fetchGlobalPumpSettings(transport: PumpMessageTransport) {
-        do {
-            let response: PumpGlobalsResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: PumpGlobalsRequest(),
-                expecting: PumpGlobalsResponse.self
-            )
-
-            handleGlobalPumpSettingsResponse(response, source: .telemetry)
-        } catch {
-            telemetryLogger.error("Pump global telemetry request failed: \(error)")
-        }
-    }
-
-    public func sendMessage(message: Message) -> Message? {
-        guard let transport = pairedTransport else {
-            return nil
-        }
-        return try? pumpComm.sendMessage(transport: transport, message: message)
-    }
-
-    private static let lastHeartbeatDebounceInterval: TimeInterval = 10
-
-    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
-        provideHeartbeat = mustProvideBLEHeartbeat
-    }
-
-    /// Query the delegate to determine whether heartbeats should be enabled.
-    /// Must not be called on the delegate's queue.
-    private func updateBLEHeartbeatPreference() {
-        pumpDelegate.notify { delegate in
-            self.provideHeartbeat = delegate?.pumpManagerMustProvideBLEHeartbeat(self) == true
-        }
-    }
-
-    private func updateLastHeartbeatIfNeeded() {
-        if provideHeartbeat, Date().timeIntervalSince(lastHeartbeat) > Self.lastHeartbeatDebounceInterval {
-            pumpDelegate.notify { delegate in
-                delegate?.pumpManagerBLEHeartbeatDidFire(self)
+                self.state.lastSettingsCheckedAt = Date.now
             }
-            lastHeartbeat = Date()
+
+            self.fetchReservoirStatus()
+            self.fetchBatteryStatus()
+            self.fetchBolusStatus()
+            self.fetchBasalStatus()
+            self.fetchNotifications()
+            self.fetchTimeSinceReset()
+
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+
+            completion?(self.state.lastReconciliation)
         }
     }
+
+    public func setMustProvideBLEHeartbeat(_: Bool) {}
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
         bolusProgressReport
@@ -1664,323 +297,156 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func setTargetPeripheral(_ peripheralIdentifier: UUID?) {
-        targetPeripheralIdentifier = peripheralIdentifier
-    }
-
-    public func setScanningMode(_ enabled: Bool) {
-        inScanningMode.value = enabled
-    }
-
-    private func handleAlertResponse(_ alertResponse: AlertStatusResponse) {
-        guard let transport = telemetryTransportIfReady(for: .alerts) else {
-            return
-        }
-
-        // Auto-acknowledge basal alerts if enabled
-        if lockedState.value.autoAcknowledgeBasalAlerts {
-            autoAcknowledgeBasalAlertsIfNeeded(alertResponse: alertResponse, transport: transport)
-        }
-    }
-
-    public func pairPump(
-        with pairingCode: String,
-        peripheral: CBPeripheral,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        // Ensure we don't reuse stale authentication material from a previous pairing.
-        // Otherwise telemetry triggers when the transport comes online and the pump
-        // immediately disconnects because requests are signed with an invalid key.
-        clearStalePairingArtifactsIfNeeded()
-
-        // Prevent the session bootstrap from racing with pairing by clearing the
-        // initialization flag *before* BLE connects (didCompleteConfiguration checks it).
-        needsSessionInitialization.value = false
-
-        Task {
-            do {
-                let peripheralUuid = peripheral.identifier.uuidString
-                let sanitizedCode = try PumpStateSupplier.sanitizeAndStorePairingCode(pairingCode)
-                tandemPump.startScanning()
-
-                var tries = 0
-                while peripheral.state != .connected {
-                    try await Task.sleep(nanoseconds: 100_000_000)
-                    log.debug("Waiting for peripheral to be in connected state, in \(peripheral.state): \(peripheral)")
-                    tries += 1
-
-                    if tries >= 50 {
-                        pairingInProgress.value = false
-                        completion(.failure(NSError(
-                            domain: "Gave up waiting for peripheral to connect",
-                            code: -1
-                        )))
-                        return
-                    }
-                }
-
-                // Also wait for transport to be initialized (didCompleteConfiguration must have been called)
-                tries = 0
-                while transportLock.value == nil {
-                    try await Task.sleep(nanoseconds: 100_000_000)
-                    log.debug("Waiting for transport to be initialized...")
-                    tries += 1
-
-                    if tries >= 50 {
-                        pairingInProgress.value = false
-                        completion(.failure(NSError(
-                            domain: "Gave up waiting for transport initialization",
-                            code: -2
-                        )))
-                        return
-                    }
-                }
-
-                guard let transport = transportLock.value else {
-                    log.error("pumpNotConnected during pairing")
-                    pairingInProgress.value = false
-                    completion(.failure(PumpCommError.pumpNotConnected))
-                    return
-                }
-
-                // Cancel the initial connection timeout — the JPAKE handshake
-                // (especially the first SwiftECC round) can take >10 seconds and
-                // the timeout would soft-disconnect the pump mid-handshake.
-                initialConnectionTimeoutWork?.cancel()
-                initialConnectionTimeoutWork = nil
-                pairingInProgress.value = true
-                log.info("Pairing started – connection timeout cancelled")
-
-                // pair() now handles: JPAKE + 250ms wait + TimeSinceResetRequest
-                try pumpComm.pair(transport: transport, peripheralUuid: peripheralUuid, pairingCode: sanitizedCode)
-
-                pairingInProgress.value = false
-                processedResponseMessages.value += 1
-                log.info("Succesfully paired!")
-                completion(.success(()))
-            } catch {
-                pairingInProgress.value = false
-                log.error("Failed to pair: \(error.localizedDescription)")
-                completion(.failure(error))
-            }
-        }
-    }
-
-    // MARK: - Dose Delivery Methods
-
     public func enactBolus(
         units: Double,
         activationType: BolusActivationType,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
-        guard let transport = pairedTransport else {
-            telemetryLogger.error("[enactBolus] could not enact bolus because no paired transport")
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeBolus(.failure(.communication(error)), completion: completion)
+        logger.info("Enacting bolus - units \(units)U")
+
+        if state.useControlIQ, activationType.isAutomatic {
+            logger.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
+            completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
 
-        if let error = validateBolusRequest(units: units, activationType) {
-            telemetryLogger
-                .error("[enactBolus] could not validate bolus request: units=\(units) activationType=\(activationType)")
-            completeBolus(.failure(error), completion: completion)
-            return
-        }
-
-        if isControlIQModeActive, activationType.isAutomatic {
-            log.info("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
-            completeBolus(.failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)), completion: completion)
-            return
-        }
-
-        updateStatus { status in
-            status.bolusState = .initiating
-        }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var permissionBolusId: Int?
-            var shouldReleasePermissionOnFailure = false
-
-            do {
-                let (initiateResponse, dose) = try self.pumpComm
-                    .performOnCommandQueue { () -> (InitiateBolusResponse, UnfinalizedDose) in
-                        let permissionResponse: BolusPermissionResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: BolusPermissionRequest(),
-                            expecting: BolusPermissionResponse.self
-                        )
-
-                        guard permissionResponse.isPermissionGranted else {
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump rejected bolus permission request",
-                                    comment: "Message when pump disallows bolus from occurring"
-                                ),
-                                request: BolusPermissionRequest(),
-                                response: permissionResponse
-                            )
-                        }
-
-                        permissionBolusId = permissionResponse.bolusId
-                        shouldReleasePermissionOnFailure = true
-
-                        let milliUnits = max(0, Int((units * 1000).rounded()))
-                        let totalVolume = UInt32(clamping: milliUnits)
-
-                        let bolusRequest = InitiateBolusRequest(
-                            totalVolume: totalVolume,
-                            bolusID: permissionResponse.bolusId,
-                            bolusTypeBitmask: BolusType.toBitmask([.food2]),
-                            foodVolume: totalVolume,
-                            correctionVolume: 0,
-                            bolusCarbs: 0,
-                            bolusBG: 0,
-                            bolusIOB: 0
-                        )
-
-                        self.telemetryLogger.info("[enactBolus] sending InitiateBolusRequest=\(bolusRequest)")
-
-                        let initiateResponse: InitiateBolusResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: bolusRequest,
-                            expecting: InitiateBolusResponse.self
-                        )
-
-                        guard initiateResponse.wasBolusInitiated else {
-                            self.telemetryLogger.info("[enactBolus] bolus not initiated")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump rejected bolus initiate request",
-                                    comment: "Message when pump disallows bolus from occurring"
-                                ),
-                                request: bolusRequest,
-                                response: initiateResponse
-                            )
-                        }
-
-                        self.telemetryLogger.info("[enactBolus] bolus started")
-
-                        shouldReleasePermissionOnFailure = false
-
-                        let dose = UnfinalizedDose(
-                            units: units,
-                            duration: self.estimatedDuration(toBolus: units) + .seconds(5), // 5s needed before bolus enacting is started
-                            activationType: activationType,
-                            insulinType: self.lockedState.value.insulinType
-                        )
-
-                        return (initiateResponse, dose)
-                    }
-
-                let doseEntry = dose.toDoseEntry(endDate: nil)
-                bolusProgressReport = TandemDoseProgressReporter(
-                    pumpManager: self,
-                    dose: doseEntry,
-                    activationType: activationType
-                )
-                telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .seconds(0.5)) {
-                    guard let transport = self.pairedTransport else { return }
-                    self.fetchBolusStatus(transport: transport)
-                }
-
-                self.activeBolus.value = ActiveBolus(
-                    id: initiateResponse.bolusId,
-                    dose: dose
-                )
-
-                self.recordReconciliation(at: Date.now)
-                self.completeBolus(.success(doseEntry), completion: completion)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                if shouldReleasePermissionOnFailure, let bolusId = permissionBolusId {
-                    self.releaseBolusPermission(transport: transport, bolusId: bolusId)
-                }
-                self.activeBolus.value = nil
-                self.updateStatus { status in
-                    status.bolusState = .noBolus
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeBolus(.failure(.communication(pumpError)), completion: completion)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for bolus: \(error.localizedDescription)")
+                completion(.communication(PumpCommError.pumpNotConnected))
+                return
             }
+
+            guard let permissionResponse = self.bluetooth.write(
+                message: BolusPermissionRequest(),
+                expecting: BolusPermissionResponse.self
+            ) as? BolusPermissionResponse else {
+                self.logger.error("Failed to request bolus permission")
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            guard permissionResponse.isPermissionGranted else {
+                self.logger.error("Pump rejected bolus permission request")
+                completion(.communication(PumpCommError.invalidPacket))
+                return
+            }
+
+            let milliUnits = max(0, Int((units * 1000).rounded()))
+            let totalVolume = UInt32(clamping: milliUnits)
+
+            let bolusRequest = InitiateBolusRequest(
+                totalVolume: totalVolume,
+                bolusID: permissionResponse.bolusId,
+                bolusTypeBitmask: BolusType.toBitmask([.food2]),
+                foodVolume: totalVolume,
+                correctionVolume: 0,
+                bolusCarbs: 0,
+                bolusBG: 0,
+                bolusIOB: 0
+            )
+            guard let initiateResponse = self.bluetooth.write(
+                message: bolusRequest,
+                expecting: InitiateBolusResponse.self
+            ) as? InitiateBolusResponse else {
+                self.logger.error("Failed to initiate bolus")
+                self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            guard initiateResponse.wasBolusInitiated else {
+                self.logger.error("Bolus was not initiated")
+                self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
+                completion(.communication(PumpCommError.invalidPacket))
+                return
+            }
+
+            let dose = UnfinalizedDose(
+                units: units,
+                // 5s needed before bolus enacting is started
+                duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                activationType: activationType,
+                insulinType: self.state.insulinType,
+                bolusId: permissionResponse.bolusId
+            )
+
+            let doseEntry = dose.toDoseEntry(isMutable: true)
+            self.bolusProgressReport = TandemDoseProgressReporter(
+                pumpManager: self,
+                dose: doseEntry,
+                activationType: activationType
+            )
+
+            self.state.bolusDose = dose
+            self.state.bolusState = .initiating
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(
+                [NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)],
+                replacePendingEvents: false
+            )
+
+            completion(nil)
         }
     }
 
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
-        updateStatus { status in
-            status.bolusState = .canceling
-        }
+        logger.info("Cancelling bolus...")
 
-        guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.bolusState = .noBolus
-            }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(.communication(error)), completion: completion)
+        guard let bolusDose = state.bolusDose, let bolusId = bolusDose.bolusId else {
+            logger.error("No active bolus...")
+            completion(.failure(.communication(PumpCommError.noActiveBolus)))
             return
         }
 
-        guard let active = activeBolus.value else {
-            updateStatus { status in
-                status.bolusState = .noBolus
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for cancel bolus: \(error.localizedDescription)")
+                completion(.failure(.communication(PumpCommError.pumpNotConnected)))
+                return
             }
-            let error = PumpCommError.noActiveBolus
-            notifyPumpManagerDelegateOfError(error)
-            completeCancelBolus(.failure(.communication(error)), completion: completion)
-            return
-        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            guard let response = self.bluetooth.write(
+                message: CancelBolusRequest(bolusId: bolusId),
+                expecting: CancelBolusResponse.self
+            ) as? CancelBolusResponse else {
+                self.logger.error("Failed to cancel bolus")
+                completion(.failure(.communication(PumpCommError.noResponse)))
+                return
+            }
 
-            do {
-                let request = CancelBolusRequest(bolusId: active.id)
-                let response: CancelBolusResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: request,
-                    expecting: CancelBolusResponse.self
+            guard response.wasCancelled else {
+                self.logger.error("Pump failed to cancel bolus")
+                completion(.failure(.communication(PumpCommError.invalidPacket)))
+                return
+            }
+
+            // Allow the Mobi to store the bolus in storage
+            Thread.sleep(forTimeInterval: .seconds(2))
+
+            // Query the pump for the actual delivered volume before clearing state
+            bolusDose.deliveredUnits = self.queryLastBolusDeliveredVolume(bolusId: bolusId) ?? 0
+
+            let canceledDose = bolusDose.toDoseEntry(endDate: Date.now)
+
+            // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
+            self.telemetryScheduler.cancelAll()
+            self.bolusProgressReport = nil
+            self.state.bolusDose = nil
+
+            var events = self.getActivePumpEvents()
+            events
+                .append(
+                    NewPumpEvent
+                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
                 )
 
-                guard response.wasCancelled else {
-                    throw PumpCommError.errorResponse(
-                        context: String(
-                            localized: "Pump failed to cancel bolus",
-                            comment: "Message when bolus could not be cancelled"
-                        ),
-                        request: request,
-                        response: response
-                    )
-                }
-                
-                self.updateStatus { status in
-                    status.bolusState = .noBolus
-                }
-                
-                // Allow the Mobi to store the bolus in storage
-                Thread.sleep(forTimeInterval: .seconds(2))
+            self.state.lastReconciliation = Date.now
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
 
-                // Query the pump for the actual delivered volume before clearing state
-                let deliveredVolume = self.queryLastBolusDeliveredVolume(transport: transport, bolusId: active.id)
-                let canceledDose = active.dose.toDoseEntry(endDate: Date.now, cancelledUnits: deliveredVolume)
-
-                // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
-                self.telemetryScheduler.cancelAll()
-                self.bolusProgressReport = nil
-                self.activeBolus.value = nil
-
-                self.recordReconciliation(at: Date.now)
-                self.completeCancelBolus(.success(canceledDose), completion: completion)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.bolusState = .inProgress(active.dose.toDoseEntry(endDate: nil))
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeCancelBolus(.failure(.communication(pumpError)), completion: completion)
-            }
+            completion(.success(nil))
         }
     }
 
@@ -1989,1100 +455,930 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
-        if isControlIQModeActive {
-            log.info("[enactTempBasal] Blocked: Control-IQ mode is active")
-            completeTempBasal(
-                .failure(.deviceState(TandemPumpManagerValidationError.controlIQModeActive)),
-                completion: completion
-            )
+        let unitsPerHour = roundToSupportedBasalRate(unitsPerHour: unitsPerHour)
+        logger.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
+
+        guard !state.useControlIQ else {
+            logger.warning("[enactTempBasal] Blocked: Control-IQ mode is active")
+            completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
             return
         }
 
-        guard let transport = pairedTransport else {
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeTempBasal(.failure(.communication(error)), completion: completion)
+        let baselineRate = getScheduledBasalRate()
+        guard baselineRate > 0 else {
+            logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
+            completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
             return
         }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
+                completion(.connection(PumpCommError.pumpNotConnected))
+                return
+            }
 
-            var pumpEvents: [NewPumpEvent] = []
-            do {
-                try self.pumpComm.performOnCommandQueue {
-                    // Query pump's current temp basal state, in case there is an active temp basal we don't have in our own state
-                    let currentTempRate: TempRateResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: TempRateRequest(),
-                        expecting: TempRateResponse.self
-                    )
+            guard let currentBasal = self.bluetooth.write(
+                message: CurrentBasalStatusRequest(),
+                expecting: CurrentBasalStatusResponse.self
+            ) as? CurrentBasalStatusResponse else {
+                self.logger.error("Failed to fetch current temp rate")
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
 
-                    self.log
-                        .info("Pump temp basal state: active=\(currentTempRate.active), percent=\(currentTempRate.percentage)%")
-
-                    // Cancel any active temp basal on the pump (whether we know about it or not)
-                    if currentTempRate.active {
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .cancelingTempBasal
-                        }
-
-                        let response: StopTempRateResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: StopTempRateRequest(),
-                            expecting: StopTempRateResponse.self
-                        )
-
-                        guard response.isStatusOK else {
-                            self.log.error("Failed to cancel temp basal - status: \(response.status)")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump failed to cancel temp basal",
-                                    comment: "Message when pump rejects request to stop temp rate"
-                                ),
-                                request: StopTempRateRequest(),
-                                response: response
-                            )
-                        }
-
-                        // Create cancellation event using either local state or pump-reported values
-                        let tempRateAbsolute = self.state
-                            .tempRateAbsolute ?? (self.getScheduledBasalRate() * (Double(currentTempRate.percentage) / 100))
-                        let tempRateStart = self.state.tempRateStart ?? currentTempRate.startTime
-                        let cancelledDose = DoseEntry.tempBasal(
-                            absoluteUnit: tempRateAbsolute,
-                            duration: 0, // Ignored when a dose is finished
-                            insulinType: self.lockedState.value.insulinType,
-                            startDate: tempRateStart,
-                            endDate: Date.now
-                        )
-                        pumpEvents.append(NewPumpEvent.tempBasal(dose: cancelledDose, date: cancelledDose.startDate))
-
-                        // Clear local temp basal state
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = nil
-                        state.tempRateAbsolute = nil
-                        state.tempRateStart = nil
-                        state.tempRateDuration = nil
-                        state.tempRateSyncIdentifier = nil
-                        self.lockedState.value = state
-
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-                    }
-
-                    let baselineRate = self.getScheduledBasalRate()
-                    guard baselineRate > 0 else {
-                        self.log.error("No scheduled basal rate present or is 0, cannot enact temp basal")
-                        throw PumpCommError.invalidScheduledBasalRate
-                    }
-
-                    let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-                    let absoluteRate = self
-                        .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
-
-                    if duration <= 0 || percent == 100 {
-                        // Loop wants us to only cancel the temp basal
-                        let basalDose = DoseEntry.basal(
-                            rate: self.getScheduledBasalRate(),
-                            insulinType: self.lockedState.value.insulinType
-                        )
-                        pumpEvents.append(NewPumpEvent.basal(dose: basalDose, date: basalDose.startDate))
-                        
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .active(Date.now)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                    } else {
-                        // Enact new temp basal
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .initiatingTempBasal
-                        }
-
-                        if absoluteRate < unitsPerHour {
-                            self.log
-                                .warning(
-                                    "Temp basal percentage limit reached: can only set \(absoluteRate)U/hr instead of requested \(unitsPerHour)U/hr"
-                                )
-                        }
-
-                        self.log
-                            .info(
-                                "ENACT-TEMP-BASAL(unitsRequested: \(unitsPerHour)U/hr, absoluteRate: \(absoluteRate)U/hr, minutes: \(duration.minutes), percent: \(percent)%)"
-                            )
-                        let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
-                        let response: SetTempRateResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: request,
-                            expecting: SetTempRateResponse.self
-                        )
-
-                        if !response.isStatusOK {
-                            self.log.error("enactTempBasal: SetTempRateResponse returned error status: \(response.status)")
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Pump failed to cancel temp basal",
-                                    comment: "Message when pump rejects request to stop temp rate"
-                                ),
-                                request: request,
-                                response: response
-                            )
-                        }
-
-                        let startTime = Date.now
-                        let dose = DoseEntry.tempBasal(
-                            absoluteUnit: absoluteRate,
-                            duration: duration,
-                            insulinType: self.lockedState.value.insulinType,
-                            startDate: startTime
-                        )
-                        pumpEvents.append(NewPumpEvent.tempBasal(dose: dose, date: dose.startDate))
-
-                        var state = self.lockedState.value
-                        state.tempRatePercentage = percent
-                        state.tempRateAbsolute = absoluteRate
-                        state.tempRateStart = startTime
-                        state.tempRateDuration = duration
-                        state.tempRateSyncIdentifier = dose.syncIdentifier
-                        self.lockedState.value = state
-                        
-                        self.updateStatus { status in
-                            status.basalDeliveryState = .tempBasal(dose)
-                        }
-
-                        self.recordReconciliation(at: Date.now)
-                        self.completeTempBasal(.success(pumpEvents), completion: completion)
-                    }
-                } // end performOnCommandQueue
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-
-                if !pumpEvents.isEmpty {
-                    // Ensure all events are commited to Loopkit
-                    self.pumpDelegate.notify { delegate in
-                        guard let delegate = delegate else { return }
-                        delegate.pumpManager(
-                            self,
-                            hasNewPumpEvents: pumpEvents,
-                            lastReconciliation: self.lockedState.value.lastReconciliation,
-                            replacePendingEvents: true,
-                            completion: { _ in }
-                        )
-                    }
+            if currentBasal.basalType == .tempBasal {
+                guard let stopCurrentRate = self.bluetooth.write(
+                    message: StopTempRateRequest(),
+                    expecting: StopTempRateResponse.self
+                ) as? StopTempRateResponse else {
+                    self.logger.error("Failed to stop temp rate")
+                    completion(.communication(PumpCommError.noResponse))
+                    return
                 }
 
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeTempBasal(.failure(.communication(pumpError)), completion: completion)
+                guard stopCurrentRate.isStatusOK else {
+                    self.logger.error("Failed to stop temp rate - Status: \(stopCurrentRate.status)")
+                    completion(.communication(PumpCommError.invalidPacket))
+                    return
+                }
+
+                self.logger.info("Current temp basal cancelled!")
             }
-        }
-    }
 
-    private var currentSettings: TandemPumpManagerSettings {
-        lockedState.value.settings
-    }
+            let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
+            let absoluteRate = self
+                .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
 
-    private var latestInsulinOnBoard: Double? {
-        lockedState.value.latestInsulinOnBoard
-    }
+            if duration < .ulpOfOne || percent == 100 {
+                // We only needed to cancel any current temp basal
+                // Qualifying events will handle state update
+                self.logger.info("Enact completed! (no basal rate change)")
 
-    private func validateBolusRequest(units: Double, _: BolusActivationType) -> PumpManagerError? {
-        guard units > 0 else {
-            return .deviceState(TandemPumpManagerValidationError.invalidBolusAmount(requested: units))
-        }
-
-        if let maxBolus = currentSettings.maxBolus, units > maxBolus {
-            return .deviceState(TandemPumpManagerValidationError.maximumBolusExceeded(requested: units, maximum: maxBolus))
-        }
-
-        if let maxIOB = currentSettings.maxInsulinOnBoard,
-           let currentIOB = latestInsulinOnBoard,
-           currentIOB + units > maxIOB
-        {
-            return .deviceState(
-                TandemPumpManagerValidationError.insulinOnBoardLimitExceeded(
-                    currentIOB: currentIOB,
-                    requested: units,
-                    maximum: maxIOB
+                let dose = UnfinalizedDose(
+                    basalRate: self.getScheduledBasalRate(),
+                    insulinType: self.state.insulinType,
+                    startDate: Date.now
                 )
+                var events = self.getActivePumpEvents(endDate: dose.startDate)
+                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
+
+                self.state.basalDose = dose
+                self.state.lastReconciliation = dose.startDate
+
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+
+                completion(nil)
+                return
+            }
+
+            let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
+            guard let response = self.bluetooth.write(
+                message: request,
+                expecting: SetTempRateResponse.self
+            ) as? SetTempRateResponse else {
+                self.logger.error("Failed to set temp rate")
+                completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            guard response.isStatusOK else {
+                self.logger
+                    .error(
+                        "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(duration.minutes)min"
+                    )
+                completion(.communication(PumpCommError.invalidPacket))
+                return
+            }
+
+            let dose = UnfinalizedDose(
+                tempRate: absoluteRate,
+                duration: duration,
+                automatic: true,
+                insulinType: self.state.insulinType,
             )
+            var events = self.getActivePumpEvents(endDate: dose.startDate)
+            events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
+
+            self.state.basalDose = dose
+            self.state.lastReconciliation = dose.startDate
+
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
+
+            self.logger.info("Temp basal enacted!")
+            completion(nil)
         }
-
-        return nil
     }
-
-    // MARK: - Delivery Control Methods
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        let previousStatus = lockedStatus.value
-        updateStatus { status in
-            status.basalDeliveryState = .suspending
-        }
+        logger.info("Suspend Insulin Delivery...")
 
-        guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.basalDeliveryState = previousStatus.basalDeliveryState
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
+                completion(error)
+                return
             }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeSuspend((error, []), completion: completion)
-            return
-        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                let response: SuspendPumpingResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: SuspendPumpingRequest(),
-                    expecting: SuspendPumpingResponse.self
-                )
-
-                guard response.status == 0 else {
-                    throw PumpCommError.errorResponse(
-                        context: String(
-                            localized: "Pump failed to suspend delivery",
-                            comment: "Message when pump rejects request to suspend insulin delivery"
-                        ),
-                        request: SuspendPumpingRequest(),
-                        response: response
-                    )
-                }
-
-                var doses = [
-                    NewPumpEvent.suspend(dose: DoseEntry.suspend(suspendDate: Date.now))
-                ]
-
-                if let tempRateAbsolute = state.tempRateAbsolute, let tempRateStart = state.tempRateStart {
-                    let tempBasalDose = DoseEntry.tempBasal(
-                        absoluteUnit: tempRateAbsolute,
-                        duration: 0,
-                        insulinType: lockedState.value.insulinType,
-                        startDate: tempRateStart,
-                        endDate: Date.now
-                    )
-                    doses.append(
-                        NewPumpEvent.tempBasal(dose: tempBasalDose, date: tempBasalDose.startDate)
-                    )
-
-                    var state = lockedState.value
-                    state.tempRatePercentage = nil
-                    state.tempRateAbsolute = nil
-                    state.tempRateStart = nil
-                    state.tempRateDuration = nil
-                    lockedState.value = state
-                }
-
-                self.updateStatus { status in
-                    status.basalDeliveryState = .suspended(Date.now)
-                    status.bolusState = .noBolus
-                }
-
-                self.recordReconciliation(at: Date.now)
-                self.completeSuspend((nil, doses), completion: completion)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.basalDeliveryState = previousStatus.basalDeliveryState
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeSuspend((pumpError, []), completion: completion)
+            guard let currentTempResponse = self.bluetooth.write(
+                message: TempRateRequest(),
+                expecting: TempRateResponse.self
+            ) as? TempRateResponse else {
+                self.logger.error("Failed to get currentTempRate...")
+                completion(PumpCommError.noResponse)
+                return
             }
+            if currentTempResponse.active {
+                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateRequest.self)
+            }
+
+            let response = self.bluetooth.write(
+                message: SuspendPumpingRequest(),
+                expecting: SuspendPumpingResponse.self
+            ) as? SuspendPumpingResponse
+            guard let response, response.status == 0 else {
+                self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
+                completion(PumpCommError.noResponse)
+                return
+            }
+
+            let suspendDose = UnfinalizedDose(suspendStartTime: Date.now)
+            var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
+            events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
+
+            self.state.basalDose = suspendDose
+            self.state.lastReconciliation = Date.now
+
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
+
+            self.logger.info("Insulin Delivery Suspended!")
+            completion(nil)
         }
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
-        let previousStatus = lockedStatus.value
-        updateStatus { status in
-            status.basalDeliveryState = .resuming
-        }
+        logger.info("Resume Insulin Delivery...")
 
-        guard let transport = pairedTransport else {
-            updateStatus { status in
-                status.basalDeliveryState = previousStatus.basalDeliveryState
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
+                completion(error)
+                return
             }
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completeResume((error, []), completion: completion)
-            return
-        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                let response: ResumePumpingResponse = try self.pumpComm.sendMessage(
-                    transport: transport,
-                    message: ResumePumpingRequest(),
-                    expecting: ResumePumpingResponse.self
-                )
-
-                guard response.status == 0 else {
-                    throw PumpCommError.errorResponse(
-                        context: String(
-                            localized: "Pump failed to resume delivery",
-                            comment: "Message when pump rejects request to resume insulin delivery"
-                        ),
-                        request: ResumePumpingRequest(),
-                        response: response
-                    )
-                }
-
-                let events = [
-                    NewPumpEvent.resume(dose: DoseEntry.resume(insulinType: lockedState.value.insulinType)),
-                    NewPumpEvent
-                        .basal(
-                            dose: DoseEntry
-                                .basal(rate: getScheduledBasalRate(), insulinType: lockedState.value.insulinType)
-                        )
-                ]
-
-                var state = lockedState.value
-                state.tempRatePercentage = nil
-                state.tempRateAbsolute = nil
-                state.tempRateStart = nil
-                state.tempRateDuration = nil
-                lockedState.value = state
-
-                self.updateStatus { status in
-                    status.basalDeliveryState = .active(Date.now)
-                }
-
-                self.recordReconciliation(at: Date.now)
-                self.completeResume((nil, events), completion: completion)
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.updateStatus { status in
-                    status.basalDeliveryState = previousStatus.basalDeliveryState
-                }
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.completeResume((pumpError, []), completion: completion)
+            let response = self.bluetooth.write(
+                message: ResumePumpingRequest(),
+                expecting: ResumePumpingResponse.self
+            ) as? ResumePumpingResponse
+            guard let response, response.status == 0 else {
+                self.logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
+                completion(PumpCommError.noResponse)
+                return
             }
-        }
-    }
 
-    public func syncBasalRateSchedule(
-        items scheduleItems: [RepeatingScheduleValue<Double>],
-        completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void
-    ) {
-        guard !scheduleItems.isEmpty else {
-            delegateQueue.async {
-                completion(.failure(PumpManagerError.configuration(nil)))
-            }
-            return
-        }
+            let dose = UnfinalizedDose(
+                resumeStartTime: Date.now,
+                insulinType: self.state.insulinType
+            )
+            let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
 
-        guard let transport = pairedTransport else {
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            completion(.failure(PumpManagerError.communication(error)))
-            return
-        }
+            self.state.basalDose = dose
+            self.state.lastReconciliation = Date.now
 
-        let sortedItems = scheduleItems.sorted { $0.startTime < $1.startTime }
+            self.notifyDelegateStateUpdated()
+            self.emitPumpEvents(events)
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            do {
-                // Step 1: Fetch current profile data using IDPManager
-                let idpManager = IDPManager()
-
-                // Fetch all IDP data until complete
-                while !idpManager.isComplete {
-                    let messages = idpManager.nextMessages()
-                    if messages.isEmpty, !idpManager.isComplete {
-                        throw PumpCommError.requestConstructionFailed(
-                            reason: "Invalid IDPManager state in syncBasalRateSchedule"
-                        )
-                    }
-                    for message in messages {
-                        let response = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: message
-                        )
-                        idpManager.processMessage(response)
-                    }
-                }
-
-                if idpManager.getProfiles().isEmpty == true {
-                    self.telemetryLogger.info("No profiles in IDPManager, creating initial profile for Trio")
-                    // TODO(jwoglom): read correct profile defaults
-                    let message = idpManager.createNewProfileMessage(
-                        profileName: "TandemKitProfile",
-                        defaultCarbRatio: 10,
-                        defaultBasalRateUnits: scheduleItems.first?.value ?? 0,
-                        defaultTargetBG: 110,
-                        defaultISF: 40,
-                        defaultInsulinDurationMinutes: 240,
-                        profileCarbEntryEnabled: false
-                    )
-                    let newlyCreatedProfile = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: message
-                    )
-
-                    guard let newlyCreatedProfile = newlyCreatedProfile as? CreateIDPResponse else {
-                        throw PumpCommError
-                            .requestConstructionFailed(
-                                reason: "No active profile found and got unexpected response creating initial profile"
-                            )
-                    }
-
-                    guard newlyCreatedProfile.isStatusOK else {
-                        throw PumpCommError
-                            .requestConstructionFailed(reason: "No active profile found and failed to create initial profile")
-                    }
-
-                    self.telemetryLogger
-                        .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
-
-                    // Return to step 1: Reset idpManager
-                    idpManager.clear()
-
-                    // Fetch all IDP data until complete
-                    while !idpManager.isComplete {
-                        let messages = idpManager.nextMessages()
-                        for message in messages {
-                            let response = try self.pumpComm.sendMessage(
-                                transport: transport,
-                                message: message
-                            )
-                            idpManager.processMessage(response)
-                        }
-                    }
-                }
-
-                // Step 2: Get the active profile
-                guard let activeProfile = idpManager.getActiveProfile() else {
-                    throw PumpCommError.requestConstructionFailed(reason: "No active profile found")
-                }
-
-                // Step 3: Get current segments to preserve non-basal fields
-                let currentSegments = activeProfile.getSegments()
-
-                // Step 4: Build modify requests for each new basal schedule item
-                var modifyRequests: [SetIDPSegmentRequest] = []
-
-                for (index, scheduleItem) in sortedItems.enumerated() {
-                    let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
-                    let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
-
-                    if index < currentSegments.count {
-                        // Check if existing segment needs modification
-                        let currentSegment = currentSegments[index]
-                        let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-                            currentSegment.profileBasalRate != basalMilliunits
-
-                        if needsUpdate {
-                            let segment = currentSegment
-                            segment.profileStartTime = startMinutes
-                            segment.profileBasalRate = basalMilliunits
-                            let request = activeProfile.modifySegmentMessage(segment: segment)
-                            modifyRequests.append(request)
-                        }
-                    } else {
-                        // Create new segment with default values from first segment
-                        let firstSegment = currentSegments.first!
-                        let request = activeProfile.createSegmentMessage(
-                            profileStartTime: startMinutes,
-                            profileBasalRate: basalMilliunits,
-                            profileCarbRatio: firstSegment.profileCarbRatio,
-                            profileTargetBG: Int(firstSegment.profileTargetBG),
-                            profileISF: firstSegment.profileISF
-                        )
-                        modifyRequests.append(request)
-                    }
-                }
-
-                // Step 5: If we have fewer items than current segments, delete extra segments
-                if sortedItems.count < currentSegments.count {
-                    for i in sortedItems.count ..< currentSegments.count {
-                        if i > 0 { // Can't delete segment 0
-                            let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
-                            modifyRequests.append(deleteRequest)
-                        }
-                    }
-                }
-
-                // Step 6: Send all modification requests
-                for request in modifyRequests {
-                    let response: SetIDPSegmentResponse = try self.pumpComm.sendMessage(
-                        transport: transport,
-                        message: request,
-                        expecting: SetIDPSegmentResponse.self
-                    )
-
-                    guard response.status == 0 else {
-                        throw PumpCommError.errorResponse(
-                            context: String(
-                                localized: "Error syncing basal rates: Pump rejected SetIDPSegment",
-                                comment: "Message when pump rejects SetIDPSegment"
-                            ),
-                            request: request,
-                            response: response
-                        )
-                    }
-                }
-
-                // Step 7: Update local state
-                let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: self.lockedStatus.value.timeZone)
-
-                var managerState = self.lockedState.value
-                managerState.basalRateSchedule = schedule
-                managerState.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
-                self.lockedState.value = managerState
-
-                self.notifyDelegateStateUpdated()
-
-                if let schedule = schedule {
-                    self.delegateQueue.async {
-                        completion(.success(schedule))
-                    }
-                } else {
-                    completion(
-                        .failure(
-                            PumpManagerError.communication(
-                                PumpCommError.requestConstructionFailed(reason: "Basal schedule serialization failed")
-                            )
-                        )
-                    )
-                }
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                log.error("Received error during basal sync: \(pumpError.errorDescription ?? "")")
-                completion(.failure(PumpManagerError.communication(pumpError)))
-            }
+            self.logger.info("Insulin Delivery Resumed!")
+            completion(nil)
         }
     }
 
     public func syncDeliveryLimits(
-        limits deliveryLimits: DeliveryLimits,
+        limits: DeliveryLimits,
         completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void
     ) {
-        guard let transport = pairedTransport else {
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            delegateQueue.async {
-                completion(.failure(PumpManagerError.communication(error)))
+        logger.info("syncDeliveryLimits...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for sync delivery limits: \(error.localizedDescription)")
+                completion(.failure(PumpCommError.pumpNotConnected))
+                return
             }
-            return
+
+            let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
+
+            if let maxBasal = limits.maximumBasalRate?.doubleValue(for: hkUnit) {
+                let milliunits = Int((maxBasal * 1000.0).rounded())
+                guard let basalResponse = self.bluetooth.write(
+                    message: SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits),
+                    expecting: SetMaxBasalLimitResponse.self
+                ) as? SetMaxBasalLimitResponse else {
+                    self.logger.error("Failed to set maxBasalLimit")
+                    completion(.failure(PumpCommError.invalidPacket))
+                    return
+                }
+
+                guard basalResponse.isStatusOK else {
+                    self.logger.error("Failed to set maxBasalLimit - Status: \(basalResponse.status)")
+                    completion(.failure(PumpCommError.invalidPacket))
+                    return
+                }
+            }
+
+            if let maxBolus = limits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
+                let milliunits = Int((maxBolus * 1000.0).rounded())
+
+                guard let bolusResponse = self.bluetooth.write(
+                    message: SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits),
+                    expecting: SetMaxBolusLimitResponse.self
+                ) as? SetMaxBolusLimitResponse else {
+                    self.logger.error("Failed to set maxBolusLimit")
+                    completion(.failure(PumpCommError.invalidPacket))
+                    return
+                }
+
+                guard bolusResponse.isStatusOK else {
+                    self.logger.error("Failed to set maxBolusLimit - Status: \(bolusResponse.status)")
+                    completion(.failure(PumpCommError.invalidPacket))
+                    return
+                }
+            }
+
+            self.state.settings.maxTempBasalRate = limits.maximumBasalRate?.doubleValue(for: hkUnit)
+            self.state.settings.maxBolus = limits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
+            self.notifyDelegateStateUpdated()
+
+            completion(.success(limits))
         }
+    }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+    func enterChangeCartridgeMode(completion: @escaping (EnterChangeCartridgeModeResponse?) -> Void) {
+        logger.info("Entering cartridge change mode")
 
-            do {
-                let appliedLimits: DeliveryLimits = try self.pumpComm.performOnCommandQueue {
-                    let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
-                    var appliedLimits = DeliveryLimits(maximumBasalRate: nil, maximumBolus: nil)
-
-                    if let maxBasal = deliveryLimits.maximumBasalRate?.doubleValue(for: hkUnit) {
-                        let milliunits = Int((maxBasal * 1000.0).rounded())
-                        let request = SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)
-                        let response: SetMaxBasalLimitResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: request,
-                            expecting: SetMaxBasalLimitResponse.self
-                        )
-
-                        guard response.status == 0 else {
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Error setting max basal limit",
-                                    comment: "Message when pump rejects SetMaxBasalLimit"
-                                ),
-                                request: request,
-                                response: response
-                            )
-                        }
-
-                        appliedLimits.maximumBasalRate = HKQuantity(unit: hkUnit, doubleValue: maxBasal)
-                    }
-
-                    if let maxBolus = deliveryLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
-                        let milliunits = Int((maxBolus * 1000.0).rounded())
-                        let request = SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)
-                        let response: SetMaxBolusLimitResponse = try self.pumpComm.sendMessage(
-                            transport: transport,
-                            message: request,
-                            expecting: SetMaxBolusLimitResponse.self
-                        )
-
-                        guard response.status == 0 else {
-                            throw PumpCommError.errorResponse(
-                                context: String(
-                                    localized: "Error setting max bolus limit",
-                                    comment: "Message when pump rejects SetMaxBolusLimit"
-                                ),
-                                request: request,
-                                response: response
-                            )
-                        }
-
-                        appliedLimits.maximumBolus = HKQuantity(unit: HKUnit.internationalUnit(), doubleValue: maxBolus)
-                    }
-
-                    return appliedLimits
-                }
-
-                let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
-                var managerState = self.lockedState.value
-                managerState.settings.maxTempBasalRate = appliedLimits.maximumBasalRate?.doubleValue(for: hkUnit)
-                managerState.settings.maxBolus = appliedLimits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit())
-                self.lockedState.value = managerState
-
-                self.notifyDelegateStateUpdated()
-
-                self.delegateQueue.async {
-                    completion(.success(appliedLimits))
-                }
-            } catch {
-                let pumpError = error as? PumpCommError ?? PumpCommError.transportError(underlying: error)
-                self.notifyPumpManagerDelegateOfError(pumpError)
-                self.delegateQueue.async {
-                    completion(.failure(PumpManagerError.communication(pumpError)))
-                }
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode: \(error.localizedDescription)")
+                completion(nil)
+                return
             }
+
+            let response = self.bluetooth.write(
+                message: EnterChangeCartridgeModeRequest(),
+                expecting: EnterChangeCartridgeModeResponse.self
+            ) as? EnterChangeCartridgeModeResponse
+
+            completion(response)
+        }
+    }
+
+    func exitChangeCartridgeMode(completion: @escaping (ExitChangeCartridgeModeResponse?) -> Void) {
+        logger.info("Exiting cartridge change mode")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let response = self.bluetooth.write(
+                message: ExitChangeCartridgeModeRequest(),
+                expecting: ExitChangeCartridgeModeResponse.self
+            ) as? ExitChangeCartridgeModeResponse
+
+            completion(response)
+        }
+    }
+
+    func enterFillTubingMode(completion: @escaping (EnterFillTubingModeResponse?) -> Void) {
+        logger.info("Entering tube filling mode")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let response = self.bluetooth.write(
+                message: EnterFillTubingModeRequest(),
+                expecting: EnterFillTubingModeResponse.self
+            ) as? EnterFillTubingModeResponse
+
+            completion(response)
+        }
+    }
+
+    func exitFillTubingMode(completion: @escaping (ExitFillTubingModeResponse?) -> Void) {
+        logger.info("Exiting tube filling mode")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let response = self.bluetooth.write(
+                message: ExitFillTubingModeRequest(),
+                expecting: ExitFillTubingModeResponse.self
+            ) as? ExitFillTubingModeResponse
+
+            completion(response)
+        }
+    }
+
+    func primeCanulla(amount: Double, completion: @escaping (FillCannulaResponse?) -> Void) {
+        logger.info("Priming canulla - \(amount)U")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let response = self.bluetooth.write(
+                message: FillCannulaRequest(primeSizeMilliUnits: Int(amount * 1000)),
+                expecting: FillCannulaResponse.self
+            ) as? FillCannulaResponse
+
+            completion(response)
         }
     }
 
     public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
-        log.info("Syncing pump time")
+        logger.info("Syncing pump time")
 
-        guard let transport = pairedTransport else {
-            log.error("Pump not connected...")
-            let error = PumpCommError.pumpNotConnected
-            notifyPumpManagerDelegateOfError(error)
-            delegateQueue.async {
-                completion(.failure(PumpManagerError.communication(error)))
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change datetime: \(error.localizedDescription)")
+                completion(.failure(PumpManagerError.communication(PumpCommError.pumpNotConnected)))
+                return
             }
-            return
-        }
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
+            let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
 
-            do {
-                let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
-                let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
-                let response: ChangeTimeDateResponse = try pumpComm.sendMessage(
-                    transport: transport,
-                    message: request,
-                    expecting: ChangeTimeDateResponse.self
+            let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
+            guard let response = self.bluetooth.write(
+                message: request,
+                expecting: ChangeTimeDateResponse.self
+            ) as? ChangeTimeDateResponse else {
+                self.logger.error("Failed to change datetime")
+                completion(.failure(PumpManagerError.communication(PumpCommError.invalidPacket)))
+                return
+            }
+
+            if !response.isStatusOK {
+                let error = PumpCommError.errorResponse(
+                    context: String(
+                        localized: "Error syncing time with pump",
+                        comment: "Message when pump rejects ChangeTimeDateRequest"
+                    ),
+                    request: request,
+                    response: response
                 )
+                completion(.failure(PumpManagerError.communication(error)))
 
-                if !response.isStatusOK {
-                    log.error("Pump time sync failed, status NOK!")
-
-                    let error = PumpCommError.errorResponse(
-                        context: String(
-                            localized: "Error syncing time with pump",
-                            comment: "Message when pump rejects ChangeTimeDateRequest"
-                        ),
-                        request: request,
-                        response: response
-                    )
-                    completion(.failure(PumpManagerError.communication(error)))
-                } else {
+            } else {
+                self.syncPumpData { _ in
                     completion(.success(()))
                 }
-            } catch {
-                log.error("Failed to sync pump time: \(error.localizedDescription)")
-
-                let pumpError = PumpCommError.other
-                completion(.failure(PumpManagerError.communication(pumpError)))
             }
         }
     }
 
+    func pairPump(code: String, peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
+        state.pumpState.pincode = code
+        bluetooth.connect(peripheral, completion: completion)
+    }
+
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
-        telemetryLogger.debug("Preparing for pump deactivation – tearing down transport")
-        disconnect()
-        tandemPump.stopScanning()
-        targetPeripheralIdentifier = nil
-        inScanningMode.value = false
-        resetManagerStateAfterDeactivation()
+        logger.debug("Preparing for pump deactivation – tearing down transport")
+        bluetooth.disconnect()
 
         notifyDelegateOfDeactivation {
             completion(nil)
         }
     }
 
-    func setPumpSound(request: SetPumpSoundsRequest) {
-        guard let transport = telemetryTransportIfReady(for: .sounds) else {
-            telemetryLogger.error("Transport not available for sound telemetry")
-            return
-        }
+    func setPumpSound(request: SetPumpSoundsRequest, completion: @escaping () -> Void) {
+        logger.info("Setting pump sounds...")
 
-        do {
-            _ = try pumpComm.sendMessage(
-                transport: transport,
-                message: request,
-                expecting: SetPumpSoundsResponse.self
-            )
-
-            // Allow the patch to set values
-            Thread.sleep(forTimeInterval: .seconds(1))
-            fetchGlobalPumpSettings(transport: transport)
-        } catch {
-            telemetryLogger.error("Failed to pump sounds: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Play Sound
-
-    func playSound() {
-        guard let transport = pairedTransport else {
-            telemetryLogger.error("Transport not available for play sound")
-            return
-        }
-
-        do {
-            _ = try pumpComm.sendMessage(
-                transport: transport,
-                message: PlaySoundRequest(),
-                expecting: PlaySoundResponse.self
-            )
-        } catch {
-            telemetryLogger.error("Failed to play sound: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Alert Snooze
-
-    func setAlertSnooze(enabled: Bool, durationMins: Int) {
-        guard let transport = pairedTransport else {
-            telemetryLogger.error("Transport not available for alert snooze")
-            return
-        }
-
-        do {
-            let response: SetPumpAlertSnoozeResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: SetPumpAlertSnoozeRequest(snoozeEnabled: enabled, snoozeDurationMins: durationMins),
-                expecting: SetPumpAlertSnoozeResponse.self
-            )
-
-            guard response.isStatusOK else {
-                telemetryLogger.error("Failed to set alert snooze: status \(response.status)")
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for sound settings: \(error.localizedDescription)")
+                completion()
                 return
             }
 
-            telemetryLogger.info("Alert snooze set: enabled=\(enabled), duration=\(durationMins)m")
-        } catch {
-            telemetryLogger.error("Failed to set alert snooze: \(error.localizedDescription)")
+            _ = self.bluetooth.write(message: request, expecting: SetPumpSoundsResponse.self)
+
+            // Allow the patch to set values
+            Thread.sleep(forTimeInterval: .seconds(1))
+            self.fetchGlobalPumpSettings()
+
+            completion()
+        }
+    }
+
+    func playSound(completion: @escaping () -> Void) {
+        logger.info("Play pump sound...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for play sound: \(error.localizedDescription)")
+                completion()
+                return
+            }
+
+            _ = self.bluetooth.write(message: PlaySoundRequest(), expecting: PlaySoundResponse.self)
+            completion()
+        }
+    }
+
+    func setAlertSnooze(enabled: Bool, durationMins: Int, completion: @escaping (Bool) -> Void) {
+        logger.info("Setting alert snooze...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for alert snooze: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: SetPumpAlertSnoozeRequest(snoozeEnabled: enabled, snoozeDurationMins: durationMins),
+                expecting: SetPumpAlertSnoozeResponse.self
+            ) as? SetPumpAlertSnoozeResponse else {
+                self.logger.error("Failed to set alert snooze")
+                completion(false)
+                return
+            }
+
+            guard response.isStatusOK else {
+                self.logger.error("Failed to set alert snooze: status \(response.status)")
+                completion(false)
+                return
+            }
+
+            self.state.alertSnoozeEnabled = enabled
+            self.state.alertSnoozeDuration = TimeInterval(minutes: Double(durationMins))
+            self.notifyDelegateStateUpdated()
+
+            self.logger.info("Alert snooze set: enabled=\(enabled), duration=\(durationMins)m")
+            completion(true)
         }
     }
 
     // MARK: - Quick Bolus Settings
 
-    func setQuickBolusSettings(enabled: Bool, mode: QuickBolusMode, increment: QuickBolusIncrement) {
-        guard let transport = pairedTransport else {
-            telemetryLogger.error("Transport not available for quick bolus settings")
-            return
-        }
+    func setQuickBolusSettings(
+        enabled: Bool,
+        mode: QuickBolusMode,
+        increment: QuickBolusIncrement,
+        completion: @escaping (Bool) -> Void
+    ) {
+        logger.info("Setting quick bolus...")
 
-        do {
-            let response: SetQuickBolusSettingsResponse = try pumpComm.sendMessage(
-                transport: transport,
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for quick bolus: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
                 message: SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment),
                 expecting: SetQuickBolusSettingsResponse.self
-            )
+            ) as? SetQuickBolusSettingsResponse else {
+                self.logger.error("Failed to set quick bolus")
+                completion(false)
+                return
+            }
 
             guard response.isStatusOK else {
-                telemetryLogger.error("Failed to set quick bolus settings: status \(response.status)")
+                self.logger.error("Failed to set quick bolus: status \(response.status)")
+                completion(false)
                 return
             }
 
             Thread.sleep(forTimeInterval: .seconds(1))
-            fetchGlobalPumpSettings(transport: transport)
-        } catch {
-            telemetryLogger.error("Failed to set quick bolus settings: \(error.localizedDescription)")
-        }
-    }
-}
+            self.fetchGlobalPumpSettings()
 
-// MARK: - TandemPumpDelegate Conformance
-
-@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: TandemPumpDelegate {
-    public func tandemPump(
-        _: TandemPump,
-        shouldConnect peripheral: CBPeripheral,
-        advertisementData _: [String: Any]?
-    ) -> Bool {
-        // If a target peripheral is set, only connect to that specific device
-        if let targetIdentifier = targetPeripheralIdentifier {
-            return peripheral.identifier == targetIdentifier
-        }
-        // Otherwise, do not connect
-        return false
-    }
-
-    public func tandemPump(
-        _: TandemPump,
-        didCompleteConfiguration peripheralManager: PeripheralManager
-    ) {
-        // Only create a new transport if we don't have one yet, or if the peripheral manager changed
-        let needsNewTransport = transportLock.value == nil || activePeripheralManager !== peripheralManager
-
-        if needsNewTransport {
-            log.info("Creating new transport for peripheral manager")
-            let transport = PeripheralManagerTransport(peripheralManager: peripheralManager)
-            updateTransport(transport)
-        } else {
-            log.info("Reusing existing transport - peripheral manager unchanged")
-        }
-
-        activePeripheralManager = peripheralManager
-        peripheralManager.activityHandler = { [weak self] in
-            self?.updateLastHeartbeatIfNeeded()
-        }
-        notificationRouter.start(with: peripheralManager, session: pumpComm.getSession())
-
-        updateBLEHeartbeatPreference()
-        scheduleInitialConnectionTimeoutCheck()
-    }
-
-    /// Schedule a 5-second post-initialization timeout check.
-    ///
-    /// After BLE initialization completes and startup messages are dispatched,
-    /// this verifies that at least one response has been received. If no responses
-    /// arrived within the window and no auth bootstrap is running, the pump is
-    /// soft-disconnected so the connection can be retried automatically.
-    /// This mirrors PumpX2's `checkIfInitialPumpConnectionEstablished()`.
-    private func scheduleInitialConnectionTimeoutCheck() {
-        // Reset counters for this connection attempt
-        processedResponseMessages.value = 0
-        initialConnectionTimeoutAttempts.value = 0
-
-        scheduleNextInitialConnectionTimeout()
-    }
-
-    private func scheduleNextInitialConnectionTimeout() {
-        // Cancel any previously scheduled check
-        initialConnectionTimeoutWork?.cancel()
-
-        let work = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-
-            let repliesReceived = self.processedResponseMessages.value
-            let bootstrapRunning = self.sessionBootstrapInProgress.value
-            let pairing = self.pairingInProgress.value
-            let attempt = self.initialConnectionTimeoutAttempts.value
-
-            if repliesReceived > 0 {
-                self.log.info(
-                    "InitialConnectionTimeout: received \(repliesReceived) response(s) – connection healthy"
-                )
-            } else if pairing {
-                // JPAKE handshake is in progress (first SwiftECC round can take >10s).
-                // Do not disconnect — pairing manages its own lifecycle.
-                self.log.info(
-                    "InitialConnectionTimeout: pairing in progress – skipping disconnect"
-                )
-            } else if bootstrapRunning, attempt < self.initialConnectionTimeoutMaxAttempts {
-                self.initialConnectionTimeoutAttempts.value += 1
-                self.log.info(
-                    "InitialConnectionTimeout: auth bootstrap still in progress (attempt \(attempt + 1)/\(self.initialConnectionTimeoutMaxAttempts)) – extending timeout"
-                )
-                self.scheduleNextInitialConnectionTimeout()
-                return
-            } else {
-                self.log.error(
-                    "InitialConnectionTimeout: no responses received (bootstrap=\(bootstrapRunning), attempt=\(attempt)) – soft disconnecting for retry"
-                )
-                self.tandemPump.softDisconnect()
-            }
-            self.initialConnectionTimeoutWork = nil
-        }
-
-        initialConnectionTimeoutWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: work)
-    }
-
-    public func tandemPump(
-        _: TandemPump,
-        didDiscoverDevice peripheral: CBPeripheral,
-        advertisementData: [String: Any]?,
-        rssi: NSNumber
-    ) {
-        if inScanningMode.value == true {
-            let device = TandemPumpScan(
-                bleIdentifier: peripheral.identifier.uuidString,
-                name: peripheral.name ?? "Unknown",
-                peripheral: peripheral,
-                advertisementData: advertisementData,
-                rssi: rssi
-            )
-
-            notifyScanDeviceDidChange(device)
-        } else if inScanningMode.value == false {
-            configureDeliveryActions(true)
-            log
-                .info(
-                    "[tandemPump didDiscoverDevice] expected pumpComm.pumpPeripheralUuid=\(String(describing: pumpComm.pumpPeripheralUuid))"
-                )
-            if peripheral.identifier.uuidString == pumpComm.pumpPeripheralUuid {
-                log.info("[tandemPump didDiscoverDevice] set targetPeripheralIdentifier")
-                targetPeripheralIdentifier = peripheral.identifier
-            }
+            completion(true)
         }
     }
 
-    public func tandemPump(
-        _: TandemPump,
-        didDisconnectWithError error: Error?
-    ) {
-        log.error("Pump disconnected with error: \(String(describing: error))")
+    func getControlIQData(completion: @escaping (ControlIQInfoV2Response?, ControlIQSleepScheduleResponse?) -> Void) {
+        logger.info("Getting controlIQ info")
 
-        // Cancel any pending initial connection timeout check
-        initialConnectionTimeoutWork?.cancel()
-        initialConnectionTimeoutWork = nil
-        processedResponseMessages.value = 0
-        initialConnectionTimeoutAttempts.value = 0
-
-        if let manager = activePeripheralManager {
-            notificationRouter.stop(with: manager)
-            activePeripheralManager = nil
-        }
-
-        updateTransport(nil)
-
-        updateStatus { status in
-            status.deliveryIsUncertain = true
-        }
-
-        if isOnboarded {
-            telemetryLogger.debug("Pump disconnected – restarting scan to reconnect")
-            tandemPump.startScanning()
-        }
-    }
-}
-
-// MARK: - PumpCommDelegate Conformance
-
-@available(macOS 13.0, iOS 14.0, *) extension TandemPumpManager: PumpCommDelegate {
-    public func pumpComm(_: PumpComm, didChange pumpState: PumpState) {
-        // Update the stored state when pump state changes (e.g., after pairing)
-        var currentState = lockedState.value
-        currentState.pumpState = pumpState
-        lockedState.value = currentState
-        pumpComm.syncPumpState(pumpState)
-        if pumpState.valid {
-            needsSessionInitialization.value = false
-        }
-
-        // Update pairing artifacts so messages will be signed with the derived secret
-        updatePairingArtifacts(with: pumpState)
-
-        notifyPumpManagerDelegateDidUpdateState()
-
-        // The state change will be automatically persisted by Loop/Trio
-        // when it calls rawState during the next cycle
-    }
-
-    public func pumpComm(
-        _: PumpComm,
-        didReceive message: Message,
-        metadata: MessageMetadata?,
-        characteristic: CharacteristicUUID,
-        txId: UInt8
-    ) {
-        processedResponseMessages.value += 1
-        initialConnectionTimeoutWork?.cancel()
-        initialConnectionTimeoutWork = nil
-
-        notificationLogger
-            .debug(
-                "[notification] Received \(String(describing: type(of: message))) opCode=\(metadata?.opCode ?? type(of: message).props.opCode) characteristic=\(characteristic.prettyName) txId=\(txId)"
-            )
-
-        switch message {
-        case let battery as CurrentBatteryAbstractResponse:
-            handleBatteryResponse(battery, source: .notification)
-        case let insulin as InsulinStatusResponse:
-            handleReservoirResponse(insulin, source: .notification)
-        case let homeScreenResponse as HomeScreenMirrorResponse:
-            handleHomeScreenMirrorResponse(homeScreenResponse, source: .notification)
-        case let bolus as CurrentBolusStatusResponse:
-            handleBolusResponse(bolus, source: .notification)
-        case let timeSinceReset as TimeSinceResetResponse:
-            handleTimeSinceResetResponse(timeSinceReset, source: .notification)
-        case let pumpGlobal as PumpGlobalsResponse:
-            handleGlobalPumpSettingsResponse(pumpGlobal, source: .notification)
-        case let alertResponse as AlertStatusResponse:
-            handleAlertResponse(alertResponse)
-        case let fillTubingState as FillTubingStateStreamResponse:
-            handleFillTubingStateStream(fillTubingState)
-        default:
-            if let meta = metadata {
-                notificationLogger.debug("[notification] Ignoring \(meta.name) on \(characteristic.prettyName)")
-            } else {
-                notificationLogger.debug("[notification] Ignoring message type=\(String(describing: type(of: message)))")
-            }
-        }
-    }
-
-    public func pumpComm(_: PumpComm, didReceiveQualifyingEvents events: Set<QualifyingEvent>) {
-        notificationLogger.info("[notification] Received qualifying events: \(events)")
-
-        // Fetch suggested status messages for these events on a background queue,
-        // routing through pumpComm.sendMessage so they go through the serial command queue.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let handlers = QualifyingEvent.groupSuggestedHandlers(events)
-            self.notificationLogger.debug("[notification] Fetching \(handlers.count) status messages for qualifying events")
-
-            guard let transport = self.pairedTransport else {
-                self.notificationLogger.warning("[notification] No transport available for qualifying event handler")
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for getting controlIQ data: \(error.localizedDescription)")
+                completion(nil, nil)
                 return
             }
 
-            do {
-                try self.pumpComm.performOnCommandQueue {
-                    for message in handlers {
-                        do {
-                            let response = try self.pumpComm.sendMessage(transport: transport, message: message)
-                            let metadata = MessageRegistry.metadata(for: response)
+            let iqInfo = self.bluetooth.write(
+                message: ControlIQInfoV2Request(),
+                expecting: ControlIQInfoV2Response.self
+            ) as? ControlIQInfoV2Response
 
-                            // Process the response through the normal notification handler
-                            self.pumpComm(
-                                self.pumpComm,
-                                didReceive: response,
-                                metadata: metadata,
-                                characteristic: .CURRENT_STATUS_CHARACTERISTICS,
-                                txId: 0
-                            )
-                        } catch {
-                            self.notificationLogger.error("[notification] Failed to fetch handler for qualifying event: \(error)")
-                        }
-                    }
+            let scheduleInfo = self.bluetooth.write(
+                message: ControlIQSleepScheduleRequest(),
+                expecting: ControlIQSleepScheduleResponse.self
+            ) as? ControlIQSleepScheduleResponse
+
+            completion(iqInfo, scheduleInfo)
+        }
+    }
+
+    func setControlIQMode(mode: SetModesRequest.ModeCommand, completion: @escaping (Bool) -> Void) {
+        logger.info("Configure controlIQ mode - mode: \(mode)")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: SetModesRequest(command: mode),
+                expecting: SetModesResponse.self
+            ) as? SetModesResponse else {
+                self.logger.error("Failed to set controlIQ mode")
+                completion(false)
+                return
+            }
+
+            completion(response.isStatusOK)
+        }
+    }
+
+    func configureControlIQMode(
+        _ request: ChangeControlIQSettingsRequest,
+        completion: @escaping (Bool, CGMStatusV2Response?) -> Void
+    ) {
+        logger.info("Configure controlIQ mode: \(request.enabled)")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
+                completion(false, nil)
+                return
+            }
+
+            if request.enabled, self.state.basalDose.type == .tempBasal {
+                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateResponse.self)
+
+                let dose = UnfinalizedDose(
+                    basalRate: self.getScheduledBasalRate(),
+                    insulinType: self.state.insulinType,
+                    startDate: Date.now
+                )
+                var events = self.getActivePumpEvents(endDate: dose.startDate)
+                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+
+                self.state.basalDose = dose
+                self.state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+            }
+
+            guard let response = self.bluetooth.write(
+                message: request,
+                expecting: ChangeControlIQSettingsResponse.self
+            ) as? ChangeControlIQSettingsResponse else {
+                self.logger.error("Failed to change controlIQ mode")
+                completion(false, nil)
+                return
+            }
+
+            guard response.isStatusOK else {
+                self.logger.error("Failed to change controlIQ mode - Status: \(response.status)")
+                completion(false, nil)
+                return
+            }
+
+            let cgmResponse = self.bluetooth.write(
+                message: CGMStatusV2Request(),
+                expecting: CGMStatusV2Response.self
+            ) as? CGMStatusV2Response
+
+            // Pump accepted -- update local preference
+            self.state.useControlIQ = request.enabled
+            self.state.controlIQWeight = request.weightLbs
+            self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
+            self.notifyDelegateStateUpdated()
+
+            self.logger.info("Algorithm mode set to \(request.enabled ? "Control-IQ" : "DIY")")
+
+            // Refresh pump state to confirm ControlIQ status
+            Thread.sleep(forTimeInterval: 1.0)
+            self.syncPumpData { _ in
+                completion(true, cgmResponse)
+            }
+        }
+    }
+
+    func setSleepSchedule(
+        slot: Int,
+        schedule: ControlIQSleepScheduleResponse.SleepSchedule,
+        completion: @escaping (Bool) -> Void
+    ) {
+        logger.info("Setting sleep schedule")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for sleep schedule: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: SetSleepScheduleRequest(
+                    slot: slot,
+                    schedule: schedule,
+                    flag: 1
+                ),
+                expecting: SetSleepScheduleResponse.self
+            ) as? SetSleepScheduleResponse else {
+                self.logger.error("Failed to set sleep schedule")
+                completion(false)
+                return
+            }
+
+            if !response.isStatusOK {
+                self.logger.error("Failed to set sleep schedule - Status: \(response.status)")
+            }
+
+            completion(response.isStatusOK)
+        }
+    }
+
+    func dismissNotification(notification item: NotificationItem, completion: @escaping (Bool) -> Void) {
+        logger.info("Dismissing notification - type: \(item.type)")
+
+        guard let dismissType = item.type.dismissType else {
+            logger.error("Cannot dismiss notification of type \(item.type)")
+            completion(false)
+            return
+        }
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for dismiss notification: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: DismissNotificationRequest(
+                    notificationType: dismissType,
+                    notificationId: item.notificationId
+                ),
+                expecting: DismissNotificationResponse.self
+            ) as? DismissNotificationResponse else {
+                self.logger.error("Failed to dismiss notification")
+                completion(false)
+                return
+            }
+
+            if !response.isStatusOK {
+                self.logger.error("Failed to dismiss notification - Status: \(response.status)")
+            }
+            completion(response.isStatusOK)
+        }
+    }
+
+    func getCGMStatus(completion: @escaping (CGMStatusV2Response?) -> Void) {
+        logger.info("Fetching CGM status...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let response = self.bluetooth.write(
+                message: CGMStatusV2Request(),
+                expecting: CGMStatusV2Response.self
+            ) as? CGMStatusV2Response
+
+            completion(response)
+        }
+    }
+
+    func stopCGMSensor(completion: @escaping (Bool) -> Void) {
+        logger.info("Stopping CGM Session")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for CGM status: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: StopDexcomCGMSensorSessionRequest(),
+                expecting: StopDexcomCGMSensorSessionResponse.self
+            ) as? StopDexcomCGMSensorSessionResponse else {
+                self.logger.error("Failed to stop CGM session")
+                completion(false)
+                return
+            }
+
+            completion(response.isStatusOK)
+        }
+    }
+
+    func connectToG6CGM(txId: String, code: Int?, completion: @escaping (Bool) -> Void) {
+        logger.info("Connecting to G6 CGM...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for G6: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let sensorTypeResponse = self.bluetooth.write(
+                message: SetSensorTypeRequest(sensorType: .dexcomG6),
+                expecting: SetSensorTypeResponse.self
+            ) as? SetSensorTypeResponse else {
+                self.logger.error("Failed to set Sensortype to G6")
+                completion(false)
+                return
+            }
+
+            guard sensorTypeResponse.isStatusOK else {
+                self.logger.error("Failed to set Sensortype to G6 - Status: \(sensorTypeResponse.status)")
+                completion(false)
+                return
+            }
+
+            guard let transmitterResponse = self.bluetooth.write(
+                message: SetG6TransmitterIdRequest(txId: txId),
+                expecting: SetG6TransmitterIdResponse.self
+            ) as? SetG6TransmitterIdResponse else {
+                self.logger.error("Failed to set transmitterId for G6")
+                completion(false)
+                return
+            }
+
+            guard transmitterResponse.isStatusOK else {
+                self.logger.error("Failed to set transmitterId for G6 - Status: \(transmitterResponse.status)")
+                completion(false)
+                return
+            }
+
+            if let code {
+                guard let startSensorResponse = self.bluetooth.write(
+                    message: StartDexcomG6SensorSessionRequest(sensorCode: code),
+                    expecting: StartDexcomG6SensorSessionResponse.self
+                ) as? StartDexcomG6SensorSessionResponse else {
+                    self.logger.error("Failed to set start G6")
+                    completion(false)
+                    return
                 }
-            } catch {
-                self.notificationLogger.error("[notification] Qualifying event handler failed: \(error)")
+
+                guard startSensorResponse.isStatusOK else {
+                    self.logger.error("Failed to set start G6 - Status: \(startSensorResponse.status)")
+                    completion(false)
+                    return
+                }
             }
+
+            completion(true)
         }
     }
 
-    public func pumpComm(_: PumpComm, didEncounterFault event: PumpCommFaultEvent) {
-        telemetryLogger
-            .error(
-                "Pump fault code=\(event.rawCode) category=\(event.category) attempt=\(event.attempt) willRetry=\(event.willRetry)"
-            )
+    func connectToG7CGM(code: Int, completion: @escaping (Bool) -> Void) {
+        logger.info("Connecting to G7 CGM...")
 
-        if !event.willRetry {
-            notifyPumpManagerDelegateOfError(.pumpFault(event: event))
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for G7: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            guard let sensorTypeResponse = self.bluetooth.write(
+                message: SetSensorTypeRequest(sensorType: .dexcomG7),
+                expecting: SetSensorTypeResponse.self
+            ) as? SetSensorTypeResponse else {
+                self.logger.error("Failed to set Sensortype to G7")
+                completion(false)
+                return
+            }
+
+            guard sensorTypeResponse.isStatusOK else {
+                self.logger.error("Failed to set Sensortype to G7 - Status: \(sensorTypeResponse.status)")
+                completion(false)
+                return
+            }
+
+            guard let startG7 = self.bluetooth.write(
+                message: SetDexcomG7PairingCodeRequest(pairingCode: code),
+                expecting: SetDexcomG7PairingCodeResponse.self
+            ) as? SetDexcomG7PairingCodeResponse else {
+                self.logger.error("Failed to start G7")
+                completion(false)
+                return
+            }
+
+            guard startG7.isStatusOK else {
+                self.logger.error("Failed to start G7 - Status: \(startG7.status)")
+                completion(false)
+                return
+            }
+
+            completion(true)
+        }
+    }
+
+    func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.logger.info("Received qualifying events: \(events)")
+
+            for qualifyingEvent in events {
+                switch qualifyingEvent {
+                case .bolusChange:
+                    self.fetchBolusStatus()
+                case .basalChange:
+                    self.fetchBasalStatus()
+                case .alert:
+                    self.fetchNotifications()
+                case .battery:
+                    self.fetchBatteryStatus()
+                default:
+                    self.logger.info("Skipping event: \(qualifyingEvent)")
+                }
+            }
+
+            completion()
+        }
+    }
+}
+
+extension TandemPumpManager {
+    func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
+        guard state.basalDose.type == .tempBasal else {
+            return []
+        }
+
+        let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)
+        var events = [
+            NewPumpEvent.tempBasal(
+                dose: basalEntry,
+                date: basalEntry.startDate
+            )
+        ]
+
+        if basalEntry.endDate == state.basalDose.estimatedEndDate {
+            let dose = UnfinalizedDose(
+                basalRate: getScheduledBasalRate(),
+                insulinType: state.insulinType,
+                startDate: basalEntry.endDate
+            )
+            events.append(NewPumpEvent.basal(
+                dose: dose.toDoseEntry(),
+                date: basalEntry.endDate
+            ))
+
+            state.basalDose = dose
+            notifyDelegateStateUpdated()
+        }
+
+        return events
+    }
+
+    func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+        pumpDelegate.notify { delegate in
+            guard let delegate = delegate else {
+                self.logger.warning("No pump delegate, not notifying...")
+                return
+            }
+
+            delegate.pumpManager(
+                self,
+                hasNewPumpEvents: events,
+                lastReconciliation: self.state.lastReconciliation,
+                replacePendingEvents: replacePendingEvents
+            ) { _ in }
         }
     }
 
     func getScheduledBasalRate() -> Double {
-        guard let schedule = lockedState.value.basalRateSchedule, !schedule.items.isEmpty else {
+        let schedule = state.basalRateSchedule
+        guard !schedule.items.isEmpty else {
             return 0
         }
 
@@ -3095,19 +1391,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 private extension TandemPumpManager {
-    func releaseBolusPermission(transport: PumpMessageTransport, bolusId: Int) {
-        do {
-            let response: BolusPermissionReleaseResponse = try pumpComm.sendMessage(
-                transport: transport,
-                message: BolusPermissionReleaseRequest(bolusID: bolusId),
-                expecting: BolusPermissionReleaseResponse.self
-            )
+    func releaseBolusPermission(bolusId: Int) {
+        guard let response = bluetooth.write(
+            message: BolusPermissionReleaseRequest(bolusID: bolusId),
+            expecting: BolusPermissionReleaseResponse.self
+        ) as? BolusPermissionReleaseResponse else {
+            logger.error("Error releasing bolus permission for id \(bolusId)")
+            return
+        }
 
-            if response.status != 0 {
-                log.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
-            }
-        } catch {
-            log.error("Error releasing bolus permission for id \(bolusId): \(String(describing: error))")
+        if response.status != 0 {
+            logger.error("Failed to release bolus permission for id \(bolusId) with status \(response.status)")
         }
     }
 }

@@ -6,7 +6,7 @@ public class SetPumpAlertSnoozeRequest: Message {
         opCode: UInt8(bitPattern: Int8(-44)),
         size: 2,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -44,7 +44,7 @@ public class SetPumpAlertSnoozeResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-43)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

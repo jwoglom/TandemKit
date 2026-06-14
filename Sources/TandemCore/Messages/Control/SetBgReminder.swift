@@ -13,7 +13,7 @@ public class SetBgReminderRequest: Message {
         opCode: UInt8(bitPattern: Int8(-40)),
         size: 9,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 
@@ -81,7 +81,7 @@ public class SetBgReminderResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-39)),
         size: 1,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true
     )
 

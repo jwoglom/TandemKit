@@ -64,7 +64,7 @@ internal class TandemKitHUDProvider: NSObject, HUDProvider {
 
     private func hudDidAppear() {
         updateReservoirView()
-        pumpManager.ensureCurrentPumpData { _ in
+        pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 self.updateReservoirView()
             }

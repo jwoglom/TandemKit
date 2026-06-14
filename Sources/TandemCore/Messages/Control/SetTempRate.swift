@@ -6,7 +6,7 @@ public class SetTempRateRequest: Message {
         opCode: UInt8(bitPattern: Int8(-92)),
         size: 6,
         type: .Request,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         modifiesInsulinDelivery: true,
         minApi: .mobiApiV3_5,
@@ -44,7 +44,7 @@ public class SetTempRateResponse: Message, StatusMessage {
         opCode: UInt8(bitPattern: Int8(-91)),
         size: 4,
         type: .Response,
-        characteristic: .CONTROL_CHARACTERISTICS,
+        characteristic: CharacteristicUUID.CONTROL_CHARACTERISTICS,
         signed: true,
         minApi: .mobiApiV3_5,
         supportedDevices: .mobiOnly

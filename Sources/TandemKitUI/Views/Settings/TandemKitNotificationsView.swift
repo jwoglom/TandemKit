@@ -1,6 +1,5 @@
 import LoopKitUI
 import SwiftUI
-import TandemCore
 
 struct TandemKitNotificationsView: View {
     @Environment(\.guidanceColors) private var guidanceColors

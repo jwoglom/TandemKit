@@ -70,7 +70,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
         }
 
-        deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: runningFor * unitsDeliveredPerSec)
+        deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: min(runningFor * unitsDeliveredPerSec, total))
 
         DispatchQueue.main.async {
             for observer in self.observers {
