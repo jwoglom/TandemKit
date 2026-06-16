@@ -253,17 +253,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastNotificationUpdate = nil
         }
 
-        if let lastSiteChangeInterval = rawValue["lastSiteChangeDate"] as? TimeInterval {
-            lastSiteChangeDate = Date(timeIntervalSinceReferenceDate: lastSiteChangeInterval)
-        } else {
-            lastSiteChangeDate = nil
-        }
-
-        if let lastCartridgeChangeInterval = rawValue["lastCartridgeChangeDate"] as? TimeInterval {
-            lastCartridgeChangeDate = Date(timeIntervalSinceReferenceDate: lastCartridgeChangeInterval)
-        } else {
-            lastCartridgeChangeDate = nil
-        }
+        lastSiteChangeDate = rawValue["lastSiteChangeDate"] as? Date
+        lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
 
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
@@ -308,8 +299,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
-        raw["lastSiteChangeDate"] = lastSiteChangeDate?.timeIntervalSinceReferenceDate
-        raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate?.timeIntervalSinceReferenceDate
+        raw["lastSiteChangeDate"] = lastSiteChangeDate
+        raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
