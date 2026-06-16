@@ -47,7 +47,6 @@ struct TandemKitSetupCompleteView: View {
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
-        .navigationTitle(String(localized: "Setup Complete", comment: "Title for setup complete"))
     }
 }
 

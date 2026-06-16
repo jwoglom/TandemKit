@@ -33,14 +33,13 @@ struct TandemKitControlIQSettingsView: View {
                 ContinueButton(
                     text: Text("Save", comment: "Save action"),
                     loading: $viewModel.isLoading,
-                    disabled: $viewModel.isDirty,
+                    disabled: $viewModel.disabled,
                 ) {
                     viewModel.saveControlIQSettings()
                 }
                 .padding(.horizontal)
             }
         }
-        .navigationTitle(String(localized: "Control-IQ Settings", comment: "Title for Control-IQ settings screen"))
         .alert(item: Binding(
             get: { viewModel.saveError.map { ErrorMessage(message: $0) } },
             set: { _ in viewModel.saveError = nil }

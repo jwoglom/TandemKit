@@ -52,4 +52,30 @@ public extension NewPumpEvent {
             title: String(localized: "Suspend", comment: "Pump Event title for UnfinalizedDose with doseType of .suspend")
         )
     }
+
+    /// Cannula / infusion-set change, reported as a `.replaceComponent` pump event.
+    /// Emitted when the user fills the cannula.
+    static func siteChange(date: Date = Date.now) -> NewPumpEvent {
+        let dateFormatter = ISO8601DateFormatter()
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "siteChange \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(localized: "Site Change", comment: "Pump Event title for a cannula/infusion-set change"),
+            type: .replaceComponent(componentType: .infusionSet)
+        )
+    }
+
+    /// Cartridge / reservoir change, reported as a `.rewind` pump event.
+    /// Emitted when the user changes the cartridge.
+    static func cartridgeChange(date: Date = Date.now) -> NewPumpEvent {
+        let dateFormatter = ISO8601DateFormatter()
+        return NewPumpEvent(
+            date: date,
+            dose: nil,
+            raw: "cartridgeChange \(dateFormatter.string(from: date))".data(using: .utf8) ?? Data([]),
+            title: String(localized: "Cartridge Change", comment: "Pump Event title for a cartridge/reservoir change"),
+            type: .rewind
+        )
+    }
 }

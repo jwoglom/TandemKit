@@ -115,7 +115,6 @@ struct TandemKitSoundSettingsView: View {
             .padding(.horizontal)
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationTitle(String(localized: "Sound Settings", comment: "Title for insulin type"))
     }
 
     func toggleEditors(propertyName: String) {

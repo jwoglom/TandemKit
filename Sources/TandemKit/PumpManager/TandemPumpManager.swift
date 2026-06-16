@@ -809,6 +809,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Records a cannula / infusion-set change. Call after the user successfully fills the cannula.
+    /// Tracks the date in state and reports a site-change pump event to the host app via the delegate.
+    func recordSiteChange(at date: Date = Date.now) {
+        logger.info("Recording site change (cannula fill) at \(date)")
+        state.lastSiteChangeDate = date
+        notifyDelegateStateUpdated()
+        emitPumpEvents([NewPumpEvent.siteChange(date: date)], replacePendingEvents: false)
+    }
+
+    /// Records a cartridge / reservoir change. Call after the user successfully changes the cartridge.
+    /// Tracks the date in state and reports the change as a pump event to the host app via the delegate.
+    func recordCartridgeChange(at date: Date = Date.now) {
+        logger.info("Recording cartridge change at \(date)")
+        state.lastCartridgeChangeDate = date
+        notifyDelegateStateUpdated()
+        emitPumpEvents([NewPumpEvent.cartridgeChange(date: date)], replacePendingEvents: false)
+    }
+
     public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
         logger.info("Syncing pump time")
 

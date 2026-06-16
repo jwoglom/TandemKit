@@ -484,6 +484,9 @@
         }
       }
     },
+    "Cannula Age" : {
+
+    },
     "Cannula fill complete!" : {
       "comment" : "Success message",
       "localizations" : {
@@ -527,6 +530,9 @@
           }
         }
       }
+    },
+    "Cartridge Change" : {
+
     },
     "Cartridge change complete!" : {
       "comment" : "Success message",
@@ -937,6 +943,12 @@
 
     },
     "Datalog" : {
+    
+    },
+    "day" : {
+
+    },
+    "days" : {
 
     },
     "Delete pump" : {
@@ -1496,6 +1508,7 @@
     },
     "Find my pump" : {
       "comment" : "Find pump alert title\nTandem find my pump",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1504,9 +1517,6 @@
           }
         }
       }
-    },
-    "Find My Pump" : {
-
     },
     "Finish" : {
       "comment" : "Text for finish button",
@@ -1585,6 +1595,12 @@
           }
         }
       }
+    },
+    "hour" : {
+
+    },
+    "hours" : {
+
     },
     "I Understand" : {
       "comment" : "Closed loop temp rate warning confirm button",
@@ -1684,6 +1700,9 @@
           }
         }
       }
+    },
+    "Insulin Age" : {
+
     },
     "Insulin Delivery" : {
       "comment" : "Title of insulin delivery section",
@@ -2836,6 +2855,9 @@
         }
       }
     },
+    "Site Change" : {
+
+    },
     "Sleep" : {
       "comment" : "user mode sleep",
       "localizations" : {
@@ -3468,6 +3490,7 @@
     },
     "The pump will vibrate and make sounds to help you identify its location." : {
       "comment" : "Find pump alert message",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {

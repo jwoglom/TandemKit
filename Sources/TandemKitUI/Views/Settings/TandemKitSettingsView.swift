@@ -6,7 +6,6 @@ private enum SettingsAlertType: Identifiable {
     case switchToDIY
     case diyRestored
     case noCGMConnected
-    case findPump
     case stopTempRate
     case stopTempRateClosedLoopWarning
 
@@ -16,7 +15,6 @@ private enum SettingsAlertType: Identifiable {
         case .switchToDIY: return "switchToDIY"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
-        case .findPump: return "findPump"
         case .stopTempRate: return "stopTempRate"
         case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
         }
@@ -169,7 +167,7 @@ struct TandemKitSettingsView: View {
     var body: some View {
         List {
             Section {
-                ZStack {
+                ZStack(alignment: .topLeading) {
                     Image(imageName: "tandem_mobi")
                         .resizable()
                         .rotationEffect(.degrees(90))
@@ -179,7 +177,7 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    VStack(alignment: .leading) {
+                    HStack(alignment: .top) {
                         if let battery = viewModel.batteryPercentage {
                             HStack(alignment: .top, spacing: 4) {
                                 Image(systemName: batteryIconName(battery))
@@ -190,8 +188,24 @@ struct TandemKitSettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+
+                        Spacer()
+
+                        Button(action: { viewModel.playSound() }) {
+                            if viewModel.isPlayingSound {
+                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                            } else {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isPlayingSound)
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 4)
+                    .padding(.horizontal, 4)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
@@ -314,19 +328,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
                 .disabled(viewModel.isRefreshing)
-
-                Button(action: {
-                    activeAlert = .findPump
-                }) {
-                    HStack {
-                        Text("Find My Pump", comment: "Tandem find my pump")
-                        Spacer()
-                        if viewModel.isPlayingSound {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isPlayingSound)
             }
             Section(header: SectionHeader(label: String(
                 localized:
@@ -384,6 +385,24 @@ struct TandemKitSettingsView: View {
                 "Cartridge Operations",
                 comment: "The title of the cartridge operations section in TandemKit settings"
             ))) {
+                if let insulinAge = viewModel.insulinAge {
+                    HStack {
+                        Text("Insulin Age", comment: "Text for time since last cartridge change")
+                        Spacer()
+                        Text(insulinAge)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let cannulaAge = viewModel.cannulaAge {
+                    HStack {
+                        Text("Cannula Age", comment: "Text for time since last cannula fill")
+                        Spacer()
+                        Text(cannulaAge)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 navigationLink(
                     label: Text("Change Cartridge", comment: "Label for change cartridge"),
                     action: { viewModel.openCartridgeChange() }
@@ -540,19 +559,6 @@ struct TandemKitSettingsView: View {
                     ),
                     dismissButton: .default(Text("OK"))
                 )
-            case .findPump:
-                return Alert(
-                    title: Text("Find my pump", comment: "Find pump alert title"),
-                    message: Text(
-                        "The pump will vibrate and make sounds to help you identify its location.",
-                        comment: "Find pump alert message"
-                    ),
-                    primaryButton: .default(
-                        Text("Continue", comment: "Continue button"),
-                        action: { viewModel.playSound() }
-                    ),
-                    secondaryButton: .cancel()
-                )
             case .stopTempRate:
                 return Alert(
                     title: Text("Temp Basal Active", comment: "Stop temp rate alert title"),
@@ -599,21 +605,6 @@ struct TandemKitSettingsView: View {
             }
         }
         .navigationBarItems(trailing: doneButton)
-        .navigationBarTitle(navigationTitle)
-    }
-
-    private var navigationTitle: String {
-        guard let pumpState = viewModel.pumpState, pumpState.pumpModel == .MOBI else {
-            return "Tandem pump"
-        }
-
-        guard let serial = pumpState.pumpSerial else {
-            return "Tandem pump"
-        }
-
-        let serialString = String(serial)
-        let serialSuffix = String(serialString.suffix(3))
-        return serialSuffix.isEmpty ? "Tandem pump" : "Tandem Mobi \(serialSuffix)"
     }
 
     private var doneButton: some View {

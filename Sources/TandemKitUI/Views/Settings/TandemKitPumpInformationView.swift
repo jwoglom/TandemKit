@@ -39,7 +39,6 @@ struct TandemKitPumpInformationView: View {
             }
         }
         .edgesIgnoringSafeArea(.bottom)
-        .navigationTitle(String(localized: "Pump Information", comment: "Title for pump information"))
     }
 
     func SectionRow(title: Text, value: String) -> some View {
