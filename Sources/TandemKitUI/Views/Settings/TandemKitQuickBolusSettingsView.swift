@@ -88,7 +88,6 @@ struct TandemKitQuickBolusSettingsView: View {
             }
             .padding(.horizontal)
         }
-        .navigationTitle(String(localized: "Quick Bolus Settings", comment: "Title for quick bolus settings"))
         .listStyle(.insetGrouped)
     }
 }

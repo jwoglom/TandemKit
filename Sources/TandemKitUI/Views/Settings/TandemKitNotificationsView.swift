@@ -85,7 +85,6 @@ struct TandemKitNotificationsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
-        .navigationBarTitle(String(localized: "Notifications", comment: "Notifications view title"))
         .navigationBarItems(trailing: refreshButton)
         .onAppear {
             guard !didLoad else { return }

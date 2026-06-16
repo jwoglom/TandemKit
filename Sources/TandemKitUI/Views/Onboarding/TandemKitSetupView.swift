@@ -43,7 +43,6 @@ struct TandemKitSetupView: View {
         }
         .edgesIgnoringSafeArea(.bottom)
         .navigationBarHidden(false)
-        .navigationBarTitle(String(localized: "Tandem Mobi Setup", comment: "Title for TandemKitSetupView"))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(String(localized: "Cancel", comment: "Cancel button title"), action: {
