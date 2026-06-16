@@ -11,7 +11,6 @@ struct TandemKitScanView: View {
 
     var body: some View {
         WizardStepContainer(
-            title: String(localized: "Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
             currentStep: viewModel.currentPhase.rawValue + 1,
             totalSteps: 3,
             canCancel: false,

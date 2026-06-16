@@ -93,6 +93,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         delegate = self
 
         navigationBar.prefersLargeTitles = true // Ensure nav bar text is displayed correctly
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
 
         if screenStack.isEmpty {
             screenStack = [getInitialScreen()]
@@ -102,24 +106,42 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         }
     }
 
-    private func hostingController<Content: View>(rootView: Content) -> DismissibleHostingController<some View> {
+    private func hostingController<Content: View>(
+        rootView: Content,
+        title: String? = nil,
+        largeTitleDisplayMode: UINavigationItem.LargeTitleDisplayMode = .automatic
+    ) -> DismissibleHostingController<some View> {
         let rootView = rootView
             .environment(\.appName, Bundle.main.bundleDisplayName)
-        return DismissibleHostingController(content: rootView, colorPalette: colorPalette)
+        let hostedView = DismissibleHostingController(content: rootView, colorPalette: colorPalette)
+        hostedView.navigationItem.title = title
+        hostedView.navigationItem.largeTitleDisplayMode = largeTitleDisplayMode
+        return hostedView
+    }
+
+    private var pumpSettingsTitle: String {
+        return "Tandem Mobi"
     }
 
     private func viewControllerForScreen(_ screen: TandemScreen) -> UIViewController {
         switch screen {
         case .setup:
             let view = TandemKitSetupView(nextAction: stepFinished)
-            return hostingController(rootView: view)
+            return hostingController(
+                rootView: view,
+                title: String(localized: "Tandem Mobi Setup", comment: "Title for TandemKitSetupView")
+            )
         case .deviceScanning:
             let nextStep = {
                 self.resetNavigationTo([.setupComplete])
             }
 
             let viewModel = TandemKitScanViewModel(pumpManager, nextStep: nextStep)
-            return hostingController(rootView: TandemKitScanView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitScanView(viewModel: viewModel),
+                title: String(localized: "Tandem Mobi Pairing", comment: "Title for Mobi pairing"),
+                largeTitleDisplayMode: .never
+            )
         case .setupComplete:
             pumpManagerOnboardingDelegate?.pumpManagerOnboarding(didOnboardPumpManager: pumpManager)
             let returnToMainScreen: () -> Void = {
@@ -131,7 +153,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             }
 
             let view = TandemKitSetupCompleteView(finish: returnToMainScreen)
-            return hostingController(rootView: view)
+            return hostingController(
+                rootView: view,
+                title: String(localized: "Setup Complete", comment: "Title for setup complete")
+            )
         case .insulinType:
             let isOnboarded = pumpManager.isOnboarded
             let view = TandemKitInsulinType(
@@ -148,11 +173,17 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                     }
                 }
             )
-            return hostingController(rootView: view)
+            return hostingController(
+                rootView: view,
+                title: String(localized: "Select insulin type", comment: "Title for insulin type")
+            )
 
         case .pumpInformation:
             let viewModel = TandemKitPumpInformationViewModel(pumpManager: pumpManager)
-            return hostingController(rootView: TandemKitPumpInformationView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitPumpInformationView(viewModel: viewModel),
+                title: String(localized: "Pump Information", comment: "Title for pump information")
+            )
 
         case .pumpSettings:
             // next step = deactivate the pump
@@ -172,7 +203,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 openAlertSettings: { self.navigateTo(.alertSettings) }
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
-            return hostingController(rootView: view)
+            return hostingController(rootView: view, title: pumpSettingsTitle)
         case .soundSettings:
             let isOnboarded = pumpManager.isOnboarded
             let onSubmit = !isOnboarded ? {
@@ -180,7 +211,10 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             } : nil
 
             let viewModel = TandemKitSoundSettingsViewModel(pumpManager: pumpManager, onSubmit: onSubmit)
-            return hostingController(rootView: TandemKitSoundSettingsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitSoundSettingsView(viewModel: viewModel),
+                title: String(localized: "Sound Settings", comment: "Title for sound settings")
+            )
 
         case .changeCartridge:
             let viewModel = TandemKitChangeCartridgeViewModel(
@@ -189,7 +223,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 toFillTubing: { self.navigateTo(.fillTubing) }
             )
 
-            return hostingController(rootView: TandemKitChangeCartridgeView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitChangeCartridgeView(viewModel: viewModel),
+                title: String(localized: "Change Cartridge", comment: "Title for change cartridge"),
+                largeTitleDisplayMode: .never
+            )
 
         case .fillTubing:
             let viewModel = TandemKitFillTubingViewModel(
@@ -198,34 +236,57 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 toFillingCannula: { self.navigateTo(.fillCannula) }
             )
 
-            return hostingController(rootView: TandemKitFillTubingView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitFillTubingView(viewModel: viewModel),
+                title: String(localized: "Fill Tubing", comment: "Title for fill tubing"),
+                largeTitleDisplayMode: .never
+            )
 
         case .fillCannula:
             let viewModel = TandemKitFillCannulaViewModel(
                 pumpManager: pumpManager,
                 done: { self.resetNavigationTo([.pumpSettings]) }
             )
-            return hostingController(rootView: TandemKitFillCannulaView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitFillCannulaView(viewModel: viewModel),
+                title: String(localized: "Fill Cannula", comment: "Title for fill cannula"),
+                largeTitleDisplayMode: .never
+            )
 
         case .notifications:
             let viewModel = TandemKitNotificationsViewModel(pumpManager)
-            return hostingController(rootView: TandemKitNotificationsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitNotificationsView(viewModel: viewModel),
+                title: String(localized: "Notifications", comment: "Notifications view title")
+            )
 
         case .cgmSettings:
             let viewModel = TandemKitCGMSettingsViewModel(pumpManager: pumpManager)
-            return hostingController(rootView: TandemKitCGMSettingsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitCGMSettingsView(viewModel: viewModel),
+                title: String(localized: "CGM Settings", comment: "Label for CGM settings")
+            )
 
         case .controlIQSettings:
             let viewModel = TandemKitControlIQSettingsViewModel(pumpManager: pumpManager)
-            return hostingController(rootView: TandemKitControlIQSettingsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitControlIQSettingsView(viewModel: viewModel),
+                title: String(localized: "Control-IQ Settings", comment: "Title for Control-IQ settings screen")
+            )
 
         case .quickBolus:
             let viewModel = TandemKitQuickBolusSettingsViewModel(pumpManager: pumpManager)
-            return hostingController(rootView: TandemKitQuickBolusSettingsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitQuickBolusSettingsView(viewModel: viewModel),
+                title: String(localized: "Quick Bolus Settings", comment: "Title for quick bolus settings")
+            )
 
         case .alertSettings:
             let viewModel = TandemKitAlertSettingsViewModel(pumpManager: pumpManager)
-            return hostingController(rootView: TandemKitAlertSettingsView(viewModel: viewModel))
+            return hostingController(
+                rootView: TandemKitAlertSettingsView(viewModel: viewModel),
+                title: String(localized: "Alert Settings", comment: "Title for alert settings screen")
+            )
         }
     }
 

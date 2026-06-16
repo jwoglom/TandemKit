@@ -66,7 +66,6 @@ struct TandemKitAlertSettingsView: View {
                 )
             }
         }
-        .navigationTitle(Text("Alert Settings", comment: "Title for alert settings screen"))
         .listStyle(InsetGroupedListStyle())
     }
 }
