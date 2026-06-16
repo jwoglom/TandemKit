@@ -6,7 +6,6 @@ private enum SettingsAlertType: Identifiable {
     case switchToDIY
     case diyRestored
     case noCGMConnected
-    case findPump
     case stopTempRate
     case stopTempRateClosedLoopWarning
 
@@ -16,7 +15,6 @@ private enum SettingsAlertType: Identifiable {
         case .switchToDIY: return "switchToDIY"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
-        case .findPump: return "findPump"
         case .stopTempRate: return "stopTempRate"
         case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
         }
@@ -179,7 +177,7 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    VStack(alignment: .leading) {
+                    HStack(alignment: .top) {
                         if let battery = viewModel.batteryPercentage {
                             HStack(alignment: .top, spacing: 4) {
                                 Image(systemName: batteryIconName(battery))
@@ -190,8 +188,24 @@ struct TandemKitSettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+
+                        Spacer()
+
+                        Button(action: { viewModel.playSound() }) {
+                            if viewModel.isPlayingSound {
+                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                            } else {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.accentColor)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(viewModel.isPlayingSound)
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.top, 4)
+                    .padding(.horizontal, 4)
                 }
 
                 HStack(alignment: .firstTextBaseline) {
@@ -314,19 +328,6 @@ struct TandemKitSettingsView: View {
                     }
                 }
                 .disabled(viewModel.isRefreshing)
-
-                Button(action: {
-                    activeAlert = .findPump
-                }) {
-                    HStack {
-                        Text("Find My Pump", comment: "Tandem find my pump")
-                        Spacer()
-                        if viewModel.isPlayingSound {
-                            ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                        }
-                    }
-                }
-                .disabled(viewModel.isPlayingSound)
             }
             Section(header: SectionHeader(label: String(
                 localized:
@@ -539,19 +540,6 @@ struct TandemKitSettingsView: View {
                         comment: "Message for no CGM connected warning after enabling Control-IQ"
                     ),
                     dismissButton: .default(Text("OK"))
-                )
-            case .findPump:
-                return Alert(
-                    title: Text("Find my pump", comment: "Find pump alert title"),
-                    message: Text(
-                        "The pump will vibrate and make sounds to help you identify its location.",
-                        comment: "Find pump alert message"
-                    ),
-                    primaryButton: .default(
-                        Text("Continue", comment: "Continue button"),
-                        action: { viewModel.playSound() }
-                    ),
-                    secondaryButton: .cancel()
                 )
             case .stopTempRate:
                 return Alert(
