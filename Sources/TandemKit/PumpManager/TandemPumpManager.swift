@@ -271,7 +271,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
-            self.fetchBolusStatus()
+            self.fetchBolusStatus(fromSync: true)
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
@@ -515,19 +515,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
 
-                let dose = UnfinalizedDose(
+                self.state.basalDose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
                     startDate: Date.now
                 )
-                var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
-
-                self.state.basalDose = dose
-                self.state.lastReconciliation = dose.startDate
-
+                self.state.lastReconciliation = Date.now
+                
                 self.notifyDelegateStateUpdated()
-                self.emitPumpEvents(events)
 
                 completion(nil)
                 return
@@ -1311,7 +1306,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             for qualifyingEvent in events {
                 switch qualifyingEvent {
                 case .bolusChange:
-                    self.fetchBolusStatus()
+                    self.fetchBolusStatus(fromSync: false)
                 case .basalChange:
                     self.fetchBasalStatus()
                 case .alert:
@@ -1342,7 +1337,7 @@ extension TandemPumpManager {
             )
         ]
 
-        if basalEntry.endDate == state.basalDose.estimatedEndDate {
+        if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
             let dose = UnfinalizedDose(
                 basalRate: getScheduledBasalRate(),
                 insulinType: state.insulinType,

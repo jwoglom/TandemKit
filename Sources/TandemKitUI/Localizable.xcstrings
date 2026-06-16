@@ -324,6 +324,9 @@
         }
       }
     },
+    "AP" : {
+
+    },
     "Api Version" : {
 
     },
@@ -359,6 +362,12 @@
           }
         }
       }
+    },
+    "ARM BLE" : {
+
+    },
+    "ARM MSP" : {
+
     },
     "Authentication required" : {
 
@@ -423,6 +432,12 @@
       }
     },
     "Bolus" : {
+
+    },
+    "BTLE" : {
+
+    },
+    "CalData" : {
 
     },
     "Cancel" : {
@@ -918,6 +933,12 @@
         }
       }
     },
+    "CPU Core" : {
+
+    },
+    "Datalog" : {
+
+    },
     "Delete pump" : {
       "comment" : "Button text to confirm Tandem PumpManager deletion",
       "extractionState" : "stale",
@@ -1006,6 +1027,9 @@
           }
         }
       }
+    },
+    "Display" : {
+
     },
     "Done" : {
       "comment" : "Button text\nbutton text",
@@ -1196,6 +1220,9 @@
           }
         }
       }
+    },
+    "External Binaries" : {
+
     },
     "Failed to build pump request: %@" : {
       "comment" : "Pump request build failure",
@@ -1743,6 +1770,9 @@
         }
       }
     },
+    "Lipo" : {
+
+    },
     "Loading CGM status..." : {
       "comment" : "Loading CGM status",
       "localizations" : {
@@ -1831,6 +1861,15 @@
           }
         }
       }
+    },
+    "Motor" : {
+
+    },
+    "MSP" : {
+
+    },
+    "MSP Supply" : {
+
     },
     "New Cartridge Inserted" : {
       "comment" : "Button text",
@@ -1998,6 +2037,9 @@
         }
       }
     },
+    "NVM" : {
+
+    },
     "OK" : {
       "comment" : "OK button\nOK button title\nTransmitter battery: OK",
       "localizations" : {
@@ -2064,6 +2106,12 @@
         }
       }
     },
+    "Overtravel Stall" : {
+
+    },
+    "P2" : {
+
+    },
     "Pair" : {
       "comment" : "Pair button",
       "localizations" : {
@@ -2098,6 +2146,9 @@
       }
     },
     "PCBA serial" : {
+
+    },
+    "Peripheral Power" : {
 
     },
     "Pick up your pump, wait a second, then double-press the T button" : {
@@ -2480,6 +2531,9 @@
         }
       }
     },
+    "Pushoff Stall" : {
+
+    },
     "Quick Bolus" : {
       "comment" : "Label for quick bolus sound",
       "localizations" : {
@@ -2630,6 +2684,9 @@
         }
       }
     },
+    "RTC" : {
+
+    },
     "Save" : {
       "comment" : "Save action\nText for save button\nlabel for save\nsave",
       "localizations" : {
@@ -2684,6 +2741,9 @@
           }
         }
       }
+    },
+    "Sensor" : {
+
     },
     "Sensor Code" : {
       "comment" : "Label for G6 sensor code",
@@ -2809,6 +2869,12 @@
         }
       }
     },
+    "Software" : {
+
+    },
+    "Software init" : {
+
+    },
     "Software Version" : {
 
     },
@@ -2833,6 +2899,9 @@
           }
         }
       }
+    },
+    "Speaker" : {
+
     },
     "Standard" : {
       "comment" : "user mode standard",
@@ -3628,6 +3697,9 @@
         }
       }
     },
+    "Touchscreen" : {
+
+    },
     "Transaction identifier mismatch" : {
 
     },
@@ -3710,6 +3782,9 @@
       }
     },
     "Undefined pump error" : {
+
+    },
+    "Undertravel Stall" : {
 
     },
     "Unexpected pump response (expected %@, received %@)" : {
@@ -3795,6 +3870,9 @@
           }
         }
       }
+    },
+    "Vibe" : {
+
     },
     "Vibrate" : {
       "comment" : "sound setting vibrate",

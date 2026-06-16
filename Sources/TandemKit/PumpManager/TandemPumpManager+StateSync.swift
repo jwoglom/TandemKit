@@ -163,7 +163,12 @@ extension TandemPumpManager {
         }
     }
 
-    func fetchBolusStatus() {
+    func fetchBolusStatus(fromSync: Bool) {
+        if fromSync, state.bolusDose != nil {
+            logger.warning("Skip bolus sync during bolus...")
+            return
+        }
+
         guard let response = bluetooth.write(
             message: CurrentBolusStatusRequest(),
             expecting: CurrentBolusStatusResponse.self
@@ -188,6 +193,10 @@ extension TandemPumpManager {
 
         if response.status == .delivering {
             if let dose = state.bolusDose {
+                // Recalculate endDate of the bolus
+                dose.estimatedEndDate = Date.now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
+
+                state.bolusDose = dose
                 state.bolusState = .inProgress(dose.toDoseEntry(isMutable: true))
                 notifyDelegateStateUpdated()
             }

@@ -9,7 +9,7 @@ public class NotificationBundle {
     public var reminderStatusResponse: ReminderStatusResponse?
     public var alarmStatusResponse: AlarmStatusResponse?
     public var cgmAlertStatusResponse: CGMAlertStatusResponse?
-    public var highestAamResponse: HighestAamResponse?
+    public var malfunctionStatusResponse: MalfunctionBitmaskStatusResponse?
     public var otherNotificationStatusResponse: OtherNotificationStatusResponse?
     public var otherNotification2StatusResponse: OtherNotification2StatusResponse?
 
@@ -25,9 +25,7 @@ public class NotificationBundle {
             (ReminderStatusRequest(), ReminderStatusResponse.self),
             (AlarmStatusRequest(), AlarmStatusResponse.self),
             (CGMAlertStatusRequest(), CGMAlertStatusResponse.self),
-            (HighestAamRequest(), HighestAamResponse.self),
-            (OtherNotificationStatusRequest(), OtherNotificationStatusResponse.self),
-            (OtherNotification2StatusRequest(), OtherNotification2StatusResponse.self)
+            (MalfunctionStatusRequest(), MalfunctionBitmaskStatusResponse.self)
         ]
     }
 
@@ -38,9 +36,7 @@ public class NotificationBundle {
             ReminderStatusResponse.self,
             AlarmStatusResponse.self,
             CGMAlertStatusResponse.self,
-            HighestAamResponse.self,
-            OtherNotificationStatusResponse.self,
-            OtherNotification2StatusResponse.self
+            MalfunctionBitmaskStatusResponse.self
         ]
     }
 
@@ -64,14 +60,8 @@ public class NotificationBundle {
         } else if let response = message as? CGMAlertStatusResponse {
             cgmAlertStatusResponse = response
             lastUpdatedTimes[typeName] = timestamp
-        } else if let response = message as? HighestAamResponse {
-            highestAamResponse = response
-            lastUpdatedTimes[typeName] = timestamp
-        } else if let response = message as? OtherNotificationStatusResponse {
-            otherNotificationStatusResponse = response
-            lastUpdatedTimes[typeName] = timestamp
-        } else if let response = message as? OtherNotification2StatusResponse {
-            otherNotification2StatusResponse = response
+        } else if let response = message as? MalfunctionBitmaskStatusResponse {
+            malfunctionStatusResponse = response
             lastUpdatedTimes[typeName] = timestamp
         }
     }
@@ -86,7 +76,8 @@ public class NotificationBundle {
             alertStatusResponse as NotificationMessage?,
             alarmStatusResponse as NotificationMessage?,
             reminderStatusResponse as NotificationMessage?,
-            cgmAlertStatusResponse as NotificationMessage?
+            cgmAlertStatusResponse as NotificationMessage?,
+            malfunctionStatusResponse as NotificationMessage?
         ].compactMap { $0 }
 
         // Add alerts
@@ -138,13 +129,15 @@ public class NotificationBundle {
         }
 
         // Add malfunction if present
-        if let response = highestAamResponse, response.hasMalfunction(notificationMessages) {
-            items.append(NotificationItem(
-                type: .malfunction,
-                id: UInt32(response.aamId),
-                name: response.errorString,
-                notificationDescription: response.notificationDescription
-            ))
+        if let response = malfunctionStatusResponse {
+            for malfunction in response.malfunctions.sorted(by: { $0.rawValue < $1.rawValue }) {
+                items.append(NotificationItem(
+                    type: .malfunction,
+                    id: UInt32(malfunction.rawValue),
+                    name: String(describing: malfunction),
+                    notificationDescription: malfunction.notificationDescription
+                ))
+            }
         }
 
         return items
