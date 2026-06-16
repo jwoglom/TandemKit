@@ -523,6 +523,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.state.lastReconciliation = Date.now
                 
                 self.notifyDelegateStateUpdated()
+                
+                let events = self.getActivePumpEvents(endDate: self.state.basalDose.startDate)
+                self.emitPumpEvents(events)
 
                 completion(nil)
                 return
