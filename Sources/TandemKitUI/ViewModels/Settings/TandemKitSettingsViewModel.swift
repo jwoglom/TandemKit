@@ -45,6 +45,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var reservoirUnitsText: String? = nil
     @Published var controlIQUserMode: TandemPumpManagerState.ControlIQUserMode? = nil
     @Published var reservoirValue: ReservoirValue?
+    @Published var cannulaAge: String? = nil
+    @Published var insulinAge: String? = nil
     @Published var quickBolusEnabled: Bool? = nil
     @Published var notificationCount: Int = 0
     @Published var suspendResumeText: String? = nil
@@ -337,6 +339,17 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 }
 
+private func formatDurationToDaysHours(since date: Date) -> String {
+    let components = Calendar.current.dateComponents([.day, .hour], from: date, to: Date())
+    let days = components.day ?? 0
+    let hours = components.hour ?? 0
+
+    let dayString = days == 1 ? String(localized: "day", comment: "Singular day unit") : String(localized: "days", comment: "Plural days unit")
+    let hourString = hours == 1 ? String(localized: "hour", comment: "Singular hour unit") : String(localized: "hours", comment: "Plural hours unit")
+
+    return "\(days) \(dayString), \(hours) \(hourString)"
+}
+
 extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
     func pumpManager(
         _: any LoopKit.PumpManager,
@@ -383,6 +396,18 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
 
             if let reservoirLevel = pumpManager.reservoirLevel {
                 self.reservoirUnitsText = String(format: "%.0f", reservoirLevel.unitVolume)
+            }
+
+            if let lastSiteChangeDate = pumpManager.state.lastSiteChangeDate {
+                self.cannulaAge = formatDurationToDaysHours(since: lastSiteChangeDate)
+            } else {
+                self.cannulaAge = nil
+            }
+
+            if let lastCartridgeChangeDate = pumpManager.state.lastCartridgeChangeDate {
+                self.insulinAge = formatDurationToDaysHours(since: lastCartridgeChangeDate)
+            } else {
+                self.insulinAge = nil
             }
 
             if let rate = self.currentProfileBaseBasalRate {

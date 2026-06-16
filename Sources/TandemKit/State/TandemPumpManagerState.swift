@@ -93,6 +93,12 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
 
+    // Consumable change tracking
+    /// Last cannula / infusion-set change. Set when the user fills the cannula.
+    public var lastSiteChangeDate: Date?
+    /// Last cartridge / reservoir change. Set when the user changes the cartridge.
+    public var lastCartridgeChangeDate: Date?
+
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
         pumpState = PumpState()
@@ -247,6 +253,9 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastNotificationUpdate = nil
         }
 
+        lastSiteChangeDate = rawValue["lastSiteChangeDate"] as? Date
+        lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
+
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
         } else {
@@ -290,6 +299,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
+        raw["lastSiteChangeDate"] = lastSiteChangeDate
+        raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -362,6 +373,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
+            "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
+            "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
             "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
             "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",

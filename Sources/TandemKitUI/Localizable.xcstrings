@@ -469,6 +469,9 @@
         }
       }
     },
+    "Cannula Age" : {
+
+    },
     "Cannula fill complete!" : {
       "comment" : "Success message",
       "localizations" : {
@@ -512,6 +515,9 @@
           }
         }
       }
+    },
+    "Cartridge Change" : {
+
     },
     "Cartridge change complete!" : {
       "comment" : "Success message",
@@ -917,6 +923,12 @@
           }
         }
       }
+    },
+    "day" : {
+
+    },
+    "days" : {
+
     },
     "Delete pump" : {
       "comment" : "Button text to confirm Tandem PumpManager deletion",
@@ -1557,6 +1569,12 @@
         }
       }
     },
+    "hour" : {
+
+    },
+    "hours" : {
+
+    },
     "I Understand" : {
       "comment" : "Closed loop temp rate warning confirm button",
       "localizations" : {
@@ -1655,6 +1673,9 @@
           }
         }
       }
+    },
+    "Insulin Age" : {
+
     },
     "Insulin Delivery" : {
       "comment" : "Title of insulin delivery section",
@@ -2773,6 +2794,9 @@
           }
         }
       }
+    },
+    "Site Change" : {
+
     },
     "Sleep" : {
       "comment" : "user mode sleep",

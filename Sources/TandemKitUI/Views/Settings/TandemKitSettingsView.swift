@@ -385,6 +385,24 @@ struct TandemKitSettingsView: View {
                 "Cartridge Operations",
                 comment: "The title of the cartridge operations section in TandemKit settings"
             ))) {
+                if let insulinAge = viewModel.insulinAge {
+                    HStack {
+                        Text("Insulin Age", comment: "Text for time since last cartridge change")
+                        Spacer()
+                        Text(insulinAge)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let cannulaAge = viewModel.cannulaAge {
+                    HStack {
+                        Text("Cannula Age", comment: "Text for time since last cannula fill")
+                        Spacer()
+                        Text(cannulaAge)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 navigationLink(
                     label: Text("Change Cartridge", comment: "Label for change cartridge"),
                     action: { viewModel.openCartridgeChange() }

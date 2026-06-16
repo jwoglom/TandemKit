@@ -197,6 +197,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                 if self.detectingProgress >= 100 {
                     timer.invalidate()
                     self.isDetecting = false
+                    self.pumpManager?.recordCartridgeChange()
                     // Exit change cartridge mode before completing
                     self.exitChangeCartridgeMode()
                 }

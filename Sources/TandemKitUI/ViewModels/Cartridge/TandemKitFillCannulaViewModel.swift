@@ -89,6 +89,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
                 self.isProcessing = false
                 if let response = response, response.status == 0 {
                     self.failedFill = false
+                    self.pumpManager?.recordSiteChange()
                     self.currentStep = self.currentStep.nextStep() ?? .done
                 } else {
                     self.failedFill = true
