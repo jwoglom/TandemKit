@@ -464,6 +464,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if let bolusProgressReport, bolusProgressReport.isUnfinalized() {
+            logger.warning("[enactTempBasal] Blocked: A bolus is still running")
+            completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
+            return
+        }
+
         let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
