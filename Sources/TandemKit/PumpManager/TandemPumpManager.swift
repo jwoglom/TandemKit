@@ -521,16 +521,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
 
-                self.state.basalDose = UnfinalizedDose(
+                let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
                     startDate: Date.now
                 )
+                
+                var events = self.getActivePumpEvents(endDate: dose.startDate)
+                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
+
+                self.state.basalDose = dose
                 self.state.lastReconciliation = Date.now
                 
                 self.notifyDelegateStateUpdated()
-                
-                let events = self.getActivePumpEvents(endDate: self.state.basalDose.startDate)
                 self.emitPumpEvents(events)
 
                 completion(nil)
