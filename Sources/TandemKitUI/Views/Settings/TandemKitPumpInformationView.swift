@@ -39,6 +39,16 @@ struct TandemKitPumpInformationView: View {
             }
         }
         .edgesIgnoringSafeArea(.bottom)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if viewModel.allowDebugFeatures {
+                    Button(action: viewModel.openDebug) {
+                        Image(systemName: "ladybug")
+                    }
+                    .accessibilityLabel(Text("Debug Options", comment: "Accessibility label for debug options button"))
+                }
+            }
+        }
     }
 
     func SectionRow(title: Text, value: String) -> some View {

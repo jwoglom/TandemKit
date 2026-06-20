@@ -30,6 +30,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openControlIQSettings: () -> Void
     let openQuickBolus: () -> Void
     let openAlertSettings: () -> Void
+    let openDebug: () -> Void
+    let allowDebugFeatures: Bool
 
     var appName: String { HostApp.current.appName }
     var algorithmName: String { HostApp.current.diyAlgorithmName }
@@ -100,7 +102,9 @@ class TandemKitSettingsViewModel: ObservableObject {
         openCgmSettings: @escaping () -> Void,
         openControlIQSettings: @escaping () -> Void,
         openQuickBolus: @escaping () -> Void,
-        openAlertSettings: @escaping () -> Void
+        openAlertSettings: @escaping () -> Void,
+        openDebug: @escaping () -> Void = {},
+        allowDebugFeatures: Bool = false
     ) {
         self.pumpManager = pumpManager
         self.nextStep = nextStep
@@ -115,6 +119,8 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openControlIQSettings = openControlIQSettings
         self.openQuickBolus = openQuickBolus
         self.openAlertSettings = openAlertSettings
+        self.openDebug = openDebug
+        self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false

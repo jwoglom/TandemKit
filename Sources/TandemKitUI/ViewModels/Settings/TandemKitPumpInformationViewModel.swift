@@ -11,8 +11,17 @@ class TandemKitPumpInformationViewModel: ObservableObject {
     @Published var pcbSerialNumber: String = ""
 
     private let pumpManager: TandemPumpManager
-    init(pumpManager: TandemPumpManager) {
+    let openDebug: () -> Void
+    let allowDebugFeatures: Bool
+
+    init(
+        pumpManager: TandemPumpManager,
+        openDebug: @escaping () -> Void = {},
+        allowDebugFeatures: Bool = false
+    ) {
         self.pumpManager = pumpManager
+        self.openDebug = openDebug
+        self.allowDebugFeatures = allowDebugFeatures
 
         self.pumpManager(pumpManager, didUpdate: pumpManager.status, oldStatus: pumpManager.status)
         self.pumpManager.addStatusObserver(self, queue: DispatchQueue.main)

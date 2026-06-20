@@ -467,6 +467,11 @@ struct TandemKitSettingsView: View {
                 .sheet(isPresented: $isSharePresented, onDismiss: {}, content: {
                     ActivityViewController(activityItems: viewModel.getLogs())
                 })
+                if viewModel.allowDebugFeatures {
+                    Button(String(localized: "View Debug Options", comment: "Label for button to open TandemKit debug options")) {
+                        viewModel.openDebug()
+                    }
+                }
                 Button(action: {
                     viewModel.showingDeleteConfirmation = true
                 }) {

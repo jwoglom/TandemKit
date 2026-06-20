@@ -18,6 +18,7 @@ enum TandemScreen {
     case controlIQSettings
     case quickBolus
     case alertSettings
+    case debug
 
     func next() -> TandemScreen? {
         switch self {
@@ -179,7 +180,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             )
 
         case .pumpInformation:
-            let viewModel = TandemKitPumpInformationViewModel(pumpManager: pumpManager)
+            let viewModel = TandemKitPumpInformationViewModel(
+                pumpManager: pumpManager,
+                openDebug: { self.navigateTo(.debug) },
+                allowDebugFeatures: allowDebugFeatures
+            )
             return hostingController(
                 rootView: TandemKitPumpInformationView(viewModel: viewModel),
                 title: String(localized: "Pump Information", comment: "Title for pump information")
@@ -200,7 +205,9 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 openCgmSettings: { self.navigateTo(.cgmSettings) },
                 openControlIQSettings: { self.navigateTo(.controlIQSettings) },
                 openQuickBolus: { self.navigateTo(.quickBolus) },
-                openAlertSettings: { self.navigateTo(.alertSettings) }
+                openAlertSettings: { self.navigateTo(.alertSettings) },
+                openDebug: { self.navigateTo(.debug) },
+                allowDebugFeatures: allowDebugFeatures
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
             return hostingController(rootView: view, title: pumpSettingsTitle)
@@ -286,6 +293,13 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(
                 rootView: TandemKitAlertSettingsView(viewModel: viewModel),
                 title: String(localized: "Alert Settings", comment: "Title for alert settings screen")
+            )
+
+        case .debug:
+            let viewModel = TandemKitDebugViewModel(pumpManager: pumpManager)
+            return hostingController(
+                rootView: TandemKitDebugView(viewModel: viewModel),
+                title: String(localized: "Debug Options", comment: "Title for debug options screen")
             )
         }
     }

@@ -285,6 +285,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func setMustProvideBLEHeartbeat(_: Bool) {}
 
+    /// Sends an arbitrary message to the pump and returns the decoded response, if any.
+    /// Intended for the debug tools only. The expected response type is resolved from the
+    /// message registry's request→response association; if none exists, the request type is
+    /// used as a best effort (which simply yields `nil` when nothing matches).
+    public func sendDebugMessage(_ message: Message, completion: @escaping (Message?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if error != nil {
+                completion(nil)
+                return
+            }
+            let expecting = MessageRegistry.metadata(for: message)?.associatedType ?? type(of: message)
+            let response = self.bluetooth.write(message: message, expecting: expecting)
+            completion(response)
+        }
+    }
+
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
         bolusProgressReport
     }
