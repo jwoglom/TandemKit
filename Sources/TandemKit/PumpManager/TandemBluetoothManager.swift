@@ -14,6 +14,12 @@ class TandemBluetoothManager: NSObject {
     private var connectCompletion: ((Error?) -> Void)?
     private let connectionQueue = DispatchQueue(label: "com.jwoglom.TandemKit.ensureConnected")
     private let connectionSemaphore = DispatchSemaphore(value: 1)
+    // Upper bound on how long a single ensureConnected attempt may hold the
+    // connection lock. Guarantees the semaphore is always released even if no
+    // BLE scan result or connection callback ever arrives (e.g. pump out of
+    // range), preventing both a permanent deadlock of future attempts and the
+    // unbalanced-semaphore trap on deallocation.
+    private let connectionAttemptTimeout: DispatchTimeInterval = .seconds(30)
 
     override init() {
         super.init()
@@ -89,15 +95,32 @@ class TandemBluetoothManager: NSObject {
             // Wait until previous ensureConnected calls have been completed
             self.connectionSemaphore.wait()
 
+            // localCompletion must run exactly once so that connectionSemaphore
+            // is signaled exactly once. BLE callbacks below may fire more than
+            // once (duplicate scan results) or never (pump never discovered), so
+            // guard with a fire-once flag evaluated on the serial connectionQueue.
+            var didComplete = false
             let localCompletion: (Error?) -> Void = { error in
-                self.connectCompletion = nil
-                
-                DispatchQueue.global(qos: .userInitiated).async {
-                    completion(error)
-                    self.connectionSemaphore.signal()
+                self.connectionQueue.async {
+                    guard !didComplete else { return }
+                    didComplete = true
+
+                    self.connectCompletion = nil
+
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        completion(error)
+                        self.connectionSemaphore.signal()
+                    }
                 }
             }
-            
+
+            // Safety net: always release the lock after a bounded interval, even
+            // if no scan/connection callback ever fires. The fire-once guard makes
+            // this a no-op when the attempt has already completed.
+            self.connectionQueue.asyncAfter(deadline: .now() + self.connectionAttemptTimeout) {
+                localCompletion(PumpCommError.pumpNotConnected)
+            }
+
             if let peripheral = self.peripheral, peripheral.state == .connected {
                 localCompletion(nil)
                 return

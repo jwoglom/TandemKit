@@ -64,9 +64,14 @@ class TandemPeripheralManager: NSObject {
     }
 
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
-        // Wait until previous write calls have been completed
+        // Wait until previous write calls have been completed.
+        // The matching signal() must be registered immediately so that every
+        // exit path (including the early returns below) balances this wait();
+        // otherwise the semaphore is left decremented and traps when the
+        // owning TandemPeripheralManager is deallocated.
         self.writeSemaphore.wait()
-        
+        defer { writeSemaphore.signal() }
+
         let requestProps = type(of: message).props
         guard let characteristic = getCharacteristic(
             serviceUUID: ServiceUUID.PUMP_SERVICE,
@@ -85,7 +90,6 @@ class TandemPeripheralManager: NSObject {
 
         defer {
             writeQueue = nil
-            writeSemaphore.signal()
         }
 
         var response = ResponseMessage()
