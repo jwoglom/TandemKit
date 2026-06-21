@@ -53,14 +53,14 @@ final class TandemDispatchGroup {
         semaphore.signal()
     }
 
-    @discardableResult  func wait() -> Data? {
+    @discardableResult func wait() -> Data? {
         semaphore.wait()
         lock.lock()
         defer { lock.unlock() }
         return data
     }
 
-    @discardableResult  func wait(timeout: DispatchTime) -> Data? {
+    @discardableResult func wait(timeout: DispatchTime) -> Data? {
         let result = semaphore.wait(timeout: timeout)
         lock.lock()
         defer { lock.unlock() }

@@ -9,10 +9,44 @@ class TandemPeripheralManager: NSObject {
     private let bluetoothManager: TandemBluetoothManager
     private var connectCompletion: ((Error?) -> Void)?
 
-    private var readQueue: (TandemDispatchGroup, CBUUID)?
-    private var writeQueue: (TandemDispatchGroup, UInt8)?
+    // These three handoff slots are written on the command thread (write/read/startNotify) and read
+    // on the CB delegate queue (didUpdateValueFor / didWriteValueFor / cancelPendingOperations).
+    // They are guarded by queueLock so the cross-thread reference access can't tear (the previous
+    // unsynchronized access was undefined behavior). The lock only protects the get/set of the
+    // reference itself — blocking waits on the referenced group happen outside the lock.
+    private let queueLock = NSLock()
+    private var _readQueue: (TandemDispatchGroup, CBUUID)?
+    private var _writeQueue: (TandemDispatchGroup, UInt8)?
+    private var _commandLock: TandemDispatchGroup?
+
+    private var readQueue: (TandemDispatchGroup, CBUUID)? {
+        get { queueLock.lock()
+            defer { queueLock.unlock() }
+            return _readQueue }
+        set { queueLock.lock()
+            _readQueue = newValue
+            queueLock.unlock() }
+    }
+
+    private var writeQueue: (TandemDispatchGroup, UInt8)? {
+        get { queueLock.lock()
+            defer { queueLock.unlock() }
+            return _writeQueue }
+        set { queueLock.lock()
+            _writeQueue = newValue
+            queueLock.unlock() }
+    }
+
+    private var commandLock: TandemDispatchGroup? {
+        get { queueLock.lock()
+            defer { queueLock.unlock() }
+            return _commandLock }
+        set { queueLock.lock()
+            _commandLock = newValue
+            queueLock.unlock() }
+    }
+
     private let writeSemaphore = DispatchSemaphore(value: 1)
-    private var commandLock: TandemDispatchGroup?
     private var currentTxId: UInt8 = 0
 
     private var authBuilder: JpakeAuthBuilder
@@ -64,12 +98,16 @@ class TandemPeripheralManager: NSObject {
     }
 
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
-        // Wait until previous write calls have been completed.
-        // The matching signal() must be registered immediately so that every
-        // exit path (including the early returns below) balances this wait();
-        // otherwise the semaphore is left decremented and traps when the
-        // owning TandemPeripheralManager is deallocated.
-        writeSemaphore.wait()
+        // Pump I/O is already serialized by TandemBluetoothManager.commandQueue, so this lock
+        // should never actually contend. It is kept purely as defense-in-depth, and the acquire
+        // is bounded so that even an unexpected off-pipeline caller can never deadlock here (the
+        // unbounded wait that used to live here was a primary cause of the connection hang).
+        // On the success path the matching signal() is registered immediately via defer; on the
+        // timeout path we never acquired the lock, so we must not signal.
+        guard writeSemaphore.wait(timeout: .now() + .seconds(15)) == .success else {
+            logger.error("Timed out acquiring write lock; pump I/O unexpectedly contended")
+            return nil
+        }
         defer { writeSemaphore.signal() }
 
         let requestProps = type(of: message).props
@@ -380,6 +418,10 @@ extension TandemPeripheralManager {
                     let secret = "serverNonce=\(authBuilder.getServerNonce() != nil)"
                     logger.error("JPAKE failed: \(done) \(invalid) \(derived) \(secret)")
 
+                    // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
+                    // full connectTimeout and stalls every queued command behind it.
+                    bluetoothManager.disconnect()
+                    connectCompletion?(PumpCommError.noResponse)
                     return
                 }
 
@@ -393,6 +435,8 @@ extension TandemPeripheralManager {
                 expecting: TimeSinceResetResponse.self
             ) as? TimeSinceResetResponse else {
                 self.logger.error("Failed to send TimeSinceResetRequest...")
+                bluetoothManager.disconnect()
+                connectCompletion?(PumpCommError.noResponse)
                 return
             }
 

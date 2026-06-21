@@ -41,6 +41,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
 
+    // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
+    // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.
+    let watchdogQueue = DispatchQueue(label: "com.jwoglom.TandemKit.commandWatchdog")
+    // Backstop timeout for pump commands. This MUST stay comfortably larger than the worst-case
+    // real command duration, otherwise it could report a spurious failure for a command that is
+    // still in progress — and for a bolus a false failure can prompt the loop to retry, risking a
+    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
+    // so a command always self-completes via the lower-level bounded waits well before this fires;
+    // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
+    // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
+    // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
+    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
+
     @objc func appMovedToBackground() {
         if state.useSilentTones {
             logger.info("Starting silent tones")
@@ -252,10 +265,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     func syncPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
+        // Layer 1 backstop: always hand the loop a lastSync, even if the layers below wedge.
+        let completion = watchdogged(timeoutResult: state.lastReconciliation) { completion?($0) }
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sync: \(error.localizedDescription)")
-                completion?(self.state.lastReconciliation)
+                completion(self.state.lastReconciliation)
                 return
             }
 
@@ -279,7 +294,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
 
-            completion?(self.state.lastReconciliation)
+            completion(self.state.lastReconciliation)
         }
     }
 
@@ -318,6 +333,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         activationType: BolusActivationType,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
+        // Layer 1 backstop: guarantee the loop gets exactly one result even if the layers below wedge.
+        let completion = watchdogged(timeoutResult: .communication(PumpCommError.pumpNotConnected), completion)
         logger.info("Enacting bolus - units \(units)U")
 
         if state.useControlIQ, activationType.isAutomatic {
@@ -471,6 +488,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         for duration: TimeInterval,
         completion: @escaping (_ error: PumpManagerError?) -> Void
     ) {
+        // Layer 1 backstop: guarantee the loop gets exactly one result even if the layers below wedge.
+        let completion = watchdogged(timeoutResult: .connection(PumpCommError.pumpNotConnected), completion)
         let unitsPerHour = roundToSupportedBasalRate(unitsPerHour: unitsPerHour)
         logger.info("Setting temp basal at \(unitsPerHour)U/hr for \(duration)s")
 
@@ -589,6 +608,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {
+        let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Suspend Insulin Delivery...")
 
         bluetooth.ensureConnected { error in
@@ -636,6 +656,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
+        let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery...")
 
         bluetooth.ensureConnected { error in
@@ -676,6 +697,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         limits: DeliveryLimits,
         completion: @escaping (_ result: Result<DeliveryLimits, Error>) -> Void
     ) {
+        let completion = watchdogged(timeoutResult: .failure(PumpCommError.pumpNotConnected), completion)
         logger.info("syncDeliveryLimits...")
 
         bluetooth.ensureConnected { error in
@@ -1339,8 +1361,29 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.logger.info("Received qualifying events: \(events)")
+        logger.info("Received qualifying events: \(events)")
+
+        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
+        guard events.contains(where: { actionableEvents.contains($0) }) else {
+            // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
+            // acknowledge; ack immediately.
+            for qualifyingEvent in events {
+                logger.info("Skipping event: \(qualifyingEvent)")
+            }
+            completion()
+            return
+        }
+
+        // Run the status fetches as a serialized command job (via the single commandQueue) so
+        // they can no longer race loop/therapy commands on the write path — this overlap was a
+        // root cause of the wedged connection. ensureConnected returns on commandQueue, so the
+        // fetches and the qualifying-event acknowledgement (completion) are fully serialized.
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to handle qualifying events: \(error.localizedDescription)")
+                completion()
+                return
+            }
 
             for qualifyingEvent in events {
                 switch qualifyingEvent {
@@ -1469,5 +1512,86 @@ extension TandemPumpManager {
         return stride(from: startInt, through: endInt, by: stepInt).map {
             Double($0) / multiplier
         }
+    }
+}
+
+/// Wraps a completion handler so that it is invoked **exactly once**, within a bounded time.
+///
+/// This is the outermost safety backstop for pump commands (Layer 1). Regardless of what happens
+/// in the connection/command layers below it, the caller — e.g. the Trio loop driving a temp basal
+/// or bolus — is guaranteed to receive a result and never hang indefinitely. The first of
+/// {real completion, timeout} wins; every later invocation is dropped.
+///
+/// It is intentionally small, pure, and queue-injectable so it can be unit-tested deterministically
+/// without touching CoreBluetooth or real wall-clock pacing.
+///
+/// Note on the timeout value: callers should choose it to be comfortably **larger** than the
+/// worst-case real command duration. The command pipeline already self-recovers within its own
+/// connect timeout, so the watchdog should essentially never fire in practice; keeping it generous
+/// avoids reporting a spurious failure for a command that is legitimately still in progress.
+final class CommandWatchdog<Outcome> {
+    private let lock = NSLock()
+    private var finished = false
+    private let onResult: (Outcome) -> Void
+    private var timeoutItem: DispatchWorkItem?
+
+    /// - Parameters:
+    ///   - timeout: how long to wait before delivering `timeoutResult` if `complete` is not called.
+    ///   - timeoutResult: produces the outcome delivered on timeout (evaluated only if it fires).
+    ///   - queue: the queue the timeout fires on. It MUST be independent of any queue the wrapped
+    ///     work might block, otherwise the timeout could be starved (the bug this whole change fixes).
+    ///   - onResult: the wrapped completion; invoked exactly once.
+    init(
+        timeout: DispatchTimeInterval,
+        timeoutResult: @escaping () -> Outcome,
+        queue: DispatchQueue,
+        onResult: @escaping (Outcome) -> Void
+    ) {
+        self.onResult = onResult
+        let item = DispatchWorkItem { [weak self] in
+            self?.deliver(timeoutResult())
+        }
+        timeoutItem = item
+        queue.asyncAfter(deadline: .now() + timeout, execute: item)
+    }
+
+    /// Delivers `result` if nothing has been delivered yet. Safe to call any number of times and
+    /// from any thread; only the first delivery (this call or the timeout) takes effect.
+    func complete(_ result: Outcome) {
+        deliver(result)
+    }
+
+    private func deliver(_ result: Outcome) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let item = timeoutItem
+        timeoutItem = nil
+        lock.unlock()
+
+        item?.cancel()
+        onResult(result)
+    }
+}
+
+extension TandemPumpManager {
+    /// Wraps `completion` with a `CommandWatchdog` and returns a guarded completion. Shadow the
+    /// original `completion` at the top of a command method with the result, so every code path
+    /// that calls `completion(...)` is single-fire and a wedge below still yields `timeoutResult`.
+    func watchdogged<Outcome>(
+        timeoutResult: @escaping @autoclosure () -> Outcome,
+        timeout: DispatchTimeInterval? = nil,
+        _ completion: @escaping (Outcome) -> Void
+    ) -> (Outcome) -> Void {
+        let watchdog = CommandWatchdog(
+            timeout: timeout ?? commandWatchdogTimeout,
+            timeoutResult: timeoutResult,
+            queue: watchdogQueue,
+            onResult: completion
+        )
+        return { watchdog.complete($0) }
     }
 }

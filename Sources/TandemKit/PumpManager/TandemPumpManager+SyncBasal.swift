@@ -5,6 +5,7 @@ public extension TandemPumpManager {
         items scheduleItems: [RepeatingScheduleValue<Double>],
         completion: @escaping (_ result: Result<BasalRateSchedule, Error>) -> Void
     ) {
+        let completion = watchdogged(timeoutResult: .failure(PumpCommError.pumpNotConnected), completion)
         logger.info("Sync basal schedule...")
         guard !scheduleItems.isEmpty else {
             logger.error("Basal schedule is empty")
