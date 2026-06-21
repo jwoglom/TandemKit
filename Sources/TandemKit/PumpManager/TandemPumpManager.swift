@@ -266,7 +266,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     func syncPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         // Layer 1 backstop: always hand the loop a lastSync, even if the layers below wedge.
-        let completion = watchdogged(timeoutResult: state.lastReconciliation) { completion?($0) }
+        // Capture lastReconciliation in a local so the timeoutResult autoclosure doesn't reference
+        // `self` — `self.state` here gets stripped by the Swiftformat build phase (redundantSelf),
+        // which then fails to compile because the autoclosure escapes.
+        let lastReconciliation = state.lastReconciliation
+        let completion = watchdogged(timeoutResult: lastReconciliation) { completion?($0) }
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sync: \(error.localizedDescription)")
