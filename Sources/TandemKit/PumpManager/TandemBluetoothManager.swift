@@ -125,7 +125,7 @@ class TandemBluetoothManager: NSObject {
                 localCompletion(nil)
                 return
             }
-            
+
             if let peripheral = self.peripheral {
                 // We've the peripheral reference to a previous connection
                 // Just try to reconnect
@@ -134,7 +134,7 @@ class TandemBluetoothManager: NSObject {
                 }
                 return
             }
-            
+
             let connectedDevices = self.manager?.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]) ?? []
             if let peripheral = connectedDevices.first {
                 // Phone is already connected, but the app is not
@@ -143,24 +143,24 @@ class TandemBluetoothManager: NSObject {
                 }
                 return
             }
-            
+
             guard let indentifier = self.pumpManager?.state.pumpState.peripheralUuid else {
                 self.logger.error("No identifier available to scan for...")
                 localCompletion(PumpCommError.pumpNotConnected)
                 return
             }
-            
+
             let scanStarted = self.startScan { result in
                 guard result.bleIdentifier == indentifier else {
                     return
                 }
-                
+
                 self.logger.debug("Found pump, reconnecting! \(result.peripheral)")
                 self.connect(result.peripheral) { error in
                     localCompletion(error)
                 }
             }
-            
+
             if !scanStarted {
                 localCompletion(PumpCommError.pumpNotConnected)
                 return
@@ -188,8 +188,14 @@ class TandemBluetoothManager: NSObject {
 extension TandemBluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         logger.info("\(String(describing: central.state.rawValue))")
-        
+
         guard central.state == .poweredOn else {
+            // Bluetooth went away (powered off / resetting / unauthorized). The
+            // peripheral's CB operations are now invalid and their callbacks
+            // won't fire, so cancel in-flight command waits to release any held
+            // locks instead of waiting for the stack to come back.
+            logger.info("Bluetooth not powered on; cancelling pending operations")
+            peripheralManager?.cancelPendingOperations()
             return
         }
 
@@ -239,15 +245,18 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             "Device disconnected, name: \(peripheral.name ?? "<NO_NAME>"), error: \(error?.localizedDescription ?? "No error")"
         )
 
+        // Unblock any command thread parked on an in-flight BLE operation. The
+        // callbacks that would normally release these waits (didWriteValueFor /
+        // didUpdateValueFor) will never arrive now that the peripheral is gone,
+        // so without this a blocked write()/read() would hold writeSemaphore and
+        // the owning ensureConnected closure would hold connectionSemaphore until
+        // the Bluetooth stack power-cycles. Cancelling lets those locks unwind.
+        peripheralManager?.cancelPendingOperations()
+
         if let pumpManager {
-            pumpManager.state.isConnected = true
+            pumpManager.state.isConnected = false
             pumpManager.notifyDelegateStateUpdated()
         }
-
-//        if forcedDisconnect {
-//            forcedDisconnect = false
-//            return
-//        }
 
         peripheralManager = nil
 

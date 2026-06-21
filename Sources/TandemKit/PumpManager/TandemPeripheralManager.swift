@@ -69,7 +69,7 @@ class TandemPeripheralManager: NSObject {
         // exit path (including the early returns below) balances this wait();
         // otherwise the semaphore is left decremented and traps when the
         // owning TandemPeripheralManager is deallocated.
-        self.writeSemaphore.wait()
+        writeSemaphore.wait()
         defer { writeSemaphore.signal() }
 
         let requestProps = type(of: message).props
@@ -139,6 +139,20 @@ class TandemPeripheralManager: NSObject {
 
         logger.info("Received message: \(response.message?.description ?? "nil")")
         return response.message
+    }
+
+    /// Cancels any in-flight read/write/notify command waits so a thread blocked
+    /// inside `read`/`write` returns promptly (with `nil`), allowing its calling
+    /// closure to finish and release the connection/write locks. Invoked when the
+    /// peripheral disconnects or Bluetooth is no longer powered on, where the
+    /// matching BLE callbacks that would normally `leave()` these groups will
+    /// never arrive. `cancel()` is idempotent, so this is safe to call at any
+    /// time and regardless of whether an operation is actually in flight.
+    func cancelPendingOperations() {
+        logger.info("Cancelling pending operations")
+        commandLock?.cancel()
+        writeQueue?.0.cancel()
+        readQueue?.0.cancel()
     }
 
     func startNotify(service serviceUUID: CBUUID, characteristic characteristicUUID: CBUUID) {
