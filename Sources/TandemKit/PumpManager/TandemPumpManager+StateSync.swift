@@ -235,9 +235,17 @@ extension TandemPumpManager {
 
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
-        for (request, expecting) in NotificationBundle.allRequests() {
+        for request in NotificationBundle.allRequests() {
+            guard let expecting = expectedNotificationResponseType(for: request) else {
+                logger.error("No response type mapping for \(type(of: request))")
+                continue
+            }
             guard let response = bluetooth.write(message: request, expecting: expecting) else {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
+                continue
+            }
+
+            guard NotificationBundle.isNotificationResponse(response) else {
                 continue
             }
 
@@ -252,6 +260,17 @@ extension TandemPumpManager {
         state.notificationCount = notificationBundle.getNotificationCount()
         state.lastNotificationUpdate = Date.now
         notifyDelegateStateUpdated()
+    }
+
+    /// Resolves the concrete response type expected on the wire for a notification status request.
+    /// Most pairings follow the `Request`/`Response` naming convention resolved by
+    /// `MessageRegistry`; `MalfunctionStatusRequest` is the exception, since its response is
+    /// `MalfunctionBitmaskStatusResponse`.
+    private func expectedNotificationResponseType(for request: Message) -> Message.Type? {
+        if request is MalfunctionStatusRequest {
+            return MalfunctionBitmaskStatusResponse.self
+        }
+        return MessageRegistry.responseMetadata(for: request)?.type
     }
 
     func fetchDeliveryLimits() {

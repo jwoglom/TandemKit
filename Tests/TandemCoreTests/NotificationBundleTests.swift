@@ -222,6 +222,53 @@ final class NotificationBundleTests: XCTestCase {
         XCTAssertFalse(response.notificationIds.contains(23)) // DEFAULT_REMINDER_23
     }
 
+    // MARK: - matchesActiveMalfunction Gate Tests
+
+    /// A malfunction confirmed by the active AAM-bits (malfunction type) is surfaced.
+    func testMalfunctionConfirmedByActiveAamBits() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Active malfunction bits with bit 12 set.
+        bundle.add(ActiveAamBitsResponse(
+            unacknowledgedBitmask: 0,
+            activeBitmask: 1 << 12,
+            aamType: .malfunction
+        ))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
+    }
+
+    /// A `HighestAamResponse` that is NOT confirmed by the active malfunction bits must not
+    /// surface a phantom malfunction (the bug fixed by restoring matchesActiveMalfunction).
+    func testMalfunctionSuppressedWhenActiveAamBitsLacksBit() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Active malfunction bits present, but bit 12 is NOT set.
+        bundle.add(ActiveAamBitsResponse(
+            unacknowledgedBitmask: 0,
+            activeBitmask: 0,
+            aamType: .malfunction
+        ))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 0)
+        XCTAssertEqual(bundle.get().count, 0)
+    }
+
+    /// When no active malfunction bits exist, the malfunction bitmask confirms/denies the AAM.
+    func testMalfunctionSuppressedByMalfunctionBitmaskWithoutBit() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Malfunction bitmask present, but bit 12 not set.
+        bundle.add(MalfunctionBitmaskStatusResponse(bitmask: 0))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 0)
+        XCTAssertEqual(bundle.get().count, 0)
+    }
+
     // MARK: - Response Addition Tests
 
     func testAddAlertStatusResponse() {
@@ -299,6 +346,19 @@ final class NotificationBundleTests: XCTestCase {
     func testAllRequestsReturnsExpectedCount() {
         let requests = NotificationBundle.allRequests()
         XCTAssertEqual(requests.count, 7)
+    }
+
+    func testAllRequestsFiltersByApiVersion() {
+        // Mobi v3.5 supports the active-AAM-bits requests.
+        let mobi = NotificationBundle.allRequests(apiVersion: KnownApiVersion.mobiApiV3_5.value)
+        XCTAssertEqual(mobi.count, 7)
+        XCTAssertTrue(mobi.contains { $0 is ActiveAamBitsRequest })
+
+        // Legacy v2.1 pumps do not support ActiveAamBitsRequest, but still get the core surfaces.
+        let legacy = NotificationBundle.allRequests(apiVersion: KnownApiVersion.apiV2_1.value)
+        XCTAssertFalse(legacy.contains { $0 is ActiveAamBitsRequest })
+        XCTAssertTrue(legacy.contains { $0 is HighestAamRequest })
+        XCTAssertTrue(legacy.contains { $0 is MalfunctionStatusRequest })
     }
 
     // MARK: - Concurrent Access Tests
