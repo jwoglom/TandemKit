@@ -25,7 +25,7 @@ public class MalfunctionStatusRequest: Message {
 }
 
 /// Response with a bitmask of active malfunction types.
-public class MalfunctionBitmaskStatusResponse: Message {
+public class MalfunctionBitmaskStatusResponse: Message, NotificationMessage {
     public static let props = MessageProps(
         opCode: 119,
         size: 8,
@@ -48,18 +48,15 @@ public class MalfunctionBitmaskStatusResponse: Message {
         self.bitmask = bitmask
         malfunctions = MalfunctionType.fromBitmask(bitmask)
     }
+    
+    public var notificationCount: Int { malfunctions.count }
 
-    public func hasMalfunctionBit(_ type: MalfunctionType) -> Bool {
-        (bitmask & type.rawValue) != 0
-    }
-
-    /// Check by raw bit position (used by HighestAamResponse.matchesActiveMalfunction).
-    public func hasMalfunctionBit(_ bit: Int) -> Bool {
-        (bitmask & (1 << bit)) != 0
+    public var notificationIds: Set<Int> {
+        Set(malfunctions.map(\.rawValue))
     }
 
     /// Malfunction subsystem types encoded as bit positions in the bitmask.
-    public enum MalfunctionType: UInt64, CaseIterable {
+    public enum MalfunctionType: Int, CaseIterable, Comparable, NotificationEnum {
         case software = 1
         case cpuCore = 2
         case armMspCom = 4
@@ -86,15 +83,78 @@ public class MalfunctionBitmaskStatusResponse: Message {
         case overtravelStall = 8_388_608
         case undertravelStall = 16_777_216
         case pushoffStall = 33_554_432
+        
+        public static func < (lhs: MalfunctionType, rhs: MalfunctionType) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
 
-        public static func fromBitmask(_ bitmask: UInt64) -> Set<MalfunctionType> {
-            var result = Set<MalfunctionType>()
+        public static func fromBitmask(_ intMap: UInt64) -> Set<MalfunctionType> {
+            var current = Set<MalfunctionType>()
             for type in MalfunctionType.allCases {
-                if (bitmask & type.rawValue) != 0 {
-                    result.insert(type)
+                if (intMap >> type.rawValue) & 1 == 1 {
+                    current.insert(type)
                 }
             }
-            return result
+            return current
+        }
+        
+        public var id: Int { rawValue }
+        
+        public var notificationDescription: String? {
+            switch self {
+            case .software:
+                return String(localized: "Software", comment: "MalfunctionType: software")
+            case .cpuCore:
+                return String(localized: "CPU Core", comment: "MalfunctionType: cpuCore")
+            case .armMspCom:
+                return String(localized: "ARM MSP", comment: "MalfunctionType: armMspCom")
+            case .sensor:
+                return String(localized: "Sensor", comment: "MalfunctionType: sensor")
+            case .lipo:
+                return String(localized: "Lipo", comment: "MalfunctionType: lipo")
+            case .touchscreen:
+                return String(localized: "Touchscreen", comment: "MalfunctionType: touchscreen")
+            case .nvm:
+                return String(localized: "NVM", comment: "MalfunctionType: nvm")
+            case .display:
+                return String(localized: "Display", comment: "MalfunctionType: display")
+            case .msp:
+                return String(localized: "MSP", comment: "MalfunctionType: msp")
+            case .motor:
+                return String(localized: "Motor", comment: "MalfunctionType: motor")
+            case .externalBins:
+                return String(localized: "External Binaries", comment: "MalfunctionType: externalBins")
+            case .swInit:
+                return String(localized: "Software init", comment: "MalfunctionType: swInit")
+            case .vibe:
+                return String(localized: "Vibe", comment: "MalfunctionType: vibe")
+            case .periphPower:
+                return String(localized: "Peripheral Power", comment: "MalfunctionType: periphPower")
+            case .p2:
+                return String(localized: "P2", comment: "MalfunctionType: p2")
+            case .datalog:
+                return String(localized: "Datalog", comment: "MalfunctionType: datalog")
+            case .speaker:
+                return String(localized: "Speaker", comment: "MalfunctionType: speaker")
+            case .mspSupply:
+                return String(localized: "MSP Supply", comment: "MalfunctionType: mspSupply")
+            case .calData:
+                return String(localized: "CalData", comment: "MalfunctionType: calData")
+            case .btle:
+                return String(localized: "BTLE", comment: "MalfunctionType: btle")
+            case .ap:
+                return String(localized: "AP", comment: "MalfunctionType: ap")
+            case .rtc:
+                return String(localized: "RTC", comment: "MalfunctionType: rtc")
+            case .armBleCom:
+                return String(localized: "ARM BLE", comment: "MalfunctionType: armBleCom")
+            case .overtravelStall:
+                return String(localized: "Overtravel Stall", comment: "MalfunctionType: overtravelStall")
+            case .undertravelStall:
+                return String(localized: "Undertravel Stall", comment: "MalfunctionType: undertravelStall")
+            case .pushoffStall:
+                return String(localized: "Pushoff Stall", comment: "MalfunctionType: pushoffStall")
+            }
         }
     }
 

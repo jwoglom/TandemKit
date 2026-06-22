@@ -54,6 +54,10 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         observers.remove(observer)
     }
 
+    public func isUnfinalized() -> Bool {
+        deliveredUnits < total
+    }
+
     public func notify() {
         guard let bolusStatedOn else {
             // First time pump switched to delivering state

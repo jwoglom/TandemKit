@@ -9,7 +9,7 @@ public class UnfinalizedDose {
     public var bolusId: Int?
     public let type: DoseType
     public let startDate: Date
-    public let estimatedEndDate: Date
+    public var estimatedEndDate: Date
     public let value: Double
     public var deliveredUnits: Double = 0
     public let insulinType: InsulinType?

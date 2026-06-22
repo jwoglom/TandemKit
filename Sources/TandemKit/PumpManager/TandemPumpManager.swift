@@ -290,7 +290,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
-            self.fetchBolusStatus()
+            self.fetchBolusStatus(fromSync: true)
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
@@ -503,6 +503,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if let bolusProgressReport, bolusProgressReport.isUnfinalized() {
+            logger.warning("[enactTempBasal] Blocked: A bolus is still running")
+            completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
+            return
+        }
+
         let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
@@ -559,12 +565,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     insulinType: self.state.insulinType,
                     startDate: Date.now
                 )
+                
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
                 self.state.basalDose = dose
-                self.state.lastReconciliation = dose.startDate
-
+                self.state.lastReconciliation = Date.now
+                
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
 
@@ -1392,7 +1399,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             for qualifyingEvent in events {
                 switch qualifyingEvent {
                 case .bolusChange:
-                    self.fetchBolusStatus()
+                    self.fetchBolusStatus(fromSync: false)
                 case .basalChange:
                     self.fetchBasalStatus()
                 case .alert:
@@ -1423,7 +1430,7 @@ extension TandemPumpManager {
             )
         ]
 
-        if basalEntry.endDate == state.basalDose.estimatedEndDate {
+        if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
             let dose = UnfinalizedDose(
                 basalRate: getScheduledBasalRate(),
                 insulinType: state.insulinType,
