@@ -33,8 +33,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
     static let bleHeartbeatMinInterval: TimeInterval = .minutes(4)
-    private var mustProvideBLEHeartbeat = false
-    var lastBLEHeartbeatFire: Date?
+
+    // mustProvideBLEHeartbeat and lastBLEHeartbeatFire are read/written from both the
+    // qualifying-event/notification path and the telemetry-scheduler timer, so they are guarded
+    // by this lock and the throttle's check-then-update is performed atomically under it.
+    private let heartbeatLock = NSLock()
+    private var _mustProvideBLEHeartbeat = false
+    private var _lastBLEHeartbeatFire: Date?
+
+    // Exposed (internal) so tests can seed the last-fire time.
+    var lastBLEHeartbeatFire: Date? {
+        get { heartbeatLock.lock(); defer { heartbeatLock.unlock() }; return _lastBLEHeartbeatFire }
+        set { heartbeatLock.lock(); _lastBLEHeartbeatFire = newValue; heartbeatLock.unlock() }
+    }
 
     // Status tracking
     private let statusObservers = WeakSynchronizedSet<PumpManagerStatusObserver>()
@@ -307,7 +318,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
-        self.mustProvideBLEHeartbeat = mustProvideBLEHeartbeat
+        heartbeatLock.lock()
+        _mustProvideBLEHeartbeat = mustProvideBLEHeartbeat
+        heartbeatLock.unlock()
 
         if mustProvideBLEHeartbeat {
             telemetryScheduler.schedule(
@@ -323,15 +336,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     func fireBLEHeartbeatIfNeeded() {
-        guard mustProvideBLEHeartbeat else { return }
-
-        if let lastFire = lastBLEHeartbeatFire,
-           Date.now.timeIntervalSince(lastFire) < TandemPumpManager.bleHeartbeatMinInterval
+        heartbeatLock.lock()
+        let shouldFire: Bool
+        if !_mustProvideBLEHeartbeat {
+            shouldFire = false
+        } else if let lastFire = _lastBLEHeartbeatFire,
+                  Date.now.timeIntervalSince(lastFire) < TandemPumpManager.bleHeartbeatMinInterval
         {
-            return
+            shouldFire = false
+        } else {
+            _lastBLEHeartbeatFire = Date.now
+            shouldFire = true
         }
+        heartbeatLock.unlock()
 
-        lastBLEHeartbeatFire = Date.now
+        guard shouldFire else { return }
         pumpDelegate.notify { delegate in
             delegate?.pumpManagerBLEHeartbeatDidFire(self)
         }
