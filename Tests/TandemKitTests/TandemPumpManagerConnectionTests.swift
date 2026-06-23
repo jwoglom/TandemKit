@@ -108,6 +108,90 @@ import XCTest
     }
 }
 
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerHeartbeatTests: XCTestCase {
+    private func makeManager() -> (TandemPumpManager, MockPumpManagerDelegate) {
+        let manager = TandemPumpManager(state: TandemPumpManagerState())
+        let delegate = MockPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = DispatchQueue(label: "com.loopkit.TandemKit.tests.heartbeat")
+        return (manager, delegate)
+    }
+
+    func testHeartbeatEventFiresWhenRequired() {
+        let (manager, delegate) = makeManager()
+        manager.setMustProvideBLEHeartbeat(true)
+
+        delegate.bleHeartbeatExpectation = expectation(description: "heartbeat fired")
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+
+        wait(for: [delegate.bleHeartbeatExpectation!], timeout: 1.0)
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 1)
+    }
+
+    func testSecondHeartbeatWithinWindowIsSuppressed() {
+        let (manager, delegate) = makeManager()
+        manager.setMustProvideBLEHeartbeat(true)
+
+        delegate.bleHeartbeatExpectation = expectation(description: "heartbeat fired")
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+        wait(for: [delegate.bleHeartbeatExpectation!], timeout: 1.0)
+
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 1)
+    }
+
+    func testHeartbeatFiresAgainAfterThrottleWindow() {
+        let (manager, delegate) = makeManager()
+        manager.setMustProvideBLEHeartbeat(true)
+
+        delegate.bleHeartbeatExpectation = expectation(description: "first heartbeat fired")
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+        wait(for: [delegate.bleHeartbeatExpectation!], timeout: 1.0)
+
+        manager.lastBLEHeartbeatFire = Date.now
+            .addingTimeInterval(-TandemPumpManager.bleHeartbeatMinInterval - 1)
+
+        delegate.bleHeartbeatExpectation = expectation(description: "second heartbeat fired")
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+        wait(for: [delegate.bleHeartbeatExpectation!], timeout: 1.0)
+
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 2)
+    }
+
+    func testHeartbeatNeverFiresWhenNotRequired() {
+        let (manager, delegate) = makeManager()
+
+        manager.handleQualifyingEvents(events: [.heartbeat]) {}
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 0)
+    }
+
+    func testSetMustProvideSchedulesAndCancelsHeartbeatTimer() {
+        let (manager, delegate) = makeManager()
+        manager.state.isConnected = true
+
+        manager.setMustProvideBLEHeartbeat(true)
+
+        delegate.bleHeartbeatExpectation = expectation(description: "scheduled heartbeat fired")
+        manager.telemetryScheduler.trigger(kind: .heartbeat)
+        wait(for: [delegate.bleHeartbeatExpectation!], timeout: 1.0)
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 1)
+
+        manager.setMustProvideBLEHeartbeat(false)
+        manager.lastBLEHeartbeatFire = nil
+
+        let suppressed = expectation(description: "cancelled heartbeat does not fire")
+        suppressed.isInverted = true
+        delegate.bleHeartbeatExpectation = suppressed
+        manager.telemetryScheduler.trigger(kind: .heartbeat)
+        wait(for: [suppressed], timeout: 0.5)
+        XCTAssertEqual(delegate.bleHeartbeatFireCount, 1)
+    }
+}
+
 @available(macOS 13.0, iOS 14.0, *) final class MockPumpManagerDelegate: PumpManagerDelegate {
     struct StatusUpdate {
         let newStatus: PumpManagerStatus
@@ -116,6 +200,8 @@ import XCTest
 
     private(set) var statusUpdates: [StatusUpdate] = []
     private(set) var recordedErrors: [PumpManagerError] = []
+    private(set) var bleHeartbeatFireCount = 0
+    var bleHeartbeatExpectation: XCTestExpectation?
     private(set) var didUpdateStateCallCount: Int = 0
     var didUpdateStateExpectation: XCTestExpectation?
 
@@ -140,7 +226,10 @@ import XCTest
         statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus))
     }
 
-    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {}
+    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {
+        bleHeartbeatFireCount += 1
+        bleHeartbeatExpectation?.fulfill()
+    }
 
     func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool { false }
 

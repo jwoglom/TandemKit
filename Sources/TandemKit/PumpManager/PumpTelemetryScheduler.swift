@@ -13,6 +13,7 @@ enum PumpTelemetryKind: CaseIterable {
     case homeScreen
     case notifications
     case history
+    case heartbeat
 
     var logDescription: String {
         switch self {
@@ -38,6 +39,8 @@ enum PumpTelemetryKind: CaseIterable {
             return "notifications"
         case .history:
             return "history"
+        case .heartbeat:
+            return "heartbeat"
         }
     }
 }
@@ -96,6 +99,15 @@ final class PumpTelemetryScheduler {
             guard let tasks = self?.tasks.values else { return }
             for task in tasks {
                 task.handler()
+            }
+        }
+    }
+
+    /// Cancel the timer for a specific telemetry kind.
+    func cancel(kind: PumpTelemetryKind) {
+        queue.async {
+            if let task = self.tasks.removeValue(forKey: kind) {
+                task.timer.cancel()
             }
         }
     }

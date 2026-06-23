@@ -32,6 +32,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     internal let logger = TandemLogger(category: "TandemPumpManager")
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
+    static let bleHeartbeatMinInterval: TimeInterval = .minutes(4)
+    private var mustProvideBLEHeartbeat = false
+    var lastBLEHeartbeatFire: Date?
+
     // Status tracking
     private let statusObservers = WeakSynchronizedSet<PumpManagerStatusObserver>()
 
@@ -302,7 +306,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func setMustProvideBLEHeartbeat(_: Bool) {}
+    public func setMustProvideBLEHeartbeat(_ mustProvideBLEHeartbeat: Bool) {
+        self.mustProvideBLEHeartbeat = mustProvideBLEHeartbeat
+
+        if mustProvideBLEHeartbeat {
+            telemetryScheduler.schedule(
+                kind: .heartbeat,
+                interval: TandemPumpManager.bleHeartbeatMinInterval
+            ) { [weak self] in
+                guard let self, self.state.isConnected else { return }
+                self.fireBLEHeartbeatIfNeeded()
+            }
+        } else {
+            telemetryScheduler.cancel(kind: .heartbeat)
+        }
+    }
+
+    func fireBLEHeartbeatIfNeeded() {
+        guard mustProvideBLEHeartbeat else { return }
+
+        if let lastFire = lastBLEHeartbeatFire,
+           Date.now.timeIntervalSince(lastFire) < TandemPumpManager.bleHeartbeatMinInterval
+        {
+            return
+        }
+
+        lastBLEHeartbeatFire = Date.now
+        pumpDelegate.notify { delegate in
+            delegate?.pumpManagerBLEHeartbeatDidFire(self)
+        }
+    }
 
     /// Sends an arbitrary message to the pump and returns the decoded response, if any.
     /// Intended for the debug tools only. The expected response type is resolved from the
@@ -927,6 +960,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
         logger.debug("Preparing for pump deactivation – tearing down transport")
         bluetooth.disconnect()
+        telemetryScheduler.cancel(kind: .heartbeat)
 
         notifyDelegateOfDeactivation {
             completion(nil)
@@ -1373,6 +1407,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
+
+        if events.contains(.heartbeat) {
+            fireBLEHeartbeatIfNeeded()
+        }
 
         let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
         guard events.contains(where: { actionableEvents.contains($0) }) else {
