@@ -1431,6 +1431,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             fireBLEHeartbeatIfNeeded()
         }
 
+        bluetooth.toggleCommunicationsSuspended(events.contains(.pumpCommunicationsSuspended))
+
         let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
         guard events.contains(where: { actionableEvents.contains($0) }) else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to

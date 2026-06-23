@@ -35,7 +35,15 @@ class TandemBluetoothManager: NSObject {
     private let connectStateLock = NSLock()
     private var inFlightConnectGroup: TandemDispatchGroup?
 
-    private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
+    // Pump-communications-suspended gate (mirrors the Android app's PauseReason.SUSPEND_COMM).
+    // When the pump reports bit 19 set, command jobs must not write to the pump. The gate is an
+    // NSCondition so a command job waiting in write() (on commandQueue) is woken the instant resume
+    // is signalled, while suspend/resume themselves never block. The wait in write() is hard-bounded
+    // (commsSuspendMaxWait) so a stuck suspend can never wedge a bolus or the loop; ANY (re)connection
+    // force-resumes via ensureCommunicationsNotSuspended(), and disconnect releases the gate.
+    private let commsSuspendedCondition = NSCondition()
+    private var _commsSuspended = false
+    private let commsSuspendMaxWait: TimeInterval = 30
         connectStateLock.lock()
         inFlightConnectGroup = group
         connectStateLock.unlock()
@@ -48,7 +56,49 @@ class TandemBluetoothManager: NSObject {
         group?.cancel()
     }
 
-    override init() {
+    /// Suspends or resumes pump communications based on the pumpCommunicationsSuspended qualifying
+    /// event. Called from the notification path; must never block. Mirrors Android's
+    /// toggleCommunication(bit19): set-while-clear suspends, clear-while-set resumes.
+    func toggleCommunicationsSuspended(_ suspended: Bool) {
+        commsSuspendedCondition.lock()
+        let changed = _commsSuspended != suspended
+        if changed {
+            _commsSuspended = suspended
+            if !suspended {
+                commsSuspendedCondition.broadcast()
+            }
+        }
+        commsSuspendedCondition.unlock()
+        if changed {
+            logger.info("Pump communications \(suspended ? "suspended" : "resumed")")
+        }
+    }
+
+    /// Force-resumes pump communications. Invoked on every (re)connection so a suspend state can
+    /// never survive a reconnect and wedge the command pipeline (mirrors Android's
+    /// ensureCommunicationsNotSuspended()).
+    func ensureCommunicationsNotSuspended() {
+        toggleCommunicationsSuspended(false)
+    }
+
+    /// Blocks the calling command job (on commandQueue) while communications are suspended, bounded
+    /// by commsSuspendMaxWait. Returns true if it is safe to proceed (resumed, or never suspended,
+    /// or the bound elapsed), which it always does — the bound guarantees a command can never hang
+    /// indefinitely on a stuck suspend.
+    private func awaitCommunicationsResumed() {
+        commsSuspendedCondition.lock()
+        defer { commsSuspendedCondition.unlock() }
+        guard _commsSuspended else { return }
+        let deadline = Date().addingTimeInterval(commsSuspendMaxWait)
+        while _commsSuspended {
+            if !commsSuspendedCondition.wait(until: deadline) {
+                logger.error("Communications still suspended after \(commsSuspendMaxWait)s; proceeding")
+                return
+            }
+        }
+    }
+
+    private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
         super.init()
 
         managerQueue.sync {
@@ -113,6 +163,8 @@ class TandemBluetoothManager: NSObject {
             logger.error("No peripheralManager -> Not connected...")
             return nil
         }
+
+        awaitCommunicationsResumed()
 
         return peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
     }
@@ -220,6 +272,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             logger.info("Bluetooth not powered on; cancelling pending operations")
             cancelInFlightConnect()
             peripheralManager?.cancelPendingOperations()
+            ensureCommunicationsNotSuspended()
             return
         }
 
@@ -248,6 +301,8 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
 
     func centralManager(_: CBCentralManager, didConnect peripheral: CBPeripheral) {
         logger.info("Connected to pump: \(peripheral.name ?? "<NO_NAME>")!")
+
+        ensureCommunicationsNotSuspended()
 
         guard let pumpManager = pumpManager else {
             logger.warning("No pumpManager...")
@@ -282,6 +337,9 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // which would otherwise block connectIfNeeded for the full connectTimeout.
         cancelInFlightConnect()
         peripheralManager?.cancelPendingOperations()
+        // Release the comms-suspend gate so a job parked in write() unwinds; the reconnect path
+        // re-establishes a clean (resumed) state.
+        ensureCommunicationsNotSuspended()
 
         if let pumpManager {
             pumpManager.state.isConnected = false
