@@ -8,6 +8,8 @@ private final class ConnectResultBox {
 }
 
 class TandemBluetoothManager: NSObject {
+    static let centralManagerRestoreIdentifier = "com.jwoglom.TandemKit.CentralManager"
+
     private let logger = TandemLogger(category: "TandemBluetoothManager")
     private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.bluetoothManagerQueue", qos: .unspecified)
 
@@ -44,6 +46,8 @@ class TandemBluetoothManager: NSObject {
     private let commsSuspendedCondition = NSCondition()
     private var _commsSuspended = false
     private let commsSuspendMaxWait: TimeInterval = 30
+
+    private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
         connectStateLock.lock()
         inFlightConnectGroup = group
         connectStateLock.unlock()
@@ -98,13 +102,14 @@ class TandemBluetoothManager: NSObject {
         }
     }
 
-    private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
+    override init() {
         super.init()
 
         managerQueue.sync {
             self.manager = CBCentralManager(
                 delegate: self,
-                queue: managerQueue
+                queue: managerQueue,
+                options: [CBCentralManagerOptionRestoreIdentifierKey: TandemBluetoothManager.centralManagerRestoreIdentifier]
             )
         }
     }
@@ -359,6 +364,39 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
                     self.logger.warning("Failed to auto-reconnect: \(error)")
                 }
             }
+        }
+    }
+
+    func centralManager(_: CBCentralManager, willRestoreState dict: [String: Any]) {
+        let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral] ?? []
+        logger.info("Restoring CB state with \(restored.count) peripheral(s)")
+
+        let identifier = pumpManager?.state.pumpState.peripheralUuid
+        guard let peripheral = restored.first(where: { identifier == nil || $0.identifier.uuidString == identifier })
+        else {
+            logger.info("No restorable pump peripheral in CB state")
+            return
+        }
+
+        self.peripheral = peripheral
+
+        guard let pumpManager else {
+            logger.warning("Restored peripheral but no pumpManager...")
+            return
+        }
+
+        // If the restored peripheral is already connected, re-wire the peripheral manager exactly as
+        // didConnect would so the existing command/notification path keeps working across relaunch.
+        // Otherwise leave it for centralManagerDidUpdateState / didConnect to reconnect; the stored
+        // peripheral reference above is enough for connectIfNeeded to reuse it.
+        if peripheral.state == .connected {
+            peripheralManager = TandemPeripheralManager(self, peripheral, pumpManager) { error in
+                if let error {
+                    self.logger.warning("Restored connection setup failed: \(error)")
+                }
+            }
+            connectCompletion = nil
+            peripheral.discoverServices(ServiceUUID.all)
         }
     }
 

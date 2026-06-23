@@ -108,6 +108,15 @@ import XCTest
     }
 }
 
+@available(macOS 13.0, iOS 14.0, *) final class TandemBluetoothManagerRestorationTests: XCTestCase {
+    func testRestoreIdentifierIsStable() {
+        XCTAssertEqual(
+            TandemBluetoothManager.centralManagerRestoreIdentifier,
+            "com.jwoglom.TandemKit.CentralManager"
+        )
+    }
+}
+
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerHeartbeatTests: XCTestCase {
     private func makeManager() -> (TandemPumpManager, MockPumpManagerDelegate) {
         let manager = TandemPumpManager(state: TandemPumpManagerState())
