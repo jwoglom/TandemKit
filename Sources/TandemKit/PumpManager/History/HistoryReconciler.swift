@@ -1,0 +1,103 @@
+import Foundation
+import LoopKit
+
+/// Matches locally-tracked pending doses with history-derived pump events.
+class HistoryReconciler {
+    private let matchWindow: TimeInterval = 5 * 60
+    private let bolusTolerance: Double = 0.05
+    private let basalTolerance: Double = 0.01
+    private let uncertainAge: TimeInterval = 24 * 60 * 60
+
+    func reconcile(
+        pendingDoses: [PendingDose],
+        historyEvents: [NewPumpEvent],
+        now: Date = Date()
+    ) -> (
+        reconciledEvents: [NewPumpEvent],
+        stillPending: [PendingDose],
+        uncertainPending: [PendingDose]
+    ) {
+        var remainingPending = pendingDoses
+        var reconciledEvents: [NewPumpEvent] = []
+
+        for event in historyEvents {
+            guard let dose = event.dose else {
+                reconciledEvents.append(event)
+                continue
+            }
+
+            if let matchIndex = remainingPending.firstIndex(where: { matches($0, to: dose) }) {
+                let syncId = remainingPending[matchIndex].syncIdentifier
+                remainingPending.remove(at: matchIndex)
+                // Create new dose with syncIdentifier
+                let updatedDose = DoseEntry(
+                    type: dose.type,
+                    startDate: dose.startDate,
+                    endDate: dose.endDate,
+                    value: dose.programmedUnits,
+                    unit: dose.unit,
+                    deliveredUnits: dose.deliveredUnits,
+                    description: dose.description,
+                    syncIdentifier: syncId,
+                    scheduledBasalRate: dose.scheduledBasalRate
+                )
+                let updatedEvent = NewPumpEvent(
+                    date: event.date,
+                    dose: updatedDose,
+                    raw: event.raw,
+                    title: event.title,
+                    type: event.type
+                )
+                reconciledEvents.append(updatedEvent)
+            } else {
+                reconciledEvents.append(event)
+            }
+        }
+
+        let uncertain = remainingPending.filter { now.timeIntervalSince($0.requestedAt) >= uncertainAge }
+
+        return (reconciledEvents, remainingPending, uncertain)
+    }
+
+    private func matches(_ pending: PendingDose, to eventDose: DoseEntry) -> Bool {
+        if let pendingSyncIdentifier = pending.dose.syncIdentifier,
+           let eventSyncIdentifier = eventDose.syncIdentifier,
+           pendingSyncIdentifier == eventSyncIdentifier
+        {
+            return true
+        }
+
+        guard pending.dose.type == eventDose.type else {
+            return false
+        }
+
+        let timeDrift = abs(pending.dose.startDate.timeIntervalSince(eventDose.startDate))
+        guard timeDrift <= matchWindow else {
+            return false
+        }
+
+        switch pending.dose.type {
+        case .bolus:
+            return closeEnough(
+                expected: pending.dose.deliveredUnits ?? pending.dose.programmedUnits,
+                actual: eventDose.deliveredUnits ?? eventDose.programmedUnits,
+                tolerance: bolusTolerance
+            )
+        case .tempBasal:
+            return closeEnough(
+                expected: pending.dose.programmedUnits,
+                actual: eventDose.programmedUnits,
+                tolerance: basalTolerance
+            )
+        case .resume,
+             .suspend:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func closeEnough(expected: Double, actual: Double, tolerance: Double) -> Bool {
+        abs(expected - actual) <= tolerance
+    }
+}
