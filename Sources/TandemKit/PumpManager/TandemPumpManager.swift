@@ -329,6 +329,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             ) { [weak self] in
                 guard let self, self.state.isConnected else { return }
                 self.fireBLEHeartbeatIfNeeded()
+                // Actively poll the pump during quiet periods. ensureCurrentPumpData
+                // short-circuits when a full sync happened < 4.5 min ago, so during normal
+                // CGM-driven operation this is a no-op; it only issues real fetches when no
+                // sync has run recently (e.g. CGM gaps, no qualifying events from the pump).
+                self.ensureCurrentPumpData(completion: nil)
             }
         } else {
             telemetryScheduler.cancel(kind: .heartbeat)
@@ -338,19 +343,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func fireBLEHeartbeatIfNeeded() {
         heartbeatLock.lock()
         let shouldFire: Bool
+        let skipReason: String?
         if !_mustProvideBLEHeartbeat {
             shouldFire = false
+            skipReason = "LoopKit has not requested a BLE heartbeat (mustProvideBLEHeartbeat=false)"
         } else if let lastFire = _lastBLEHeartbeatFire,
                   Date.now.timeIntervalSince(lastFire) < TandemPumpManager.bleHeartbeatMinInterval
         {
             shouldFire = false
+            skipReason = "throttled, last fire \(Date.now.timeIntervalSince(lastFire))s ago < \(TandemPumpManager.bleHeartbeatMinInterval)s"
         } else {
             _lastBLEHeartbeatFire = Date.now
             shouldFire = true
+            skipReason = nil
         }
         heartbeatLock.unlock()
 
-        guard shouldFire else { return }
+        guard shouldFire else {
+            logger.info("BLE heartbeat skipped: \(skipReason ?? "unknown")")
+            return
+        }
+        logger.info("BLE heartbeat firing: pumpManagerBLEHeartbeatDidFire")
         pumpDelegate.notify { delegate in
             delegate?.pumpManagerBLEHeartbeatDidFire(self)
         }
@@ -1427,7 +1440,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
 
-        if events.contains(.heartbeat) {
+        // Treat any qualifying event as a heartbeat: the pump only pushes these while we're
+        // connected, so each batch is a fresh opportunity to satisfy LoopKit's BLE heartbeat.
+        // fireBLEHeartbeatIfNeeded() self-gates on mustProvideBLEHeartbeat and the min interval.
+        if !events.isEmpty {
             fireBLEHeartbeatIfNeeded()
         }
 
