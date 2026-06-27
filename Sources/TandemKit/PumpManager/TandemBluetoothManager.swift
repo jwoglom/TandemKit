@@ -108,6 +108,23 @@ class TandemBluetoothManager: NSObject {
         manager.connect(peripheral)
     }
 
+    /// Tears down whatever scan / connect attempt is currently outstanding.
+    ///
+    /// CoreBluetooth's `connect()` has no timeout of its own — once issued it stays pending
+    /// indefinitely until it succeeds, fails, or is explicitly cancelled. So when our own
+    /// `connectTimeout` fires we must cancel the underlying request, otherwise the wedged
+    /// connect lingers in the BLE stack and blocks every subsequent attempt (observed as a
+    /// multi-hour inability to reconnect to a pump sitting inches away).
+    private func cancelPendingConnect() {
+        guard let manager else { return }
+        if manager.isScanning {
+            manager.stopScan()
+        }
+        if let peripheral {
+            manager.cancelPeripheralConnection(peripheral)
+        }
+    }
+
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
         guard let peripheralManager else {
             logger.error("No peripheralManager -> Not connected...")
@@ -186,6 +203,9 @@ class TandemBluetoothManager: NSObject {
         // Cancelled by cancelInFlightConnect() on disconnect/Bluetooth-off, or times out on its own.
         if group.wait(timeout: .now() + connectTimeout) == nil {
             logger.error("Connect attempt did not complete within \(connectTimeout)")
+            // Cancel the still-pending CoreBluetooth connect so it does not linger and block
+            // future attempts; CB never times it out on its own.
+            cancelPendingConnect()
             return PumpCommError.pumpNotConnected
         }
         return resultBox.error
