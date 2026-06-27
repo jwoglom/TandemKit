@@ -50,6 +50,45 @@ public struct MessageMetadata {
         }
         return false
     }
+
+    /// The functional category this message belongs to, derived from its BLE characteristic.
+    public var category: MessageCategory {
+        MessageCategory(characteristic: characteristic)
+    }
+}
+
+/// High-level grouping of pump messages by the BLE characteristic they travel over.
+public enum MessageCategory: String, CaseIterable, Sendable {
+    case currentStatus = "CurrentStatus"
+    case control = "Control"
+    case controlStream = "ControlStream"
+    case historyLog = "HistoryLog"
+    case qualifyingEvent = "QualifyingEvent"
+    case authentication = "Authentication"
+    case other = "Other"
+
+    public init(characteristic: CBUUID) {
+        if characteristic == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS {
+            self = .currentStatus
+        } else if characteristic == CharacteristicUUID.CONTROL_CHARACTERISTICS {
+            self = .control
+        } else if characteristic == CharacteristicUUID.CONTROL_STREAM_CHARACTERISTICS {
+            self = .controlStream
+        } else if characteristic == CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS {
+            self = .historyLog
+        } else if characteristic == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
+            self = .qualifyingEvent
+        } else if characteristic == CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS {
+            self = .authentication
+        } else {
+            self = .other
+        }
+    }
+
+    /// User-facing button label, e.g. "Send CurrentStatus request".
+    public var sendButtonTitle: String {
+        "Send \(rawValue) request"
+    }
 }
 
 public enum MessageRegistry {
