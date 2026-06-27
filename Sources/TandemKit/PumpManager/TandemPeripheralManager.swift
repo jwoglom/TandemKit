@@ -400,6 +400,16 @@ extension TandemPeripheralManager {
 
                 while let (request, expectedResponse) = authBuilder.nextRequest() {
                     guard let response = write(message: request, expecting: expectedResponse) else {
+                        // A failure while awaiting key confirmation almost always means the
+                        // pairing code was wrong: rounds 1-3 complete regardless of code, and
+                        // the pump rejects a bad code by dropping the link at this step. Surface
+                        // that distinctly instead of a generic "no response".
+                        if authBuilder.awaitingKeyConfirmation() {
+                            logger.error("JPAKE key confirmation failed — likely incorrect pairing code")
+                            bluetoothManager.disconnect()
+                            connectCompletion?(PumpCommError.incorrectPairingCode)
+                            return
+                        }
                         logger.error("Failed to send JPAKE confirm")
                         bluetoothManager.disconnect()
                         connectCompletion?(PumpCommError.noResponse)
@@ -418,10 +428,14 @@ extension TandemPeripheralManager {
                     let secret = "serverNonce=\(authBuilder.getServerNonce() != nil)"
                     logger.error("JPAKE failed: \(done) \(invalid) \(derived) \(secret)")
 
+                    // An INVALID end state means the pump returned a key-confirmation that did not
+                    // match — i.e. the pairing code was wrong. Report that distinctly.
+                    let failure: PumpCommError = authBuilder.invalid() ? .incorrectPairingCode : .noResponse
+
                     // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
                     // full connectTimeout and stalls every queued command behind it.
                     bluetoothManager.disconnect()
-                    connectCompletion?(PumpCommError.noResponse)
+                    connectCompletion?(failure)
                     return
                 }
 
