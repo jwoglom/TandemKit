@@ -35,6 +35,13 @@ class TandemBluetoothManager: NSObject {
     private let connectStateLock = NSLock()
     private var inFlightConnectGroup: TandemDispatchGroup?
 
+    // Count of connect attempts that have failed back-to-back without an intervening success.
+    // Only ever mutated from connectIfNeeded (which runs serialized on commandQueue), so it
+    // needs no extra locking. Once it reaches connectEscalationThreshold we stop retrying the
+    // cached peripheral — which may be a stale/wedged object — and force a fresh scan instead.
+    private var consecutiveConnectFailures = 0
+    private let connectEscalationThreshold = 3
+
     private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
         connectStateLock.lock()
         inFlightConnectGroup = group
@@ -174,6 +181,18 @@ class TandemBluetoothManager: NSObject {
             return PumpCommError.pumpNotConnected
         }
 
+        // After repeated back-to-back failures the cached peripheral object is likely stale or
+        // wedged (re-issuing connect() on it keeps timing out). Drop and cancel it so the
+        // strategy below falls through to a fresh scan, which produces a new peripheral object —
+        // the same move that recovers the connection when done manually.
+        if consecutiveConnectFailures >= connectEscalationThreshold, let stale = peripheral {
+            logger.warning(
+                "Escalating reconnect after \(consecutiveConnectFailures) failures: dropping cached peripheral and rescanning"
+            )
+            manager.cancelPeripheralConnection(stale)
+            peripheral = nil
+        }
+
         let group = TandemDispatchGroup()
         group.enter()
         setInFlightConnectGroup(group)
@@ -215,9 +234,17 @@ class TandemBluetoothManager: NSObject {
             // Cancel the still-pending CoreBluetooth connect so it does not linger and block
             // future attempts; CB never times it out on its own.
             cancelPendingConnect()
+            consecutiveConnectFailures += 1
             return PumpCommError.pumpNotConnected
         }
-        return resultBox.error
+
+        if let error = resultBox.error {
+            consecutiveConnectFailures += 1
+            return error
+        }
+
+        consecutiveConnectFailures = 0
+        return nil
     }
 
     func disconnect() {
