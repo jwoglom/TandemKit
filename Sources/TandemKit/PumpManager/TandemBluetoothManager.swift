@@ -248,7 +248,11 @@ class TandemBluetoothManager: NSObject {
     }
 
     func disconnect() {
-        if let peripheralManager {
+        // Best-effort courtesy notification so the pump tears the session down cleanly — but
+        // only when the link is actually up. On a degraded/half-open link (e.g. a drop mid
+        // handshake) this write would just block until its bounded timeout, delaying the
+        // cancelPeripheralConnection below, which is the teardown that actually matters.
+        if let peripheralManager, let peripheral, peripheral.state == .connected {
             _ = peripheralManager.write(message: DisconnectPumpRequest(), expecting: DisconnectPumpResponse.self)
         }
 
