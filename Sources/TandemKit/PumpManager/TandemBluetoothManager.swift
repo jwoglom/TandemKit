@@ -100,6 +100,15 @@ class TandemBluetoothManager: NSObject {
 
         stopScan()
 
+        // If a connect for a *different* peripheral object is still outstanding, cancel it
+        // first. A re-scan hands back a fresh CBPeripheral instance for the same device
+        // (same identifier, new object), and CB keeps the previous object's connect pending
+        // forever — so without this, retries accumulate competing connect requests against
+        // the same pump and none complete.
+        if let existing = self.peripheral, existing !== peripheral {
+            manager.cancelPeripheralConnection(existing)
+        }
+
         logger.info("Connecting to \(peripheral)")
 
         self.peripheral = peripheral
