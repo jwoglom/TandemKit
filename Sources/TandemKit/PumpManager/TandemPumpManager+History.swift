@@ -89,7 +89,7 @@ extension TandemPumpManager {
             if let dose = event.dose {
                 let delivered = dose.deliveredUnits.map { "\($0)" } ?? "-"
                 historyLogger.info(
-                    "[HISTORY-RO] dose type=\(dose.type) start=\(dose.startDate) end=\(dose.endDate) value=\(dose.value) \(dose.unit) delivered=\(delivered) sync=\(dose.syncIdentifier ?? "-")"
+                    "[HISTORY-RO] dose type=\(dose.type) start=\(dose.startDate) end=\(dose.endDate) programmedUnits=\(dose.programmedUnits) unitsPerHour=\(dose.unitsPerHour) \(dose.unit) delivered=\(delivered) sync=\(dose.syncIdentifier ?? "-")"
                 )
             } else {
                 let typeStr = event.type.map { "\($0)" } ?? "-"
