@@ -309,6 +309,23 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == HistoryLogStreamResponse.props.characteristic,
+           data.count > 5,
+           data[2] == HistoryLogStreamResponse.props.opCode
+        {
+            // Diagnostic for the open multi-packet question: if the frame's remaining-packet
+            // counter (low nibble of byte 0) is non-zero, a single HistoryLogStreamResponse
+            // spans multiple BLE notifications and this single-frame parse is incomplete —
+            // we'll see it in the logs and add reassembly if needed.
+            let remainingPackets = Int(data[0] & 0x0F)
+            if remainingPackets > 0 {
+                logger.warning("[HISTORY-RO] multi-packet history stream frame (remaining=\(remainingPackets), bytes=\(data.count)); single-frame parse may be incomplete")
+            }
+            let response = HistoryLogStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.handleHistoryLogStream(response)
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {

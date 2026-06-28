@@ -41,6 +41,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
 
+    // MARK: - History fetch (READ-ONLY logging slice)
+    // This wiring fetches pump history and LOGS it (raw + mapped) for validation on a live
+    // pump. It deliberately does NOT emit to DoseStore — nothing here calls hasNewPumpEvents —
+    // so IOB and dosing are unaffected. The emit/reconcile path is a later, separate step.
+    internal let historyLogger = TandemLogger(category: "HistoryFetch")
+    private let historyLock = NSLock()
+    private var _activeHistoryFetchSession: HistoryFetchSession?
+    /// The in-flight fetch session, used to route incoming HistoryLogStreamResponse notifications.
+    /// Guarded because it is set on the fetch queue and read on the CB delegate queue.
+    internal var activeHistoryFetchSession: HistoryFetchSession? {
+        get { historyLock.lock(); defer { historyLock.unlock() }; return _activeHistoryFetchSession }
+        set { historyLock.lock(); _activeHistoryFetchSession = newValue; historyLock.unlock() }
+    }
+    /// In-memory cursor so repeated fetches only log new entries (reset on app restart).
+    internal var lastFetchedHistorySequence: UInt32?
+
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.
     let watchdogQueue = DispatchQueue(label: "com.jwoglom.TandemKit.commandWatchdog")
@@ -299,6 +315,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.notifyDelegateStateUpdated()
 
             completion(self.state.lastReconciliation)
+
+            // READ-ONLY: fetch + log pump history after sync completes. Runs on this
+            // background, already-connected queue; does not affect sync timing or DoseStore.
+            self.fetchAndLogPumpHistory()
         }
     }
 
