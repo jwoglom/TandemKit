@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Tracks seen history log sequence numbers to prevent duplicate processing across fetches.
 class HistoryDeduplicator {

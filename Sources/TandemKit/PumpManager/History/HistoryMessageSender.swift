@@ -8,7 +8,6 @@
 //
 
 import Foundation
-import TandemCore
 
 /// Synchronously sends a pump request and returns the matching response, or nil on
 /// timeout / no response. Mirrors the shape of `TandemBluetoothManager.write`.

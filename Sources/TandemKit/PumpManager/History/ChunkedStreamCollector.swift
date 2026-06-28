@@ -1,6 +1,5 @@
 import Dispatch
 import Foundation
-import TandemCore
 
 /// Result of a chunk collection attempt.
 internal enum ChunkResult {

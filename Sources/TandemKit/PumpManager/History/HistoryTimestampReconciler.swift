@@ -1,5 +1,4 @@
 import Foundation
-import TandemCore
 
 /// Tracks clock-change deltas and converts pump timestamps to UTC.
 class HistoryTimestampReconciler {

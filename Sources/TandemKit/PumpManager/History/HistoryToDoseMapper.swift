@@ -1,6 +1,5 @@
 import Foundation
 import LoopKit
-import TandemCore
 
 /// Maps Tandem HistoryLog events to LoopKit DoseEntry and NewPumpEvent instances.
 class HistoryToDoseMapper {

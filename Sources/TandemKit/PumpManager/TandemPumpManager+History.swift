@@ -11,7 +11,6 @@
 
 import Foundation
 import LoopKit
-import TandemCore
 
 extension TandemPumpManager {
     /// Most recent entries to pull on the first (cursor-less) fetch. Kept small so the live

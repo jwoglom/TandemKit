@@ -1,6 +1,5 @@
 import Dispatch
 import Foundation
-import TandemCore
 
 // History fetch configuration matching ControlX2
 private let TandemHistoryChunkSize: Int = 32
