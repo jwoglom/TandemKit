@@ -12,10 +12,12 @@ enum HistoryFetchError: Error, Equatable {
     case invalidRange(start: UInt32, firstAvailable: UInt32, lastAvailable: UInt32)
     case responseStatus(Int)
     case streamTimeout(expected: Int, received: Int)
+    /// No (or non-decodable) response from the pump for a request. Transient; retryable.
+    case noResponse
 
     var isRetryable: Bool {
         switch self {
-        case .streamTimeout:
+        case .streamTimeout, .noResponse:
             return true
         default:
             return false
@@ -30,8 +32,7 @@ enum HistoryFetchError: Error, Equatable {
 /// `HistoryLogStreamResponse` notifications until the expected number of entries
 /// arrive or a timeout occurs.
 final class HistoryFetchSession {
-    private let transport: PumpMessageTransport
-    private let pumpComm: PumpComm
+    private let sender: HistoryMessageSender
     private let startSequence: UInt32?
     private let maxEntries: Int
     private let chunkSize = TandemHistoryChunkSize
@@ -40,13 +41,11 @@ final class HistoryFetchSession {
     private var activeCollector: ChunkedStreamCollector?
 
     init(
-        transport: PumpMessageTransport,
-        pumpComm: PumpComm,
+        sender: HistoryMessageSender,
         startSequence: UInt32?,
         maxEntries: Int = 500
     ) {
-        self.transport = transport
-        self.pumpComm = pumpComm
+        self.sender = sender
         self.startSequence = startSequence
         self.maxEntries = maxEntries
     }
@@ -88,11 +87,12 @@ final class HistoryFetchSession {
 
     /// Execute the fetch flow with chunked backward iteration and return sorted history logs.
     func fetch() throws -> [HistoryLog] {
-        let status: HistoryLogStatusResponse = try pumpComm.sendMessage(
-            transport: transport,
-            message: HistoryLogStatusRequest(),
+        guard let status = sender.sendMessage(
+            HistoryLogStatusRequest(),
             expecting: HistoryLogStatusResponse.self
-        )
+        ) as? HistoryLogStatusResponse else {
+            throw HistoryFetchError.noResponse
+        }
 
         let start = resolvedStartSequence(from: status)
         guard let start else {
@@ -159,11 +159,12 @@ final class HistoryFetchSession {
         count: Int,
         collector: ChunkedStreamCollector
     ) throws -> ChunkResult {
-        let response: HistoryLogResponse = try pumpComm.sendMessage(
-            transport: transport,
-            message: HistoryLogRequest(startLog: startSequence, numberOfLogs: count),
+        guard let response = sender.sendMessage(
+            HistoryLogRequest(startLog: startSequence, numberOfLogs: count),
             expecting: HistoryLogResponse.self
-        )
+        ) as? HistoryLogResponse else {
+            throw HistoryFetchError.noResponse
+        }
 
         guard response.status == 0 else {
             throw HistoryFetchError.responseStatus(response.status)

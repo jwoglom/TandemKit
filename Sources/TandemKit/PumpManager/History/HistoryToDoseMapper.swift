@@ -79,6 +79,39 @@ class HistoryToDoseMapper {
                 events.append(makeAlarmEvent(alarm, reconciler: reconciler, timeZone: timeZone))
             case let alert as AlertActivatedHistoryLog:
                 events.append(makeAlarmEvent(alert, reconciler: reconciler, timeZone: timeZone))
+            case let suspend as PumpingSuspendedHistoryLog:
+                // Source the suspend from the pump's own ledger so it can't be missed
+                // (the asymmetry behind the stale-suspend bug, where a suspend was emitted
+                // from status but the matching resume sometimes was not).
+                let date = reconciler.utcDate(
+                    pumpTimeSec: suspend.pumpTimeSec,
+                    sequenceNum: suspend.sequenceNum,
+                    timeZone: timeZone
+                )
+                events.append(
+                    NewPumpEvent(
+                        date: date,
+                        dose: DoseEntry(suspendDate: date),
+                        raw: suspend.cargo,
+                        title: "Suspend",
+                        type: .suspend
+                    )
+                )
+            case let resume as PumpingResumedHistoryLog:
+                let date = reconciler.utcDate(
+                    pumpTimeSec: resume.pumpTimeSec,
+                    sequenceNum: resume.sequenceNum,
+                    timeZone: timeZone
+                )
+                events.append(
+                    NewPumpEvent(
+                        date: date,
+                        dose: DoseEntry(resumeDate: date, insulinType: insulinType),
+                        raw: resume.cargo,
+                        title: "Resume",
+                        type: .resume
+                    )
+                )
             default:
                 continue
             }
