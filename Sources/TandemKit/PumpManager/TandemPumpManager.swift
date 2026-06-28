@@ -1464,17 +1464,20 @@ extension TandemPumpManager {
         }
     }
 
-    func getScheduledBasalRate() -> Double {
+    /// The scheduled (profile) basal rate in effect at `date` per Loop's basal schedule.
+    /// Defaults to now (used by the set path); history interpretation passes the dose's
+    /// start date so a temp basal's percent can be converted to an absolute rate exactly
+    /// as the set path does.
+    func getScheduledBasalRate(at date: Date = Date.now) -> Double {
         let schedule = state.basalRateSchedule
         guard !schedule.items.isEmpty else {
             return 0
         }
 
-        let now = Date.now
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let nowTimeInterval = now.timeIntervalSince(startOfDay)
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let timeInterval = date.timeIntervalSince(startOfDay)
 
-        return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+        return schedule.items.last(where: { $0.startTime < timeInterval })?.value ?? schedule.items[0].value
     }
 }
 

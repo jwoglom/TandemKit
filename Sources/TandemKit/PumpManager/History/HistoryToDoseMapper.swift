@@ -4,11 +4,18 @@ import TandemCore
 
 /// Maps Tandem HistoryLog events to LoopKit DoseEntry and NewPumpEvent instances.
 class HistoryToDoseMapper {
+    /// - Parameters:
+    ///   - scheduledBasalRate: Loop's scheduled (profile) basal rate at a given date.
+    ///     Used to convert a temp basal's pump-stored *percent* into an absolute U/hr rate,
+    ///     exactly as the set path does (`scheduledRate × percent/100`).
+    ///   - roundBasalRate: Rounds a rate to a pump-supported value (mirrors the set path).
     func mapToEvents(
         _ logs: [HistoryLog],
         reconciler: HistoryTimestampReconciler,
         insulinType: InsulinType?,
-        timeZone: TimeZone
+        timeZone: TimeZone,
+        scheduledBasalRate: (Date) -> Double,
+        roundBasalRate: (Double) -> Double
     ) -> [NewPumpEvent] {
         let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
         recordClockChanges(sortedLogs, reconciler: reconciler)
@@ -47,7 +54,9 @@ class HistoryToDoseMapper {
                     completion: completion,
                     reconciler: reconciler,
                     insulinType: insulinType,
-                    timeZone: timeZone
+                    timeZone: timeZone,
+                    scheduledBasalRate: scheduledBasalRate,
+                    roundBasalRate: roundBasalRate
                 ) {
                     events.append(
                         NewPumpEvent(
@@ -150,7 +159,9 @@ class HistoryToDoseMapper {
                 completion: nil,
                 reconciler: reconciler,
                 insulinType: insulinType,
-                timeZone: timeZone
+                timeZone: timeZone,
+                scheduledBasalRate: scheduledBasalRate,
+                roundBasalRate: roundBasalRate
             ) {
                 events.append(
                     NewPumpEvent(
@@ -237,7 +248,9 @@ class HistoryToDoseMapper {
         completion: TempRateCompletedHistoryLog?,
         reconciler: HistoryTimestampReconciler,
         insulinType: InsulinType?,
-        timeZone: TimeZone
+        timeZone: TimeZone,
+        scheduledBasalRate: (Date) -> Double,
+        roundBasalRate: (Double) -> Double
     ) -> DoseEntry? {
         guard let activation else {
             return nil
@@ -267,11 +280,19 @@ class HistoryToDoseMapper {
         // Use min() not max() - if temp basal completes early, use the actual completion time
         let endDate = min(programmedEndDate, completionDate)
 
+        // A Tandem temp basal is stored in history as a *percent* of the active profile
+        // basal, not an absolute rate. Convert to an absolute U/hr rate exactly as the
+        // set path does: round(scheduledBasalRate(at: start) × percent/100). Recording the
+        // bare percent/100 here would only be correct when the scheduled basal is 1.0 U/hr.
+        let absoluteRate = roundBasalRate(
+            scheduledBasalRate(startDate) * Double(activation.percent) / 100.0
+        )
+
         let dose = DoseEntry(
             type: .tempBasal,
             startDate: startDate,
             endDate: endDate,
-            value: Double(activation.percent) / 100.0,
+            value: absoluteRate,
             unit: .unitsPerHour,
             description: "Temp basal #\(activation.tempRateId) at \(activation.percent)%",
             syncIdentifier: Self.tempBasalSyncIdentifier(activation.tempRateId),
