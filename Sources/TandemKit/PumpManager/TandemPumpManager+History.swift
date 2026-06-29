@@ -69,7 +69,7 @@ extension TandemPumpManager {
 
         // Raw entries (debug level so they can be filtered out).
         for log in logs {
-            historyLogger.debug("[HISTORY-RO] raw seq=\(log.sequenceNum) \(log)")
+            historyLogger.debug("[HISTORY-RO] raw seq=\(log.sequenceNum) typeId=\(log.typeId) time=\(Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))) \(log)")
         }
 
         // Run the mapper to validate the fixes (temp-basal absolute rate, timestamps,
