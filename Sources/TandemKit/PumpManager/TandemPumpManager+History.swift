@@ -13,10 +13,9 @@ import Foundation
 import LoopKit
 
 extension TandemPumpManager {
-    /// Most recent entries to pull on the first (cursor-less) fetch. Kept small so the live
-    /// trial is fast and the logs are readable; later (IOB-emitting) work will bound by
-    /// `startDateToFilterNewPumpEvents` instead.
-    private var historyReadOnlyFetchLimit: Int { 50 }
+    /// Hard backstop on the initial (DIA-bounded) deep fetch. The date bound should stop us well
+    /// before this; if we hit it, the bound isn't working and the summary line flags it.
+    private var historyDeepFetchBackstop: Int { 1000 }
 
     /// Routes an incoming HistoryLogStreamResponse (delivered on the CB delegate queue) to the
     /// in-flight fetch session's collector. No-op when no fetch is active.
@@ -24,7 +23,10 @@ extension TandemPumpManager {
         activeHistoryFetchSession?.handleStreamResponse(response)
     }
 
-    /// READ-ONLY: fetch recent (or newly-arrived) pump history and log it. Never emits.
+    /// READ-ONLY: fetch pump history and log it. Never emits.
+    /// - **Initial sync** (no cursor — also after an app restart / overnight power-down): a *deep*
+    ///   fetch bounded by `startDateToFilterNewPumpEvents` (≈ insulin duration), with a metrics line.
+    /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
         guard activeHistoryFetchSession == nil else {
@@ -32,28 +34,54 @@ extension TandemPumpManager {
             return
         }
 
-        // Incremental after the first run: only pull entries newer than the last we logged.
+        let isInitialSync = lastFetchedHistorySequence == nil
         let startSequence: UInt32? = lastFetchedHistorySequence.map { $0 &+ 1 }
+        let stopBeforeDate: Date? = isInitialSync
+            ? (pumpManagerDelegate?.startDateToFilterNewPumpEvents(for: self) ?? Date().addingTimeInterval(-.hours(6)))
+            : nil
+        let maxEntries = isInitialSync ? historyDeepFetchBackstop : 200
+
         let session = HistoryFetchSession(
             sender: bluetooth,
             startSequence: startSequence,
-            maxEntries: startSequence == nil ? historyReadOnlyFetchLimit : 200
+            maxEntries: maxEntries,
+            stopBeforeDate: stopBeforeDate
         )
-
         activeHistoryFetchSession = session
         defer { activeHistoryFetchSession = nil }
 
-        historyLogger.info("[HISTORY-RO] starting fetch (startSequence=\(startSequence.map { "\($0)" } ?? "recent"))")
+        let kind = isInitialSync ? "DEEP (DIA-bounded)" : "incremental"
+        historyLogger.info(
+            "[HISTORY-RO] starting \(kind) fetch (startSequence=\(startSequence.map { "\($0)" } ?? "recent"), stopBefore=\(stopBeforeDate.map { "\($0)" } ?? "none"), backstop=\(maxEntries))"
+        )
 
+        let started = Date()
         do {
             let logs = try session.fetchWithRetry()
+            let elapsed = Date().timeIntervalSince(started)
+            if isInitialSync {
+                logDeepFetchSummary(logs, elapsed: elapsed, stopBeforeDate: stopBeforeDate, backstop: maxEntries)
+            }
             logFetchedHistory(logs)
             if let maxSeq = logs.map(\.sequenceNum).max() {
                 lastFetchedHistorySequence = maxSeq
             }
         } catch {
-            historyLogger.error("[HISTORY-RO] fetch failed: \(String(describing: error))")
+            let elapsed = Date().timeIntervalSince(started)
+            historyLogger.error("[HISTORY-RO] \(kind) fetch FAILED after \(String(format: "%.1f", elapsed))s: \(String(describing: error))")
         }
+    }
+
+    /// One-line metrics for the deep fetch: timing / count / sequence range / how far back we
+    /// reached / what stopped us (DIA bound vs backstop).
+    private func logDeepFetchSummary(_ logs: [HistoryLog], elapsed: TimeInterval, stopBeforeDate: Date?, backstop: Int) {
+        let seqs = logs.map(\.sequenceNum)
+        let oldest = logs.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }.min()
+        let reachedDIA = oldest != nil && stopBeforeDate != nil && oldest! <= stopBeforeDate!
+        let hitBackstop = logs.count >= backstop
+        historyLogger.info(
+            "[HISTORY-RO] DEEP fetch done: \(logs.count) entries in \(String(format: "%.1f", elapsed))s, seq \(seqs.min() ?? 0)...\(seqs.max() ?? 0), oldest=\(oldest.map { "\($0)" } ?? "-"), DIA target=\(stopBeforeDate.map { "\($0)" } ?? "-"), reachedDIA=\(reachedDIA), hitBackstop=\(hitBackstop)"
+        )
     }
 
     private func logFetchedHistory(_ logs: [HistoryLog]) {

@@ -34,6 +34,9 @@ final class HistoryFetchSession {
     private let sender: HistoryMessageSender
     private let startSequence: UInt32?
     private let maxEntries: Int
+    /// Optional lower bound: stop the backward walk once we've fetched an entry older than this
+    /// date (≈ insulin duration via `startDateToFilterNewPumpEvents`). `maxEntries` is the backstop.
+    private let stopBeforeDate: Date?
     private let chunkSize = TandemHistoryChunkSize
     private let chunkTimeout = TandemHistoryChunkTimeout
     private let log = TandemLogger(category: "HistoryFetchSession")
@@ -42,11 +45,13 @@ final class HistoryFetchSession {
     init(
         sender: HistoryMessageSender,
         startSequence: UInt32?,
-        maxEntries: Int = 500
+        maxEntries: Int,
+        stopBeforeDate: Date? = nil
     ) {
         self.sender = sender
         self.startSequence = startSequence
         self.maxEntries = maxEntries
+        self.stopBeforeDate = stopBeforeDate
     }
 
     /// Route incoming stream responses to the active collector.
@@ -143,6 +148,16 @@ final class HistoryFetchSession {
             } catch {
                 // Log error but continue to next chunk for resilience (like ControlX2 line 90-91)
                 log.error("Chunk [\(chunkStart), \(currentEnd)] failed: \(error)")
+            }
+
+            // Date-bound stop: once the oldest fetched entry is older than the requested bound
+            // (≈ insulin duration), we have everything that matters for IOB — stop walking back.
+            if let stopBeforeDate,
+               let oldest = allLogs.map(\.pumpTimeSec).min(),
+               Dates.fromJan12008EpochSecondsToDate(TimeInterval(oldest)) < stopBeforeDate
+            {
+                log.debug("Reached date bound \(stopBeforeDate); stopping backward fetch at seq \(chunkStart)")
+                break
             }
 
             currentEnd = chunkStart - 1
