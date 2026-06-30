@@ -17,10 +17,12 @@ extension TandemPumpManager {
     /// before this; if we hit it, the bound isn't working and the summary line flags it.
     private var historyDeepFetchBackstop: Int { 1000 }
 
-    /// Read-only deep-fetch lookback window (≈ insulin duration). This is a placeholder for Loop's
-    /// `startDateToFilterNewPumpEvents`, which we must NOT call here — invoking that delegate method
-    /// synchronously off the pump-manager queue traps a `dispatchPrecondition`. The emit step will
-    /// use the real bound on the correct queue.
+    /// Initial deep-fetch lookback window (≈ insulin duration). Deliberately a *fixed* window, NOT
+    /// Loop's `startDateToFilterNewPumpEvents`: that returns `pumpEventQueryAfterDate` — Loop's
+    /// "newest finalized event I was told about" cursor, driven by the optimistic path, not by
+    /// reconciled pump history. On a running system it's ≈ now and can sit *past* unreported pump-UI
+    /// doses (e.g. a Quick Bolus), so bounding the fetch by it would miss them. The fetch must reach
+    /// ≈DIA back on its own. See live_test_notes.md.
     private var historyDeepFetchWindow: TimeInterval { .hours(6) }
 
     /// Routes an incoming HistoryLogStreamResponse (delivered on the CB delegate queue) to the
@@ -31,8 +33,8 @@ extension TandemPumpManager {
 
     /// READ-ONLY: fetch pump history and log it. Never emits.
     /// - **Initial sync** (no cursor — also after an app restart / overnight power-down): a *deep*
-    ///   fetch bounded by a fixed ≈insulin-duration window (placeholder for the emit step's real
-    ///   `startDateToFilterNewPumpEvents` bound), with a metrics line.
+    ///   fetch bounded by a fixed ≈insulin-duration window (see `historyDeepFetchWindow`), with a
+    ///   metrics line.
     /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
@@ -43,8 +45,8 @@ extension TandemPumpManager {
 
         let isInitialSync = lastFetchedHistorySequence == nil
         let startSequence: UInt32? = lastFetchedHistorySequence.map { $0 &+ 1 }
-        // Fixed ≈DIA window for the read-only test (NOT Loop's startDateToFilterNewPumpEvents —
-        // that delegate call traps off the pump-manager queue; see historyDeepFetchWindow).
+        // Fixed ≈DIA window (see historyDeepFetchWindow): the fetch must reach DIA back on its own,
+        // independent of Loop's startDateToFilterNewPumpEvents (an optimistic cursor, not history).
         let stopBeforeDate: Date? = isInitialSync ? Date().addingTimeInterval(-historyDeepFetchWindow) : nil
         let maxEntries = isInitialSync ? historyDeepFetchBackstop : 200
 
