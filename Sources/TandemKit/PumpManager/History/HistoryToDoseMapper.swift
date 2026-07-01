@@ -8,13 +8,16 @@ class HistoryToDoseMapper {
     ///     Used to convert a temp basal's pump-stored *percent* into an absolute U/hr rate,
     ///     exactly as the set path does (`scheduledRate × percent/100`).
     ///   - roundBasalRate: Rounds a rate to a pump-supported value (mirrors the set path).
+    ///   - isCommandedBolus: Whether a bolusId corresponds to a bolus the controlling app commanded (vs a
+    ///     pump-UI Quick Bolus / Control-IQ bolus). Drives `DoseEntry.wasProgrammedByPumpUI`.
     func mapToEvents(
         _ logs: [HistoryLog],
         reconciler: HistoryTimestampReconciler,
         insulinType: InsulinType?,
         timeZone: TimeZone,
         scheduledBasalRate: (Date) -> Double,
-        roundBasalRate: (Double) -> Double
+        roundBasalRate: (Double) -> Double,
+        isCommandedBolus: (Int) -> Bool
     ) -> [NewPumpEvent] {
         let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
         recordClockChanges(sortedLogs, reconciler: reconciler)
@@ -34,7 +37,8 @@ class HistoryToDoseMapper {
                     completion: completion,
                     reconciler: reconciler,
                     insulinType: insulinType,
-                    timeZone: timeZone
+                    timeZone: timeZone,
+                    isCommandedBolus: isCommandedBolus
                 )
                 events.append(
                     NewPumpEvent(
@@ -139,7 +143,8 @@ class HistoryToDoseMapper {
                 deliveredUnits: nil,
                 description: "Bolus #\(activation.bolusId)",
                 syncIdentifier: Self.bolusSyncIdentifier(activation.bolusId),
-                insulinType: insulinType
+                insulinType: insulinType,
+                wasProgrammedByPumpUI: !isCommandedBolus(activation.bolusId)
             )
             events.append(
                 NewPumpEvent(
@@ -194,7 +199,8 @@ class HistoryToDoseMapper {
         completion: BolusCompletedHistoryLog,
         reconciler: HistoryTimestampReconciler,
         insulinType: InsulinType?,
-        timeZone: TimeZone
+        timeZone: TimeZone,
+        isCommandedBolus: (Int) -> Bool
     ) -> DoseEntry {
         let startDate: Date
         if let activation {
@@ -229,7 +235,8 @@ class HistoryToDoseMapper {
             deliveredUnits: deliveredUnits,
             description: "Bolus #\(completion.bolusId)",
             syncIdentifier: Self.bolusSyncIdentifier(completion.bolusId),
-            insulinType: insulinType
+            insulinType: insulinType,
+            wasProgrammedByPumpUI: !isCommandedBolus(completion.bolusId)
         )
         return dose
     }

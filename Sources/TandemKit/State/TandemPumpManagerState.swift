@@ -15,6 +15,19 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
     }
 
+    /// A bolus the controlling app commanded, identified by the pump-assigned bolusId from
+    /// `BolusPermissionResponse`, plus when it was requested. Used to classify history boluses
+    /// as app-commanded vs pump-UI (Quick Bolus / Control-IQ). Pruned to a rolling window.
+    public struct CommandedBolusRecord: Equatable {
+        public let bolusId: Int
+        public let requestedAt: Date
+
+        public init(bolusId: Int, requestedAt: Date) {
+            self.bolusId = bolusId
+            self.requestedAt = requestedAt
+        }
+    }
+
     public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
         case standard = 0
         case sleep = 1
@@ -46,6 +59,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
+    /// bolusIds the controlling app commanded, used to distinguish app-commanded boluses from pump-UI boluses
+    /// when reconciling pump history. Pruned to a rolling window; see `recordCommandedBolus`.
+    public var commandedBolusIds: [CommandedBolusRecord] = []
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     public var autoAcknowledgeBasalAlerts: Bool = false
@@ -164,6 +180,19 @@ public struct TandemPumpManagerState: RawRepresentable {
             bolusDose = UnfinalizedDose(rawValue: bolusDoseRaw)
         } else {
             bolusDose = nil
+        }
+
+        if let idsRaw = rawValue["commandedBolusIds"] as? [[String: Any]] {
+            commandedBolusIds = idsRaw.compactMap { entry in
+                guard let id = entry["bolusId"] as? Int,
+                      let interval = entry["requestedAt"] as? TimeInterval
+                else {
+                    return nil
+                }
+                return CommandedBolusRecord(bolusId: id, requestedAt: Date(timeIntervalSinceReferenceDate: interval))
+            }
+        } else {
+            commandedBolusIds = []
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -330,7 +359,26 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["bolusDose"] = bolusDose.rawValue
         }
 
+        if !commandedBolusIds.isEmpty {
+            raw["commandedBolusIds"] = commandedBolusIds.map {
+                ["bolusId": $0.bolusId, "requestedAt": $0.requestedAt.timeIntervalSinceReferenceDate]
+            }
+        }
+
         return raw
+    }
+
+    /// Record a bolus the controlling app just commanded, pruning entries older than `window` so the list stays
+    /// bounded. bolusIds are pump-assigned 2-byte values that are eventually reused, so we retain
+    /// only a recent window (comfortably longer than the history-fetch lookback / any overnight gap).
+    public mutating func recordCommandedBolus(id: Int, at date: Date = Date(), window: TimeInterval = .hours(24)) {
+        commandedBolusIds.removeAll { date.timeIntervalSince($0.requestedAt) > window }
+        commandedBolusIds.append(CommandedBolusRecord(bolusId: id, requestedAt: date))
+    }
+
+    /// Whether a history bolus with this id is one the controlling app commanded (vs a pump-UI / Control-IQ bolus).
+    public func isCommandedBolus(id: Int) -> Bool {
+        commandedBolusIds.contains { $0.bolusId == id }
     }
 
     public var showPumpTimeSyncWarning: Bool {

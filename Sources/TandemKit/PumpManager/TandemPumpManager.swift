@@ -436,6 +436,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             )
 
             self.state.bolusDose = dose
+            // Record the pump-assigned bolusId so history reconciliation can tell this
+            // app-commanded bolus apart from a pump-UI (Quick Bolus / Control-IQ) bolus.
+            self.state.recordCommandedBolus(id: permissionResponse.bolusId)
             self.state.bolusState = .initiating
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()

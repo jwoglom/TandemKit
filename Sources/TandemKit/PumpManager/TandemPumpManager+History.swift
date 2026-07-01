@@ -118,15 +118,23 @@ extension TandemPumpManager {
             insulinType: state.insulinType,
             timeZone: .current,
             scheduledBasalRate: { self.getScheduledBasalRate(at: $0) },
-            roundBasalRate: { self.roundToSupportedBasalRate(unitsPerHour: $0) }
+            roundBasalRate: { self.roundToSupportedBasalRate(unitsPerHour: $0) },
+            isCommandedBolus: { self.state.isCommandedBolus(id: $0) }
         )
 
-        historyLogger.info("[HISTORY-RO] mapped \(events.count) dose event(s) (logged only):")
+        let bolusDoses = events.compactMap(\.dose).filter { $0.type == .bolus }
+        let pumpUIBoluses = bolusDoses.filter(\.wasProgrammedByPumpUI).count
+        historyLogger.info(
+            "[HISTORY-RO] mapped \(events.count) dose event(s) (logged only); boluses: \(bolusDoses.count) (\(pumpUIBoluses) pump-UI, \(bolusDoses.count - pumpUIBoluses) commanded):"
+        )
         for event in events {
             if let dose = event.dose {
                 let delivered = dose.deliveredUnits.map { "\($0)" } ?? "-"
+                // For boluses, classify app-commanded vs pump-UI (Quick Bolus / Control-IQ) from the
+                // bolusId join. Read-only: this only annotates the log; nothing is emitted.
+                let source = dose.type == .bolus ? (dose.wasProgrammedByPumpUI ? " source=PUMP-UI" : " source=COMMANDED") : ""
                 historyLogger.info(
-                    "[HISTORY-RO] dose type=\(dose.type) start=\(dose.startDate) end=\(dose.endDate) programmedUnits=\(dose.programmedUnits) unitsPerHour=\(dose.unitsPerHour) \(dose.unit) delivered=\(delivered) sync=\(dose.syncIdentifier ?? "-")"
+                    "[HISTORY-RO] dose type=\(dose.type) start=\(dose.startDate) end=\(dose.endDate) programmedUnits=\(dose.programmedUnits) unitsPerHour=\(dose.unitsPerHour) \(dose.unit) delivered=\(delivered)\(source) sync=\(dose.syncIdentifier ?? "-")"
                 )
             } else {
                 let typeStr = event.type.map { "\($0)" } ?? "-"
