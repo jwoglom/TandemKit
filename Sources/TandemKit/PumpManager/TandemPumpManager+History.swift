@@ -2,11 +2,14 @@
 //  TandemPumpManager+History.swift
 //  TandemKit
 //
-//  READ-ONLY history-fetch slice. Fetches pump history and LOGS it (raw entries + the
-//  DoseEntries the mapper would produce) so the fetch, parsing, and the dose-mapping fixes
-//  can be validated on a live pump. Nothing here calls `hasNewPumpEvents` / emits to
-//  DoseStore, so IOB and dosing are completely unaffected. The emit + reconcile path is a
-//  later, separate step.
+//  History-fetch slice. Fetches pump history, LOGS it (raw entries + the mapped DoseEntries),
+//  and emits *pump-UI* boluses (Quick Bolus / Control-IQ) to DoseStore — Part B.
+//
+//  A pump-UI bolus is one the driver never commanded, so it has NO optimistic counterpart in
+//  DoseStore; emitting it can't double-count a commanded dose, and it closes the over-delivery
+//  gap where pump-initiated insulin was invisible to the loop. Everything else — commanded
+//  boluses, temp basals, suspend/resume, `lastReconciliation`, and reconciliation of the
+//  optimistic doses — is handled by later steps and is NOT emitted here.
 //
 
 import Foundation
@@ -31,7 +34,7 @@ extension TandemPumpManager {
         activeHistoryFetchSession?.handleStreamResponse(response)
     }
 
-    /// READ-ONLY: fetch pump history and log it. Never emits.
+    /// Fetch pump history, log it, and emit pump-UI boluses (see `processFetchedHistory`).
     /// - **Initial sync** (no cursor — also after an app restart / overnight power-down): a *deep*
     ///   fetch bounded by a fixed ≈insulin-duration window (see `historyDeepFetchWindow`), with a
     ///   metrics line.
@@ -41,6 +44,14 @@ extension TandemPumpManager {
         guard activeHistoryFetchSession == nil else {
             historyLogger.debug("[HISTORY-RO] fetch already in progress; skipping")
             return
+        }
+
+        // Mark when commanded-id tracking began (first run only). Pump-UI emission is gated to
+        // doses at/after this instant so boluses that predate tracking can't be double-counted.
+        if state.commandedTrackingStartedAt == nil {
+            state.commandedTrackingStartedAt = Date()
+            notifyDelegateStateUpdated()
+            historyLogger.info("[HISTORY-EMIT] began commanded-bolus tracking at \(state.commandedTrackingStartedAt!); only pump-UI boluses at/after this time are emitted")
         }
 
         let isInitialSync = lastFetchedHistorySequence == nil
@@ -71,7 +82,7 @@ extension TandemPumpManager {
             if isInitialSync {
                 logDeepFetchSummary(logs, elapsed: elapsed, stopBeforeDate: stopBeforeDate, backstop: maxEntries)
             }
-            logFetchedHistory(logs)
+            processFetchedHistory(logs)
             if let maxSeq = logs.map(\.sequenceNum).max() {
                 lastFetchedHistorySequence = maxSeq
             }
@@ -93,7 +104,8 @@ extension TandemPumpManager {
         )
     }
 
-    private func logFetchedHistory(_ logs: [HistoryLog]) {
+    /// Log the fetched history (raw + mapped doses) and emit the completed pump-UI boluses.
+    private func processFetchedHistory(_ logs: [HistoryLog]) {
         guard !logs.isEmpty else {
             historyLogger.info("[HISTORY-RO] no new history entries")
             return
@@ -101,7 +113,7 @@ extension TandemPumpManager {
 
         let seqs = logs.map(\.sequenceNum)
         historyLogger.info(
-            "[HISTORY-RO] fetched \(logs.count) entries, seq \(seqs.min() ?? 0)...\(seqs.max() ?? 0) — NOT emitting to DoseStore"
+            "[HISTORY-RO] fetched \(logs.count) entries, seq \(seqs.min() ?? 0)...\(seqs.max() ?? 0) — logging all, emitting pump-UI boluses only"
         )
 
         // Raw entries (debug level so they can be filtered out).
@@ -109,8 +121,8 @@ extension TandemPumpManager {
             historyLogger.debug("[HISTORY-RO] raw seq=\(log.sequenceNum) typeId=\(log.typeId) time=\(Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))) \(log)")
         }
 
-        // Run the mapper to validate the fixes (temp-basal absolute rate, timestamps,
-        // suspend/resume) against real data. These DoseEntries are logged only, never emitted.
+        // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
+        // emitted below (see the emit block at the end of this method).
         let reconciler = HistoryTimestampReconciler()
         let events = HistoryToDoseMapper().mapToEvents(
             logs,
@@ -141,5 +153,46 @@ extension TandemPumpManager {
                 historyLogger.info("[HISTORY-RO] event type=\(typeStr) title=\(event.title) (no dose)")
             }
         }
+
+        emitPumpUIBoluses(events)
+    }
+
+    /// Emit ONLY completed pump-UI boluses (Quick Bolus / Control-IQ) to DoseStore.
+    ///
+    /// Safety rationale:
+    /// - **No double-count:** a pump-UI bolus was never commanded through the driver, so it has no
+    ///   optimistic counterpart in DoseStore. Commanded boluses are deliberately excluded here —
+    ///   the optimistic path already owns them (reconciling those is a later step).
+    /// - **Completed only:** we require `deliveredUnits != nil` (i.e. a `BolusCompleted` was seen).
+    ///   An in-flight pump-UI bolus is skipped and picked up once its completion arrives in a later
+    ///   fetch, so we never emit a mutable/uncertain amount here.
+    /// - **`replacePendingEvents: false`:** never purge the optimistic mutable doses.
+    /// - **Idempotent:** `NewPumpEvent` sets `syncIdentifier` to the entry's stable raw hex, so
+    ///   re-reading the same bolus across deep fetches upserts rather than duplicates.
+    /// - **Tracking cutoff:** only doses at/after `commandedTrackingStartedAt` are emitted; earlier
+    ///   ones can't be reliably classified (an untracked commanded bolus would look pump-UI) so we
+    ///   skip them to avoid double-counting the optimistic path.
+    private func emitPumpUIBoluses(_ events: [NewPumpEvent]) {
+        let cutoff = state.commandedTrackingStartedAt ?? .distantFuture
+        let completedPumpUI = events.filter { event in
+            guard let dose = event.dose else { return false }
+            return dose.type == .bolus && dose.wasProgrammedByPumpUI && dose.deliveredUnits != nil
+        }
+        let pumpUIBolusEvents = completedPumpUI.filter { ($0.dose?.startDate ?? .distantPast) >= cutoff }
+
+        let skipped = completedPumpUI.count - pumpUIBolusEvents.count
+        if skipped > 0 {
+            historyLogger.debug("[HISTORY-EMIT] skipped \(skipped) completed pump-UI bolus(es) predating tracking cutoff \(cutoff)")
+        }
+        guard !pumpUIBolusEvents.isEmpty else { return }
+
+        let summary = pumpUIBolusEvents
+            .compactMap(\.dose)
+            .map { "\($0.deliveredUnits ?? $0.programmedUnits)U@\($0.startDate)" }
+            .joined(separator: ", ")
+        historyLogger.info(
+            "[HISTORY-EMIT] emitting \(pumpUIBolusEvents.count) completed pump-UI bolus dose(s) to DoseStore (replacePendingEvents: false): \(summary)"
+        )
+        emitPumpEvents(pumpUIBolusEvents, replacePendingEvents: false)
     }
 }

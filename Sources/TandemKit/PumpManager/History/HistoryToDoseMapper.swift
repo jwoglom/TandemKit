@@ -138,7 +138,7 @@ class HistoryToDoseMapper {
             let dose = DoseEntry(
                 type: .bolus,
                 startDate: startDate,
-                value: Double(activation.bolusSize),
+                value: Self.roundToReportingResolution(Double(activation.bolusSize)),
                 unit: .units,
                 deliveredUnits: nil,
                 description: "Bolus #\(activation.bolusId)",
@@ -223,8 +223,8 @@ class HistoryToDoseMapper {
             timeZone: timeZone
         )
 
-        let programmedUnits = activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested)
-        let deliveredUnits = Double(completion.insulinDelivered)
+        let programmedUnits = Self.roundToReportingResolution(activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested))
+        let deliveredUnits = Self.roundToReportingResolution(Double(completion.insulinDelivered))
 
         let dose = DoseEntry(
             type: .bolus,
@@ -243,6 +243,15 @@ class HistoryToDoseMapper {
 
     static func bolusSyncIdentifier(_ bolusId: Int) -> String {
         "bolus-\(bolusId)"
+    }
+
+    /// Round a pump-reported insulin amount to the pump's native milliunit reporting resolution,
+    /// stripping Float32 representation noise (e.g. `Float(0.9)` = 0.89999997) without distorting
+    /// genuine partial deliveries (e.g. a cancelled bolus of 1.041 U). Round-to-**nearest** — NOT
+    /// the floor-to-command-grid `roundToSupportedBolusVolume`, which combined with the Float
+    /// undershoot could drop a whole increment and understate delivered IOB (the unsafe direction).
+    static func roundToReportingResolution(_ units: Double) -> Double {
+        (units * 1000).rounded() / 1000
     }
 
     static func tempBasalSyncIdentifier(_ tempRateId: Int) -> String {

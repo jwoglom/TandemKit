@@ -62,6 +62,11 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// bolusIds the controlling app commanded, used to distinguish app-commanded boluses from pump-UI boluses
     /// when reconciling pump history. Pruned to a rolling window; see `recordCommandedBolus`.
     public var commandedBolusIds: [CommandedBolusRecord] = []
+    /// When the driver first began recording commanded bolusIds (first run of the history pipeline).
+    /// Before this instant a pump-UI bolus can't be told apart from an untracked commanded one, so
+    /// pump-UI emission is gated to doses at/after this time — avoids double-counting the optimistic
+    /// path for boluses that predate tracking (e.g. anything already in the fetch window at install).
+    public var commandedTrackingStartedAt: Date?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     public var autoAcknowledgeBasalAlerts: Bool = false
@@ -193,6 +198,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             }
         } else {
             commandedBolusIds = []
+        }
+
+        if let trackingInterval = rawValue["commandedTrackingStartedAt"] as? TimeInterval {
+            commandedTrackingStartedAt = Date(timeIntervalSinceReferenceDate: trackingInterval)
+        } else {
+            commandedTrackingStartedAt = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -364,6 +375,8 @@ public struct TandemPumpManagerState: RawRepresentable {
                 ["bolusId": $0.bolusId, "requestedAt": $0.requestedAt.timeIntervalSinceReferenceDate]
             }
         }
+
+        raw["commandedTrackingStartedAt"] = commandedTrackingStartedAt?.timeIntervalSinceReferenceDate
 
         return raw
     }
