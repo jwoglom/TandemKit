@@ -1423,6 +1423,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 switch qualifyingEvent {
                 case .bolusChange:
                     self.fetchBolusStatus(fromSync: false)
+                    // A bolus just changed on the pump — precisely when a pump-UI (Quick Bolus /
+                    // Control-IQ) bolus appears in history. Fetch now so it registers within seconds
+                    // instead of waiting for the next full sync, which the 4.5-min freshness gate in
+                    // ensureCurrentPumpData can push well past one loop cycle.
+                    self.fetchAndLogPumpHistory()
                 case .basalChange:
                     self.fetchBasalStatus()
                 case .alert:
