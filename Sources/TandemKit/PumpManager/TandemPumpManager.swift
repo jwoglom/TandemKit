@@ -54,8 +54,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         get { historyLock.lock(); defer { historyLock.unlock() }; return _activeHistoryFetchSession }
         set { historyLock.lock(); _activeHistoryFetchSession = newValue; historyLock.unlock() }
     }
-    /// In-memory cursor so repeated fetches only log new entries (reset on app restart).
-    internal var lastFetchedHistorySequence: UInt32?
 
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.

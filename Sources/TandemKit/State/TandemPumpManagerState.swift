@@ -67,6 +67,10 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// pump-UI emission is gated to doses at/after this time — avoids double-counting the optimistic
     /// path for boluses that predate tracking (e.g. anything already in the fetch window at install).
     public var commandedTrackingStartedAt: Date?
+    /// Contiguous ranges of pump-history sequence numbers already fetched. Persisted so we resume
+    /// incrementally from where we left off (no redundant deep fetch every launch) and can detect
+    /// gaps to backfill. See `HistoryRangeTracker`.
+    public var historyFetchedRanges: [FetchedRange] = []
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     public var autoAcknowledgeBasalAlerts: Bool = false
@@ -204,6 +208,24 @@ public struct TandemPumpManagerState: RawRepresentable {
             commandedTrackingStartedAt = Date(timeIntervalSinceReferenceDate: trackingInterval)
         } else {
             commandedTrackingStartedAt = nil
+        }
+
+        if let rangesRaw = rawValue["historyFetchedRanges"] as? [[String: Any]] {
+            historyFetchedRanges = rangesRaw.compactMap { entry in
+                guard let start = entry["start"] as? Int,
+                      let end = entry["end"] as? Int,
+                      let fetchedAtInterval = entry["fetchedAt"] as? TimeInterval
+                else {
+                    return nil
+                }
+                return FetchedRange(
+                    start: UInt32(start),
+                    end: UInt32(end),
+                    fetchedAt: Date(timeIntervalSinceReferenceDate: fetchedAtInterval)
+                )
+            }
+        } else {
+            historyFetchedRanges = []
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -377,6 +399,12 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         raw["commandedTrackingStartedAt"] = commandedTrackingStartedAt?.timeIntervalSinceReferenceDate
+
+        if !historyFetchedRanges.isEmpty {
+            raw["historyFetchedRanges"] = historyFetchedRanges.map {
+                ["start": Int($0.start), "end": Int($0.end), "fetchedAt": $0.fetchedAt.timeIntervalSinceReferenceDate]
+            }
+        }
 
         return raw
     }

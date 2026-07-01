@@ -54,8 +54,13 @@ extension TandemPumpManager {
             historyLogger.info("[HISTORY-EMIT] began commanded-bolus tracking at \(state.commandedTrackingStartedAt!); only pump-UI boluses at/after this time are emitted")
         }
 
-        let isInitialSync = lastFetchedHistorySequence == nil
-        let startSequence: UInt32? = lastFetchedHistorySequence.map { $0 &+ 1 }
+        // Resume from the persisted fetched-ranges cursor: the first run (no ranges) does a deep,
+        // DIA-bounded fetch; later runs resume incrementally from just after the newest fetched
+        // sequence, so we don't redundantly re-deep-fetch every launch.
+        let rangeTracker = HistoryRangeTracker(fetchedRanges: state.historyFetchedRanges)
+        let newestFetched = state.historyFetchedRanges.map(\.end).max()
+        let isInitialSync = newestFetched == nil
+        let startSequence: UInt32? = newestFetched.map { $0 &+ 1 }
         // Fixed ≈DIA window (see historyDeepFetchWindow): the fetch must reach DIA back on its own,
         // independent of Loop's startDateToFilterNewPumpEvents (an optimistic cursor, not history).
         let stopBeforeDate: Date? = isInitialSync ? Date().addingTimeInterval(-historyDeepFetchWindow) : nil
@@ -83,8 +88,13 @@ extension TandemPumpManager {
                 logDeepFetchSummary(logs, elapsed: elapsed, stopBeforeDate: stopBeforeDate, backstop: maxEntries)
             }
             processFetchedHistory(logs)
-            if let maxSeq = logs.map(\.sequenceNum).max() {
-                lastFetchedHistorySequence = maxSeq
+            // Record the (contiguous) fetched span and persist so the next run resumes from here.
+            if let minSeq = logs.map(\.sequenceNum).min(),
+               let maxSeq = logs.map(\.sequenceNum).max()
+            {
+                rangeTracker.recordFetched(start: minSeq, end: maxSeq)
+                state.historyFetchedRanges = rangeTracker.export()
+                notifyDelegateStateUpdated()
             }
         } catch {
             let elapsed = Date().timeIntervalSince(started)
