@@ -82,6 +82,9 @@
         }
       }
     },
+    "%@ Requests" : {
+
+    },
     "%@ units remaining at %@" : {
       "comment" : "Accessibility format string for (1: localized volume)(2: time)",
       "localizations" : {
@@ -680,6 +683,9 @@
         }
       }
     },
+    "Close" : {
+
+    },
     "Closed loop is currently enabled. Cancelling the active temp rate on the pump will NOT place you in open-loop mode, and the next run of the oref algorithm will set a new temp rate." : {
       "comment" : "Closed loop temp rate warning message",
       "localizations" : {
@@ -943,12 +949,15 @@
 
     },
     "Datalog" : {
-    
+
     },
     "day" : {
 
     },
     "days" : {
+
+    },
+    "Debug Options" : {
 
     },
     "Delete pump" : {
@@ -2164,6 +2173,9 @@
         }
       }
     },
+    "Parameters" : {
+
+    },
     "PCBA serial" : {
 
     },
@@ -2525,6 +2537,9 @@
         }
       }
     },
+    "Pump response" : {
+
+    },
     "Pump serial" : {
 
     },
@@ -2549,6 +2564,9 @@
           }
         }
       }
+    },
+    "PumpState" : {
+
     },
     "Pushoff Stall" : {
 
@@ -2597,6 +2615,9 @@
           }
         }
       }
+    },
+    "Raw Cargo (hex optional)" : {
+
     },
     "Ready to connect your Tandem Mobi?" : {
       "comment" : "Subtitle for TandemKitSetupView",
@@ -2663,6 +2684,15 @@
           }
         }
       }
+    },
+    "Requests marked with a slider icon need parameters or raw cargo before sending." : {
+
+    },
+    "Resend" : {
+
+    },
+    "Response" : {
+
     },
     "Resume" : {
 
@@ -2760,6 +2790,15 @@
           }
         }
       }
+    },
+    "Send" : {
+
+    },
+    "Send Pump Message" : {
+
+    },
+    "Sending…" : {
+
     },
     "Sensor" : {
 
@@ -3253,6 +3292,9 @@
           }
         }
       }
+    },
+    "TandemPumpManagerState" : {
+
     },
     "Temp Basal" : {
       "comment" : "Title for temp rate",
@@ -3907,6 +3949,15 @@
           }
         }
       }
+    },
+    "View Debug Options" : {
+
+    },
+    "View PumpState" : {
+
+    },
+    "View TandemPumpManagerState" : {
+
     },
     "Waiting for Pump" : {
       "comment" : "Step header",
