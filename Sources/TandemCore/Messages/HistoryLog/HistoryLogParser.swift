@@ -33,6 +33,8 @@ public enum HistoryLogParser {
             return ArmInitHistoryLog(cargo: raw)
         case BasalRateChangeHistoryLog.typeId:
             return BasalRateChangeHistoryLog(cargo: raw)
+        case BasalDeliveryHistoryLog.typeId:
+            return BasalDeliveryHistoryLog(cargo: raw)
         case BolusActivatedHistoryLog.typeId:
             return BolusActivatedHistoryLog(cargo: raw)
         case BolusCompletedHistoryLog.typeId:

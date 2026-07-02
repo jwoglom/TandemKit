@@ -54,6 +54,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         get { historyLock.lock(); defer { historyLock.unlock() }; return _activeHistoryFetchSession }
         set { historyLock.lock(); _activeHistoryFetchSession = newValue; historyLock.unlock() }
     }
+    /// True while a cooperative deep/backfill fetch is stepping backward across separate command-queue
+    /// jobs. Only touched on the command queue. Prevents starting a second deep fetch; incremental
+    /// (real-time) fetches still run between steps.
+    internal var deepBackfillInProgress = false
 
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.

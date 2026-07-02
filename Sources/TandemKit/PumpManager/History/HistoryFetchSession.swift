@@ -37,6 +37,10 @@ final class HistoryFetchSession {
     /// Optional lower bound: stop the backward walk once we've fetched an entry older than this
     /// date (≈ insulin duration via `startDateToFilterNewPumpEvents`). `maxEntries` is the backstop.
     private let stopBeforeDate: Date?
+    /// Optional upper bound: begin the backward walk at this sequence instead of the pump's newest
+    /// (`lastSequenceNum`). Lets a caller fetch an *older* contiguous slice one chunk at a time —
+    /// used by the cooperative deep fetch to step backward while yielding the command queue.
+    private let endSequence: UInt32?
     private let chunkSize = TandemHistoryChunkSize
     private let chunkTimeout = TandemHistoryChunkTimeout
     private let log = TandemLogger(category: "HistoryFetchSession")
@@ -46,12 +50,14 @@ final class HistoryFetchSession {
         sender: HistoryMessageSender,
         startSequence: UInt32?,
         maxEntries: Int,
-        stopBeforeDate: Date? = nil
+        stopBeforeDate: Date? = nil,
+        endSequence: UInt32? = nil
     ) {
         self.sender = sender
         self.startSequence = startSequence
         self.maxEntries = maxEntries
         self.stopBeforeDate = stopBeforeDate
+        self.endSequence = endSequence
     }
 
     /// Route incoming stream responses to the active collector.
@@ -103,7 +109,14 @@ final class HistoryFetchSession {
             return []
         }
 
-        let availableCount = Int(status.lastSequenceNum &- start + 1)
+        // Begin the backward walk at the requested upper bound (clamped to what the pump has), so a
+        // caller can fetch an older slice; defaults to the pump's newest sequence.
+        let effectiveEnd = min(endSequence ?? status.lastSequenceNum, status.lastSequenceNum)
+        guard effectiveEnd >= start else {
+            return []
+        }
+
+        let availableCount = Int(effectiveEnd &- start + 1)
         let totalToFetch = max(0, min(maxEntries, availableCount))
 
         if totalToFetch == 0 {
@@ -114,7 +127,7 @@ final class HistoryFetchSession {
         activeCollector = ChunkedStreamCollector()
 
         // Iterate backwards from END to START (like ControlX2 lines 64-96)
-        var currentEnd = status.lastSequenceNum
+        var currentEnd = effectiveEnd
 
         while currentEnd >= start, allLogs.count < totalToFetch {
             let remainingCount = totalToFetch - allLogs.count

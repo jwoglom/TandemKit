@@ -16,9 +16,15 @@ import Foundation
 import LoopKit
 
 extension TandemPumpManager {
-    /// Hard backstop on the initial (DIA-bounded) deep fetch. The date bound should stop us well
-    /// before this; if we hit it, the bound isn't working and the summary line flags it.
-    private var historyDeepFetchBackstop: Int { 1000 }
+    /// Entries fetched per cooperative deep-fetch step. Each step is one command-queue job that holds
+    /// the queue only for its own chunk (~this many entries at ~50 ms each), then yields so therapy
+    /// commands and real-time incremental fetches run before the next step. Keep small for prompt
+    /// bolus detection during a long backfill.
+    private var historyDeepStepEntries: Int { 32 }
+
+    /// Safety cap on cooperative deep-fetch steps (prevents an unbounded backward walk if the date
+    /// bound is never reached). 400 × 32 ≈ 12.8k entries — comfortably past any realistic DIA window.
+    private var historyDeepMaxSteps: Int { 400 }
 
     /// Initial deep-fetch lookback window (≈ insulin duration). Deliberately a *fixed* window, NOT
     /// Loop's `startDateToFilterNewPumpEvents`: that returns `pumpEventQueryAfterDate` — Loop's
@@ -41,11 +47,6 @@ extension TandemPumpManager {
     /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
-        guard activeHistoryFetchSession == nil else {
-            historyLogger.debug("[HISTORY-RO] fetch already in progress; skipping")
-            return
-        }
-
         // Mark when commanded-id tracking began (first run only). Pump-UI emission is gated to
         // doses at/after this instant so boluses that predate tracking can't be double-counted.
         if state.commandedTrackingStartedAt == nil {
@@ -54,41 +55,45 @@ extension TandemPumpManager {
             historyLogger.info("[HISTORY-EMIT] began commanded-bolus tracking at \(state.commandedTrackingStartedAt!); only pump-UI boluses at/after this time are emitted")
         }
 
-        // Resume from the persisted fetched-ranges cursor: the first run (no ranges) does a deep,
-        // DIA-bounded fetch; later runs resume incrementally from just after the newest fetched
-        // sequence, so we don't redundantly re-deep-fetch every launch.
+        // First run (no persisted ranges): kick off a cooperative deep fetch that steps backward to
+        // the DIA window one chunk per command-queue job, yielding the queue between chunks. Later
+        // runs resume with a small single-job incremental fetch of entries newer than the cursor.
+        if state.historyFetchedRanges.isEmpty {
+            guard !deepBackfillInProgress else {
+                historyLogger.debug("[HISTORY-DEEP] deep fetch already in progress; skipping")
+                return
+            }
+            startCooperativeDeepFetch(targetDate: Date().addingTimeInterval(-historyDeepFetchWindow))
+            return
+        }
+
+        performIncrementalFetch()
+    }
+
+    /// A small, single-job fetch of entries newer than the persisted cursor. Fast (usually one
+    /// chunk) and runs to completion within one command-queue job. Safe to run between deep-fetch
+    /// steps — this is the real-time path that keeps pump-UI bolus detection prompt.
+    private func performIncrementalFetch() {
+        guard activeHistoryFetchSession == nil else {
+            historyLogger.debug("[HISTORY-RO] fetch already in progress; skipping")
+            return
+        }
+
         let rangeTracker = HistoryRangeTracker(fetchedRanges: state.historyFetchedRanges)
         let newestFetched = state.historyFetchedRanges.map(\.end).max()
-        let isInitialSync = newestFetched == nil
         let startSequence: UInt32? = newestFetched.map { $0 &+ 1 }
-        // Fixed ≈DIA window (see historyDeepFetchWindow): the fetch must reach DIA back on its own,
-        // independent of Loop's startDateToFilterNewPumpEvents (an optimistic cursor, not history).
-        let stopBeforeDate: Date? = isInitialSync ? Date().addingTimeInterval(-historyDeepFetchWindow) : nil
-        let maxEntries = isInitialSync ? historyDeepFetchBackstop : 200
 
-        let session = HistoryFetchSession(
-            sender: bluetooth,
-            startSequence: startSequence,
-            maxEntries: maxEntries,
-            stopBeforeDate: stopBeforeDate
-        )
+        let session = HistoryFetchSession(sender: bluetooth, startSequence: startSequence, maxEntries: 200)
         activeHistoryFetchSession = session
         defer { activeHistoryFetchSession = nil }
 
-        let kind = isInitialSync ? "DEEP (DIA-bounded)" : "incremental"
         historyLogger.info(
-            "[HISTORY-RO] starting \(kind) fetch (startSequence=\(startSequence.map { "\($0)" } ?? "recent"), stopBefore=\(stopBeforeDate.map { "\($0)" } ?? "none"), backstop=\(maxEntries))"
+            "[HISTORY-RO] starting incremental fetch (startSequence=\(startSequence.map { "\($0)" } ?? "recent"), backstop=200)"
         )
 
-        let started = Date()
         do {
             let logs = try session.fetchWithRetry()
-            let elapsed = Date().timeIntervalSince(started)
-            if isInitialSync {
-                logDeepFetchSummary(logs, elapsed: elapsed, stopBeforeDate: stopBeforeDate, backstop: maxEntries)
-            }
             processFetchedHistory(logs)
-            // Record the (contiguous) fetched span and persist so the next run resumes from here.
             if let minSeq = logs.map(\.sequenceNum).min(),
                let maxSeq = logs.map(\.sequenceNum).max()
             {
@@ -97,21 +102,85 @@ extension TandemPumpManager {
                 notifyDelegateStateUpdated()
             }
         } catch {
-            let elapsed = Date().timeIntervalSince(started)
-            historyLogger.error("[HISTORY-RO] \(kind) fetch FAILED after \(String(format: "%.1f", elapsed))s: \(String(describing: error))")
+            historyLogger.error("[HISTORY-RO] incremental fetch FAILED: \(String(describing: error))")
         }
     }
 
-    /// One-line metrics for the deep fetch: timing / count / sequence range / how far back we
-    /// reached / what stopped us (DIA bound vs backstop).
-    private func logDeepFetchSummary(_ logs: [HistoryLog], elapsed: TimeInterval, stopBeforeDate: Date?, backstop: Int) {
-        let seqs = logs.map(\.sequenceNum)
-        let oldest = logs.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }.min()
-        let reachedDIA = oldest != nil && stopBeforeDate != nil && oldest! <= stopBeforeDate!
-        let hitBackstop = logs.count >= backstop
-        historyLogger.info(
-            "[HISTORY-RO] DEEP fetch done: \(logs.count) entries in \(String(format: "%.1f", elapsed))s, seq \(seqs.min() ?? 0)...\(seqs.max() ?? 0), oldest=\(oldest.map { "\($0)" } ?? "-"), DIA target=\(stopBeforeDate.map { "\($0)" } ?? "-"), reachedDIA=\(reachedDIA), hitBackstop=\(hitBackstop)"
-        )
+    /// Kick off the cooperative deep fetch: step backward to `targetDate`, one chunk per command-queue
+    /// job, re-enqueuing each next step via `ensureConnected` so any therapy command or real-time
+    /// incremental fetch runs first. Never holds the command queue for the whole fetch.
+    private func startCooperativeDeepFetch(targetDate: Date) {
+        deepBackfillInProgress = true
+        historyLogger.info("[HISTORY-DEEP] starting cooperative deep fetch, target back to \(targetDate) (yields the command queue between chunks)")
+        stepDeepFetch(endingAt: nil, targetDate: targetDate, stepIndex: 0)
+    }
+
+    /// One cooperative step: fetch a single chunk ending at `endingAt` (nil = pump's newest), process
+    /// + emit + record it, then either finish or re-enqueue the next step one chunk further back.
+    private func stepDeepFetch(endingAt: UInt32?, targetDate: Date, stepIndex: Int) {
+        guard stepIndex < historyDeepMaxSteps else {
+            historyLogger.warning("[HISTORY-DEEP] hit max step cap (\(historyDeepMaxSteps)); stopping backfill")
+            deepBackfillInProgress = false
+            return
+        }
+
+        // Each step is its own command-queue job. Re-enqueuing via ensureConnected sends the next
+        // step to the back of the serial queue, so anything enqueued meanwhile (a bolus, a temp, a
+        // bolusChange-triggered incremental) runs before the next chunk — that's the cooperation.
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.historyLogger.error("[HISTORY-DEEP] step \(stepIndex) connect failed: \(error.localizedDescription); aborting backfill")
+                self.deepBackfillInProgress = false
+                return
+            }
+
+            let session = HistoryFetchSession(
+                sender: self.bluetooth,
+                startSequence: nil,
+                maxEntries: self.historyDeepStepEntries,
+                endSequence: endingAt
+            )
+            self.activeHistoryFetchSession = session
+            let started = Date()
+            var logs: [HistoryLog] = []
+            do {
+                logs = try session.fetchWithRetry()
+            } catch {
+                self.historyLogger.error("[HISTORY-DEEP] step \(stepIndex) fetch failed: \(String(describing: error))")
+            }
+            self.activeHistoryFetchSession = nil
+            let elapsed = Date().timeIntervalSince(started)
+
+            guard let minSeq = logs.map(\.sequenceNum).min(),
+                  let maxSeq = logs.map(\.sequenceNum).max()
+            else {
+                self.historyLogger.info("[HISTORY-DEEP] step \(stepIndex) returned no entries; backfill complete (reached start of history)")
+                self.deepBackfillInProgress = false
+                return
+            }
+
+            self.processFetchedHistory(logs)
+            let tracker = HistoryRangeTracker(fetchedRanges: self.state.historyFetchedRanges)
+            tracker.recordFetched(start: minSeq, end: maxSeq)
+            self.state.historyFetchedRanges = tracker.export()
+            self.notifyDelegateStateUpdated()
+
+            let oldest = logs.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }.min()!
+            self.historyLogger.info("[HISTORY-DEEP] step \(stepIndex): \(logs.count) entries seq \(minSeq)...\(maxSeq) in \(String(format: "%.1f", elapsed))s, oldest=\(oldest)")
+
+            if oldest <= targetDate {
+                self.historyLogger.info("[HISTORY-DEEP] cooperative deep fetch DONE at step \(stepIndex): reached target \(targetDate)")
+                self.deepBackfillInProgress = false
+                return
+            }
+            if minSeq == 0 {
+                self.historyLogger.info("[HISTORY-DEEP] cooperative deep fetch DONE: reached start of pump history (seq 0)")
+                self.deepBackfillInProgress = false
+                return
+            }
+
+            self.stepDeepFetch(endingAt: minSeq &- 1, targetDate: targetDate, stepIndex: stepIndex + 1)
+        }
     }
 
     /// Log the fetched history (raw + mapped doses) and emit the completed pump-UI boluses.
@@ -129,6 +198,23 @@ extension TandemPumpManager {
         // Raw entries (debug level so they can be filtered out).
         for log in logs {
             historyLogger.debug("[HISTORY-RO] raw seq=\(log.sequenceNum) typeId=\(log.typeId) time=\(Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))) \(log)")
+
+            // Diagnostic (info level → also written to tandem_log.txt): the basal-delivery record
+            // (typeId 279) reports the effective rates in milliunits/hr and their source. Not mapped
+            // to a dose; logged so we can inspect Control-IQ's algorithmRate vs profile/temp.
+            if let basal = log as? BasalDeliveryHistoryLog {
+                let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
+                historyLogger.info("[HISTORY-BASAL279] seq=\(log.sequenceNum) time=\(time) source=\(basal.commandedRateSource) commandedRate=\(basal.commandedRate) profile=\(basal.profileBasalRate) algorithm=\(basal.algorithmRate) temp=\(basal.tempRate) (mU/hr)")
+            }
+
+            // Diagnostic (info level → tandem_log.txt): the running basal odometer (typeId 81),
+            // emitted ≥ hourly and on every rate change, resetting at midnight. Diffing
+            // `dailyTotalBasal` across two entries gives ACTUAL basal delivered in that interval —
+            // the closest signal we have to real (pulse-quantized) basal delivery for accounting.
+            if let daily = log as? DailyBasalHistoryLog {
+                let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
+                historyLogger.info("[HISTORY-DAILYBASAL] seq=\(log.sequenceNum) time=\(time) dailyTotalBasal=\(daily.dailyTotalBasal)U lastBasalRate=\(daily.lastBasalRate)U/hr iob=\(daily.iob)U finalEventForDay=\(daily.finalEventForDay)")
+            }
         }
 
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
