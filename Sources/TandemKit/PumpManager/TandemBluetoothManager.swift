@@ -35,6 +35,13 @@ class TandemBluetoothManager: NSObject {
     private let connectStateLock = NSLock()
     private var inFlightConnectGroup: TandemDispatchGroup?
 
+    // Count of connect attempts that have failed back-to-back without an intervening success.
+    // Only ever mutated from connectIfNeeded (which runs serialized on commandQueue), so it
+    // needs no extra locking. Once it reaches connectEscalationThreshold we stop retrying the
+    // cached peripheral — which may be a stale/wedged object — and force a fresh scan instead.
+    private var consecutiveConnectFailures = 0
+    private let connectEscalationThreshold = 3
+
     private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
         connectStateLock.lock()
         inFlightConnectGroup = group
@@ -100,12 +107,38 @@ class TandemBluetoothManager: NSObject {
 
         stopScan()
 
+        // If a connect for a *different* peripheral object is still outstanding, cancel it
+        // first. A re-scan hands back a fresh CBPeripheral instance for the same device
+        // (same identifier, new object), and CB keeps the previous object's connect pending
+        // forever — so without this, retries accumulate competing connect requests against
+        // the same pump and none complete.
+        if let existing = self.peripheral, existing !== peripheral {
+            manager.cancelPeripheralConnection(existing)
+        }
+
         logger.info("Connecting to \(peripheral)")
 
         self.peripheral = peripheral
         connectCompletion = completion
 
         manager.connect(peripheral)
+    }
+
+    /// Tears down whatever scan / connect attempt is currently outstanding.
+    ///
+    /// CoreBluetooth's `connect()` has no timeout of its own — once issued it stays pending
+    /// indefinitely until it succeeds, fails, or is explicitly cancelled. So when our own
+    /// `connectTimeout` fires we must cancel the underlying request, otherwise the wedged
+    /// connect lingers in the BLE stack and blocks every subsequent attempt (observed as a
+    /// multi-hour inability to reconnect to a pump sitting inches away).
+    private func cancelPendingConnect() {
+        guard let manager else { return }
+        if manager.isScanning {
+            manager.stopScan()
+        }
+        if let peripheral {
+            manager.cancelPeripheralConnection(peripheral)
+        }
     }
 
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
@@ -148,6 +181,18 @@ class TandemBluetoothManager: NSObject {
             return PumpCommError.pumpNotConnected
         }
 
+        // After repeated back-to-back failures the cached peripheral object is likely stale or
+        // wedged (re-issuing connect() on it keeps timing out). Drop and cancel it so the
+        // strategy below falls through to a fresh scan, which produces a new peripheral object —
+        // the same move that recovers the connection when done manually.
+        if consecutiveConnectFailures >= connectEscalationThreshold, let stale = peripheral {
+            logger.warning(
+                "Escalating reconnect after \(consecutiveConnectFailures) failures: dropping cached peripheral and rescanning"
+            )
+            manager.cancelPeripheralConnection(stale)
+            peripheral = nil
+        }
+
         let group = TandemDispatchGroup()
         group.enter()
         setInFlightConnectGroup(group)
@@ -186,13 +231,28 @@ class TandemBluetoothManager: NSObject {
         // Cancelled by cancelInFlightConnect() on disconnect/Bluetooth-off, or times out on its own.
         if group.wait(timeout: .now() + connectTimeout) == nil {
             logger.error("Connect attempt did not complete within \(connectTimeout)")
+            // Cancel the still-pending CoreBluetooth connect so it does not linger and block
+            // future attempts; CB never times it out on its own.
+            cancelPendingConnect()
+            consecutiveConnectFailures += 1
             return PumpCommError.pumpNotConnected
         }
-        return resultBox.error
+
+        if let error = resultBox.error {
+            consecutiveConnectFailures += 1
+            return error
+        }
+
+        consecutiveConnectFailures = 0
+        return nil
     }
 
     func disconnect() {
-        if let peripheralManager {
+        // Best-effort courtesy notification so the pump tears the session down cleanly — but
+        // only when the link is actually up. On a degraded/half-open link (e.g. a drop mid
+        // handshake) this write would just block until its bounded timeout, delaying the
+        // cancelPeripheralConnection below, which is the teardown that actually matters.
+        if let peripheralManager, let peripheral, peripheral.state == .connected {
             _ = peripheralManager.write(message: DisconnectPumpRequest(), expecting: DisconnectPumpResponse.self)
         }
 

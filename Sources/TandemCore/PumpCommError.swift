@@ -8,6 +8,7 @@ public enum PumpCommError: Error {
     case pumpFault
     case notImplemented
     case pumpChallengeError
+    case incorrectPairingCode
     case invalidPacket
     case jpakeUnavailable
     case requestConstructionFailed(reason: String)
@@ -74,6 +75,11 @@ extension PumpCommError: LocalizedError {
             return String(
                 localized: "Pump challenge error",
                 comment: "Error shown when we cannot perform crypto challenge operations to pair"
+            )
+        case .incorrectPairingCode:
+            return String(
+                localized: "Incorrect pairing code",
+                comment: "Error shown when the entered pump pairing code appears to be wrong"
             )
         case .jpakeUnavailable:
             return String(
@@ -174,6 +180,11 @@ extension PumpCommError: LocalizedError {
             return String(
                 localized: "Please retry pairing and check your pairing code.",
                 comment: "Recovery suggestion for transport/response failures"
+            )
+        case .incorrectPairingCode:
+            return String(
+                localized: "Double-check the PIN labeled on the side of the cartridge area.",
+                comment: "Recovery suggestion when the pairing code appears incorrect"
             )
         case .noActiveBolus:
             return String(
