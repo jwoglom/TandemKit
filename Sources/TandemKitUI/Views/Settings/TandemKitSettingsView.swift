@@ -179,9 +179,9 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    HStack(alignment: .top) {
+                    HStack(alignment: .center) {
                         if let battery = viewModel.batteryPercentage {
-                            HStack(alignment: .top, spacing: 4) {
+                            HStack(alignment: .center, spacing: 4) {
                                 Image(systemName: batteryIconName(battery))
                                     .font(.system(size: 16))
                                     .foregroundColor(batteryColor(battery))
