@@ -100,6 +100,14 @@ final class PumpTelemetryScheduler {
         }
     }
 
+    /// Cancel the timer for a single telemetry kind, leaving other kinds running.
+    func cancel(kind: PumpTelemetryKind) {
+        queue.async {
+            guard let task = self.tasks.removeValue(forKey: kind) else { return }
+            task.timer.cancel()
+        }
+    }
+
     /// Cancel all timers.
     func cancelAll() {
         queue.async {

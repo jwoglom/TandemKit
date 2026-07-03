@@ -279,6 +279,31 @@ public class NotificationBundle {
         let typeName = String(describing: type)
         return lastUpdatedTimes[typeName]
     }
+
+    /// Notification categories whose status response actually arrived in this bundle.
+    ///
+    /// The bundle is rebuilt on every fetch pass, so a `nil` response field means the
+    /// corresponding status request failed (or was never sent) during that pass — the pump's
+    /// state for that category is unknown, not empty. Consumers reconciling externally-issued
+    /// notifications (e.g. LoopKit alerts) must only treat a category's notifications as
+    /// cleared when the category appears here; otherwise a single dropped BLE round trip
+    /// would retract alerts that are still active on the pump.
+    ///
+    /// Malfunctions key off `HighestAamResponse` alone: the corroborating
+    /// `MalfunctionBitmaskStatusResponse`/`ActiveAamBitsResponse` may legitimately be absent
+    /// (filtered by `minApi`), and `get()` already treats missing corroboration as best-effort.
+    public var fetchedCategories: Set<NotificationItem.NotificationType> {
+        lock.lock()
+        defer { lock.unlock() }
+
+        var categories: Set<NotificationItem.NotificationType> = []
+        if alertStatusResponse != nil { categories.insert(.alert) }
+        if alarmStatusResponse != nil { categories.insert(.alarm) }
+        if reminderStatusResponse != nil { categories.insert(.reminder) }
+        if cgmAlertStatusResponse != nil { categories.insert(.cgmAlert) }
+        if highestAamResponse != nil { categories.insert(.malfunction) }
+        return categories
+    }
 }
 
 /// Represents a single notification item.
@@ -327,7 +352,7 @@ public struct NotificationItem: Identifiable, Hashable {
     /// Names of the other notifications merged into this row, in display order.
     public var mergedNames: [String] { mergedMembers.map(\.name) }
 
-    public enum NotificationType {
+    public enum NotificationType: String, CaseIterable {
         case alert
         case reminder
         case alarm
@@ -405,6 +430,30 @@ public struct NotificationItem: Identifiable, Hashable {
             }
         }
         return result
+    }
+
+    /// Identity that is stable across fetch passes, unlike `id` (a `UUID` minted per fetch).
+    /// Derived from the notification category and the pump's own identifier for the
+    /// notification: the bitmask bit position for alerts/alarms/reminders/CGM alerts, and the
+    /// `aamId` for malfunctions. Used as the `LoopKit.Alert.AlertIdentifier` suffix so the
+    /// same pump notification maps to the same alert across polls and app restarts.
+    public var stableIdentifier: String {
+        "\(type.rawValue).\(notificationId)"
+    }
+
+    /// Inverse of `stableIdentifier`, used to route a LoopKit alert acknowledgement back to
+    /// the pump notification it was issued for. Returns nil for identifiers this driver did
+    /// not mint.
+    public static func parseStableIdentifier(_ identifier: String) -> (type: NotificationType, notificationId: UInt32)? {
+        guard let separator = identifier.firstIndex(of: ".") else {
+            return nil
+        }
+        guard let type = NotificationType(rawValue: String(identifier[..<separator])),
+              let notificationId = UInt32(identifier[identifier.index(after: separator)...])
+        else {
+            return nil
+        }
+        return (type, notificationId)
     }
 }
 

@@ -527,7 +527,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let canceledDose = bolusDose.toDoseEntry(endDate: Date.now)
 
             // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
-            self.telemetryScheduler.cancelAll()
+            self.telemetryScheduler.cancel(kind: .bolus)
             self.bolusProgressReport = nil
             self.state.bolusDose = nil
 
@@ -1358,6 +1358,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // An ordinary (non-merged) row is done once its notification is acked.
             guard !item.mergedMembers.isEmpty else {
+                // Refresh the bundle so the LoopKit alert reconciler retracts the
+                // dismissed notification instead of waiting for the next poll.
+                self.fetchNotifications()
                 completion(true)
                 return
             }
@@ -1722,8 +1725,55 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
         []
     }
 
-    public func acknowledgeAlert(alertIdentifier _: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
-        completion(nil)
+    public func acknowledgeAlert(alertIdentifier: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
+        guard let parsed = NotificationItem.parseStableIdentifier(alertIdentifier) else {
+            // Not an identifier this driver minted (e.g. from a newer version) — nothing to
+            // relay to the pump, so acknowledge phone-side rather than leave the alert stuck.
+            logger.warning("acknowledgeAlert: unrecognized identifier \(alertIdentifier)")
+            completion(nil)
+            return
+        }
+
+        guard let dismissType = parsed.type.dismissType else {
+            // Malfunctions cannot be dismissed remotely: acknowledging only silences the
+            // phone-side notification. The identifier stays in issuedAlertIdentifiers so the
+            // still-active malfunction is not re-issued; it is retracted once the pump
+            // reports it cleared.
+            logger.info("acknowledgeAlert: \(alertIdentifier) is not dismissible on the pump")
+            completion(nil)
+            return
+        }
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("acknowledgeAlert: failed to connect: \(error.localizedDescription)")
+                completion(error)
+                return
+            }
+
+            guard let response = self.bluetooth.write(
+                message: DismissNotificationRequest(
+                    notificationType: dismissType,
+                    notificationId: parsed.notificationId
+                ),
+                expecting: DismissNotificationResponse.self
+            ) as? DismissNotificationResponse else {
+                self.logger.error("acknowledgeAlert: no response dismissing \(alertIdentifier)")
+                completion(PumpCommError.noResponse)
+                return
+            }
+
+            guard response.isStatusOK else {
+                self.logger.error("acknowledgeAlert: dismiss failed with status \(response.status)")
+                completion(PumpCommError.errorResponse(context: "DismissNotification status \(response.status)"))
+                return
+            }
+
+            // Refresh the bundle so the reconciler retracts this alert (and anything else
+            // the pump cleared) from the LoopKit alert store.
+            self.fetchNotifications()
+            completion(nil)
+        }
     }
 }
 

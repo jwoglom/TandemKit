@@ -27,6 +27,24 @@ struct TandemKitAlertSettingsView: View {
                     }
                 }
 
+                Toggle(isOn: Binding(
+                    get: { viewModel.forwardCGMAlerts },
+                    set: { viewModel.setForwardCGMAlerts($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            "Forward CGM Alerts",
+                            comment: "Label for CGM alert forwarding toggle"
+                        )
+                        Text(
+                            "Also deliver the pump's CGM alerts as phone notifications. Leave off if your CGM app already notifies you",
+                            comment: "Description for CGM alert forwarding toggle"
+                        )
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                }
+
                 if viewModel.alertSnoozeEnabled {
                     Picker(
                         String(localized: "Snooze Duration", comment: "Label for snooze duration picker"),

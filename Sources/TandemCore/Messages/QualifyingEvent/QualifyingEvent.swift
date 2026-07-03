@@ -70,8 +70,8 @@ public enum QualifyingEvent: CaseIterable {
     public static func fromRawBytes(_ raw: Data) -> Set<QualifyingEvent> {
         fromBitmask(Bytes.readUint32(raw, 0))
     }
-    
-    static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
+
+    public static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
        var ret: Set<QualifyingEvent> = []
        for event in QualifyingEvent.allCases {
            if (bitmask & event.id) != 0 {
@@ -80,6 +80,97 @@ public enum QualifyingEvent: CaseIterable {
        }
        return ret
    }
+
+    /// Status requests that should be re-fetched when this event is raised, mirroring
+    /// PumpX2's `QualifyingEvent.suggestedHandlers`. Version-dependent requests default to
+    /// their V1 form (valid on all firmware); callers that know the negotiated API version
+    /// can substitute via the corresponding request builders. Events with no stateless
+    /// fetch (e.g. `.heartbeat`, or `.bolusPermissionRevoked` whose request needs a bolus
+    /// id) return an empty list.
+    public var suggestedHandlers: [() -> Message] {
+        switch self {
+        case .alert:
+            return [{ AlertStatusRequest() }]
+        case .alarm:
+            return [{ AlarmStatusRequest() }, { HighestAamRequest() }, { ActiveAamBitsRequest(aamType: 2) }]
+        case .reminder:
+            return [{ ReminderStatusRequest() }]
+        case .malfunction:
+            return [{ MalfunctionStatusRequest() }, { HighestAamRequest() }, { ActiveAamBitsRequest(aamType: 4) }]
+        case .cgmAlert:
+            return [{ CGMAlertStatusRequest() }]
+        case .homeScreenChange:
+            return [{ HomeScreenMirrorRequest() }]
+        case .pumpSuspend, .pumpResume:
+            return [{ InsulinStatusRequest() }, { CurrentBasalStatusRequest() }]
+        case .timeChange, .pumpReset:
+            return [{ TimeSinceResetRequest() }]
+        case .basalChange:
+            return [{ CurrentBasalStatusRequest() }]
+        case .bolusChange:
+            return [{ CurrentBolusStatusRequest() }]
+        case .iobChange:
+            return [{ ControlIQIOBRequest() }]
+        case .extendedBolusChange:
+            return [{ ExtendedBolusStatusRequest() }]
+        case .profileChange, .activeProfileSegmentChange:
+            return [{ ProfileStatusRequest() }]
+        case .bg:
+            return [{ LastBGRequest() }]
+        case .cgmChange:
+            return [{ CGMStatusRequest() }, { CurrentEGVGuiDataRequest() }]
+        case .battery:
+            return [{ CurrentBatteryRequestBuilder.create(apiVersion: nil).0 }]
+        case .basalIQ, .basalIQStatus:
+            return [{ BasalIQStatusRequest() }]
+        case .remainingInsulin:
+            return [{ InsulinStatusRequest() }]
+        case .controlIQInfo:
+            return [{ ControlIQInfoV1Request() }]
+        case .controlIQSleep:
+            return [{ ControlIQSleepScheduleRequest() }]
+        case .globalPumpSettings:
+            return [
+                { GlobalMaxBolusSettingsRequest() },
+                { BasalLimitSettingsRequest() },
+                { LocalizationRequest() },
+                { PumpGlobalsRequest() },
+                { PumpSettingsRequest() }
+            ]
+        case .pumpingStatus:
+            return [{ LoadStatusRequest() }]
+        case .pumpCommunicationsSuspended, .snoozeStatus, .heartbeat, .bolusPermissionRevoked:
+            return []
+        }
+    }
+
+    /// Builds the combined request list for a set of events, deduplicated by opcode + cargo
+    /// so overlapping events (e.g. `.pumpSuspend` and `.pumpResume`) fetch each status once.
+    /// Deduplication keys on cargo as well as opcode because distinct requests can share an
+    /// opcode with different payloads (`ActiveAamBitsRequest(aamType: 2)` vs `(aamType: 4)`).
+    public static func groupSuggestedHandlers(_ events: Set<QualifyingEvent>) -> [Message] {
+        var seen: Set<RequestKey> = []
+        var messages: [Message] = []
+
+        // Iterate allCases (declaration order) rather than the unordered set so the
+        // resulting request order is deterministic.
+        for event in QualifyingEvent.allCases where events.contains(event) {
+            for handler in event.suggestedHandlers {
+                let message = handler()
+                let key = RequestKey(opCode: type(of: message).props.opCode, cargo: message.cargo)
+                if seen.insert(key).inserted {
+                    messages.append(message)
+                }
+            }
+        }
+
+        return messages
+    }
+
+    private struct RequestKey: Hashable {
+        let opCode: UInt8
+        let cargo: Data
+    }
 }
 
 /// Pump state that the qualifying-event suggested handlers depend on.
