@@ -44,7 +44,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     // The pump primes the cannula physically; a real fill completes well within this window.
     // This bound exists purely so the UI can't spin forever if the pump's completion stream
     // message is dropped or never arrives.
-    private let fillTimeout: DispatchTimeInterval = .seconds(120)
+    private let fillTimeout: DispatchTimeInterval = .seconds(30)
 
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager
