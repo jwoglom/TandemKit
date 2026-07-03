@@ -88,6 +88,15 @@ struct TandemKitDebugView: View {
                     DebugTextView(title: "TandemPumpManagerState", contents: viewModel.managerStateJsonDebugDescription)
                 }
             }
+
+            Section(header: Text("Silent Tones")) {
+                Toggle(isOn: Binding(
+                    get: { viewModel.useSilentMode },
+                    set: { viewModel.setSilentMode($0) }
+                )) {
+                    Text("Silent Tones", comment: "Label for silent tones")
+                }
+            }
         }
         .navigationBarTitle("Debug Options", displayMode: .inline)
         .sheet(item: $showingParameterized) { option in

@@ -28,11 +28,19 @@ final class TandemKitDebugViewModel: ObservableObject {
     @Published var parameterInput: [String: String] = [:]
     @Published var cargoHexInput: String = ""
 
+    @Published var useSilentMode: Bool = false
+
     private let pumpManager: TandemPumpManager?
     private var lastRequestMessage: Message?
 
     init(pumpManager: TandemPumpManager?) {
         self.pumpManager = pumpManager
+        useSilentMode = pumpManager?.state.useSilentTones ?? false
+    }
+
+    func setSilentMode(_ enabled: Bool) {
+        pumpManager?.configureSilentMode(enabled)
+        useSilentMode = enabled
     }
 
     var pumpStateDebugDescription: String {
