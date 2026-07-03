@@ -217,7 +217,9 @@ struct TandemKitSettingsView: View {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
-                            .onTapGesture {
+                            // Require a deliberate long press (not a single tap) to open the
+                            // algorithm-switch confirmation, so it can't be triggered inadvertently.
+                            .onLongPressGesture(minimumDuration: 0.5) {
                                 activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
                             }
                     }
