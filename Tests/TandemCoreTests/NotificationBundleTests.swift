@@ -387,4 +387,42 @@ final class NotificationBundleTests: XCTestCase {
         // After all operations, count should still match items
         XCTAssertEqual(bundle.getNotificationCount(), bundle.get().count)
     }
+
+    // MARK: - NotificationItem Display Title Tests
+
+    /// `displayTitle` shows the human-readable description when present, and falls back to
+    /// the prettified enum name for name-only notifications (CGM alerts / reminders, which
+    /// pumpX2 also leaves name-only) or when no description exists.
+    func testNotificationItemDisplayTitle() {
+        // Alerts / alarms carry a distinct description -> shown verbatim.
+        let withDescription = NotificationItem(
+            type: .alert,
+            id: 0,
+            name: "LOW_INSULIN_ALERT",
+            notificationDescription: "Low amount of insulin remaining in the cartridge."
+        )
+        XCTAssertEqual(withDescription.displayTitle, "Low amount of insulin remaining in the cartridge.")
+
+        // Description equal to the raw name (CGM alerts / reminders) -> prettified name.
+        let descriptionEqualsName = NotificationItem(
+            type: .cgmAlert,
+            id: 2,
+            name: "HIGH_CGM_ALERT",
+            notificationDescription: "HIGH_CGM_ALERT"
+        )
+        XCTAssertEqual(descriptionEqualsName.displayTitle, "High Cgm Alert")
+
+        // No description -> prettified name.
+        let noDescription = NotificationItem(type: .reminder, id: 2, name: "SITE_CHANGE_REMINDER")
+        XCTAssertEqual(noDescription.displayTitle, "Site Change Reminder")
+
+        // Empty description -> prettified name.
+        let emptyDescription = NotificationItem(
+            type: .alarm,
+            id: 3,
+            name: "OCCLUSION_ALARM",
+            notificationDescription: ""
+        )
+        XCTAssertEqual(emptyDescription.displayTitle, "Occlusion Alarm")
+    }
 }
