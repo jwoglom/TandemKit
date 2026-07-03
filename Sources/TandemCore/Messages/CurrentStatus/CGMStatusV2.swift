@@ -103,6 +103,20 @@ public class CGMStatusV2Response: Message {
         SessionState(rawValue: sessionStateId) ?? .unknown
     }
 
+    /// Whether a CGM sensor session is established on the pump — i.e. a sensor is running
+    /// (`active`) or warming up (`startPending`). Control-IQ relies on a connected CGM to close
+    /// the loop, so this is used to gate enabling Control-IQ: a `stopped`, `stopPending`, or
+    /// `unknown` session means no CGM is (or will imminently be) feeding the pump, in which case
+    /// Control-IQ would only ever run open-loop.
+    public var isSensorSessionConfigured: Bool {
+        switch sessionState {
+        case .active, .startPending:
+            return true
+        case .stopPending, .stopped, .unknown:
+            return false
+        }
+    }
+
     public var transmitterBatteryStatus: TransmitterBatteryStatus {
         TransmitterBatteryStatus(rawValue: transmitterBatteryStatusId) ?? .unknown
     }

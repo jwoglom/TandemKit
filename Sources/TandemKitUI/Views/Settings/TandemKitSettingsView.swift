@@ -4,6 +4,7 @@ import SwiftUI
 private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
+    case cgmRequiredForCIQ
     case diyRestored
     case noCGMConnected
     case stopTempRate
@@ -13,6 +14,7 @@ private enum SettingsAlertType: Identifiable {
         switch self {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
+        case .cgmRequiredForCIQ: return "cgmRequiredForCIQ"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
@@ -217,10 +219,23 @@ struct TandemKitSettingsView: View {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
+                            .overlay(
+                                Group {
+                                    if viewModel.isCheckingCGMForCIQ {
+                                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                                    }
+                                }
+                            )
                             // Require a deliberate long press (not a single tap) to open the
                             // algorithm-switch confirmation, so it can't be triggered inadvertently.
                             .onLongPressGesture(minimumDuration: 0.5) {
-                                activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
+                                if viewModel.useControlIQ {
+                                    activeAlert = .switchToDIY
+                                } else {
+                                    // Switching to Control-IQ requires a CGM connected to the pump;
+                                    // verify one is configured before offering the confirmation.
+                                    viewModel.attemptSwitchToControlIQ()
+                                }
                             }
                     }
 
@@ -544,6 +559,22 @@ struct TandemKitSettingsView: View {
                     },
                     secondaryButton: .cancel()
                 )
+            case .cgmRequiredForCIQ:
+                return Alert(
+                    title: Text(
+                        "Connect a CGM First",
+                        comment: "Title for alert blocking the switch to Control-IQ when no CGM is connected"
+                    ),
+                    message: Text(
+                        "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again.",
+                        comment: "Message for alert blocking the switch to Control-IQ when no CGM is connected"
+                    ),
+                    primaryButton: .default(
+                        Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
+                        action: { viewModel.openCgmSettings() }
+                    ),
+                    secondaryButton: .cancel(Text("OK"))
+                )
             case .diyRestored:
                 return Alert(
                     title: Text(String(format: String(
@@ -609,6 +640,18 @@ struct TandemKitSettingsView: View {
             if show {
                 activeAlert = .noCGMConnected
                 viewModel.showNoCGMWarning = false
+            }
+        }
+        .onChange(of: viewModel.showSwitchToCIQConfirm) { show in
+            if show {
+                activeAlert = .switchToCIQ
+                viewModel.showSwitchToCIQConfirm = false
+            }
+        }
+        .onChange(of: viewModel.showCGMRequiredForCIQ) { show in
+            if show {
+                activeAlert = .cgmRequiredForCIQ
+                viewModel.showCGMRequiredForCIQ = false
             }
         }
         .navigationBarItems(trailing: doneButton)
