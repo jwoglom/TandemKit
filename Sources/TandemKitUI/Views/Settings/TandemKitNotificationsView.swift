@@ -157,8 +157,10 @@ struct NotificationRow: View {
                     Text(item.type.title)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(item.title)
+                    Text(item.displayTitle)
                         .font(.body)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
 
@@ -236,10 +238,19 @@ private extension TandemKitNotificationsViewModel {
     static var previewWithNotifications: TandemKitNotificationsViewModel {
         let viewModel = TandemKitNotificationsViewModel(nil)
         viewModel.notifications = [
-            NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT"),
+            // Alerts and alarms carry a human-readable description and render it.
+            NotificationItem(
+                type: .alert,
+                id: 0,
+                name: "LOW_INSULIN_ALERT",
+                notificationDescription: "Low amount of insulin remaining in the cartridge."
+            ),
+            // Malfunctions render the HighestAam fault code (matching pumpX2).
+            NotificationItem(type: .malfunction, id: 12, name: "12-0x2071"),
+            // Reminders/CGM alerts have no description (as in pumpX2) and fall
+            // back to the prettified enum name.
             NotificationItem(type: .reminder, id: 2, name: "SITE_CHANGE_REMINDER"),
-            NotificationItem(type: .cgmAlert, id: 3, name: "LOW_CGM_ALERT"),
-            NotificationItem(type: .malfunction, id: 1, name: "1-0x2026")
+            NotificationItem(type: .cgmAlert, id: 3, name: "LOW_CGM_ALERT")
         ]
         viewModel.lastRefreshTime = Date()
         return viewModel

@@ -251,7 +251,6 @@ extension TandemPumpManager {
 
             if let response = response as? AlertStatusResponse {
                 autoAcknowledgeBasalAlertsIfNeeded(alertResponse: response)
-                continue
             }
 
             notificationBundle.add(response)

@@ -291,6 +291,19 @@ public struct NotificationItem: Identifiable, Hashable {
             .joined(separator: " ")
     }
 
+    /// Text shown to the user. Prefers the pump's notification description
+    /// (alerts / alarms / malfunctions) and falls back to the prettified enum
+    /// name when no distinct description exists — e.g. CGM alerts and reminders,
+    /// which pumpX2 also leaves name-only.
+    public var displayTitle: String {
+        if let description = notificationDescription,
+           !description.isEmpty,
+           description != name {
+            return description
+        }
+        return title
+    }
+
     /// Whether this notification can be dismissed.
     public var canDismiss: Bool {
         type.dismissType != nil
