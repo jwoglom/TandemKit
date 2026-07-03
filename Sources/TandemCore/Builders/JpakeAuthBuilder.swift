@@ -206,6 +206,16 @@ public class JpakeAuthBuilder {
         step == .INVALID
     }
 
+    /// True once the round-4 key-confirmation request has been sent but not yet validated.
+    ///
+    /// JPAKE rounds 1-3 complete regardless of the pairing code; the code is only proven at
+    /// key confirmation. A pump rejects a wrong code by dropping the link at this step (rather
+    /// than returning a mismatching confirmation), so a write failure while awaiting key
+    /// confirmation is a strong signal that the entered pairing code was incorrect.
+    public func awaitingKeyConfirmation() -> Bool {
+        step == .CONFIRM_4_SENT
+    }
+
     public func getDerivedSecret() -> Data? {
         derivedSecret
     }

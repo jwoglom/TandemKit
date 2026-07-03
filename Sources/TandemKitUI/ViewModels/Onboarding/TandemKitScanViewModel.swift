@@ -71,6 +71,7 @@ class TandemKitScanViewModel: ObservableObject {
         pumpManager.pairPump(code: devicePinCode, peripheral: peripheral) { error in
             if let error {
                 self.log.error("Error during pairing: \(error.localizedDescription)")
+                self.onPairFailure(error: error)
                 return
             }
 
@@ -125,10 +126,22 @@ class TandemKitScanViewModel: ObservableObject {
     func onPairFailure(error: Error) {
         DispatchQueue.main.async {
             self.log.error("Pairing failed: \(error.localizedDescription)")
+
+            // Include the recovery suggestion (e.g. where to find the PIN) when the error
+            // provides one, so a wrong-code failure tells the user how to fix it.
+            var message = error.localizedDescription
+            if let suggestion = (error as? LocalizedError)?.recoverySuggestion, !suggestion.isEmpty {
+                message += "\n\n" + suggestion
+            }
             self.isConnectionError = true
-            self.connectionErrorMessage = error.localizedDescription
+            self.connectionErrorMessage = message
+
+            // Reset back to a scannable state so the user can re-enter the code instead of
+            // being stranded on the pairing spinner.
             self.selectedPeripheral = nil
             self.devicePinCode = ""
+            self.currentPhase = .mobiOnPad
+            _ = self.pumpManager?.bluetooth.startScan(self.deviceScanDidUpdate)
         }
     }
 }
