@@ -1,3 +1,4 @@
+import Combine
 import LoopKit
 import SwiftUI
 
@@ -36,6 +37,14 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
     let done: () -> Void
     private let pumpManager: TandemPumpManager?
+    private var cancellables = Set<AnyCancellable>()
+    private var fillResolved = false
+    private var fillTimeoutWorkItem: DispatchWorkItem?
+
+    // The pump primes the cannula physically; a real fill completes well within this window.
+    // This bound exists purely so the UI can't spin forever if the pump's completion stream
+    // message is dropped or never arrives.
+    private let fillTimeout: DispatchTimeInterval = .seconds(120)
 
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -82,19 +91,69 @@ class TandemKitFillCannulaViewModel: ObservableObject {
         loadingFill = true
         failedFill = false
         isProcessing = true
+        fillResolved = false
+
+        // The pump signals that the cannula has actually finished filling asynchronously, via a
+        // FillCannulaStateStreamResponse (state == .cannulaFilled) on the control-stream
+        // characteristic. The direct response to FillCannulaRequest is only an acknowledgment that
+        // the pump accepted the command and *started* priming — it arrives almost immediately and
+        // must NOT be treated as completion. Subscribe before issuing the command so the completion
+        // signal cannot be missed, then wait for it (or the safety timeout) before advancing.
+        observeCannulaFilled()
 
         pumpManager?.primeCanulla(amount: primeAmount) { response in
             DispatchQueue.main.async {
-                self.loadingFill = false
-                self.isProcessing = false
-                if let response = response, response.status == 0 {
-                    self.failedFill = false
-                    self.pumpManager?.recordSiteChange()
-                    self.currentStep = self.currentStep.nextStep() ?? .done
-                } else {
-                    self.failedFill = true
+                guard let response = response, response.status == 0 else {
+                    // The pump refused to start filling — fail immediately.
+                    self.resolveFill(success: false)
+                    return
                 }
+                // Filling has started successfully. Keep the loading state and wait for the
+                // .cannulaFilled stream message; do not advance the wizard yet.
             }
+        }
+    }
+
+    /// Subscribes to the pump's cannula-fill state stream and advances the wizard only when the
+    /// pump reports `.cannulaFilled`. Also arms a safety timeout so the UI can't hang if the
+    /// completion message never arrives.
+    private func observeCannulaFilled() {
+        guard let pumpManager = pumpManager else { return }
+        cancellables.removeAll()
+
+        pumpManager.fillCannulaStateStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                guard response.state == .cannulaFilled else { return }
+                self?.resolveFill(success: true)
+            }
+            .store(in: &cancellables)
+
+        let timeoutWorkItem = DispatchWorkItem { [weak self] in
+            self?.resolveFill(success: false)
+        }
+        fillTimeoutWorkItem = timeoutWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + fillTimeout, execute: timeoutWorkItem)
+    }
+
+    /// Finalizes the fill exactly once, tearing down the stream subscription and either advancing
+    /// the wizard (recording the site change) or surfacing a failure.
+    private func resolveFill(success: Bool) {
+        guard !fillResolved else { return }
+        fillResolved = true
+        cancellables.removeAll()
+        fillTimeoutWorkItem?.cancel()
+        fillTimeoutWorkItem = nil
+
+        loadingFill = false
+        isProcessing = false
+
+        if success {
+            failedFill = false
+            pumpManager?.recordSiteChange()
+            currentStep = currentStep.nextStep() ?? .done
+        } else {
+            failedFill = true
         }
     }
 
