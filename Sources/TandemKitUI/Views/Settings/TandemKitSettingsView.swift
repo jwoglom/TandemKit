@@ -9,6 +9,8 @@ private enum SettingsAlertType: Identifiable {
     case noCGMConnected
     case stopTempRate
     case stopTempRateClosedLoopWarning
+    case suspendDelivery
+    case resumeDelivery
 
     var id: String {
         switch self {
@@ -19,6 +21,8 @@ private enum SettingsAlertType: Identifiable {
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
         case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
+        case .suspendDelivery: return "suspendDelivery"
+        case .resumeDelivery: return "resumeDelivery"
         }
     }
 }
@@ -316,7 +320,7 @@ struct TandemKitSettingsView: View {
 
                 if let suspendResumeText = viewModel.suspendResumeText {
                     Button(action: {
-                        viewModel.suspendResumeButtonPressed()
+                        activeAlert = viewModel.isDeliverySuspended ? .resumeDelivery : .suspendDelivery
                     }) {
                         HStack {
                             Text(suspendResumeText)
@@ -625,6 +629,32 @@ struct TandemKitSettingsView: View {
                     primaryButton: .destructive(
                         Text("I Understand", comment: "Closed loop temp rate warning confirm button"),
                         action: { viewModel.stopTempRate() }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            case .suspendDelivery:
+                return Alert(
+                    title: Text("Suspend Insulin Delivery", comment: "Title for confirm suspend insulin delivery alert"),
+                    message: Text(
+                        "Are you sure you want to suspend insulin delivery? No basal or bolus insulin will be delivered until you resume delivery.",
+                        comment: "Message for confirm suspend insulin delivery alert"
+                    ),
+                    primaryButton: .destructive(
+                        Text("Suspend Delivery", comment: "Button to confirm suspending insulin delivery"),
+                        action: { viewModel.suspendResumeButtonPressed() }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            case .resumeDelivery:
+                return Alert(
+                    title: Text("Resume Insulin Delivery", comment: "Title for confirm resume insulin delivery alert"),
+                    message: Text(
+                        "Are you sure you want to resume insulin delivery? Your scheduled basal delivery will restart.",
+                        comment: "Message for confirm resume insulin delivery alert"
+                    ),
+                    primaryButton: .default(
+                        Text("Resume Delivery", comment: "Button to confirm resuming insulin delivery"),
+                        action: { viewModel.suspendResumeButtonPressed() }
                     ),
                     secondaryButton: .cancel()
                 )
