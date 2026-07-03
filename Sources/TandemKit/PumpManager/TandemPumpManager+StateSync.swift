@@ -350,6 +350,24 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
+    /// Reads the current load/reservoir status and publishes it on `loadStatusStream`.
+    ///
+    /// Called from `handleQualifyingEvents` on a `.pumpingStatus` event, which fires (among other
+    /// reasons) when the pump auto-exits fill-tubing mode. Uses a direct synchronous write because the
+    /// caller already holds the command-queue connection (mirrors `fetchBasalStatus`/`fetchBatteryStatus`).
+    func fetchLoadStatus() {
+        guard let response = bluetooth.write(
+            message: LoadStatusRequest(),
+            expecting: LoadStatusResponse.self
+        ) as? LoadStatusResponse else {
+            logger.error("Failed to fetch load status: \(type(of: LoadStatusRequest.self))")
+            return
+        }
+
+        logger.debug("Load status: \(response.description)")
+        loadStatusStream.send(response)
+    }
+
     func handleHomeScreenMirrorResponse(_ response: HomeScreenMirrorResponse) {
         guard let basalIcon = response.basalStatusIcon else {
             return

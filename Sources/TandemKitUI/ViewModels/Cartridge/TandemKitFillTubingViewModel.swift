@@ -44,6 +44,13 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var hasDisplayedFlow = false
     @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
 
+    /// True when the pump has left fill-tubing mode on its own (Mobi auto-exits after dispensing a set
+    /// amount). Drives the explicit "Continue filling" / "Complete tubing fill" choice on the filling step.
+    @Published var pumpExitedFillMode = false
+
+    /// Guards against subscribing to the pump-manager streams more than once across continue cycles.
+    private var isMonitoringStreams = false
+
     let done: () -> Void
     let toFillingCannula: () -> Void
     private let pumpManager: TandemPumpManager?
@@ -138,6 +145,18 @@ class TandemKitFillTubingViewModel: ObservableObject {
     }
 
     func enterFillTubingMode() {
+        performEnterFillTubing(advanceStep: true, startMonitoring: true)
+    }
+
+    /// Re-enter fill-tubing mode after the pump auto-exited, so the user can keep filling without
+    /// restarting the whole flow. Stays on the `.filling` step and reuses the existing stream
+    /// subscriptions (no re-subscribe).
+    func continueFilling() {
+        pumpExitedFillMode = false
+        performEnterFillTubing(advanceStep: false, startMonitoring: false)
+    }
+
+    private func performEnterFillTubing(advanceStep: Bool, startMonitoring: Bool) {
         guard isSuspended == true else {
             failedEnterMode = true
             return
@@ -152,19 +171,31 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 self.loadingEnterMode = false
                 if let response = response, response.status == 0 {
                     self.failedEnterMode = false
-                    self.currentStep = self.currentStep.nextStep() ?? .done
-                    self.startMonitoringButtonState()
+                    if advanceStep {
+                        self.currentStep = self.currentStep.nextStep() ?? .done
+                    }
+                    if startMonitoring {
+                        self.startMonitoringButtonState()
+                    }
                 } else {
                     self.failedEnterMode = true
-                    self.isProcessing = false
+                    if advanceStep {
+                        self.isProcessing = false
+                    } else {
+                        // Re-enter after auto-exit failed: keep the Continue/Complete UI available.
+                        self.pumpExitedFillMode = true
+                    }
                 }
             }
         }
     }
 
     func startMonitoringButtonState() {
-        // Subscribe to FillTubingStateStreamResponse from the pump manager
-        guard let pumpManager = pumpManager else { return }
+        // Subscribe to pump-manager streams once. `cancellables` lives for the VM's lifetime and is
+        // never torn down on auto-exit, so these sinks persist across Continue-filling cycles; the
+        // guard prevents duplicate subscriptions if this is reached again.
+        guard let pumpManager = pumpManager, !isMonitoringStreams else { return }
+        isMonitoringStreams = true
 
         pumpManager.fillTubingStateStream
             .receive(on: DispatchQueue.main)
@@ -177,6 +208,30 @@ class TandemKitFillTubingViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Detect when the pump auto-exits fill-tubing mode. A `.pumpingStatus` qualifying event makes
+        // the pump manager read the load status and publish it here.
+        pumpManager.loadStatusStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                self?.handleLoadStatus(response)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleLoadStatus(_ response: LoadStatusResponse) {
+        // Only meaningful once filling is under way; the hasDisplayedFlow gate also ensures a status
+        // read that races the initial enter (before any filling) isn't misread as an exit.
+        guard currentStep == .filling, hasDisplayedFlow else { return }
+
+        if response.isInTubingFillMode {
+            pumpExitedFillMode = false
+        } else {
+            pumpExitedFillMode = true
+            // Make the Continue/Complete UI reachable even if the button stream never reports a
+            // release (e.g. the pump auto-exits while the button is still held).
+            buttonDown = false
+        }
     }
 
     private func requestAlertStatus() {
@@ -224,6 +279,12 @@ class TandemKitFillTubingViewModel: ObservableObject {
                     self.failedExitMode = false
                     self.exitState = .tubingFilled
                     self.currentStep = self.currentStep.nextStep() ?? .done
+                } else if self.pumpExitedFillMode {
+                    // The pump already auto-exited fill mode, so re-issuing the exit request is
+                    // expected to be rejected. Treat that as success instead of bouncing to filling.
+                    self.failedExitMode = false
+                    self.exitState = .tubingFilled
+                    self.currentStep = .done
                 } else {
                     // Exit failed - go back to filling step and show error
                     self.failedExitMode = true

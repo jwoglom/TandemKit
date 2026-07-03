@@ -83,6 +83,16 @@ public class LoadStatusResponse: Message {
         loadState == .changeCartridge || loadState == .loadCartridge || loadState == .primeTubing
     }
 
+    /// True while the pump is in tubing-fill mode (the user can dispense insulin with the pump button).
+    ///
+    /// When this becomes false during a fill-tubing session, the pump has left fill mode — either the
+    /// user completed it or the pump auto-exited after dispensing its set amount. We key detection off
+    /// `loadState` (leaving `.primeTubing`) rather than `primeTubingStatus`/`isLoadingActive`, because
+    /// those also toggle on a normal button release while still in fill mode and would produce false exits.
+    public var isInTubingFillMode: Bool {
+        loadState == .primeTubing
+    }
+
     public enum LoadState: Int {
         case changeCartridge = 0
         case loadCartridge = 1

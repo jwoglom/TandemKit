@@ -91,6 +91,30 @@ struct TandemKitFillTubingView: View {
                 if viewModel.buttonDown {
                     InsulinFlowIndicator()
                         .transition(.opacity)
+                } else if viewModel.pumpExitedFillMode {
+                    // The pump auto-exited fill mode. Offer an explicit choice: keep filling
+                    // (re-enter fill mode) or finish.
+                    VStack(spacing: 12) {
+                        ContinueButton(
+                            text: Text("Continue filling", comment: "Button to re-enter fill tubing mode"),
+                            loading: $viewModel.loadingEnterMode,
+                            disabled: Binding(
+                                get: { viewModel.hasActiveNotifications },
+                                set: { _ in }
+                            )
+                        ) {
+                            viewModel.continueFilling()
+                        }
+
+                        ContinueButton(
+                            text: Text("Complete tubing fill", comment: "Button text"),
+                            loading: $viewModel.loadingExitMode,
+                            buttonStyle: .secondary
+                        ) {
+                            viewModel.tubingFilled()
+                        }
+                    }
+                    .transition(.opacity)
                 } else if viewModel.hasDisplayedFlow {
                     ContinueButton(
                         text: Text("Complete tubing fill", comment: "Button text"),
@@ -106,6 +130,7 @@ struct TandemKitFillTubingView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.3), value: viewModel.buttonDown)
+            .animation(.easeInOut(duration: 0.3), value: viewModel.pumpExitedFillMode)
             .frame(maxWidth: .infinity)
         case .exiting:
             EmptyView()
@@ -312,22 +337,41 @@ struct TandemKitFillTubingView: View {
             }
 
             if !viewModel.hasActiveNotifications {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(
-                        "Press and hold the button on your pump to fill tubing.",
-                        comment: "Instructions"
-                    )
-                    .font(.body)
+                if viewModel.pumpExitedFillMode {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(
+                            "The pump stopped filling tubing after dispensing the set amount.",
+                            comment: "Message shown when the pump automatically exits fill tubing mode"
+                        )
+                        .font(.body)
 
-                    Text(
-                        "Watch the tubing for insulin and release the button when you see it.",
-                        comment: "Instructions"
-                    )
-                    .font(.body)
+                        Text(
+                            "Tap Continue filling to fill more insulin, or Complete tubing fill when you're done.",
+                            comment: "Instructions shown after the pump automatically exits fill tubing mode"
+                        )
+                        .font(.body)
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .cornerRadius(12)
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(
+                            "Press and hold the button on your pump to fill tubing.",
+                            comment: "Instructions"
+                        )
+                        .font(.body)
+
+                        Text(
+                            "Watch the tubing for insulin and release the button when you see it.",
+                            comment: "Instructions"
+                        )
+                        .font(.body)
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .cornerRadius(12)
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
             }
 
             // Show active notifications warning during fill
@@ -367,6 +411,18 @@ struct TandemKitFillTubingView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.warning.opacity(0.1))
+                .cornerRadius(12)
+            }
+
+            if viewModel.failedEnterMode {
+                Label(
+                    String(localized: "Failed to continue filling. Please try again.", comment: "Error message"),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .foregroundColor(guidanceColors.critical)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.critical.opacity(0.1))
                 .cornerRadius(12)
             }
 
@@ -582,6 +638,17 @@ private extension TandemKitFillTubingViewModel {
         viewModel.exitState = .tubingFilled
         return viewModel
     }
+
+    static var previewPumpExited: TandemKitFillTubingViewModel {
+        let viewModel = TandemKitFillTubingViewModel(pumpManager: nil, done: {}, toFillingCannula: {})
+        viewModel.currentStep = .filling
+        viewModel.isSuspended = true
+        viewModel.isProcessing = true
+        viewModel.buttonDown = false
+        viewModel.hasDisplayedFlow = true
+        viewModel.pumpExitedFillMode = true
+        return viewModel
+    }
 }
 
 #Preview("Filling") {
@@ -594,6 +661,13 @@ private extension TandemKitFillTubingViewModel {
 #Preview("Completed") {
     NavigationView {
         TandemKitFillTubingView(viewModel: .previewCompleted)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Pump Stopped") {
+    NavigationView {
+        TandemKitFillTubingView(viewModel: .previewPumpExited)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }

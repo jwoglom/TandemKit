@@ -702,6 +702,50 @@
         }
       }
     },
+    "Continue filling" : {
+      "comment" : "Button to re-enter fill tubing mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue filling"
+          }
+        }
+      }
+    },
+    "Failed to continue filling. Please try again." : {
+      "comment" : "Error message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to continue filling. Please try again."
+          }
+        }
+      }
+    },
+    "Tap Continue filling to fill more insulin, or Complete tubing fill when you're done." : {
+      "comment" : "Instructions shown after the pump automatically exits fill tubing mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap Continue filling to fill more insulin, or Complete tubing fill when you're done."
+          }
+        }
+      }
+    },
+    "The pump stopped filling tubing after dispensing the set amount." : {
+      "comment" : "Message shown when the pump automatically exits fill tubing mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump stopped filling tubing after dispensing the set amount."
+          }
+        }
+      }
+    },
     "Completing cartridge change..." : {
       "comment" : "Status text",
       "localizations" : {

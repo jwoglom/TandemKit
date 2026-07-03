@@ -37,6 +37,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
+    // Published whenever a load/reservoir status is read in response to a `.pumpingStatus` qualifying
+    // event. The fill-tubing UI uses this to detect when the pump auto-exits fill mode.
+    public let loadStatusStream = PassthroughSubject<LoadStatusResponse, Never>()
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -1374,7 +1377,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
 
-        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
+        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery, .pumpingStatus]
         guard events.contains(where: { actionableEvents.contains($0) }) else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
             // acknowledge; ack immediately.
@@ -1406,6 +1409,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     self.fetchNotifications()
                 case .battery:
                     self.fetchBatteryStatus()
+                case .pumpingStatus:
+                    // Fires (among other reasons) when the pump auto-exits fill-tubing mode. Read
+                    // the load status so the fill-tubing UI can confirm and offer Continue/Complete.
+                    self.fetchLoadStatus()
                 default:
                     self.logger.info("Skipping event: \(qualifyingEvent)")
                 }
