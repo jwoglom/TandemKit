@@ -156,31 +156,47 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
+    /// Whether the pump is currently suspended, used to decide which confirmation to present and
+    /// which command to issue.
+    var isDeliverySuspended: Bool {
+        basalDose?.type == .suspend
+    }
+
     func suspendResumeButtonPressed() {
         guard let pumpManager else {
             return
         }
 
-        if pumpManager.state.basalDose.type == .suspend {
-            pumpManager.resumeDelivery { error in
+        isUpdatingPumpState = true
+
+        let wasSuspended = pumpManager.state.basalDose.type == .suspend
+        let failure: CommandFailure = wasSuspended ? .resume : .suspend
+
+        // Shared completion: surface the error sheet on failure, otherwise re-sync the pump so the
+        // delivery status and suspend/resume button reflect the pump's actual state instead of
+        // leaving the UI ambiguous about whether the command took effect. The brief sleep lets the
+        // pump settle before we read the reconciled state back, matching the other therapy commands.
+        let handleCompletion: (Error?) -> Void = { error in
+            if error != nil {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
+                    self.commandFailure = failure
+                }
+                return
+            }
 
-                    if let _ = error {
-                        self.commandFailure = .resume
-                    }
+            Thread.sleep(forTimeInterval: 1.0)
+            self.pumpManager?.syncPumpData { _ in
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
                 }
             }
+        }
+
+        if wasSuspended {
+            pumpManager.resumeDelivery(completion: handleCompletion)
         } else {
-            pumpManager.suspendDelivery { error in
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
-
-                    if let _ = error {
-                        self.commandFailure = .suspend
-                    }
-                }
-            }
+            pumpManager.suspendDelivery(completion: handleCompletion)
         }
     }
 
