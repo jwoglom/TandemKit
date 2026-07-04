@@ -237,6 +237,14 @@ extension TandemPumpManager {
                 let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
                 historyLogger.info("[HISTORY-DAILYBASAL] seq=\(log.sequenceNum) time=\(time) dailyTotalBasal=\(daily.dailyTotalBasal)U lastBasalRate=\(daily.lastBasalRate)U/hr iob=\(daily.iob)U finalEventForDay=\(daily.finalEventForDay)")
             }
+
+            // Authoritative pump bolus ledger (info → tandem_log.txt): every completed bolus, commanded
+            // AND pump-UI, with the pump's requested/delivered and its own reported IOB. This is the
+            // ground truth the reconciliation audit checks Loop's DoseStore against.
+            if let bolus = log as? BolusCompletedHistoryLog {
+                let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
+                historyLogger.info("[HISTORY-BOLUS] seq=\(log.sequenceNum) time=\(time) bolusId=\(bolus.bolusId) requested=\(bolus.insulinRequested)U delivered=\(bolus.insulinDelivered)U iob=\(bolus.iob)U completionStatus=\(bolus.completionStatusId)")
+            }
         }
 
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
