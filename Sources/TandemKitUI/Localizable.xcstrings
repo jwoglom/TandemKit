@@ -1063,6 +1063,9 @@
         }
       }
     },
+    "Double-check the PIN labeled on the side of the cartridge area." : {
+
+    },
     "Enable %@ Algorithm" : {
       "comment" : "Title for alert to switch from Control-IQ to DIY",
       "localizations" : {
@@ -1676,6 +1679,9 @@
           }
         }
       }
+    },
+    "Incorrect pairing code" : {
+
     },
     "Initial state messages failed, please retry pairing" : {
       "comment" : "Error shown when initial pump requests after auth fail",
