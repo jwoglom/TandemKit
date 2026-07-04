@@ -443,11 +443,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.recordCommandedBolus(id: permissionResponse.bolusId)
             self.state.bolusState = .initiating
             self.state.lastReconciliation = Date.now
+
+            // Track this optimistically-emitted bolus as pending, keyed by the emitted dose's stable
+            // syncIdentifier, so history reconciliation (D1b) can finalize it from the pump ledger if
+            // the real-time completion is ever missed. Inert until the reconciler is wired in.
+            let bolusEvent = NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)
+            if let emittedDose = bolusEvent.dose, let syncId = emittedDose.syncIdentifier {
+                self.state.recordPendingDose(PendingDose(syncIdentifier: syncId, dose: emittedDose, requestedAt: Date()))
+            }
             self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(
-                [NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)],
-                replacePendingEvents: false
-            )
+            self.emitPumpEvents([bolusEvent], replacePendingEvents: false)
 
             completion(nil)
         }

@@ -71,6 +71,11 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// incrementally from where we left off (no redundant deep fetch every launch) and can detect
     /// gaps to backfill. See `HistoryRangeTracker`.
     public var historyFetchedRanges: [FetchedRange] = []
+    /// Optimistically-emitted commanded doses awaiting confirmation from the pump's history ledger.
+    /// Persisted so history reconciliation can finalize a commanded bolus even if the real-time
+    /// completion was missed (app backgrounded/killed at completion). Pruned to a rolling window.
+    /// Each carries the emitted dose's stable syncIdentifier so the reconciler updates in place.
+    public var pendingDoses: [PendingDose] = []
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     public var autoAcknowledgeBasalAlerts: Bool = false
@@ -226,6 +231,14 @@ public struct TandemPumpManagerState: RawRepresentable {
             }
         } else {
             historyFetchedRanges = []
+        }
+
+        if let pendingData = rawValue["pendingDoses"] as? Data,
+           let decoded = try? PropertyListDecoder().decode([PendingDose].self, from: pendingData)
+        {
+            pendingDoses = decoded
+        } else {
+            pendingDoses = []
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -406,6 +419,10 @@ public struct TandemPumpManagerState: RawRepresentable {
             }
         }
 
+        if !pendingDoses.isEmpty, let pendingData = try? PropertyListEncoder().encode(pendingDoses) {
+            raw["pendingDoses"] = pendingData
+        }
+
         return raw
     }
 
@@ -420,6 +437,13 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// Whether a history bolus with this id is one the controlling app commanded (vs a pump-UI / Control-IQ bolus).
     public func isCommandedBolus(id: Int) -> Bool {
         commandedBolusIds.contains { $0.bolusId == id }
+    }
+
+    /// Record an optimistically-emitted dose as pending (awaiting history confirmation), pruning
+    /// entries older than `window` so the list stays bounded.
+    public mutating func recordPendingDose(_ dose: PendingDose, at date: Date = Date(), window: TimeInterval = .hours(24)) {
+        pendingDoses.removeAll { date.timeIntervalSince($0.requestedAt) > window }
+        pendingDoses.append(dose)
     }
 
     public var showPumpTimeSyncWarning: Bool {
