@@ -34,6 +34,12 @@ extension TandemPumpManager {
     /// ≈DIA back on its own. See live_test_notes.md.
     private var historyDeepFetchWindow: TimeInterval { .hours(6) }
 
+    /// Total lookback for the initial cooperative backfill. Phase 1 covers `historyDeepFetchWindow`
+    /// (≈DIA, IOB-relevant); phase 2 continues in the background to this depth to give retrospective
+    /// analysis (therapy-setting tuning) a fuller picture. Purely a fetch/log depth — the older data
+    /// only reaches DoseStore once the full emit lands (Part D). 24h ≈ 68 steps at ~90 entries/hr.
+    private var historyBackfillWindow: TimeInterval { .hours(24) }
+
     /// Routes an incoming HistoryLogStreamResponse (delivered on the CB delegate queue) to the
     /// in-flight fetch session's collector. No-op when no fetch is active.
     func handleHistoryLogStream(_ response: HistoryLogStreamResponse) {
@@ -55,15 +61,20 @@ extension TandemPumpManager {
             historyLogger.info("[HISTORY-EMIT] began commanded-bolus tracking at \(state.commandedTrackingStartedAt!); only pump-UI boluses at/after this time are emitted")
         }
 
-        // First run (no persisted ranges): kick off a cooperative deep fetch that steps backward to
-        // the DIA window one chunk per command-queue job, yielding the queue between chunks. Later
-        // runs resume with a small single-job incremental fetch of entries newer than the cursor.
+        // First run (no persisted ranges): kick off a cooperative backfill that steps backward one
+        // chunk per command-queue job, yielding the queue between chunks. Two phases: phase 1 to the
+        // DIA window (IOB-relevant), phase 2 continuing in the background to the 24h backfill depth.
+        // Later runs resume with a small single-job incremental fetch of entries newer than the cursor.
         if state.historyFetchedRanges.isEmpty {
             guard !deepBackfillInProgress else {
                 historyLogger.debug("[HISTORY-DEEP] deep fetch already in progress; skipping")
                 return
             }
-            startCooperativeDeepFetch(targetDate: Date().addingTimeInterval(-historyDeepFetchWindow))
+            let now = Date()
+            startCooperativeDeepFetch(
+                diaBoundary: now.addingTimeInterval(-historyDeepFetchWindow),
+                backfillTarget: now.addingTimeInterval(-historyBackfillWindow)
+            )
             return
         }
 
@@ -106,18 +117,21 @@ extension TandemPumpManager {
         }
     }
 
-    /// Kick off the cooperative deep fetch: step backward to `targetDate`, one chunk per command-queue
-    /// job, re-enqueuing each next step via `ensureConnected` so any therapy command or real-time
-    /// incremental fetch runs first. Never holds the command queue for the whole fetch.
-    private func startCooperativeDeepFetch(targetDate: Date) {
+    /// Kick off the cooperative two-phase backfill: step backward one chunk per command-queue job,
+    /// re-enqueuing each next step via `ensureConnected` so any therapy command or real-time
+    /// incremental fetch runs first. Phase 1 covers to `diaBoundary` (IOB-relevant); phase 2 continues
+    /// in the background to `backfillTarget` (≈24h). Never holds the command queue for the whole fetch.
+    private func startCooperativeDeepFetch(diaBoundary: Date, backfillTarget: Date) {
         deepBackfillInProgress = true
-        historyLogger.info("[HISTORY-DEEP] starting cooperative deep fetch, target back to \(targetDate) (yields the command queue between chunks)")
-        stepDeepFetch(endingAt: nil, targetDate: targetDate, stepIndex: 0)
+        historyLogger.info("[HISTORY-DEEP] starting cooperative backfill: phase 1 to DIA \(diaBoundary), phase 2 to \(backfillTarget) (yields the command queue between chunks)")
+        stepDeepFetch(endingAt: nil, diaBoundary: diaBoundary, backfillTarget: backfillTarget, phase1Reached: false, stepIndex: 0)
     }
 
     /// One cooperative step: fetch a single chunk ending at `endingAt` (nil = pump's newest), process
-    /// + emit + record it, then either finish or re-enqueue the next step one chunk further back.
-    private func stepDeepFetch(endingAt: UInt32?, targetDate: Date, stepIndex: Int) {
+    /// + emit + record it, then either finish (reached `backfillTarget` or start of history) or
+    /// re-enqueue the next step one chunk further back. Logs a milestone the first time it crosses
+    /// `diaBoundary` (phase 1 → phase 2), so IOB-relevant coverage is visible in the logs.
+    private func stepDeepFetch(endingAt: UInt32?, diaBoundary: Date, backfillTarget: Date, phase1Reached: Bool, stepIndex: Int) {
         guard stepIndex < historyDeepMaxSteps else {
             historyLogger.warning("[HISTORY-DEEP] hit max step cap (\(historyDeepMaxSteps)); stopping backfill")
             deepBackfillInProgress = false
@@ -168,18 +182,26 @@ extension TandemPumpManager {
             let oldest = logs.map { Dates.fromJan12008EpochSecondsToDate(TimeInterval($0.pumpTimeSec)) }.min()!
             self.historyLogger.info("[HISTORY-DEEP] step \(stepIndex): \(logs.count) entries seq \(minSeq)...\(maxSeq) in \(String(format: "%.1f", elapsed))s, oldest=\(oldest)")
 
-            if oldest <= targetDate {
-                self.historyLogger.info("[HISTORY-DEEP] cooperative deep fetch DONE at step \(stepIndex): reached target \(targetDate)")
+            // Phase-1 milestone: the first step whose oldest entry reaches the DIA window. IOB-relevant
+            // coverage is complete here; everything further back is background retrospective data.
+            var reachedPhase1 = phase1Reached
+            if !reachedPhase1, oldest <= diaBoundary {
+                reachedPhase1 = true
+                self.historyLogger.info("[HISTORY-DEEP] phase 1 (DIA) reached at step \(stepIndex); continuing background backfill to \(backfillTarget)")
+            }
+
+            if oldest <= backfillTarget {
+                self.historyLogger.info("[HISTORY-DEEP] cooperative backfill DONE at step \(stepIndex): reached target \(backfillTarget)")
                 self.deepBackfillInProgress = false
                 return
             }
             if minSeq == 0 {
-                self.historyLogger.info("[HISTORY-DEEP] cooperative deep fetch DONE: reached start of pump history (seq 0)")
+                self.historyLogger.info("[HISTORY-DEEP] cooperative backfill DONE: reached start of pump history (seq 0)")
                 self.deepBackfillInProgress = false
                 return
             }
 
-            self.stepDeepFetch(endingAt: minSeq &- 1, targetDate: targetDate, stepIndex: stepIndex + 1)
+            self.stepDeepFetch(endingAt: minSeq &- 1, diaBoundary: diaBoundary, backfillTarget: backfillTarget, phase1Reached: reachedPhase1, stepIndex: stepIndex + 1)
         }
     }
 
