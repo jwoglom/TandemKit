@@ -187,7 +187,7 @@ public class UnfinalizedDose {
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
-                deliveredUnits: isMutable ? nil : roundBasalRate(value * (duration / .hours(1))),
+                deliveredUnits: isMutable ? nil : value * (duration / .hours(1)),
                 insulinType: insulinType,
                 automatic: automatic,
                 isMutable: isMutable
