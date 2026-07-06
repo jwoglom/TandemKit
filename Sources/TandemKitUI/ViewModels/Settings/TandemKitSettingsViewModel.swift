@@ -68,7 +68,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var isConnected: Bool = false
     @Published var isRefreshing: Bool = false
-    @Published var useSilentMode: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
@@ -125,7 +124,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openDebug = openDebug
         self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
-        useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -358,11 +356,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
         pumpManager?.configureAutoAcknowledgeBasalAlerts(enabled)
         autoAcknowledgeBasalAlerts = enabled
-    }
-
-    func setSilentMode(_ enabled: Bool) {
-        pumpManager?.configureSilentMode(enabled)
-        useSilentMode = enabled
     }
 
     func playSound() {

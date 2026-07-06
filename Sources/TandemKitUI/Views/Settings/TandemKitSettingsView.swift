@@ -476,12 +476,6 @@ struct TandemKitSettingsView: View {
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { viewModel.useSilentMode },
-                    set: { viewModel.setSilentMode($0) }
-                )) {
-                    Text("Silent Tones", comment: "Label for silent tones")
-                }
                 Button(String(localized: "Share Tandem pump logs", comment: "TandemKit share logs")) {
                     self.isSharePresented = true
                 }
