@@ -163,10 +163,25 @@ extension TandemPumpManager {
         }
     }
 
+    static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)
+
+    /// Defer to event-driven bolus tracking only while the bolus should still be delivering —
+    /// a bolusChange event lost to a disconnect is never replayed, so sync must reconcile if past the grace time.
+    func shouldDeferBolusSync(at date: Date = .now) -> Bool {
+        guard let bolusDose = state.bolusDose else {
+            return false
+        }
+        return date < bolusDose.estimatedEndDate.addingTimeInterval(Self.bolusSyncReconcileGrace)
+    }
+
     func fetchBolusStatus(fromSync: Bool) {
-        if fromSync, state.bolusDose != nil {
+        if fromSync, shouldDeferBolusSync() {
             logger.warning("Skip bolus sync during bolus...")
             return
+        }
+
+        if fromSync, let bolusDose = state.bolusDose {
+            logger.warning("Bolus \(bolusDose.bolusId ?? -1) past estimated end; reconciling stale bolus state")
         }
 
         guard let response = bluetooth.write(
