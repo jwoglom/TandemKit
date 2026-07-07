@@ -154,7 +154,7 @@ struct NotificationRow: View {
             // Notification content
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.type.title)
+                    Text(item.categoryTitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text(item.displayTitle)
