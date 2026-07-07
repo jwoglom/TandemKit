@@ -308,6 +308,12 @@ public struct NotificationItem: Identifiable, Hashable {
     public var canDismiss: Bool {
         type.dismissType != nil
     }
+
+    /// The notification's category paired with its underlying enum name,
+    /// e.g. "Alarm: OCCLUSION_ALARM" or "Alert: LOW_INSULIN_ALERT".
+    public var categoryTitle: String {
+        "\(type.title): \(name)"
+    }
 }
 
 public extension NotificationBundle {
