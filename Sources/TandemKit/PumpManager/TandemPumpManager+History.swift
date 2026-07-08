@@ -379,8 +379,26 @@ extension TandemPumpManager {
             .map { "\($0.deliveredUnits ?? $0.programmedUnits)U@\($0.startDate)" }
             .joined(separator: ", ")
         historyLogger.info(
-            "[HISTORY-EMIT] reconciled \(finalizations.count) commanded bolus(es) from history (replacePendingEvents: false): \(summary)"
+            "[HISTORY-EMIT] reconciled \(finalizations.count) commanded bolus(es) from history (replacePendingEvents: true): \(summary)"
         )
-        emitPumpEvents(finalizations, replacePendingEvents: false)
+
+        // Emit with replacePendingEvents: TRUE so each finalization REPLACES its pending *mutable*
+        // optimistic dose in DoseStore (mutable → immutable) — the same mechanism the real-time finalize
+        // uses (`fetchBolusStatus` → `emitPumpEvents(events)`, which defaults to true). With
+        // replacePendingEvents: false the mutable dose was never replaced: the immutable finalization
+        // did not take, the stale mutable lingered, and the next bolus's replacePendingEvents: true
+        // sweep deleted it — a disconnected bolus was lost from IOB (2026-07-07 live: 2.0 U vanished).
+        //
+        // replacePendingEvents: true drops any *mutable* dose NOT in the batch, so — exactly like the
+        // real-time path — include the active temp basal (`getActivePumpEvents`) and any still-in-progress
+        // bolus (`state.bolusDose`, non-nil only if it isn't the one we just finalized+cleared above) so
+        // they are preserved; only the finalized boluses transition to immutable.
+        var events = getActivePumpEvents()
+        if let inProgress = state.bolusDose {
+            let entry = inProgress.toDoseEntry(isMutable: true)
+            events.append(NewPumpEvent.bolus(dose: entry, units: entry.programmedUnits, date: entry.startDate))
+        }
+        events.append(contentsOf: finalizations)
+        emitPumpEvents(events, replacePendingEvents: true)
     }
 }
