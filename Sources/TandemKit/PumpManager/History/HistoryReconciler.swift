@@ -29,7 +29,9 @@ class HistoryReconciler {
             if let matchIndex = remainingPending.firstIndex(where: { matches($0, to: dose) }) {
                 let syncId = remainingPending[matchIndex].syncIdentifier
                 remainingPending.remove(at: matchIndex)
-                // Create new dose with syncIdentifier
+                // Rebuild the dose carrying the pending (optimistic) syncIdentifier so DoseStore
+                // updates that dose in place rather than adding a second one. Preserve insulinType /
+                // automatic and mark it finalized (isMutable: false).
                 let updatedDose = DoseEntry(
                     type: dose.type,
                     startDate: dose.startDate,
@@ -39,12 +41,18 @@ class HistoryReconciler {
                     deliveredUnits: dose.deliveredUnits,
                     description: dose.description,
                     syncIdentifier: syncId,
-                    scheduledBasalRate: dose.scheduledBasalRate
+                    scheduledBasalRate: dose.scheduledBasalRate,
+                    insulinType: dose.insulinType,
+                    automatic: dose.automatic,
+                    isMutable: false
                 )
+                // CRITICAL: NewPumpEvent.init overwrites dose.syncIdentifier with raw.hexadecimalString,
+                // so the identity must come from `raw`. Use the bytes that hex back to the pending
+                // syncIdentifier; fall back to the history raw only if that syncId isn't valid hex.
                 let updatedEvent = NewPumpEvent(
                     date: event.date,
                     dose: updatedDose,
-                    raw: event.raw,
+                    raw: Data(hexadecimalString: syncId) ?? event.raw,
                     title: event.title,
                     type: event.type
                 )

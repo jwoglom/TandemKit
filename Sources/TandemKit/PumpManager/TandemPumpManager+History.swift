@@ -281,6 +281,7 @@ extension TandemPumpManager {
         }
 
         emitPumpUIBoluses(events)
+        reconcilePendingCommandedBoluses(events)
     }
 
     /// Emit ONLY completed pump-UI boluses (Quick Bolus / Control-IQ) to DoseStore.
@@ -320,5 +321,66 @@ extension TandemPumpManager {
             "[HISTORY-EMIT] emitting \(pumpUIBolusEvents.count) completed pump-UI bolus dose(s) to DoseStore (replacePendingEvents: false): \(summary)"
         )
         emitPumpEvents(pumpUIBolusEvents, replacePendingEvents: false)
+    }
+
+    /// D1b: finalize app-commanded boluses that are still pending — i.e. whose real-time completion
+    /// was missed (app backgrounded/killed or BT dropped at completion) — from the pump's history
+    /// ledger. Each pending optimistic dose is matched to a completed commanded bolus in history and
+    /// re-emitted carrying the pending's *stable* syncIdentifier, so DoseStore updates the dose in
+    /// place: idempotent if the real-time path already finalized it, and it re-adds it if the
+    /// optimistic mutable was purged (the lost-bolus case). Unmatched commanded boluses are NOT
+    /// emitted — the optimistic path owns those.
+    private func reconcilePendingCommandedBoluses(_ events: [NewPumpEvent]) {
+        guard !state.pendingDoses.isEmpty else { return }
+
+        // D1b scope: completed, app-commanded boluses only. Pump-UI boluses are handled by
+        // `emitPumpUIBoluses`; temp basals are a later slice (D3). A bolus pending dose can't match a
+        // non-bolus event (the reconciler checks type), so filtering here is safe for future dose types.
+        let commandedBoluses = events.filter { event in
+            guard let dose = event.dose else { return false }
+            return dose.type == .bolus && !dose.wasProgrammedByPumpUI && dose.deliveredUnits != nil
+        }
+        guard !commandedBoluses.isEmpty else { return }
+
+        let before = state.pendingDoses
+        let (reconciled, stillPending, _) = HistoryReconciler().reconcile(
+            pendingDoses: before,
+            historyEvents: commandedBoluses,
+            now: Date()
+        )
+        let matchedSyncIds = Set(before.map(\.syncIdentifier)).subtracting(stillPending.map(\.syncIdentifier))
+        guard !matchedSyncIds.isEmpty else { return }
+        state.pendingDoses = stillPending
+
+        // The reconciled events that now carry a matched pending syncIdentifier are the finalizations.
+        let finalizations = reconciled.filter { event in
+            guard let syncId = event.dose?.syncIdentifier else { return false }
+            return matchedSyncIds.contains(syncId)
+        }
+
+        // If the currently-stuck in-progress bolus is one we just finalized from history, clear its
+        // state so the "starting bolus" spinner recovers. This is the ~fetch-cadence path; D1c makes
+        // it prompt (uncertain-delivery alert + recover-on-reconnect).
+        if let stuck = state.bolusDose,
+           before.contains(where: { matchedSyncIds.contains($0.syncIdentifier)
+               && abs($0.dose.startDate.timeIntervalSince(stuck.startDate)) < 2 })
+        {
+            telemetryScheduler.cancelAll()
+            bolusProgressReport = nil
+            state.bolusDose = nil
+            state.bolusState = .noBolus
+            historyLogger.info("[HISTORY-EMIT] cleared stuck in-progress bolus (finalized from history)")
+        }
+
+        notifyDelegateStateUpdated()
+
+        guard !finalizations.isEmpty else { return }
+        let summary = finalizations.compactMap(\.dose)
+            .map { "\($0.deliveredUnits ?? $0.programmedUnits)U@\($0.startDate)" }
+            .joined(separator: ", ")
+        historyLogger.info(
+            "[HISTORY-EMIT] reconciled \(finalizations.count) commanded bolus(es) from history (replacePendingEvents: false): \(summary)"
+        )
+        emitPumpEvents(finalizations, replacePendingEvents: false)
     }
 }
