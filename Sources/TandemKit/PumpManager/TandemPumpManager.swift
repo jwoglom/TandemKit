@@ -60,6 +60,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// (real-time) fetches still run between steps.
     internal var deepBackfillInProgress = false
 
+    /// True once we've pushed a "delivery uncertain" status update for the current bolus, so the 1 Hz
+    /// bolus telemetry tick surfaces the overdue transition exactly once instead of every second. Reset
+    /// when a new bolus starts.
+    private var didNotifyBolusDeliveryUncertain = false
+
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.
     let watchdogQueue = DispatchQueue(label: "com.jwoglom.TandemKit.commandWatchdog")
@@ -69,8 +74,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
     // so a command always self-completes via the lower-level bounded waits well before this fires;
     // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
-    // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
-    // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
+    // (Related: a commanded bolus that goes overdue without confirmation is now surfaced to Loop as
+    // uncertain delivery — see `isBolusDeliveryUncertain` (D1c). The watchdog itself still reports a
+    // clean failure; unifying the two is a possible follow-up.) Exposed (internal) so tests can
+    // override it with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
 
     @objc func appMovedToBackground() {
@@ -101,8 +108,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
             basalDeliveryState: state.basalDeliveryState,
             bolusState: state.bolusState,
             insulinType: state.insulinType,
-            deliveryIsUncertain: false
+            deliveryIsUncertain: isBolusDeliveryUncertain(from: state)
         )
+    }
+
+    /// A commanded bolus is "delivery-uncertain" once it is overdue: still tracked (`bolusDose != nil`)
+    /// past its estimated end plus the reconcile grace. That means the real-time completion was missed
+    /// (comms dropped mid-bolus, app killed, …) and we can't yet confirm what was delivered — so Loop
+    /// should treat delivery as uncertain and alert. Clears automatically once the bolus is finalized
+    /// (real-time on reconnect via the bolus-sync grace, or from history via D1b) and `bolusDose` goes
+    /// nil. Reuses the same grace that gates stale-bolus reconciliation, so the two stay consistent.
+    static func isBolusDeliveryUncertain(from state: TandemPumpManagerState, at date: Date = .now) -> Bool {
+        guard let bolusDose = state.bolusDose else { return false }
+        return date >= bolusDose.estimatedEndDate.addingTimeInterval(bolusSyncReconcileGrace)
     }
 
     public init(state: TandemPumpManagerState) {
@@ -219,6 +237,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
+    }
+
+    /// Push a status update the first time the current bolus crosses into delivery-uncertain (overdue,
+    /// still unconfirmed). Driven by the 1 Hz bolus telemetry tick, which keeps firing locally even
+    /// while comms are down — so Loop is alerted promptly during the outage rather than waiting for the
+    /// next loop cycle. Idempotent per bolus via `didNotifyBolusDeliveryUncertain`; the cleared state is
+    /// pushed by the normal finalize/reconcile paths when `bolusDose` goes nil.
+    internal func notifyIfBolusDeliveryBecameUncertain() {
+        guard TandemPumpManager.isBolusDeliveryUncertain(from: state), !didNotifyBolusDeliveryUncertain else {
+            return
+        }
+        didNotifyBolusDeliveryUncertain = true
+        logger.warning("Bolus delivery uncertain: no confirmation past estimated end + grace; surfacing to Loop")
+        notifyDelegateStateUpdated()
     }
 
     // MARK: - Status Observers
@@ -439,6 +471,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             )
 
             self.state.bolusDose = dose
+            // Fresh bolus: re-arm the one-shot "delivery uncertain" push for this dose.
+            self.didNotifyBolusDeliveryUncertain = false
             // Record the pump-assigned bolusId so history reconciliation can tell this
             // app-commanded bolus apart from a pump-UI (Quick Bolus / Control-IQ) bolus.
             self.state.recordCommandedBolus(id: permissionResponse.bolusId)

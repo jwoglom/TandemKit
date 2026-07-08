@@ -247,6 +247,10 @@ extension TandemPumpManager {
             }
         }
 
+        // D4a (read-only): reconstruct + log the pump's basal timeline from this fetch's 279 samples,
+        // so we can eyeball it against Loop's schedule and the DailyBasal odometer before D4b emits it.
+        logBasalDeliverySegments(from: logs)
+
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
         // emitted below (see the emit block at the end of this method).
         let reconciler = HistoryTimestampReconciler()
@@ -321,6 +325,65 @@ extension TandemPumpManager {
             "[HISTORY-EMIT] emitting \(pumpUIBolusEvents.count) completed pump-UI bolus dose(s) to DoseStore (replacePendingEvents: false): \(summary)"
         )
         emitPumpEvents(pumpUIBolusEvents, replacePendingEvents: false)
+    }
+
+    // MARK: - D4a: basal timeline (read-only)
+
+    /// Human-readable label for a 279 `commandedRateSource` (pumpX2 #77): 0 Suspended, 1 Profile,
+    /// 2 Temp Rate, 3 Algorithm (= Control-IQ), 4 Temp Rate + Algorithm.
+    static func basalSourceLabel(_ source: Int) -> String {
+        switch source {
+        case 0: return "suspended"
+        case 1: return "profile"
+        case 2: return "temp"
+        case 3: return "algorithm(CIQ)"
+        case 4: return "temp+algorithm"
+        default: return "unknown(\(source))"
+        }
+    }
+
+    /// The LoopKit dose type a 279 segment would map to in D4b: a suspend for source 0, plain scheduled
+    /// `basal` for the profile rate, and `tempBasal` for any deviation (temp / Control-IQ). Read-only
+    /// classification for now — foreshadows the emit decision (whether profile stretches are emitted at
+    /// all, or left to LoopKit's scheduled-basal assumption).
+    static func impliedBasalDoseType(_ source: Int) -> String {
+        switch source {
+        case 0: return "suspend"
+        case 1: return "basal(scheduled)"
+        default: return "tempBasal"
+        }
+    }
+
+    /// D4a (read-only): reconstruct the pump's basal timeline from the BasalDelivery (279) samples in
+    /// this fetch and log each segment. The pump emits 279 every ~5 min and on rate changes, each
+    /// carrying the effective `commandedRate` (mU/hr) and its source; pairing consecutive samples gives
+    /// the rate that was actually running over each interval — the authoritative delivered-basal signal
+    /// (including Control-IQ) that D4b will emit to DoseStore. Nothing is emitted here.
+    private func logBasalDeliverySegments(from logs: [HistoryLog]) {
+        let samples = logs
+            .compactMap { $0 as? BasalDeliveryHistoryLog }
+            .sorted { $0.sequenceNum < $1.sequenceNum }
+        guard !samples.isEmpty else { return }
+
+        for (index, sample) in samples.enumerated() {
+            let start = Dates.fromJan12008EpochSecondsToDate(TimeInterval(sample.pumpTimeSec))
+            let rate = Double(sample.commandedRate) / 1000.0 // mU/hr → U/hr
+            let source = Self.basalSourceLabel(sample.commandedRateSource)
+            let type = Self.impliedBasalDoseType(sample.commandedRateSource)
+
+            guard index + 1 < samples.count else {
+                historyLogger.info(
+                    "[HISTORY-BASAL-SEG] \(start) → (open) rate=\(rate)U/hr source=\(source) type=\(type) [ongoing]"
+                )
+                continue
+            }
+            let end = Dates.fromJan12008EpochSecondsToDate(TimeInterval(samples[index + 1].pumpTimeSec))
+            let durationSec = end.timeIntervalSince(start)
+            let deliveredUnits = rate * durationSec / 3600.0
+            historyLogger.info(
+                "[HISTORY-BASAL-SEG] \(start) → \(end) dur=\(Int(durationSec))s rate=\(rate)U/hr source=\(source) type=\(type) delivered≈\(String(format: "%.4f", deliveredUnits))U"
+            )
+        }
     }
 
     /// D1b: finalize app-commanded boluses that are still pending — i.e. whose real-time completion

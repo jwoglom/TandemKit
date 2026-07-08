@@ -221,6 +221,9 @@ extension TandemPumpManager {
             telemetryScheduler.cancelAll()
             telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) {
                 self.bolusProgressReport?.notify()
+                // This local tick keeps firing even if comms drop mid-bolus, so use it to surface an
+                // overdue, unconfirmed bolus to Loop as uncertain delivery promptly (D1c).
+                self.notifyIfBolusDeliveryBecameUncertain()
             }
             return
         }
