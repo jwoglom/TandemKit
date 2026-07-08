@@ -8,6 +8,7 @@ struct TandemKitFillTubingView: View {
 
     @State private var didLoad = false
     @State private var actionSheet: TubingActionSheet?
+    @State private var isConfirmingFillTubing = false
 
     var body: some View {
         WizardStepContainer(
@@ -35,6 +36,20 @@ struct TandemKitFillTubingView: View {
             case .resume: return resumeOperationSheet
             case .suspend: return suspendInsulinSheet
             }
+        }
+        .alert(
+            String(localized: "Fill Tubing", comment: "Title for the fill tubing disconnect confirmation alert"),
+            isPresented: $isConfirmingFillTubing
+        ) {
+            Button(String(localized: "Cancel", comment: "Cancel button"), role: .cancel) { }
+            Button(String(localized: "Begin Fill Tubing", comment: "Confirm button to begin filling tubing")) {
+                viewModel.enterFillTubingMode()
+            }
+        } message: {
+            Text(
+                "Have you disconnected the pump from your body?",
+                comment: "Fill tubing safety confirmation asking the user to confirm the pump is disconnected from their body"
+            )
         }
         .task {
             guard !didLoad else { return }
@@ -84,7 +99,7 @@ struct TandemKitFillTubingView: View {
                     set: { _ in }
                 )
             ) {
-                viewModel.enterFillTubingMode()
+                isConfirmingFillTubing = true
             }
         case .filling:
             ZStack {

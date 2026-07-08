@@ -326,6 +326,14 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == FillCannulaStateStreamResponse.props.characteristic,
+           data[2] == FillCannulaStateStreamResponse.props.opCode
+        {
+            let response = FillCannulaStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.fillCannulaStateStream.send(response)
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {
