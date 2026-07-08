@@ -245,6 +245,15 @@ class HistoryToDoseMapper {
         "bolus-\(bolusId)"
     }
 
+    /// Pump bolus id encoded in a mapped bolus dose's `description`. Paired with the
+    /// `description: "Bolus #\(bolusId)"` format this mapper produces; `HistoryReconciler` uses it to
+    /// match a history bolus to a pending commanded bolus by the pump's unique id.
+    static let bolusDescriptionPrefix = "Bolus #"
+    static func bolusId(fromDescription description: String?) -> Int? {
+        guard let description, description.hasPrefix(bolusDescriptionPrefix) else { return nil }
+        return Int(description.dropFirst(bolusDescriptionPrefix.count))
+    }
+
     /// Round a pump-reported insulin amount to the pump's native milliunit reporting resolution,
     /// stripping Float32 representation noise (e.g. `Float(0.9)` = 0.89999997) without distorting
     /// genuine partial deliveries (e.g. a cancelled bolus of 1.041 U). Round-to-**nearest** — NOT

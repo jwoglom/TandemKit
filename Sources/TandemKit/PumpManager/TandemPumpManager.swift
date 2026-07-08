@@ -449,7 +449,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // the real-time completion is ever missed. Inert until the reconciler is wired in.
             let bolusEvent = NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)
             if let emittedDose = bolusEvent.dose, let syncId = emittedDose.syncIdentifier {
-                self.state.recordPendingDose(PendingDose(syncIdentifier: syncId, dose: emittedDose, requestedAt: Date()))
+                self.state.recordPendingDose(PendingDose(
+                    syncIdentifier: syncId,
+                    dose: emittedDose,
+                    requestedAt: Date(),
+                    bolusId: permissionResponse.bolusId
+                ))
             }
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents([bolusEvent], replacePendingEvents: false)
