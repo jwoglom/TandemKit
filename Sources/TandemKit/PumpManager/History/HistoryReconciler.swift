@@ -30,17 +30,17 @@ class HistoryReconciler {
                 let pending = remainingPending[matchIndex]
                 let syncId = pending.syncIdentifier
                 remainingPending.remove(at: matchIndex)
-                // Finalize the PENDING (optimistic) dose in place: keep its identity fields — crucially
+                // Finalize the pending (optimistic) dose in place: keep its identity fields — crucially
                 // `startDate` — and overlay only the pump-authoritative delivered amount from history.
                 //
                 // Why NOT the history event's startDate: the syncIdentifier is derived from the
-                // optimistic units + startDate (D1a), and LoopKit keys/reconciles doses by
-                // syncIdentifier. The pump's actual bolus-start time lags the command time by BLE/queue
-                // latency (~21 s observed live), so using it makes the finalized dose's startDate
-                // contradict its own syncId. LoopKit then fails to convert the optimistic *mutable*
-                // dose to immutable in place; it stays mutable and gets swept by the next bolus's
-                // `replacePendingEvents: true` — the recovered bolus vanishes from IOB entirely This mirrors the
-                // normal connected finalize, which reuses the optimistic UnfinalizedDose.startDate.
+                // optimistic units + startDate, and LoopKit keys/reconciles doses by syncIdentifier. The
+                // pump's actual bolus-start time lags the command time by BLE/queue latency (~20 s), so using it
+                // makes the finalized dose's startDate contradict its own syncId. LoopKit then fails to
+                // convert the optimistic *mutable* dose to immutable in place; it stays mutable and gets
+                // swept by the next bolus's `replacePendingEvents: true`, so the recovered bolus vanishes
+                // from IOB entirely. This mirrors the normal connected finalize, which reuses the
+                // optimistic UnfinalizedDose.startDate.
                 let updatedDose = DoseEntry(
                     type: pending.dose.type,
                     startDate: pending.dose.startDate,

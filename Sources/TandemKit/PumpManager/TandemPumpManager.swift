@@ -74,10 +74,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
     // so a command always self-completes via the lower-level bounded waits well before this fires;
     // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
-    // (Related: a commanded bolus that goes overdue without confirmation is now surfaced to Loop as
-    // uncertain delivery — see `isBolusDeliveryUncertain` (D1c). The watchdog itself still reports a
-    // clean failure; unifying the two is a possible follow-up.) Exposed (internal) so tests can
-    // override it with a short value.
+    // (Related: a commanded bolus that goes overdue without confirmation is surfaced to Loop as
+    // uncertain delivery — see `isBolusDeliveryUncertain`. The watchdog itself still reports a clean
+    // failure; unifying the two is a possible follow-up.) Exposed (internal) so tests can override it
+    // with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
 
     @objc func appMovedToBackground() {
@@ -116,8 +116,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// past its estimated end plus the reconcile grace. That means the real-time completion was missed
     /// (comms dropped mid-bolus, app killed, …) and we can't yet confirm what was delivered — so Loop
     /// should treat delivery as uncertain and alert. Clears automatically once the bolus is finalized
-    /// (real-time on reconnect via the bolus-sync grace, or from history via D1b) and `bolusDose` goes
-    /// nil. Reuses the same grace that gates stale-bolus reconciliation, so the two stay consistent.
+    /// (real-time on reconnect via the bolus-sync grace, or from history reconciliation) and
+    /// `bolusDose` goes nil. Reuses the same grace that gates stale-bolus reconciliation, so the two
+    /// stay consistent.
     static func isBolusDeliveryUncertain(from state: TandemPumpManagerState, at date: Date = .now) -> Bool {
         guard let bolusDose = state.bolusDose else { return false }
         return date >= bolusDose.estimatedEndDate.addingTimeInterval(bolusSyncReconcileGrace)
@@ -480,8 +481,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.lastReconciliation = Date.now
 
             // Track this optimistically-emitted bolus as pending, keyed by the emitted dose's stable
-            // syncIdentifier, so history reconciliation (D1b) can finalize it from the pump ledger if
-            // the real-time completion is ever missed. Inert until the reconciler is wired in.
+            // syncIdentifier, so history reconciliation can finalize it from the pump ledger if
+            // the real-time completion is ever missed.
             let bolusEvent = NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)
             if let emittedDose = bolusEvent.dose, let syncId = emittedDose.syncIdentifier {
                 self.state.recordPendingDose(PendingDose(

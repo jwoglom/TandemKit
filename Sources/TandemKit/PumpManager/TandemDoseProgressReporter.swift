@@ -45,7 +45,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             // syncIdentifier is STABLE across the optimistic → finalized (→ history-reconciled) emits
             // for the same bolus. deliveredUnits carries the actual amount (that's what drives IOB);
             // keeping it out of the identity prevents a partial/cancelled bolus from being counted
-            // twice (optimistic under one id, finalized under another). See D1a in the pipeline status.
+            // twice (optimistic under one id, finalized under another).
             units: total,
             date: dose.startDate
         )

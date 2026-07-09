@@ -3,7 +3,7 @@
 //  TandemKit
 //
 //  History-fetch slice. Fetches pump history, LOGS it (raw entries + the mapped DoseEntries),
-//  and emits *pump-UI* boluses (Quick Bolus / Control-IQ) to DoseStore — Part B.
+//  and emits *pump-UI* boluses (Quick Bolus / Control-IQ) to DoseStore.
 //
 //  A pump-UI bolus is one the driver never commanded, so it has NO optimistic counterpart in
 //  DoseStore; emitting it can't double-count a commanded dose, and it closes the over-delivery
@@ -37,7 +37,7 @@ extension TandemPumpManager {
     /// Total lookback for the initial cooperative backfill. Phase 1 covers `historyDeepFetchWindow`
     /// (≈DIA, IOB-relevant); phase 2 continues in the background to this depth to give retrospective
     /// analysis (therapy-setting tuning) a fuller picture. Purely a fetch/log depth — the older data
-    /// only reaches DoseStore once the full emit lands (Part D). 24h ≈ 68 steps at ~90 entries/hr.
+    /// only reaches DoseStore once the full emit lands. 24h ≈ 68 steps at ~90 entries/hr.
     private var historyBackfillWindow: TimeInterval { .hours(24) }
 
     /// Routes an incoming HistoryLogStreamResponse (delivered on the CB delegate queue) to the
@@ -247,8 +247,8 @@ extension TandemPumpManager {
             }
         }
 
-        // D4a (read-only): reconstruct + log the pump's basal timeline from this fetch's 279 samples,
-        // so we can eyeball it against Loop's schedule and the DailyBasal odometer before D4b emits it.
+        // Reconstruct + log the pump's basal timeline (read-only) from this fetch's 279 samples, so it
+        // can be checked against the basal schedule and the DailyBasal odometer before it's emitted.
         logBasalDeliverySegments(from: logs)
 
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
@@ -327,10 +327,10 @@ extension TandemPumpManager {
         emitPumpEvents(pumpUIBolusEvents, replacePendingEvents: false)
     }
 
-    // MARK: - D4a: basal timeline (read-only)
+    // MARK: - Basal timeline (read-only)
 
-    /// Human-readable label for a 279 `commandedRateSource` (pumpX2 #77): 0 Suspended, 1 Profile,
-    /// 2 Temp Rate, 3 Algorithm (= Control-IQ), 4 Temp Rate + Algorithm.
+    /// Human-readable label for a 279 `commandedRateSource`: 0 Suspended, 1 Profile, 2 Temp Rate,
+    /// 3 Algorithm (= Control-IQ), 4 Temp Rate + Algorithm.
     static func basalSourceLabel(_ source: Int) -> String {
         switch source {
         case 0: return "suspended"
@@ -342,7 +342,7 @@ extension TandemPumpManager {
         }
     }
 
-    /// The LoopKit dose type a 279 segment would map to in D4b: a suspend for source 0, plain scheduled
+    /// The LoopKit dose type a 279 segment would map to: a suspend for source 0, plain scheduled
     /// `basal` for the profile rate, and `tempBasal` for any deviation (temp / Control-IQ). Read-only
     /// classification for now — foreshadows the emit decision (whether profile stretches are emitted at
     /// all, or left to LoopKit's scheduled-basal assumption).
@@ -354,11 +354,11 @@ extension TandemPumpManager {
         }
     }
 
-    /// D4a (read-only): reconstruct the pump's basal timeline from the BasalDelivery (279) samples in
-    /// this fetch and log each segment. The pump emits 279 every ~5 min and on rate changes, each
-    /// carrying the effective `commandedRate` (mU/hr) and its source; pairing consecutive samples gives
-    /// the rate that was actually running over each interval — the authoritative delivered-basal signal
-    /// (including Control-IQ) that D4b will emit to DoseStore. Nothing is emitted here.
+    /// Reconstruct the pump's basal timeline (read-only) from the BasalDelivery (279) samples in this
+    /// fetch and log each segment. The pump emits 279 every ~5 min and on rate changes, each carrying
+    /// the effective `commandedRate` (mU/hr) and its source; pairing consecutive samples gives the rate
+    /// that was actually running over each interval — the authoritative delivered-basal signal
+    /// (including Control-IQ) that will later be emitted to DoseStore. Nothing is emitted here.
     private func logBasalDeliverySegments(from logs: [HistoryLog]) {
         let samples = logs
             .compactMap { $0 as? BasalDeliveryHistoryLog }
@@ -386,8 +386,8 @@ extension TandemPumpManager {
         }
     }
 
-    /// D1b: finalize app-commanded boluses that are still pending — i.e. whose real-time completion
-    /// was missed (app backgrounded/killed or BT dropped at completion) — from the pump's history
+    /// Finalize app-commanded boluses that are still pending — i.e. whose real-time completion was
+    /// missed (app backgrounded/killed or BT dropped at completion) — from the pump's history
     /// ledger. Each pending optimistic dose is matched to a completed commanded bolus in history and
     /// re-emitted carrying the pending's *stable* syncIdentifier, so DoseStore updates the dose in
     /// place: idempotent if the real-time path already finalized it, and it re-adds it if the
@@ -396,8 +396,8 @@ extension TandemPumpManager {
     private func reconcilePendingCommandedBoluses(_ events: [NewPumpEvent]) {
         guard !state.pendingDoses.isEmpty else { return }
 
-        // D1b scope: completed, app-commanded boluses only. Pump-UI boluses are handled by
-        // `emitPumpUIBoluses`; temp basals are a later slice (D3). A bolus pending dose can't match a
+        // Scope: completed, app-commanded boluses only. Pump-UI boluses are handled by
+        // `emitPumpUIBoluses`; temp basals are a later step. A bolus pending dose can't match a
         // non-bolus event (the reconciler checks type), so filtering here is safe for future dose types.
         let commandedBoluses = events.filter { event in
             guard let dose = event.dose else { return false }
@@ -422,8 +422,8 @@ extension TandemPumpManager {
         }
 
         // If the currently-stuck in-progress bolus is one we just finalized from history, clear its
-        // state so the "starting bolus" spinner recovers. This is the ~fetch-cadence path; D1c makes
-        // it prompt (uncertain-delivery alert + recover-on-reconnect).
+        // state so the "starting bolus" spinner recovers. This runs at fetch cadence; the bolus-sync
+        // grace and the uncertain-delivery flag surface it sooner.
         if let stuck = state.bolusDose,
            before.contains(where: { matchedSyncIds.contains($0.syncIdentifier)
                && abs($0.dose.startDate.timeIntervalSince(stuck.startDate)) < 2 })
@@ -448,9 +448,9 @@ extension TandemPumpManager {
         // Emit with replacePendingEvents: TRUE so each finalization REPLACES its pending *mutable*
         // optimistic dose in DoseStore (mutable → immutable) — the same mechanism the real-time finalize
         // uses (`fetchBolusStatus` → `emitPumpEvents(events)`, which defaults to true). With
-        // replacePendingEvents: false the mutable dose was never replaced: the immutable finalization
-        // did not take, the stale mutable lingered, and the next bolus's replacePendingEvents: true
-        // sweep deleted it — a disconnected bolus was lost from IOB (2026-07-07 live: 2.0 U vanished).
+        // replacePendingEvents: false the mutable dose is never replaced: the immutable finalization
+        // does not take, the stale mutable lingers, and the next bolus's replacePendingEvents: true
+        // sweep deletes it — the disconnected bolus is lost from IOB.
         //
         // replacePendingEvents: true drops any *mutable* dose NOT in the batch, so — exactly like the
         // real-time path — include the active temp basal (`getActivePumpEvents`) and any still-in-progress
