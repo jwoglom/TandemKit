@@ -355,6 +355,9 @@
         }
       }
     },
+    "Are you sure you want to resume insulin delivery? Your scheduled basal delivery will restart." : {
+
+    },
     "Are you sure you want to stop the CGM sensor session on your pump?" : {
       "comment" : "Message for stop CGM confirmation",
       "localizations" : {
@@ -365,6 +368,9 @@
           }
         }
       }
+    },
+    "Are you sure you want to suspend insulin delivery? No basal or bolus insulin will be delivered until you resume delivery." : {
+
     },
     "ARM BLE" : {
 
@@ -433,6 +439,9 @@
           }
         }
       }
+    },
+    "Begin Fill Tubing" : {
+
     },
     "Bolus" : {
 
@@ -758,6 +767,9 @@
         }
       }
     },
+    "Connect a CGM First" : {
+
+    },
     "Connect to existing session" : {
       "comment" : "Button to connect to existing G6 session",
       "localizations" : {
@@ -812,6 +824,9 @@
           }
         }
       }
+    },
+    "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again." : {
+
     },
     "Control-IQ pump algorithm enabled" : {
       "comment" : "title for CIQ active notice",
@@ -1595,6 +1610,9 @@
           }
         }
       }
+    },
+    "Have you disconnected the pump from your body?" : {
+
     },
     "Hello, World!" : {
       "comment" : "A simple greeting.",
@@ -2703,6 +2721,9 @@
     "Resume" : {
 
     },
+    "Resume Delivery" : {
+
+    },
     "Resume insulin delivery" : {
       "comment" : "Button text",
       "localizations" : {
@@ -3203,6 +3224,9 @@
       }
     },
     "Suspend" : {
+
+    },
+    "Suspend Delivery" : {
 
     },
     "Suspend insulin delivery" : {
