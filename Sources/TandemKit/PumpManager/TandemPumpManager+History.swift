@@ -256,9 +256,12 @@ extension TandemPumpManager {
             }
         }
 
-        // Reconstruct + log the pump's basal timeline (read-only) from this fetch's 279 samples, so it
-        // can be checked against the basal schedule and the DailyBasal odometer before it's emitted.
-        logBasalDeliverySegments(from: logs)
+        // Reconstruct the pump's basal timeline from this fetch's 279 samples, then dry-run both the
+        // segments and the DoseStore events they'd become — read-only, nothing emitted yet. (Call
+        // `basalSegments` exactly once per fetch: it advances the cross-fetch cursor.)
+        let segments = basalSegments(from: logs)
+        logBasalDeliverySegments(segments)
+        logBasalDeliveryEvents(basalDeliveryEvents(from: segments))
 
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
         // emitted below (see the emit block at the end of this method).
@@ -401,10 +404,57 @@ extension TandemPumpManager {
         }
     }
 
+    /// Convert the reconstructed timeline into the DoseStore events the pump actually delivered. Only
+    /// CLOSED segments become events — each is an authoritative, immutable record of a past interval;
+    /// the still-open (current) segment stays covered by the optimistic path until the next sample
+    /// closes it. Profile → `.basal`, temp / Control-IQ → `.tempBasal`. Suspends (source 0) are owned by
+    /// the `PumpingSuspended`/`Resumed` history events, so they're skipped here.
+    private func basalDeliveryEvents(from segments: [BasalSegment]) -> [NewPumpEvent] {
+        segments.compactMap { segment in
+            guard let end = segment.end else { return nil } // open/current — leave to the optimistic path
+            let deliveredUnits = segment.rateUnitsPerHour * end.timeIntervalSince(segment.start) / 3600.0
+
+            switch segment.source {
+            case 0:
+                return nil // suspend — handled by the suspend/resume history events
+            case 1:
+                let dose = DoseEntry(
+                    type: .basal,
+                    startDate: segment.start,
+                    endDate: end,
+                    value: segment.rateUnitsPerHour,
+                    unit: .unitsPerHour,
+                    deliveredUnits: deliveredUnits,
+                    insulinType: state.insulinType
+                )
+                return NewPumpEvent.basal(dose: dose, date: segment.start)
+            default:
+                let dose = DoseEntry.tempBasal(
+                    absoluteUnit: segment.rateUnitsPerHour,
+                    duration: end.timeIntervalSince(segment.start),
+                    insulinType: state.insulinType,
+                    startDate: segment.start,
+                    endDate: end
+                )
+                return NewPumpEvent.tempBasal(dose: dose, date: segment.start)
+            }
+        }
+    }
+
+    /// Read-only dry run: log the exact `NewPumpEvent`s the emit would produce, so the dose objects
+    /// (types, rates, durations, delivered amounts) can be validated before anything is emitted.
+    private func logBasalDeliveryEvents(_ events: [NewPumpEvent]) {
+        guard !events.isEmpty else { return }
+        let summary = events.compactMap(\.dose)
+            .map { "\($0.type) \($0.unitsPerHour)U/hr \($0.startDate)→\($0.endDate) del≈\(String(format: "%.4f", $0.deliveredUnits ?? 0))U" }
+            .joined(separator: " | ")
+        historyLogger.info("[HISTORY-BASAL-DRYRUN] would emit \(events.count) basal event(s): \(summary)")
+    }
+
     /// Read-only dry run: log the reconstructed (stitched) basal timeline so it can be checked against
     /// the basal schedule and the DailyBasal odometer before it's emitted. Nothing is emitted here.
-    private func logBasalDeliverySegments(from logs: [HistoryLog]) {
-        for segment in basalSegments(from: logs) {
+    private func logBasalDeliverySegments(_ segments: [BasalSegment]) {
+        for segment in segments {
             let source = Self.basalSourceLabel(segment.source)
             let type = Self.impliedBasalDoseType(segment.source)
             guard let end = segment.end else {
