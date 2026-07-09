@@ -15,6 +15,15 @@
 import Foundation
 import LoopKit
 
+/// One reconstructed basal interval: the rate that ran from `start` until `end` (nil = still open, i.e.
+/// the current rate, closed when the next 279 sample arrives). `source` is the 279 `commandedRateSource`.
+private struct BasalSegment {
+    let start: Date
+    let end: Date?
+    let rateUnitsPerHour: Double
+    let source: Int
+}
+
 extension TandemPumpManager {
     /// Entries fetched per cooperative deep-fetch step. Each step is one command-queue job that holds
     /// the queue only for its own chunk (~this many entries at ~50 ms each), then yields so therapy
@@ -354,34 +363,60 @@ extension TandemPumpManager {
         }
     }
 
-    /// Reconstruct the pump's basal timeline (read-only) from the BasalDelivery (279) samples in this
-    /// fetch and log each segment. The pump emits 279 every ~5 min and on rate changes, each carrying
-    /// the effective `commandedRate` (mU/hr) and its source; pairing consecutive samples gives the rate
-    /// that was actually running over each interval — the authoritative delivered-basal signal
-    /// (including Control-IQ) that will later be emitted to DoseStore. Nothing is emitted here.
-    private func logBasalDeliverySegments(from logs: [HistoryLog]) {
-        let samples = logs
+    /// Reconstruct the pump's basal timeline from the BasalDelivery (279) samples in this fetch. The
+    /// pump emits one 279 every ~5 min and on rate changes, each carrying the effective `commandedRate`
+    /// (mU/hr) and its source; a segment runs from one sample's time to the next's at the earlier
+    /// sample's rate — the authoritative delivered-basal signal (including Control-IQ).
+    ///
+    /// Because an incremental fetch usually brings a single new sample, segments are stitched across
+    /// fetches: `lastBasalDeliverySample` (the newest sample seen so far) is prepended so its interval
+    /// closes at this batch's first sample, and is then advanced to this batch's newest. An older
+    /// backfill run isn't prepended and doesn't move the cursor — it pairs internally.
+    ///
+    /// Side effect: advances `lastBasalDeliverySample`. Call once per fetch.
+    private func basalSegments(from logs: [HistoryLog]) -> [BasalSegment] {
+        let batch = logs
             .compactMap { $0 as? BasalDeliveryHistoryLog }
             .sorted { $0.sequenceNum < $1.sequenceNum }
-        guard !samples.isEmpty else { return }
+        guard !batch.isEmpty else { return [] }
 
-        for (index, sample) in samples.enumerated() {
-            let start = Dates.fromJan12008EpochSecondsToDate(TimeInterval(sample.pumpTimeSec))
-            let rate = Double(sample.commandedRate) / 1000.0 // mU/hr → U/hr
-            let source = Self.basalSourceLabel(sample.commandedRateSource)
-            let type = Self.impliedBasalDoseType(sample.commandedRateSource)
+        var samples = batch
+        if let last = lastBasalDeliverySample, let firstSeq = batch.first?.sequenceNum, last.sequenceNum < firstSeq {
+            samples.insert(last, at: 0)
+        }
+        if let newest = batch.last, newest.sequenceNum > (lastBasalDeliverySample?.sequenceNum ?? 0) {
+            lastBasalDeliverySample = newest
+        }
 
-            guard index + 1 < samples.count else {
+        return samples.enumerated().map { index, sample in
+            let end = index + 1 < samples.count
+                ? Dates.fromJan12008EpochSecondsToDate(TimeInterval(samples[index + 1].pumpTimeSec))
+                : nil
+            return BasalSegment(
+                start: Dates.fromJan12008EpochSecondsToDate(TimeInterval(sample.pumpTimeSec)),
+                end: end,
+                rateUnitsPerHour: Double(sample.commandedRate) / 1000.0,
+                source: sample.commandedRateSource
+            )
+        }
+    }
+
+    /// Read-only dry run: log the reconstructed (stitched) basal timeline so it can be checked against
+    /// the basal schedule and the DailyBasal odometer before it's emitted. Nothing is emitted here.
+    private func logBasalDeliverySegments(from logs: [HistoryLog]) {
+        for segment in basalSegments(from: logs) {
+            let source = Self.basalSourceLabel(segment.source)
+            let type = Self.impliedBasalDoseType(segment.source)
+            guard let end = segment.end else {
                 historyLogger.info(
-                    "[HISTORY-BASAL-SEG] \(start) → (open) rate=\(rate)U/hr source=\(source) type=\(type) [ongoing]"
+                    "[HISTORY-BASAL-SEG] \(segment.start) → (open) rate=\(segment.rateUnitsPerHour)U/hr source=\(source) type=\(type) [ongoing]"
                 )
                 continue
             }
-            let end = Dates.fromJan12008EpochSecondsToDate(TimeInterval(samples[index + 1].pumpTimeSec))
-            let durationSec = end.timeIntervalSince(start)
-            let deliveredUnits = rate * durationSec / 3600.0
+            let durationSec = end.timeIntervalSince(segment.start)
+            let delivered = segment.rateUnitsPerHour * durationSec / 3600.0
             historyLogger.info(
-                "[HISTORY-BASAL-SEG] \(start) → \(end) dur=\(Int(durationSec))s rate=\(rate)U/hr source=\(source) type=\(type) delivered≈\(String(format: "%.4f", deliveredUnits))U"
+                "[HISTORY-BASAL-SEG] \(segment.start) → \(end) dur=\(Int(durationSec))s rate=\(segment.rateUnitsPerHour)U/hr source=\(source) type=\(type) delivered≈\(String(format: "%.4f", delivered))U"
             )
         }
     }

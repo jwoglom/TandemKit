@@ -65,6 +65,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// when a new bolus starts.
     private var didNotifyBolusDeliveryUncertain = false
 
+    /// Newest basal-delivery (279) sample processed so far, carried across fetches so a segment can be
+    /// closed when the next sample arrives. The pump emits one 279 every ~5 min, so an incremental fetch
+    /// usually brings a single sample whose interval only closes on the following fetch. Only touched on
+    /// the command queue (where history is processed). Not persisted: after a restart the deep fetch
+    /// re-pulls a contiguous history run, which closes its own segments within the batch.
+    internal var lastBasalDeliverySample: BasalDeliveryHistoryLog?
+
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.
     let watchdogQueue = DispatchQueue(label: "com.jwoglom.TandemKit.commandWatchdog")
