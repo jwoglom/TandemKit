@@ -256,12 +256,13 @@ extension TandemPumpManager {
             }
         }
 
-        // Reconstruct the pump's basal timeline from this fetch's 279 samples, then dry-run both the
-        // segments and the DoseStore events they'd become — read-only, nothing emitted yet. (Call
-        // `basalSegments` exactly once per fetch: it advances the cross-fetch cursor.)
+        // Reconstruct the pump's basal timeline from this fetch's 279 samples. (Call `basalSegments`
+        // exactly once per fetch: it advances the cross-fetch cursor.) The full timeline is logged for
+        // visibility; only the Control-IQ-attributed portion is emitted (see `emitControlIQBasal`).
         let segments = basalSegments(from: logs)
         logBasalDeliverySegments(segments)
         logBasalDeliveryEvents(basalDeliveryEvents(from: segments))
+        emitControlIQBasal(from: segments)
 
         // Map history to doses. Every mapped dose is logged; only completed pump-UI boluses are
         // emitted below (see the emit block at the end of this method).
@@ -441,14 +442,64 @@ extension TandemPumpManager {
         }
     }
 
-    /// Read-only dry run: log the exact `NewPumpEvent`s the emit would produce, so the dose objects
-    /// (types, rates, durations, delivered amounts) can be validated before anything is emitted.
+    /// Log the full reconstructed basal timeline as DoseStore events, for visibility. Only the
+    /// Control-IQ subset of these is actually emitted (`emitControlIQBasal`); the rest — scheduled
+    /// basal and app-commanded temps — are already covered by the optimistic path and LoopKit's
+    /// scheduled-basal assumption, so they are shown here but not written.
     private func logBasalDeliveryEvents(_ events: [NewPumpEvent]) {
         guard !events.isEmpty else { return }
         let summary = events.compactMap(\.dose)
             .map { "\($0.type) \($0.unitsPerHour)U/hr \($0.startDate)→\($0.endDate) del≈\(String(format: "%.4f", $0.deliveredUnits ?? 0))U" }
             .joined(separator: " | ")
-        historyLogger.info("[HISTORY-BASAL-DRYRUN] would emit \(events.count) basal event(s): \(summary)")
+        historyLogger.info("[HISTORY-BASAL-TIMELINE] reconstructed \(events.count) basal event(s): \(summary)")
+    }
+
+    /// Emit the pure-Control-IQ basal (279 `commandedRateSource` 3 = Algorithm) to DoseStore as
+    /// temp-basal doses — the pump-initiated basal Loop never commanded, and the one basal case the
+    /// optimistic path can't cover.
+    ///
+    /// The source-3 attribution IS the gate: the pump only stamps it when Control-IQ overrides the
+    /// profile on its own, so a non-CIQ pump produces none and nothing is emitted (a comms gap can't lose
+    /// scheduled/temp basal — the pump only continues what Loop already committed, which LoopKit already
+    /// assumes). Reading the attribution per segment also avoids the ~24h-stale cached `controlIQEnabled`
+    /// flag, so it activates as soon as CIQ actually acts.
+    ///
+    /// Source 3 has no optimistic counterpart, so — like a pump-UI bolus — it is emitted directly
+    /// (`replacePendingEvents: false`) with a stable per-segment identity for dedup on re-fetch, and
+    /// bounded to `commandedTrackingStartedAt` so a cold-start deep fetch doesn't re-ingest pre-install
+    /// history.
+    ///
+    /// Deliberately NOT emitted: source 4 (Temp + Algorithm) — CIQ modifying an app-commanded temp, which
+    /// overlaps the optimistic temp already in DoseStore and would double-count without time-based
+    /// reconciliation; deferred until the CIQ test shows whether it even occurs and how it overlaps.
+    /// Source 0/1/2 (suspend / profile / app temp) are owned by the suspend-resume events and the
+    /// optimistic path.
+    private func emitControlIQBasal(from segments: [BasalSegment]) {
+        guard let trackingStart = state.commandedTrackingStartedAt else { return }
+
+        let events = segments.compactMap { segment -> NewPumpEvent? in
+            guard let end = segment.end,
+                  segment.source == 3,
+                  segment.start >= trackingStart
+            else { return nil }
+            let dose = DoseEntry.tempBasal(
+                absoluteUnit: segment.rateUnitsPerHour,
+                duration: end.timeIntervalSince(segment.start),
+                insulinType: state.insulinType,
+                startDate: segment.start,
+                endDate: end
+            )
+            return NewPumpEvent.tempBasal(dose: dose, date: segment.start)
+        }
+        guard !events.isEmpty else { return }
+
+        let summary = events.compactMap(\.dose)
+            .map { "\($0.unitsPerHour)U/hr@\($0.startDate)" }
+            .joined(separator: ", ")
+        historyLogger.info(
+            "[HISTORY-EMIT] emitting \(events.count) Control-IQ basal segment(s) to DoseStore (replacePendingEvents: false): \(summary)"
+        )
+        emitPumpEvents(events, replacePendingEvents: false)
     }
 
     /// Read-only dry run: log the reconstructed (stitched) basal timeline so it can be checked against
