@@ -81,12 +81,27 @@ extension TandemPumpManager {
     /// Call this BEFORE any dose-emitting sync step (`fetchBolusStatus`/`fetchBasalStatus`): those emit
     /// finalized events dated ≈now, which would themselves advance `pumpEventQueryAfterDate` and defeat
     /// the backfill if the floor were read afterward. Idempotent (guarded on `== nil`).
-    func establishHistoryEmitFloorIfNeeded() {
-        guard state.commandedTrackingStartedAt == nil else { return }
-        let boundary = pumpDelegate.call { $0?.startDateToFilterNewPumpEvents(for: self) } ?? Date()
+    /// Returns true once the floor is established (already set, or seeded now); false if it can't be
+    /// seeded yet because the pump delegate isn't wired.
+    @discardableResult
+    func establishHistoryEmitFloorIfNeeded() -> Bool {
+        guard state.commandedTrackingStartedAt == nil else { return true }
+        // Read Loop's DoseStore boundary. On a fresh pump ADD the first connect/sync can run before Loop
+        // has wired the pumpManagerDelegate, so `pumpDelegate.call` returns nil. Do NOT fall back to
+        // `now`: that reproduces exactly the re-pair-time floor this seed exists to avoid (observed live
+        // 2026-07-11 — the boundary came back == the connect instant because the delegate was nil, so the
+        // whole disconnected-gap backfill was skipped). Instead defer: leave the floor unset (every emit
+        // path no-ops while it's nil) and retry on the next sync once the delegate is present. Emits
+        // during pairing fail too (no delegate), so nothing advances the boundary meanwhile — the
+        // deferred read still sees Loop's true pre-add cursor.
+        guard let boundary = pumpDelegate.call({ $0?.startDateToFilterNewPumpEvents(for: self) }) else {
+            historyLogger.info("[HISTORY-EMIT] deferring history emit floor — pump delegate not wired yet")
+            return false
+        }
         state.commandedTrackingStartedAt = boundary
         notifyDelegateStateUpdated()
         historyLogger.info("[HISTORY-EMIT] established history emit floor at \(boundary) (from DoseStore boundary); pump-autonomous doses at/after this time are emitted")
+        return true
     }
 
     /// Fetch pump history, log it, and emit the pump-autonomous delivery (see `processFetchedHistory`).
@@ -96,10 +111,15 @@ extension TandemPumpManager {
     /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
-        // Safety net for any path that reaches history without a prior sync (e.g. a bolusChange
-        // trigger). On the cold-start sync path the floor is already seeded earlier, before the
+        // The emit floor must exist before we fetch: it gates every emit AND, on the first run, we must
+        // not consume the empty-ranges deep-backfill trigger before the floor is set or the gap would be
+        // fetched-but-never-emitted. If the delegate isn't wired yet (fresh pump add), defer the whole
+        // fetch to the next sync. On the normal sync path the floor is already seeded earlier, before the
         // dose-emitting fetches — see `establishHistoryEmitFloorIfNeeded`.
-        establishHistoryEmitFloorIfNeeded()
+        guard establishHistoryEmitFloorIfNeeded() else {
+            historyLogger.debug("[HISTORY-RO] emit floor not established yet (delegate pending); skipping history fetch this cycle")
+            return
+        }
 
         // First run (no persisted ranges): kick off a cooperative backfill that steps backward one
         // chunk per command-queue job, yielding the queue between chunks. Two phases: phase 1 to the
