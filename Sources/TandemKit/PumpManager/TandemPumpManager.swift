@@ -337,6 +337,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Seed the history emit floor from Loop's DoseStore boundary BEFORE the dose-emitting
+            // fetches below: they finalize events dated ≈now, which would advance
+            // `pumpEventQueryAfterDate` and defeat the cold-start/re-add backfill if the floor were
+            // seeded afterward (as `fetchAndLogPumpHistory` otherwise would). Idempotent.
+            self.establishHistoryEmitFloorIfNeeded()
+
             let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
             if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
                 self.fetchControlIQStatus()

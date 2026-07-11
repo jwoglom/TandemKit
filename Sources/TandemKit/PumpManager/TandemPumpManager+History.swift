@@ -2,14 +2,20 @@
 //  TandemPumpManager+History.swift
 //  TandemKit
 //
-//  History-fetch slice. Fetches pump history, LOGS it (raw entries + the mapped DoseEntries),
-//  and emits *pump-UI* boluses (Quick Bolus / Control-IQ) to DoseStore.
+//  History-fetch pipeline. Fetches pump history, LOGS it (raw entries + the mapped DoseEntries),
+//  and emits the delivery Loop's optimistic path can't see, so IOB reflects what the pump actually
+//  did. Three things reach DoseStore from here:
+//    - pump-UI boluses (Quick Bolus / Control-IQ auto-bolus) — never commanded through the driver,
+//      so no optimistic counterpart; emitting can't double-count (see `emitPumpUIBoluses`);
+//    - Control-IQ basal (279 source 3 = Algorithm, 4 = Temp+Algorithm) — pump-initiated basal Loop
+//      never commanded (see `emitControlIQBasal`);
+//    - finalizations of still-pending commanded boluses whose real-time completion was missed
+//      (see `reconcilePendingCommandedBoluses`).
 //
-//  A pump-UI bolus is one the driver never commanded, so it has NO optimistic counterpart in
-//  DoseStore; emitting it can't double-count a commanded dose, and it closes the over-delivery
-//  gap where pump-initiated insulin was invisible to the loop. Everything else — commanded
-//  boluses, temp basals, suspend/resume, `lastReconciliation`, and reconciliation of the
-//  optimistic doses — is handled by later steps and is NOT emitted here.
+//  All emits are bounded to a single floor — `commandedTrackingStartedAt`, seeded from Loop's own
+//  DoseStore boundary — so a cold start / re-add backfills exactly the window Loop is missing and
+//  never re-injects settled delivery. Scheduled/profile basal and app-only temps are left to
+//  LoopKit's scheduled-basal assumption and the optimistic path; suspend/resume is logged only.
 //
 
 import Foundation
@@ -55,20 +61,45 @@ extension TandemPumpManager {
         activeHistoryFetchSession?.handleStreamResponse(response)
     }
 
-    /// Fetch pump history, log it, and emit pump-UI boluses (see `processFetchedHistory`).
+    /// Establish the emit floor (first run only, or after a rawState wipe). Pump-autonomous doses
+    /// (pump-UI boluses, Control-IQ basal) at/after this instant are emitted; earlier ones are assumed
+    /// already accounted for. Seed it from Loop's own DoseStore boundary
+    /// (`startDateToFilterNewPumpEvents` → `pumpEventQueryAfterDate`) rather than `now`, so a cold start
+    /// backfills exactly the window Loop is missing:
+    ///  - existing doses in DoseStore (pump switch / same-pump app restart) → the point after them, so
+    ///    we fill only forward and never re-inject already-settled delivery;
+    ///  - empty DoseStore (new Loop user coming from the Tandem app) → `cacheStartDate` (~24h), so older
+    ///    pump-UI / Control-IQ doses are pulled in;
+    ///  - delete/re-add for a Tandem-app excursion → the last Loop dose (≈ the delete moment), so the
+    ///    gap's source-3/4 basal and pump-UI boluses backfill instead of being dropped at re-pair.
+    ///
+    /// Read ONCE, then fixed (persisted). This matters on a running system: `pumpEventQueryAfterDate`
+    /// only advances on *finalized* records and can jump to ≈now when a commanded bolus settles, so
+    /// re-reading it live could raise the floor past an out-of-range Quick Bolus we haven't emitted yet.
+    /// An ordinary reconnect keeps rawState, so we don't re-seed; only an install/wipe does.
+    ///
+    /// Call this BEFORE any dose-emitting sync step (`fetchBolusStatus`/`fetchBasalStatus`): those emit
+    /// finalized events dated ≈now, which would themselves advance `pumpEventQueryAfterDate` and defeat
+    /// the backfill if the floor were read afterward. Idempotent (guarded on `== nil`).
+    func establishHistoryEmitFloorIfNeeded() {
+        guard state.commandedTrackingStartedAt == nil else { return }
+        let boundary = pumpDelegate.call { $0?.startDateToFilterNewPumpEvents(for: self) } ?? Date()
+        state.commandedTrackingStartedAt = boundary
+        notifyDelegateStateUpdated()
+        historyLogger.info("[HISTORY-EMIT] established history emit floor at \(boundary) (from DoseStore boundary); pump-autonomous doses at/after this time are emitted")
+    }
+
+    /// Fetch pump history, log it, and emit the pump-autonomous delivery (see `processFetchedHistory`).
     /// - **Initial sync** (no cursor — also after an app restart / overnight power-down): a *deep*
     ///   fetch bounded by a fixed ≈insulin-duration window (see `historyDeepFetchWindow`), with a
     ///   metrics line.
     /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
-        // Mark when commanded-id tracking began (first run only). Pump-UI emission is gated to
-        // doses at/after this instant so boluses that predate tracking can't be double-counted.
-        if state.commandedTrackingStartedAt == nil {
-            state.commandedTrackingStartedAt = Date()
-            notifyDelegateStateUpdated()
-            historyLogger.info("[HISTORY-EMIT] began commanded-bolus tracking at \(state.commandedTrackingStartedAt!); only pump-UI boluses at/after this time are emitted")
-        }
+        // Safety net for any path that reaches history without a prior sync (e.g. a bolusChange
+        // trigger). On the cold-start sync path the floor is already seeded earlier, before the
+        // dose-emitting fetches — see `establishHistoryEmitFloorIfNeeded`.
+        establishHistoryEmitFloorIfNeeded()
 
         // First run (no persisted ranges): kick off a cooperative backfill that steps backward one
         // chunk per command-queue job, yielding the queue between chunks. Two phases: phase 1 to the
@@ -313,9 +344,10 @@ extension TandemPumpManager {
     /// - **`replacePendingEvents: false`:** never purge the optimistic mutable doses.
     /// - **Idempotent:** `NewPumpEvent` sets `syncIdentifier` to the entry's stable raw hex, so
     ///   re-reading the same bolus across deep fetches upserts rather than duplicates.
-    /// - **Tracking cutoff:** only doses at/after `commandedTrackingStartedAt` are emitted; earlier
-    ///   ones can't be reliably classified (an untracked commanded bolus would look pump-UI) so we
-    ///   skip them to avoid double-counting the optimistic path.
+    /// - **Emit floor:** only doses at/after `commandedTrackingStartedAt` (seeded from Loop's DoseStore
+    ///   boundary — see `establishHistoryEmitFloorIfNeeded`) are emitted. Below the floor Loop already
+    ///   owns the period (its own settled delivery, or another pump's), so filling it would double-count;
+    ///   above it is the gap Loop is missing.
     private func emitPumpUIBoluses(_ events: [NewPumpEvent]) {
         let cutoff = state.commandedTrackingStartedAt ?? .distantFuture
         let completedPumpUI = events.filter { event in
@@ -454,32 +486,36 @@ extension TandemPumpManager {
         historyLogger.info("[HISTORY-BASAL-TIMELINE] reconstructed \(events.count) basal event(s): \(summary)")
     }
 
-    /// Emit the pure-Control-IQ basal (279 `commandedRateSource` 3 = Algorithm) to DoseStore as
-    /// temp-basal doses — the pump-initiated basal Loop never commanded, and the one basal case the
-    /// optimistic path can't cover.
+    /// Emit the Control-IQ-attributed basal (279 `commandedRateSource` 3 = Algorithm, 4 = Temp +
+    /// Algorithm) to DoseStore as temp-basal doses — the pump-initiated basal Loop never commanded,
+    /// and the one basal case the optimistic path can't cover.
     ///
-    /// The source-3 attribution IS the gate: the pump only stamps it when Control-IQ overrides the
-    /// profile on its own, so a non-CIQ pump produces none and nothing is emitted (a comms gap can't lose
-    /// scheduled/temp basal — the pump only continues what Loop already committed, which LoopKit already
-    /// assumes). Reading the attribution per segment also avoids the ~24h-stale cached `controlIQEnabled`
-    /// flag, so it activates as soon as CIQ actually acts.
+    /// The source attribution IS the gate: the pump only stamps 3/4 when Control-IQ is acting, so a
+    /// non-CIQ pump produces none and nothing is emitted (a comms gap can't lose scheduled/temp basal —
+    /// the pump only continues what Loop already committed, which LoopKit already assumes). Reading the
+    /// attribution per segment also avoids the ~24h-stale cached `controlIQEnabled` flag, so it
+    /// activates as soon as CIQ actually acts.
     ///
-    /// Source 3 has no optimistic counterpart, so — like a pump-UI bolus — it is emitted directly
-    /// (`replacePendingEvents: false`) with a stable per-segment identity for dedup on re-fetch, and
-    /// bounded to `commandedTrackingStartedAt` so a cold-start deep fetch doesn't re-ingest pre-install
-    /// history.
+    /// Both sources have no optimistic counterpart in the window we emit, so — like a pump-UI bolus —
+    /// they are emitted directly (`replacePendingEvents: false`) with a stable per-segment identity for
+    /// dedup on re-fetch, bounded to `commandedTrackingStartedAt` (Loop's DoseStore floor) so we only
+    /// fill the gap Loop is missing and never re-ingest settled history.
     ///
-    /// Deliberately NOT emitted: source 4 (Temp + Algorithm) — CIQ modifying an app-commanded temp, which
-    /// overlaps the optimistic temp already in DoseStore and would double-count without time-based
-    /// reconciliation; deferred until the CIQ test shows whether it even occurs and how it overlaps.
-    /// Source 0/1/2 (suspend / profile / app temp) are owned by the suspend-resume events and the
-    /// optimistic path.
+    /// Why source 4 is safe to emit (no double-count): source 4 = CIQ modifying a *temp*, and a temp can
+    /// only be set from the Tandem app — there is no Loop UI to set a temp while Control-IQ runs. Setting
+    /// one requires the pump be removed from Loop, so during any source-4 period Loop was disconnected and
+    /// has NO optimistic temp for that window; the emit floor keeps us inside exactly that gap. If Loop
+    /// ever gains temp-under-CIQ, this overlaps the optimistic temp and would need time-based
+    /// reconciliation — revisit here. The emitted rate is the pump's actual (CIQ-adjusted) `commandedRate`.
+    ///
+    /// Source 0/1/2 (suspend / profile / app-only temp) are owned by the suspend-resume events and the
+    /// optimistic path (profile is covered by LoopKit's scheduled-basal assumption).
     private func emitControlIQBasal(from segments: [BasalSegment]) {
         guard let trackingStart = state.commandedTrackingStartedAt else { return }
 
         let events = segments.compactMap { segment -> NewPumpEvent? in
             guard let end = segment.end,
-                  segment.source == 3,
+                  segment.source == 3 || segment.source == 4,
                   segment.start >= trackingStart
             else { return nil }
             let dose = DoseEntry.tempBasal(
