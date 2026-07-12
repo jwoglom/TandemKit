@@ -338,10 +338,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             // Seed the history emit floor from Loop's DoseStore boundary BEFORE the dose-emitting
-            // fetches below: they finalize events dated ≈now, which would advance
-            // `pumpEventQueryAfterDate` and defeat the cold-start/re-add backfill if the floor were
-            // seeded afterward (as `fetchAndLogPumpHistory` otherwise would). Idempotent.
-            self.establishHistoryEmitFloorIfNeeded()
+            // fetches below (they finalize events dated ≈now that would otherwise advance
+            // `pumpEventQueryAfterDate` and defeat the cold-start/re-add backfill).
+            //
+            // On a fresh pump add mid-pairing the pumpManagerDelegate isn't wired yet, so the floor can't
+            // be seeded AND nothing below can emit or reconcile to DoseStore (every hasNewPumpEvents
+            // no-ops). Bail the whole pass here — before the status fetches, each of which
+            // (fetchBasalStatus/fetchBolusStatus/fetchReservoirStatus) would otherwise stamp
+            // lastReconciliation = now, arming the 4.5-min freshness gate in ensureCurrentPumpData and
+            // delaying the disconnected-period backfill by that long. We reconcile nothing on this pass, so
+            // leaving lastReconciliation untouched and returning the prior value (nil on a fresh add) is
+            // honest — it tells Loop we haven't synced, so it retries promptly once the delegate is set.
+            guard self.establishHistoryEmitFloorIfNeeded() else {
+                self.logger.info("Pump delegate not wired yet; deferring sync until it is (no reconciliation this pass)")
+                completion(self.state.lastReconciliation)
+                return
+            }
 
             let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
             if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
