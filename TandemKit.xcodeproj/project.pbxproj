@@ -141,6 +141,10 @@
 		3EB807A22FBCDCD70075D19E /* BolusRequestedMsg1HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344D82EC91299008A07F6 /* BolusRequestedMsg1HistoryLog.swift */; };
 		3EB807A32FBCDCD70075D19E /* CgmAlertClearedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AE60F67BDD4F4248945795B /* CgmAlertClearedHistoryLog.swift */; };
 		3EB807A42FBCDCD70075D19E /* HistoryLogParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344EA2EC91299008A07F6 /* HistoryLogParser.swift */; };
+		71570600000000000000EA01 /* HistoryLogExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EA02 /* HistoryLogExport.swift */; };
+		71570600000000000000EB01 /* HistoryLogFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EB02 /* HistoryLogFetcher.swift */; };
+		71570600000000000000EC01 /* TandemKitHistoryLogViewerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EC02 /* TandemKitHistoryLogViewerViewModel.swift */; };
+		71570600000000000000ED01 /* TandemKitHistoryLogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */; };
 		3EB807A52FBCDCD70075D19E /* CgmOorSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30D9E5C3141560950708C87 /* CgmOorSettingsHistoryLog.swift */; };
 		3EB807A62FBCDCD70075D19E /* CgmJoinSessionFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21471DD1D8D951A8332252A0 /* CgmJoinSessionFsl3HistoryLog.swift */; };
 		3EB807A72FBCDCD70075D19E /* CorrectionDeclinedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344E52EC91299008A07F6 /* CorrectionDeclinedHistoryLog.swift */; };
@@ -704,6 +708,10 @@
 		3EE344E82EC91299008A07F6 /* DateChangeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateChangeHistoryLog.swift; sourceTree = "<group>"; };
 		3EE344E92EC91299008A07F6 /* FactoryResetHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FactoryResetHistoryLog.swift; sourceTree = "<group>"; };
 		3EE344EA2EC91299008A07F6 /* HistoryLogParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogParser.swift; sourceTree = "<group>"; };
+		71570600000000000000EA02 /* HistoryLogExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogExport.swift; sourceTree = "<group>"; };
+		71570600000000000000EB02 /* HistoryLogFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogFetcher.swift; sourceTree = "<group>"; };
+		71570600000000000000EC02 /* TandemKitHistoryLogViewerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitHistoryLogViewerViewModel.swift; sourceTree = "<group>"; };
+		71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitHistoryLogViewerView.swift; sourceTree = "<group>"; };
 		3EE344EB2EC91299008A07F6 /* HistoryLogRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogRecord.swift; sourceTree = "<group>"; };
 		3EE344EC2EC91299008A07F6 /* HistoryLogStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogStream.swift; sourceTree = "<group>"; };
 		3EE344ED2EC91299008A07F6 /* HypoMinimizerResumeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HypoMinimizerResumeHistoryLog.swift; sourceTree = "<group>"; };
@@ -915,6 +923,7 @@
 				3E3A79992FCCBB2B008F5FC2 /* TandemPumpManager+SyncBasal.swift */,
 				3EBE90F72FC0E7210048A57F /* TandemBluetoothManager.swift */,
 				3EBE90F92FC0E84F0048A57F /* TandemPeripheralManager.swift */,
+				71570600000000000000EB02 /* HistoryLogFetcher.swift */,
 				3E0F4D3E2F265B8D008290A3 /* TandemSilentToneManager.swift */,
 			);
 			path = PumpManager;
@@ -1010,6 +1019,7 @@
 				844120DA2457989518F91C39 /* TandemKitControlIQSettingsView.swift */,
 				17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */,
 				29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */,
+				71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */,
 				DEB0DE00000000000000DA02 /* TandemKitDebugView.swift */,
 			);
 			path = Settings;
@@ -1038,6 +1048,7 @@
 			children = (
 				3EDA3D922FD59E40006EAD12 /* TandemKitPumpInformationViewModel.swift */,
 				3E74810D2F83E80C00B09B8E /* TandemKitAlertSettingsViewModel.swift */,
+				71570600000000000000EC02 /* TandemKitHistoryLogViewerViewModel.swift */,
 				3E0F4D432F2662A7008290A3 /* TandemKitSoundSettingsViewModel.swift */,
 				1A55E0F72EC96921006E651D /* TandemKitSettingsViewModel.swift */,
 				1A0E17292ED1069F00E75219 /* TandemKitNotificationsViewModel.swift */,
@@ -1390,6 +1401,7 @@
 				A4B354D4E962B782C6D6B152 /* DexcomG7CGMHistoryLog.swift */,
 				3EE344E92EC91299008A07F6 /* FactoryResetHistoryLog.swift */,
 				3EE344EA2EC91299008A07F6 /* HistoryLogParser.swift */,
+				71570600000000000000EA02 /* HistoryLogExport.swift */,
 				3EE344EB2EC91299008A07F6 /* HistoryLogRecord.swift */,
 				3EE344EC2EC91299008A07F6 /* HistoryLogStream.swift */,
 				3EE344ED2EC91299008A07F6 /* HypoMinimizerResumeHistoryLog.swift */,
@@ -1989,6 +2001,10 @@
 				3EB807A22FBCDCD70075D19E /* BolusRequestedMsg1HistoryLog.swift in Sources */,
 				3EB807A32FBCDCD70075D19E /* CgmAlertClearedHistoryLog.swift in Sources */,
 				3EB807A42FBCDCD70075D19E /* HistoryLogParser.swift in Sources */,
+				71570600000000000000EA01 /* HistoryLogExport.swift in Sources */,
+				71570600000000000000EB01 /* HistoryLogFetcher.swift in Sources */,
+				71570600000000000000EC01 /* TandemKitHistoryLogViewerViewModel.swift in Sources */,
+				71570600000000000000ED01 /* TandemKitHistoryLogViewerView.swift in Sources */,
 				3EB807A52FBCDCD70075D19E /* CgmOorSettingsHistoryLog.swift in Sources */,
 				3EB807A62FBCDCD70075D19E /* CgmJoinSessionFsl3HistoryLog.swift in Sources */,
 				3EB807A72FBCDCD70075D19E /* CorrectionDeclinedHistoryLog.swift in Sources */,
