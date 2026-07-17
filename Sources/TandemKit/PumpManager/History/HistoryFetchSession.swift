@@ -116,7 +116,7 @@ final class HistoryFetchSession {
             return []
         }
 
-        let availableCount = Int(effectiveEnd &- start + 1)
+        let availableCount = Int(effectiveEnd - start + 1)
         let totalToFetch = max(0, min(maxEntries, availableCount))
 
         if totalToFetch == 0 {
@@ -126,7 +126,9 @@ final class HistoryFetchSession {
         var allLogs: [HistoryLog] = []
         activeCollector = ChunkedStreamCollector()
 
-        // Iterate backwards from END to START (like ControlX2 lines 64-96)
+        // Iterate backwards from END to START, like ControlX2's `triggerRangeInternal()` in
+        // HistoryLogFetcher.kt:
+        // https://github.com/jwoglom/controlx2/blob/main/mobile/src/main/java/com/jwoglom/controlx2/util/HistoryLogFetcher.kt
         var currentEnd = effectiveEnd
 
         while currentEnd >= start, allLogs.count < totalToFetch {
@@ -159,7 +161,9 @@ final class HistoryFetchSession {
                     log.warning("Chunk [\(chunkStart), \(currentEnd)] timeout: \(received)/\(expected) logs")
                 }
             } catch {
-                // Log error but continue to next chunk for resilience (like ControlX2 line 90-91)
+                // Log error but continue to next chunk for resilience, like the timeout-and-continue
+                // in ControlX2's `triggerRangeInternal()` in HistoryLogFetcher.kt:
+                // https://github.com/jwoglom/controlx2/blob/main/mobile/src/main/java/com/jwoglom/controlx2/util/HistoryLogFetcher.kt
                 log.error("Chunk [\(chunkStart), \(currentEnd)] failed: \(error)")
             }
 

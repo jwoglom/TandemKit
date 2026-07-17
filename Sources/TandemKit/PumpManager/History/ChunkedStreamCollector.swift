@@ -48,7 +48,9 @@ internal final class ChunkedStreamCollector {
     }
 
     /// Poll for completion with timeout.
-    /// Port of ControlX2's polling logic (lines 78-93).
+    /// Port of ControlX2's polling logic — the poll loop inside `triggerRangeInternal()` in
+    /// HistoryLogFetcher.kt:
+    /// https://github.com/jwoglom/controlx2/blob/main/mobile/src/main/java/com/jwoglom/controlx2/util/HistoryLogFetcher.kt
     ///
     /// - Parameters:
     ///   - timeout: Maximum time to wait for all logs (default 2.5s)

@@ -37,7 +37,8 @@ internal final class HistoryRangeTracker {
     }
 
     /// Find missing ranges within the specified range.
-    /// Port of ControlX2's getMissingIds() logic (lines 176-196).
+    /// Port of ControlX2's top-level `getMissingIds()` in HistoryLogFetcher.kt:
+    /// https://github.com/jwoglom/controlx2/blob/main/mobile/src/main/java/com/jwoglom/controlx2/util/HistoryLogFetcher.kt
     internal func getMissingRanges(in range: ClosedRange<UInt32>) -> [ClosedRange<UInt32>] {
         let min = range.lowerBound
         let max = range.upperBound
