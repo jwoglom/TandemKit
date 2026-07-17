@@ -6,7 +6,7 @@ class HistoryReconciler {
     private let matchWindow: TimeInterval = 5 * 60
     private let bolusTolerance: Double = 0.05
     private let basalTolerance: Double = 0.01
-    private let uncertainAge: TimeInterval = 24 * 60 * 60
+    private let uncertainAge = TimeInterval.days(1)
 
     func reconcile(
         pendingDoses: [PendingDose],
