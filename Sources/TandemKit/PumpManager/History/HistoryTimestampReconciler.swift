@@ -43,9 +43,11 @@ class HistoryTimestampReconciler {
         return true
     }
 
+    // Adjust a pump time by applying the cumulative clock change
+    // deltas that occur after the given sequence number
     private func adjustedPumpTime(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Int {
         let cumulativeDelta = clockChangeDeltas
-            .filter { $0.sequenceNum < sequenceNum }
+            .filter { $0.sequenceNum > sequenceNum }
             .reduce(0) { $0 + $1.deltaSec }
         return Int(pumpTimeSec) + cumulativeDelta
     }
