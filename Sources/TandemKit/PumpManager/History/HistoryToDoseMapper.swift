@@ -4,12 +4,15 @@ import LoopKit
 /// Maps Tandem HistoryLog events to LoopKit DoseEntry and NewPumpEvent instances.
 class HistoryToDoseMapper {
     /// - Parameters:
-    ///   - scheduledBasalRate: Loop's scheduled (profile) basal rate at a given date.
-    ///     Used to convert a temp basal's pump-stored *percent* into an absolute U/hr rate,
-    ///     exactly as the set path does (`scheduledRate × percent/100`).
-    ///   - roundBasalRate: Rounds a rate to a pump-supported value (mirrors the set path).
-    ///   - isCommandedBolus: Whether a bolusId corresponds to a bolus the controlling app commanded (vs a
-    ///     pump-UI Quick Bolus / Control-IQ bolus). Drives `DoseEntry.wasProgrammedByPumpUI`.
+    ///   - scheduledBasalRate: Loop's scheduled (profile) basal rate at
+    ///     a given date. Used to convert a temp basal's pump-stored
+    ///     *percent* into an absolute U/hr rate, exactly as the set
+    ///     path does (`scheduledRate × percent/100`).
+    ///   - roundBasalRate: Rounds a rate to a pump-supported value
+    ///     (mirrors the set path).
+    ///   - isCommandedBolus: Whether a bolusId corresponds to a bolus
+    ///     the controlling app commanded (vs a pump-UI Quick Bolus /
+    ///     Control-IQ bolus). Drives `DoseEntry.wasProgrammedByPumpUI`.
     func mapToEvents(
         _ logs: [HistoryLog],
         reconciler: HistoryTimestampReconciler,
@@ -92,9 +95,8 @@ class HistoryToDoseMapper {
             case let alert as AlertActivatedHistoryLog:
                 events.append(makeAlarmEvent(alert, reconciler: reconciler, timeZone: timeZone))
             case let suspend as PumpingSuspendedHistoryLog:
-                // Source the suspend from the pump's own ledger so it can't be missed
-                // (the asymmetry behind the stale-suspend bug, where a suspend was emitted
-                // from status but the matching resume sometimes was not).
+                // Source the suspend from the pump's own ledger so it
+                // can't be missed.
                 let date = reconciler.utcDate(
                     pumpTimeSec: suspend.pumpTimeSec,
                     sequenceNum: suspend.sequenceNum,
