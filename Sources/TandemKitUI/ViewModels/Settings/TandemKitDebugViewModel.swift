@@ -56,9 +56,11 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     private let pumpManager: TandemPumpManager?
     private var lastRequestMessage: Message?
+    let openHistoryLogViewer: (() -> Void)?
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, openHistoryLogViewer: (() -> Void)? = nil) {
         self.pumpManager = pumpManager
+        self.openHistoryLogViewer = openHistoryLogViewer
         useSilentMode = pumpManager?.state.useSilentTones ?? false
     }
 

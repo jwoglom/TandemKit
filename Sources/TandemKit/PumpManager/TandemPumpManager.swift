@@ -38,6 +38,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     public let fillCannulaStateStream = PassthroughSubject<FillCannulaStateStreamResponse, Never>()
+    public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
