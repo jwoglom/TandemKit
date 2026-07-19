@@ -4,7 +4,7 @@ import XCTest
 final class RenameIDPRequestTests: XCTestCase {
     func testRenameIDPRequest() {
         MessageTester.initPumpState("IGNORE_HMAC_SIGNATURE_EXCEPTION", 1)
-        let expected = RenameIDPRequest(idpId: 1, profileName: "testprofil2")
+        let expected = RenameIDPRequest(idpId: 1, profileIndex: 1, profileName: "testprofil2")
 
         let parsed: RenameIDPRequest = MessageTester.test(
             "02d6a8d62b01017465737470726f66696c320000",
