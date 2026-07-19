@@ -124,42 +124,6 @@ public class AlarmStatusResponse: Message, NotificationMessage {
             lhs.rawValue < rhs.rawValue
         }
 
-        /// A set of alarms the pump acknowledges together (dismissing any one clears
-        /// them all), declared so the notification UI can merge them into a single
-        /// row. `primary` is the member whose description is shown and whose id is
-        /// dismissed on the user's behalf; it is listed first in the merged row and
-        /// defaults to the first member.
-        public struct MergedGroup {
-            public let members: [AlarmResponseType]
-            public let primary: AlarmResponseType
-
-            /// - Parameters:
-            ///   - members: the alarms that fire and are acknowledged together.
-            ///   - primary: the member whose description/id represents the row.
-            ///     Defaults to the first member.
-            public init(_ members: [AlarmResponseType], primary: AlarmResponseType? = nil) {
-                precondition(members.count >= 2, "A merged alarm group needs at least two members")
-                let resolvedPrimary = primary ?? members[0]
-                precondition(members.contains(resolvedPrimary), "primary must be one of the members")
-                self.members = members
-                self.primary = resolvedPrimary
-            }
-        }
-
-        /// Groups of alarms that the pump acknowledges together: dismissing any one
-        /// member causes the pump to clear the entire group on our behalf. Because
-        /// such alarms describe a single underlying condition, the notification UI
-        /// merges them into one row (e.g. "Alarm: RESUME_PUMP_ALARM,
-        /// RESUME_PUMP_ALARM2"). See `MergedGroup` and `MergedNotificationGroup`.
-        ///
-        /// To surface a specific member's description (and dismiss its id), pass it
-        /// as `primary`; otherwise the first member is primary — for the resume
-        /// alarms both members share the same description, so the default suffices:
-        ///   MergedGroup([.RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2], primary: .RESUME_PUMP_ALARM2)
-        public static let mergedGroups: [MergedGroup] = [
-            MergedGroup([.RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2])
-        ]
-
         /// Returns a set of alarms encoded in the provided bitmask.
         public static func fromBitmask(_ intMap: UInt64) -> Set<AlarmResponseType> {
             var current = Set<AlarmResponseType>()

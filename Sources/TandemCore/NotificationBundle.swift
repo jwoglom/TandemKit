@@ -229,6 +229,32 @@ public class NotificationBundle {
         getNotificationCount() == 0
     }
 
+    /// Whether the notification identified by `(type, id)` is currently active in
+    /// the bundle's raw per-category state.
+    ///
+    /// Reads the underlying status responses directly (not `get()`), so it reports
+    /// a member's presence independently of whether it is being merged into a row.
+    /// Used after a dismissal reload to decide which merged members the pump has not
+    /// already cleared on its own.
+    public func isActive(type: NotificationItem.NotificationType, id: UInt32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        switch type {
+        case .alert:
+            return alertStatusResponse?.alerts.contains { UInt32($0.rawValue) == id } ?? false
+        case .alarm:
+            return alarmStatusResponse?.alarms.contains { UInt32($0.rawValue) == id } ?? false
+        case .reminder:
+            return reminderStatusResponse?.reminders.contains { UInt32($0.rawValue) == id } ?? false
+        case .cgmAlert:
+            return cgmAlertStatusResponse?.alerts.contains { UInt32($0.rawValue) == id } ?? false
+        case .malfunction:
+            // Malfunctions are not dismissable and never participate in merged groups.
+            return false
+        }
+    }
+
     /// Returns the last updated time for a specific response type.
     public func lastUpdatedTime(for type: Message.Type) -> Date? {
         lock.lock()
@@ -247,26 +273,43 @@ public struct NotificationItem: Identifiable, Hashable {
     public let name: String
     public let notificationDescription: String?
 
-    /// Names of the other notifications merged into this row, in display order.
-    /// Empty for an ordinary (non-merged) notification. `notificationId` still
-    /// refers to the primary member used for dismissal. See
-    /// `MergedNotificationGroup`.
-    public let mergedNames: [String]
+    /// The other notifications merged into this row, in display order. Empty for an
+    /// ordinary (non-merged) notification. Each member carries its own category and
+    /// id — a merged group may span categories (e.g. an alert + an alarm) — so
+    /// dismissal can acknowledge every member individually. The row's own
+    /// `type`/`notificationId` are the primary; see `MergedNotificationGroup`.
+    public let mergedMembers: [MergedMember]
+
+    /// A single non-primary notification folded into a merged row.
+    public struct MergedMember: Hashable {
+        public let type: NotificationType
+        public let id: UInt32
+        public let name: String
+
+        public init(type: NotificationType, id: UInt32, name: String) {
+            self.type = type
+            self.id = id
+            self.name = name
+        }
+    }
 
     public init(
         type: NotificationType,
         id notificationId: UInt32,
         name: String,
         notificationDescription: String? = nil,
-        mergedNames: [String] = []
+        mergedMembers: [MergedMember] = []
     ) {
         self.id = UUID()
         self.type = type
         self.notificationId = notificationId
         self.name = name
         self.notificationDescription = notificationDescription
-        self.mergedNames = mergedNames
+        self.mergedMembers = mergedMembers
     }
+
+    /// Names of the other notifications merged into this row, in display order.
+    public var mergedNames: [String] { mergedMembers.map(\.name) }
 
     public enum NotificationType {
         case alert
@@ -328,11 +371,24 @@ public struct NotificationItem: Identifiable, Hashable {
 
     /// The notification's category paired with its underlying enum name(s),
     /// e.g. "Alarm: OCCLUSION_ALARM" or "Alert: LOW_INSULIN_ALERT". When several
-    /// co-firing notifications are merged into one row, every member name is
-    /// listed in order, e.g. "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2".
+    /// co-firing notifications are merged into one row, every member name is listed
+    /// in order, e.g. "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2". A merged row
+    /// that spans categories re-labels at each category boundary, e.g.
+    /// "Alarm: RESUME_PUMP_ALARM, Alert: LOW_INSULIN_ALERT".
     public var categoryTitle: String {
-        let names = ([name] + mergedNames).joined(separator: ", ")
-        return "\(type.title): \(names)"
+        // Primary first, then the merged members in display order; a new
+        // "Category:" prefix is emitted only when the category changes.
+        var result = "\(type.title): \(name)"
+        var previousType = type
+        for member in mergedMembers {
+            if member.type == previousType {
+                result += ", \(member.name)"
+            } else {
+                result += ", \(member.type.title): \(member.name)"
+                previousType = member.type
+            }
+        }
+        return result
     }
 }
 
