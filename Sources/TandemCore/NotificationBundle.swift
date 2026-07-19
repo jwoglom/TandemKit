@@ -210,7 +210,11 @@ public class NotificationBundle {
             }
         }
 
-        return items
+        // Collapse any sets of co-firing notifications (that the pump acknowledges
+        // together) into a single row. Applied here so every consumer — the UI, the
+        // badge count via `getNotificationCount()`, and the CLI — sees one
+        // consistent, condensed view.
+        return NotificationCondensation.condense(items)
     }
 
     /// Calculates the total number of active notifications across all response types.
@@ -243,12 +247,25 @@ public struct NotificationItem: Identifiable, Hashable {
     public let name: String
     public let notificationDescription: String?
 
-    public init(type: NotificationType, id notificationId: UInt32, name: String, notificationDescription: String? = nil) {
+    /// Names of the other notifications condensed into this row, in display order.
+    /// Empty for an ordinary (non-condensed) notification. `notificationId` still
+    /// refers to the representative member used for dismissal. See
+    /// `NotificationCondensationGroup`.
+    public let groupedNames: [String]
+
+    public init(
+        type: NotificationType,
+        id notificationId: UInt32,
+        name: String,
+        notificationDescription: String? = nil,
+        groupedNames: [String] = []
+    ) {
         self.id = UUID()
         self.type = type
         self.notificationId = notificationId
         self.name = name
         self.notificationDescription = notificationDescription
+        self.groupedNames = groupedNames
     }
 
     public enum NotificationType {
@@ -309,10 +326,13 @@ public struct NotificationItem: Identifiable, Hashable {
         type.dismissType != nil
     }
 
-    /// The notification's category paired with its underlying enum name,
-    /// e.g. "Alarm: OCCLUSION_ALARM" or "Alert: LOW_INSULIN_ALERT".
+    /// The notification's category paired with its underlying enum name(s),
+    /// e.g. "Alarm: OCCLUSION_ALARM" or "Alert: LOW_INSULIN_ALERT". When several
+    /// co-firing notifications are condensed into one row, every member name is
+    /// listed in order, e.g. "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2".
     public var categoryTitle: String {
-        "\(type.title): \(name)"
+        let names = ([name] + groupedNames).joined(separator: ", ")
+        return "\(type.title): \(names)"
     }
 }
 

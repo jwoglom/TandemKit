@@ -124,6 +124,19 @@ public class AlarmStatusResponse: Message, NotificationMessage {
             lhs.rawValue < rhs.rawValue
         }
 
+        /// Groups of alarms that the pump acknowledges together: dismissing any one
+        /// member causes the pump to clear the entire group on our behalf. Because
+        /// such alarms describe a single underlying condition, the notification UI
+        /// condenses them into one row (e.g. "Alarm: RESUME_PUMP_ALARM,
+        /// RESUME_PUMP_ALARM2") and dismisses only the representative.
+        ///
+        /// Each inner array lists the members in display order; the first element is
+        /// the representative dismissed on the user's behalf. See
+        /// `NotificationCondensationGroup`.
+        public static let condensationGroups: [[AlarmResponseType]] = [
+            [.RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2]
+        ]
+
         /// Returns a set of alarms encoded in the provided bitmask.
         public static func fromBitmask(_ intMap: UInt64) -> Set<AlarmResponseType> {
             var current = Set<AlarmResponseType>()

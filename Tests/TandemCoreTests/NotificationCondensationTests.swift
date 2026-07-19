@@ -1,0 +1,103 @@
+@testable import TandemCore
+import XCTest
+
+/// Verifies that co-firing pump notifications the pump acknowledges together are
+/// condensed into a single UI row. The first modelled group is
+/// `RESUME_PUMP_ALARM` (18) + `RESUME_PUMP_ALARM2` (23).
+final class NotificationCondensationTests: XCTestCase {
+    /// Creates a bitmask from the given bit positions (raw values).
+    private func bitmask(_ positions: Int...) -> UInt64 {
+        positions.reduce(0) { $0 | (1 << $1) }
+    }
+
+    private let resumeAlarm = AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM.rawValue // 18
+    private let resumeAlarm2 = AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM2.rawValue // 23
+
+    // MARK: - Catalog
+
+    /// The resume-pump alarms are declared as a condensation group scoped to alarms,
+    /// with the lower-numbered alarm as the representative.
+    func testCatalogContainsResumePumpGroup() {
+        let group = NotificationCondensation.groups.first {
+            $0.type == .alarm && $0.members.contains(UInt32(resumeAlarm))
+        }
+        XCTAssertNotNil(group)
+        XCTAssertEqual(group?.members, [UInt32(resumeAlarm), UInt32(resumeAlarm2)])
+        XCTAssertEqual(group?.representative, UInt32(resumeAlarm))
+    }
+
+    // MARK: - Bundle-level behaviour
+
+    /// Both resume-pump alarms collapse into one row whose category line lists both
+    /// member names, in declared order.
+    func testResumePumpAlarmsCondenseIntoSingleRow() {
+        let bundle = NotificationBundle()
+        bundle.add(AlarmStatusResponse(intMap: bitmask(resumeAlarm, resumeAlarm2)))
+
+        let items = bundle.get()
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+
+        let item = items[0]
+        XCTAssertEqual(item.type, .alarm)
+        XCTAssertEqual(item.categoryTitle, "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2")
+        XCTAssertEqual(item.groupedNames, ["RESUME_PUMP_ALARM2"])
+        // The representative (lower id) drives dismissal; the pump acks the rest.
+        XCTAssertEqual(item.notificationId, UInt32(resumeAlarm))
+        // The shared description is preserved from the representative.
+        XCTAssertEqual(item.displayTitle, "Insulin delivery is currently off. Please restart insulin delivery soon.")
+    }
+
+    /// A lone member does not condense — it renders as its own ordinary row. This is
+    /// also the graceful fallback if the pump only partially acknowledges a group.
+    func testLoneResumePumpAlarmIsNotCondensed() {
+        let bundle = NotificationBundle()
+        bundle.add(AlarmStatusResponse(intMap: bitmask(resumeAlarm2)))
+
+        let items = bundle.get()
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].categoryTitle, "Alarm: RESUME_PUMP_ALARM2")
+        XCTAssertEqual(items[0].groupedNames, [])
+        XCTAssertEqual(items[0].notificationId, UInt32(resumeAlarm2))
+    }
+
+    /// Unrelated alarms are untouched, and the condensed row keeps the position of
+    /// its first present member (so ordering by raw value is preserved).
+    func testUnrelatedAlarmsAreUnaffectedAndOrderingIsStable() {
+        let bundle = NotificationBundle()
+        // bit 2 = OCCLUSION_ALARM, plus the two resume alarms.
+        bundle.add(AlarmStatusResponse(intMap: bitmask(2, resumeAlarm, resumeAlarm2)))
+
+        let items = bundle.get()
+        XCTAssertEqual(items.count, 2)
+        XCTAssertEqual(items[0].categoryTitle, "Alarm: OCCLUSION_ALARM")
+        XCTAssertEqual(items[1].categoryTitle, "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2")
+    }
+
+    /// Condensation does not reach across categories: an alert sharing a raw value
+    /// with a grouped alarm is left alone.
+    func testCondensationDoesNotSpanCategories() {
+        let bundle = NotificationBundle()
+        bundle.add(AlarmStatusResponse(intMap: bitmask(resumeAlarm, resumeAlarm2)))
+        // Alert bit 18 is an unrelated alert; it must remain its own row.
+        bundle.add(AlertStatusResponse(intMap: bitmask(resumeAlarm)))
+
+        let alarmRows = bundle.get().filter { $0.type == .alarm }
+        let alertRows = bundle.get().filter { $0.type == .alert }
+        XCTAssertEqual(alarmRows.count, 1)
+        XCTAssertEqual(alarmRows[0].categoryTitle, "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2")
+        XCTAssertEqual(alertRows.count, 1)
+    }
+
+    // MARK: - Condenser unit behaviour
+
+    /// The pure condenser leaves a list with no grouped members unchanged.
+    func testCondenseIsIdentityWithoutGroups() {
+        let items = [
+            NotificationItem(type: .alarm, id: 2, name: "OCCLUSION_ALARM"),
+            NotificationItem(type: .reminder, id: 3, name: "SITE_CHANGE_REMINDER")
+        ]
+        let condensed = NotificationCondensation.condense(items)
+        XCTAssertEqual(condensed.map(\.categoryTitle), items.map(\.categoryTitle))
+    }
+}
