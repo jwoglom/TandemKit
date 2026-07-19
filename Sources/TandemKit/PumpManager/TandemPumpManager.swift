@@ -1207,7 +1207,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            // For a condensed row (see `NotificationCondensationGroup`),
+            // For a merged row (see `MergedNotificationGroup`),
             // `item.notificationId` is the group's representative. The pump
             // acknowledges the remaining members of the group automatically, so a
             // single dismiss request clears the whole row.
