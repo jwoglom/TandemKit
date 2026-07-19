@@ -209,7 +209,14 @@ public class UnfinalizedDose {
     }
 
     private func roundBasalRate(_ rate: Double) -> Double {
-        TandemPumpManager.onboardingSupportedBasalRates.last(where: { $0 <= rate }) ?? 0
+        #if os(Linux)
+            // TandemPumpManager lives in the iOS-only TandemKit layer, which is not
+            // part of the desktop/Linux SwiftPM build. Basal-rate rounding is only
+            // meaningful when driving a real pump, so pass the rate through here.
+            return rate
+        #else
+            return TandemPumpManager.onboardingSupportedBasalRates.last(where: { $0 <= rate }) ?? 0
+        #endif
     }
 
     public static func defaultBasalDose(basalSchedule: BasalRateSchedule, insulineType: InsulinType?) -> UnfinalizedDose {
