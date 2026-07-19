@@ -249,7 +249,7 @@ public struct NotificationItem: Identifiable, Hashable {
 
     /// Names of the other notifications merged into this row, in display order.
     /// Empty for an ordinary (non-merged) notification. `notificationId` still
-    /// refers to the representative member used for dismissal. See
+    /// refers to the primary member used for dismissal. See
     /// `MergedNotificationGroup`.
     public let mergedNames: [String]
 

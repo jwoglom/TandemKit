@@ -1208,9 +1208,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             // For a merged row (see `MergedNotificationGroup`),
-            // `item.notificationId` is the group's representative. The pump
-            // acknowledges the remaining members of the group automatically, so a
-            // single dismiss request clears the whole row.
+            // `item.notificationId` is the group's primary. The pump acknowledges
+            // the remaining members of the group automatically, so a single dismiss
+            // request clears the whole row.
             guard let response = self.bluetooth.write(
                 message: DismissNotificationRequest(
                     notificationType: dismissType,

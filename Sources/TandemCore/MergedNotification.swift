@@ -5,12 +5,12 @@ import Foundation
 ///
 /// Because the members represent one underlying condition, they are merged into a
 /// single row in the UI (e.g. "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2") and
-/// dismissed with a single request targeting the representative member — the pump
-/// then clears the remaining members on its own.
+/// dismissed with a single request targeting the `primary` member — the pump then
+/// clears the remaining members on its own.
 ///
 /// The "acknowledged together" property is the defining invariant: a set is only
-/// modelled as a merged group when dismissing its representative is known to clear
-/// the whole set on the pump. Groups are declared per notification category on that
+/// modelled as a merged group when dismissing its primary is known to clear the
+/// whole set on the pump. Groups are declared per notification category on that
 /// category's own enum (see `AlarmStatusResponse.AlarmResponseType.mergedGroups`)
 /// and aggregated into the category-agnostic catalog in `MergedNotification`.
 public struct MergedNotificationGroup: Equatable {
@@ -19,19 +19,22 @@ public struct MergedNotificationGroup: Equatable {
     /// status surface.
     public let type: NotificationItem.NotificationType
 
-    /// Member notification ids in display order. `members.first` is the
-    /// representative dismissed on the user's behalf.
+    /// Member notification ids in display order.
     public let members: [UInt32]
 
-    public init(type: NotificationItem.NotificationType, members: [UInt32]) {
+    /// The member whose description is shown and whose id is dismissed (the pump
+    /// acknowledges the remaining members automatically). It is listed first in the
+    /// merged row. Defaults to the first member.
+    public let primary: UInt32
+
+    public init(type: NotificationItem.NotificationType, members: [UInt32], primary: UInt32? = nil) {
         precondition(members.count >= 2, "A merged group must declare at least two members")
+        let resolvedPrimary = primary ?? members[0]
+        precondition(members.contains(resolvedPrimary), "primary must be one of the members")
         self.type = type
         self.members = members
+        self.primary = resolvedPrimary
     }
-
-    /// The id dismissed on the user's behalf; the pump acknowledges the remaining
-    /// members automatically.
-    public var representative: UInt32 { members[0] }
 
     /// Whether the given item is a member of this group.
     func contains(_ item: NotificationItem) -> Bool {
@@ -53,21 +56,29 @@ public enum MergedNotification {
     /// `AlarmStatusResponse.AlarmResponseType.mergedGroups`) and map it in here.
     /// Nothing else in the pipeline needs to change.
     public static let groups: [MergedNotificationGroup] =
-        AlarmStatusResponse.AlarmResponseType.mergedGroups.map { members in
+        AlarmStatusResponse.AlarmResponseType.mergedGroups.map { group in
             MergedNotificationGroup(
                 type: .alarm,
-                members: members.map { UInt32($0.rawValue) }
+                members: group.members.map { UInt32($0.rawValue) },
+                primary: UInt32(group.primary.rawValue)
             )
         }
 
-    /// Merges each configured group of co-firing notifications into a single
-    /// representative row.
+    /// Merges each configured group of co-firing notifications into a single row.
+    public static func merge(_ items: [NotificationItem]) -> [NotificationItem] {
+        merge(items, using: groups)
+    }
+
+    /// Merges `items` against an explicit set of groups.
     ///
     /// A group merges only when two or more of its members are actually present; a
     /// lone member renders normally (and, on the next refresh after a partial pump
     /// acknowledge, so does any straggler). The merged row keeps the position of the
     /// group's first present member, so overall ordering is stable.
-    public static func merge(_ items: [NotificationItem]) -> [NotificationItem] {
+    ///
+    /// Exposed (internally) so the merge can be exercised against ad-hoc groups in
+    /// tests without touching the shared catalog.
+    static func merge(_ items: [NotificationItem], using groups: [MergedNotificationGroup]) -> [NotificationItem] {
         guard !groups.isEmpty, items.count > 1 else { return items }
 
         var result: [NotificationItem] = []
@@ -86,7 +97,7 @@ public enum MergedNotification {
                 continue
             }
 
-            result.append(merged(from: present))
+            result.append(merged(from: present, primary: group.primary))
             for member in present {
                 consumed.insert(member.id)
             }
@@ -111,17 +122,18 @@ public enum MergedNotification {
         }
     }
 
-    /// Builds the single row that represents a merged group. The first present
-    /// member is the representative — its id drives dismissal and its description is
-    /// shown — and the remaining member names are appended to the category line.
-    private static func merged(from members: [NotificationItem]) -> NotificationItem {
-        let representative = members[0]
+    /// Builds the single row that represents a merged group. The `primary` member —
+    /// its id drives dismissal and its description is shown — is listed first, and
+    /// the remaining members follow in their declared order.
+    private static func merged(from members: [NotificationItem], primary: UInt32) -> NotificationItem {
+        let primaryItem = members.first { $0.notificationId == primary } ?? members[0]
+        let others = members.filter { $0.id != primaryItem.id }
         return NotificationItem(
-            type: representative.type,
-            id: representative.notificationId,
-            name: representative.name,
-            notificationDescription: representative.notificationDescription,
-            mergedNames: members.dropFirst().map(\.name)
+            type: primaryItem.type,
+            id: primaryItem.notificationId,
+            name: primaryItem.name,
+            notificationDescription: primaryItem.notificationDescription,
+            mergedNames: others.map(\.name)
         )
     }
 }

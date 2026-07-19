@@ -16,14 +16,46 @@ final class MergedNotificationTests: XCTestCase {
     // MARK: - Catalog
 
     /// The resume-pump alarms are declared as a merged group scoped to alarms, with
-    /// the lower-numbered alarm as the representative.
+    /// the lower-numbered alarm as the primary.
     func testCatalogContainsResumePumpGroup() {
         let group = MergedNotification.groups.first {
             $0.type == .alarm && $0.members.contains(UInt32(resumeAlarm))
         }
         XCTAssertNotNil(group)
         XCTAssertEqual(group?.members, [UInt32(resumeAlarm), UInt32(resumeAlarm2)])
-        XCTAssertEqual(group?.representative, UInt32(resumeAlarm))
+        XCTAssertEqual(group?.primary, UInt32(resumeAlarm))
+    }
+
+    // MARK: - Primary selection
+
+    /// When no primary is specified, the first declared member is primary.
+    func testPrimaryDefaultsToFirstMember() {
+        let group = MergedNotificationGroup(type: .alarm, members: [40, 41])
+        XCTAssertEqual(group.primary, 40)
+    }
+
+    /// An explicit primary can be any member and is independent of position.
+    func testExplicitPrimaryIsHonored() {
+        let group = MergedNotificationGroup(type: .alarm, members: [40, 41], primary: 41)
+        XCTAssertEqual(group.primary, 41)
+    }
+
+    /// The primary supplies the description shown and the id dismissed, and is
+    /// listed first in the merged row — even when it is not the first member.
+    func testPrimaryDeterminesDescriptionAndDismissalId() {
+        let first = NotificationItem(type: .alarm, id: 40, name: "ALARM_A", notificationDescription: "Description A.")
+        let second = NotificationItem(type: .alarm, id: 41, name: "ALARM_B", notificationDescription: "Description B.")
+        // members list A first, but B is nominated primary.
+        let group = MergedNotificationGroup(type: .alarm, members: [40, 41], primary: 41)
+
+        let merged = MergedNotification.merge([first, second], using: [group])
+        XCTAssertEqual(merged.count, 1)
+        // Description + dismissal id come from the primary (B).
+        XCTAssertEqual(merged[0].notificationId, 41)
+        XCTAssertEqual(merged[0].displayTitle, "Description B.")
+        // Primary is listed first, the remaining member follows.
+        XCTAssertEqual(merged[0].categoryTitle, "Alarm: ALARM_B, ALARM_A")
+        XCTAssertEqual(merged[0].mergedNames, ["ALARM_A"])
     }
 
     // MARK: - Bundle-level behaviour
@@ -42,9 +74,9 @@ final class MergedNotificationTests: XCTestCase {
         XCTAssertEqual(item.type, .alarm)
         XCTAssertEqual(item.categoryTitle, "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2")
         XCTAssertEqual(item.mergedNames, ["RESUME_PUMP_ALARM2"])
-        // The representative (lower id) drives dismissal; the pump acks the rest.
+        // The primary (lower id) drives dismissal; the pump acks the rest.
         XCTAssertEqual(item.notificationId, UInt32(resumeAlarm))
-        // The shared description is preserved from the representative.
+        // The shared description is preserved from the primary.
         XCTAssertEqual(item.displayTitle, "Insulin delivery is currently off. Please restart insulin delivery soon.")
     }
 
