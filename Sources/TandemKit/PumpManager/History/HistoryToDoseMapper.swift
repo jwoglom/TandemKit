@@ -187,11 +187,17 @@ class HistoryToDoseMapper {
     private func recordClockChanges(_ logs: [HistoryLog], reconciler: HistoryTimestampReconciler) {
         for log in logs {
             if let timeChanged = log as? TimeChangedHistoryLog {
-                let delta = Int(timeChanged.timeAfter) - Int(timeChanged.timePrior)
-                reconciler.recordClockChange(at: timeChanged.sequenceNum, deltaSec: delta)
+                // timePrior/timeAfter are MILLISECONDS since local midnight (verified
+                // from pump logs). A change that crosses midnight also emits a
+                // DateChangeHistoryLog; the two deltas sum to the true shift.
+                let deltaMs = Int(timeChanged.timeAfter) - Int(timeChanged.timePrior)
+                let deltaSec = Int((Double(deltaMs) / 1000).rounded())
+                reconciler.recordClockChange(at: timeChanged.sequenceNum, deltaSec: deltaSec)
             } else if let dateChanged = log as? DateChangeHistoryLog {
-                let delta = Int(dateChanged.dateAfter) - Int(dateChanged.datePrior)
-                reconciler.recordClockChange(at: dateChanged.sequenceNum, deltaSec: delta)
+                // datePrior/dateAfter are DAYS since the Jan-1-2008 epoch — see pumpX2's
+                // DateChangeHistoryLog.getDatePriorInstant (Dates.fromJan12008EpochDaysToDate).
+                let deltaDays = Int(dateChanged.dateAfter) - Int(dateChanged.datePrior)
+                reconciler.recordClockChange(at: dateChanged.sequenceNum, deltaSec: deltaDays * 86400)
             }
         }
     }
