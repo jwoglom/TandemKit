@@ -105,9 +105,10 @@ extension TandemPumpManager {
     }
 
     /// Fetch pump history, log it, and emit the pump-autonomous delivery (see `processFetchedHistory`).
-    /// - **Initial sync** (no cursor — also after an app restart / overnight power-down): a *deep*
+    /// - **First run only** (no persisted fetched ranges — fresh install or pump re-add): a *deep*
     ///   fetch bounded by a fixed ≈insulin-duration window (see `historyDeepFetchWindow`), with a
-    ///   metrics line.
+    ///   metrics line. The ranges persist in pump-manager state, so an ordinary app restart does
+    ///   NOT re-trigger this.
     /// - **Subsequent cycles:** a small incremental fetch of entries newer than the last we logged.
     /// Runs synchronously on the caller's (background, already-connected) queue.
     func fetchAndLogPumpHistory() {
