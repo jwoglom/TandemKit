@@ -47,3 +47,31 @@ public struct FetchedRange: Codable, Equatable {
         Int(end - start) + 1
     }
 }
+
+extension FetchedRange: RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        guard let startRaw = rawValue["start"] as? Int,
+              let endRaw = rawValue["end"] as? Int,
+              let start = UInt32(exactly: startRaw),
+              let end = UInt32(exactly: endRaw),
+              let fetchedAtInterval = rawValue["fetchedAt"] as? TimeInterval
+        else {
+            return nil
+        }
+        self.init(
+            start: start,
+            end: end,
+            fetchedAt: Date(timeIntervalSinceReferenceDate: fetchedAtInterval)
+        )
+    }
+
+    public var rawValue: RawValue {
+        [
+            "start": Int(start),
+            "end": Int(end),
+            "fetchedAt": fetchedAt.timeIntervalSinceReferenceDate
+        ]
+    }
+}

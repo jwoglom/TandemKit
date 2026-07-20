@@ -197,14 +197,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         if let idsRaw = rawValue["commandedBolusIds"] as? [[String: Any]] {
-            commandedBolusIds = idsRaw.compactMap { entry in
-                guard let id = entry["bolusId"] as? Int,
-                      let interval = entry["requestedAt"] as? TimeInterval
-                else {
-                    return nil
-                }
-                return CommandedBolusRecord(bolusId: id, requestedAt: Date(timeIntervalSinceReferenceDate: interval))
-            }
+            commandedBolusIds = idsRaw.compactMap(CommandedBolusRecord.init(rawValue:))
         } else {
             commandedBolusIds = []
         }
@@ -216,19 +209,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         if let rangesRaw = rawValue["historyFetchedRanges"] as? [[String: Any]] {
-            historyFetchedRanges = rangesRaw.compactMap { entry in
-                guard let start = entry["start"] as? Int,
-                      let end = entry["end"] as? Int,
-                      let fetchedAtInterval = entry["fetchedAt"] as? TimeInterval
-                else {
-                    return nil
-                }
-                return FetchedRange(
-                    start: UInt32(start),
-                    end: UInt32(end),
-                    fetchedAt: Date(timeIntervalSinceReferenceDate: fetchedAtInterval)
-                )
-            }
+            historyFetchedRanges = rangesRaw.compactMap(FetchedRange.init(rawValue:))
         } else {
             historyFetchedRanges = []
         }
@@ -406,17 +387,13 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         if !commandedBolusIds.isEmpty {
-            raw["commandedBolusIds"] = commandedBolusIds.map {
-                ["bolusId": $0.bolusId, "requestedAt": $0.requestedAt.timeIntervalSinceReferenceDate]
-            }
+            raw["commandedBolusIds"] = commandedBolusIds.map(\.rawValue)
         }
 
         raw["commandedTrackingStartedAt"] = commandedTrackingStartedAt?.timeIntervalSinceReferenceDate
 
         if !historyFetchedRanges.isEmpty {
-            raw["historyFetchedRanges"] = historyFetchedRanges.map {
-                ["start": Int($0.start), "end": Int($0.end), "fetchedAt": $0.fetchedAt.timeIntervalSinceReferenceDate]
-            }
+            raw["historyFetchedRanges"] = historyFetchedRanges.map(\.rawValue)
         }
 
         if !pendingDoses.isEmpty, let pendingData = try? PropertyListEncoder().encode(pendingDoses) {
@@ -521,6 +498,26 @@ public struct TandemPumpManagerState: RawRepresentable {
             localIdentifier: nil,
             udiDeviceIdentifier: nil
         )
+    }
+}
+
+extension TandemPumpManagerState.CommandedBolusRecord: RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        guard let id = rawValue["bolusId"] as? Int,
+              let interval = rawValue["requestedAt"] as? TimeInterval
+        else {
+            return nil
+        }
+        self.init(bolusId: id, requestedAt: Date(timeIntervalSinceReferenceDate: interval))
+    }
+
+    public var rawValue: RawValue {
+        [
+            "bolusId": bolusId,
+            "requestedAt": requestedAt.timeIntervalSinceReferenceDate
+        ]
     }
 }
 
