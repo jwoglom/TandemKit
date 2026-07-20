@@ -15,7 +15,6 @@
 		01A16DAA2FF1A81E006CA94E /* FetchedRange.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16D9A2FF1A81E006CA94E /* FetchedRange.swift */; };
 		01A16DAB2FF1A81E006CA94E /* HistoryRangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16D9E2FF1A81E006CA94E /* HistoryRangeTracker.swift */; };
 		01A16DAC2FF1A81E006CA94E /* HistoryMessageSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16D9D2FF1A81E006CA94E /* HistoryMessageSender.swift */; };
-		01A16DAD2FF1A81E006CA94E /* HistoryDeduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16D9B2FF1A81E006CA94E /* HistoryDeduplicator.swift */; };
 		01A16DAE2FF1A81E006CA94E /* HistoryReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16D9F2FF1A81E006CA94E /* HistoryReconciler.swift */; };
 		01A16DAF2FF1A81E006CA94E /* PendingDose.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01A16DA22FF1A81E006CA94E /* PendingDose.swift */; };
 		02334C18F15F4FF8B8720DA5 /* TandemKitChangeCartridgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */; };
@@ -471,7 +470,6 @@
 /* Begin PBXFileReference section */
 		01A16D992FF1A81E006CA94E /* ChunkedStreamCollector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChunkedStreamCollector.swift; sourceTree = "<group>"; };
 		01A16D9A2FF1A81E006CA94E /* FetchedRange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FetchedRange.swift; sourceTree = "<group>"; };
-		01A16D9B2FF1A81E006CA94E /* HistoryDeduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryDeduplicator.swift; sourceTree = "<group>"; };
 		01A16D9C2FF1A81E006CA94E /* HistoryFetchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryFetchSession.swift; sourceTree = "<group>"; };
 		01A16D9D2FF1A81E006CA94E /* HistoryMessageSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryMessageSender.swift; sourceTree = "<group>"; };
 		01A16D9E2FF1A81E006CA94E /* HistoryRangeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryRangeTracker.swift; sourceTree = "<group>"; };
@@ -932,7 +930,6 @@
 			children = (
 				01A16D992FF1A81E006CA94E /* ChunkedStreamCollector.swift */,
 				01A16D9A2FF1A81E006CA94E /* FetchedRange.swift */,
-				01A16D9B2FF1A81E006CA94E /* HistoryDeduplicator.swift */,
 				01A16D9C2FF1A81E006CA94E /* HistoryFetchSession.swift */,
 				01A16D9D2FF1A81E006CA94E /* HistoryMessageSender.swift */,
 				01A16D9E2FF1A81E006CA94E /* HistoryRangeTracker.swift */,
@@ -2036,7 +2033,6 @@
 				01A16DAA2FF1A81E006CA94E /* FetchedRange.swift in Sources */,
 				01A16DAB2FF1A81E006CA94E /* HistoryRangeTracker.swift in Sources */,
 				01A16DAC2FF1A81E006CA94E /* HistoryMessageSender.swift in Sources */,
-				01A16DAD2FF1A81E006CA94E /* HistoryDeduplicator.swift in Sources */,
 				01A16DAE2FF1A81E006CA94E /* HistoryReconciler.swift in Sources */,
 				01A16DAF2FF1A81E006CA94E /* PendingDose.swift in Sources */,
 				3EB807A32FBCDCD70075D19E /* CgmAlertClearedHistoryLog.swift in Sources */,
