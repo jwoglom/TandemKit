@@ -305,6 +305,19 @@ extension TandemPumpManager {
                 let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
                 historyLogger.info("[HISTORY-BOLUS] seq=\(log.sequenceNum) time=\(time) bolusId=\(bolus.bolusId) requested=\(bolus.insulinRequested)U delivered=\(bolus.insulinDelivered)U iob=\(bolus.iob)U completionStatus=\(bolus.completionStatusId)")
             }
+
+            // Diagnostics (info level → tandem_log.txt): pump clock changes (typeIds 13/14). These
+            // shift how every earlier record's pumpTimeSec maps to real time (see
+            // HistoryTimestampReconciler), so keep the raw prior/after fields on record.
+            if let timeChanged = log as? TimeChangedHistoryLog {
+                let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
+                historyLogger.info("[HISTORY-TIMECHANGE] seq=\(log.sequenceNum) time=\(time) timePrior=\(timeChanged.timePrior) timeAfter=\(timeChanged.timeAfter) rawRTC=\(timeChanged.rawRTC)")
+            }
+
+            if let dateChanged = log as? DateChangeHistoryLog {
+                let time = Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
+                historyLogger.info("[HISTORY-DATECHANGE] seq=\(log.sequenceNum) time=\(time) datePrior=\(dateChanged.datePrior) dateAfter=\(dateChanged.dateAfter) rawRTCTime=\(dateChanged.rawRTCTime)")
+            }
         }
 
         // Reconstruct the pump's basal timeline from this fetch's 279 samples. (Call `basalSegments`
