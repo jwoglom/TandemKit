@@ -14,7 +14,7 @@ import Foundation
 /// The mapping assumes sequence number and date increase together. Pump clock changes can break
 /// that locally, so every value produced here is an *estimate* — good enough to jump to the right
 /// neighbourhood, after which a binary search (`binarySearchBoundary`) can pin an exact edge.
-public struct HistoryLogCalibration: Equatable {
+public struct HistoryLogTimeIndex: Equatable {
     /// A single sampled (sequenceNum, date) pair.
     public struct Point: Equatable, Comparable {
         public let sequenceNum: UInt32

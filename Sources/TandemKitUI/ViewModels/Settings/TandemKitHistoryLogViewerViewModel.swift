@@ -77,7 +77,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
     @Published private(set) var isResolvingRange = false
 
     // MARK: Calibration
-    @Published private(set) var calibration = HistoryLogCalibration()
+    @Published private(set) var timeIndex = HistoryLogTimeIndex()
     @Published private(set) var calibrationState: CalibrationState = .idle
 
     /// History logs keyed by sequence number.
@@ -217,7 +217,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     guard self.isCurrent(myToken) else { return }
                     if let log {
-                        self.calibration.insert(
+                        self.timeIndex.insert(
                             sequenceNum: log.sequenceNum,
                             date: Dates.fromJan12008EpochSecondsToDate(TimeInterval(log.pumpTimeSec))
                         )
@@ -232,7 +232,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
         }
     }
 
-    var isCalibrated: Bool { calibration.isUsable }
+    var isCalibrated: Bool { timeIndex.isUsable }
 
     /// e.g. "Calibrated from 31 points · 2026-06-20 → 2026-07-21"
     var calibrationSummary: String {
@@ -242,11 +242,11 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
         case let .running(done, total):
             return "Calibrating… \(done)/\(total) sample logs"
         case .ready:
-            guard let earliest = calibration.earliest, let latest = calibration.latest else {
+            guard let earliest = timeIndex.earliest, let latest = timeIndex.latest else {
                 return "Calibration produced no samples"
             }
             let span = "\(Self.shortDate(earliest.date)) → \(Self.shortDate(latest.date))"
-            return "Calibrated from \(calibration.count) point\(calibration.count == 1 ? "" : "s") · \(span)"
+            return "Calibrated from \(timeIndex.count) point\(timeIndex.count == 1 ? "" : "s") · \(span)"
         }
     }
 
@@ -278,16 +278,16 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
     func resetStartToNewest() {
         guard let last = lastSequenceNum else { return }
         startId = last
-        pickerDate = calibration.estimatedDate(forSequenceNum: last) ?? Date()
+        pickerDate = timeIndex.estimatedDate(forSequenceNum: last) ?? Date()
         daysAgo = 0
     }
 
     func estimatedStartId(forDate date: Date) -> UInt32? {
-        calibration.estimatedSequenceNum(forDate: date, lowerBound: firstSequenceNum, upperBound: lastSequenceNum)
+        timeIndex.estimatedSequenceNum(forDate: date, lowerBound: firstSequenceNum, upperBound: lastSequenceNum)
     }
 
     func estimatedDate(forSequenceNum sequenceNum: UInt32) -> Date? {
-        calibration.estimatedDate(forSequenceNum: sequenceNum)
+        timeIndex.estimatedDate(forSequenceNum: sequenceNum)
     }
 
     /// Human-readable estimated date for a sequence number, or "—" before calibration.
@@ -367,7 +367,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
             return
         }
         let (lower, upper) = orderedRangeDates()
-        let snapshot = calibration
+        let snapshot = timeIndex
         let myToken = bumpToken()
         isResolvingRange = true
         resolvedRange = nil
@@ -389,11 +389,11 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
             let fromBounds = snapshot.sequenceBounds(forDate: lower) ?? (first, last)
             let toBounds = snapshot.sequenceBounds(forDate: upper) ?? (first, last)
 
-            let fromId = HistoryLogCalibration.binarySearchBoundary(
+            let fromId = HistoryLogTimeIndex.binarySearchBoundary(
                 .firstAtOrAfter, target: lower,
                 lowerBound: fromBounds.lower, upperBound: fromBounds.upper, probe: probe
             )
-            let toId = HistoryLogCalibration.binarySearchBoundary(
+            let toId = HistoryLogTimeIndex.binarySearchBoundary(
                 .lastAtOrBefore, target: upper,
                 lowerBound: toBounds.lower, upperBound: toBounds.upper, probe: probe
             )
@@ -405,7 +405,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
                 self.isResolvingRange = false
                 // Fold newly learned points back into the calibration for sharper future estimates.
                 for (seq, date) in cache {
-                    self.calibration.insert(sequenceNum: seq, date: date)
+                    self.timeIndex.insert(sequenceNum: seq, date: date)
                 }
                 let resolved = ResolvedRange(fromId: fromId, toId: toId)
                 self.resolvedRange = resolved

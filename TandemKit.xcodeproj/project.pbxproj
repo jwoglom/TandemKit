@@ -360,7 +360,7 @@
 		3EB808792FBCDD060075D19E /* CRC16.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444C2EC91299008A07F6 /* CRC16.swift */; };
 		3EB8087A2FBCDD060075D19E /* Double.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF00DD52F0AAF8F00776DCD /* Double.swift */; };
 		3EB8087B2FBCDD060075D19E /* Dates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3444D2EC91299008A07F6 /* Dates.swift */; };
-		71570600000000000000EE01 /* HistoryLogCalibration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EE02 /* HistoryLogCalibration.swift */; };
+		71570600000000000000EE01 /* HistoryLogTimeIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EE02 /* HistoryLogTimeIndex.swift */; };
 		3EB8087C2FBCDD060075D19E /* TimeInterval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344492EC91299008A07F6 /* TimeInterval.swift */; };
 		3EB8087E2FBCDD060075D19E /* Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344482EC91299008A07F6 /* Data.swift */; };
 		3EB808832FBCDD110075D19E /* CurrentBatteryRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3443A2EC91299008A07F6 /* CurrentBatteryRequestBuilder.swift */; };
@@ -559,7 +559,7 @@
 		3EE3444B2EC91299008A07F6 /* Bytes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bytes.swift; sourceTree = "<group>"; };
 		3EE3444C2EC91299008A07F6 /* CRC16.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRC16.swift; sourceTree = "<group>"; };
 		3EE3444D2EC91299008A07F6 /* Dates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dates.swift; sourceTree = "<group>"; };
-		71570600000000000000EE02 /* HistoryLogCalibration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogCalibration.swift; sourceTree = "<group>"; };
+		71570600000000000000EE02 /* HistoryLogTimeIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogTimeIndex.swift; sourceTree = "<group>"; };
 		3EE3444E2EC91299008A07F6 /* HmacSha1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HmacSha1.swift; sourceTree = "<group>"; };
 		3EE344512EC91299008A07F6 /* TandemLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemLogger.swift; sourceTree = "<group>"; };
 		3EE344522EC91299008A07F6 /* SHA1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SHA1.swift; sourceTree = "<group>"; };
@@ -1159,7 +1159,7 @@
 				3EBE90FB2FC1A5540048A57F /* TandemDispatchGroup.swift */,
 				3EE3444C2EC91299008A07F6 /* CRC16.swift */,
 				3EE3444D2EC91299008A07F6 /* Dates.swift */,
-				71570600000000000000EE02 /* HistoryLogCalibration.swift */,
+				71570600000000000000EE02 /* HistoryLogTimeIndex.swift */,
 				3EE3444E2EC91299008A07F6 /* HmacSha1.swift */,
 				3EE344512EC91299008A07F6 /* TandemLogger.swift */,
 				3EE344522EC91299008A07F6 /* SHA1.swift */,
@@ -1865,7 +1865,7 @@
 				3EB808792FBCDD060075D19E /* CRC16.swift in Sources */,
 				3EB8087A2FBCDD060075D19E /* Double.swift in Sources */,
 				3EB8087B2FBCDD060075D19E /* Dates.swift in Sources */,
-				71570600000000000000EE01 /* HistoryLogCalibration.swift in Sources */,
+				71570600000000000000EE01 /* HistoryLogTimeIndex.swift in Sources */,
 				3EB8087C2FBCDD060075D19E /* TimeInterval.swift in Sources */,
 				3EB8087E2FBCDD060075D19E /* Data.swift in Sources */,
 				3EB807692FBCDCD70075D19E /* CannulaFilledHistoryLog.swift in Sources */,
