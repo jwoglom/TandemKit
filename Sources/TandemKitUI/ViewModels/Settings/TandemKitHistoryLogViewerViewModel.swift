@@ -46,7 +46,8 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
     struct LogEntry: Identifiable {
         let log: HistoryLog
         var id: UInt32 { log.sequenceNum }
-        var typeName: String { HistoryLogExport.typeName(log) }
+        /// Grouping/display name — splits UnknownHistoryLog by typeId (e.g. "UnknownHistoryLog (140)").
+        var displayName: String { HistoryLogExport.displayName(log) }
     }
 
     @Published var phase: Phase = .loadingStatus
@@ -501,25 +502,56 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
         HistoryLogExport.prettyDescription(log)
     }
 
+    /// Logs of one type group, newest first, for the group sheet. `logsByType` is kept sorted
+    /// ascending by sequence number, so reversing is enough (no re-sort).
+    func typeEntries(forTypeName name: String) -> [LogEntry] {
+        (logsByType[name] ?? []).reversed().map { LogEntry(log: $0) }
+    }
+
     /// Writes all received stream messages as cliparser-format JSONL and returns the file URL.
     func exportFileURL() -> URL? {
         guard !streamMessages.isEmpty else {
             return nil
         }
+        return writeExport(HistoryLogExport.jsonl(for: streamMessages), nameHint: nil)
+    }
+
+    /// Exports just the logs in one type group, in chronological (ascending sequence) order.
+    func exportFileURL(forTypeName name: String) -> URL? {
+        let logs = logsByType[name] ?? []
+        guard !logs.isEmpty else { return nil }
+        return writeExport(HistoryLogExport.jsonl(forLogs: logs, receivedAt: Date()), nameHint: name)
+    }
+
+    /// Exports a single history log.
+    func exportFileURL(for log: HistoryLog) -> URL? {
+        writeExport(HistoryLogExport.jsonl(forLogs: [log], receivedAt: Date()), nameHint: "seq-\(log.sequenceNum)")
+    }
+
+    /// Writes JSONL to a uniquely named temp file and returns its URL, or nil on empty/failure.
+    private func writeExport(_ jsonl: String, nameHint: String?) -> URL? {
+        guard !jsonl.isEmpty else { return nil }
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let timestamp = formatter.string(from: Date())
+        let hint = nameHint.map { "\(sanitizedFileComponent($0))-" } ?? ""
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("history-logs-\(formatter.string(from: Date())).jsonl")
+            .appendingPathComponent("history-logs-\(hint)\(timestamp).jsonl")
 
-        let contents = HistoryLogExport.jsonl(for: streamMessages) + "\n"
         do {
-            try contents.write(to: url, atomically: true, encoding: .utf8)
+            try (jsonl + "\n").write(to: url, atomically: true, encoding: .utf8)
             return url
         } catch {
             return nil
         }
+    }
+
+    /// Maps a group/label string to a safe filename component ("UnknownHistoryLog (140)" -> "UnknownHistoryLog-140").
+    private func sanitizedFileComponent(_ raw: String) -> String {
+        let mapped = raw.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) ? Character($0) : "-" }
+        return String(mapped).split(separator: "-", omittingEmptySubsequences: true).joined(separator: "-")
     }
 
     static func relativeTimeAgo(_ date: Date, now: Date = Date()) -> String {
@@ -595,7 +627,7 @@ final class TandemKitHistoryLogViewerViewModel: ObservableObject {
         }
         logsBySequence[log.sequenceNum] = log
 
-        let typeName = HistoryLogExport.typeName(log)
+        let typeName = HistoryLogExport.displayName(log)
         var typeLogs = logsByType[typeName] ?? []
         typeLogs.insert(log, at: insertionIndex(in: typeLogs, ascending: true, sequenceNum: log.sequenceNum))
         logsByType[typeName] = typeLogs

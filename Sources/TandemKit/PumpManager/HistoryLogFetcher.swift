@@ -2,8 +2,8 @@ import Combine
 import Foundation
 
 /// Fetches a window of history logs ending at the pump's newest entry, mirroring ControlX2's
-/// HistoryLogFetcher: the range is walked backward in chunks of 32, each HistoryLogRequest is
-/// issued with the chunk's highest sequence number (the pump streams entries backward from
+/// HistoryLogFetcher: the range is walked backward in chunks (of up to 255), each HistoryLogRequest
+/// is issued with the chunk's highest sequence number (the pump streams entries backward from
 /// `startLog`), and a chunk is considered done once every sequence number in it has arrived or
 /// a timeout elapses. Entries are deduplicated by sequence number, and after the initial walk a
 /// single gap-healing pass re-requests any ranges that never arrived.
@@ -29,10 +29,13 @@ public final class HistoryLogFetcher {
         }
     }
 
-    private static let chunkSize: Int64 = 32
+    // 255 is the most logs a single HistoryLogRequest can ask for (numberOfLogs is one byte), so
+    // fetching in the largest chunks minimizes round-trips. chunkTimeout is correspondingly larger
+    // than the old 32-log value to give a full chunk time to stream in before gap-healing.
+    private static let chunkSize: Int64 = 255
     private static let requestDelay: TimeInterval = 1.0
     private static let pollInterval: TimeInterval = 0.5
-    private static let chunkTimeout: TimeInterval = 4.0
+    private static let chunkTimeout: TimeInterval = 8.0
     private static let sendTimeout: DispatchTimeInterval = .seconds(45)
 
     private let pumpManager: TandemPumpManager

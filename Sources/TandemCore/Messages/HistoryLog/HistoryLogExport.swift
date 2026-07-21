@@ -13,6 +13,16 @@ public enum HistoryLogExport {
         String(describing: type(of: log))
     }
 
+    /// Name for grouping and listing in the UI. Same as `typeName`, except `UnknownHistoryLog` is
+    /// disambiguated by its numeric `typeId` (e.g. "UnknownHistoryLog (140)") so distinct unknown
+    /// log types aren't collapsed into a single bucket. Export/pumpX2 output still uses `typeName`.
+    public static func displayName(_ log: HistoryLog) -> String {
+        if log is UnknownHistoryLog {
+            return "UnknownHistoryLog (\(log.typeId))"
+        }
+        return typeName(log)
+    }
+
     /// Ordered (label, value) pairs for a history log: the concrete type's own fields first
     /// (declaration order), then the shared cargo/pumpTimeSec/sequenceNum, matching the field
     /// order of pumpX2's reflection-based toString. `typeId` is only included for
@@ -59,6 +69,23 @@ public enum HistoryLogExport {
     public static func jsonl(for messages: [(receivedAt: Date, message: HistoryLogStreamResponse)]) -> String {
         messages.compactMap { jsonlLine(for: $0.message, receivedAt: $0.receivedAt) }
             .joined(separator: "\n")
+    }
+
+    /// cliparser-format JSONL for an arbitrary set of history logs (e.g. a single type group or one
+    /// log), synthesizing stream responses of up to 255 logs each. Unlike `jsonl(for:)`, which
+    /// replays captured stream messages verbatim, this reconstructs responses from parsed logs.
+    public static func jsonl(forLogs logs: [HistoryLog], receivedAt: Date) -> String {
+        let chunkSize = 255
+        return stride(from: 0, to: logs.count, by: chunkSize).compactMap { offset -> String? in
+            let slice = Array(logs[offset ..< min(offset + chunkSize, logs.count)])
+            let response = HistoryLogStreamResponse(
+                numberOfHistoryLogs: slice.count,
+                streamId: 0,
+                historyLogStreamBytes: slice.map { $0.cargo }
+            )
+            return jsonlLine(for: response, receivedAt: receivedAt)
+        }
+        .joined(separator: "\n")
     }
 
     /// Single cliparser-format JSON line for a HistoryLogStreamResponse.

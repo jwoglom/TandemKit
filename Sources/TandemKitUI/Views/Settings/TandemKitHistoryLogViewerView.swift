@@ -1,5 +1,17 @@
 import SwiftUI
 
+/// A JSONL export file ready to hand to a share sheet.
+private struct HistoryLogExportFile: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// A tapped type group, identified by its display name.
+private struct HistoryLogTypeSelection: Identifiable {
+    let name: String
+    var id: String { name }
+}
+
 struct TandemKitHistoryLogViewerView: View {
     @StateObject var viewModel: TandemKitHistoryLogViewerViewModel
 
@@ -10,14 +22,10 @@ struct TandemKitHistoryLogViewerView: View {
         case byTime
     }
 
-    private struct ExportFile: Identifiable {
-        let url: URL
-        var id: String { url.absoluteString }
-    }
-
     @State private var selectedTab: Tab = .byType
     @State private var detailEntry: TandemKitHistoryLogViewerViewModel.LogEntry?
-    @State private var exportFile: ExportFile?
+    @State private var selectedType: HistoryLogTypeSelection?
+    @State private var exportFile: HistoryLogExportFile?
 
     var body: some View {
         List {
@@ -32,20 +40,24 @@ struct TandemKitHistoryLogViewerView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     if let url = viewModel.exportFileURL() {
-                        exportFile = ExportFile(url: url)
+                        exportFile = HistoryLogExportFile(url: url)
                     }
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .disabled(!viewModel.hasLogs)
-                .accessibilityLabel("Export history logs")
+                .accessibilityLabel("Export all history logs")
             }
         }
         .sheet(item: $detailEntry) { entry in
             HistoryLogDetailView(
                 title: "\(entry.log.sequenceNum)",
-                contents: viewModel.prettyDescription(for: entry.log)
+                contents: viewModel.prettyDescription(for: entry.log),
+                exportURL: { viewModel.exportFileURL(for: entry.log) }
             )
+        }
+        .sheet(item: $selectedType) { selection in
+            HistoryLogTypeGroupView(viewModel: viewModel, typeName: selection.name)
         }
         .sheet(item: $exportFile) { file in
             ActivityViewController(activityItems: [file.url])
@@ -254,11 +266,20 @@ struct TandemKitHistoryLogViewerView: View {
         Section(header: tabPicker) {
             if selectedTab == .byType {
                 ForEach(viewModel.typeCounts) { typeCount in
-                    HStack {
-                        Text("\(typeCount.count) log\(typeCount.count == 1 ? "" : "s"):")
-                            .foregroundColor(.secondary)
-                        Text(typeCount.name)
-                            .font(.system(.footnote, design: .monospaced))
+                    Button {
+                        selectedType = HistoryLogTypeSelection(name: typeCount.name)
+                    } label: {
+                        HStack {
+                            Text("\(typeCount.count) log\(typeCount.count == 1 ? "" : "s"):")
+                                .foregroundColor(.secondary)
+                            Text(typeCount.name)
+                                .font(.system(.footnote, design: .monospaced))
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             } else {
@@ -266,13 +287,7 @@ struct TandemKitHistoryLogViewerView: View {
                     Button {
                         detailEntry = entry
                     } label: {
-                        HStack {
-                            Text("\(entry.log.sequenceNum):")
-                                .foregroundColor(.secondary)
-                            Text(entry.typeName)
-                                .font(.system(.footnote, design: .monospaced))
-                                .foregroundColor(.primary)
-                        }
+                        LogRow(entry: entry)
                     }
                 }
             }
@@ -341,11 +356,79 @@ struct TandemKitHistoryLogViewerView: View {
     }
 }
 
-/// Full pretty-printed contents of a single history log entry.
+/// One "sequence: TypeName" row used by the By Time list and the type-group sheet.
+private struct LogRow: View {
+    let entry: TandemKitHistoryLogViewerViewModel.LogEntry
+
+    var body: some View {
+        HStack {
+            Text("\(entry.log.sequenceNum):")
+                .foregroundColor(.secondary)
+            Text(entry.displayName)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundColor(.primary)
+        }
+    }
+}
+
+/// Sheet listing every log of one type, newest first, with a share button for the whole group.
+private struct HistoryLogTypeGroupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: TandemKitHistoryLogViewerViewModel
+    let typeName: String
+
+    @State private var detailEntry: TandemKitHistoryLogViewerViewModel.LogEntry?
+    @State private var exportFile: HistoryLogExportFile?
+
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(viewModel.typeEntries(forTypeName: typeName)) { entry in
+                    Button {
+                        detailEntry = entry
+                    } label: {
+                        LogRow(entry: entry)
+                    }
+                }
+            }
+            .navigationBarTitle(typeName, displayMode: .inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        if let url = viewModel.exportFileURL(forTypeName: typeName) {
+                            exportFile = HistoryLogExportFile(url: url)
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Export these logs")
+                }
+            }
+            .sheet(item: $detailEntry) { entry in
+                HistoryLogDetailView(
+                    title: "\(entry.log.sequenceNum)",
+                    contents: viewModel.prettyDescription(for: entry.log),
+                    exportURL: { viewModel.exportFileURL(for: entry.log) }
+                )
+            }
+            .sheet(item: $exportFile) { file in
+                ActivityViewController(activityItems: [file.url])
+            }
+        }
+    }
+}
+
+/// Full pretty-printed contents of a single history log entry, with a share button for that log.
 private struct HistoryLogDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let title: String
     let contents: String
+    let exportURL: () -> URL?
+
+    @State private var exportFile: HistoryLogExportFile?
 
     var body: some View {
         NavigationView {
@@ -362,6 +445,19 @@ private struct HistoryLogDetailView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        if let url = exportURL() {
+                            exportFile = HistoryLogExportFile(url: url)
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Export this log")
+                }
+            }
+            .sheet(item: $exportFile) { file in
+                ActivityViewController(activityItems: [file.url])
             }
         }
     }
