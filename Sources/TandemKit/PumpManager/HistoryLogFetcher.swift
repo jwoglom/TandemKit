@@ -2,8 +2,8 @@ import Combine
 import Foundation
 
 /// Fetches a window of history logs ending at the pump's newest entry, mirroring ControlX2's
-/// HistoryLogFetcher: the range is walked backward in chunks of 32, each HistoryLogRequest is
-/// issued with the chunk's highest sequence number (the pump streams entries backward from
+/// HistoryLogFetcher: the range is walked backward in chunks (of up to 255), each HistoryLogRequest
+/// is issued with the chunk's highest sequence number (the pump streams entries backward from
 /// `startLog`), and a chunk is considered done once every sequence number in it has arrived or
 /// a timeout elapses. Entries are deduplicated by sequence number, and after the initial walk a
 /// single gap-healing pass re-requests any ranges that never arrived.
@@ -29,10 +29,13 @@ public final class HistoryLogFetcher {
         }
     }
 
-    private static let chunkSize: Int64 = 32
+    // 255 is the most logs a single HistoryLogRequest can ask for (numberOfLogs is one byte), so
+    // fetching in the largest chunks minimizes round-trips. chunkTimeout is correspondingly larger
+    // than the old 32-log value to give a full chunk time to stream in before gap-healing.
+    private static let chunkSize: Int64 = 255
     private static let requestDelay: TimeInterval = 1.0
     private static let pollInterval: TimeInterval = 0.5
-    private static let chunkTimeout: TimeInterval = 4.0
+    private static let chunkTimeout: TimeInterval = 8.0
     private static let sendTimeout: DispatchTimeInterval = .seconds(45)
 
     private let pumpManager: TandemPumpManager
@@ -82,9 +85,69 @@ public final class HistoryLogFetcher {
         }
     }
 
-    /// Fetches the most recent `numberOfLogs` entries. Progress and per-log callbacks fire
-    /// while the fetch runs; `completion` fires exactly once on the main queue.
-    public func start(numberOfLogs: Int, completion: @escaping (Result<Progress, FetchError>) -> Void) {
+    /// Reads exactly one history log by sequence number and returns it, without feeding the
+    /// per-log/progress callbacks or the export capture — used to sample "guidepost" entries and
+    /// to binary-search date boundaries. Blocks (bounded) on the calling thread, so must be run
+    /// off the main queue. Returns nil if the entry did not stream back in time.
+    ///
+    /// Must not be called while a full `start(...)` fetch is in progress: the shared history-log
+    /// stream would otherwise be consumed by both paths at once. The guard below enforces this.
+    public func probeLog(sequenceNum: UInt32, timeout: TimeInterval = 6.0) -> HistoryLog? {
+        lock.lock()
+        let busy = fetchActive
+        lock.unlock()
+        if busy {
+            logger.warning("Ignoring probeLog(\(sequenceNum)): fetch in progress")
+            return nil
+        }
+
+        let captureLock = NSLock()
+        var captured: HistoryLog?
+        let streamSemaphore = DispatchSemaphore(value: 0)
+
+        // Subscribe before sending so a fast stream response can't be missed.
+        let subscription = pumpManager.historyLogStream.sink { response in
+            for log in response.historyLogs where log.sequenceNum == sequenceNum {
+                captureLock.lock()
+                let firstHit = captured == nil
+                if firstHit { captured = log }
+                captureLock.unlock()
+                if firstHit { streamSemaphore.signal() }
+            }
+        }
+        defer { subscription.cancel() }
+
+        let sendSemaphore = DispatchSemaphore(value: 0)
+        pumpManager.bluetooth.ensureConnected { error in
+            defer { sendSemaphore.signal() }
+            guard error == nil else { return }
+            _ = self.pumpManager.bluetooth.write(
+                message: HistoryLogRequest(startLog: sequenceNum, numberOfLogs: 1),
+                expecting: HistoryLogResponse.self
+            )
+        }
+
+        // Wait for connect + request acknowledgement, then for the streamed entry itself. The
+        // stream can arrive before the ack returns; the pre-installed subscription captures it
+        // either way, so the second wait returns immediately in that case.
+        _ = sendSemaphore.wait(timeout: .now() + Self.sendTimeout)
+        _ = streamSemaphore.wait(timeout: .now() + timeout)
+
+        captureLock.lock()
+        defer { captureLock.unlock() }
+        return captured
+    }
+
+    /// Fetches `numberOfLogs` entries ending at `endingAtSequenceNum` (inclusive), walking
+    /// backward from there. When `endingAtSequenceNum` is nil the window ends at the pump's newest
+    /// entry, matching the original "most recent N logs" behavior. The end is clamped into the
+    /// pump's `[first, last]` range. Progress and per-log callbacks fire while the fetch runs;
+    /// `completion` fires exactly once on the main queue.
+    public func start(
+        numberOfLogs: Int,
+        endingAtSequenceNum: UInt32? = nil,
+        completion: @escaping (Result<Progress, FetchError>) -> Void
+    ) {
         lock.lock()
         if fetchActive {
             lock.unlock()
@@ -106,7 +169,7 @@ public final class HistoryLogFetcher {
             }
 
         queue.async {
-            let result = self.runFetch(numberOfLogs: numberOfLogs)
+            let result = self.runFetch(numberOfLogs: numberOfLogs, endingAtSequenceNum: endingAtSequenceNum)
 
             self.lock.lock()
             self.fetchActive = false
@@ -132,7 +195,7 @@ public final class HistoryLogFetcher {
         return cancelled
     }
 
-    private func runFetch(numberOfLogs: Int) -> Result<Progress, FetchError> {
+    private func runFetch(numberOfLogs: Int, endingAtSequenceNum: UInt32?) -> Result<Progress, FetchError> {
         guard let status = sendSync(
             HistoryLogStatusRequest(),
             expecting: HistoryLogStatusResponse.self
@@ -143,19 +206,21 @@ public final class HistoryLogFetcher {
 
         let first = Int64(status.firstSequenceNum)
         let last = Int64(status.lastSequenceNum)
-        let start = min(max(first, last - Int64(numberOfLogs) + 1), last)
+        let requestedEnd = endingAtSequenceNum.map { Int64($0) } ?? last
+        let end = min(max(requestedEnd, first), last)
+        let start = min(max(first, end - Int64(numberOfLogs) + 1), end)
 
         lock.lock()
         windowStart = start
-        windowEnd = last
+        windowEnd = end
         lock.unlock()
 
-        logger.info("Fetching history logs \(start)-\(last) (pump has \(first)-\(last))")
-        walkRange(startId: start, endId: last)
+        logger.info("Fetching history logs \(start)-\(end) (pump has \(first)-\(last))")
+        walkRange(startId: start, endId: end)
 
         // Gap-healing pass: re-request whatever never arrived, newest range first, like
         // ControlX2 does on its next status cycle.
-        let missing = missingRanges(startId: start, endId: last)
+        let missing = missingRanges(startId: start, endId: end)
         if !missing.isEmpty, !isCancelled {
             logger.info("Retrying \(missing.count) missing history log range(s)")
             for range in missing.reversed() {
