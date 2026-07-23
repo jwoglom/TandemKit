@@ -76,15 +76,26 @@ public enum MergedNotification {
     /// Every merged-notification group. Add entries here — same-category or
     /// cross-category — using the member factories.
     public static let groups: [MergedNotificationGroup] = [
-        // RESUME_PUMP_ALARM (18) and RESUME_PUMP_ALARM2 (23) are two encodings of
-        // the same "insulin delivery is off" condition; the pump acknowledges both
-        // when either is dismissed. Both carry the same description, so the default
-        // primary (the first member) is fine.
-        MergedNotificationGroup(members: [.alarm(.RESUME_PUMP_ALARM), .alarm(.RESUME_PUMP_ALARM2)])
+        // Each pair below is one underlying condition the pump encodes under two
+        // ids. Both members represent the same thing, so the default primary (the
+        // first member) is fine.
 
-        // Cross-category groups are supported. Once a real co-acknowledged pair is
-        // identified, declare it here and nominate whichever member's description
-        // should represent the row, e.g.:
+        // Insulin delivery is off.
+        MergedNotificationGroup(members: [.alarm(.RESUME_PUMP_ALARM), .alarm(.RESUME_PUMP_ALARM2)]),
+        // Occlusion detected.
+        MergedNotificationGroup(members: [.alarm(.OCCLUSION_ALARM), .alarm(.OCCLUSION_ALARM2)]),
+        // Delivering at the minimum basal rate.
+        MergedNotificationGroup(members: [.alert(.MIN_BASAL_ALERT), .alert(.MIN_BASAL_ALERT2)]),
+        // Pump battery low.
+        MergedNotificationGroup(members: [.alert(.LOW_POWER_ALERT), .alert(.LOW_POWER_ALERT2)]),
+        // Low insulin remaining.
+        MergedNotificationGroup(members: [.alert(.LOW_INSULIN_ALERT), .alert(.LOW_INSULIN_ALERT2)]),
+        // Connection error.
+        MergedNotificationGroup(members: [.alert(.CONNECTION_ERROR_ALERT), .alert(.CONNECTION_ERROR_ALERT2)])
+
+        // Cross-category groups are supported too. Declare one when a real
+        // co-acknowledged alert+alarm pair is identified, nominating whichever
+        // member's description should represent the row, e.g.:
         // MergedNotificationGroup(
         //     members: [.alarm(.SOME_ALARM), .alert(.SOME_ALERT)],
         //     primary: .alert(.SOME_ALERT)

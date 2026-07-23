@@ -26,6 +26,24 @@ final class MergedNotificationTests: XCTestCase {
         XCTAssertEqual(group?.primary, Member.alarm(.RESUME_PUMP_ALARM))
     }
 
+    /// Guards the configured pairs against typos/regressions.
+    func testCatalogContainsAllConfiguredPairs() {
+        let expected: [[Member]] = [
+            [.alarm(.RESUME_PUMP_ALARM), .alarm(.RESUME_PUMP_ALARM2)],
+            [.alarm(.OCCLUSION_ALARM), .alarm(.OCCLUSION_ALARM2)],
+            [.alert(.MIN_BASAL_ALERT), .alert(.MIN_BASAL_ALERT2)],
+            [.alert(.LOW_POWER_ALERT), .alert(.LOW_POWER_ALERT2)],
+            [.alert(.LOW_INSULIN_ALERT), .alert(.LOW_INSULIN_ALERT2)],
+            [.alert(.CONNECTION_ERROR_ALERT), .alert(.CONNECTION_ERROR_ALERT2)]
+        ]
+        for members in expected {
+            XCTAssertTrue(
+                MergedNotification.groups.contains { $0.members == members },
+                "Missing merged group: \(members)"
+            )
+        }
+    }
+
     // MARK: - Primary selection
 
     /// When no primary is specified, the first declared member is primary.
@@ -127,6 +145,21 @@ final class MergedNotificationTests: XCTestCase {
         XCTAssertEqual(item.displayTitle, "Insulin delivery is currently off. Please restart insulin delivery soon.")
     }
 
+    /// Alert pairs merge too (not just alarms): both low-insulin alerts collapse
+    /// into a single Alert row.
+    func testAlertPairMergesIntoSingleRow() {
+        let bundle = NotificationBundle()
+        // LOW_INSULIN_ALERT (0) + LOW_INSULIN_ALERT2 (17)
+        bundle.add(AlertStatusResponse(intMap: bitmask(0, 17)))
+
+        let items = bundle.get()
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items[0].type, .alert)
+        XCTAssertEqual(items[0].categoryTitle, "Alert: LOW_INSULIN_ALERT, LOW_INSULIN_ALERT2")
+        XCTAssertEqual(items[0].displayTitle, "Low amount of insulin remaining in the cartridge.")
+        XCTAssertEqual(items[0].notificationId, 0)
+    }
+
     /// A lone member does not merge — it renders as its own ordinary row. This is
     /// also the graceful fallback if the pump only partially acknowledges a group.
     func testLoneResumePumpAlarmIsNotMerged() {
@@ -169,8 +202,9 @@ final class MergedNotificationTests: XCTestCase {
 
     // MARK: - Merge unit behaviour
 
-    /// The pure merge leaves a list with no grouped members unchanged.
-    func testMergeIsIdentityWithoutGroups() {
+    /// Items that do not complete a group are left unchanged: a lone group member
+    /// (one occlusion alarm without its pair) and an ungrouped reminder.
+    func testItemsThatDoNotCompleteAGroupAreUnchanged() {
         let items = [
             NotificationItem(type: .alarm, id: 2, name: "OCCLUSION_ALARM"),
             NotificationItem(type: .reminder, id: 3, name: "SITE_CHANGE_REMINDER")
