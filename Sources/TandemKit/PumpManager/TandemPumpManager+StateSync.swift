@@ -260,7 +260,7 @@ extension TandemPumpManager {
 
             progressReport.notify()
 
-            telemetryScheduler.cancel(kind: .bolus)
+            telemetryScheduler.cancelAll()
             telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) {
                 self.bolusProgressReport?.notify()
             }
@@ -269,7 +269,7 @@ extension TandemPumpManager {
 
         if response.bolusId == 0 {
             // Bolus is finished
-            telemetryScheduler.cancel(kind: .bolus)
+            telemetryScheduler.cancelAll()
 
             // Query the pump for actual delivered volume rather than assuming full delivery
             var actualDelivered: Double?

@@ -387,7 +387,7 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
 ### TODO – Documentation accuracy audit
 - [x] Align PumpComm transport row with the implemented retry/backoff handling and fault-event delegate surfacing.
 - [x] Refresh `TandemPumpManager` capability notes to reflect existing bolus/temp basal/suspend flows and status reconciliation.
-- [x] Alert/alarm/malfunction surfacing now flows through LoopKit `Alert` issuance (see [docs/plans/loopkit_alert_surfacing.md](docs/plans/loopkit_alert_surfacing.md)); revisit the CGM data bullets once that pipeline is implemented.
+- [x] Alert/alarm/malfunction surfacing now flows through LoopKit `Alert` issuance; revisit the CGM data bullets once that pipeline is implemented.
 
 ## Pump Driver Implementation Plan (Loop/Trio)
 
@@ -416,7 +416,7 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
   - Configuration toggles (`enableActionsAffectingInsulinDelivery`, etc.) write through to `PumpStateSupplier`, persist into manager state, and drive delegate notifications; UI affordances remain to be finished.
   - `pairPump()` drives the UIKit/CBPeripheral pairing path; non-Apple/on-device initiation flows still need polish.
   - Dosing interfaces for bolus, temp basal, and suspend/resume are implemented with LoopKit safety validation and delegate updates.
-  - Reservoir, battery, basal, bolus, and history reconciliation now propagate through LoopKit delegate callbacks; alerts, alarms, and malfunctions surface as LoopKit `Alert`s via `TandemAlertReconciler` (qualifying-event driven plus a 5-minute poll), while CGM data surfaces remain unimplemented.
+  - Reservoir, battery, basal, bolus, and history reconciliation now propagate through LoopKit delegate callbacks; alerts, alarms, and malfunctions surface as LoopKit `Alert`s via `TandemAlertReconciler` (qualifying-event driven plus every `ensureCurrentPumpData` sync, ~5 minutes), while CGM data surfaces remain unimplemented.
 * **`TandemPumpManagerState`** (`Sources/TandemKit/PumpManager/TandemPumpManagerState.swift`) – ⚠️ **PARTIALLY IMPLEMENTED**:
   - Serializes/deserializes `PumpState` including derived secret and server nonce
   - Still lacks storage for therapy settings, pump status snapshots, and LoopKit-facing metadata
@@ -504,7 +504,7 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
    - Continue refining fault taxonomy for UI/LoopKit consumption.
 
 3. **Extend telemetry surfaces** (`TandemPumpManager.swift`)
-   - Alert/alarm/malfunction pipelines are implemented: `fetchNotifications()` polls the `NotificationBundle` requests and `TandemAlertReconciler` issues/retracts LoopKit `Alert`s, driven by qualifying events and a 5-minute `PumpTelemetryScheduler` poll.
+   - Alert/alarm/malfunction pipelines are implemented: `fetchNotifications()` polls the `NotificationBundle` requests and `TandemAlertReconciler` issues/retracts LoopKit `Alert`s, driven by qualifying events and by every `ensureCurrentPumpData` sync (LoopKit's ~5-minute cadence).
    - CGM pipelines using `CurrentEGVGuiDataRequest` remain to be implemented.
 
 4. **Implement pump model detection**

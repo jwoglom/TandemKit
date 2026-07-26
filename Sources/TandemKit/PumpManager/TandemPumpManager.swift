@@ -527,7 +527,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let canceledDose = bolusDose.toDoseEntry(endDate: Date.now)
 
             // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
-            self.telemetryScheduler.cancel(kind: .bolus)
+            self.telemetryScheduler.cancelAll()
             self.bolusProgressReport = nil
             self.state.bolusDose = nil
 
@@ -1744,6 +1744,24 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
             return
         }
 
+        // Prefer the live bundle row for this identifier: a merged row (see
+        // `MergedNotificationGroup`) carries the group's primary as its type/notificationId,
+        // and `dismissNotification` knows how to acknowledge the merged members the pump
+        // does not auto-clear. Both of its paths re-fetch, which runs the alert reconciler.
+        if let item = notificationBundle.get().first(where: {
+            $0.type == parsed.type && $0.notificationId == parsed.notificationId
+        }) {
+            dismissNotification(notification: item) { success in
+                completion(success ? nil : PumpCommError.errorResponse(
+                    context: "Failed to dismiss \(alertIdentifier) on the pump"
+                ))
+            }
+            return
+        }
+
+        // The notification is no longer in the bundle (stale alert or bundle not yet
+        // fetched this session) — send a single dismiss for the primary and re-fetch so the
+        // reconciler retracts whatever the pump reports as cleared.
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("acknowledgeAlert: failed to connect: \(error.localizedDescription)")
@@ -1751,26 +1769,13 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: DismissNotificationRequest(
-                    notificationType: dismissType,
-                    notificationId: parsed.notificationId
-                ),
-                expecting: DismissNotificationResponse.self
-            ) as? DismissNotificationResponse else {
-                self.logger.error("acknowledgeAlert: no response dismissing \(alertIdentifier)")
-                completion(PumpCommError.noResponse)
-                return
+            // A rejected dismiss here most likely means the pump already cleared the
+            // notification itself; don't fail the acknowledgement over it — the re-fetch
+            // below retracts the alert if it is really gone.
+            if !self.acknowledgeNotification(type: dismissType, id: parsed.notificationId) {
+                self.logger.warning("acknowledgeAlert: pump rejected dismiss of stale \(alertIdentifier)")
             }
 
-            guard response.isStatusOK else {
-                self.logger.error("acknowledgeAlert: dismiss failed with status \(response.status)")
-                completion(PumpCommError.errorResponse(context: "DismissNotification status \(response.status)"))
-                return
-            }
-
-            // Refresh the bundle so the reconciler retracts this alert (and anything else
-            // the pump cleared) from the LoopKit alert store.
             self.fetchNotifications()
             completion(nil)
         }

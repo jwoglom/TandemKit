@@ -41,11 +41,6 @@ extension NotificationItem {
 // MARK: - Alert reconciliation
 
 extension TandemPumpManager {
-    static let notificationTelemetryInterval: TimeInterval = .minutes(5)
-    /// Scheduled polls (and the on-reconnect trigger) skip when a fetch already ran this
-    /// recently through another path; qualifying-event fetches never skip.
-    static let notificationTelemetryFreshnessWindow: TimeInterval = .minutes(1)
-
     /// Notification categories currently forwarded to LoopKit as alerts. Alarms and
     /// malfunctions mean stopped/compromised delivery; alerts are actionable. CGM alerts
     /// are opt-in and reminders stay in-app only.
@@ -126,52 +121,5 @@ extension TandemPumpManager {
         // alerts without waiting for the next fetch (the reconciler retracts
         // no-longer-surfaced categories regardless of fetch state).
         reconcileLoopKitAlerts()
-    }
-
-    // MARK: - Notification telemetry (5-minute background poll)
-
-    /// (Re)arms the repeating notification poll. Idempotent — `schedule` replaces any
-    /// existing timer — so this is safe to call on every successful connection.
-    func scheduleNotificationTelemetry() {
-        telemetryScheduler.schedule(
-            kind: .notifications,
-            interval: TandemPumpManager.notificationTelemetryInterval,
-            leeway: 10
-        ) { [weak self] in
-            self?.performScheduledNotificationFetch()
-        }
-    }
-
-    private func performScheduledNotificationFetch() {
-        if let lastUpdate = state.lastNotificationUpdate,
-           Date.now.timeIntervalSince(lastUpdate) < TandemPumpManager.notificationTelemetryFreshnessWindow
-        {
-            logger.debug("Skipping scheduled notification fetch; last update is fresh")
-            return
-        }
-
-        bluetooth.ensureConnected { error in
-            if let error {
-                self.logger.warning("Scheduled notification fetch could not connect: \(error.localizedDescription)")
-                return
-            }
-
-            self.fetchNotifications()
-        }
-    }
-
-    /// Called once a connection has completed initial setup and is ready for commands.
-    /// Arms the 5-minute notification poll and fires an immediate check so an alarm raised
-    /// while disconnected surfaces as soon as the link returns.
-    func pumpConnectionBecameReady() {
-        scheduleNotificationTelemetry()
-        telemetryScheduler.trigger(kind: .notifications)
-    }
-
-    /// Called when the BLE connection is lost; stops the notification poll so a dead link
-    /// doesn't spin failed connect attempts (auto-reconnect re-arms it via
-    /// `pumpConnectionBecameReady`).
-    func pumpConnectionWasLost() {
-        telemetryScheduler.cancel(kind: .notifications)
     }
 }

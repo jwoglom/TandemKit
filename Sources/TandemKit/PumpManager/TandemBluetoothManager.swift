@@ -291,7 +291,6 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         if let pumpManager {
             pumpManager.state.isConnected = false
             pumpManager.notifyDelegateStateUpdated()
-            pumpManager.pumpConnectionWasLost()
         }
 
         peripheralManager = nil

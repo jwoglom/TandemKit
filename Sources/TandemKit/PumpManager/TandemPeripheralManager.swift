@@ -529,10 +529,6 @@ extension TandemPeripheralManager {
 
             logger.info("Connected to pump!")
             connectCompletion?(nil)
-
-            // Arm the repeating notification poll and fire an immediate check so alerts or
-            // alarms raised while disconnected surface right away.
-            pumpManager.pumpConnectionBecameReady()
         }
     }
 }
