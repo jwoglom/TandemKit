@@ -433,27 +433,47 @@ public struct NotificationItem: Identifiable, Hashable {
     }
 
     /// Identity that is stable across fetch passes, unlike `id` (a `UUID` minted per fetch).
-    /// Derived from the notification category and the pump's own identifier for the
-    /// notification: the bitmask bit position for alerts/alarms/reminders/CGM alerts, and the
-    /// `aamId` for malfunctions. Used as the `LoopKit.Alert.AlertIdentifier` suffix so the
-    /// same pump notification maps to the same alert across polls and app restarts.
+    /// Used as the `LoopKit.Alert.AlertIdentifier` so the same pump notification maps to the
+    /// same alert across polls and app restarts.
+    ///
+    /// Format: `<category>.<slug>.<id>` (e.g. `alarm.occlusion.2`, `alert.other.37`), where
+    /// the slug is the human-readable condition name (`alertSlug`) that hosts key severity
+    /// and display grouping on without hardcoding bit positions, and the trailing id is the
+    /// bitmask bit position that keeps per-bit identity and routes acknowledgements back to
+    /// `DismissNotificationRequest`. Malfunctions are `malfunction.<aamId>` — at most one is
+    /// surfaced at a time and there is no condition enum to slug.
     public var stableIdentifier: String {
-        "\(type.rawValue).\(notificationId)"
+        if type == .malfunction {
+            return "\(type.rawValue).\(notificationId)"
+        }
+        return "\(type.rawValue).\(alertSlug).\(notificationId)"
     }
 
     /// Inverse of `stableIdentifier`, used to route a LoopKit alert acknowledgement back to
-    /// the pump notification it was issued for. Returns nil for identifiers this driver did
-    /// not mint.
+    /// the pump notification it was issued for. The slug segment is not validated — routing
+    /// only needs the category and id, so identifiers survive future slug-table refinements.
+    /// Returns nil for identifiers this driver did not mint (including the pre-slug
+    /// `<category>.<id>` format, which the reconciler then retracts and re-issues).
     public static func parseStableIdentifier(_ identifier: String) -> (type: NotificationType, notificationId: UInt32)? {
-        guard let separator = identifier.firstIndex(of: ".") else {
-            return nil
-        }
-        guard let type = NotificationType(rawValue: String(identifier[..<separator])),
-              let notificationId = UInt32(identifier[identifier.index(after: separator)...])
+        let segments = identifier.split(separator: ".", omittingEmptySubsequences: false)
+        guard let first = segments.first,
+              let type = NotificationType(rawValue: String(first)),
+              let last = segments.last,
+              let notificationId = UInt32(last)
         else {
             return nil
         }
-        return (type, notificationId)
+
+        switch (type, segments.count) {
+        case (.malfunction, 2):
+            return (type, notificationId)
+        case (.malfunction, _):
+            return nil
+        case (_, 3) where !segments[1].isEmpty:
+            return (type, notificationId)
+        default:
+            return nil
+        }
     }
 }
 

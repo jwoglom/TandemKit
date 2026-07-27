@@ -21,33 +21,33 @@ final class TandemAlertReconcilerTests: XCTestCase {
             surfacedCategories: allSurfaced
         )
 
-        XCTAssertEqual(result.itemsToIssue.map(\.stableIdentifier), ["alarm.2"])
+        XCTAssertEqual(result.itemsToIssue.map(\.stableIdentifier), ["alarm.occlusion.2"])
         XCTAssertTrue(result.identifiersToRetract.isEmpty)
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
     func testUnchangedNotificationsProduceNoDelegateCalls() {
         let result = TandemAlertReconciler.reconcile(
             activeItems: [occlusionAlarm()],
             fetchedCategories: allFetched,
-            issuedIdentifiers: ["alarm.2"],
+            issuedIdentifiers: ["alarm.occlusion.2"],
             surfacedCategories: allSurfaced
         )
 
         XCTAssertTrue(result.isEmpty)
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
     func testClearedNotificationIsRetractedWhenCategoryWasFetched() {
         let result = TandemAlertReconciler.reconcile(
             activeItems: [],
             fetchedCategories: allFetched,
-            issuedIdentifiers: ["alarm.2"],
+            issuedIdentifiers: ["alarm.occlusion.2"],
             surfacedCategories: allSurfaced
         )
 
         XCTAssertTrue(result.itemsToIssue.isEmpty)
-        XCTAssertEqual(result.identifiersToRetract, ["alarm.2"])
+        XCTAssertEqual(result.identifiersToRetract, ["alarm.occlusion.2"])
         XCTAssertTrue(result.updatedIssuedIdentifiers.isEmpty)
     }
 
@@ -56,12 +56,12 @@ final class TandemAlertReconcilerTests: XCTestCase {
         let result = TandemAlertReconciler.reconcile(
             activeItems: [],
             fetchedCategories: [.alert, .cgmAlert],
-            issuedIdentifiers: ["alarm.2"],
+            issuedIdentifiers: ["alarm.occlusion.2"],
             surfacedCategories: allSurfaced
         )
 
         XCTAssertTrue(result.isEmpty)
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
     func testNoLongerSurfacedCategoryIsRetractedEvenWithoutFetch() {
@@ -70,12 +70,12 @@ final class TandemAlertReconcilerTests: XCTestCase {
         let result = TandemAlertReconciler.reconcile(
             activeItems: [],
             fetchedCategories: [],
-            issuedIdentifiers: ["cgmAlert.2", "alarm.2"],
+            issuedIdentifiers: ["cgmAlert.high.2", "alarm.occlusion.2"],
             surfacedCategories: allSurfaced
         )
 
-        XCTAssertEqual(result.identifiersToRetract, ["cgmAlert.2"])
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+        XCTAssertEqual(result.identifiersToRetract, ["cgmAlert.high.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
     func testUnparseableIdentifierIsRetracted() {
@@ -90,19 +90,35 @@ final class TandemAlertReconcilerTests: XCTestCase {
         XCTAssertTrue(result.updatedIssuedIdentifiers.isEmpty)
     }
 
+    func testPreSlugIdentifierMigratesToSlugFormat() {
+        // An issued set persisted by a pre-slug driver version ("alarm.2") doesn't parse
+        // under the current format: it is retracted and the still-active notification is
+        // re-issued under its slugged identifier in the same pass.
+        let result = TandemAlertReconciler.reconcile(
+            activeItems: [occlusionAlarm()],
+            fetchedCategories: allFetched,
+            issuedIdentifiers: ["alarm.2"],
+            surfacedCategories: allSurfaced
+        )
+
+        XCTAssertEqual(result.identifiersToRetract, ["alarm.2"])
+        XCTAssertEqual(result.itemsToIssue.map(\.stableIdentifier), ["alarm.occlusion.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
+    }
+
     func testMixedIssueAndRetractInOnePass() {
         let lowInsulin = NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT")
 
         let result = TandemAlertReconciler.reconcile(
             activeItems: [lowInsulin],
             fetchedCategories: allFetched,
-            issuedIdentifiers: ["alarm.2"],
+            issuedIdentifiers: ["alarm.occlusion.2"],
             surfacedCategories: allSurfaced
         )
 
-        XCTAssertEqual(result.itemsToIssue.map(\.stableIdentifier), ["alert.0"])
-        XCTAssertEqual(result.identifiersToRetract, ["alarm.2"])
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alert.0"])
+        XCTAssertEqual(result.itemsToIssue.map(\.stableIdentifier), ["alert.lowInsulin.0"])
+        XCTAssertEqual(result.identifiersToRetract, ["alarm.occlusion.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alert.lowInsulin.0"])
     }
 
     func testDuplicateStableIdentifiersIssueOnce() {
@@ -114,7 +130,7 @@ final class TandemAlertReconcilerTests: XCTestCase {
         )
 
         XCTAssertEqual(result.itemsToIssue.count, 1)
-        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
     func testMalfunctionRetractedOnlyAfterHighestAamFetch() {
@@ -140,12 +156,12 @@ final class TandemAlertReconcilerTests: XCTestCase {
     func testIssuedAlertIdentifiersRoundTripThroughRawValue() {
         let schedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0.5)])!
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
-        state.issuedAlertIdentifiers = ["alarm.2", "malfunction.12"]
+        state.issuedAlertIdentifiers = ["alarm.occlusion.2", "malfunction.12"]
         state.forwardCGMAlerts = true
 
         let restored = TandemPumpManagerState(rawValue: state.rawValue)
 
-        XCTAssertEqual(restored.issuedAlertIdentifiers, ["alarm.2", "malfunction.12"])
+        XCTAssertEqual(restored.issuedAlertIdentifiers, ["alarm.occlusion.2", "malfunction.12"])
         XCTAssertTrue(restored.forwardCGMAlerts)
     }
 
