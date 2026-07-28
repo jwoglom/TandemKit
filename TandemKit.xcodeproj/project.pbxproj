@@ -148,6 +148,7 @@
 		717D5700000000000000F201 /* HistoryLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 717D5700000000000000F202 /* HistoryLogStore.swift */; };
 		717D5700000000000000F301 /* InMemoryHistoryLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 717D5700000000000000F302 /* InMemoryHistoryLogStore.swift */; };
 		717D5700000000000000F401 /* CoreDataHistoryLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 717D5700000000000000F402 /* CoreDataHistoryLogStore.swift */; };
+		717D5700000000000000F501 /* HistoryLogSyncIdentifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 717D5700000000000000F502 /* HistoryLogSyncIdentifier.swift */; };
 		71570600000000000000EC01 /* TandemKitHistoryLogViewerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000EC02 /* TandemKitHistoryLogViewerViewModel.swift */; };
 		71570600000000000000ED01 /* TandemKitHistoryLogViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */; };
 		3EB807A52FBCDCD70075D19E /* CgmOorSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30D9E5C3141560950708C87 /* CgmOorSettingsHistoryLog.swift */; };
@@ -722,6 +723,7 @@
 		717D5700000000000000F202 /* HistoryLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogStore.swift; sourceTree = "<group>"; };
 		717D5700000000000000F302 /* InMemoryHistoryLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryHistoryLogStore.swift; sourceTree = "<group>"; };
 		717D5700000000000000F402 /* CoreDataHistoryLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataHistoryLogStore.swift; sourceTree = "<group>"; };
+		717D5700000000000000F502 /* HistoryLogSyncIdentifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogSyncIdentifier.swift; sourceTree = "<group>"; };
 		71570600000000000000EC02 /* TandemKitHistoryLogViewerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitHistoryLogViewerViewModel.swift; sourceTree = "<group>"; };
 		71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitHistoryLogViewerView.swift; sourceTree = "<group>"; };
 		3EE344EB2EC91299008A07F6 /* HistoryLogRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryLogRecord.swift; sourceTree = "<group>"; };
@@ -932,6 +934,7 @@
 				717D5700000000000000F202 /* HistoryLogStore.swift */,
 				717D5700000000000000F302 /* InMemoryHistoryLogStore.swift */,
 				717D5700000000000000F402 /* CoreDataHistoryLogStore.swift */,
+				717D5700000000000000F502 /* HistoryLogSyncIdentifier.swift */,
 			);
 			path = History;
 			sourceTree = "<group>";
@@ -2034,6 +2037,7 @@
 				717D5700000000000000F201 /* HistoryLogStore.swift in Sources */,
 				717D5700000000000000F301 /* InMemoryHistoryLogStore.swift in Sources */,
 				717D5700000000000000F401 /* CoreDataHistoryLogStore.swift in Sources */,
+				717D5700000000000000F501 /* HistoryLogSyncIdentifier.swift in Sources */,
 				71570600000000000000EC01 /* TandemKitHistoryLogViewerViewModel.swift in Sources */,
 				71570600000000000000ED01 /* TandemKitHistoryLogViewerView.swift in Sources */,
 				3EB807A52FBCDCD70075D19E /* CgmOorSettingsHistoryLog.swift in Sources */,
