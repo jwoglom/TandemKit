@@ -679,31 +679,104 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: ResumePumpingRequest(),
-                expecting: ResumePumpingResponse.self
-            ) as? ResumePumpingResponse
-            guard let response, response.status == 0 else {
-                self.logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
-                completion(PumpCommError.noResponse)
+            completion(self.sendResumePumping())
+        }
+    }
+
+    /// Resumes delivery, first clearing the pump's "resume pump" alarms if they are what stands
+    /// in the way.
+    ///
+    /// While delivery is suspended the pump raises `RESUME_PUMP_ALARM`/`RESUME_PUMP_ALARM2` to
+    /// tell the user insulin is not being delivered, and a resume can be refused while either is
+    /// still unacknowledged. A user pressing "Resume Insulin Delivery" is already acting on what
+    /// those alarms ask for, so when the first attempt fails we re-read the pump's notification
+    /// state, acknowledge whichever of the two are active, and retry once — instead of making the
+    /// user go clear them by hand from the notifications screen.
+    ///
+    /// Only those two alarms are acknowledged on the user's behalf. If neither is active, or the
+    /// retry fails too, the original/retry error is surfaced so the caller still reports the
+    /// failure.
+    func resumeDeliveryAcknowledgingResumeAlarms(completion: @escaping (_ error: Error?) -> Void) {
+        let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
+        logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to pump: \(error.localizedDescription)")
+                completion(error)
                 return
             }
 
-            let dose = UnfinalizedDose(
-                resumeStartTime: Date.now,
-                insulinType: self.state.insulinType
-            )
-            let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
+            guard let resumeError = self.sendResumePumping() else {
+                completion(nil)
+                return
+            }
 
-            self.state.basalDose = dose
-            self.state.lastReconciliation = Date.now
+            // Re-read the pump's notifications so the decision is made against current state
+            // rather than whatever was cached from the last sync.
+            self.fetchNotifications()
+            let activeAlarms = self.notificationBundle.activeResumePumpAlarms()
+            guard !activeAlarms.isEmpty else {
+                self.logger.info("Resume failed with no resume-pump alarm active; reporting the failure")
+                completion(resumeError)
+                return
+            }
 
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(events)
+            let alarmNames = activeAlarms.map { String(describing: $0) }.joined(separator: ", ")
+            self.logger.info("Acknowledging resume-pump alarm(s) [\(alarmNames)] before retrying resume")
+            var acknowledgedAny = false
+            for alarm in activeAlarms {
+                if self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue)) {
+                    acknowledgedAny = true
+                }
+            }
 
-            self.logger.info("Insulin Delivery Resumed!")
-            completion(nil)
+            // Reload so the notification list and badge reflect the acknowledgements even if the
+            // retry below fails.
+            self.fetchNotifications()
+
+            guard acknowledgedAny else {
+                self.logger.error("Could not acknowledge any resume-pump alarm; reporting the original failure")
+                completion(resumeError)
+                return
+            }
+
+            let retryError = self.sendResumePumping()
+            if retryError != nil {
+                self.logger.error("Resume retry after acknowledging resume-pump alarm(s) failed")
+            }
+            completion(retryError)
         }
+    }
+
+    /// Sends a single `ResumePumpingRequest` and, on success, records the resume dose and notifies
+    /// LoopKit. Returns nil on success or the error to report otherwise.
+    ///
+    /// Must be called while connected (i.e. inside `bluetooth.ensureConnected`).
+    private func sendResumePumping() -> Error? {
+        let response = bluetooth.write(
+            message: ResumePumpingRequest(),
+            expecting: ResumePumpingResponse.self
+        ) as? ResumePumpingResponse
+        guard let response, response.status == 0 else {
+            logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
+            return PumpCommError.noResponse
+        }
+
+        let dose = UnfinalizedDose(
+            resumeStartTime: Date.now,
+            insulinType: state.insulinType
+        )
+        let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
+
+        state.basalDose = dose
+        state.lastReconciliation = Date.now
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+
+        logger.info("Insulin Delivery Resumed!")
+        return nil
     }
 
     public func syncDeliveryLimits(
