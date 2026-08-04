@@ -62,12 +62,16 @@ struct TandemKitControlIQSettingsView: View {
             )
 
             if viewModel.controlIQEnabled {
-                // Weight
+                // Weight. Shown in the unit the pump itself stores it in -- the value
+                // is written back in the same unit, so mislabelling it here would
+                // silently change the user's stored weight.
                 HStack {
                     Text("Weight", comment: "Label for weight")
                     Spacer()
-                    Text("\(viewModel.weight) lbs")
-                        .foregroundColor(isEditingWeight ? .accentColor : .secondary)
+                    valueText(
+                        for: viewModel.weight.map { "\($0) \(viewModel.weightUnitLabel)" },
+                        isEditing: isEditingWeight
+                    )
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -79,8 +83,11 @@ struct TandemKitControlIQSettingsView: View {
 
                 if isEditingWeight {
                     Picker("", selection: $viewModel.weight) {
-                        ForEach(Array(stride(from: 50, through: 400, by: 1)), id: \.self) { lbs in
-                            Text("\(lbs) lbs").tag(lbs)
+                        if viewModel.weight == nil {
+                            Text(notSetText).tag(Int?.none)
+                        }
+                        ForEach(Array(viewModel.weightRange), id: \.self) { value in
+                            Text("\(value) \(viewModel.weightUnitLabel)").tag(Int?.some(value))
                         }
                     }
                     .pickerStyle(.wheel)
@@ -91,8 +98,10 @@ struct TandemKitControlIQSettingsView: View {
                 HStack {
                     Text("Total Daily Insulin", comment: "Label for total daily insulin")
                     Spacer()
-                    Text("\(viewModel.totalDailyInsulin) U")
-                        .foregroundColor(isEditingTDI ? .accentColor : .secondary)
+                    valueText(
+                        for: viewModel.totalDailyInsulin.map { "\($0) U" },
+                        isEditing: isEditingTDI
+                    )
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -104,14 +113,40 @@ struct TandemKitControlIQSettingsView: View {
 
                 if isEditingTDI {
                     Picker("", selection: $viewModel.totalDailyInsulin) {
-                        ForEach(Array(stride(from: 1, through: 200, by: 1)), id: \.self) { units in
-                            Text("\(units) U").tag(units)
+                        if viewModel.totalDailyInsulin == nil {
+                            Text(notSetText).tag(Int?.none)
+                        }
+                        ForEach(Array(viewModel.totalDailyInsulinRange), id: \.self) { units in
+                            Text("\(units) U").tag(Int?.some(units))
                         }
                     }
                     .pickerStyle(.wheel)
                     .frame(height: 150)
                 }
+
+                if let validationMessage = viewModel.validationMessage {
+                    Text(validationMessage)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
             }
+        }
+    }
+
+    private var notSetText: String {
+        String(localized: "Not set", comment: "Shown when a Control-IQ value has never been set on the pump")
+    }
+
+    /// Renders a value, or a highlighted "Not set" when the pump has none stored, so
+    /// a missing value can never be mistaken for a real one.
+    @ViewBuilder
+    private func valueText(for value: String?, isEditing: Bool) -> some View {
+        if let value {
+            Text(value)
+                .foregroundColor(isEditing ? .accentColor : .secondary)
+        } else {
+            Text(notSetText)
+                .foregroundColor(isEditing ? .accentColor : .orange)
         }
     }
 

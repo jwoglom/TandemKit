@@ -81,8 +81,25 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var pendingEnableClosedLoop: Bool = false
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
+    /// Body weight stored on the pump, expressed in `controlIQWeightUnit`. `nil`
+    /// when the pump has never had one configured.
     public var controlIQWeight: Int?
+    /// Total daily insulin stored on the pump, in whole units. `nil` when the pump
+    /// has never had one configured.
     public var controlIQTotalDailyInsulin: Int?
+    /// Unit `controlIQWeight` is expressed in, as reported by the pump. Required to
+    /// display the weight correctly and to write it back unchanged.
+    public var controlIQWeightUnit: ControlIQWeightUnit?
+
+    /// Normalizes a Control-IQ weight or total daily insulin value.
+    ///
+    /// The pump reports zero for a value that has never been configured. Storing that
+    /// zero as if it were data is what makes enabling Control-IQ fail, so it is
+    /// collapsed to `nil` everywhere it enters the state.
+    public static func configuredControlIQValue(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
+    }
     public var lastControlIQUpdate: Date?
 
     // Alert snooze settings
@@ -114,8 +131,12 @@ public struct TandemPumpManagerState: RawRepresentable {
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
-        controlIQWeight = rawValue["controlIQWeight"] as? Int
-        controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
+        // Persisted zeroes predate treating zero as "not configured", so drop them
+        // on read instead of resurrecting a value the pump never had.
+        controlIQWeight = TandemPumpManagerState.configuredControlIQValue(rawValue["controlIQWeight"] as? Int)
+        controlIQTotalDailyInsulin = TandemPumpManagerState
+            .configuredControlIQValue(rawValue["controlIQTotalDailyInsulin"] as? Int)
+        controlIQWeightUnit = (rawValue["controlIQWeightUnit"] as? Int).flatMap(ControlIQWeightUnit.init(rawValue:))
         alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
         notificationCount = rawValue["notificationCount"] as? Int
@@ -294,6 +315,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
         raw["controlIQWeight"] = controlIQWeight
         raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
+        raw["controlIQWeightUnit"] = controlIQWeightUnit?.rawValue
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
         raw["alertSnoozeEnabled"] = alertSnoozeEnabled
         raw["alertSnoozeDuration"] = alertSnoozeDuration
@@ -370,6 +392,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",
             "* controlIQWeight: \(String(describing: controlIQWeight))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
+            "* controlIQWeightUnit: \(String(describing: controlIQWeightUnit))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",

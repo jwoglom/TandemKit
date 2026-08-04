@@ -30,6 +30,26 @@ public class ControlIQInfoAbstractResponse: Message {
     public var currentUserModeType: UserModeType? { UserModeType(rawValue: getCurrentUserModeTypeId()) }
     public var weightUnit: WeightUnit? { WeightUnit(rawValue: getWeightUnitId()) }
 
+    /// Whether the pump has a body weight stored.
+    ///
+    /// A pump that has never had one entered reports zero, which is not a weight —
+    /// it means "not configured". Echoing it back in a
+    /// `ChangeControlIQSettingsRequest` is what makes enabling Control-IQ fail.
+    public var isWeightConfigured: Bool { getWeight() > 0 }
+
+    /// Whether the pump has a total daily insulin amount stored. Zero means "not
+    /// configured", not "no insulin".
+    public var isTotalDailyInsulinConfigured: Bool { getTotalDailyInsulin() > 0 }
+
+    /// Body weight as stored on the pump, or `nil` when it has never been configured.
+    public var configuredWeight: Int? { isWeightConfigured ? getWeight() : nil }
+
+    /// Total daily insulin as stored on the pump, or `nil` when it has never been
+    /// configured.
+    public var configuredTotalDailyInsulin: Int? {
+        isTotalDailyInsulinConfigured ? getTotalDailyInsulin() : nil
+    }
+
     /// ControlIQ user modes.
     public enum UserModeType: Int, RawRepresentable {
         case standard = 0
@@ -38,11 +58,10 @@ public class ControlIQInfoAbstractResponse: Message {
         case notSupportedEatingSoon = 3
     }
 
-    /// Weight units.
-    public enum WeightUnit: Int {
-        case kilograms = 0
-        case pounds = 1
-    }
+    /// Weight units. Retained as a nested name for existing callers; the canonical
+    /// type is `ControlIQWeightUnit`, shared with `ChangeControlIQSettingsRequest`
+    /// so a weight can never be read in one unit and written in another.
+    public typealias WeightUnit = ControlIQWeightUnit
 
     open var description: String {
         "ControlIQInfoAbstractResponse(cargo=\(cargo.hexadecimalString), currentUserModeType=\(String(describing: currentUserModeType)), weightUnit=\(String(describing: weightUnit)))"

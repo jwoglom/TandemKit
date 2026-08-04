@@ -59,6 +59,8 @@
 		3EB8074F2FBCDCCC0075D19E /* PairingCodeType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345072EC91299008A07F6 /* PairingCodeType.swift */; };
 		3EB807502FBCDCCC0075D19E /* BolusDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345052EC91299008A07F6 /* BolusDelivery.swift */; };
 		3EB807512FBCDCCC0075D19E /* StatusMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345092EC91299008A07F6 /* StatusMessage.swift */; };
+		3EB8FF012FBCDCCC0075D19E /* ControlIQWeightUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB8FF112FBCDCCC0075D19E /* ControlIQWeightUnit.swift */; };
+		3EB8FF022FBCDCCC0075D19E /* ControlIQSettingsLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EB8FF122FBCDCCC0075D19E /* ControlIQSettingsLimits.swift */; };
 		3EB807522FBCDCCC0075D19E /* SupportedDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE3450A2EC91299008A07F6 /* SupportedDevices.swift */; };
 		3EB807532FBCDCD70075D19E /* CgmUnexpectedGeAlertHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB739377BE92F9DBFEDDB1FE /* CgmUnexpectedGeAlertHistoryLog.swift */; };
 		3EB807542FBCDCD70075D19E /* ParamChangeReminderHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344F82EC91299008A07F6 /* ParamChangeReminderHistoryLog.swift */; };
@@ -746,6 +748,8 @@
 		3EE345072EC91299008A07F6 /* PairingCodeType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeType.swift; sourceTree = "<group>"; };
 		3EE345082EC91299008A07F6 /* PumpFaultCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpFaultCode.swift; sourceTree = "<group>"; };
 		3EE345092EC91299008A07F6 /* StatusMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusMessage.swift; sourceTree = "<group>"; };
+		3EB8FF112FBCDCCC0075D19E /* ControlIQWeightUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlIQWeightUnit.swift; sourceTree = "<group>"; };
+		3EB8FF122FBCDCCC0075D19E /* ControlIQSettingsLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlIQSettingsLimits.swift; sourceTree = "<group>"; };
 		3EE3450A2EC91299008A07F6 /* SupportedDevices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportedDevices.swift; sourceTree = "<group>"; };
 		3EE3450C2EC91299008A07F6 /* QualifyingEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualifyingEvent.swift; sourceTree = "<group>"; };
 		3EE3450E2EC91299008A07F6 /* ErrorResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorResponse.swift; sourceTree = "<group>"; };
@@ -1501,6 +1505,8 @@
 				3EE345072EC91299008A07F6 /* PairingCodeType.swift */,
 				3EE345082EC91299008A07F6 /* PumpFaultCode.swift */,
 				3EE345092EC91299008A07F6 /* StatusMessage.swift */,
+				3EB8FF112FBCDCCC0075D19E /* ControlIQWeightUnit.swift */,
+				3EB8FF122FBCDCCC0075D19E /* ControlIQSettingsLimits.swift */,
 				3EE3450A2EC91299008A07F6 /* SupportedDevices.swift */,
 			);
 			path = Models;
@@ -2074,6 +2080,8 @@
 				3EB8074F2FBCDCCC0075D19E /* PairingCodeType.swift in Sources */,
 				3EB807502FBCDCCC0075D19E /* BolusDelivery.swift in Sources */,
 				3EB807512FBCDCCC0075D19E /* StatusMessage.swift in Sources */,
+				3EB8FF012FBCDCCC0075D19E /* ControlIQWeightUnit.swift in Sources */,
+				3EB8FF022FBCDCCC0075D19E /* ControlIQSettingsLimits.swift in Sources */,
 				3EB807522FBCDCCC0075D19E /* SupportedDevices.swift in Sources */,
 				1A9E00D02F009A840096E8EB /* ProgressBar.swift in Sources */,
 				1A2FA96B2EC8FD0800DF080F /* TandemPumpManagerSettings.swift in Sources */,

@@ -44,8 +44,12 @@ extension TandemPumpManager {
             state.controlIQUserMode = nil
         }
 
-        state.controlIQWeight = response.getWeight()
-        state.controlIQTotalDailyInsulin = response.getTotalDailyInsulin()
+        // A pump that has never had these entered reports zero. Store nil rather
+        // than 0 so we never echo "not configured" back as if it were a real
+        // weight or TDD -- doing so is what makes enabling Control-IQ fail.
+        state.controlIQWeight = response.configuredWeight
+        state.controlIQTotalDailyInsulin = response.configuredTotalDailyInsulin
+        state.controlIQWeightUnit = response.weightUnit
         state.lastControlIQUpdate = Date.now
 
         notifyDelegateStateUpdated()

@@ -355,15 +355,29 @@ final class TandemKitDebugViewModel: ObservableObject {
                     metadata: metadata,
                     fields: [
                         ParameterField(id: "enabled", label: "Enabled (true/false)", placeholder: "true", type: .boolean),
-                        ParameterField(id: "weight", label: "Weight (lbs)", placeholder: "0", type: .integer),
+                        ParameterField(id: "weight", label: "Weight", placeholder: "0", type: .integer),
+                        ParameterField(
+                            id: "weightUnit",
+                            label: "Weight unit (0=kg, 1=lbs)",
+                            placeholder: "1",
+                            type: .integer
+                        ),
                         ParameterField(id: "tdi", label: "Total Daily Insulin", placeholder: "0", type: .integer)
                     ],
                     build: { input in
                         guard let weight = input["weight"].flatMap(Int.init),
-                              let tdi = input["tdi"].flatMap(Int.init)
+                              let tdi = input["tdi"].flatMap(Int.init),
+                              let weightUnit = input["weightUnit"]
+                              .flatMap(Int.init)
+                              .flatMap(ControlIQWeightUnit.init(rawValue:))
                         else { return nil }
                         let enabled = Self.parseBool(input["enabled"])
-                        return ChangeControlIQSettingsRequest(enabled: enabled, weightLbs: weight, totalDailyInsulinUnits: tdi)
+                        return ChangeControlIQSettingsRequest(
+                            enabled: enabled,
+                            weight: weight,
+                            weightUnit: weightUnit,
+                            totalDailyInsulinUnits: tdi
+                        )
                     }
                 )
             )

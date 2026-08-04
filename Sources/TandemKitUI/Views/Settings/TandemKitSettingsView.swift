@@ -5,6 +5,7 @@ private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
     case cgmRequiredForCIQ
+    case controlIQSetupRequired
     case diyRestored
     case noCGMConnected
     case stopTempRate
@@ -17,6 +18,7 @@ private enum SettingsAlertType: Identifiable {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
         case .cgmRequiredForCIQ: return "cgmRequiredForCIQ"
+        case .controlIQSetupRequired: return "controlIQSetupRequired"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
@@ -101,12 +103,14 @@ struct TandemKitSettingsView: View {
                 )
             )
         case .controlIQ:
+            // Prefer what the pump (or our validation) actually reported; the generic
+            // wording is only a fallback, since it cannot tell the user what to fix.
             content = ErrorSheetContent(
                 title: String(
                     localized: "Could not change Control-IQ setting",
                     comment: "Title for failure to toggle Control-IQ"
                 ),
-                message: String(
+                message: viewModel.commandFailureDetail ?? String(
                     localized: "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status.",
                     comment: "Message for failed to toggle Control-IQ"
                 )
@@ -573,6 +577,25 @@ struct TandemKitSettingsView: View {
                     ),
                     secondaryButton: .cancel(Text("OK"))
                 )
+            case .controlIQSetupRequired:
+                return Alert(
+                    title: Text(
+                        "Control-IQ Setup Needed",
+                        comment: "Title for alert blocking the Control-IQ switch when weight or TDD are unset"
+                    ),
+                    message: Text(
+                        "Control-IQ needs your body weight and total daily insulin stored on the pump before it can be turned on or off from here.\n\nEnter them in Control-IQ Settings, or on the pump itself, and then try again.",
+                        comment: "Message for alert blocking the Control-IQ switch when weight or TDD are unset"
+                    ),
+                    primaryButton: .default(
+                        Text(
+                            "Control-IQ Settings",
+                            comment: "Button to open Control-IQ settings from the setup-needed alert"
+                        ),
+                        action: { viewModel.openControlIQSettings() }
+                    ),
+                    secondaryButton: .cancel(Text("OK"))
+                )
             case .diyRestored:
                 return Alert(
                     title: Text(String(format: String(
@@ -676,6 +699,12 @@ struct TandemKitSettingsView: View {
             if show {
                 activeAlert = .cgmRequiredForCIQ
                 viewModel.showCGMRequiredForCIQ = false
+            }
+        }
+        .onChange(of: viewModel.showControlIQSetupRequired) { show in
+            if show {
+                activeAlert = .controlIQSetupRequired
+                viewModel.showControlIQSetupRequired = false
             }
         }
         .navigationBarItems(trailing: doneButton)

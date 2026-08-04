@@ -61,6 +61,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isUpdatingTime = false
     @Published var showingTimeSyncConfirmation = false
     @Published var commandFailure: CommandFailure?
+    /// What the pump or our own validation actually said, appended to the generic
+    /// failure sheet so the user sees something they can act on.
+    @Published var commandFailureDetail: String?
     @Published var basalDose: UnfinalizedDose?
     @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
@@ -75,6 +78,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isCGMActiveOnPump: Bool = false
     @Published var pendingEnableClosedLoop: Bool = false
     @Published var showCGMRequiredForCIQ: Bool = false
+    /// Set when Control-IQ cannot be switched because the pump has no stored weight
+    /// or total daily insulin; routes the user to the Control-IQ settings screen.
+    @Published var showControlIQSetupRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
 
@@ -205,9 +211,19 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// worse state for the user. To prevent that, first confirm a CGM sensor session is configured
     /// on the pump. Only when one is present do we surface the switch confirmation; otherwise we
     /// show a blocking prompt directing the user to connect a CGM and leave the algorithm unchanged.
+    ///
+    /// Control-IQ also needs a body weight and total daily insulin stored on the pump. Those cannot
+    /// be guessed on the user's behalf — a wrong weight or TDD changes how Control-IQ doses — so
+    /// when either is missing the user is sent to the Control-IQ settings screen to enter them
+    /// instead of the switch failing with a bare pump status.
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
+
+        guard controlIQSettingsRequest(enabled: true) != nil else {
+            showControlIQSetupRequired = true
+            return
+        }
 
         isCheckingCGMForCIQ = true
         pumpManager.getCGMStatus { response in
@@ -222,16 +238,41 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
-    func switchAlgorithmToControlIQ() {
-        isUpdatingPumpState = true
+    /// Builds a Control-IQ settings request from what the pump has actually told us.
+    ///
+    /// Returns `nil` when the pump has no stored weight, no stored total daily insulin, or a weight
+    /// unit we cannot decode — anything that would force us to make a value up. Enabling Control-IQ
+    /// with a fabricated weight or TDD would change how the pump doses, and echoing an unset value
+    /// back is what the pump rejects, so both paths ask the user for the real numbers instead.
+    private func controlIQSettingsRequest(enabled: Bool) -> ChangeControlIQSettingsRequest? {
+        guard let state = pumpManager?.state,
+              let weight = state.controlIQWeight,
+              let totalDailyInsulin = state.controlIQTotalDailyInsulin,
+              let weightUnit = state.controlIQWeightUnit
+        else {
+            return nil
+        }
 
-        let request = ChangeControlIQSettingsRequest(
-            enabled: true,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+        return ChangeControlIQSettingsRequest(
+            enabled: enabled,
+            weight: weight,
+            weightUnit: weightUnit,
+            totalDailyInsulinUnits: totalDailyInsulin
         )
-        pumpManager?.configureControlIQMode(request) { success, cgmResponse in
-            if success {
+    }
+
+    func switchAlgorithmToControlIQ() {
+        guard let request = controlIQSettingsRequest(enabled: true) else {
+            showControlIQSetupRequired = true
+            return
+        }
+
+        isUpdatingPumpState = true
+        commandFailureDetail = nil
+
+        pumpManager?.configureControlIQMode(request) { result in
+            switch result {
+            case let .success(cgmResponse):
                 let cgmActive = cgmResponse?.sessionState == .active
 
                 DispatchQueue.main.async {
@@ -242,9 +283,10 @@ class TandemKitSettingsViewModel: ObservableObject {
                         self.showNoCGMWarning = true
                     }
                 }
-            } else {
+            case let .failure(error):
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
+                    self.commandFailureDetail = error.localizedDescription
                     self.commandFailure = .controlIQ
                 }
             }
@@ -252,20 +294,23 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func switchAlgorithmToDIY() {
-        isUpdatingPumpState = true
+        guard let request = controlIQSettingsRequest(enabled: false) else {
+            showControlIQSetupRequired = true
+            return
+        }
 
-        let request = ChangeControlIQSettingsRequest(
-            enabled: false,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
-        )
-        pumpManager?.configureControlIQMode(request) { success, _ in
+        isUpdatingPumpState = true
+        commandFailureDetail = nil
+
+        pumpManager?.configureControlIQMode(request) { result in
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
-                if success {
+                switch result {
+                case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                } else {
+                case let .failure(error):
+                    self.commandFailureDetail = error.localizedDescription
                     self.commandFailure = .controlIQ
                 }
             }
