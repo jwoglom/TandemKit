@@ -49,6 +49,17 @@
         }
       }
     },
+    "%@ ago" : {
+      "comment" : "Relative time suffix, parameter is a duration",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ago"
+          }
+        }
+      }
+    },
     "%@ closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop." : {
       "comment" : "subtitle for CIQ no CGM notice",
       "localizations" : {
@@ -231,17 +242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Active Notifications"
-          }
-        }
-      }
-    },
-    "ago" : {
-      "comment" : "Suffix for relative time",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ago"
           }
         }
       }

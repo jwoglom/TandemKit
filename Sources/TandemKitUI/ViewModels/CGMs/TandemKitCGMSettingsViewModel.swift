@@ -40,7 +40,7 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var cgmSessionState: CGMSessionState = .unknown
     @Published var sensorTypeText: String?
-    @Published var sensorStartedDate: Date?
+    @Published var sensorStartedText: String?
     @Published var sessionDuration: String?
     @Published var sessionTimeRemaining: String?
     @Published var transmitterBattery: String?
@@ -57,10 +57,14 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
 
     // MARK: - Fetch
 
-    func fetchCGMStatus(force: Bool = false) {
+    /// Fetches CGM status from the pump. Pass `showsSpinner: false` to refresh in place, leaving
+    /// the currently displayed values visible while the pump round-trip is in flight.
+    func fetchCGMStatus(force: Bool = false, showsSpinner: Bool = true) {
         guard !hasFetched || force else { return }
         hasFetched = true
-        isFetching = true
+        if showsSpinner {
+            isFetching = true
+        }
 
         pumpManager?.getCGMStatus { response in
             DispatchQueue.main.async {
@@ -78,7 +82,11 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                     }
                 }()
 
+                // The pump only reports transmitter battery for G6; on a G7 session it always
+                // reads back as unavailable, so the row is omitted entirely.
                 let batteryText: String? = {
+                    guard response.cgmSensorType != .dexcomG7 else { return nil }
+
                     switch response.transmitterBatteryStatus {
                     case .okay: return String(localized: "OK", comment: "Transmitter battery: OK")
                     case .error: return String(localized: "Error", comment: "Transmitter battery: Error")
@@ -89,13 +97,18 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
                     }
                 }()
 
-                let duration = Self.formatDuration(seconds: response.sessionDurationSeconds)
-                let remaining = Self.formatDuration(seconds: response.sessionTimeRemainingSeconds)
-                let startedDate = response.sensorStartedTimestamp > 0 ? response.sensorStartedDate : nil
+                let duration = formatCompactDuration(seconds: response.sessionDurationSeconds)
+                let remaining = formatCompactDuration(seconds: response.sessionTimeRemainingSeconds)
+                let startedText: String? = response.sensorStartedTimestamp > 0
+                    ? String(format: String(
+                        localized: "%@ ago",
+                        comment: "Relative time suffix, parameter is a duration"
+                    ), formatCompactDuration(since: response.sensorStartedDate))
+                    : nil
 
                 self.cgmSessionState = CGMSessionState(from: response.sessionStateId)
                 self.sensorTypeText = sensorType
-                self.sensorStartedDate = startedDate
+                self.sensorStartedText = startedText
                 self.sessionDuration = response.sessionDurationSeconds > 0 ? duration : nil
                 self.sessionTimeRemaining = response.sessionTimeRemainingSeconds > 0 ? remaining : nil
                 self.transmitterBattery = batteryText
@@ -107,23 +120,22 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
     // MARK: - Factory
 
     func createG6SetupViewModel() -> TandemKitG6SetupViewModel {
-        TandemKitG6SetupViewModel(pumpManager: pumpManager)
+        TandemKitG6SetupViewModel(pumpManager: pumpManager) { [weak self] in
+            self?.handleSetupCompleted()
+        }
     }
 
     func createG7SetupViewModel() -> TandemKitG7SetupViewModel {
-        TandemKitG7SetupViewModel(pumpManager: pumpManager)
+        TandemKitG7SetupViewModel(pumpManager: pumpManager) { [weak self] in
+            self?.handleSetupCompleted()
+        }
     }
 
-    // MARK: - Helpers
-
-    private static func formatDuration(seconds: UInt32) -> String {
-        let totalMinutes = Int(seconds) / 60
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        if hours > 0 {
-            return String(format: "%dh %dm", hours, minutes)
-        }
-        return String(format: "%dm", minutes)
+    /// Called when a setup wizard finishes talking to the pump. The displayed status is stale at
+    /// that point, so show the expected state immediately and reload the authoritative one.
+    private func handleSetupCompleted() {
+        cgmSessionState = .startPending
+        fetchCGMStatus(force: true, showsSpinner: false)
     }
 
     // MARK: - Stop CGM Sensor
@@ -135,15 +147,16 @@ class TandemKitCGMSettingsViewModel: ObservableObject {
         pumpManager?.stopCGMSensor { success in
             DispatchQueue.main.async {
                 self.isLoading = false
-            }
 
-            if success {
-                self.cgmSessionState = .stopPending
-            } else {
-                self.commandError = String(
-                    localized: "Failed to stop CGM sensor. Check pump connection.",
-                    comment: "Error when CGM sensor stop fails"
-                )
+                if success {
+                    self.cgmSessionState = .stopPending
+                    self.fetchCGMStatus(force: true, showsSpinner: false)
+                } else {
+                    self.commandError = String(
+                        localized: "Failed to stop CGM sensor. Check pump connection.",
+                        comment: "Error when CGM sensor stop fails"
+                    )
+                }
             }
         }
     }

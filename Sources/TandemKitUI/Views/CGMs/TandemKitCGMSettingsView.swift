@@ -110,13 +110,11 @@ struct TandemKitCGMSettingsView: View {
                     .foregroundColor(statusColor)
             }
 
-            if let startedDate = viewModel.sensorStartedDate {
+            if let startedText = viewModel.sensorStartedText {
                 HStack {
                     Text("Sensor Started", comment: "Label for sensor started date")
                     Spacer()
-                    Text(startedDate, style: .relative)
-                        .foregroundColor(.secondary)
-                    Text("ago", comment: "Suffix for relative time")
+                    Text(startedText)
                         .foregroundColor(.secondary)
                 }
             }

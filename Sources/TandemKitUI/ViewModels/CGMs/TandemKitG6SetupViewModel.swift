@@ -17,8 +17,13 @@ class TandemKitG6SetupViewModel: ObservableObject {
 
     private let pumpManager: TandemPumpManager?
 
-    init(pumpManager: TandemPumpManager?) {
+    /// Invoked on the main thread after the pump accepts the sensor configuration, so the caller
+    /// can reload any status it is displaying.
+    private let onSetupCompleted: (() -> Void)?
+
+    init(pumpManager: TandemPumpManager?, onSetupCompleted: (() -> Void)? = nil) {
         self.pumpManager = pumpManager
+        self.onSetupCompleted = onSetupCompleted
     }
 
     // MARK: - Navigation
@@ -67,7 +72,9 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 self.isLoading = false
                 self.didComplete = success
 
-                if !success {
+                if success {
+                    self.onSetupCompleted?()
+                } else {
                     self.error = String(
                         localized: "Failed to set transmitter.",
                         comment: "Error when pump is not connected"
@@ -92,7 +99,9 @@ class TandemKitG6SetupViewModel: ObservableObject {
                 self.isLoading = false
                 self.didComplete = success
 
-                if !success {
+                if success {
+                    self.onSetupCompleted?()
+                } else {
                     self.error = String(
                         localized: "Failed to start CGM sensor",
                         comment: "Error when pump is not connected"

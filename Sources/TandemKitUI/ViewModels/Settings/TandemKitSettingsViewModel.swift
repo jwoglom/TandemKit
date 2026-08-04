@@ -381,17 +381,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 }
 
-private func formatDurationToDaysHours(since date: Date) -> String {
-    let components = Calendar.current.dateComponents([.day, .hour], from: date, to: Date())
-    let days = components.day ?? 0
-    let hours = components.hour ?? 0
-
-    let dayString = days == 1 ? String(localized: "day", comment: "Singular day unit") : String(localized: "days", comment: "Plural days unit")
-    let hourString = hours == 1 ? String(localized: "hour", comment: "Singular hour unit") : String(localized: "hours", comment: "Plural hours unit")
-
-    return "\(days) \(dayString), \(hours) \(hourString)"
-}
-
 extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
     func pumpManager(
         _: any LoopKit.PumpManager,
