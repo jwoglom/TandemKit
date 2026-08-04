@@ -29,10 +29,8 @@ enum CartridgeChangeStep: Int {
 }
 
 class TandemKitChangeCartridgeViewModel: ObservableObject {
-    /// Rate at which the pump retracts its drive mechanism, expressed in the cartridge units of
-    /// travel it undoes per second.
     static let cartridgeRetractionUnitsPerSecond: Double = 20
-    /// Fallback cartridge capacity used when no pump manager is attached (previews).
+    /// Used when no pump manager is attached (previews).
     static let defaultCartridgeCapacity: Double = 200
 
     @Published var currentStep: CartridgeChangeStep = .suspend
@@ -51,8 +49,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var detectingProgress: Int = 0
     @Published var isDetecting = false
 
-    /// Cartridge volume read immediately before entering change mode. Drives the ready-to-change
-    /// estimate; nil if the pump could not be read.
     @Published var cartridgeUnitsRemaining: Double?
 
     private var readyToChangeWorkItem: DispatchWorkItem?
@@ -160,8 +156,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         failedEnterMode = false
         isProcessing = true
 
-        // Read the cartridge volume before entering change mode: it is the input to the
-        // ready-to-change estimate, and the pump starts retracting as soon as the mode is entered.
+        // Read before entering change mode; the pump starts retracting as soon as it's entered.
         pumpManager?.fetchInsulinRemaining { units in
             DispatchQueue.main.async {
                 self.cartridgeUnitsRemaining = units
@@ -188,15 +183,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         }
     }
 
-    /// Holds the "waiting for pump" step until the cartridge should be safe to remove.
-    ///
-    /// The pump's change-cartridge control stream is not currently emitting, so the ready state is
-    /// estimated rather than observed: see `readyToChangeDelay(unitsRemaining:capacity:)`. The wait
-    /// is measured from when the request was sent, so any time the pump already spent before
-    /// answering counts toward it.
-    ///
-    /// Replace this with `EnterChangeCartridgeModeStateStreamResponse`'s `.readyToChange` state once
-    /// the control stream is working.
+    /// Estimates the ready state instead of observing it, since the pump isn't currently emitting
+    /// the change-cartridge control stream. Switch to `EnterChangeCartridgeModeStateStreamResponse`
+    /// `.readyToChange` once it works.
     func startMonitoringChangeState(requestSentAt: Date) {
         let capacity = pumpManager?.pumpReservoirCapacity ?? Self.defaultCartridgeCapacity
         let delay = readyToChangeDelay(unitsRemaining: cartridgeUnitsRemaining, capacity: capacity)
@@ -214,16 +203,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + remaining, execute: workItem)
     }
 
-    /// How long to wait after requesting change-cartridge mode before telling the user the
-    /// cartridge can be removed.
-    ///
-    /// Removing the cartridge requires the pump to retract its drive mechanism, which has advanced
-    /// in proportion to the insulin already delivered — so the wait scales with
-    /// `capacity - unitsRemaining` at roughly `cartridgeRetractionUnitsPerSecond`. A full cartridge
-    /// needs no wait; an empty one needs the full traversal.
-    ///
-    /// With no reading available the worst case (an empty cartridge) is assumed, since waiting too
-    /// long is only an inconvenience while prompting too early is not.
+    /// The pump retracts a drive mechanism that has advanced in proportion to the insulin already
+    /// delivered, so the wait scales with `capacity - unitsRemaining`. With no reading, assumes an
+    /// empty cartridge: waiting too long is an inconvenience, prompting early is not.
     func readyToChangeDelay(unitsRemaining: Double?, capacity: Double) -> TimeInterval {
         let remaining = min(max(unitsRemaining ?? 0, 0), capacity)
         return (capacity - remaining) / Self.cartridgeRetractionUnitsPerSecond
@@ -289,7 +271,6 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     }
 
     func cancelOperation() {
-        // Don't let a pending ready-to-change transition fire after the user backs out.
         readyToChangeWorkItem?.cancel()
         readyToChangeWorkItem = nil
 

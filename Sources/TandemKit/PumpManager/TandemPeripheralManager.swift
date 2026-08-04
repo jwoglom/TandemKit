@@ -49,14 +49,11 @@ class TandemPeripheralManager: NSObject {
     private let writeSemaphore = DispatchSemaphore(value: 1)
     private var currentTxId: UInt8 = 0
 
-    // How long a single write waits for its response packet. This must cover the slowest command
-    // the pump can be asked to run, not the typical one: EnterChangeCartridgeMode does not respond
-    // until the cartridge is mechanically safe to remove, which is observed to take 5-20 seconds.
-    // A timeout shorter than that reports a failure for a command the pump is still completing,
-    // which invites the caller to re-send an insulin-affecting request.
+    // Sized for the slowest command, not the typical one: EnterChangeCartridgeMode doesn't respond
+    // until the cartridge is safe to remove, which takes 5-20s. Timing out early reports a failure
+    // for a command still in progress, inviting a re-send of an insulin-affecting request.
     private static let responseTimeout: DispatchTimeInterval = .seconds(30)
-    // Bound on acquiring the write lock. Kept above responseTimeout so that a caller queued behind
-    // one legitimately slow write still waits it out rather than failing spuriously.
+    // Above responseTimeout, so a caller queued behind one slow write waits it out.
     private static let writeLockTimeout: DispatchTimeInterval = .seconds(45)
 
     private var authBuilder: JpakeAuthBuilder

@@ -365,8 +365,7 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    /// Reads the current cartridge volume, connecting first if needed. The completion receives the
-    /// units remaining, or nil if the pump could not be reached or did not answer.
+    /// Reads the cartridge volume, connecting first if needed. Yields nil if the pump didn't answer.
     func fetchInsulinRemaining(completion: @escaping (Double?) -> Void) {
         bluetooth.ensureConnected { error in
             if let error {
@@ -379,7 +378,6 @@ extension TandemPumpManager {
         }
     }
 
-    /// Reads the current cartridge volume and publishes it to the state and pump delegate.
     /// MUST be called on the command queue. Returns the units remaining, or nil on failure.
     @discardableResult
     func fetchReservoirStatus() -> Double? {
