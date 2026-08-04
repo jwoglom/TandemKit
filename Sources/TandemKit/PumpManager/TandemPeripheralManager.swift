@@ -49,6 +49,16 @@ class TandemPeripheralManager: NSObject {
     private let writeSemaphore = DispatchSemaphore(value: 1)
     private var currentTxId: UInt8 = 0
 
+    // How long a single write waits for its response packet. This must cover the slowest command
+    // the pump can be asked to run, not the typical one: EnterChangeCartridgeMode does not respond
+    // until the cartridge is mechanically safe to remove, which is observed to take 5-20 seconds.
+    // A timeout shorter than that reports a failure for a command the pump is still completing,
+    // which invites the caller to re-send an insulin-affecting request.
+    private static let responseTimeout: DispatchTimeInterval = .seconds(30)
+    // Bound on acquiring the write lock. Kept above responseTimeout so that a caller queued behind
+    // one legitimately slow write still waits it out rather than failing spuriously.
+    private static let writeLockTimeout: DispatchTimeInterval = .seconds(45)
+
     private var authBuilder: JpakeAuthBuilder
 
     // Reassembles the (possibly multi-packet) unsolicited HistoryLogStreamResponse
@@ -109,7 +119,7 @@ class TandemPeripheralManager: NSObject {
         // unbounded wait that used to live here was a primary cause of the connection hang).
         // On the success path the matching signal() is registered immediately via defer; on the
         // timeout path we never acquired the lock, so we must not signal.
-        guard writeSemaphore.wait(timeout: .now() + .seconds(15)) == .success else {
+        guard writeSemaphore.wait(timeout: .now() + Self.writeLockTimeout) == .success else {
             logger.error("Timed out acquiring write lock; pump I/O unexpectedly contended")
             return nil
         }
@@ -159,7 +169,7 @@ class TandemPeripheralManager: NSObject {
         currentTxId = currentTxId &+ 1
         while response.needsMorePacket {
             // Wait for result from pump
-            guard let result = writeQ.wait(timeout: .now() + .seconds(10)) else {
+            guard let result = writeQ.wait(timeout: .now() + Self.responseTimeout) else {
                 logger.error("Timeout hit, no response from pump...")
                 return nil
             }

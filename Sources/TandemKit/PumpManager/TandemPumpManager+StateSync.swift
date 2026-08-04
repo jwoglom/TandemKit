@@ -365,13 +365,30 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchReservoirStatus() {
+    /// Reads the current cartridge volume, connecting first if needed. The completion receives the
+    /// units remaining, or nil if the pump could not be reached or did not answer.
+    func fetchInsulinRemaining(completion: @escaping (Double?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for reservoir status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            completion(self.fetchReservoirStatus())
+        }
+    }
+
+    /// Reads the current cartridge volume and publishes it to the state and pump delegate.
+    /// MUST be called on the command queue. Returns the units remaining, or nil on failure.
+    @discardableResult
+    func fetchReservoirStatus() -> Double? {
         guard let response = bluetooth.write(
             message: InsulinStatusRequest(),
             expecting: InsulinStatusResponse.self
         ) as? InsulinStatusResponse else {
             logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
-            return
+            return nil
         }
 
         let timestamp = Date.now
@@ -397,6 +414,8 @@ extension TandemPumpManager {
                 completion: { _ in }
             )
         }
+
+        return units
     }
 
     func fetchBatteryStatus() {

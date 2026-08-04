@@ -49,12 +49,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Backstop timeout for pump commands. This MUST stay comfortably larger than the worst-case
     // real command duration, otherwise it could report a spurious failure for a command that is
     // still in progress — and for a bolus a false failure can prompt the loop to retry, risking a
-    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
-    // so a command always self-completes via the lower-level bounded waits well before this fires;
-    // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
+    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips, each of
+    // which is bounded by TandemPeripheralManager.responseTimeout (30s), so a command always
+    // self-completes via the lower-level bounded waits well before this fires; the watchdog is
+    // purely a last-resort guarantee that the loop receives exactly one result.
     // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
-    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
+    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
