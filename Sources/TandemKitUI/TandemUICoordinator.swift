@@ -19,6 +19,7 @@ enum TandemScreen {
     case quickBolus
     case alertSettings
     case debug
+    case historyLogViewer
 
     func next() -> TandemScreen? {
         switch self {
@@ -296,10 +297,20 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             )
 
         case .debug:
-            let viewModel = TandemKitDebugViewModel(pumpManager: pumpManager)
+            let viewModel = TandemKitDebugViewModel(
+                pumpManager: pumpManager,
+                openHistoryLogViewer: { self.navigateTo(.historyLogViewer) }
+            )
             return hostingController(
                 rootView: TandemKitDebugView(viewModel: viewModel),
                 title: String(localized: "Debug Options", comment: "Title for debug options screen")
+            )
+
+        case .historyLogViewer:
+            let viewModel = TandemKitHistoryLogViewerViewModel(pumpManager: pumpManager)
+            return hostingController(
+                rootView: TandemKitHistoryLogViewerView(viewModel: viewModel),
+                title: String(localized: "History Log Viewer", comment: "Title for history log viewer screen")
             )
         }
     }

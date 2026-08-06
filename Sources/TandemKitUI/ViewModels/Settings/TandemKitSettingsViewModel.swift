@@ -68,13 +68,15 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var isConnected: Bool = false
     @Published var isRefreshing: Bool = false
-    @Published var useSilentMode: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
     @Published var showNoCGMWarning: Bool = false
     @Published var isCGMActiveOnPump: Bool = false
     @Published var pendingEnableClosedLoop: Bool = false
+    @Published var showCGMRequiredForCIQ: Bool = false
+    @Published var showSwitchToCIQConfirm: Bool = false
+    @Published var isCheckingCGMForCIQ: Bool = false
 
     private var numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -122,7 +124,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openDebug = openDebug
         self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
-        useSilentMode = pumpManager?.state.useSilentTones ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -153,29 +154,69 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
     }
 
+    /// Whether the pump is currently suspended, used to decide which confirmation to present and
+    /// which command to issue.
+    var isDeliverySuspended: Bool {
+        basalDose?.type == .suspend
+    }
+
     func suspendResumeButtonPressed() {
         guard let pumpManager else {
             return
         }
 
-        if pumpManager.state.basalDose.type == .suspend {
-            pumpManager.resumeDelivery { error in
+        isUpdatingPumpState = true
+
+        let wasSuspended = pumpManager.state.basalDose.type == .suspend
+        let failure: CommandFailure = wasSuspended ? .resume : .suspend
+
+        // Shared completion: surface the error sheet on failure, otherwise re-sync the pump so the
+        // delivery status and suspend/resume button reflect the pump's actual state instead of
+        // leaving the UI ambiguous about whether the command took effect. The brief sleep lets the
+        // pump settle before we read the reconciled state back, matching the other therapy commands.
+        let handleCompletion: (Error?) -> Void = { error in
+            if error != nil {
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
+                    self.commandFailure = failure
+                }
+                return
+            }
 
-                    if let _ = error {
-                        self.commandFailure = .resume
-                    }
+            Thread.sleep(forTimeInterval: 1.0)
+            self.pumpManager?.syncPumpData { _ in
+                DispatchQueue.main.async {
+                    self.isUpdatingPumpState = false
                 }
             }
-        } else {
-            pumpManager.suspendDelivery { error in
-                DispatchQueue.main.async {
-                    self.isUpdatingPumpState = false
+        }
 
-                    if let _ = error {
-                        self.commandFailure = .suspend
-                    }
+        if wasSuspended {
+            pumpManager.resumeDelivery(completion: handleCompletion)
+        } else {
+            pumpManager.suspendDelivery(completion: handleCompletion)
+        }
+    }
+
+    /// Begins a switch of the pump algorithm to Control-IQ.
+    ///
+    /// Control-IQ can only close the loop when a CGM is connected to the pump; without one the
+    /// pump silently runs Control-IQ in open-loop while our DIY algorithm is disabled — a strictly
+    /// worse state for the user. To prevent that, first confirm a CGM sensor session is configured
+    /// on the pump. Only when one is present do we surface the switch confirmation; otherwise we
+    /// show a blocking prompt directing the user to connect a CGM and leave the algorithm unchanged.
+    func attemptSwitchToControlIQ() {
+        guard let pumpManager else { return }
+        guard !isCheckingCGMForCIQ else { return }
+
+        isCheckingCGMForCIQ = true
+        pumpManager.getCGMStatus { response in
+            DispatchQueue.main.async {
+                self.isCheckingCGMForCIQ = false
+                if response?.isSensorSessionConfigured == true {
+                    self.showSwitchToCIQConfirm = true
+                } else {
+                    self.showCGMRequiredForCIQ = true
                 }
             }
         }
@@ -315,11 +356,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
         pumpManager?.configureAutoAcknowledgeBasalAlerts(enabled)
         autoAcknowledgeBasalAlerts = enabled
-    }
-
-    func setSilentMode(_ enabled: Bool) {
-        pumpManager?.configureSilentMode(enabled)
-        useSilentMode = enabled
     }
 
     func playSound() {

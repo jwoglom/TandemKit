@@ -163,10 +163,25 @@ extension TandemPumpManager {
         }
     }
 
+    static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)
+
+    /// Defer to event-driven bolus tracking only while the bolus should still be delivering —
+    /// a bolusChange event lost to a disconnect is never replayed, so sync must reconcile if past the grace time.
+    func shouldDeferBolusSync(at date: Date = .now) -> Bool {
+        guard let bolusDose = state.bolusDose else {
+            return false
+        }
+        return date < bolusDose.estimatedEndDate.addingTimeInterval(Self.bolusSyncReconcileGrace)
+    }
+
     func fetchBolusStatus(fromSync: Bool) {
-        if fromSync, state.bolusDose != nil {
+        if fromSync, shouldDeferBolusSync() {
             logger.warning("Skip bolus sync during bolus...")
             return
+        }
+
+        if fromSync, let bolusDose = state.bolusDose {
+            logger.warning("Bolus \(bolusDose.bolusId ?? -1) past estimated end; reconciling stale bolus state")
         }
 
         guard let response = bluetooth.write(
@@ -235,15 +250,22 @@ extension TandemPumpManager {
 
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
-        for (request, expecting) in NotificationBundle.allRequests() {
+        for request in NotificationBundle.allRequests() {
+            guard let expecting = expectedNotificationResponseType(for: request) else {
+                logger.error("No response type mapping for \(type(of: request))")
+                continue
+            }
             guard let response = bluetooth.write(message: request, expecting: expecting) else {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
                 continue
             }
 
+            guard NotificationBundle.isNotificationResponse(response) else {
+                continue
+            }
+
             if let response = response as? AlertStatusResponse {
                 autoAcknowledgeBasalAlertsIfNeeded(alertResponse: response)
-                continue
             }
 
             notificationBundle.add(response)
@@ -252,6 +274,17 @@ extension TandemPumpManager {
         state.notificationCount = notificationBundle.getNotificationCount()
         state.lastNotificationUpdate = Date.now
         notifyDelegateStateUpdated()
+    }
+
+    /// Resolves the concrete response type expected on the wire for a notification status request.
+    /// Most pairings follow the `Request`/`Response` naming convention resolved by
+    /// `MessageRegistry`; `MalfunctionStatusRequest` is the exception, since its response is
+    /// `MalfunctionBitmaskStatusResponse`.
+    private func expectedNotificationResponseType(for request: Message) -> Message.Type? {
+        if request is MalfunctionStatusRequest {
+            return MalfunctionBitmaskStatusResponse.self
+        }
+        return MessageRegistry.responseMetadata(for: request)?.type
     }
 
     func fetchDeliveryLimits() {

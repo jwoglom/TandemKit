@@ -51,6 +51,11 @@ class TandemPeripheralManager: NSObject {
 
     private var authBuilder: JpakeAuthBuilder
 
+    // Reassembles the (possibly multi-packet) unsolicited HistoryLogStreamResponse
+    // notifications that arrive on the history log characteristic. Only touched on the
+    // CB delegate queue (didUpdateValueFor / cancelPendingOperations callers' queue).
+    private var historyLogStreamAccumulator: ResponseMessage?
+
     init(
         _ bluetoothManager: TandemBluetoothManager,
         _ peripheral: CBPeripheral,
@@ -191,6 +196,8 @@ class TandemPeripheralManager: NSObject {
         commandLock?.cancel()
         writeQueue?.0.cancel()
         readQueue?.0.cancel()
+        // A partially assembled stream message can never complete once the connection drops.
+        historyLogStreamAccumulator = nil
     }
 
     func startNotify(service serviceUUID: CBUUID, characteristic characteristicUUID: CBUUID) {
@@ -282,6 +289,15 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        // The history log characteristic only ever carries unsolicited HistoryLogStreamResponse
+        // notifications, so route it before the write-queue check: continuation packets of a
+        // multi-packet stream message carry cargo at data[2] that could otherwise alias a
+        // pending write's expected opcode.
+        if characteristic.uuid == CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS {
+            handleHistoryLogStreamPacket(data)
+            return
+        }
+
         if let (writeQueue, writeOpCode) = writeQueue, data[2] == writeOpCode {
             writeQueue.leave(Data(data))
             return
@@ -309,6 +325,14 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == FillCannulaStateStreamResponse.props.characteristic,
+           data[2] == FillCannulaStateStreamResponse.props.opCode
+        {
+            let response = FillCannulaStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.fillCannulaStateStream.send(response)
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {
@@ -318,6 +342,30 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         }
 
         logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
+    }
+
+    /// Accumulates history log stream packets until a full message is assembled, then
+    /// publishes the parsed HistoryLogStreamResponse to the pump manager's stream.
+    private func handleHistoryLogStreamPacket(_ data: Data) {
+        var response = historyLogStreamAccumulator ?? ResponseMessage()
+        BTResponseParser.parse(
+            data: data,
+            characteristic: CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS,
+            authKey: nil,
+            response: &response
+        )
+
+        if response.needsMorePacket {
+            historyLogStreamAccumulator = response
+            return
+        }
+
+        historyLogStreamAccumulator = nil
+        guard let message = response.message as? HistoryLogStreamResponse else {
+            logger.warning("Unparseable history log stream message: \(data.hexadecimalString)")
+            return
+        }
+        pumpManager.historyLogStream.send(message)
     }
 
     func peripheral(_: CBPeripheral, didWriteValueFor _: CBCharacteristic, error: (any Error)?) {

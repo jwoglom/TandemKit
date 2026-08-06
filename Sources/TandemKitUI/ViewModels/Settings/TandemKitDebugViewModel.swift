@@ -21,6 +21,30 @@ final class TandemKitDebugViewModel: ObservableObject {
         let build: ([String: String]) -> Message?
     }
 
+    /// A single request that can be sent from a category sheet. `parameterized` is non-nil
+    /// when the request needs structured input; otherwise it can be sent with empty cargo.
+    struct RequestEntry: Identifiable {
+        let metadata: MessageMetadata
+        let parameterized: ParameterizedOption?
+
+        var id: String { metadata.name }
+        var name: String { metadata.name }
+
+        /// Requests that require user input before they can be built and sent.
+        var requiresInput: Bool {
+            parameterized != nil || metadata.size > 0
+        }
+    }
+
+    /// All requests belonging to a single pump message category (CurrentStatus, Control, …).
+    struct CategoryGroup: Identifiable {
+        let category: MessageCategory
+        let requests: [RequestEntry]
+
+        var id: String { category.rawValue }
+        var sendButtonTitle: String { category.sendButtonTitle }
+    }
+
     @Published var lastResponseDescription: String?
     @Published var lastSendError: String?
     @Published var isSending = false
@@ -28,11 +52,21 @@ final class TandemKitDebugViewModel: ObservableObject {
     @Published var parameterInput: [String: String] = [:]
     @Published var cargoHexInput: String = ""
 
+    @Published var useSilentMode: Bool = false
+
     private let pumpManager: TandemPumpManager?
     private var lastRequestMessage: Message?
+    let openHistoryLogViewer: (() -> Void)?
 
-    init(pumpManager: TandemPumpManager?) {
+    init(pumpManager: TandemPumpManager?, openHistoryLogViewer: (() -> Void)? = nil) {
         self.pumpManager = pumpManager
+        self.openHistoryLogViewer = openHistoryLogViewer
+        useSilentMode = pumpManager?.state.useSilentTones ?? false
+    }
+
+    func setSilentMode(_ enabled: Bool) {
+        pumpManager?.configureSilentMode(enabled)
+        useSilentMode = enabled
     }
 
     var pumpStateDebugDescription: String {
@@ -81,13 +115,31 @@ final class TandemKitDebugViewModel: ObservableObject {
         }
     }
 
-    var requestMessages: [MessageMetadata] {
-        MessageRegistry.all
-            .filter { $0.messageType == .Request && $0.size == 0 }
-            .sorted { $0.name < $1.name }
+    /// All request messages grouped by category, in display order. Categories without any
+    /// sendable requests are omitted.
+    var categories: [CategoryGroup] {
+        let optionsByName = Dictionary(
+            parameterizedOptions.map { ($0.metadata.name, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let grouped = Dictionary(grouping: MessageRegistry.all.filter { $0.messageType == .Request }) {
+            $0.category
+        }
+
+        return MessageCategory.allCases.compactMap { category in
+            guard let metadatas = grouped[category], !metadatas.isEmpty else {
+                return nil
+            }
+            let entries = metadatas
+                .map { RequestEntry(metadata: $0, parameterized: optionsByName[$0.name]) }
+                .sorted { $0.name < $1.name }
+            return CategoryGroup(category: category, requests: entries)
+        }
     }
 
-    var parameterizedMessages: [ParameterizedOption] {
+    /// Curated definitions for requests that need structured parameters before sending.
+    private var parameterizedOptions: [ParameterizedOption] {
         var options: [ParameterizedOption] = []
 
         if let metadata = MessageRegistry.metadata(for: IDPSegmentRequest.self) {
@@ -244,8 +296,8 @@ final class TandemKitDebugViewModel: ObservableObject {
                               let bolusId = input["bolusId"].flatMap(Int.init)
                         else { return nil }
 
-                        let useCalibration = ParameterizedOption.parseBool(input["useForCalibration"])
-                        let autoPop = ParameterizedOption.parseBool(input["isAutopop"])
+                        let useCalibration = Self.parseBool(input["useForCalibration"])
+                        let autoPop = Self.parseBool(input["isAutopop"])
                         return RemoteBgEntryRequest(
                             bg: bg,
                             useForCgmCalibration: useCalibration,
@@ -310,29 +362,40 @@ final class TandemKitDebugViewModel: ObservableObject {
                         guard let weight = input["weight"].flatMap(Int.init),
                               let tdi = input["tdi"].flatMap(Int.init)
                         else { return nil }
-                        let enabled = ParameterizedOption.parseBool(input["enabled"])
+                        let enabled = Self.parseBool(input["enabled"])
                         return ChangeControlIQSettingsRequest(enabled: enabled, weightLbs: weight, totalDailyInsulinUnits: tdi)
                     }
                 )
             )
         }
 
-        return options.sorted { $0.metadata.name < $1.metadata.name }
+        return options
     }
 
-    func sendSimpleMessage(_ metadata: MessageMetadata) {
-        let message = metadata.type.init(cargo: Data())
-        send(message)
+    /// Sends a request that needs no input (empty cargo).
+    func sendSimpleEntry(_ entry: RequestEntry) {
+        send(entry.metadata.type.init(cargo: Data()))
     }
 
-    func sendParameterizedMessage(_ option: ParameterizedOption) {
-        if let hexMessage = messageFromHex(option.metadata) {
+    /// Sends a request after the user has supplied parameters and/or raw cargo hex.
+    func sendEntry(_ entry: RequestEntry) {
+        // A raw cargo hex override always takes precedence when provided.
+        if let hexMessage = messageFromHex(entry.metadata) {
             send(hexMessage)
             return
         }
 
-        let message = option.build(parameterInput)
-        send(message)
+        if let option = entry.parameterized {
+            send(option.build(parameterInput))
+            return
+        }
+
+        // No parameters defined: fall back to empty cargo for zero-length requests.
+        if entry.metadata.size == 0 {
+            send(entry.metadata.type.init(cargo: Data()))
+        } else {
+            lastSendError = "Provide parameters or raw cargo hex before sending"
+        }
     }
 
     func resendLastMessage() {
@@ -341,6 +404,14 @@ final class TandemKitDebugViewModel: ObservableObject {
             return
         }
         send(lastRequestMessage)
+    }
+
+    /// Clears any transient input/response state, e.g. when opening a request detail screen.
+    func resetInput() {
+        parameterInput = [:]
+        cargoHexInput = ""
+        lastResponseDescription = nil
+        lastSendError = nil
     }
 
     private func messageFromHex(_ metadata: MessageMetadata) -> Message? {
@@ -381,10 +452,8 @@ final class TandemKitDebugViewModel: ObservableObject {
             }
         }
     }
-}
 
-private extension TandemKitDebugViewModel.ParameterizedOption {
-    static func parseBool(_ value: String?) -> Bool {
+    private static func parseBool(_ value: String?) -> Bool {
         guard let value else { return false }
         return ["true", "1", "yes"].contains(value.lowercased())
     }

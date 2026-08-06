@@ -4,19 +4,25 @@ import SwiftUI
 private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
+    case cgmRequiredForCIQ
     case diyRestored
     case noCGMConnected
     case stopTempRate
     case stopTempRateClosedLoopWarning
+    case suspendDelivery
+    case resumeDelivery
 
     var id: String {
         switch self {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
+        case .cgmRequiredForCIQ: return "cgmRequiredForCIQ"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
         case .stopTempRateClosedLoopWarning: return "stopTempRateClosedLoopWarning"
+        case .suspendDelivery: return "suspendDelivery"
+        case .resumeDelivery: return "resumeDelivery"
         }
     }
 }
@@ -217,8 +223,23 @@ struct TandemKitSettingsView: View {
                         algorithmStatus
                             .frame(maxWidth: .infinity)
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                activeAlert = viewModel.useControlIQ ? .switchToDIY : .switchToCIQ
+                            .overlay(
+                                Group {
+                                    if viewModel.isCheckingCGMForCIQ {
+                                        ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                                    }
+                                }
+                            )
+                            // Require a deliberate long press (not a single tap) to open the
+                            // algorithm-switch confirmation, so it can't be triggered inadvertently.
+                            .onLongPressGesture(minimumDuration: 0.5) {
+                                if viewModel.useControlIQ {
+                                    activeAlert = .switchToDIY
+                                } else {
+                                    // Switching to Control-IQ requires a CGM connected to the pump;
+                                    // verify one is configured before offering the confirmation.
+                                    viewModel.attemptSwitchToControlIQ()
+                                }
                             }
                     }
 
@@ -299,7 +320,7 @@ struct TandemKitSettingsView: View {
 
                 if let suspendResumeText = viewModel.suspendResumeText {
                     Button(action: {
-                        viewModel.suspendResumeButtonPressed()
+                        activeAlert = viewModel.isDeliverySuspended ? .resumeDelivery : .suspendDelivery
                     }) {
                         HStack {
                             Text(suspendResumeText)
@@ -455,12 +476,6 @@ struct TandemKitSettingsView: View {
             }
 
             Section {
-                Toggle(isOn: Binding(
-                    get: { viewModel.useSilentMode },
-                    set: { viewModel.setSilentMode($0) }
-                )) {
-                    Text("Silent Tones", comment: "Label for silent tones")
-                }
                 Button(String(localized: "Share Tandem pump logs", comment: "TandemKit share logs")) {
                     self.isSharePresented = true
                 }
@@ -542,6 +557,22 @@ struct TandemKitSettingsView: View {
                     },
                     secondaryButton: .cancel()
                 )
+            case .cgmRequiredForCIQ:
+                return Alert(
+                    title: Text(
+                        "Connect a CGM First",
+                        comment: "Title for alert blocking the switch to Control-IQ when no CGM is connected"
+                    ),
+                    message: Text(
+                        "Control-IQ needs a CGM connected to your pump to work. No active CGM sensor session was found on your pump, so switching to Control-IQ has been blocked.\n\nStart a CGM sensor from CGM Settings, then try switching again.",
+                        comment: "Message for alert blocking the switch to Control-IQ when no CGM is connected"
+                    ),
+                    primaryButton: .default(
+                        Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
+                        action: { viewModel.openCgmSettings() }
+                    ),
+                    secondaryButton: .cancel(Text("OK"))
+                )
             case .diyRestored:
                 return Alert(
                     title: Text(String(format: String(
@@ -595,6 +626,32 @@ struct TandemKitSettingsView: View {
                     ),
                     secondaryButton: .cancel()
                 )
+            case .suspendDelivery:
+                return Alert(
+                    title: Text("Suspend Insulin Delivery", comment: "Title for confirm suspend insulin delivery alert"),
+                    message: Text(
+                        "Are you sure you want to suspend insulin delivery? No basal or bolus insulin will be delivered until you resume delivery.",
+                        comment: "Message for confirm suspend insulin delivery alert"
+                    ),
+                    primaryButton: .destructive(
+                        Text("Suspend Delivery", comment: "Button to confirm suspending insulin delivery"),
+                        action: { viewModel.suspendResumeButtonPressed() }
+                    ),
+                    secondaryButton: .cancel()
+                )
+            case .resumeDelivery:
+                return Alert(
+                    title: Text("Resume Insulin Delivery", comment: "Title for confirm resume insulin delivery alert"),
+                    message: Text(
+                        "Are you sure you want to resume insulin delivery? Your scheduled basal delivery will restart.",
+                        comment: "Message for confirm resume insulin delivery alert"
+                    ),
+                    primaryButton: .default(
+                        Text("Resume Delivery", comment: "Button to confirm resuming insulin delivery"),
+                        action: { viewModel.suspendResumeButtonPressed() }
+                    ),
+                    secondaryButton: .cancel()
+                )
             }
         }
         .onChange(of: viewModel.showReenableClosedLoopPrompt) { show in
@@ -607,6 +664,18 @@ struct TandemKitSettingsView: View {
             if show {
                 activeAlert = .noCGMConnected
                 viewModel.showNoCGMWarning = false
+            }
+        }
+        .onChange(of: viewModel.showSwitchToCIQConfirm) { show in
+            if show {
+                activeAlert = .switchToCIQ
+                viewModel.showSwitchToCIQConfirm = false
+            }
+        }
+        .onChange(of: viewModel.showCGMRequiredForCIQ) { show in
+            if show {
+                activeAlert = .cgmRequiredForCIQ
+                viewModel.showCGMRequiredForCIQ = false
             }
         }
         .navigationBarItems(trailing: doneButton)

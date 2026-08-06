@@ -222,6 +222,53 @@ final class NotificationBundleTests: XCTestCase {
         XCTAssertFalse(response.notificationIds.contains(23)) // DEFAULT_REMINDER_23
     }
 
+    // MARK: - matchesActiveMalfunction Gate Tests
+
+    /// A malfunction confirmed by the active AAM-bits (malfunction type) is surfaced.
+    func testMalfunctionConfirmedByActiveAamBits() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Active malfunction bits with bit 12 set.
+        bundle.add(ActiveAamBitsResponse(
+            unacknowledgedBitmask: 0,
+            activeBitmask: 1 << 12,
+            aamType: .malfunction
+        ))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+        XCTAssertEqual(bundle.get().count, 1)
+    }
+
+    /// A `HighestAamResponse` that is NOT confirmed by the active malfunction bits must not
+    /// surface a phantom malfunction (the bug fixed by restoring matchesActiveMalfunction).
+    func testMalfunctionSuppressedWhenActiveAamBitsLacksBit() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Active malfunction bits present, but bit 12 is NOT set.
+        bundle.add(ActiveAamBitsResponse(
+            unacknowledgedBitmask: 0,
+            activeBitmask: 0,
+            aamType: .malfunction
+        ))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 0)
+        XCTAssertEqual(bundle.get().count, 0)
+    }
+
+    /// When no active malfunction bits exist, the malfunction bitmask confirms/denies the AAM.
+    func testMalfunctionSuppressedByMalfunctionBitmaskWithoutBit() {
+        let bundle = NotificationBundle()
+
+        bundle.add(HighestAamResponse(aamId: 12, faultId: 0x2071, remaining: Data([4, 0xFF, 0xFF])))
+        // Malfunction bitmask present, but bit 12 not set.
+        bundle.add(MalfunctionBitmaskStatusResponse(bitmask: 0))
+
+        XCTAssertEqual(bundle.getNotificationCount(), 0)
+        XCTAssertEqual(bundle.get().count, 0)
+    }
+
     // MARK: - Response Addition Tests
 
     func testAddAlertStatusResponse() {
@@ -301,6 +348,19 @@ final class NotificationBundleTests: XCTestCase {
         XCTAssertEqual(requests.count, 7)
     }
 
+    func testAllRequestsFiltersByApiVersion() {
+        // Mobi v3.5 supports the active-AAM-bits requests.
+        let mobi = NotificationBundle.allRequests(apiVersion: KnownApiVersion.mobiApiV3_5.value)
+        XCTAssertEqual(mobi.count, 7)
+        XCTAssertTrue(mobi.contains { $0 is ActiveAamBitsRequest })
+
+        // Legacy v2.1 pumps do not support ActiveAamBitsRequest, but still get the core surfaces.
+        let legacy = NotificationBundle.allRequests(apiVersion: KnownApiVersion.apiV2_1.value)
+        XCTAssertFalse(legacy.contains { $0 is ActiveAamBitsRequest })
+        XCTAssertTrue(legacy.contains { $0 is HighestAamRequest })
+        XCTAssertTrue(legacy.contains { $0 is MalfunctionStatusRequest })
+    }
+
     // MARK: - Concurrent Access Tests
 
     func testConcurrentAccessSafety() {
@@ -326,5 +386,43 @@ final class NotificationBundleTests: XCTestCase {
 
         // After all operations, count should still match items
         XCTAssertEqual(bundle.getNotificationCount(), bundle.get().count)
+    }
+
+    // MARK: - NotificationItem Display Title Tests
+
+    /// `displayTitle` shows the human-readable description when present, and falls back to
+    /// the prettified enum name for name-only notifications (CGM alerts / reminders, which
+    /// pumpX2 also leaves name-only) or when no description exists.
+    func testNotificationItemDisplayTitle() {
+        // Alerts / alarms carry a distinct description -> shown verbatim.
+        let withDescription = NotificationItem(
+            type: .alert,
+            id: 0,
+            name: "LOW_INSULIN_ALERT",
+            notificationDescription: "Low amount of insulin remaining in the cartridge."
+        )
+        XCTAssertEqual(withDescription.displayTitle, "Low amount of insulin remaining in the cartridge.")
+
+        // Description equal to the raw name (CGM alerts / reminders) -> prettified name.
+        let descriptionEqualsName = NotificationItem(
+            type: .cgmAlert,
+            id: 2,
+            name: "HIGH_CGM_ALERT",
+            notificationDescription: "HIGH_CGM_ALERT"
+        )
+        XCTAssertEqual(descriptionEqualsName.displayTitle, "High Cgm Alert")
+
+        // No description -> prettified name.
+        let noDescription = NotificationItem(type: .reminder, id: 2, name: "SITE_CHANGE_REMINDER")
+        XCTAssertEqual(noDescription.displayTitle, "Site Change Reminder")
+
+        // Empty description -> prettified name.
+        let emptyDescription = NotificationItem(
+            type: .alarm,
+            id: 3,
+            name: "OCCLUSION_ALARM",
+            notificationDescription: ""
+        )
+        XCTAssertEqual(emptyDescription.displayTitle, "Occlusion Alarm")
     }
 }

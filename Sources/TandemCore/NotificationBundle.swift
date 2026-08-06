@@ -9,9 +9,14 @@ public class NotificationBundle {
     public var reminderStatusResponse: ReminderStatusResponse?
     public var alarmStatusResponse: AlarmStatusResponse?
     public var cgmAlertStatusResponse: CGMAlertStatusResponse?
-    public var malfunctionStatusResponse: MalfunctionBitmaskStatusResponse?
+    public var highestAamResponse: HighestAamResponse?
     public var otherNotificationStatusResponse: OtherNotificationStatusResponse?
     public var otherNotification2StatusResponse: OtherNotification2StatusResponse?
+
+    /// Corroborating malfunction data used to confirm that a `HighestAamResponse` is a
+    /// genuine malfunction rather than an alert/alarm. Mirrors PumpX2's `NotificationBundle`.
+    public var malfunctionBitmaskStatusResponse: MalfunctionBitmaskStatusResponse?
+    public var activeAamBitsResponses: [ActiveAamBitsResponse.AamType: ActiveAamBitsResponse] = [:]
 
     private var lastUpdatedTimes: [String: Date] = [:]
     private let lock = NSLock()
@@ -19,14 +24,36 @@ public class NotificationBundle {
     public init() {}
 
     /// Returns a list of request message types needed to populate the bundle.
-    public static func allRequests() -> [(Message, Message.Type)] {
-        [
-            (AlertStatusRequest(), AlertStatusResponse.self),
-            (ReminderStatusRequest(), ReminderStatusResponse.self),
-            (AlarmStatusRequest(), AlarmStatusResponse.self),
-            (CGMAlertStatusRequest(), CGMAlertStatusResponse.self),
-            (MalfunctionStatusRequest(), MalfunctionBitmaskStatusResponse.self)
+    ///
+    /// Mirrors PumpX2's `NotificationBundle.allRequests`: in addition to the alert/alarm/CGM
+    /// surfaces, this requests `MalfunctionStatusRequest`, `HighestAamRequest`, and the
+    /// active-AAM-bits for alarm (type 2) and malfunction (type 4). The latter two corroborate
+    /// whether a `HighestAamResponse` is a genuine malfunction (see `get()`).
+    ///
+    /// When `apiVersion` is provided, requests whose `minApi` exceeds it are filtered out
+    /// (e.g. `ActiveAamBitsRequest` requires Mobi API v3.5).
+    public static func allRequests(apiVersion: ApiVersion? = nil) -> [Message] {
+        let requests: [Message] = [
+            AlertStatusRequest(),
+            AlarmStatusRequest(),
+            CGMAlertStatusRequest(),
+            MalfunctionStatusRequest(),
+            HighestAamRequest(),
+            ActiveAamBitsRequest(aamType: 2),
+            ActiveAamBitsRequest(aamType: 4)
         ]
+
+        guard let apiVersion = apiVersion else {
+            return requests
+        }
+
+        return requests.filter { supportsApiVersion($0, apiVersion) }
+    }
+
+    /// Whether the pump's negotiated API version is new enough to support the given request.
+    private static func supportsApiVersion(_ request: Message, _ apiVersion: ApiVersion) -> Bool {
+        let minApi = type(of: request).props.minApi.value
+        return !minApi.greaterThan(apiVersion)
     }
 
     /// Returns the corresponding response class types for the bundle's status categories.
@@ -36,8 +63,25 @@ public class NotificationBundle {
             ReminderStatusResponse.self,
             AlarmStatusResponse.self,
             CGMAlertStatusResponse.self,
-            MalfunctionBitmaskStatusResponse.self
+            HighestAamResponse.self,
+            OtherNotificationStatusResponse.self,
+            OtherNotification2StatusResponse.self,
+            MalfunctionBitmaskStatusResponse.self,
+            ActiveAamBitsResponse.self
         ]
+    }
+
+    /// Validates whether a given message is one of the recognized notification response types.
+    public static func isNotificationResponse(_ message: Message) -> Bool {
+        message is AlertStatusResponse ||
+            message is ReminderStatusResponse ||
+            message is AlarmStatusResponse ||
+            message is CGMAlertStatusResponse ||
+            message is HighestAamResponse ||
+            message is OtherNotificationStatusResponse ||
+            message is OtherNotification2StatusResponse ||
+            message is MalfunctionBitmaskStatusResponse ||
+            message is ActiveAamBitsResponse
     }
 
     /// Accepts a notification response, stores it in the appropriate field, and records the current timestamp.
@@ -60,8 +104,20 @@ public class NotificationBundle {
         } else if let response = message as? CGMAlertStatusResponse {
             cgmAlertStatusResponse = response
             lastUpdatedTimes[typeName] = timestamp
+        } else if let response = message as? HighestAamResponse {
+            highestAamResponse = response
+            lastUpdatedTimes[typeName] = timestamp
+        } else if let response = message as? OtherNotificationStatusResponse {
+            otherNotificationStatusResponse = response
+            lastUpdatedTimes[typeName] = timestamp
+        } else if let response = message as? OtherNotification2StatusResponse {
+            otherNotification2StatusResponse = response
+            lastUpdatedTimes[typeName] = timestamp
         } else if let response = message as? MalfunctionBitmaskStatusResponse {
-            malfunctionStatusResponse = response
+            malfunctionBitmaskStatusResponse = response
+            lastUpdatedTimes[typeName] = timestamp
+        } else if let response = message as? ActiveAamBitsResponse {
+            activeAamBitsResponses[response.aamType] = response
             lastUpdatedTimes[typeName] = timestamp
         }
     }
@@ -76,8 +132,7 @@ public class NotificationBundle {
             alertStatusResponse as NotificationMessage?,
             alarmStatusResponse as NotificationMessage?,
             reminderStatusResponse as NotificationMessage?,
-            cgmAlertStatusResponse as NotificationMessage?,
-            malfunctionStatusResponse as NotificationMessage?
+            cgmAlertStatusResponse as NotificationMessage?
         ].compactMap { $0 }
 
         // Add alerts
@@ -128,19 +183,38 @@ public class NotificationBundle {
             }
         }
 
-        // Add malfunction if present
-        if let response = malfunctionStatusResponse {
-            for malfunction in response.malfunctions.sorted(by: { $0.rawValue < $1.rawValue }) {
+        // Add malfunction if present.
+        //
+        // Mirrors PumpX2's `NotificationBundle.get()`: a malfunction is only surfaced when all
+        // three gates pass, otherwise an ordinary alert/alarm carried by `HighestAamResponse`
+        // would appear as a spurious malfunction:
+        //   1. `hasMalfunction` — not an ignorable code and not a known concurrent notification.
+        //   2. `matchesActiveMalfunction` — corroborated by the active AAM-bits (malfunction
+        //      type) or the malfunction bitmask, when that data is available.
+        //   3. a non-blank error string.
+        if let response = highestAamResponse {
+            let activeMalfunctionBits = activeAamBitsResponses[.malfunction]
+            if response.hasMalfunction(notificationMessages),
+               response.matchesActiveMalfunction(
+                   activeMalfunctionBits: activeMalfunctionBits,
+                   malfunctionBitmaskStatusResponse: malfunctionBitmaskStatusResponse
+               ),
+               !response.errorString.isEmpty
+            {
                 items.append(NotificationItem(
                     type: .malfunction,
-                    id: UInt32(malfunction.rawValue),
-                    name: String(describing: malfunction),
-                    notificationDescription: malfunction.notificationDescription
+                    id: UInt32(response.aamId),
+                    name: response.errorString,
+                    notificationDescription: response.notificationDescription
                 ))
             }
         }
 
-        return items
+        // Merge any sets of co-firing notifications (that the pump acknowledges
+        // together) into a single row. Applied here so every consumer — the UI, the
+        // badge count via `getNotificationCount()`, and the CLI — sees one
+        // consistent, merged view.
+        return MergedNotification.merge(items)
     }
 
     /// Calculates the total number of active notifications across all response types.
@@ -153,6 +227,32 @@ public class NotificationBundle {
     /// Boolean check for whether any notifications exist.
     public var isEmpty: Bool {
         getNotificationCount() == 0
+    }
+
+    /// Whether the notification identified by `(type, id)` is currently active in
+    /// the bundle's raw per-category state.
+    ///
+    /// Reads the underlying status responses directly (not `get()`), so it reports
+    /// a member's presence independently of whether it is being merged into a row.
+    /// Used after a dismissal reload to decide which merged members the pump has not
+    /// already cleared on its own.
+    public func isActive(type: NotificationItem.NotificationType, id: UInt32) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        switch type {
+        case .alert:
+            return alertStatusResponse?.alerts.contains { UInt32($0.rawValue) == id } ?? false
+        case .alarm:
+            return alarmStatusResponse?.alarms.contains { UInt32($0.rawValue) == id } ?? false
+        case .reminder:
+            return reminderStatusResponse?.reminders.contains { UInt32($0.rawValue) == id } ?? false
+        case .cgmAlert:
+            return cgmAlertStatusResponse?.alerts.contains { UInt32($0.rawValue) == id } ?? false
+        case .malfunction:
+            // Malfunctions are not dismissable and never participate in merged groups.
+            return false
+        }
     }
 
     /// Returns the last updated time for a specific response type.
@@ -173,13 +273,43 @@ public struct NotificationItem: Identifiable, Hashable {
     public let name: String
     public let notificationDescription: String?
 
-    public init(type: NotificationType, id notificationId: UInt32, name: String, notificationDescription: String? = nil) {
-        id = UUID()
+    /// The other notifications merged into this row, in display order. Empty for an
+    /// ordinary (non-merged) notification. Each member carries its own category and
+    /// id — a merged group may span categories (e.g. an alert + an alarm) — so
+    /// dismissal can acknowledge every member individually. The row's own
+    /// `type`/`notificationId` are the primary; see `MergedNotificationGroup`.
+    public let mergedMembers: [MergedMember]
+
+    /// A single non-primary notification folded into a merged row.
+    public struct MergedMember: Hashable {
+        public let type: NotificationType
+        public let id: UInt32
+        public let name: String
+
+        public init(type: NotificationType, id: UInt32, name: String) {
+            self.type = type
+            self.id = id
+            self.name = name
+        }
+    }
+
+    public init(
+        type: NotificationType,
+        id notificationId: UInt32,
+        name: String,
+        notificationDescription: String? = nil,
+        mergedMembers: [MergedMember] = []
+    ) {
+        self.id = UUID()
         self.type = type
         self.notificationId = notificationId
         self.name = name
         self.notificationDescription = notificationDescription
+        self.mergedMembers = mergedMembers
     }
+
+    /// Names of the other notifications merged into this row, in display order.
+    public var mergedNames: [String] { mergedMembers.map(\.name) }
 
     public enum NotificationType {
         case alert
@@ -221,9 +351,44 @@ public struct NotificationItem: Identifiable, Hashable {
             .joined(separator: " ")
     }
 
+    /// Text shown to the user. Prefers the pump's notification description
+    /// (alerts / alarms / malfunctions) and falls back to the prettified enum
+    /// name when no distinct description exists — e.g. CGM alerts and reminders,
+    /// which pumpX2 also leaves name-only.
+    public var displayTitle: String {
+        if let description = notificationDescription,
+           !description.isEmpty,
+           description != name {
+            return description
+        }
+        return title
+    }
+
     /// Whether this notification can be dismissed.
     public var canDismiss: Bool {
         type.dismissType != nil
+    }
+
+    /// The notification's category paired with its underlying enum name(s),
+    /// e.g. "Alarm: OCCLUSION_ALARM" or "Alert: LOW_INSULIN_ALERT". When several
+    /// co-firing notifications are merged into one row, every member name is listed
+    /// in order, e.g. "Alarm: RESUME_PUMP_ALARM, RESUME_PUMP_ALARM2". A merged row
+    /// that spans categories re-labels at each category boundary, e.g.
+    /// "Alarm: RESUME_PUMP_ALARM, Alert: LOW_INSULIN_ALERT".
+    public var categoryTitle: String {
+        // Primary first, then the merged members in display order; a new
+        // "Category:" prefix is emitted only when the category changes.
+        var result = "\(type.title): \(name)"
+        var previousType = type
+        for member in mergedMembers {
+            if member.type == previousType {
+                result += ", \(member.name)"
+            } else {
+                result += ", \(member.type.title): \(member.name)"
+                previousType = member.type
+            }
+        }
+        return result
     }
 }
 

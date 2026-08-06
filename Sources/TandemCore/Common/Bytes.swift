@@ -54,16 +54,9 @@ public enum Bytes {
     /// Reads a 32-bit float (little-endian) from `data` at index `i`.
     /// (Equivalent to `readFloat` in Java.)
     public static func readFloat(_ data: Data, _ i: Int) -> Float {
-        let start = data.startIndex
-        precondition(i >= 0 && start + i + 3 < data.endIndex, "Index out of bounds")
-        let sub = data.subdata(in: (start + i) ..< (start + i + 4))
-        // We'll interpret these 4 bytes as a Float in little-endian order.
-        return sub.withUnsafeBytes { ptr -> Float in
-            // Load raw bits from memory:
-            let bitPattern = ptr.load(as: UInt32.self)
-            // Convert from little-endian to native-endian, then to Float:
-            return Float(bitPattern: UInt32(littleEndian: bitPattern))
-        }
+        // Assemble the little-endian bit pattern byte-by-byte: a raw pointer load here
+        // would require 4-byte alignment, which arbitrary cargo offsets don't guarantee.
+        Float(bitPattern: readUint32(data, i))
     }
 
     /// Converts a `Float` to a 4-byte `Data` (little-endian).

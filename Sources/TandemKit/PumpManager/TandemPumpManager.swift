@@ -37,6 +37,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
+    public let fillCannulaStateStream = PassthroughSubject<FillCannulaStateStreamResponse, Never>()
+    public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -1192,7 +1194,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func dismissNotification(notification item: NotificationItem, completion: @escaping (Bool) -> Void) {
         logger.info("Dismissing notification - type: \(item.type)")
 
-        guard let dismissType = item.type.dismissType else {
+        guard let primaryDismissType = item.type.dismissType else {
             logger.error("Cannot dismiss notification of type \(item.type)")
             completion(false)
             return
@@ -1205,23 +1207,66 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: DismissNotificationRequest(
-                    notificationType: dismissType,
-                    notificationId: item.notificationId
-                ),
-                expecting: DismissNotificationResponse.self
-            ) as? DismissNotificationResponse else {
-                self.logger.error("Failed to dismiss notification")
+            // 1. Acknowledge the primary. For a merged row (see
+            //    `MergedNotificationGroup`) this is the group's primary member.
+            guard self.acknowledgeNotification(type: primaryDismissType, id: item.notificationId) else {
                 completion(false)
                 return
             }
 
-            if !response.isStatusOK {
-                self.logger.error("Failed to dismiss notification - Status: \(response.status)")
+            // An ordinary (non-merged) row is done once its notification is acked.
+            guard !item.mergedMembers.isEmpty else {
+                completion(true)
+                return
             }
-            completion(response.isStatusOK)
+
+            // 2. Reload pump state so we can see which members the pump cleared on
+            //    its own when the primary was acknowledged.
+            self.fetchNotifications()
+
+            // 3. Acknowledge any merged member the pump did NOT auto-clear. Members
+            //    the pump already dropped are skipped, so we never dismiss a
+            //    notification that is no longer present.
+            var allAcknowledged = true
+            var sentSecondaryAck = false
+            for member in item.mergedMembers {
+                guard self.notificationBundle.isActive(type: member.type, id: member.id) else {
+                    continue
+                }
+                guard let memberDismissType = member.type.dismissType else {
+                    continue
+                }
+                sentSecondaryAck = true
+                if !self.acknowledgeNotification(type: memberDismissType, id: member.id) {
+                    allAcknowledged = false
+                }
+            }
+
+            // Reflect the extra acknowledgements in the bundle/state if we sent any.
+            if sentSecondaryAck {
+                self.fetchNotifications()
+            }
+
+            completion(allAcknowledged)
         }
+    }
+
+    /// Sends a single `DismissNotificationRequest` and reports whether the pump
+    /// acknowledged it. Must be called while connected (e.g. inside
+    /// `bluetooth.ensureConnected`).
+    private func acknowledgeNotification(type: DismissNotificationRequest.NotificationType, id: UInt32) -> Bool {
+        guard let response = bluetooth.write(
+            message: DismissNotificationRequest(notificationType: type, notificationId: id),
+            expecting: DismissNotificationResponse.self
+        ) as? DismissNotificationResponse else {
+            logger.error("Failed to dismiss notification id=\(id) type=\(type)")
+            return false
+        }
+
+        if !response.isStatusOK {
+            logger.error("Failed to dismiss notification id=\(id) - Status: \(response.status)")
+        }
+        return response.isStatusOK
     }
 
     func getCGMStatus(completion: @escaping (CGMStatusV2Response?) -> Void) {
