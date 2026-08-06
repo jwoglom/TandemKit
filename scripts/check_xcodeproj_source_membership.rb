@@ -21,11 +21,18 @@ DEFAULTS = {
 }.freeze
 
 # When no --target/--source-root given, check all of these.
+#
+# TandemKit.xcodeproj is a single-framework project: the SwiftPM targets
+# TandemCore/TandemKit/TandemKitUI all compile into the one "TandemKit"
+# framework target, so each of their source roots maps to it. Source roots that
+# do not exist on disk are skipped, so entries here may describe directories
+# that are not present in every checkout.
 ALL_TARGET_SOURCE_PAIRS = [
-  { target: "TandemCore",  source_root: "Sources/TandemCore" },
-  { target: "TandemKit",   source_root: "Sources/TandemKit" },
-  { target: "TandemKit",   source_root: "Sources/TandemKitUI" },
-  { target: "TandemBLE",   source_root: "Sources/TandemBLE" },
+  { target: "TandemKit",       source_root: "Sources/TandemCore" },
+  { target: "TandemKit",       source_root: "Sources/TandemKit" },
+  { target: "TandemKit",       source_root: "Sources/TandemKitUI" },
+  { target: "TandemKit",       source_root: "Sources/TandemBLE" },
+  { target: "TandemKitPlugin", source_root: "Sources/TandemKitPlugin" },
 ].freeze
 
 def repo_root
@@ -74,7 +81,11 @@ end
 
 def find_target!(project, target_name)
   project.targets.find { |t| t.name == target_name } ||
-    abort("Target not found in #{project.path}: #{target_name}")
+    abort(<<~MSG)
+      Target not found in #{project.path}: #{target_name}
+      Available targets: #{project.targets.map(&:name).sort.join(', ')}
+      Update ALL_TARGET_SOURCE_PAIRS in #{File.basename(__FILE__)} if the project layout changed.
+    MSG
 end
 
 def relpath_from_repo(abs_path)

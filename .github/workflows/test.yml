@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
     paths:
       - '.github/workflows/build.yml'
       - '.github/workflows/test.yml'
@@ -18,7 +18,7 @@ on:
       - '*.xcworkspace/**'
   pull_request_target:
     types: [ labeled ]
-    branches: [ main ]
+    branches: [ main, dev ]
   workflow_dispatch:
     inputs:
       trio_repo:
