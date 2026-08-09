@@ -406,11 +406,12 @@ extension TandemPumpManager {
             return
         }
 
-        logger.debug("Battery updated: \(response.batteryPercent)% remaining")
+        logger.debug("Battery updated: \(response.batteryPercent)% remaining, charging=\(response.isCharging)")
 
         state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
             date: Date.now,
-            chargeRemaining: Double(response.batteryPercent) / 100.0
+            chargeRemaining: Double(response.batteryPercent) / 100.0,
+            isCharging: response.isCharging
         )
         notifyDelegateStateUpdated()
     }

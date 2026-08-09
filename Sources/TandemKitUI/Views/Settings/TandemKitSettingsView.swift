@@ -184,28 +184,40 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    HStack(alignment: .top) {
+                    // Centered so the percentage sits level with the battery, and the battery
+                    // sits level with the sound button across from it.
+                    HStack(alignment: .center) {
                         if let battery = viewModel.batteryPercentage {
-                            HStack(alignment: .top, spacing: 4) {
-                                Image(systemName: batteryIconName(battery))
-                                    .font(.system(size: 16))
-                                    .foregroundColor(batteryColor(battery))
+                            HStack(alignment: .center, spacing: 4) {
+                                BatteryIndicatorView(
+                                    chargeRemaining: viewModel.batteryChargeRemaining,
+                                    isCharging: viewModel.batteryIsCharging
+                                )
                                 Text("\(battery)")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(
+                                        BatteryIndicatorView.tintColor(
+                                            chargeRemaining: viewModel.batteryChargeRemaining,
+                                            isCharging: viewModel.batteryIsCharging
+                                        )
+                                    )
                             }
                         }
 
                         Spacer()
 
                         Button(action: { viewModel.playSound() }) {
-                            if viewModel.isPlayingSound {
-                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            } else {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.accentColor)
+                            Group {
+                                if viewModel.isPlayingSound {
+                                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                                } else {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.accentColor)
+                                }
                             }
+                            // Fixed footprint so swapping in the spinner doesn't shift the row.
+                            .frame(width: 24, height: 20)
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.isPlayingSound)
@@ -881,28 +893,6 @@ struct TandemKitSettingsView: View {
         .padding(.vertical, 8)
     }
 
-    private func batteryIconName(_ percentage: String) -> String {
-        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
-            return "battery.0"
-        }
-        switch value {
-        case 75 ... 100: return "battery.100"
-        case 50 ..< 75: return "battery.75"
-        case 25 ..< 50: return "battery.50"
-        case 1 ..< 25: return "battery.25"
-        default: return "battery.0"
-        }
-    }
-
-    private func batteryColor(_ percentage: String) -> Color {
-        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
-            return .secondary
-        }
-        if value <= 10 { return .red }
-        if value <= 25 { return .orange }
-        return .green
-    }
-
     private func userModeText(_ mode: Int) -> String {
         switch mode {
         case 0,
@@ -952,6 +942,23 @@ private extension TandemKitSettingsViewModel {
             openAlertSettings: {}
         )
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
+        viewModel.batteryPercentage = "100%"
+        viewModel.batteryChargeRemaining = 1.0
+        return viewModel
+    }
+
+    static var previewDataLowBattery: TandemKitSettingsViewModel {
+        let viewModel = previewData
+        viewModel.batteryPercentage = "15%"
+        viewModel.batteryChargeRemaining = 0.15
+        return viewModel
+    }
+
+    static var previewDataCharging: TandemKitSettingsViewModel {
+        let viewModel = previewData
+        viewModel.batteryPercentage = "62%"
+        viewModel.batteryChargeRemaining = 0.62
+        viewModel.batteryIsCharging = true
         return viewModel
     }
 
@@ -985,6 +992,20 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
 #Preview("Overview") {
     NavigationView {
         TandemKitSettingsView(viewModel: .previewData)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Low Battery") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewDataLowBattery)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Charging") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewDataCharging)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }
