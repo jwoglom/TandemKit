@@ -21,13 +21,12 @@ on:
 # repo and generate a two-project workspace. That keeps this job free of Trio
 # and of secrets, so it runs on every push and pull request, forks included.
 #
-# Caveat worth knowing: this builds against upstream LoopKit/LoopKit at the
-# Cartfile.resolved revision, while Trio's workspace supplies its own fork
-# (loopandlearn/LoopKit) at a different commit. The two can drift. If that ever
-# starts causing failures here that Trio does not see, the options are to pin
-# this job to Trio's fork and submodule SHA instead, or to build inside Trio's
-# workspace the way test.yml does -- which costs the private repo and its
-# secret, and with them fork coverage.
+# Cartfile.resolved pins loopandlearn/LoopKit -- Trio's fork -- at the commit
+# Trio's submodule points to, because that is what the framework is really
+# compiled against. Upstream LoopKit/LoopKit is not interchangeable: at the
+# revision previously pinned here it has no `Pluggable`, which
+# TandemPumpManager conforms to. When Trio bumps its LoopKit submodule, bump
+# the revision in Cartfile.resolved to match.
 jobs:
   unit-tests:
     runs-on: macos-latest
@@ -62,21 +61,25 @@ jobs:
           ruby scripts/check_xcodeproj_source_membership.rb --check
         working-directory: TandemKit
 
-      - name: Resolve the pinned LoopKit revision
+      - name: Resolve the pinned LoopKit repository and revision
         run: |
           set -euo pipefail
-          LOOPKIT_REVISION="$(awk '/LoopKit\/LoopKit/ { gsub(/"/, "", $3); print $3 }' TandemKit/Cartfile.resolved)"
-          if [[ -z "${LOOPKIT_REVISION}" ]]; then
-            echo "Could not read the LoopKit revision from TandemKit/Cartfile.resolved"
+          read -r LOOPKIT_REPOSITORY LOOPKIT_REVISION < <(
+            awk '$2 ~ /\/LoopKit"$/ { gsub(/"/, "", $2); gsub(/"/, "", $3); print $2, $3 }' \
+              TandemKit/Cartfile.resolved
+          )
+          if [[ -z "${LOOPKIT_REPOSITORY:-}" || -z "${LOOPKIT_REVISION:-}" ]]; then
+            echo "Could not read the LoopKit pin from TandemKit/Cartfile.resolved"
             exit 1
           fi
-          echo "Pinned LoopKit revision: ${LOOPKIT_REVISION}"
+          echo "Pinned LoopKit: ${LOOPKIT_REPOSITORY} @ ${LOOPKIT_REVISION}"
+          echo "LOOPKIT_REPOSITORY=${LOOPKIT_REPOSITORY}" >> "${GITHUB_ENV}"
           echo "LOOPKIT_REVISION=${LOOPKIT_REVISION}" >> "${GITHUB_ENV}"
 
       - name: Checkout LoopKit at the pinned revision
         uses: actions/checkout@v4
         with:
-          repository: LoopKit/LoopKit
+          repository: ${{ env.LOOPKIT_REPOSITORY }}
           ref: ${{ env.LOOPKIT_REVISION }}
           path: LoopKit
           fetch-depth: 1
