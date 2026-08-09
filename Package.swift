@@ -44,16 +44,11 @@ let package = Package(
         .library(
             name: "TandemKitPlugin",
             targets: ["TandemKitPlugin"]
-        ),
-        .executable(
-            name: "tandem-simulator",
-            targets: ["TandemSimulator"]
         )
     ],
     dependencies: [
         .package(url: "https://github.com/leif-ibsen/SwiftECC", from: "5.5.0"),
-        .package(url: "https://github.com/leif-ibsen/BigInt", from: "1.0.0"),
-        .package(url: "https://github.com/apple/swift-log", from: "1.5.3")
+        .package(url: "https://github.com/leif-ibsen/BigInt", from: "1.0.0")
     ],
     targets: [
         .target(
@@ -78,22 +73,6 @@ let package = Package(
             name: "TandemKitPlugin",
             dependencies: ["TandemKit", "TandemCore"],
             path: "Sources/TandemKitPlugin"
-        ),
-        .executableTarget(
-            name: "TandemSimulator",
-            dependencies: [
-                "TandemCore",
-                .product(name: "SwiftECC", package: "SwiftECC"),
-                .product(name: "BigInt", package: "BigInt"),
-                .product(name: "Logging", package: "swift-log")
-            ],
-            path: "Sources/TandemSimulator",
-            resources: [
-                .copy("README.md")
-            ],
-            swiftSettings: [
-                .unsafeFlags(["-parse-as-library"])
-            ]
         )
     ]
 )

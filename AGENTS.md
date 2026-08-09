@@ -532,8 +532,17 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 17. **Implement comprehensive error handling** – ⚠️ *Partially completed*
     - Basic communication errors surface today, but pump-fault decoding and retry logic are still missing.
 
-18. **Implement therapy command validation** ✅ *Done*
-    - `TandemPumpManager` enforces bolus limits, max temp basal rates, and IOB ceilings before sending commands.
+18. **Implement therapy command validation** – ⚠️ *Partially completed*
+    - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
+      (the limit the host app last synced). The pump enforces the same ceiling in firmware,
+      because `syncDeliveryLimits` pushes it down via `SetMaxBolusLimitRequest`.
+    - `enactBolus`/`enactTempBasal` also block while Control-IQ is active or a bolus is running.
+    - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
+      `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
+      IOB telemetry is a prerequisite for reinstating that check.
+    - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
+      only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
+      been removed rather than left as a dead enum case.)
 
 ### Testing and Validation
 19. **Add missing message tests**
@@ -546,6 +555,25 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
     - Authentication flow (V1 and V2)
     - Critical therapy commands with mock pump
     - Error handling and fault recovery
+
+### Test target membership
+Every `.swift` file under `Tests/` must be a member of the `TandemKitTests` target, and
+`scripts/check_xcodeproj_source_membership.rb` discovers `Tests/*` directories rather than
+taking a registered list, so a test cannot be silently left out of CI. There is no exclusion
+list — a test that stops compiling is fixed or deleted. `--fix` adds newly created files;
+CI runs `--check` in every workflow.
+
+`TandemPumpManager` takes its BLE layer through the `PumpBluetoothConnection` protocol
+(`init(state:bluetooth:)`), so command sequences can be driven from tests via
+`StubPumpBluetooth` without CoreBluetooth. Production still goes through `init(state:)`, which
+constructs the real `TandemBluetoothManager`.
+
+Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
+policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
+`HistoryToDoseMapper`/`HistoryTimestampReconciler`, `PumpStateSupplier`,
+`PumpChallengeRequestBuilder` and the V1 16-character pairing path) is not represented
+anywhere now. If any of those behaviours come back, they need tests written against the
+current architecture, not restored from git history.
 
 21. **Add hardware validation procedures**
     - Document manual testing steps for pairing
@@ -570,6 +598,27 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 - Pairing completion now logs truncated derived-secret/server-nonce values alongside the stored `PumpState`, simplifying retrieval of credentials for follow-on commands.
 
 ### Outstanding Pairing Tasks
+- **JPAKE round 1 is not always 330 bytes.** `EcJpake.getRound1()` emits two length-prefixed
+  `(point, ZKP)` groups, and each ZKP ends in a scalar written by `writeNum`, which uses
+  `BInt.asMagnitudeBytes()` and so drops leading zero bytes. A scalar is 32 bytes only about
+  255/256 of the time, so a group is 165 bytes and the payload 330 bytes only about 99.2% of the
+  time; roughly 0.78% of pairings produce a short payload.
+  `JpakeAuthBuilder` used to slice `clientRound1` at fixed offsets `0..<165` and `165..<330`, which
+  broke both ways: a short first scalar misaligned the 1b frame, and a short second scalar failed
+  the `count >= 330` guard and dropped the builder into `.INVALID`. Either way pairing failed
+  non-deterministically with no actionable error.
+  Fixed by `JpakeRound1Framing`: split on the real group boundary and right-pad each frame to 165
+  with zero bytes. The pump's parser is length-prefixed, so it stops at the end of the group and
+  never reads the padding — the same reason `Jpake1aRequest.normalizeChallenge` could already pad.
+  The reassembly side (`joinRound1`) strips the first frame's padding before concatenating, because
+  the pump pads its own halves for the same reason and raw concatenation would misalign the second
+  group.
+  Note pumpX2 has the same fixed-offset slicing and is *not* fully correct here: Java's
+  `Arrays.copyOfRange` zero-fills past the end of the array, which happens to cover the short-second
+  -scalar case, but the short-first case still misaligns its 1b frame. Verified against
+  `jwoglom/pumpX2` `JpakeAuthBuilder.java` / `io.particle.crypto.EcJpake`.
+  The framing is unit-tested; the end-to-end behaviour against real pump firmware is not, so this
+  wants confirmation on hardware.
 - Trim SwiftECC start-up latency: first-round generation still takes >10 s, so we need either a pre-warm hook or an alternative ECC backend to keep the UX within expected pairing windows.
 - Exercise the full multi-round exchange (including the legacy challenge) under real hardware to ensure `PumpComm.pair` handles back-to-back responses and that background pairing does not race the timeout scheduler.
 - Add coverage for failure surfaces (e.g. invalid pairing codes, mid-handshake disconnects) so the CLI and manager surface actionable errors instead of generic timeouts.

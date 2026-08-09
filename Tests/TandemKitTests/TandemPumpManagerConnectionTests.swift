@@ -1,209 +1,163 @@
-@testable import TandemCore
+import LoopKit
 @testable import TandemKit
 import XCTest
 
+/// Every pump command funnels through `ensureConnected`, which brings the link up (or reports that
+/// it could not) before the command's blocking writes run. These tests pin what the driver does on
+/// each side of that gate: nothing is written when the link is down, and the caller still gets
+/// exactly one result.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerConnectionTests: XCTestCase {
-    private var originalApiVersionSupplier: (() -> Int)? = PumpStateSupplier.pumpApiVersion
+    private var bluetooth: StubPumpBluetooth!
+    private var manager: TandemPumpManager!
+
+    override func setUp() {
+        super.setUp()
+        bluetooth = StubPumpBluetooth()
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+    }
 
     override func tearDown() {
+        manager = nil
+        bluetooth = nil
         super.tearDown()
-        PumpStateSupplier.pumpApiVersion = originalApiVersionSupplier
     }
 
-    func testConnectAndDisconnectManageTransportTelemetryAndState() {
-        PumpStateSupplier.pumpApiVersion = { KnownApiVersion.apiV3_4.value }
-
-        var pumpState = PumpState()
-        pumpState.derivedSecret = Data(repeating: 0xAA, count: 32)
-        pumpState.serverNonce = Data(repeating: 0xBB, count: 8)
-
-        var managerState = TandemPumpManagerState(pumpState: pumpState)
-        managerState.deliveryIsUncertain = false
-
-        let manager = TandemPumpManager(state: managerState)
-        let delegate = MockPumpManagerDelegate()
-        manager.pumpManagerDelegate = delegate
-
-        let mockPeripheralManager = MockPeripheralManager()
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBatteryV2Request.self,
-            response: CurrentBatteryV2Response(
-                currentBatteryAbc: 80,
-                currentBatteryIbc: 80,
-                chargingStatus: 0,
-                unknown1: 0,
-                unknown2: 0,
-                unknown3: 0,
-                unknown4: 0
-            )
+    private func stubSyncResponses() {
+        bluetooth.stub(ApiVersionRequest.self, with: ApiVersionResponse(majorVersion: 3, minorVersion: 4))
+        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
+            currentInsulinAmount: 150,
+            isEstimate: 0,
+            insulinLowAmount: 0
+        ))
+        bluetooth.stub(
+            CurrentBatteryV1Request.self,
+            with: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
         )
-        mockPeripheralManager.enqueueResponse(
-            for: InsulinStatusRequest.self,
-            response: InsulinStatusResponse(
-                currentInsulinAmount: 150_000,
-                isEstimate: 0,
-                insulinLowAmount: 0
-            )
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(
-                profileBasalRate: 900,
-                currentBasalRate: 900,
-                basalModifiedBitmask: 0
-            )
-        )
+    }
 
-        let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
-        let mockPumpComm = MockPumpComm(pumpState: pumpState)
-        manager.setPumpCommForTesting(mockPumpComm)
+    // MARK: - Connect failures
 
-        let telemetryExpectation = expectation(description: "Telemetry triggered")
-        telemetryExpectation.expectedFulfillmentCount = 3
+    func testSyncDoesNotWriteWhenConnectFails() {
+        bluetooth.connectError = PumpCommError.pumpNotConnected
+        stubSyncResponses()
 
-        mockPumpComm.onSend = { message in
-            if message is CurrentBatteryV2Request ||
-                message is InsulinStatusRequest ||
-                message is CurrentBasalStatusRequest
-            {
-                telemetryExpectation.fulfill()
-            }
+        let expectation = expectation(description: "syncPumpData completes")
+        var reportedLastSync: Date?
+        var completionCount = 0
+        manager.syncPumpData { lastSync in
+            reportedLastSync = lastSync
+            completionCount += 1
+            expectation.fulfill()
         }
 
-        manager.connect()
+        wait(for: [expectation], timeout: 5.0)
 
-        XCTAssertTrue(manager.status.deliveryIsUncertain, "Starting a connection should mark delivery uncertain")
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty, "Nothing should be written while disconnected")
+        XCTAssertNil(reportedLastSync, "Never-synced state must not report a lastSync it does not have")
+        XCTAssertEqual(completionCount, 1, "The loop must get exactly one result")
+    }
 
-        manager.updateTransport(transport)
+    /// A failed sync must report the *previous* lastSync, not `nil` and not `now` — Loop uses it to
+    /// decide how far back its insulin delivery data can be trusted.
+    func testFailedSyncReportsPreviousLastSync() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        bluetooth.connectError = PumpCommError.pumpNotConnected
 
-        wait(for: [telemetryExpectation], timeout: 1.0)
+        let expectation = expectation(description: "syncPumpData completes")
+        var reportedLastSync: Date?
+        manager.syncPumpData { lastSync in
+            reportedLastSync = lastSync
+            expectation.fulfill()
+        }
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        wait(for: [expectation], timeout: 5.0)
 
-        XCTAssertFalse(manager.status.deliveryIsUncertain, "Connected transport should clear uncertainty")
-        XCTAssertEqual(delegate.statusUpdates.last?.0.deliveryIsUncertain, false)
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining, 0.8, accuracy: 0.01)
-        XCTAssertNotNil(manager.reservoirLevel)
+        XCTAssertEqual(reportedLastSync, previousSync)
+        XCTAssertEqual(manager.state.lastReconciliation, previousSync, "A failed sync must not advance lastReconciliation")
+    }
 
-        let rawState = manager.rawState
-        XCTAssertEqual(rawState["deliveryIsUncertain"] as? Bool, false)
-        XCTAssertNotNil(rawState["lastReservoirReading"])
+    func testEnactBolusReportsCommunicationErrorWhenConnectFails() {
+        bluetooth.connectError = PumpCommError.pumpNotConnected
 
-        let telemetryCountAfterConnect = mockPumpComm.calls.count
+        let expectation = expectation(description: "enactBolus completes")
+        var reportedError: PumpManagerError?
+        manager.enactBolus(units: 1.0, activationType: .manualNoRecommendation) { error in
+            reportedError = error
+            expectation.fulfill()
+        }
 
-        manager.disconnect()
+        wait(for: [expectation], timeout: 5.0)
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-
-        XCTAssertTrue(manager.status.deliveryIsUncertain, "Disconnecting should mark delivery uncertain")
-        XCTAssertEqual(manager.rawState["deliveryIsUncertain"] as? Bool, true)
-
-        let telemetryCountAfterDisconnect = mockPumpComm.calls.count
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        XCTAssertEqual(
-            telemetryCountAfterDisconnect,
-            telemetryCountAfterConnect,
-            "Telemetry should pause once transport is cleared"
+        guard case .communication = reportedError else {
+            return XCTFail("Expected a communication error, got \(String(describing: reportedError))")
+        }
+        XCTAssertFalse(
+            bluetooth.didSend(BolusPermissionRequest.self),
+            "No bolus permission should be requested while disconnected"
         )
     }
-}
 
-@available(macOS 13.0, iOS 14.0, *) final class MockPumpManagerDelegate: PumpManagerDelegate {
-    struct StatusUpdate {
-        let newStatus: PumpManagerStatus
-        let oldStatus: PumpManagerStatus
+    // MARK: - Successful sync
+
+    func testSuccessfulSyncAdvancesLastReconciliation() {
+        stubSyncResponses()
+        // The remaining reads are unstubbed on purpose: each one logs and returns early, which is
+        // the behaviour a partially-responsive pump produces. The sync must still complete.
+        let expectation = expectation(description: "syncPumpData completes")
+        var reportedLastSync: Date?
+        manager.syncPumpData { lastSync in
+            reportedLastSync = lastSync
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
+        XCTAssertNotNil(reportedLastSync)
+        XCTAssertEqual(reportedLastSync, manager.state.lastReconciliation)
     }
 
-    private(set) var statusUpdates: [StatusUpdate] = []
-    private(set) var recordedErrors: [PumpManagerError] = []
-    private(set) var didUpdateStateCallCount: Int = 0
-    var didUpdateStateExpectation: XCTestExpectation?
+    /// `ensureCurrentPumpData` is Loop's periodic poll; it must not re-hit the pump when the last
+    /// sync is still fresh.
+    func testEnsureCurrentPumpDataSkipsRecentSync() {
+        let recentSync = Date().addingTimeInterval(-60)
+        manager.state.lastReconciliation = recentSync
 
-    var detectedSystemTimeOffset: TimeInterval = 0
-    var automaticDosingEnabled: Bool = false
+        let expectation = expectation(description: "ensureCurrentPumpData completes")
+        var reportedLastSync: Date?
+        manager.ensureCurrentPumpData { lastSync in
+            reportedLastSync = lastSync
+            expectation.fulfill()
+        }
 
-    func deviceManager(
-        _: DeviceManager,
-        logEventForDeviceIdentifier _: String?,
-        type _: DeviceLogEntryType,
-        message _: String,
-        completion: ((Error?) -> Void)?
-    ) {
-        completion?(nil)
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(reportedLastSync, recentSync)
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0, "A fresh sync should not touch the pump")
     }
 
-    func pumpManager(
-        _: PumpManager,
-        didUpdate status: PumpManagerStatus,
-        oldStatus: PumpManagerStatus
-    ) {
-        statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus))
+    func testEnsureCurrentPumpDataSyncsWhenStale() {
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60 * 60)
+        stubSyncResponses()
+
+        let expectation = expectation(description: "ensureCurrentPumpData completes")
+        manager.ensureCurrentPumpData { _ in expectation.fulfill() }
+
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
     }
 
-    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {}
+    // MARK: - Teardown
 
-    func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool { false }
+    func testPrepareForDeactivationDisconnects() {
+        let expectation = expectation(description: "prepareForDeactivation completes")
+        manager.prepareForDeactivation { _ in expectation.fulfill() }
 
-    func pumpManagerWillDeactivate(_: PumpManager) {}
+        wait(for: [expectation], timeout: 5.0)
 
-    func pumpManagerPumpWasReplaced(_: PumpManager) {}
-
-    func pumpManager(
-        _: PumpManager,
-        didUpdatePumpRecordsBasalProfileStartEvents _: Bool
-    ) {}
-
-    func pumpManager(
-        _: PumpManager,
-        didError error: PumpManagerError
-    ) {
-        recordedErrors.append(error)
-    }
-
-    func pumpManager(
-        _: PumpManager,
-        hasNewPumpEvents _: [NewPumpEvent],
-        lastReconciliation _: Date?,
-        replacePendingEvents _: Bool,
-        completion: @escaping (Error?) -> Void
-    ) {
-        completion(nil)
-    }
-
-    func pumpManager(
-        _: PumpManager,
-        didReadReservoirValue units: Double,
-        at date: Date,
-        completion: @escaping (Result<
-            (newValue: ReservoirValue, lastValue: ReservoirValue?, areStoredValuesContinuous: Bool),
-            Error
-        >) -> Void
-    ) {
-        completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
-    }
-
-    func pumpManager(
-        _: PumpManager,
-        didAdjustPumpClockBy _: TimeInterval
-    ) {}
-
-    func pumpManagerDidUpdateState(_: PumpManager) {
-        didUpdateStateCallCount += 1
-        didUpdateStateExpectation?.fulfill()
-        didUpdateStateExpectation = nil
-    }
-
-    func pumpManager(
-        _: PumpManager,
-        didRequestBasalRateScheduleChange _: BasalRateSchedule,
-        completion: @escaping (Error?) -> Void
-    ) {
-        completion(nil)
-    }
-
-    func pumpManagerRecommendsLoop(_: PumpManager) {}
-
-    func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
-        Date.distantPast
+        XCTAssertEqual(bluetooth.disconnectCount, 1)
     }
 }

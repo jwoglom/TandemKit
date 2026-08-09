@@ -6,18 +6,15 @@ public struct TandemPumpManagerSettings: RawRepresentable, Equatable {
     public var maxBolus: Double?
     public var maxTempBasalRate: Double?
     public var maxBasalScheduleEntry: Double?
-    public var maxInsulinOnBoard: Double?
 
     public init(
         maxBolus: Double? = nil,
         maxTempBasalRate: Double? = nil,
-        maxBasalScheduleEntry: Double? = nil,
-        maxInsulinOnBoard: Double? = nil
+        maxBasalScheduleEntry: Double? = nil
     ) {
         self.maxBolus = maxBolus
         self.maxTempBasalRate = maxTempBasalRate
         self.maxBasalScheduleEntry = maxBasalScheduleEntry
-        self.maxInsulinOnBoard = maxInsulinOnBoard
     }
 
     public init?(rawValue: RawValue) {
@@ -35,7 +32,6 @@ public struct TandemPumpManagerSettings: RawRepresentable, Equatable {
         maxBolus = double(from: rawValue["maxBolus"])
         maxTempBasalRate = double(from: rawValue["maxTempBasalRate"])
         maxBasalScheduleEntry = double(from: rawValue["maxBasalScheduleEntry"])
-        maxInsulinOnBoard = double(from: rawValue["maxInsulinOnBoard"])
     }
 
     public var rawValue: RawValue {
@@ -53,10 +49,6 @@ public struct TandemPumpManagerSettings: RawRepresentable, Equatable {
             raw["maxBasalScheduleEntry"] = maxBasalScheduleEntry
         }
 
-        if let maxInsulinOnBoard = maxInsulinOnBoard {
-            raw["maxInsulinOnBoard"] = maxInsulinOnBoard
-        }
-
         return raw
     }
 }
@@ -68,10 +60,59 @@ public extension TandemPumpManagerSettings {
 public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case invalidBolusAmount(requested: Double)
     case maximumBolusExceeded(requested: Double, maximum: Double)
-    case insulinOnBoardLimitExceeded(currentIOB: Double, requested: Double, maximum: Double)
-    case invalidTempBasalRate(requested: Double)
-    case maximumTempBasalRateExceeded(requested: Double, maximum: Double)
-    case invalidTempBasalDuration(requested: TimeInterval)
     case controlIQModeActive
     case bolusIsRunning
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidBolusAmount(requested):
+            return String(
+                format: String(
+                    localized: "Cannot deliver a bolus of %.2f units",
+                    comment: "Error when a bolus of zero or negative units is requested"
+                ),
+                requested
+            )
+        case let .maximumBolusExceeded(requested, maximum):
+            return String(
+                format: String(
+                    localized: "Bolus of %.2f units exceeds the maximum bolus of %.2f units",
+                    comment: "Error when a bolus is larger than the configured maximum bolus"
+                ),
+                requested,
+                maximum
+            )
+        case .controlIQModeActive:
+            return String(
+                localized: "Control-IQ is active on the pump",
+                comment: "Error when a command is blocked because the pump is running Control-IQ"
+            )
+        case .bolusIsRunning:
+            return String(
+                localized: "A bolus is still being delivered",
+                comment: "Error when a command is blocked because a bolus is in progress"
+            )
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case .invalidBolusAmount,
+             .maximumBolusExceeded:
+            return String(
+                localized: "Check your maximum bolus in delivery limits, then try again.",
+                comment: "Recovery suggestion when a bolus fails validation"
+            )
+        case .controlIQModeActive:
+            return String(
+                localized: "Turn off Control-IQ on the pump to let this app control delivery.",
+                comment: "Recovery suggestion when Control-IQ blocks a command"
+            )
+        case .bolusIsRunning:
+            return String(
+                localized: "Wait for the bolus to finish, then try again.",
+                comment: "Recovery suggestion when a bolus is in progress"
+            )
+        }
+    }
 }

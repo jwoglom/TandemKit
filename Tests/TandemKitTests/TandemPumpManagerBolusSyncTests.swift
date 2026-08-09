@@ -1,12 +1,10 @@
 import LoopKit
-@testable import TandemCore
 @testable import TandemKit
 import XCTest
 
 final class TandemPumpManagerBolusSyncTests: XCTestCase {
     private func makeManager(bolusDose: UnfinalizedDose?) -> TandemPumpManager {
-        let state = TandemPumpManagerState(pumpState: nil)
-        let manager = TandemPumpManager(state: state)
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]))
         manager.state.bolusDose = bolusDose
         return manager
     }

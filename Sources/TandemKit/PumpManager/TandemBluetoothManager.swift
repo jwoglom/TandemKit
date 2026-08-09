@@ -7,7 +7,7 @@ private final class ConnectResultBox {
     var error: Error?
 }
 
-class TandemBluetoothManager: NSObject {
+class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     private let logger = TandemLogger(category: "TandemBluetoothManager")
     private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.bluetoothManagerQueue", qos: .unspecified)
 
