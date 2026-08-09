@@ -724,26 +724,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let alarmNames = activeAlarms.map { String(describing: $0) }.joined(separator: ", ")
             self.logger.info("Acknowledging resume-pump alarm(s) [\(alarmNames)] before retrying resume")
-            var acknowledgedAny = false
             for alarm in activeAlarms {
-                if self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue)) {
-                    acknowledgedAny = true
-                }
+                _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
             }
 
-            // Reload so the notification list and badge reflect the acknowledgements even if the
-            // retry below fails.
-            self.fetchNotifications()
-
-            guard acknowledgedAny else {
-                self.logger.error("Could not acknowledge any resume-pump alarm; reporting the original failure")
-                completion(resumeError)
-                return
-            }
-
+            // Retry regardless of how the acknowledgements were reported: the retry itself is the
+            // authority on whether the pump will resume.
             let retryError = self.sendResumePumping()
             if retryError != nil {
                 self.logger.error("Resume retry after acknowledging resume-pump alarm(s) failed")
+                // Reload so the notification list and badge reflect the acknowledgements we just
+                // sent — the caller only re-syncs the pump after a successful resume.
+                self.fetchNotifications()
             }
             completion(retryError)
         }
