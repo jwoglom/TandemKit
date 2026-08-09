@@ -695,7 +695,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     ///
     /// Only those two alarms are acknowledged on the user's behalf. If neither is active, or the
     /// retry fails too, the original/retry error is surfaced so the caller still reports the
-    /// failure.
+    /// failure. The sequence itself lives in `ResumeWithAlarmAcknowledgement`, which is where it is
+    /// unit-tested; this method just binds it to the pump.
     func resumeDeliveryAcknowledgingResumeAlarms(completion: @escaping (_ error: Error?) -> Void) {
         let completion = watchdogged(timeoutResult: PumpCommError.pumpNotConnected as Error?, completion)
         logger.info("Resume Insulin Delivery (clearing resume-pump alarms if needed)...")
@@ -707,37 +708,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let resumeError = self.sendResumePumping() else {
-                completion(nil)
-                return
-            }
+            let sequence = ResumeWithAlarmAcknowledgement(
+                sendResume: { self.sendResumePumping() },
+                reloadNotifications: { self.fetchNotifications() },
+                activeResumeAlarms: { self.notificationBundle.activeResumePumpAlarms() },
+                acknowledgeAlarm: { alarm in
+                    _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
+                },
+                log: { self.logger.info($0) }
+            )
 
-            // Re-read the pump's notifications so the decision is made against current state
-            // rather than whatever was cached from the last sync.
-            self.fetchNotifications()
-            let activeAlarms = self.notificationBundle.activeResumePumpAlarms()
-            guard !activeAlarms.isEmpty else {
-                self.logger.info("Resume failed with no resume-pump alarm active; reporting the failure")
-                completion(resumeError)
-                return
-            }
-
-            let alarmNames = activeAlarms.map { String(describing: $0) }.joined(separator: ", ")
-            self.logger.info("Acknowledging resume-pump alarm(s) [\(alarmNames)] before retrying resume")
-            for alarm in activeAlarms {
-                _ = self.acknowledgeNotification(type: .alarm, id: UInt32(alarm.rawValue))
-            }
-
-            // Retry regardless of how the acknowledgements were reported: the retry itself is the
-            // authority on whether the pump will resume.
-            let retryError = self.sendResumePumping()
-            if retryError != nil {
-                self.logger.error("Resume retry after acknowledging resume-pump alarm(s) failed")
-                // Reload so the notification list and badge reflect the acknowledgements we just
-                // sent — the caller only re-syncs the pump after a successful resume.
-                self.fetchNotifications()
-            }
-            completion(retryError)
+            completion(sequence.run())
         }
     }
 
@@ -1633,6 +1614,64 @@ extension TandemPumpManager {
         return stride(from: startInt, through: endInt, by: stepInt).map {
             Double($0) / multiplier
         }
+    }
+}
+
+/// The resume-with-alarm-acknowledgement sequence used by the settings screen's
+/// "Resume Insulin Delivery" button.
+///
+/// Split out of `TandemPumpManager` so the branching — the ways a resume can end — is unit-testable
+/// without a BLE stack; `TandemPumpManager.resumeDeliveryAcknowledgingResumeAlarms` supplies the
+/// real pump operations. Like the manager's own command bodies, every operation here is synchronous
+/// and must run on the pump command queue with the pump already connected.
+struct ResumeWithAlarmAcknowledgement {
+    /// Sends one `ResumePumpingRequest`. Returns nil once the pump has resumed, otherwise the error
+    /// to report.
+    let sendResume: () -> Error?
+    /// Re-reads the pump's notification state, so the decision below is made against what the pump
+    /// reports now rather than whatever was cached from the last sync.
+    let reloadNotifications: () -> Void
+    /// The resume-pump alarms active in the notification state last read.
+    let activeResumeAlarms: () -> [AlarmStatusResponse.AlarmResponseType]
+    /// Acknowledges one alarm. Whether the pump accepts the acknowledgement is deliberately not
+    /// consulted — see `run()`.
+    let acknowledgeAlarm: (AlarmStatusResponse.AlarmResponseType) -> Void
+    /// Progress reporting; the manager passes its logger.
+    var log: (String) -> Void = { _ in }
+
+    /// Runs the sequence, returning nil once the pump has resumed or the error to surface.
+    func run() -> Error? {
+        guard let resumeError = sendResume() else {
+            return nil
+        }
+
+        reloadNotifications()
+        let alarms = activeResumeAlarms()
+
+        // Only the resume-pump alarms are cleared on the user's behalf. A resume that failed for
+        // any other reason is reported as-is, so the caller still shows its error.
+        guard !alarms.isEmpty else {
+            log("Resume failed with no resume-pump alarm active; reporting the failure")
+            return resumeError
+        }
+
+        let alarmNames = alarms.map { String(describing: $0) }.joined(separator: ", ")
+        log("Acknowledging resume-pump alarm(s) [\(alarmNames)] before retrying resume")
+        for alarm in alarms {
+            acknowledgeAlarm(alarm)
+        }
+
+        // Retry regardless of how the acknowledgements were reported: the retry itself is the
+        // authority on whether the pump will resume.
+        guard let retryError = sendResume() else {
+            return nil
+        }
+
+        log("Resume retry after acknowledging resume-pump alarm(s) failed")
+        // Reload so the notification list and badge reflect the acknowledgements just sent — the
+        // caller only re-syncs the pump after a successful resume.
+        reloadNotifications()
+        return retryError
     }
 }
 
