@@ -277,7 +277,9 @@ final class NotificationBundleTests: XCTestCase {
         let response = AlertStatusResponse(intMap: bitmask(0, 5, 17))
         bundle.add(response)
 
-        XCTAssertEqual(bundle.getNotificationCount(), 3)
+        // LOW_INSULIN_ALERT and LOW_INSULIN_ALERT2 are a merged group, so the three raw
+        // alerts render as two rows.
+        XCTAssertEqual(bundle.getNotificationCount(), 2)
         XCTAssertNotNil(bundle.alertStatusResponse)
         XCTAssertEqual(bundle.alertStatusResponse?.alerts.count, 3)
     }
