@@ -384,7 +384,7 @@ Responses:
 - V1 pairing (16-char code via `PumpChallengeRequestBuilder.createV1`): ✅ Fully implemented
 - V2 pairing (6-digit PIN via `PumpChallengeRequestBuilder.createV2`): ✅ Uses JPAKE builder to advance pairing flow
   - Pairing state persistence: ✅ TandemPumpManagerState persists derived secrets/server nonces
-* **Utility surface area** – ✅ **FULLY IMPLEMENTED**: `PumpStateSupplier` provides complete pairing code validation/sanitization (`sanitizeAndStorePairingCode`), authentication key derivation (`authenticationKey`), and configuration flags for insulin-affecting actions. Command-line target (`Sources/TandemCLI`) exposes decode/encode/list tooling.
+* **Utility surface area** – ✅ **FULLY IMPLEMENTED**: `PumpStateSupplier` provides complete pairing code validation/sanitization (`sanitizeAndStorePairingCode`), authentication key derivation (`authenticationKey`), and configuration flags for insulin-affecting actions.
 * **Existing validation** – ⚠️ **PARTIAL**: Unit tests cover message metadata, pairing-code validation, and JPake builder behavior. Many message types in AGENTS.md checklist are marked as lacking tests.
 
 ### Gaps Blocking a Functional Loop/Trio Pump Driver
@@ -458,7 +458,7 @@ Responses:
 
 7. **Phase 6 – Safety, tooling, and QA** – ❌ *Not yet started*
    * Provide user-facing controls or configuration surfaces for insulin-affecting toggles managed by `PumpStateSupplier`, including persistence and audit logging — no UI or persistence implemented.
-   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands; automate end-to-end smoke tests via `tandemkit-cli` where possible — coverage still absent.
+   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands — coverage still absent.
    * Document manual validation steps for hardware testing (pairing, bolus, suspend/resume), and capture known limitations or required pump firmware versions before releasing to Loop/Trio users — documentation not written.
 
 This roadmap keeps the existing protocol/BLE groundwork intact while layering the missing pump-manager functionality required for a production Loop or Trio integration.

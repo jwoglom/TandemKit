@@ -1,6 +1,26 @@
 // swift-tools-version: 5.9
 import PackageDescription
 
+// NOTE: TandemKit.xcodeproj is the supported build. This manifest describes the
+// source layout and resolves its dependencies, but SwiftPM cannot compile these
+// targets as declared, for two reasons:
+//
+//   1. LoopKit is not vendored. Six TandemCore files import LoopKit, and
+//      TandemKitUI/TandemKitPlugin import LoopKitUI; the repository ships
+//      neither sources nor binaries for either (see Cartfile). Fixing this
+//      means vendoring LoopKit back in, e.g. as binaryTargets pointing at
+//      Carthage-built xcframeworks.
+//   2. The module split below does not match the code. The Xcode project
+//      compiles Sources/TandemCore, Sources/TandemKit and Sources/TandemKitUI
+//      into a single TandemKit framework, and the sources rely on that -- for
+//      example TandemCore/Common/Extensions/String.swift references
+//      TandemKitUI's TandemKitHUDProvider.
+//
+// The unit tests are deliberately not declared here for the same reason: they
+// `@testable import TandemKit` and expect that one module. They are built and
+// run by the TandemKitTests target in TandemKit.xcodeproj; see
+// .github/workflows/unit-tests.yml.
+
 let package = Package(
     name: "TandemKit",
     platforms: [
@@ -11,10 +31,6 @@ let package = Package(
         .library(
             name: "TandemCore",
             targets: ["TandemCore"]
-        ),
-        .library(
-            name: "TandemBLE",
-            targets: ["TandemBLE"]
         ),
         .library(
             name: "TandemKit",
@@ -29,10 +45,6 @@ let package = Package(
             targets: ["TandemKitPlugin"]
         ),
         .executable(
-            name: "tandemkit-cli",
-            targets: ["TandemCLI"]
-        ),
-        .executable(
             name: "tandem-simulator",
             targets: ["TandemSimulator"]
         )
@@ -42,134 +54,45 @@ let package = Package(
         .package(url: "https://github.com/leif-ibsen/BigInt", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-log", from: "1.5.3")
     ],
-    targets: {
-        var targets: [Target] = [
-            // Optional: Mbed TLS headers and shim are only built when the underlying library is
-            // available in the build environment. See the README for the linker flags needed to
-            // provide vendored sources or prebuilt binaries to SwiftPM.
-            .target(
-                name: "MbedTLS",
-                path: "Sources/MbedTLS",
-                publicHeadersPath: "include"
-            ),
-            .target(
-                name: "MbedTLSShim",
-                dependencies: ["MbedTLS"],
-                path: "Sources/MbedTLSShim",
-                publicHeadersPath: "include"
-            ),
-            .target(
-                name: "Bluetooth",
-                path: "Sources/Bluetooth"
-            ),
-            .target(
-                name: "CoreBluetooth",
-                dependencies: [
-                    .target(name: "Bluetooth", condition: .when(platforms: [.linux]))
-                ],
-                path: "Sources/CoreBluetooth"
-            ),
-            .target(
-                name: "TandemCore",
-                dependencies: [
-                    .product(name: "SwiftECC", package: "SwiftECC"),
-                    .product(name: "BigInt", package: "BigInt"),
-                    .product(name: "Logging", package: "swift-log"),
-                    .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
-                    // Add "MbedTLSShim" here when providing Mbed TLS headers and binaries to SwiftPM.
-                ],
-                path: "Sources/TandemCore"
-            ),
-            .target(
-                name: "TandemBLE",
-                dependencies: [
-                    "TandemCore",
-                    "LoopKit",
-                    .target(name: "Bluetooth", condition: .when(platforms: [.linux])),
-                    .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
-                ],
-                path: "Sources/TandemBLE"
-            ),
-            .target(
-                name: "TandemKit",
-                dependencies: ["TandemCore", "TandemBLE", "LoopKit"],
-                path: "Sources/TandemKit"
-            ),
-            .target(
-                name: "TandemKitUI",
-                dependencies: ["TandemKit", "TandemCore", "LoopKitUI"],
-                path: "Sources/TandemKitUI"
-            ),
-            .target(
-                name: "TandemKitPlugin",
-                dependencies: ["TandemKit", "LoopKitUI", "TandemCore"],
-                path: "Sources/TandemKitPlugin"
-            ),
-            .executableTarget(
-                name: "TandemCLI",
-                dependencies: [
-                    "TandemCore",
-                    "TandemBLE",
-                    "TandemKit"
-                ],
-                path: "Sources/TandemCLI",
-                swiftSettings: [
-                    .unsafeFlags(["-parse-as-library"])
-                ]
-            ),
-            .executableTarget(
-                name: "TandemSimulator",
-                dependencies: [
-                    "TandemCore",
-                    "TandemBLE",
-                    .product(name: "SwiftECC", package: "SwiftECC"),
-                    .product(name: "BigInt", package: "BigInt"),
-                    .product(name: "Logging", package: "swift-log"),
-                    .target(name: "CoreBluetooth", condition: .when(platforms: [.linux]))
-                ],
-                path: "Sources/TandemSimulator",
-                resources: [
-                    .copy("README.md")
-                ],
-                swiftSettings: [
-                    .unsafeFlags(["-parse-as-library"])
-                ]
-            ),
-            .testTarget(
-                name: "TandemCoreTests",
-                dependencies: ["TandemCore"],
-                path: "Tests/TandemCoreTests"
-            ),
-            .testTarget(
-                name: "TandemKitTests",
-                dependencies: ["TandemKit", "TandemCore", "TandemBLE"],
-                path: "Tests/TandemKitTests"
-            ),
-            .testTarget(
-                name: "TandemCommTests",
-                dependencies: ["TandemKit", "TandemCore"],
-                path: "Tests/TandemCommTests"
-            ),
-            .testTarget(
-                name: "TandemSimulatorTests",
-                dependencies: ["TandemSimulator", "TandemCore", "TandemBLE"],
-                path: "Tests/TandemSimulatorTests"
-            )
-        ]
-
-        // Always use source-based shims since the binary frameworks don't support macOS
-        targets.append(contentsOf: [
-            .target(
-                name: "LoopKit",
-                path: "Sources/LoopKit"
-            ),
-            .target(
-                name: "LoopKitUI",
-                dependencies: ["LoopKit"],
-                path: "Sources/LoopKitUI"
-            )
-        ])
-
-        return targets
-    }()
+    targets: [
+        .target(
+            name: "TandemCore",
+            dependencies: [
+                .product(name: "SwiftECC", package: "SwiftECC"),
+                .product(name: "BigInt", package: "BigInt")
+            ],
+            path: "Sources/TandemCore"
+        ),
+        .target(
+            name: "TandemKit",
+            dependencies: ["TandemCore"],
+            path: "Sources/TandemKit"
+        ),
+        .target(
+            name: "TandemKitUI",
+            dependencies: ["TandemKit", "TandemCore"],
+            path: "Sources/TandemKitUI"
+        ),
+        .target(
+            name: "TandemKitPlugin",
+            dependencies: ["TandemKit", "TandemCore"],
+            path: "Sources/TandemKitPlugin"
+        ),
+        .executableTarget(
+            name: "TandemSimulator",
+            dependencies: [
+                "TandemCore",
+                .product(name: "SwiftECC", package: "SwiftECC"),
+                .product(name: "BigInt", package: "BigInt"),
+                .product(name: "Logging", package: "swift-log")
+            ],
+            path: "Sources/TandemSimulator",
+            resources: [
+                .copy("README.md")
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-parse-as-library"])
+            ]
+        )
+    ]
 )
