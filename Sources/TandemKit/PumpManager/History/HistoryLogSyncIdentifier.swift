@@ -135,3 +135,18 @@ public enum HistoryLogSyncIdentifier {
         }
     }
 }
+
+public extension StoredHistoryLog {
+    /// Identity for an event the pump assigns no id to, anchored on this entry's sequence number.
+    /// Boluses and temp rates must use `HistoryLogSyncIdentifier.bolus`/`.tempRate` instead, so that
+    /// the identifier survives the transition from an optimistic report to its history confirmation.
+    ///
+    /// Nil when the entry carries no usable pump serial — see `HistoryLogSyncIdentifier.PumpSerial`
+    /// for why a placeholder serial is worse than no identifier at all.
+    var logSequenceSyncIdentifier: Data? {
+        guard let serial = HistoryLogSyncIdentifier.PumpSerial(pumpSerial) else {
+            return nil
+        }
+        return HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: sequenceNum)
+    }
+}
