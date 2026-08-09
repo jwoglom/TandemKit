@@ -47,10 +47,11 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     /// Answers successive `requestType` writes with `responses` in order. Once the queue is drained
     /// the fixed stub for that type (if any) takes over.
     func enqueue(_ requestType: Message.Type, responses: [Message?]) {
-        lock.lock()
-        queuedResponses[ObjectIdentifier(requestType), default: []] += responses.map { response in
+        let handlers: [(Message) -> Message?] = responses.map { response in
             { _ in response }
         }
+        lock.lock()
+        queuedResponses[ObjectIdentifier(requestType), default: []] += handlers
         lock.unlock()
     }
 

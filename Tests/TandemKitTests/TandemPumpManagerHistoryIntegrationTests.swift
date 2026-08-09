@@ -63,11 +63,10 @@ import XCTest
             guard let self, let request = message as? HistoryLogRequest else { return }
 
             // The pump streams backward from startLog, so build the requested window the same way.
-            let top = request.startLog
-            let count = UInt32(request.numberOfLogs)
-            let bottom = top >= count - 1 ? top - count + 1 : 0
+            let top = Int(request.startLog)
+            let bottom = max(0, top - max(request.numberOfLogs, 1) + 1)
 
-            let logs = stride(from: Int(top), through: Int(bottom), by: -1)
+            let logs = stride(from: top, through: bottom, by: -1)
                 .map { UInt32($0) }
                 .filter { !withholding.contains($0) }
                 .map { self.log(sequenceNum: $0) }

@@ -36,7 +36,7 @@ import XCTest
 
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV1Request.self))
         XCTAssertFalse(bluetooth.didSend(CurrentBatteryV2Request.self))
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.8, accuracy: 0.001)
     }
 
     func testBatteryTelemetryUsesV2RequestWhenApiSupportsIt() {
@@ -55,7 +55,7 @@ import XCTest
 
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV2Request.self))
         XCTAssertFalse(bluetooth.didSend(CurrentBatteryV1Request.self))
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.6, accuracy: 0.001)
     }
 
     /// An unknown API version has to fall back to the request every firmware answers.
@@ -69,7 +69,7 @@ import XCTest
         manager.fetchBatteryStatus()
 
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV1Request.self))
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining ?? 0, 0.45, accuracy: 0.001)
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.45, accuracy: 0.001)
     }
 
     /// A failed read must leave the last known charge alone rather than reporting a bogus level.
@@ -80,7 +80,7 @@ import XCTest
         manager.fetchBatteryStatus()
 
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV2Request.self))
-        XCTAssertNil(manager.pumpBatteryChargeRemaining)
+        XCTAssertNil(manager.status.pumpBatteryChargeRemaining)
     }
 
     // MARK: - Reservoir

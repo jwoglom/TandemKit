@@ -26,12 +26,18 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private var _didUpdateStateCount = 0
     private var _issuedAlerts: [Alert] = []
 
-    var statusUpdates: [StatusUpdate] { lock.withLock { _statusUpdates } }
-    var pumpEvents: [NewPumpEvent] { lock.withLock { _pumpEvents } }
-    var reservoirReadings: [ReservoirReading] { lock.withLock { _reservoirReadings } }
-    var errors: [PumpManagerError] { lock.withLock { _errors } }
-    var didUpdateStateCount: Int { lock.withLock { _didUpdateStateCount } }
-    var issuedAlerts: [Alert] { lock.withLock { _issuedAlerts } }
+    private func synchronized<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
+    var statusUpdates: [StatusUpdate] { synchronized { _statusUpdates } }
+    var pumpEvents: [NewPumpEvent] { synchronized { _pumpEvents } }
+    var reservoirReadings: [ReservoirReading] { synchronized { _reservoirReadings } }
+    var errors: [PumpManagerError] { synchronized { _errors } }
+    var didUpdateStateCount: Int { synchronized { _didUpdateStateCount } }
+    var issuedAlerts: [Alert] { synchronized { _issuedAlerts } }
 
     /// Fulfilled on every `pumpManagerDidUpdateState`, when set.
     var didUpdateStateExpectation: XCTestExpectation?
@@ -58,7 +64,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - AlertIssuer
 
     func issueAlert(_ alert: Alert) {
-        lock.withLock { _issuedAlerts.append(alert) }
+        synchronized { _issuedAlerts.append(alert) }
     }
 
     func retractAlert(identifier _: Alert.Identifier) {}
@@ -88,7 +94,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - PumpManagerStatusObserver
 
     func pumpManager(_: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
-        lock.withLock { _statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus)) }
+        synchronized { _statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus)) }
     }
 
     // MARK: - PumpManagerDelegate
@@ -104,7 +110,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     func pumpManager(_: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents _: Bool) {}
 
     func pumpManager(_: PumpManager, didError error: PumpManagerError) {
-        lock.withLock { _errors.append(error) }
+        synchronized { _errors.append(error) }
     }
 
     func pumpManager(
@@ -114,7 +120,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         replacePendingEvents _: Bool,
         completion: @escaping (Error?) -> Void
     ) {
-        lock.withLock { _pumpEvents += events }
+        synchronized { _pumpEvents += events }
         didReceivePumpEventsExpectation?.fulfill()
         completion(nil)
     }
@@ -128,7 +134,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
             Error
         >) -> Void
     ) {
-        lock.withLock { _reservoirReadings.append(ReservoirReading(units: units, date: date)) }
+        synchronized { _reservoirReadings.append(ReservoirReading(units: units, date: date)) }
         didReadReservoirExpectation?.fulfill()
         completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
     }
@@ -136,7 +142,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     func pumpManager(_: PumpManager, didAdjustPumpClockBy _: TimeInterval) {}
 
     func pumpManagerDidUpdateState(_: PumpManager) {
-        lock.withLock { _didUpdateStateCount += 1 }
+        synchronized { _didUpdateStateCount += 1 }
         didUpdateStateExpectation?.fulfill()
     }
 
@@ -150,13 +156,5 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
         .distantPast
-    }
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () -> T) -> T {
-        lock()
-        defer { unlock() }
-        return body()
     }
 }
