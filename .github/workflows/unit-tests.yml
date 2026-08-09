@@ -182,9 +182,34 @@ jobs:
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             -resultBundlePath "TandemKitTests.xcresult" \
             ${XCODEBUILD_COMMON_FLAGS} \
-            -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-test.log"
+
+      # An .xctest bundle with no test cases in it passes. That is exactly how
+      # the TandemKitTests target sat broken for so long -- an empty Sources
+      # build phase, a green build, and nothing actually run. Insist the run
+      # reports a positive test count so "green" cannot mean "empty".
+      - name: Check that tests actually ran
+        run: |
+          set -euo pipefail
+          EXECUTED="$(
+            grep -oE 'Executed [0-9]+ test' xcodebuild-test.log \
+              | grep -oE '[0-9]+' \
+              | sort -rn \
+              | head -1 \
+              || true
+          )"
+          if [[ -z "${EXECUTED}" ]]; then
+            echo "Could not find an 'Executed N tests' line in the xcodebuild output."
+            echo "Either the tests did not run or xcodebuild changed its reporting format."
+            exit 1
+          fi
+          if [[ "${EXECUTED}" -eq 0 ]]; then
+            echo "The test bundle ran 0 tests."
+            exit 1
+          fi
+          echo "Executed ${EXECUTED} tests."
+          echo "TandemKitTests: ${EXECUTED} tests executed." >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload test logs/results (on failure)
         if: failure()
