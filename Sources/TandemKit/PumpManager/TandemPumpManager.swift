@@ -13,7 +13,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
 
-    let bluetooth: TandemBluetoothManager
+    let bluetooth: PumpBluetoothConnection
 
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
@@ -88,10 +88,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
-    public init(state: TandemPumpManagerState) {
+    public convenience init(state: TandemPumpManagerState) {
+        self.init(state: state, bluetooth: TandemBluetoothManager())
+    }
+
+    /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
+    /// without CoreBluetooth; production goes through `init(state:)`.
+    init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection) {
         self.state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
-        bluetooth = TandemBluetoothManager()
+        self.bluetooth = bluetooth
         bluetooth.pumpManager = self
 
         let nc = NotificationCenter.default
@@ -334,6 +340,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Returns the reason `units` is not a deliverable bolus, or nil when it is.
+    ///
+    /// `settings.maxBolus` mirrors the delivery limit the host app last synced (see
+    /// `syncDeliveryLimits`); when it has never been synced the limit is nil and only the
+    /// positive-amount check applies.
+    func validateBolusRequest(units: Double) -> TandemPumpManagerValidationError? {
+        guard units > 0 else {
+            return .invalidBolusAmount(requested: units)
+        }
+
+        if let maxBolus = state.settings.maxBolus, units > maxBolus {
+            return .maximumBolusExceeded(requested: units, maximum: maxBolus)
+        }
+
+        return nil
+    }
+
     public func enactBolus(
         units: Double,
         activationType: BolusActivationType,
@@ -346,6 +369,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
         if state.useControlIQ, activationType.isAutomatic {
             logger.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
+            return
+        }
+
+        // The pump enforces its own max bolus limit (pushed down by syncDeliveryLimits via
+        // SetMaxBolusLimitRequest), but check here too so an out-of-range request fails fast with a
+        // specific error instead of being rejected mid-handshake as a generic permission denial.
+        if let error = validateBolusRequest(units: units) {
+            logger.error("[enactBolus] Rejected bolus request of \(units)U: \(error)")
+            completion(.deviceState(error))
             return
         }
 

@@ -20,85 +20,26 @@ DEFAULTS = {
   mode: :check
 }.freeze
 
-# When no --target/--source-root given, check all of these.
-#
 # TandemKit.xcodeproj is a single-framework project: the SwiftPM targets
 # TandemCore/TandemKit/TandemKitUI all compile into the one "TandemKit"
-# framework target, so each of their source roots maps to it. Source roots that
-# do not exist on disk are skipped, so entries here may describe directories
-# that are not present in every checkout.
-ALL_TARGET_SOURCE_PAIRS = [
+# framework target, so each of their source roots maps to it.
+#
+# There is no exclusion list. Every .swift file under a source root below, and
+# every .swift file under every Tests/* directory, must be a member of the
+# corresponding target -- that is what keeps a test from being silently absent
+# from the CI run (which is how the TandemKitTests target ended up with an empty
+# Sources build phase). A file that cannot compile has to be deleted or fixed,
+# not hidden from the check.
+SOURCE_TARGET_PAIRS = [
   { target: "TandemKit",       source_root: "Sources/TandemCore" },
   { target: "TandemKit",       source_root: "Sources/TandemKit" },
   { target: "TandemKit",       source_root: "Sources/TandemKitUI" },
-  { target: "TandemKit",       source_root: "Sources/TandemBLE" },
   { target: "TandemKitPlugin", source_root: "Sources/TandemKitPlugin" },
-  { target: "TandemKitTests",  source_root: "Tests/TandemCoreTests" },
-  { target: "TandemKitTests",  source_root: "Tests/TandemKitTests" },
 ].freeze
 
-# Test sources that are deliberately NOT members of the TandemKitTests target,
-# each with the reason it is excluded. Every entry must be a repo-relative path
-# to a file or a directory; anything under an excluded directory is excluded.
-#
-# These are kept out because they exercise APIs that no longer exist in the
-# framework, so adding them would break the build rather than add coverage.
-# Deleting them or porting them forward is a separate call for a maintainer --
-# listing them here keeps the exclusion explicit and reviewable instead of
-# silently invisible (which is how the target ended up with an empty Sources
-# phase in the first place).
-EXCLUDED_TEST_PATHS = {
-  "Tests/TandemCommTests" =>
-    "PumpComm / PumpMessageTransport were removed from the framework.",
-  "Tests/TandemSimulatorTests" =>
-    "Sources/TandemSimulator is not built by TandemKit.xcodeproj.",
-  "Tests/TandemKitTests/BLETransportIntegrationTests.swift" =>
-    "Built on the removed TandemBLE stack (BluetoothManager/PacketArrayList).",
-  "Tests/TandemKitTests/HistoryDeduplicatorTests.swift" =>
-    "HistoryDeduplicator was removed.",
-  "Tests/TandemKitTests/HistoryFetchSessionTests.swift" =>
-    "HistoryFetchSession was removed.",
-  "Tests/TandemKitTests/HistoryReconcilerTests.swift" =>
-    "HistoryReconciler was removed.",
-  "Tests/TandemKitTests/HistoryTimestampReconcilerTests.swift" =>
-    "HistoryTimestampReconciler was removed.",
-  "Tests/TandemKitTests/HistoryToDoseMapperTests.swift" =>
-    "HistoryToDoseMapper was removed.",
-  "Tests/TandemKitTests/MockPumpDependencies.swift" =>
-    "Mocks the removed PumpComm / PumpMessageTransport protocols.",
-  "Tests/TandemKitTests/PacketArrayListDynamicCargoOverrideTests.swift" =>
-    "PacketArrayList was removed with TandemBLE.",
-  "Tests/TandemKitTests/PumpCommIntegrationTests.swift" =>
-    "PumpComm was removed.",
-  "Tests/TandemKitTests/PumpNotificationRouterTests.swift" =>
-    "PumpNotificationRouter was removed.",
-  "Tests/TandemKitTests/TandemPairingIntegrationTests.swift" =>
-    "Built on the removed PumpComm pairing stack.",
-  "Tests/TandemKitTests/TandemPumpManagerBolusSyncTests.swift" =>
-    "Depends on the removed MockPumpDependencies harness.",
-  "Tests/TandemKitTests/TandemPumpManagerConfigurationTests.swift" =>
-    "Depends on the removed MockPumpDependencies harness.",
-  "Tests/TandemKitTests/TandemPumpManagerConnectionTests.swift" =>
-    "Depends on the removed MockPumpDependencies harness.",
-  "Tests/TandemKitTests/TandemPumpManagerConsentTests.swift" =>
-    "PumpStateSupplier was removed.",
-  "Tests/TandemKitTests/TandemPumpManagerHistoryIntegrationTests.swift" =>
-    "Depends on the removed MockPumpDependencies harness.",
-  "Tests/TandemKitTests/TandemPumpManagerStateTests.swift" =>
-    "PendingDose / PumpStateSupplier were removed.",
-  "Tests/TandemKitTests/TandemPumpManagerTelemetryTests.swift" =>
-    "Depends on the removed MockPumpDependencies harness.",
-  "Tests/TandemKitTests/TandemPumpManagerValidationTests.swift" =>
-    "Depends on the removed PumpComm dosing entry points.",
-  "Tests/TandemCoreTests/EcJpakePerformanceTests.swift" =>
-    "Uses the removed JpakeAuthBuilder(pairingCode:) init; also wall-clock assertions.",
-  "Tests/TandemCoreTests/MbedTLSJpakeProviderTests.swift" =>
-    "The MbedTLS shim targets were removed.",
-  "Tests/TandemCoreTests/PumpChallengeRequestBuilderTests.swift" =>
-    "PumpChallengeRequestBuilder was removed.",
-  "Tests/TandemCoreTests/PumpStateSupplierTests.swift" =>
-    "PumpStateSupplier was removed.",
-}.freeze
+# Every directory under Tests/ is discovered at run time and mapped to this
+# target, so adding a new test directory cannot bypass the check.
+TEST_TARGET = "TandemKitTests"
 
 def repo_root
   Pathname.new(__dir__).join("..").realpath
@@ -114,26 +55,33 @@ def within_root?(path, root)
   path == root || path.start_with?("#{root}/")
 end
 
-def excluded_abs_paths
-  @excluded_abs_paths ||= EXCLUDED_TEST_PATHS.keys.map { |rel| normalize_path(repo_root.join(rel)) }
-end
-
-def excluded?(abs_path)
-  excluded_abs_paths.any? { |excluded| within_root?(abs_path, excluded) }
-end
-
 def source_file_paths_under(root)
   Dir.glob(root.join("**/*.swift").to_s)
     .map { |p| normalize_path(p) }
-    .reject { |p| excluded?(p) }
     .sort
 end
 
-def excluded_file_paths_under(root)
-  Dir.glob(root.join("**/*.swift").to_s)
-    .map { |p| normalize_path(p) }
-    .select { |p| excluded?(p) }
+def relative_dirs_under(root, parent)
+  Dir.glob(root.join(parent, "*").to_s)
+    .select { |p| File.directory?(p) }
+    .map { |p| Pathname.new(p).relative_path_from(root).to_s }
+    .reject { |rel| Dir.glob(root.join(rel, "**/*.swift").to_s).empty? }
     .sort
+end
+
+# One pair per Tests/* directory, so a newly added test directory is checked
+# without anyone having to remember to register it here.
+def test_target_pairs(root)
+  relative_dirs_under(root, "Tests").map do |rel|
+    { target: TEST_TARGET, source_root: rel }
+  end
+end
+
+# Source directories holding Swift files that no pair covers. These would be
+# invisible to the membership check, so report them rather than skip them.
+def unmapped_source_dirs(root)
+  mapped = SOURCE_TARGET_PAIRS.map { |pair| pair[:source_root] }
+  relative_dirs_under(root, "Sources").reject { |rel| mapped.include?(rel) }
 end
 
 def file_ref_abs_path(file_ref)
@@ -464,20 +412,15 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
   project_set = project_file_refs_under_source_root(project, source_root.to_s)
   target_set = target_source_file_refs_under_source_root(target, source_root.to_s)
 
-  excluded_files = excluded_file_paths_under(source_root)
-  wrongly_included = excluded_files.select { |abs| target_set.include?(abs) }.sort
-
   missing_project_refs = (disk_set - project_set).to_a.sort
   missing_target_membership = (disk_set - target_set).to_a.sort
   stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
   orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
   misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
 
-  summary = "Target: #{target_name}  Source root: #{source_root_rel}  Swift files: #{disk_files.length}"
-  summary += "  (excluded: #{excluded_files.length}, see EXCLUDED_TEST_PATHS in #{File.basename(__FILE__)})" unless excluded_files.empty?
-  puts summary
+  puts "Target: #{target_name}  Source root: #{source_root_rel}  Swift files: #{disk_files.length}"
 
-  has_issues = !wrongly_included.empty? || !missing_project_refs.empty? || !missing_target_membership.empty? ||
+  has_issues = !missing_project_refs.empty? || !missing_target_membership.empty? ||
                !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty? ||
                !misplaced_refs.empty?
 
@@ -502,14 +445,6 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       changed = true
     end
 
-    wrongly_included.each do |abs|
-      target.source_build_phase.files.select { |bf| file_ref_abs_path(bf.file_ref) == abs }
-        .each do |build_file|
-          build_file.remove_from_project
-          changed = true
-        end
-    end
-
     # Re-detect misplaced refs after adding missing files (ensure_file_ref! may
     # have created new refs in the main group that now need relocating)
     misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
@@ -529,12 +464,11 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
       orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
       misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
-      wrongly_included = excluded_files.select { |abs| target_set.include?(abs) }.sort
       puts "  Applied fixes"
     end
   end
 
-  ok = wrongly_included.empty? && missing_project_refs.empty? && missing_target_membership.empty? &&
+  ok = missing_project_refs.empty? && missing_target_membership.empty? &&
        stale_broken_duplicates.empty? && orphan_broken_file_refs.empty? &&
        misplaced_refs.empty?
 
@@ -542,7 +476,6 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
     puts "  Status: OK"
   else
     puts "  Status: DRIFT DETECTED"
-    print_missing("Excluded files that are #{target_name} sources", wrongly_included)
     print_missing("Missing file references in project", missing_project_refs)
     print_missing("Missing target source membership in #{target_name}", missing_target_membership)
     print_stale_broken_duplicates(target_name, stale_broken_duplicates)
@@ -561,10 +494,11 @@ abort("Project not found: #{project_path}") unless project_path.exist?
 
 project = Xcodeproj::Project.open(project_path.to_s)
 
-pairs = if opts[:target] && opts[:source_root]
+explicit_pair = opts[:target] && opts[:source_root]
+pairs = if explicit_pair
           [{ target: opts[:target], source_root: opts[:source_root] }]
         else
-          ALL_TARGET_SOURCE_PAIRS
+          SOURCE_TARGET_PAIRS + test_target_pairs(root)
         end
 
 puts "Project: #{opts[:project]}"
@@ -578,9 +512,23 @@ pairs.each do |pair|
   any_failed = true unless result[:ok]
 end
 
+# A source directory nobody maps to a target would never be checked at all --
+# the same blind spot the removed exclusion list used to create, one level up.
+unless explicit_pair
+  unmapped = unmapped_source_dirs(root)
+  unless unmapped.empty?
+    puts
+    puts "Unmapped source directories containing Swift files: #{unmapped.length}"
+    unmapped.each { |rel| puts "  - #{rel}" }
+    puts "  Add each to SOURCE_TARGET_PAIRS in #{File.basename(__FILE__)} (or delete the directory)."
+    any_failed = true
+  end
+end
+
 if any_failed
   puts
   puts "Remediation:"
   puts "  ruby scripts/check_xcodeproj_source_membership.rb --fix"
+  puts "  (unmapped source directories must be registered by hand)"
   exit 1
 end

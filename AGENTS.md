@@ -532,8 +532,17 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 17. **Implement comprehensive error handling** – ⚠️ *Partially completed*
     - Basic communication errors surface today, but pump-fault decoding and retry logic are still missing.
 
-18. **Implement therapy command validation** ✅ *Done*
-    - `TandemPumpManager` enforces bolus limits, max temp basal rates, and IOB ceilings before sending commands.
+18. **Implement therapy command validation** – ⚠️ *Partially completed*
+    - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
+      (the limit the host app last synced). The pump enforces the same ceiling in firmware,
+      because `syncDeliveryLimits` pushes it down via `SetMaxBolusLimitRequest`.
+    - `enactBolus`/`enactTempBasal` also block while Control-IQ is active or a bolus is running.
+    - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
+      `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
+      IOB telemetry is a prerequisite for reinstating that check.
+    - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
+      only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
+      been removed rather than left as a dead enum case.)
 
 ### Testing and Validation
 19. **Add missing message tests**
@@ -546,6 +555,25 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
     - Authentication flow (V1 and V2)
     - Critical therapy commands with mock pump
     - Error handling and fault recovery
+
+### Test target membership
+Every `.swift` file under `Tests/` must be a member of the `TandemKitTests` target, and
+`scripts/check_xcodeproj_source_membership.rb` discovers `Tests/*` directories rather than
+taking a registered list, so a test cannot be silently left out of CI. There is no exclusion
+list — a test that stops compiling is fixed or deleted. `--fix` adds newly created files;
+CI runs `--check` in every workflow.
+
+`TandemPumpManager` takes its BLE layer through the `PumpBluetoothConnection` protocol
+(`init(state:bluetooth:)`), so command sequences can be driven from tests via
+`StubPumpBluetooth` without CoreBluetooth. Production still goes through `init(state:)`, which
+constructs the real `TandemBluetoothManager`.
+
+Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
+policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
+`HistoryToDoseMapper`/`HistoryTimestampReconciler`, `PumpStateSupplier`,
+`PumpChallengeRequestBuilder` and the V1 16-character pairing path) is not represented
+anywhere now. If any of those behaviours come back, they need tests written against the
+current architecture, not restored from git history.
 
 21. **Add hardware validation procedures**
     - Document manual testing steps for pairing

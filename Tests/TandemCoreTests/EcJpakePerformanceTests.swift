@@ -1,141 +1,90 @@
 import Foundation
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
     import BigInt
     import SwiftECC
 
+    /// Smoke tests for the elliptic-curve work behind JPAKE pairing.
+    ///
+    /// SwiftECC's first curve operation is slow (it warms up `Domain.instance`), which is why the
+    /// driver primes the builder off the main thread during pairing. Timings are logged here for
+    /// diagnosis but deliberately not asserted on: shared CI runners make wall-clock budgets a
+    /// source of false failures, not signal. The assertions cover shape and correctness only.
     final class EcJpakePerformanceTests: XCTestCase {
-        func testNonBlockingRandomPerformance() throws {
-            // Test that NonBlockingRandom doesn't block
+        private func logElapsed(_ label: String, since start: Date) {
+            print("[EcJpakePerformance] \(label): \(String(format: "%.3f", Date().timeIntervalSince(start)))s")
+        }
+
+        func testDefaultRandomProducesRequestedLength() {
             let start = Date()
 
             for _ in 0 ..< 100 {
-                let data = JpakeAuthBuilder.defaultRandom(32)
-                XCTAssertEqual(data.count, 32)
+                XCTAssertEqual(JpakeAuthBuilder.defaultRandom(32).count, 32)
             }
 
-            let elapsed = Date().timeIntervalSince(start)
-            XCTAssertLessThan(elapsed, 1.0, "NonBlockingRandom took too long: \(elapsed)s")
-
-            print("✅ NonBlockingRandom: 100 iterations in \(elapsed)s")
+            logElapsed("100x defaultRandom(32)", since: start)
         }
 
-        func testEcJpakeGetRound1Performance() throws {
-            // Test if getRound1() completes in reasonable time
-            print("🔍 Testing EcJpake.getRound1() performance...")
-            print("  ⏱️  Starting getRound1() synchronously on test thread...")
+        func testDefaultRandomIsNotConstant() {
+            let first = JpakeAuthBuilder.defaultRandom(32)
+            let second = JpakeAuthBuilder.defaultRandom(32)
 
+            XCTAssertNotEqual(first, second, "Pairing security depends on these bytes being unpredictable")
+        }
+
+        func testEcJpakeRound1HasExpectedSize() {
             let start = Date()
 
-            var jpake = EcJpake(
+            let jpake = EcJpake(
                 role: .client,
                 password: Data("123456".utf8),
                 random: JpakeAuthBuilder.defaultRandom
             )
+            let round1 = jpake.getRound1()
 
-            print("  📊 EcJpake initialized, calling getRound1()...")
-            let result = jpake.getRound1()
-
-            let elapsed = Date().timeIntervalSince(start)
-            print("  ✅ getRound1() completed in \(elapsed)s")
-            print("  📦 Result size: \(result.count) bytes")
-
-            XCTAssertEqual(result.count, 330, "getRound1 should return 330 bytes (2 key pairs)")
-            XCTAssertLessThan(elapsed, 2.0, "getRound1 should complete in under 2 seconds")
+            logElapsed("first getRound1()", since: start)
+            XCTAssertEqual(round1.count, 330, "getRound1 should return 330 bytes (2 key pairs)")
         }
 
-        func testJpakeAuthBuilderNextRequestPerformance() throws {
-            // Test the full nextRequest() path
-            print("🔍 Testing JpakeAuthBuilder.nextRequest() performance...")
+        func testSwiftECCDomainInitializationAndPointMultiplication() throws {
+            let domainStart = Date()
+            let domain = Domain.instance(curve: .EC256r1)
+            logElapsed("Domain.instance(.EC256r1)", since: domainStart)
 
-            let expectation = expectation(description: "nextRequest completes")
-            var completed = false
-            var request: Message?
-            var error: Error?
+            let multiplyStart = Date()
+            let point = try domain.multiplyPoint(domain.g, BInt(magnitude: [42]))
+            logElapsed("first multiplyPoint", since: multiplyStart)
 
-            DispatchQueue.global(qos: .userInitiated).async {
-                do {
-                    print("  ⏱️  Starting nextRequest()...")
-                    let start = Date()
+            XCTAssertTrue(domain.contains(point), "Scalar multiple of the generator must stay on the curve")
+        }
 
-                    let builder = JpakeAuthBuilder(pairingCode: "123456")
-                    request = builder.nextRequest()
+        func testJpakeAuthBuilderFirstRequestIsRound1a() throws {
+            JpakeAuthBuilder.clearInstance()
+            defer { JpakeAuthBuilder.clearInstance() }
 
-                    let elapsed = Date().timeIntervalSince(start)
-                    print("  ✅ nextRequest() completed in \(elapsed)s")
-                    print("  📦 Request type: \(type(of: request))")
+            let start = Date()
+            let builder = JpakeAuthBuilder.initializeWithPairingCode("123456")
+            let next = builder.nextRequest()
+            logElapsed("initialize + nextRequest", since: start)
 
-                    completed = true
-                    expectation.fulfill()
-                } catch let err {
-                    print("  ❌ nextRequest() threw error: \(err)")
-                    error = err
-                    expectation.fulfill()
-                }
-            }
-
-            // Wait with a timeout
-            wait(for: [expectation], timeout: 10.0)
-
-            XCTAssertTrue(completed, "nextRequest should complete")
-            XCTAssertNil(error, "nextRequest should not throw")
-            XCTAssertNotNil(request, "nextRequest should return a message")
+            let request = try XCTUnwrap(next?.0, "The builder should produce a first request")
             XCTAssertTrue(request is Jpake1aRequest, "First request should be Jpake1aRequest")
         }
 
-        func testSwiftECCDomainInitialization() throws {
-            // Test if Domain.instance() is the slow part
-            print("🔍 Testing SwiftECC Domain initialization...")
-
-            let start = Date()
-
-            // This might be the blocking call
-            let domain = Domain.instance(curve: .EC256r1)
-
-            let elapsed = Date().timeIntervalSince(start)
-            print("  ✅ Domain.instance() completed in \(elapsed)s")
-
-            XCTAssertLessThan(elapsed, 1.0, "Domain initialization took too long: \(elapsed)s")
-
-            // Test point operations
-            let start2 = Date()
-            _ = try domain.multiplyPoint(domain.g, BInt(magnitude: [42]))
-            let elapsed2 = Date().timeIntervalSince(start2)
-
-            print("  ✅ First multiplyPoint() in \(elapsed2)s")
-            XCTAssertLessThan(elapsed2, 1.0, "Point multiplication took too long: \(elapsed2)s")
-        }
-
-        func testMultipleGetRound1Calls() throws {
-            // Test if subsequent calls are faster (cache warming)
-            print("🔍 Testing multiple getRound1() calls...")
-
-            var times: [TimeInterval] = []
-
-            for i in 0 ..< 3 {
+        /// Repeated round-1 generation should keep working after the first (warm-up) call — this is
+        /// the path a retry during pairing takes.
+        func testRepeatedRound1CallsStaySized() {
+            for index in 0 ..< 3 {
                 let start = Date()
-
-                var jpake = EcJpake(
+                let jpake = EcJpake(
                     role: .client,
-                    password: Data("12345\(i)".utf8),
+                    password: Data("12345\(index)".utf8),
                     random: JpakeAuthBuilder.defaultRandom
                 )
-
-                _ = jpake.getRound1()
-                let elapsed = Date().timeIntervalSince(start)
-                times.append(elapsed)
-
-                print("  ⏱️  Call \(i + 1): \(elapsed)s")
-            }
-
-            // Check if times improve (indicating cache warmup)
-            if times.count >= 2 {
-                print("  📊 First call: \(times[0])s, Second call: \(times[1])s")
-                if times[1] < times[0] * 0.5 {
-                    print("  ✅ Subsequent calls are faster (cache warmup detected)")
-                }
+                XCTAssertEqual(jpake.getRound1().count, 330)
+                logElapsed("getRound1() call \(index + 1)", since: start)
             }
         }
     }
