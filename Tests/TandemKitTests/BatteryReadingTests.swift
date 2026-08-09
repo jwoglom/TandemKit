@@ -6,44 +6,65 @@ import XCTest
 /// These live outside TandemPumpManagerStateTests because that file is excluded from the
 /// TandemKitTests target (see scripts/check_xcodeproj_source_membership.rb), so anything
 /// added there would never run.
+///
+/// The encode/decode helpers are fileprivate, so these go through the public
+/// rawValue / init(rawValue:) round trip, which is the path LoopKit actually persists with.
 final class BatteryReadingTests: XCTestCase {
-    func testBatteryReadingRoundTripsChargingState() throws {
-        let timestamp = Date(timeIntervalSinceReferenceDate: 987_654)
+    private let timestamp = Date(timeIntervalSinceReferenceDate: 987_654)
 
+    private func makeState() -> TandemPumpManagerState {
+        // init(rawValue:) is non-failable and defaults every field, so an empty dictionary
+        // is the cheapest way to get a valid state to round-trip.
+        TandemPumpManagerState(rawValue: [:])
+    }
+
+    func testBatteryReadingRoundTripsChargingState() throws {
         for isCharging in [true, false] {
-            let reading = TandemPumpManagerState.BatteryReading(
+            var state = makeState()
+            state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
                 date: timestamp,
                 chargeRemaining: 0.42,
                 isCharging: isCharging
             )
-            let raw = TandemPumpManagerState.encodeBatteryReading(reading)
-            let decoded = try XCTUnwrap(TandemPumpManagerState.decodeBatteryReading(from: raw))
 
-            XCTAssertEqual(decoded, reading)
-            XCTAssertEqual(decoded.isCharging, isCharging)
+            let restored = TandemPumpManagerState(rawValue: state.rawValue)
+            let reading = try XCTUnwrap(restored.lastBatteryReading)
+
+            XCTAssertEqual(reading, state.lastBatteryReading)
+            XCTAssertEqual(reading.date, timestamp)
+            XCTAssertEqual(reading.chargeRemaining, 0.42)
+            XCTAssertEqual(reading.isCharging, isCharging)
         }
     }
 
     func testBatteryReadingDefaultsToNotCharging() {
         let reading = TandemPumpManagerState.BatteryReading(
-            date: Date(timeIntervalSinceReferenceDate: 987_654),
+            date: timestamp,
             chargeRemaining: 0.42
         )
 
         XCTAssertFalse(reading.isCharging)
     }
 
-    func testBatteryReadingSavedBeforeChargingWasTrackedDecodesAsNotCharging() throws {
-        let timestamp = Date(timeIntervalSinceReferenceDate: 987_654)
-        let legacyRaw: [String: Any] = [
-            "date": timestamp.timeIntervalSinceReferenceDate,
-            "chargeRemaining": 0.42
-        ]
+    func testStateSavedBeforeChargingWasTrackedDecodesAsNotCharging() throws {
+        var state = makeState()
+        state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
+            date: timestamp,
+            chargeRemaining: 0.42,
+            isCharging: true
+        )
 
-        let decoded = try XCTUnwrap(TandemPumpManagerState.decodeBatteryReading(from: legacyRaw))
+        // Drop the key to mimic state written by a build that predates charging tracking.
+        var raw = state.rawValue
+        var batteryRaw = try XCTUnwrap(raw["lastBatteryReading"] as? [String: Any])
+        XCTAssertNotNil(batteryRaw.removeValue(forKey: "isCharging"))
+        raw["lastBatteryReading"] = batteryRaw
 
-        XCTAssertEqual(decoded.date, timestamp)
-        XCTAssertEqual(decoded.chargeRemaining, 0.42)
-        XCTAssertFalse(decoded.isCharging)
+        let restored = TandemPumpManagerState(rawValue: raw)
+        let reading = try XCTUnwrap(restored.lastBatteryReading)
+
+        XCTAssertEqual(reading.date, timestamp)
+        XCTAssertEqual(reading.chargeRemaining, 0.42)
+        XCTAssertFalse(reading.isCharging)
     }
 }
