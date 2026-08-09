@@ -110,13 +110,11 @@ struct TandemKitCGMSettingsView: View {
                     .foregroundColor(statusColor)
             }
 
-            if let startedDate = viewModel.sensorStartedDate {
+            if let startedText = viewModel.sensorStartedText {
                 HStack {
                     Text("Sensor Started", comment: "Label for sensor started date")
                     Spacer()
-                    Text(startedDate, style: .relative)
-                        .foregroundColor(.secondary)
-                    Text("ago", comment: "Suffix for relative time")
+                    Text(startedText)
                         .foregroundColor(.secondary)
                 }
             }
@@ -219,11 +217,12 @@ struct TandemKitCGMSettingsView: View {
         } header: {
             Text("CGM Sensor", comment: "Header for CGM sensor section")
         } footer: {
-            Text(
-                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used.",
-                comment: "Description for CGM settings"
-            )
-            .font(.footnote)
+            Text(String(format: String(
+                localized:
+                "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when %@ is not being used.",
+                comment: "Description for CGM settings, parameter is app name"
+            ), viewModel.appName))
+                .font(.footnote)
         }
     }
 

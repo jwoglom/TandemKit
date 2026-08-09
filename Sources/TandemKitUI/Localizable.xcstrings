@@ -49,6 +49,17 @@
         }
       }
     },
+    "%@ ago" : {
+      "comment" : "Relative time suffix, parameter is a duration",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ago"
+          }
+        }
+      }
+    },
     "%@ closed-loop is disabled with your pump's Control-IQ algorithm on, but no CGM is connected, so you are in open-loop." : {
       "comment" : "subtitle for CIQ no CGM notice",
       "localizations" : {
@@ -231,17 +242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Active Notifications"
-          }
-        }
-      }
-    },
-    "ago" : {
-      "comment" : "Suffix for relative time",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ago"
           }
         }
       }
@@ -1848,13 +1848,13 @@
         }
       }
     },
-    "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used." : {
-      "comment" : "Description for CGM settings",
+    "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when %@ is not being used." : {
+      "comment" : "Description for CGM settings, parameter is app name",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when this app is not being used."
+            "value" : "Manage the CGM sensor connection on your pump. These CGM options are ONLY used with the pump's built-in Control-IQ algorithm when %@ is not being used."
           }
         }
       }
@@ -4070,17 +4070,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "You can now use your Tandem pump with %@. Make sure to keep your pump nearby and within Bluetooth range."
-          }
-        }
-      }
-    },
-    "You can now use your Tandem pump with this app. Make sure to keep your pump nearby and within Bluetooth range." : {
-      "comment" : "Tandem setup complete instructions",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You can now use your Tandem pump with this app. Make sure to keep your pump nearby and within Bluetooth range."
           }
         }
       }
