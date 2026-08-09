@@ -192,7 +192,10 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
 
         if wasSuspended {
-            pumpManager.resumeDelivery(completion: handleCompletion)
+            // Resuming clears the pump's "insulin isn't being delivered" alarms on the user's
+            // behalf and retries once before failing, so the error sheet is only shown when the
+            // resume genuinely could not be completed.
+            pumpManager.resumeDeliveryAcknowledgingResumeAlarms(completion: handleCompletion)
         } else {
             pumpManager.suspendDelivery(completion: handleCompletion)
         }

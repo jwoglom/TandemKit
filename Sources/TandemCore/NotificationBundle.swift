@@ -255,6 +255,22 @@ public class NotificationBundle {
         }
     }
 
+    /// The alarms the pump raises purely to tell the user that insulin is not being
+    /// delivered, in acknowledgement order. The pump encodes the one condition under two
+    /// ids, which is why they also form a merged row (see `MergedNotification.groups`).
+    public static let resumePumpAlarms: [AlarmStatusResponse.AlarmResponseType] = [
+        .RESUME_PUMP_ALARM,
+        .RESUME_PUMP_ALARM2
+    ]
+
+    /// Which of the `resumePumpAlarms` are currently active, in acknowledgement order.
+    ///
+    /// Reads the raw alarm state (via `isActive(type:id:)`), so a lone alarm is reported
+    /// just the same as the pair that renders as a single merged row.
+    public func activeResumePumpAlarms() -> [AlarmStatusResponse.AlarmResponseType] {
+        NotificationBundle.resumePumpAlarms.filter { isActive(type: .alarm, id: UInt32($0.rawValue)) }
+    }
+
     /// Returns the last updated time for a specific response type.
     public func lastUpdatedTime(for type: Message.Type) -> Date? {
         lock.lock()

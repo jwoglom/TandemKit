@@ -312,6 +312,46 @@ final class NotificationBundleTests: XCTestCase {
         XCTAssertNotNil(bundle.cgmAlertStatusResponse)
     }
 
+    // MARK: - Resume Pump Alarm Tests
+
+    /// Both resume-pump alarms are reported, in acknowledgement order, when both fire — even
+    /// though `get()` collapses them into a single merged row.
+    func testActiveResumePumpAlarmsWithBothActive() {
+        let bundle = NotificationBundle()
+        let response = AlarmStatusResponse(intMap: bitmask(
+            AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM.rawValue,
+            AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM2.rawValue
+        ))
+        bundle.add(response)
+
+        XCTAssertEqual(bundle.activeResumePumpAlarms(), [.RESUME_PUMP_ALARM, .RESUME_PUMP_ALARM2])
+        // Merged into one row for display, but both are still individually active.
+        XCTAssertEqual(bundle.getNotificationCount(), 1)
+    }
+
+    /// A lone resume-pump alarm is reported on its own.
+    func testActiveResumePumpAlarmsWithOneActive() {
+        let bundle = NotificationBundle()
+        let response = AlarmStatusResponse(
+            intMap: bitmask(AlarmStatusResponse.AlarmResponseType.RESUME_PUMP_ALARM2.rawValue)
+        )
+        bundle.add(response)
+
+        XCTAssertEqual(bundle.activeResumePumpAlarms(), [.RESUME_PUMP_ALARM2])
+    }
+
+    /// Unrelated alarms — and an empty bundle — report nothing to acknowledge.
+    func testActiveResumePumpAlarmsIgnoresOtherNotifications() {
+        let bundle = NotificationBundle()
+        XCTAssertTrue(bundle.activeResumePumpAlarms().isEmpty)
+
+        // bit 2 = OCCLUSION_ALARM, bit 0 (alert) = LOW_INSULIN_ALERT
+        bundle.add(AlarmStatusResponse(intMap: bitmask(2)))
+        bundle.add(AlertStatusResponse(intMap: bitmask(0)))
+
+        XCTAssertTrue(bundle.activeResumePumpAlarms().isEmpty)
+    }
+
     // MARK: - Last Updated Time Tests
 
     func testLastUpdatedTimeTracking() {
