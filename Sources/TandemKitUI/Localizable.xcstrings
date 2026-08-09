@@ -384,28 +384,6 @@
         }
       }
     },
-    "Auto-Acknowledge Basal Alerts" : {
-      "comment" : "Label for auto-acknowledge basal alerts toggle",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auto-Acknowledge Basal Alerts"
-          }
-        }
-      }
-    },
-    "Automatically dismiss min/max basal rate alerts during looping" : {
-      "comment" : "Description for auto-acknowledge basal alerts toggle",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatically dismiss min/max basal rate alerts during looping"
-          }
-        }
-      }
-    },
     "Basal" : {
 
     },

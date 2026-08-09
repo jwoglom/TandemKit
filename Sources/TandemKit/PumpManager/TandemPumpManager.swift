@@ -238,7 +238,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
+    /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
+    /// oref sets zero basal rates as a matter of course, and the pump would alert on each one.
+    /// This remains only so tests can exercise the disabled path — do not expose it to the UI.
+    internal func configureAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
         state.autoAcknowledgeBasalAlerts = enabled
         notifyDelegateStateUpdated()
 

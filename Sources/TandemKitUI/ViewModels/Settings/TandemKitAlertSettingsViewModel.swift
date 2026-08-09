@@ -1,7 +1,6 @@
 import SwiftUI
 
 class TandemKitAlertSettingsViewModel: ObservableObject {
-    @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var alertSnoozeEnabled: Bool = false
     @Published var alertSnoozeDurationMins: Int = 10
 
@@ -13,14 +12,8 @@ class TandemKitAlertSettingsViewModel: ObservableObject {
             return
         }
 
-        autoAcknowledgeBasalAlerts = pumpManager.state.autoAcknowledgeBasalAlerts
         alertSnoozeEnabled = pumpManager.state.alertSnoozeEnabled
         alertSnoozeDurationMins = Int(pumpManager.state.alertSnoozeDuration.minutes)
-    }
-
-    func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
-        pumpManager?.configureAutoAcknowledgeBasalAlerts(enabled)
-        autoAcknowledgeBasalAlerts = enabled
     }
 
     func setAlertSnooze(enabled: Bool, durationMins: Int) {

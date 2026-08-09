@@ -179,4 +179,26 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restored.lastHistoryReconciliation, timestamp)
         XCTAssertEqual(restored.pendingDoses, [pending])
     }
+
+    func testAutoAcknowledgeBasalAlertsDefaultsOn() {
+        let schedule = BasalRateSchedule(
+            items: [RepeatingScheduleValue(startTime: 0, value: 0.75)],
+            timeZone: TimeZone(secondsFromGMT: 0)!
+        )
+
+        XCTAssertTrue(TandemPumpManagerState(basalRateSchedule: schedule).autoAcknowledgeBasalAlerts)
+    }
+
+    func testAutoAcknowledgeBasalAlertsMigratesOnFromPersistedState() throws {
+        // State persisted before auto-acknowledge became mandatory may hold `false`, and state
+        // persisted before the flag existed omits the key entirely. Both must come back enabled.
+        let disabledRaw: [String: Any] = [
+            "version": 1,
+            "autoAcknowledgeBasalAlerts": false
+        ]
+        let legacyRaw: [String: Any] = ["version": 1]
+
+        XCTAssertTrue(try XCTUnwrap(TandemPumpManagerState(rawValue: disabledRaw)).autoAcknowledgeBasalAlerts)
+        XCTAssertTrue(try XCTUnwrap(TandemPumpManagerState(rawValue: legacyRaw)).autoAcknowledgeBasalAlerts)
+    }
 }

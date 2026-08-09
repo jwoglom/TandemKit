@@ -8,23 +8,6 @@ struct TandemKitAlertSettingsView: View {
         List {
             Section {
                 Toggle(isOn: Binding(
-                    get: { viewModel.autoAcknowledgeBasalAlerts },
-                    set: { viewModel.setAutoAcknowledgeBasalAlerts($0) }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(
-                            "Auto-Acknowledge Basal Alerts",
-                            comment: "Label for auto-acknowledge basal alerts toggle"
-                        )
-                        Text(
-                            "Automatically dismiss min/max basal rate alerts during looping",
-                            comment: "Description for auto-acknowledge basal alerts toggle"
-                        )
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-                }
-                Toggle(isOn: Binding(
                     get: { viewModel.alertSnoozeEnabled },
                     set: { enabled in
                         viewModel.setAlertSnooze(enabled: enabled, durationMins: viewModel.alertSnoozeDurationMins)

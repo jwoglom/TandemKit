@@ -65,7 +65,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
-    @Published var autoAcknowledgeBasalAlerts: Bool = false
     @Published var isConnected: Bool = false
     @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false
@@ -123,7 +122,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openAlertSettings = openAlertSettings
         self.openDebug = openDebug
         self.allowDebugFeatures = allowDebugFeatures
-        autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -354,11 +352,6 @@ class TandemKitSettingsViewModel: ObservableObject {
 
     func getLogs() -> [URL] {
         log.getDebugLogs()
-    }
-
-    func setAutoAcknowledgeBasalAlerts(_ enabled: Bool) {
-        pumpManager?.configureAutoAcknowledgeBasalAlerts(enabled)
-        autoAcknowledgeBasalAlerts = enabled
     }
 
     func playSound() {
