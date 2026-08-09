@@ -1,4 +1,4 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 /// Packet captures taken from pumpX2's CurrentBatteryV2ResponseTest, which records real
