@@ -7,9 +7,10 @@ import PackageDescription
 //
 //   1. LoopKit is not vendored. Six TandemCore files import LoopKit, and
 //      TandemKitUI/TandemKitPlugin import LoopKitUI; the repository ships
-//      neither sources nor binaries for either (see Cartfile). Fixing this
-//      means vendoring LoopKit back in, e.g. as binaryTargets pointing at
-//      Carthage-built xcframeworks.
+//      neither sources nor binaries for either -- the Xcode project links them
+//      from BUILT_PRODUCTS_DIR, i.e. from the host app's workspace. Fixing this
+//      means vendoring LoopKit back in, e.g. as binaryTargets, or building
+//      it from a workspace the way TandemKit.xcodeproj does.
 //   2. The module split below does not match the code. The Xcode project
 //      compiles Sources/TandemCore, Sources/TandemKit and Sources/TandemKitUI
 //      into a single TandemKit framework, and the sources rely on that -- for

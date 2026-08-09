@@ -429,7 +429,7 @@ Responses:
 
 ### Proposed Roadmap
 1. **Phase 0 – Environment & dependency alignment** – ❌ *Not yet started*
-   * Ensure Carthage frameworks (LoopKit, etc.) build locally; replace the `LoopKit` stub with the actual dependency surfaces or modular shims required for Linux testing (still pending; Linux builds rely on the stub).
+   * LoopKit/LoopKitUI come from the host app's workspace (Trio pulls `loopandlearn/LoopKit` in as a git submodule); TandemKit.xcodeproj links them from `BUILT_PRODUCTS_DIR`. Carthage is no longer used by TandemKit or by Trio.
    * Document and script any additional SwiftECC/BigInt/CryptoKit requirements so the JPake path builds in CI (no automation or documentation present).
 
 2. **Phase 1 – Transport consolidation** – ⚠️ *Partially completed*
@@ -575,5 +575,5 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 - Add coverage for failure surfaces (e.g. invalid pairing codes, mid-handshake disconnects) so the CLI and manager surface actionable errors instead of generic timeouts.
 
 ### LoopKit Compatibility Risks & Dependencies
-- Apple-platform builds now rely on the Carthage-sourced `LoopKit.xcframework` and `LoopKitUI.xcframework`; consumers must supply matching binaries or the SPM package will fail to resolve these binary targets. Document the required versions and distribution story alongside the package.
+- Apple-platform builds resolve `LoopKit`/`LoopKitUI` from the surrounding Xcode workspace, which must build them — Trio's workspace does, via its `loopandlearn/LoopKit` submodule. SwiftPM cannot build these targets at all; see the comment atop `Package.swift`.
 - `LoopKitUI` re-exports `LoopKitUIBinary`, and `TandemKitPlugin` expects the full `PumpManagerUI` APIs. Verify the shipped binaries expose the same protocol surface as our Linux stubs to avoid compile-time drift when swapping in official LoopKit frameworks.

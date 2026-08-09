@@ -4,34 +4,54 @@ TandemKit is a Swift library that provides communication utilities for Tandem in
 
 ## Building
 
-This project relies on Carthage for several dependencies (LoopKit, LoopKitUI, LoopTestingKit, MockKit, and MockKitUI). The binary frameworks are not committed to the repository. Before building the Xcode project you must fetch and build these frameworks.
+TandemKit is a framework, not a standalone app, and it cannot be built on its
+own: the `TandemKit` target links `LoopKit.framework` and `LoopKitUI.framework`
+from `BUILT_PRODUCTS_DIR`, so some other project in the same Xcode workspace has
+to produce them.
 
-1. Install [Carthage](https://github.com/Carthage/Carthage).
-2. Run the following command from the repository root:
+Normally that workspace is [Trio](https://github.com/nightscout/Trio)'s. Trio
+pulls its dependencies in as git submodules -- TandemKit is one of them, as is
+`loopandlearn/LoopKit` -- and `Trio.xcworkspace` contains both projects, so
+opening Trio's workspace and building is all that is needed.
 
-   ```bash
-   ./carthage.sh update --platform iOS,macOS --use-xcframeworks
-   ```
+To build or test TandemKit by itself, check LoopKit out beside this repository
+and put the two projects in a workspace together:
 
-   This script mirrors the one used by OmniBLE and ensures the correct build settings for modern Xcode versions.
-3. After Carthage finishes building, verify that `Carthage/Build/LoopKit.xcframework` and `Carthage/Build/LoopKitUI.xcframework` are present. The Swift Package manifest consumes these binaries on Apple platforms, while Linux continues to compile against the lightweight stubs.
-4. Open `TandemKit.xcodeproj` and build the targets.
+```
+some-directory/
+  LoopKit/          # git clone https://github.com/loopandlearn/LoopKit
+  TandemKit/        # this repository
+  Something.xcworkspace   # referencing LoopKit/LoopKit.xcodeproj and TandemKit/TandemKit.xcodeproj
+```
 
-The generated frameworks will appear under `Carthage/Build/` and are referenced by the project via a `carthage copy-frameworks` build phase.
+Use the same LoopKit revision Trio's submodule points at. Upstream
+`LoopKit/LoopKit` is not a drop-in substitute -- it has no `Pluggable`, which
+`TandemPumpManager` conforms to.
 
-### Optional Mbed TLS builds
+`.github/workflows/unit-tests.yml` does exactly this and is the reference for
+the setup: it checks out the pinned LoopKit, writes a two-project workspace, and
+runs the `TandemKitTests` scheme against an iOS simulator.
 
-When an Mbed TLS toolchain becomes available, the package exposes two SwiftPM targets—`MbedTLS` (a module map for the upstream headers) and `MbedTLSShim` (a thin C wrapper used by `JpakeAuthBuilder`). To enable the shim in your build:
+## Tests
 
-1. Provide the Mbed TLS headers and binaries via either a local install or a vendor drop under `Sources/MbedTLS`.
-2. Add `MbedTLSShim` as a dependency of the `TandemCore` target inside `Package.swift` so Swift can import the module when `#if canImport(MbedTLS)` evaluates to `true`.
-3. Pass the include/library search paths and linker flags when building, for example:
+The unit tests live in `Tests/` and are built by the `TandemKitTests` target in
+`TandemKit.xcodeproj`. Because the Xcode project compiles `Sources/TandemCore`,
+`Sources/TandemKit` and `Sources/TandemKitUI` into a single `TandemKit`
+framework, the tests `@testable import TandemKit` rather than the individual
+source directories.
 
-   ```bash
-   swift build \
-     -Xcc -I/path/to/mbedtls/include \
-     -Xlinker -L/path/to/mbedtls/lib \
-     -Xlinker -lmbedtls -Xlinker -lmbedcrypto
-   ```
+Test sources must be members of the `TandemKitTests` target to run at all. To
+check for drift, or to add newly created files:
 
-The Mbed TLS-specific code is fully gated by `#if canImport(MbedTLS)` so Apple and Linux builds continue to compile without the external dependency present.
+```bash
+ruby scripts/check_xcodeproj_source_membership.rb --check
+ruby scripts/check_xcodeproj_source_membership.rb --fix
+```
+
+Files deliberately left out of the target are listed, with a reason each, in
+`EXCLUDED_TEST_PATHS` inside that script.
+
+## Swift Package Manager
+
+`Package.swift` describes the source layout but cannot currently compile it; see
+the comment at the top of the manifest for why. Use the Xcode project.

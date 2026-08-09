@@ -1,7 +1,0 @@
-# LoopKit is supplied by the host app's workspace. Trio builds TandemKit
-# against its own fork, so that is what this pin tracks -- see the LoopKit
-# submodule in the Trio repository. Bump the revision in Cartfile.resolved
-# when Trio bumps its submodule; .github/workflows/unit-tests.yml reads it to
-# build the framework in CI.
-github "loopandlearn/LoopKit" "dev"
-github "leif-ibsen/SwiftECC" ~> 5.5.0
