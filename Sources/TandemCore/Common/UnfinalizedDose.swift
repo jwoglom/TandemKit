@@ -165,12 +165,19 @@ public class UnfinalizedDose {
             )
 
         case .basal:
+            // Scheduled basal is an interval, not an instant. LoopKit throws away zero-duration
+            // basal doses -- `reconciled()` only keeps a trailing basal entry when its endDate is
+            // after its startDate -- so a dose without an end leaves no record that the pump is
+            // delivering its profile at all.
+            let resolvedEndDate = Swift.max(startDate, endDate)
             return DoseEntry(
                 type: .basal,
                 startDate: startDate,
+                endDate: resolvedEndDate,
                 value: roundBasalRate(value),
                 unit: .unitsPerHour,
-                insulinType: insulinType
+                insulinType: insulinType,
+                isMutable: isMutable
             )
 
         case .tempBasal:

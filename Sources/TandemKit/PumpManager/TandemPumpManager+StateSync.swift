@@ -1,6 +1,54 @@
 import Foundation
 import LoopKit
 
+/// Decides how the tracked basal dose should change when the pump reports its basal status.
+///
+/// Split out of `applyBasalStatus(_:)` so the transition rules can be exercised without a pump.
+enum BasalStatusReconciler {
+    enum Action: Equatable {
+        /// The pump agrees with what is being tracked; re-report the running dose so the delivery
+        /// record keeps advancing.
+        case refresh
+        /// End the tracked dose and start recording scheduled basal at `rate` U/hr.
+        case startBasal(rate: Double)
+        /// End the tracked dose and record that delivery is suspended.
+        case startSuspend
+        /// The pump is running a temp rate that was not programmed through here. A basal status
+        /// response carries no duration, so the tracked dose is left alone.
+        case untrackedTempBasal
+    }
+
+    /// Basal rates go over the wire in milliunits per hour, so anything under half a milliunit is
+    /// the same rate.
+    static let rateEpsilon = 0.0005
+
+    static func action(
+        pumpBasalType: DoseType,
+        pumpProfileBasalRate: Double,
+        trackedType: DoseType,
+        trackedRate: Double
+    ) -> Action {
+        switch pumpBasalType {
+        case .suspend:
+            return trackedType == .suspend ? .refresh : .startSuspend
+
+        case .tempBasal:
+            return trackedType == .tempBasal ? .refresh : .untrackedTempBasal
+
+        default:
+            // A resume is followed by scheduled basal, which the pump reports as a rate; adopt it
+            // so the rate on display is the pump's rather than the zero a resume dose carries.
+            guard trackedType == .basal else {
+                return .startBasal(rate: pumpProfileBasalRate)
+            }
+
+            return abs(trackedRate - pumpProfileBasalRate) < rateEpsilon
+                ? .refresh
+                : .startBasal(rate: pumpProfileBasalRate)
+        }
+    }
+}
+
 extension TandemPumpManager {
     func fetchTimeSinceReset() {
         guard let response = bluetooth.write(
@@ -151,57 +199,69 @@ extension TandemPumpManager {
             message: CurrentBasalStatusRequest(),
             expecting: CurrentBasalStatusResponse.self
         ) as? CurrentBasalStatusResponse else {
-            logger.error("Failed to fetch basal Status: \(type(of: HomeScreenMirrorRequest.self))")
+            logger.error("Failed to fetch basal Status: \(type(of: CurrentBasalStatusRequest.self))")
             return
         }
 
-        let activeBasalType = response.basalType
-        if activeBasalType != state.basalDose.type {
-            if activeBasalType == .basal, state.basalDose.type == .resume {
-                // This is also the same
-                return
-            }
+        applyBasalStatus(response)
+    }
 
-            logger.debug("Updating new basal dose: \(activeBasalType)")
-            let now = Date.now
-            var events = getActivePumpEvents(endDate: now)
+    /// Reconciles the tracked basal dose with what the pump reports.
+    ///
+    /// Three things have to happen here, and only the first one used to:
+    ///  * a change of *type* -- a temp rate ended, delivery was suspended -- ends the running dose
+    ///    and starts the next one;
+    ///  * a change of *rate* -- the pump moving into the next segment of its basal profile -- is
+    ///    picked up from the rate the pump itself reports, so what we display and report is the
+    ///    pump's profile rate for right now rather than a snapshot taken whenever the dose was
+    ///    created; and
+    ///  * when nothing changed, the running dose is re-reported anyway. LoopKit only synthesizes
+    ///    scheduled basal delivery *between* the doses it was handed, so unless a dose keeps
+    ///    growing, the delivery record -- and Loop's insulin graph -- stops at the last temp
+    ///    basal. In closed loop a fresh temp basal every five minutes hides that; in open loop
+    ///    nothing follows it.
+    func applyBasalStatus(_ response: CurrentBasalStatusResponse) {
+        let now = Date.now
+        state.lastBasalStatusDate = now
 
-            if activeBasalType == .suspend {
-                let dose = UnfinalizedDose(suspendStartTime: now)
-                events.append(NewPumpEvent.suspend(
-                    dose: dose.toDoseEntry(),
-                    date: dose.startDate
-                ))
+        let action = BasalStatusReconciler.action(
+            pumpBasalType: response.basalType,
+            pumpProfileBasalRate: response.profileBasalRate,
+            trackedType: state.basalDose.type,
+            trackedRate: state.basalDose.value
+        )
 
-                state.basalDose = dose
-                state.lastReconciliation = Date.now
+        switch action {
+        case .refresh:
+            refreshActiveBasalDose(at: now)
 
-                emitPumpEvents(events)
-                notifyDelegateStateUpdated()
-                return
-            }
+        case let .startBasal(rate):
+            logger.debug("Basal status: profile basal \(rate)U/hr (tracking \(state.basalDose.type))")
+            let startDate = basalTransitionDate(at: now)
+            let dose = UnfinalizedDose(
+                basalRate: rate,
+                insulinType: state.insulinType,
+                startDate: startDate
+            )
+            transitionBasalDose(
+                to: dose,
+                endingPreviousAt: startDate,
+                newEvent: NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate)
+            )
 
-            if activeBasalType == .basal {
-                if !events.contains(where: { $0.type == .basal }) {
-                    let dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
-                        insulinType: state.insulinType,
-                        startDate: now
-                    )
-                    events.append(NewPumpEvent.basal(
-                        dose: dose.toDoseEntry(),
-                        date: dose.startDate
-                    ))
+        case .startSuspend:
+            logger.debug("Basal status: delivery suspended (tracking \(state.basalDose.type))")
+            let dose = UnfinalizedDose(suspendStartTime: now)
+            transitionBasalDose(
+                to: dose,
+                endingPreviousAt: now,
+                newEvent: NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate)
+            )
 
-                    state.basalDose = dose
-                }
-
-                state.lastReconciliation = Date.now
-
-                emitPumpEvents(events)
-                notifyDelegateStateUpdated()
-                return
-            }
+        case .untrackedTempBasal:
+            // The basal status response carries no duration, so there is nothing to build a dose
+            // out of. TempRateRequest would be needed to adopt a temp rate started on the pump.
+            logger.warning("Pump reports an untracked temp rate; leaving \(state.basalDose.type) in place")
         }
     }
 
@@ -472,40 +532,52 @@ extension TandemPumpManager {
         }
 
         let basalType = basalIcon.type
-        if basalType != state.basalDose.type {
-            let now = Date.now
-            var events = getActivePumpEvents(endDate: now)
-            var dose: UnfinalizedDose
+        guard basalType != state.basalDose.type else {
+            return
+        }
 
-            switch basalType {
-            case .suspend:
-                dose = UnfinalizedDose(suspendStartTime: now)
-                events.append(NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate))
+        let now = Date.now
 
-            case .basal:
-                // Home screen does not emit resume, thus we check if we need to emit resume or basal
-                // based on previous state
-                if state.basalDose.type == .suspend {
-                    dose = UnfinalizedDose(
-                        resumeStartTime: now,
-                        insulinType: state.insulinType
-                    )
-                } else {
-                    dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
-                        insulinType: state.insulinType,
-                        startDate: now
-                    )
-                }
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
+        switch basalType {
+        case .suspend:
+            let dose = UnfinalizedDose(suspendStartTime: now)
+            transitionBasalDose(
+                to: dose,
+                endingPreviousAt: now,
+                newEvent: NewPumpEvent.suspend(dose: dose.toDoseEntry(), date: dose.startDate)
+            )
 
-            default:
-                return
+        case .basal:
+            // Home screen does not emit resume, thus we check if we need to emit resume or basal
+            // based on previous state
+            if state.basalDose.type == .suspend {
+                let dose = UnfinalizedDose(
+                    resumeStartTime: now,
+                    insulinType: state.insulinType
+                )
+                transitionBasalDose(
+                    to: dose,
+                    endingPreviousAt: now,
+                    newEvent: NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)
+                )
+            } else {
+                // The rate here is the app's schedule; the next basal status read replaces it with
+                // the rate the pump reports for the segment it is actually in.
+                let startDate = basalTransitionDate(at: now)
+                let dose = UnfinalizedDose(
+                    basalRate: getScheduledBasalRate(),
+                    insulinType: state.insulinType,
+                    startDate: startDate
+                )
+                transitionBasalDose(
+                    to: dose,
+                    endingPreviousAt: startDate,
+                    newEvent: NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate)
+                )
             }
 
-            state.basalDose = dose
-            notifyDelegateStateUpdated()
-            emitPumpEvents(events)
+        default:
+            return
         }
     }
 

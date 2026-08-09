@@ -599,19 +599,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.info("Enact completed! (no basal rate change)")
 
                 let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
+                    basalRate: currentBasal.profileBasalRate > 0 ? currentBasal.profileBasalRate : baselineRate,
                     insulinType: self.state.insulinType,
                     startDate: Date.now
                 )
-                
-                var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
-                self.state.basalDose = dose
-                self.state.lastReconciliation = Date.now
-                
-                self.notifyDelegateStateUpdated()
-                self.emitPumpEvents(events)
+                self.transitionBasalDose(
+                    to: dose,
+                    endingPreviousAt: dose.startDate,
+                    newEvent: NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate)
+                )
 
                 completion(nil)
                 return
@@ -1211,15 +1208,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
-                    startDate: Date.now
+                    startDate: self.basalTransitionDate()
                 )
-                var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
-
-                self.state.basalDose = dose
-                self.state.lastReconciliation = Date.now
-                self.notifyDelegateStateUpdated()
-                self.emitPumpEvents(events)
+                self.transitionBasalDose(
+                    to: dose,
+                    endingPreviousAt: dose.startDate,
+                    newEvent: NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate)
+                )
             }
 
             guard let response = self.bluetooth.write(
@@ -1615,35 +1610,71 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 extension TandemPumpManager {
+    /// Pump events for the basal dose that is currently being tracked, so it can be reported
+    /// alongside whatever event prompted the call.
+    ///
+    /// - Parameter endDate: When the running dose stopped. Pass `nil` while it is still running,
+    ///   which reports it as a mutable dose ending now; LoopKit replaces pending events on every
+    ///   report, so the same dose can be re-reported as it grows. Callers that end the dose are
+    ///   responsible for appending the event that starts the next one.
     func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
-        guard state.basalDose.type == .tempBasal else {
+        let isMutable = endDate == nil
+        let basalEntry = state.basalDose.toDoseEntry(isMutable: isMutable, endDate: endDate ?? Date.now)
+
+        switch state.basalDose.type {
+        case .tempBasal:
+            return [NewPumpEvent.tempBasal(dose: basalEntry, date: basalEntry.startDate)]
+        case .basal:
+            // LoopKit discards zero-duration basal doses, and a dose that has not run for any
+            // time yet has nothing to report.
+            guard basalEntry.endDate > basalEntry.startDate else {
+                return []
+            }
+            return [NewPumpEvent.basal(dose: basalEntry, date: basalEntry.startDate)]
+        default:
+            // Suspend and resume are reported once, when they happen; LoopKit pairs them itself.
             return []
         }
+    }
 
-        let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)
-        var events = [
-            NewPumpEvent.tempBasal(
-                dose: basalEntry,
-                date: basalEntry.startDate
-            )
-        ]
+    /// The moment the tracked basal dose stops. A temp rate that already ran past its programmed
+    /// end stopped then, not when we noticed.
+    func basalTransitionDate(at date: Date = Date.now) -> Date {
+        guard state.basalDose.type == .tempBasal else {
+            return date
+        }
+        return min(state.basalDose.estimatedEndDate, date)
+    }
 
-        if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
-            let dose = UnfinalizedDose(
-                basalRate: getScheduledBasalRate(),
-                insulinType: state.insulinType,
-                startDate: basalEntry.endDate
-            )
-            events.append(NewPumpEvent.basal(
-                dose: dose.toDoseEntry(),
-                date: basalEntry.endDate
-            ))
+    /// Ends the tracked basal dose at `date`, starts tracking `dose`, and reports both to LoopKit
+    /// in one batch so the delivery record has no hole between them.
+    func transitionBasalDose(to dose: UnfinalizedDose, endingPreviousAt date: Date, newEvent: NewPumpEvent) {
+        var events = getActivePumpEvents(endDate: date)
+        events.append(newEvent)
 
-            state.basalDose = dose
-            notifyDelegateStateUpdated()
+        state.basalDose = dose
+        state.lastReconciliation = Date.now
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
+    /// Re-reports the running basal dose so LoopKit's delivery record keeps up with the clock.
+    ///
+    /// Skipped while a bolus is in flight: reporting replaces LoopKit's pending events, and the
+    /// bolus in progress is one of them. The next sync picks the basal dose back up.
+    func refreshActiveBasalDose(at date: Date = Date.now) {
+        guard bolusProgressReport == nil else {
+            return
         }
 
-        return events
+        let events = getActivePumpEvents()
+        guard !events.isEmpty else {
+            return
+        }
+
+        state.lastReconciliation = date
+        emitPumpEvents(events)
     }
 
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {

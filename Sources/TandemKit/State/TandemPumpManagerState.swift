@@ -447,6 +447,13 @@ public struct TandemPumpManagerState: RawRepresentable {
         case .suspend:
             return .suspended(basalDose.startDate)
         case .tempBasal:
+            // A temp rate that ran past its programmed end is no longer running on the pump, even
+            // if we have not re-read basal status yet. Keeping it in the status makes LoopKit show
+            // a temp basal that has finished, and makes Loop skip cancelling it on the way to open
+            // loop (it only cancels what the pump manager says is running).
+            guard basalDose.estimatedEndDate > Date.now else {
+                return .active(basalDose.estimatedEndDate)
+            }
             return .tempBasal(basalDose.toDoseEntry(isMutable: true))
         }
     }
