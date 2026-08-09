@@ -34,10 +34,7 @@ TandemKit is a Swift framework for communicating with Tandem t:slim X2 insulin p
 
 ### Supporting Modules
 
-- **Bluetooth**: Base BLE abstractions for cross-platform support (Linux/iOS)
-- **CoreBluetooth**: Apple CoreBluetooth wrapper
-- **LoopKit**: Integration with Loop closed-loop system
-- **TandemCLI**: Command-line interface for testing
+- **LoopKit**: Integration with Loop closed-loop system (supplied by the host app; not vendored here)
 
 ---
 

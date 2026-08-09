@@ -384,7 +384,7 @@ Responses:
 - V1 pairing (16-char code via `PumpChallengeRequestBuilder.createV1`): ✅ Fully implemented
 - V2 pairing (6-digit PIN via `PumpChallengeRequestBuilder.createV2`): ✅ Uses JPAKE builder to advance pairing flow
   - Pairing state persistence: ✅ TandemPumpManagerState persists derived secrets/server nonces
-* **Utility surface area** – ✅ **FULLY IMPLEMENTED**: `PumpStateSupplier` provides complete pairing code validation/sanitization (`sanitizeAndStorePairingCode`), authentication key derivation (`authenticationKey`), and configuration flags for insulin-affecting actions. Command-line target (`Sources/TandemCLI`) exposes decode/encode/list tooling.
+* **Utility surface area** – ✅ **FULLY IMPLEMENTED**: `PumpStateSupplier` provides complete pairing code validation/sanitization (`sanitizeAndStorePairingCode`), authentication key derivation (`authenticationKey`), and configuration flags for insulin-affecting actions.
 * **Existing validation** – ⚠️ **PARTIAL**: Unit tests cover message metadata, pairing-code validation, and JPake builder behavior. Many message types in AGENTS.md checklist are marked as lacking tests.
 
 ### Gaps Blocking a Functional Loop/Trio Pump Driver
@@ -429,7 +429,7 @@ Responses:
 
 ### Proposed Roadmap
 1. **Phase 0 – Environment & dependency alignment** – ❌ *Not yet started*
-   * Ensure Carthage frameworks (LoopKit, etc.) build locally; replace the `LoopKit` stub with the actual dependency surfaces or modular shims required for Linux testing (still pending; Linux builds rely on the stub).
+   * LoopKit/LoopKitUI come from the host app's workspace (Trio pulls `loopandlearn/LoopKit` in as a git submodule); TandemKit.xcodeproj links them from `BUILT_PRODUCTS_DIR`. Carthage is no longer used by TandemKit or by Trio.
    * Document and script any additional SwiftECC/BigInt/CryptoKit requirements so the JPake path builds in CI (no automation or documentation present).
 
 2. **Phase 1 – Transport consolidation** – ⚠️ *Partially completed*
@@ -458,7 +458,7 @@ Responses:
 
 7. **Phase 6 – Safety, tooling, and QA** – ❌ *Not yet started*
    * Provide user-facing controls or configuration surfaces for insulin-affecting toggles managed by `PumpStateSupplier`, including persistence and audit logging — no UI or persistence implemented.
-   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands; automate end-to-end smoke tests via `tandemkit-cli` where possible — coverage still absent.
+   * Expand unit and integration tests to cover BLE packetization, authentication failure handling, and critical therapy commands — coverage still absent.
    * Document manual validation steps for hardware testing (pairing, bolus, suspend/resume), and capture known limitations or required pump firmware versions before releasing to Loop/Trio users — documentation not written.
 
 This roadmap keeps the existing protocol/BLE groundwork intact while layering the missing pump-manager functionality required for a production Loop or Trio integration.
@@ -575,5 +575,5 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 - Add coverage for failure surfaces (e.g. invalid pairing codes, mid-handshake disconnects) so the CLI and manager surface actionable errors instead of generic timeouts.
 
 ### LoopKit Compatibility Risks & Dependencies
-- Apple-platform builds now rely on the Carthage-sourced `LoopKit.xcframework` and `LoopKitUI.xcframework`; consumers must supply matching binaries or the SPM package will fail to resolve these binary targets. Document the required versions and distribution story alongside the package.
+- Apple-platform builds resolve `LoopKit`/`LoopKitUI` from the surrounding Xcode workspace, which must build them — Trio's workspace does, via its `loopandlearn/LoopKit` submodule. SwiftPM cannot build these targets at all; see the comment atop `Package.swift`.
 - `LoopKitUI` re-exports `LoopKitUIBinary`, and `TandemKitPlugin` expects the full `PumpManagerUI` APIs. Verify the shipped binaries expose the same protocol surface as our Linux stubs to avoid compile-time drift when swapping in official LoopKit frameworks.

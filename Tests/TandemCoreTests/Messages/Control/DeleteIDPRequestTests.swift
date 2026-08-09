@@ -1,10 +1,14 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class DeleteIDPRequestTests: XCTestCase {
+    // Both captured packets carry 0x01 in the second cargo byte, while
+    // `DeleteIDPRequest.init(idpId:profileIndex:)` defaults `profileIndex` to 0.
+    // The captures are the ground truth here, so build the expectation with the
+    // observed value rather than the default.
     func testDeleteIDPRequest_idpId2() {
         MessageTester.initPumpState("", 0)
-        let expected = DeleteIDPRequest(idpId: 2)
+        let expected = DeleteIDPRequest(idpId: 2, profileIndex: 1)
 
         let parsed: DeleteIDPRequest = MessageTester.test(
             "014dae4d1a0201c0493e208cb42b3ffcb6f3f0a9",
@@ -20,7 +24,7 @@ final class DeleteIDPRequestTests: XCTestCase {
 
     func testDeleteIDPRequest_idpId1() {
         MessageTester.initPumpState("", 0)
-        let expected = DeleteIDPRequest(idpId: 1)
+        let expected = DeleteIDPRequest(idpId: 1, profileIndex: 1)
 
         let parsed: DeleteIDPRequest = MessageTester.test(
             "0153ae531a0101cf493e200e7a1458b74d619de6",

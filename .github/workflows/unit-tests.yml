@@ -1,0 +1,210 @@
+name: TandemKit unit tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+# The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
+# BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
+# other project in the same workspace has to produce them. build.yml/test.yml
+# get that from Trio's workspace, which needs the private Trio repo and a
+# secret.
+#
+# Instead, check out LoopKit (public, pinned by Cartfile.resolved) next to this
+# repo and generate a two-project workspace. That keeps this job free of Trio
+# and of secrets, so it runs on every push and pull request, forks included.
+#
+# LOOPKIT_REPOSITORY/LOOPKIT_REVISION below mirror Trio's LoopKit submodule,
+# which is the real source of truth -- Trio pulls its dependencies in as git
+# submodules (see .gitmodules in nightscout/Trio), and TandemKit is one of
+# them. Upstream LoopKit/LoopKit is not interchangeable with Trio's
+# loopandlearn fork: upstream has no `Pluggable`, which TandemPumpManager
+# conforms to. When Trio bumps its LoopKit submodule, bump the revision here
+# to match.
+jobs:
+  unit-tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      DERIVED_DATA_PATH: DerivedData
+      WORKSPACE: TandemKitTests.xcworkspace
+      LOOPKIT_REPOSITORY: loopandlearn/LoopKit
+      LOOPKIT_REVISION: 0229bb18d30b095420aae1e8fa04c37794e0a378
+      XCODEBUILD_COMMON_FLAGS: >-
+        -skipMacroValidation
+        -skipPackagePluginValidation
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Validate Xcode source membership (all targets)
+        run: |
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check
+        working-directory: TandemKit
+
+      - name: Checkout LoopKit at the pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LOOPKIT_REPOSITORY }}
+          ref: ${{ env.LOOPKIT_REVISION }}
+          path: LoopKit
+          fetch-depth: 1
+
+      - name: Generate the two-project workspace
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKSPACE}"
+          cat > "${WORKSPACE}/contents.xcworkspacedata" <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Workspace
+             version = "1.0">
+             <FileRef
+                location = "group:LoopKit/LoopKit.xcodeproj">
+             </FileRef>
+             <FileRef
+                location = "group:TandemKit/TandemKit.xcodeproj">
+             </FileRef>
+          </Workspace>
+          XML
+          xcodebuild -workspace "${WORKSPACE}" -list
+
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+
+          def runtime_sort_key(rt: str):
+            m = re.search(r"iOS-(\d+)-(\d+)", rt)
+            return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+          data = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"], text=True)
+          j = json.loads(data)
+
+          ios_runtimes = sorted([rt for rt in j.get("devices", {}).keys() if ".iOS-" in rt], key=runtime_sort_key, reverse=True)
+          if not ios_runtimes:
+            raise SystemExit("No iOS runtimes found on runner")
+
+          candidates = []
+          for rt in ios_runtimes:
+            for dev in j["devices"].get(rt, []):
+              if not dev.get("isAvailable"):
+                continue
+              name = dev.get("name", "")
+              if name.startswith("iPhone"):
+                candidates.append((name, dev.get("udid"), rt))
+            if candidates:
+              break
+
+          if not candidates:
+            raise SystemExit("No available iPhone simulators found on runner")
+
+          preferred = next((c for c in candidates if c[0] == "iPhone 16"), candidates[0])
+          name, udid, rt = preferred
+          print(f"Selected simulator: {name} ({udid}) [{rt}]")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
+          PY
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
+
+      - name: Boot selected simulator
+        run: |
+          set -euo pipefail
+          UDID="${SIMULATOR_DESTINATION##*id=}"
+          xcrun simctl bootstatus "${UDID}" -b || true
+
+      - name: Build TandemKitTests for execution
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -workspace "${WORKSPACE}" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Run TandemKitTests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -workspace "${WORKSPACE}" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            -resultBundlePath "TandemKitTests.xcresult" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-test.log"
+
+      # An .xctest bundle with no test cases in it passes. That is exactly how
+      # the TandemKitTests target sat broken for so long -- an empty Sources
+      # build phase, a green build, and nothing actually run. Insist the run
+      # reports a positive test count so "green" cannot mean "empty".
+      - name: Check that tests actually ran
+        run: |
+          set -euo pipefail
+          EXECUTED="$(
+            grep -oE 'Executed [0-9]+ test' xcodebuild-test.log \
+              | grep -oE '[0-9]+' \
+              | sort -rn \
+              | head -1 \
+              || true
+          )"
+          if [[ -z "${EXECUTED}" ]]; then
+            echo "Could not find an 'Executed N tests' line in the xcodebuild output."
+            echo "Either the tests did not run or xcodebuild changed its reporting format."
+            exit 1
+          fi
+          if [[ "${EXECUTED}" -eq 0 ]]; then
+            echo "The test bundle ran 0 tests."
+            exit 1
+          fi
+          echo "Executed ${EXECUTED} tests."
+          echo "TandemKitTests: ${EXECUTED} tests executed." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload test logs/results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tandemkit-unit-test-artifacts
+          path: |
+            xcodebuild-build-for-testing.log
+            xcodebuild-test.log
+            TandemKitTests.xcresult

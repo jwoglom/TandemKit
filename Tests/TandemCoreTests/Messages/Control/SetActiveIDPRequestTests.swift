@@ -1,10 +1,13 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class SetActiveIDPRequestTests: XCTestCase {
+    // The captured packets carry 1 in the profileIndex byte; the initializer
+    // defaults it to 0. Production callers (IDPManager) always pass it
+    // explicitly, so build the expectations from the captures.
     func testSetActiveIDPRequest_profileWithId1() {
         MessageTester.initPumpState("IGNORE_HMAC_SIGNATURE_EXCEPTION", 1)
-        let expected = SetActiveIDPRequest(idpId: 1)
+        let expected = SetActiveIDPRequest(idpId: 1, profileIndex: 1)
 
         let parsed: SetActiveIDPRequest = MessageTester.test(
             "0119ec191a010165493e2009a33736acb3713492",
@@ -20,7 +23,7 @@ final class SetActiveIDPRequestTests: XCTestCase {
 
     func testSetActiveIDPRequest_profileWithId0() {
         MessageTester.initPumpState("IGNORE_HMAC_SIGNATURE_EXCEPTION", 1)
-        let expected = SetActiveIDPRequest(idpId: 0)
+        let expected = SetActiveIDPRequest(idpId: 0, profileIndex: 1)
 
         let parsed: SetActiveIDPRequest = MessageTester.test(
             "0124ec241a00017c493e2027b0811608d99b2431",

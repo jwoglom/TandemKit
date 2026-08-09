@@ -1,4 +1,5 @@
-@testable import TandemCore
+import CoreBluetooth
+@testable import TandemKit
 import XCTest
 
 enum MessageTester {
@@ -10,7 +11,7 @@ enum MessageTester {
         _ rawHex: String,
         _: Int,
         _: Int,
-        _: CharacteristicUUID,
+        _: CBUUID,
         _ expected: T,
         _ extraHexPackets: String...
     ) -> T {

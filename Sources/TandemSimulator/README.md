@@ -91,7 +91,7 @@ let simulator = SimulatedPump(config: config)
 try await simulator.start()
 
 // Simulator is now running and processing messages
-// Use with TandemCLI or TandemKit for testing
+// Use with TandemKit for testing
 
 // Stop when done
 try await simulator.stop()
@@ -292,9 +292,7 @@ For testing and development, bypass mode:
 - [ ] Fuzzing and error injection
 - [ ] Performance optimization
 
-## Testing with TandemCLI
-
-You can test the simulator with TandemCLI:
+## Running the simulator
 
 ```bash
 # Terminal 1: Start simulator in test mode (mock transport)
@@ -366,6 +364,5 @@ Same as TandemKit parent project.
 ## See Also
 
 - [TandemKit](../../) - Main library for Tandem pump communication
-- [TandemCLI](../TandemCLI/) - Command-line client for pump interaction
 - [Architecture Analysis](../../ARCHITECTURE_ANALYSIS.md) - Detailed protocol documentation
 - [Simulator Implementation Guide](../../SIMULATOR_IMPLEMENTATION_GUIDE.md) - Implementation reference

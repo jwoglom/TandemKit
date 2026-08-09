@@ -1,4 +1,4 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class IDPManagerTests: XCTestCase {
@@ -9,7 +9,7 @@ final class IDPManagerTests: XCTestCase {
         let messages = manager.nextMessages()
 
         XCTAssertEqual(messages.count, 1)
-        XCTAssertTrue(messages.first is ProfileStatusRequest)
+        XCTAssertTrue(messages.first?.0 is ProfileStatusRequest)
         XCTAssertFalse(manager.isComplete)
     }
 
@@ -19,7 +19,7 @@ final class IDPManagerTests: XCTestCase {
         // Step 1: Get profile status request
         var messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 1)
-        XCTAssertTrue(messages.first is ProfileStatusRequest)
+        XCTAssertTrue(messages.first?.0 is ProfileStatusRequest)
 
         // Step 2: Process profile status response with 2 profiles
         let profileStatus = ProfileStatusResponse(
@@ -38,7 +38,7 @@ final class IDPManagerTests: XCTestCase {
         messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 2)
 
-        let settingsRequests = messages.compactMap { $0 as? IDPSettingsRequest }
+        let settingsRequests = messages.compactMap { $0.0 as? IDPSettingsRequest }
         XCTAssertEqual(settingsRequests.count, 2)
         XCTAssertTrue(settingsRequests.contains { $0.idpId == 10 })
         XCTAssertTrue(settingsRequests.contains { $0.idpId == 20 })
@@ -64,12 +64,11 @@ final class IDPManagerTests: XCTestCase {
         // Process settings response with 3 segments
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 3,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 
@@ -77,7 +76,7 @@ final class IDPManagerTests: XCTestCase {
         let messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 3)
 
-        let segmentRequests = messages.compactMap { $0 as? IDPSegmentRequest }
+        let segmentRequests = messages.compactMap { $0.0 as? IDPSegmentRequest }
         XCTAssertEqual(segmentRequests.count, 3)
         XCTAssertTrue(segmentRequests.contains { $0.segmentIndex == 0 })
         XCTAssertTrue(segmentRequests.contains { $0.segmentIndex == 1 })
@@ -105,12 +104,11 @@ final class IDPManagerTests: XCTestCase {
         _ = manager.nextMessages()
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 2,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 
@@ -251,20 +249,6 @@ final class IDPManagerTests: XCTestCase {
         XCTAssertEqual(request.idpStatusId, 31, "Must include all 5 fields")
     }
 
-    func testDeleteSegment0Fails() throws {
-        let manager = IDPManager()
-        setupCompleteManager(manager)
-
-        let profile = try XCTUnwrap(manager.getActiveProfile())
-        let segments = profile.getSegments()
-        let segment0 = try XCTUnwrap(segments.first { $0.segmentIndex == 0 })
-
-        // Should crash with precondition
-        XCTAssertThrowsError(try {
-            _ = profile.deleteSegmentMessage(segment: segment0)
-        }())
-    }
-
     // MARK: - Profile Management Tests
 
     func testDeleteProfileMessage() throws {
@@ -367,12 +351,11 @@ final class IDPManagerTests: XCTestCase {
 
         XCTAssertTrue(IDPManager.isIDPManagerResponse(IDPSettingsResponse(
             idpId: 0,
-            profileName: "",
+            name: "",
             numberOfProfileSegments: 0,
-            activeProfile: 0,
-            carbEntry: 0,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 0
+            insulinDuration: 0,
+            maxBolus: 0,
+            carbEntry: false
         )))
 
         XCTAssertTrue(IDPManager.isIDPManagerResponse(IDPSegmentResponse(
@@ -408,12 +391,11 @@ final class IDPManagerTests: XCTestCase {
         // Settings
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 2,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 

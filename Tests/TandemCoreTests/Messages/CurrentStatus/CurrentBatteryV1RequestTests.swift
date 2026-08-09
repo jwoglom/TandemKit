@@ -1,4 +1,4 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class CurrentBatteryV1RequestTests: XCTestCase {

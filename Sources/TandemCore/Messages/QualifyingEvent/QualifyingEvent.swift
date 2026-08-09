@@ -71,7 +71,7 @@ public enum QualifyingEvent: CaseIterable {
         fromBitmask(Bytes.readUint32(raw, 0))
     }
     
-    private static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
+    static func fromBitmask(_ bitmask: UInt32) -> Set<QualifyingEvent> {
        var ret: Set<QualifyingEvent> = []
        for event in QualifyingEvent.allCases {
            if (bitmask & event.id) != 0 {

@@ -1,3 +1,0 @@
-github "LoopKit/LoopKit" "loop-release/v2.x"
-github "leif-ibsen/SwiftECC" ~> 5.5.0
-

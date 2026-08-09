@@ -1,5 +1,5 @@
 import Foundation
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class TandemDispatchGroupTests: XCTestCase {
