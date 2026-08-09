@@ -1,0 +1,140 @@
+name: TandemKit unit tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+# Unlike build.yml / test.yml this job builds TandemKit on its own -- no Trio
+# checkout and no repository secrets -- so it runs on every push and pull
+# request, including from forks.
+jobs:
+  unit-tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      DERIVED_DATA_PATH: DerivedData
+      XCODEBUILD_COMMON_FLAGS: >-
+        -skipMacroValidation
+        -skipPackagePluginValidation
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Validate Xcode source membership (all targets)
+        run: |
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check
+
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+
+          def runtime_sort_key(rt: str):
+            m = re.search(r"iOS-(\d+)-(\d+)", rt)
+            return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+          data = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"], text=True)
+          j = json.loads(data)
+
+          ios_runtimes = sorted([rt for rt in j.get("devices", {}).keys() if ".iOS-" in rt], key=runtime_sort_key, reverse=True)
+          if not ios_runtimes:
+            raise SystemExit("No iOS runtimes found on runner")
+
+          candidates = []
+          for rt in ios_runtimes:
+            for dev in j["devices"].get(rt, []):
+              if not dev.get("isAvailable"):
+                continue
+              name = dev.get("name", "")
+              if name.startswith("iPhone"):
+                candidates.append((name, dev.get("udid"), rt))
+            if candidates:
+              break
+
+          if not candidates:
+            raise SystemExit("No available iPhone simulators found on runner")
+
+          preferred = next((c for c in candidates if c[0] == "iPhone 16"), candidates[0])
+          name, udid, rt = preferred
+          print(f"Selected simulator: {name} ({udid}) [{rt}]")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
+          PY
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
+
+      - name: Boot selected simulator
+        run: |
+          set -euo pipefail
+          UDID="${SIMULATOR_DESTINATION##*id=}"
+          xcrun simctl bootstatus "${UDID}" -b || true
+
+      - name: Build TandemKitTests for execution
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project "TandemKit.xcodeproj" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Run TandemKitTests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project "TandemKit.xcodeproj" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            -resultBundlePath "TandemKitTests.xcresult" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-test.log"
+
+      - name: Upload test logs/results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tandemkit-unit-test-artifacts
+          path: |
+            xcodebuild-build-for-testing.log
+            xcodebuild-test.log
+            TandemKitTests.xcresult

@@ -1,5 +1,5 @@
 import Foundation
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 #if canImport(SwiftECC) && canImport(BigInt) && canImport(CryptoKit)
@@ -16,11 +16,11 @@ import XCTest
         }
 
         func testNextRequestBootstrap() throws {
-            let builder = JpakeAuthBuilder(pairingCode: "123456", derivedSecret: nil, rand: AllZeroSecureRandom.nextBytes)
-            let req = builder.nextRequest()
-            XCTAssertTrue(req is Jpake1aRequest)
-            let chal = (req as! Jpake1aRequest).centralChallenge
-            XCTAssertEqual(chal.count, 165)
+            let builder = JpakeAuthBuilder.initializeWithPairingCode("123456")
+            let next = try XCTUnwrap(builder.nextRequest())
+            let request = try XCTUnwrap(next.0 as? Jpake1aRequest)
+            XCTAssertEqual(request.centralChallenge.count, 165)
+            XCTAssertTrue(next.1 is Jpake1aResponse.Type)
             XCTAssertEqual(builder.step, .ROUND_1A_SENT)
         }
     }

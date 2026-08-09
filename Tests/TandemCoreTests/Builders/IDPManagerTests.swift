@@ -1,4 +1,4 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 final class IDPManagerTests: XCTestCase {
@@ -64,12 +64,11 @@ final class IDPManagerTests: XCTestCase {
         // Process settings response with 3 segments
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 3,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 
@@ -105,12 +104,11 @@ final class IDPManagerTests: XCTestCase {
         _ = manager.nextMessages()
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 2,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 
@@ -367,12 +365,11 @@ final class IDPManagerTests: XCTestCase {
 
         XCTAssertTrue(IDPManager.isIDPManagerResponse(IDPSettingsResponse(
             idpId: 0,
-            profileName: "",
+            name: "",
             numberOfProfileSegments: 0,
-            activeProfile: 0,
-            carbEntry: 0,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 0
+            insulinDuration: 0,
+            maxBolus: 0,
+            carbEntry: false
         )))
 
         XCTAssertTrue(IDPManager.isIDPManagerResponse(IDPSegmentResponse(
@@ -408,12 +405,11 @@ final class IDPManagerTests: XCTestCase {
         // Settings
         let settings = IDPSettingsResponse(
             idpId: 10,
-            profileName: "Test",
+            name: "Test",
             numberOfProfileSegments: 2,
-            activeProfile: 1,
-            carbEntry: 1,
-            totalDailyInsulin: 0,
-            profileInsulinDuration: 180
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
         )
         manager.processMessage(settings)
 

@@ -1,4 +1,4 @@
-@testable import TandemCore
+@testable import TandemKit
 import XCTest
 
 /// Verifies that co-firing pump notifications are merged into a single UI row,
