@@ -11,15 +11,30 @@ on:
     branches: [ main, dev ]
   workflow_dispatch:
 
-# Unlike build.yml / test.yml this job builds TandemKit on its own -- no Trio
-# checkout and no repository secrets -- so it runs on every push and pull
-# request, including from forks.
+# The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
+# BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
+# other project in the same workspace has to produce them. build.yml/test.yml
+# get that from Trio's workspace, which needs the private Trio repo and a
+# secret.
+#
+# Instead, check out LoopKit (public, pinned by Cartfile.resolved) next to this
+# repo and generate a two-project workspace. That keeps this job free of Trio
+# and of secrets, so it runs on every push and pull request, forks included.
+#
+# Caveat worth knowing: this builds against upstream LoopKit/LoopKit at the
+# Cartfile.resolved revision, while Trio's workspace supplies its own fork
+# (loopandlearn/LoopKit) at a different commit. The two can drift. If that ever
+# starts causing failures here that Trio does not see, the options are to pin
+# this job to Trio's fork and submodule SHA instead, or to build inside Trio's
+# workspace the way test.yml does -- which costs the private repo and its
+# secret, and with them fork coverage.
 jobs:
   unit-tests:
     runs-on: macos-latest
     timeout-minutes: 30
     env:
       DERIVED_DATA_PATH: DerivedData
+      WORKSPACE: TandemKitTests.xcworkspace
       XCODEBUILD_COMMON_FLAGS: >-
         -skipMacroValidation
         -skipPackagePluginValidation
@@ -27,6 +42,7 @@ jobs:
       - name: Checkout TandemKit
         uses: actions/checkout@v4
         with:
+          path: TandemKit
           fetch-depth: 1
 
       - name: Set up Xcode
@@ -44,6 +60,44 @@ jobs:
         run: |
           ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
           ruby scripts/check_xcodeproj_source_membership.rb --check
+        working-directory: TandemKit
+
+      - name: Resolve the pinned LoopKit revision
+        run: |
+          set -euo pipefail
+          LOOPKIT_REVISION="$(awk '/LoopKit\/LoopKit/ { gsub(/"/, "", $3); print $3 }' TandemKit/Cartfile.resolved)"
+          if [[ -z "${LOOPKIT_REVISION}" ]]; then
+            echo "Could not read the LoopKit revision from TandemKit/Cartfile.resolved"
+            exit 1
+          fi
+          echo "Pinned LoopKit revision: ${LOOPKIT_REVISION}"
+          echo "LOOPKIT_REVISION=${LOOPKIT_REVISION}" >> "${GITHUB_ENV}"
+
+      - name: Checkout LoopKit at the pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: LoopKit/LoopKit
+          ref: ${{ env.LOOPKIT_REVISION }}
+          path: LoopKit
+          fetch-depth: 1
+
+      - name: Generate the two-project workspace
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORKSPACE}"
+          cat > "${WORKSPACE}/contents.xcworkspacedata" <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Workspace
+             version = "1.0">
+             <FileRef
+                location = "group:LoopKit/LoopKit.xcodeproj">
+             </FileRef>
+             <FileRef
+                location = "group:TandemKit/TandemKit.xcodeproj">
+             </FileRef>
+          </Workspace>
+          XML
+          xcodebuild -workspace "${WORKSPACE}" -list
 
       - name: Select an available iPhone simulator
         run: |
@@ -90,7 +144,7 @@ jobs:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/SourcePackages
             ~/.swiftpm
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
 
@@ -104,7 +158,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild build-for-testing \
-            -project "TandemKit.xcodeproj" \
+            -workspace "${WORKSPACE}" \
             -scheme "TandemKitTests" \
             -configuration Debug \
             -destination "${SIMULATOR_DESTINATION}" \
@@ -118,7 +172,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test-without-building \
-            -project "TandemKit.xcodeproj" \
+            -workspace "${WORKSPACE}" \
             -scheme "TandemKitTests" \
             -configuration Debug \
             -destination "${SIMULATOR_DESTINATION}" \
