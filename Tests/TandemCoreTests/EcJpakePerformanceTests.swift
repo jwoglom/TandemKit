@@ -34,7 +34,15 @@ import XCTest
             XCTAssertNotEqual(first, second, "Pairing security depends on these bytes being unpredictable")
         }
 
-        func testEcJpakeRound1HasExpectedSize() {
+        /// Round 1 is two (point, ZKP) pairs. Each ZKP ends in a length-prefixed scalar written by
+        /// `writeNum`, which uses `asMagnitudeBytes()` and therefore drops leading zero bytes — so
+        /// a scalar is 32 bytes only about 255/256 of the time and the total is 330 bytes only
+        /// about 99.2% of the time.
+        ///
+        /// This is not merely a test detail: `JpakeAuthBuilder.nextRequest()` slices `clientRound1`
+        /// at fixed offsets 0..<165 and 165..<330, which is wrong whenever a scalar comes up short.
+        /// See the pairing notes in AGENTS.md.
+        func testEcJpakeRound1SizeIsWithinEncodingRange() {
             let start = Date()
 
             let jpake = EcJpake(
@@ -45,7 +53,32 @@ import XCTest
             let round1 = jpake.getRound1()
 
             logElapsed("first getRound1()", since: start)
-            XCTAssertEqual(round1.count, 330, "getRound1 should return 330 bytes (2 key pairs)")
+            XCTAssertTrue(
+                (320 ... 330).contains(round1.count),
+                "getRound1 should be at most 330 bytes (2 key pairs), got \(round1.count)"
+            )
+        }
+
+        /// Client and server must agree on a secret regardless of how the scalars happened to
+        /// encode. This is the invariant that actually matters, and it holds for every length.
+        func testEcJpakeRoundTripDerivesMatchingSecret() {
+            let password = Data("123456".utf8)
+            let client = EcJpake(role: .client, password: password, random: JpakeAuthBuilder.defaultRandom)
+            let server = EcJpake(role: .server, password: password, random: JpakeAuthBuilder.defaultRandom)
+
+            let clientRound1 = client.getRound1()
+            let serverRound1 = server.getRound1()
+            client.readRound1(serverRound1)
+            server.readRound1(clientRound1)
+
+            let clientRound2 = client.getRound2()
+            let serverRound2 = server.getRound2()
+            client.readRound2(serverRound2)
+            server.readRound2(clientRound2)
+
+            let clientSecret = client.deriveSecret()
+            XCTAssertFalse(clientSecret.isEmpty)
+            XCTAssertEqual(clientSecret, server.deriveSecret())
         }
 
         func testSwiftECCDomainInitializationAndPointMultiplication() throws {
@@ -75,7 +108,7 @@ import XCTest
 
         /// Repeated round-1 generation should keep working after the first (warm-up) call — this is
         /// the path a retry during pairing takes.
-        func testRepeatedRound1CallsStaySized() {
+        func testRepeatedRound1CallsStayWithinEncodingRange() {
             for index in 0 ..< 3 {
                 let start = Date()
                 let jpake = EcJpake(
@@ -83,7 +116,8 @@ import XCTest
                     password: Data("12345\(index)".utf8),
                     random: JpakeAuthBuilder.defaultRandom
                 )
-                XCTAssertEqual(jpake.getRound1().count, 330)
+                let count = jpake.getRound1().count
+                XCTAssertTrue((320 ... 330).contains(count), "Round 1 was \(count) bytes")
                 logElapsed("getRound1() call \(index + 1)", since: start)
             }
         }

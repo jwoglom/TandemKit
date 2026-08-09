@@ -598,6 +598,19 @@ current architecture, not restored from git history.
 - Pairing completion now logs truncated derived-secret/server-nonce values alongside the stored `PumpState`, simplifying retrieval of credentials for follow-on commands.
 
 ### Outstanding Pairing Tasks
+- **JPAKE round 1 is not always 330 bytes, but `JpakeAuthBuilder` assumes it is.** `EcJpake.getRound1()`
+  emits two `(point, ZKP)` pairs, and each ZKP ends in a length-prefixed scalar written by `writeNum`,
+  which uses `BInt.asMagnitudeBytes()` and so drops leading zero bytes. A scalar is 32 bytes only about
+  255/256 of the time, so round 1 is exactly 330 bytes only about 99.2% of the time.
+  `JpakeAuthBuilder.nextRequest()` slices `clientRound1` at fixed offsets `0..<165` and `165..<330`:
+  - short first scalar -> the 1a frame carries 165 bytes that straddle the second point, and the pump
+    rejects it;
+  - short second scalar -> the `round1.count >= 330` guard fails and the builder goes to `.INVALID`.
+  Either way pairing fails non-deterministically, on roughly 1.5% of attempts, with no actionable error.
+  Fixing this needs the pumpX2 reference behaviour for variable-length scalars: `Jpake1aRequest` has a
+  fixed 165-byte message size, so slicing differently is not obviously the right answer.
+  `EcJpakePerformanceTests` asserts a size range rather than exactly 330 so it does not bake in the
+  broken assumption. Found by the CI run that first executed these tests.
 - Trim SwiftECC start-up latency: first-round generation still takes >10 s, so we need either a pre-warm hook or an alternative ECC backend to keep the UX within expected pairing windows.
 - Exercise the full multi-round exchange (including the legacy challenge) under real hardware to ensure `PumpComm.pair` handles back-to-back responses and that background pairing does not race the timeout scheduler.
 - Add coverage for failure surfaces (e.g. invalid pairing codes, mid-handshake disconnects) so the CLI and manager surface actionable errors instead of generic timeouts.
