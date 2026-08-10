@@ -43,7 +43,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
         )!
         state.useControlIQ = true
         state.controlIQEnabled = true
-        state.controlIQWeight = 70
+        state.controlIQWeightLbs = 154
+        state.controlIQWeightUnit = .kilograms
         state.controlIQTotalDailyInsulin = 42
         state.lastControlIQUpdate = timestamp
         state.autoAcknowledgeBasalAlerts = true
@@ -94,7 +95,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
 
         XCTAssertTrue(restored.useControlIQ)
         XCTAssertEqual(restored.controlIQEnabled, true)
-        XCTAssertEqual(restored.controlIQWeight, 70)
+        XCTAssertEqual(restored.controlIQWeightLbs, 154)
+        XCTAssertEqual(restored.controlIQWeightUnit, .kilograms)
         XCTAssertEqual(restored.controlIQTotalDailyInsulin, 42)
         XCTAssertEqual(restored.lastControlIQUpdate, timestamp)
         XCTAssertTrue(restored.autoAcknowledgeBasalAlerts)
@@ -178,6 +180,20 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(state.bolusState, .noBolus)
         XCTAssertNil(state.settings.maxBolus)
         XCTAssertFalse(state.useControlIQ)
+    }
+
+    /// Builds before the weight unit was tracked stored `controlIQWeight` in whichever unit the pump
+    /// displayed, so that value cannot be read back as the pounds the pump is sent. It is dropped
+    /// instead of guessed, and the next sync repopulates it.
+    func testLegacyControlIQWeightKeyIsNotRestored() {
+        var raw = TandemPumpManagerState(rawValue: [:]).rawValue
+        raw["controlIQWeight"] = 70
+        raw.removeValue(forKey: "controlIQWeightLbs")
+
+        let restored = TandemPumpManagerState(rawValue: raw)
+
+        XCTAssertNil(restored.controlIQWeightLbs)
+        XCTAssertNil(restored.controlIQWeightUnit)
     }
 
     /// `isConnected` is deliberately not restored: a stale `true` would make the driver believe it

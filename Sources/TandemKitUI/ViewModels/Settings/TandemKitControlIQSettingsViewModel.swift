@@ -26,7 +26,7 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         if let state = pumpManager?.state {
             controlIQEnabled = state.useControlIQ
 
-            if let w = state.controlIQWeight {
+            if let w = state.controlIQWeightLbs {
                 weight = w
                 originalWeight = w
             }
@@ -47,12 +47,24 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         pumpManager?.getControlIQData { ciqResponse, scheduleResponse in
             DispatchQueue.main.async {
                 if let ciqResponse {
-                    self.controlIQEnabled = ciqResponse.closedLoopEnabled
-                    self.weight = ciqResponse.weight
-                    self.originalEnabled = ciqResponse.closedLoopEnabled
-                    self.originalWeight = ciqResponse.weight
-                    self.totalDailyInsulin = ciqResponse.totalDailyInsulin
-                    self.originalTDI = ciqResponse.totalDailyInsulin
+                    // The pump reports the weight in whichever unit it displays; the request always
+                    // carries pounds, so normalize before it reaches the picker.
+                    let weightLbs = ControlIQSettingsLimits.pounds(
+                        from: ciqResponse.getWeight(),
+                        unit: ciqResponse.weightUnit
+                    )
+
+                    self.controlIQEnabled = ciqResponse.getClosedLoopEnabled()
+                    self.originalEnabled = ciqResponse.getClosedLoopEnabled()
+                    // A pump with Control-IQ never configured reports zeroes, which are shown as
+                    // they are: substituting a plausible-looking default here would let the user
+                    // enable Control-IQ with a body weight they never entered. Saving with them
+                    // fails, and now says which value is missing. Making them enterable is #223's
+                    // remaining half.
+                    self.weight = weightLbs
+                    self.originalWeight = weightLbs
+                    self.totalDailyInsulin = ciqResponse.getTotalDailyInsulin()
+                    self.originalTDI = ciqResponse.getTotalDailyInsulin()
                     self.isDirty = false
                 }
 
@@ -83,19 +95,21 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
             totalDailyInsulinUnits: totalDailyInsulin
         )
 
-        pumpManager?.configureControlIQMode(request) { success, _ in
+        pumpManager?.configureControlIQMode(request) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
-                if success {
+                switch result {
+                case .success:
+                    self.originalEnabled = self.controlIQEnabled
                     self.originalWeight = self.weight
                     self.originalTDI = self.totalDailyInsulin
                     self.isDirty = false
-                } else {
-                    self.saveError = String(
-                        localized:
-                        "Failed to update Control-IQ settings. Check pump connection.",
-                        comment: "Error when Control-IQ settings save fails"
-                    )
+                case let .failure(error):
+                    // Report what actually went wrong -- an unset weight or TDI, or the status the
+                    // pump rejected the change with -- instead of blaming the connection.
+                    self.saveError = [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
                 }
             }
         }

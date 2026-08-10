@@ -44,8 +44,17 @@ extension TandemPumpManager {
             state.controlIQUserMode = nil
         }
 
-        state.controlIQWeight = response.getWeight()
-        state.controlIQTotalDailyInsulin = response.getTotalDailyInsulin()
+        // A pump on which Control-IQ has never been configured reports zeroes here. Those are not
+        // values that can be sent back to it -- it rejects a ChangeControlIQSettingsRequest built
+        // from them -- so they are stored as "unset" rather than as a weight of nothing.
+        let reportedWeight = response.getWeight()
+        state.controlIQWeightUnit = response.weightUnit
+        state.controlIQWeightLbs = reportedWeight == 0
+            ? nil
+            : ControlIQSettingsLimits.pounds(from: reportedWeight, unit: response.weightUnit)
+
+        let reportedTotalDailyInsulin = response.getTotalDailyInsulin()
+        state.controlIQTotalDailyInsulin = reportedTotalDailyInsulin == 0 ? nil : reportedTotalDailyInsulin
         state.lastControlIQUpdate = Date.now
 
         notifyDelegateStateUpdated()

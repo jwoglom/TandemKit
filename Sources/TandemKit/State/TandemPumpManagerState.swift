@@ -81,7 +81,13 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var pendingEnableClosedLoop: Bool = false
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
-    public var controlIQWeight: Int?
+    /// Body weight Control-IQ is configured with, always in pounds -- the unit
+    /// `ChangeControlIQSettingsRequest` carries on the wire, regardless of the unit the pump
+    /// displays. nil when Control-IQ has never been configured on the pump.
+    public var controlIQWeightLbs: Int?
+    /// Unit the pump displays the weight in. Display only; `controlIQWeightLbs` is the value sent.
+    public var controlIQWeightUnit: ControlIQInfoAbstractResponse.WeightUnit?
+    /// nil when Control-IQ has never been configured on the pump.
     public var controlIQTotalDailyInsulin: Int?
     public var lastControlIQUpdate: Date?
 
@@ -114,7 +120,12 @@ public struct TandemPumpManagerState: RawRepresentable {
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
-        controlIQWeight = rawValue["controlIQWeight"] as? Int
+        // The legacy "controlIQWeight" key is deliberately not read: it stored whatever unit the
+        // pump reported in, so an old value cannot be safely interpreted as pounds. It is
+        // repopulated by the next `fetchControlIQStatus`, i.e. on the next sync.
+        controlIQWeightLbs = rawValue["controlIQWeightLbs"] as? Int
+        controlIQWeightUnit = (rawValue["controlIQWeightUnit"] as? Int)
+            .flatMap(ControlIQInfoAbstractResponse.WeightUnit.init(rawValue:))
         controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
         alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
@@ -292,7 +303,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["basalDose"] = basalDose.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
-        raw["controlIQWeight"] = controlIQWeight
+        raw["controlIQWeightLbs"] = controlIQWeightLbs
+        raw["controlIQWeightUnit"] = controlIQWeightUnit?.rawValue
         raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
         raw["alertSnoozeEnabled"] = alertSnoozeEnabled
@@ -368,7 +380,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",
-            "* controlIQWeight: \(String(describing: controlIQWeight))",
+            "* controlIQWeightLbs: \(String(describing: controlIQWeightLbs))",
+            "* controlIQWeightUnit: \(String(describing: controlIQWeightUnit))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
