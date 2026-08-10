@@ -1,5 +1,4 @@
 import LoopKit
-import TandemCore
 @testable import TandemKit
 import XCTest
 
