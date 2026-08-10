@@ -246,6 +246,58 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(ControlIQInfoV2Request.self))
     }
 
+    // MARK: - Sleep schedules
+
+    /// Sleep schedule writes are Mobi-only, from API 3.5. On anything else the request would go
+    /// unanswered, so it is not sent and the settings screen shows the schedules read-only.
+    func testSleepScheduleWriteIsNotAttemptedOnAPumpThatCannotAcceptIt() {
+        manager.state.pumpState.pumpModel = .TSLIM_X2
+        manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
+        bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 0))
+
+        var reportedSuccess: Bool?
+        let expectation = expectation(description: "setSleepSchedule")
+        manager.setSleepSchedule(slot: 0, schedule: sleepSchedule()) {
+            reportedSuccess = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(reportedSuccess, false)
+        XCTAssertFalse(bluetooth.didSend(SetSleepScheduleRequest.self))
+        XCTAssertFalse(manager.supports(SetSleepScheduleRequest.self))
+    }
+
+    func testSleepScheduleWriteIsSentOnASupportedPump() {
+        manager.state.pumpState.pumpModel = .MOBI
+        manager.state.pumpState.apiVersion = KnownApiVersion.mobiApiV3_5.value
+        bluetooth.stub(SetSleepScheduleRequest.self, with: SetSleepScheduleResponse(status: 0))
+
+        var reportedSuccess: Bool?
+        let expectation = expectation(description: "setSleepSchedule")
+        manager.setSleepSchedule(slot: 1, schedule: sleepSchedule()) {
+            reportedSuccess = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertEqual(reportedSuccess, true)
+        XCTAssertTrue(manager.supports(SetSleepScheduleRequest.self))
+        let sent = bluetooth.sent(SetSleepScheduleRequest.self)
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.first?.slot, 1)
+        XCTAssertEqual(sent.first?.schedule.startTime, 22 * 60 + 30)
+    }
+
+    private func sleepSchedule() -> ControlIQSleepScheduleResponse.SleepSchedule {
+        ControlIQSleepScheduleResponse.SleepSchedule(
+            enabled: 1,
+            activeDays: 0b111_1111,
+            startTime: 22 * 60 + 30,
+            endTime: 6 * 60
+        )
+    }
+
     func testControlIQDataUsesV2OnNewerPumps() {
         manager.state.pumpState.apiVersion = KnownApiVersion.mobiApiV3_5.value
 

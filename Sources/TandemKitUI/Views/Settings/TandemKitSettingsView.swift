@@ -5,6 +5,7 @@ private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
     case cgmRequiredForCIQ
+    case controlIQValuesRequired
     case diyRestored
     case noCGMConnected
     case stopTempRate
@@ -17,6 +18,7 @@ private enum SettingsAlertType: Identifiable {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
         case .cgmRequiredForCIQ: return "cgmRequiredForCIQ"
+        case .controlIQValuesRequired: return "controlIQValuesRequired"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
@@ -573,6 +575,25 @@ struct TandemKitSettingsView: View {
                     ),
                     secondaryButton: .cancel(Text("OK"))
                 )
+            case .controlIQValuesRequired:
+                return Alert(
+                    title: Text(
+                        "Control-IQ Setup Needed",
+                        comment: "Title for alert blocking the switch to Control-IQ when weight/TDI are unset"
+                    ),
+                    message: Text(
+                        "Control-IQ uses your weight and total daily insulin to dose, and your pump does not have them yet.\n\nEnter them in Control-IQ Settings, then try switching again.",
+                        comment: "Message for alert blocking the switch to Control-IQ when weight/TDI are unset"
+                    ),
+                    primaryButton: .default(
+                        Text(
+                            "Control-IQ Settings",
+                            comment: "Button to open Control-IQ settings from the missing-values alert"
+                        ),
+                        action: { viewModel.openControlIQSettings() }
+                    ),
+                    secondaryButton: .cancel(Text("OK"))
+                )
             case .diyRestored:
                 return Alert(
                     title: Text(String(format: String(
@@ -676,6 +697,12 @@ struct TandemKitSettingsView: View {
             if show {
                 activeAlert = .cgmRequiredForCIQ
                 viewModel.showCGMRequiredForCIQ = false
+            }
+        }
+        .onChange(of: viewModel.showControlIQValuesRequired) { show in
+            if show {
+                activeAlert = .controlIQValuesRequired
+                viewModel.showControlIQValuesRequired = false
             }
         }
         .navigationBarItems(trailing: doneButton)

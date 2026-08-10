@@ -1,21 +1,16 @@
-public enum KnownDeviceModel: Sendable {
-    case tslimX2
-    case mobi
-}
-
 public enum SupportedDevices: Sendable {
     case all
     case tslimX2Only
     case mobiOnly
 
-    public var value: [KnownDeviceModel] {
+    public var value: [PumpModel] {
         switch self {
         case .all:
-            return [.tslimX2, .mobi]
+            return [.TSLIM_X2, .MOBI]
         case .tslimX2Only:
-            return [.tslimX2]
+            return [.TSLIM_X2]
         case .mobiOnly:
-            return [.mobi]
+            return [.MOBI]
         }
     }
 }

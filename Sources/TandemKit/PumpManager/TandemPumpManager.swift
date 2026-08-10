@@ -1254,12 +1254,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Whether this pump's model and API version can be expected to handle `messageType`, so the UI
+    /// can hide a control instead of offering a write the pump will never answer.
+    func supports<T: Message>(_ messageType: T.Type) -> Bool {
+        messageType.props.isSupported(
+            pumpModel: state.pumpState.pumpModel,
+            apiVersion: state.pumpState.apiVersion
+        )
+    }
+
     func setSleepSchedule(
         slot: Int,
         schedule: ControlIQSleepScheduleResponse.SleepSchedule,
         completion: @escaping (Bool) -> Void
     ) {
         logger.info("Setting sleep schedule")
+
+        guard supports(SetSleepScheduleRequest.self) else {
+            logger.error("Pump does not support setting sleep schedules")
+            completion(false)
+            return
+        }
 
         bluetooth.ensureConnected { error in
             if let error {
