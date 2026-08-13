@@ -1,11 +1,9 @@
 @testable import TandemKit
 import XCTest
 
-/// Coverage for the charging flag on persisted battery readings.
-///
-/// These live outside TandemPumpManagerStateTests because that file is excluded from the
-/// TandemKitTests target (see scripts/check_xcodeproj_source_membership.rb), so anything
-/// added there would never run.
+/// Coverage for the charging flag on persisted battery readings, split out from
+/// TandemPumpManagerStateTests because these pin the charging field's own edge cases rather
+/// than the broader state round trip.
 ///
 /// The encode/decode helpers are fileprivate, so these go through the public
 /// rawValue / init(rawValue:) round trip, which is the path LoopKit actually persists with.
