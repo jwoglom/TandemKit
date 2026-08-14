@@ -13,13 +13,19 @@ on:
 
 # The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
 # BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
-# other project in the same workspace has to produce them. build.yml/test.yml
-# get that from Trio's workspace, which needs the private Trio repo and a
-# secret.
+# other project has to produce them first. build.yml/test.yml get that from
+# Trio's workspace, which needs the private Trio repo and a secret.
 #
-# Instead, check out LoopKit (public, pinned by Cartfile.resolved) next to this
-# repo and generate a two-project workspace. That keeps this job free of Trio
-# and of secrets, so it runs on every push and pull request, forks included.
+# Instead, check out LoopKit (public, pinned below) next to this repo and build
+# its two framework targets straight into the shared derived data. That keeps
+# this job free of Trio and of secrets, so it runs on every push and pull
+# request, forks included.
+#
+# Those frameworks only depend on the pinned LoopKit revision and the Xcode
+# version, so they are cached under exactly that key and rebuilt only when one
+# of the two moves. On a cache hit the LoopKit checkout is skipped entirely and
+# TandemKit is built with -project (no workspace), which keeps the LoopKit
+# targets out of the build graph so nothing can decide to recompile them.
 #
 # LOOPKIT_REPOSITORY/LOOPKIT_REVISION below mirror Trio's LoopKit submodule,
 # which is the real source of truth -- Trio pulls its dependencies in as git
@@ -34,19 +40,14 @@ jobs:
     timeout-minutes: 30
     env:
       DERIVED_DATA_PATH: DerivedData
-      WORKSPACE: TandemKitTests.xcworkspace
+      PRODUCTS_DIR: DerivedData/Build/Products/Debug-iphonesimulator
+      LOOPKIT_PRODUCTS_CACHE: LoopKitProducts
       LOOPKIT_REPOSITORY: loopandlearn/LoopKit
       LOOPKIT_REVISION: 0229bb18d30b095420aae1e8fa04c37794e0a378
       XCODEBUILD_COMMON_FLAGS: >-
         -skipMacroValidation
         -skipPackagePluginValidation
     steps:
-      - name: Checkout TandemKit
-        uses: actions/checkout@v4
-        with:
-          path: TandemKit
-          fetch-depth: 1
-
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
@@ -57,38 +58,6 @@ jobs:
           set -euo pipefail
           XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
           echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
-
-      - name: Validate Xcode source membership (all targets)
-        run: |
-          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
-          ruby scripts/check_xcodeproj_source_membership.rb --check
-        working-directory: TandemKit
-
-      - name: Checkout LoopKit at the pinned revision
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.LOOPKIT_REPOSITORY }}
-          ref: ${{ env.LOOPKIT_REVISION }}
-          path: LoopKit
-          fetch-depth: 1
-
-      - name: Generate the two-project workspace
-        run: |
-          set -euo pipefail
-          mkdir -p "${WORKSPACE}"
-          cat > "${WORKSPACE}/contents.xcworkspacedata" <<'XML'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Workspace
-             version = "1.0">
-             <FileRef
-                location = "group:LoopKit/LoopKit.xcodeproj">
-             </FileRef>
-             <FileRef
-                location = "group:TandemKit/TandemKit.xcodeproj">
-             </FileRef>
-          </Workspace>
-          XML
-          xcodebuild -workspace "${WORKSPACE}" -list
 
       - name: Select an available iPhone simulator
         run: |
@@ -127,7 +96,67 @@ jobs:
 
           with open(os.environ["GITHUB_ENV"], "a") as f:
             f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
+            f.write(f"SIMULATOR_UDID={udid}\n")
           PY
+
+      # First boot of a simulator device on a fresh runner takes ~5-6 minutes,
+      # almost all of it CoreSimulator running one-shot data-migration plugins.
+      # `simctl boot` only kicks the boot off -- simd carries it out, so this
+      # returns in a second or two and the device keeps booting while we check
+      # out and build. The wait happens in "Wait for the simulator to finish
+      # booting", immediately before the tests, by which point the boot is
+      # usually done or nearly so. Nothing before that step needs a live
+      # simulator: xcodebuild only needs the destination to *exist* to pick an
+      # SDK and architecture.
+      - name: Start booting the simulator in the background
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${SIMULATOR_UDID}" || true
+
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Validate Xcode source membership (all targets)
+        run: |
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check
+        working-directory: TandemKit
+
+      # Keyed on the pinned LoopKit revision and the Xcode version, and nothing
+      # else -- those are the only two inputs to these frameworks. The key is
+      # deliberately narrow so it stays a hit across branches and the ~hundreds
+      # of MB are re-uploaded only when the pin or the toolchain moves.
+      - name: Cache prebuilt LoopKit frameworks
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LOOPKIT_PRODUCTS_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loopkit-frameworks-${{ env.LOOPKIT_REVISION }}
+
+      # Don't trust the restore blindly: a partial or truncated cache entry
+      # should fall back to a real build rather than fail the job at link time.
+      - name: Check for usable prebuilt LoopKit frameworks
+        id: loopkit
+        run: |
+          set -euo pipefail
+          if [[ -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKit.framework" && -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKitUI.framework" ]]; then
+            echo "Using cached LoopKit frameworks."
+            echo "prebuilt=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No usable cached LoopKit frameworks; they will be built from source."
+            echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Checkout LoopKit at the pinned revision
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LOOPKIT_REPOSITORY }}
+          ref: ${{ env.LOOPKIT_REVISION }}
+          path: LoopKit
+          fetch-depth: 1
 
       - name: Cache SwiftPM artifacts
         uses: actions/cache@v4
@@ -139,17 +168,58 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
 
-      - name: Boot selected simulator
+      # LoopKit.xcodeproj publishes no shared scheme for these two, so build the
+      # targets directly. LoopKitUI depends on LoopKit, but build both explicitly
+      # so a missing dependency edge upstream can't leave us with half of what
+      # TandemKit links against.
+      - name: Build LoopKit frameworks
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        run: |
+          set -o pipefail
+          # LoopKitUI depends on the SwiftCharts package. Building by -target
+          # rather than -scheme does not always resolve the package graph on its
+          # own, so resolve it up front.
+          xcodebuild -resolvePackageDependencies \
+            -project "LoopKit/LoopKit.xcodeproj" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            2>&1 | tee -a "xcodebuild-loopkit.log"
+          for target in LoopKit LoopKitUI; do
+            xcodebuild build \
+              -project "LoopKit/LoopKit.xcodeproj" \
+              -target "${target}" \
+              -configuration Debug \
+              -destination "${SIMULATOR_DESTINATION}" \
+              -derivedDataPath "${DERIVED_DATA_PATH}" \
+              ${XCODEBUILD_COMMON_FLAGS} \
+              -quiet \
+              ONLY_ACTIVE_ARCH=YES \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              2>&1 | tee -a "xcodebuild-loopkit.log"
+          done
+          mkdir -p "${LOOPKIT_PRODUCTS_CACHE}"
+          rsync -a --delete "${PRODUCTS_DIR}/" "${LOOPKIT_PRODUCTS_CACHE}/"
+
+      # TandemKit.xcodeproj resolves LoopKit.framework/LoopKitUI.framework out of
+      # BUILT_PRODUCTS_DIR, so putting them there is all the wiring the build
+      # needs -- which is why the TandemKit build below can use -project and skip
+      # the LoopKit project entirely.
+      - name: Stage LoopKit frameworks into BUILT_PRODUCTS_DIR
         run: |
           set -euo pipefail
-          UDID="${SIMULATOR_DESTINATION##*id=}"
-          xcrun simctl bootstatus "${UDID}" -b || true
+          mkdir -p "${PRODUCTS_DIR}"
+          rsync -a "${LOOPKIT_PRODUCTS_CACHE}/" "${PRODUCTS_DIR}/"
+          for framework in LoopKit LoopKitUI; do
+            if [[ ! -d "${PRODUCTS_DIR}/${framework}.framework" ]]; then
+              echo "${framework}.framework is missing from ${PRODUCTS_DIR} after staging."
+              exit 1
+            fi
+          done
 
       - name: Build TandemKitTests for execution
         run: |
           set -o pipefail
           xcodebuild build-for-testing \
-            -workspace "${WORKSPACE}" \
+            -project "TandemKit/TandemKit.xcodeproj" \
             -scheme "TandemKitTests" \
             -configuration Debug \
             -destination "${SIMULATOR_DESTINATION}" \
@@ -159,17 +229,26 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-build-for-testing.log"
 
+      - name: Wait for the simulator to finish booting
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      # -disableAutomaticPackageResolution is safe here and not on the build
+      # above: build-for-testing has already resolved the graph into
+      # DerivedData/SourcePackages, so re-resolving is pure network latency.
       - name: Run TandemKitTests without rebuilding
         run: |
           set -o pipefail
           xcodebuild test-without-building \
-            -workspace "${WORKSPACE}" \
+            -project "TandemKit/TandemKit.xcodeproj" \
             -scheme "TandemKitTests" \
             -configuration Debug \
             -destination "${SIMULATOR_DESTINATION}" \
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             -resultBundlePath "TandemKitTests.xcresult" \
             ${XCODEBUILD_COMMON_FLAGS} \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-test.log"
 
@@ -205,6 +284,7 @@ jobs:
         with:
           name: tandemkit-unit-test-artifacts
           path: |
+            xcodebuild-loopkit.log
             xcodebuild-build-for-testing.log
             xcodebuild-test.log
             TandemKitTests.xcresult
