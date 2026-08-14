@@ -294,7 +294,7 @@ struct TandemKitChangeCartridgeView: View {
                     String(
                         localized:
                         "The pump did not respond, so it is unclear whether it started the cartridge change. "
-                            + "Check the pump screen and finish or cancel the change there before trying again here.",
+                            + "Cancel to take the pump back out of cartridge change mode, then start again.",
                         comment: "Error message shown when the pump did not answer the change cartridge request"
                     ),
                     systemImage: "exclamationmark.triangle.fill"
