@@ -157,7 +157,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         isProcessing = true
 
         // Read before entering change mode; the pump starts retracting as soon as it's entered.
-        pumpManager?.fetchInsulinRemaining { units in
+        pumpManager?.fetchReservoirStatus { units in
             DispatchQueue.main.async {
                 self.cartridgeUnitsRemaining = units
                 self.sendEnterChangeCartridgeMode()

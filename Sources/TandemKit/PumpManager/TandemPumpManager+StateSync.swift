@@ -365,8 +365,8 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    /// Reads the cartridge volume, connecting first if needed. Yields nil if the pump didn't answer.
-    func fetchInsulinRemaining(completion: @escaping (Double?) -> Void) {
+    /// Runs its own command job, so it is safe to call from anywhere.
+    func fetchReservoirStatus(completion: @escaping (Double?) -> Void) {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for reservoir status: \(error.localizedDescription)")
@@ -378,7 +378,7 @@ extension TandemPumpManager {
         }
     }
 
-    /// MUST be called on the command queue. Returns the units remaining, or nil on failure.
+    /// Returns the units remaining, or nil on failure.
     @discardableResult
     func fetchReservoirStatus() -> Double? {
         guard let response = bluetooth.write(
