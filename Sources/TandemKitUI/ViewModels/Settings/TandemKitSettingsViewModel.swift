@@ -228,13 +228,17 @@ class TandemKitSettingsViewModel: ObservableObject {
     func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
 
+        // Weight and TDI come from the pump, and are absent until Control-IQ has been configured
+        // there at least once. Sending a placeholder in their place only earns a rejection, so pass
+        // the absence through and let the driver refuse with an error that names what is missing.
         let request = ChangeControlIQSettingsRequest(
             enabled: true,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+            weightLbs: pumpManager?.state.controlIQWeightLbs ?? 0,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 0
         )
-        pumpManager?.configureControlIQMode(request) { success, cgmResponse in
-            if success {
+        pumpManager?.configureControlIQMode(request) { result in
+            switch result {
+            case let .success(cgmResponse):
                 let cgmActive = cgmResponse?.sessionState == .active
 
                 DispatchQueue.main.async {
@@ -245,7 +249,7 @@ class TandemKitSettingsViewModel: ObservableObject {
                         self.showNoCGMWarning = true
                     }
                 }
-            } else {
+            case .failure:
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                     self.commandFailure = .controlIQ
@@ -257,18 +261,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     func switchAlgorithmToDIY() {
         isUpdatingPumpState = true
 
+        // Turning Control-IQ off carries the same fields but does not depend on them, so an unset
+        // weight/TDI is no obstacle here.
         let request = ChangeControlIQSettingsRequest(
             enabled: false,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+            weightLbs: pumpManager?.state.controlIQWeightLbs ?? 0,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 0
         )
-        pumpManager?.configureControlIQMode(request) { success, _ in
+        pumpManager?.configureControlIQMode(request) { result in
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
-                if success {
+                switch result {
+                case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                } else {
+                case .failure:
                     self.commandFailure = .controlIQ
                 }
             }

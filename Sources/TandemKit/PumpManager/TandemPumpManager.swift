@@ -1121,7 +1121,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func getControlIQData(completion: @escaping (ControlIQInfoV2Response?, ControlIQSleepScheduleResponse?) -> Void) {
+    func getControlIQData(completion: @escaping (ControlIQInfoAbstractResponse?, ControlIQSleepScheduleResponse?) -> Void) {
         logger.info("Getting controlIQ info")
 
         bluetooth.ensureConnected { error in
@@ -1131,10 +1131,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Pumps at or below API 2.1 only answer the V1 request, so ask for the variant this pump
+            // speaks rather than always asking for V2 and reporting nothing when it goes unanswered.
+            let (request, expecting) = ControlIQInfoRequestBuilder.create(apiVersion: self.state.pumpState.apiVersion)
             let iqInfo = self.bluetooth.write(
-                message: ControlIQInfoV2Request(),
-                expecting: ControlIQInfoV2Response.self
-            ) as? ControlIQInfoV2Response
+                message: request,
+                expecting: expecting
+            ) as? ControlIQInfoAbstractResponse
 
             let scheduleInfo = self.bluetooth.write(
                 message: ControlIQSleepScheduleRequest(),
@@ -1168,16 +1171,33 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Applies a Control-IQ settings change, reporting the CGM status that follows it on success.
+    ///
+    /// Enabling Control-IQ requires a weight and total daily insulin the pump will accept; a pump on
+    /// which Control-IQ has never been configured reports zeroes for both, and rejects a request
+    /// carrying them. Those are checked here so the request never leaves the phone -- and, just as
+    /// importantly, so a doomed request does not first cancel a running temp basal below.
+    /// Disabling Control-IQ carries the same fields but does not depend on them, so it is not gated.
     func configureControlIQMode(
         _ request: ChangeControlIQSettingsRequest,
-        completion: @escaping (Bool, CGMStatusV2Response?) -> Void
+        completion: @escaping (Result<CGMStatusV2Response?, Error>) -> Void
     ) {
         logger.info("Configure controlIQ mode: \(request.enabled)")
+
+        if request.enabled, let failure = ControlIQSettingsLimits.validate(
+            weightLbs: request.weightLbs,
+            totalDailyInsulinUnits: request.totalDailyInsulinUnits
+        ) {
+            let error = ControlIQConfigurationError(failure)
+            logger.error("Refusing to enable ControlIQ: \(error.localizedDescription)")
+            completion(.failure(error))
+            return
+        }
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
-                completion(false, nil)
+                completion(.failure(error))
                 return
             }
 
@@ -1203,13 +1223,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 expecting: ChangeControlIQSettingsResponse.self
             ) as? ChangeControlIQSettingsResponse else {
                 self.logger.error("Failed to change controlIQ mode")
-                completion(false, nil)
+                completion(.failure(ControlIQConfigurationError.noResponse))
                 return
             }
 
             guard response.isStatusOK else {
                 self.logger.error("Failed to change controlIQ mode - Status: \(response.status)")
-                completion(false, nil)
+                completion(.failure(ControlIQConfigurationError.pumpRejected(status: response.status)))
                 return
             }
 
@@ -1220,7 +1240,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Pump accepted -- update local preference
             self.state.useControlIQ = request.enabled
-            self.state.controlIQWeight = request.weightLbs
+            self.state.controlIQWeightLbs = request.weightLbs
             self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
             self.notifyDelegateStateUpdated()
 
@@ -1229,7 +1249,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
             self.syncPumpData { _ in
-                completion(true, cgmResponse)
+                completion(.success(cgmResponse))
             }
         }
     }
