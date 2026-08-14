@@ -1532,13 +1532,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
 
-        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
-        guard events.contains(where: { actionableEvents.contains($0) }) else {
+        let context = qualifyingEventContext
+        for qualifyingEvent in events
+            where QualifyingEventFetch.fetches(for: [qualifyingEvent], context: context).isEmpty {
+            logger.info("Skipping event: \(qualifyingEvent)")
+        }
+
+        // Deduplicated across the batch, so an alert+alarm pair reloads the notification bundle
+        // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
+        // suggested handlers on QualifyingEvent.
+        let fetches = QualifyingEventFetch.fetches(for: events, context: context)
+        guard !fetches.isEmpty else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
             // acknowledge; ack immediately.
-            for qualifyingEvent in events {
-                logger.info("Skipping event: \(qualifyingEvent)")
-            }
             completion()
             return
         }
@@ -1554,22 +1560,44 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            for qualifyingEvent in events {
-                switch qualifyingEvent {
-                case .bolusChange:
-                    self.fetchBolusStatus(fromSync: false)
-                case .basalChange:
-                    self.fetchBasalStatus()
-                case .alert:
-                    self.fetchNotifications()
-                case .battery:
-                    self.fetchBatteryStatus()
-                default:
-                    self.logger.info("Skipping event: \(qualifyingEvent)")
-                }
+            for fetch in fetches {
+                self.runFetch(fetch)
             }
 
             completion()
+        }
+    }
+
+    /// The pump state the suggested handlers are selected against. PumpX2 reads the equivalent
+    /// out of its global `PumpStateSupplier`.
+    var qualifyingEventContext: QualifyingEventContext {
+        QualifyingEventContext(
+            apiVersion: state.pumpState.apiVersion,
+            controlIQSupported: state.controlIQEnabled ?? false,
+            inProgressBolusId: state.bolusDose?.bolusId
+        )
+    }
+
+    private func runFetch(_ fetch: QualifyingEventFetch) {
+        switch fetch {
+        case .notifications:
+            fetchNotifications()
+        case .controlIQStatus:
+            fetchControlIQStatus()
+        case .basalStatus:
+            fetchBasalStatus()
+        case .bolusStatus:
+            fetchBolusStatus(fromSync: false)
+        case .reservoirStatus:
+            fetchReservoirStatus()
+        case .batteryStatus:
+            fetchBatteryStatus()
+        case .deliveryLimits:
+            fetchDeliveryLimits()
+        case .globalPumpSettings:
+            fetchGlobalPumpSettings()
+        case .timeSinceReset:
+            fetchTimeSinceReset()
         }
     }
 }
