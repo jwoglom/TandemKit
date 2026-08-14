@@ -168,25 +168,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
 
-      # LoopKit.xcodeproj publishes no shared scheme for these two, so build the
-      # targets directly. LoopKitUI depends on LoopKit, but build both explicitly
-      # so a missing dependency edge upstream can't leave us with half of what
-      # TandemKit links against.
+      # LoopKit.xcodeproj shares schemes only for its example app and test
+      # bundles, and xcodebuild refuses -target together with -derivedDataPath,
+      # so generate a scheme per target and share it. Generated schemes land in
+      # xcuserdata, which xcodebuild resolves against $USER; move them to
+      # xcshareddata so the lookup does not depend on who the runner runs as.
+      - name: Generate LoopKit schemes
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        run: |
+          set -euo pipefail
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby -e '
+            require "xcodeproj"
+            Xcodeproj::Project.open("LoopKit/LoopKit.xcodeproj").recreate_user_schemes
+          '
+          mkdir -p "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes"
+          for scheme in LoopKit LoopKitUI; do
+            find "LoopKit/LoopKit.xcodeproj/xcuserdata" -name "${scheme}.xcscheme" -exec \
+              cp {} "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes/${scheme}.xcscheme" \;
+          done
+          xcodebuild -project "LoopKit/LoopKit.xcodeproj" -list
+
+      # LoopKitUI depends on LoopKit, but build both explicitly so a missing
+      # dependency edge upstream cannot leave us with half of what TandemKit
+      # links against.
       - name: Build LoopKit frameworks
         if: steps.loopkit.outputs.prebuilt != 'true'
         run: |
           set -o pipefail
-          # LoopKitUI depends on the SwiftCharts package. Building by -target
-          # rather than -scheme does not always resolve the package graph on its
-          # own, so resolve it up front.
-          xcodebuild -resolvePackageDependencies \
-            -project "LoopKit/LoopKit.xcodeproj" \
-            -derivedDataPath "${DERIVED_DATA_PATH}" \
-            2>&1 | tee -a "xcodebuild-loopkit.log"
-          for target in LoopKit LoopKitUI; do
+          for scheme in LoopKit LoopKitUI; do
             xcodebuild build \
               -project "LoopKit/LoopKit.xcodeproj" \
-              -target "${target}" \
+              -scheme "${scheme}" \
               -configuration Debug \
               -destination "${SIMULATOR_DESTINATION}" \
               -derivedDataPath "${DERIVED_DATA_PATH}" \
