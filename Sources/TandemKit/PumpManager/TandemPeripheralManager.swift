@@ -340,6 +340,29 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == EnterChangeCartridgeModeStateStreamResponse.props.characteristic,
+           data[2] == EnterChangeCartridgeModeStateStreamResponse.props.opCode
+        {
+            let response = EnterChangeCartridgeModeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.changeCartridgeStateStream.send(response)
+            return
+        }
+
+        // DetectingCartridgeStateStreamResponse and LoadCartridgeStateStreamResponse share opcode
+        // -29 and are told apart by total packet length, the same split ControlStreamMessages makes.
+        if characteristic.uuid == DetectingCartridgeStateStreamResponse.props.characteristic,
+           data[2] == DetectingCartridgeStateStreamResponse.props.opCode
+        {
+            if data.count >= 26 {
+                let response = DetectingCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+                pumpManager.detectingCartridgeStateStream.send(response)
+            } else {
+                let response = LoadCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+                logger.info("Received load cartridge state: \(response.description)")
+            }
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {
@@ -393,6 +416,11 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 }
 
 extension TandemPeripheralManager {
+    /// Runs off the command queue and writes to the peripheral directly, bypassing
+    /// TandemBluetoothManager.write and its queue precondition. That is safe only because this runs
+    /// during connection setup, while connectIfNeeded is parked in its wait on the command queue —
+    /// no other command can be in flight. Keep it that way: setup must stay confined to the window
+    /// before connectIfNeeded returns.
     func performInitialSetup() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }

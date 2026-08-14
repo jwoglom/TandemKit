@@ -44,6 +44,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var failedSuspend = false
     @Published var failedEnterMode = false
     @Published var failedExitMode = false
+    /// The pump never answered the enter request and could not be driven back out of change mode,
+    /// so which mode it is in is unknown and retrying blind is unsafe.
+    @Published var indeterminateEnterMode = false
 
     @Published var changeCartridgeState: EnterChangeCartridgeModeStateStreamResponse.ChangeCartridgeState?
     @Published var detectingProgress: Int = 0
@@ -52,6 +55,10 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     @Published var cartridgeUnitsRemaining: Double?
 
     private var readyToChangeWorkItem: DispatchWorkItem?
+    private var readyToChangeResolved = false
+    private var simulatedDetectingTimer: Timer?
+    private var detectingResolved = false
+    private var streamCancellables = Set<AnyCancellable>()
 
     let done: () -> Void
     let toFillTubing: () -> Void
@@ -83,6 +90,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     deinit {
         notificationCheckTask?.cancel()
         readyToChangeWorkItem?.cancel()
+        simulatedDetectingTimer?.invalidate()
     }
 
     func startPeriodicNotificationCheck() async {
@@ -154,6 +162,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
         loadingEnterMode = true
         failedEnterMode = false
+        indeterminateEnterMode = false
         isProcessing = true
 
         // Read before entering change mode; the pump starts retracting as soon as it's entered.
@@ -170,12 +179,21 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
         pumpManager?.enterChangeCartridgeMode { response in
             DispatchQueue.main.async {
+                guard let response = response else {
+                    // No answer at all: the pump may have entered change mode anyway. Re-sending a
+                    // signed insulin-affecting request blind is the thing to avoid, so drive the
+                    // pump back to a known state instead and only then offer a retry.
+                    self.recoverFromUnansweredEnterMode()
+                    return
+                }
+
                 self.loadingEnterMode = false
-                if let response = response, response.status == 0 {
+                if response.status == 0 {
                     self.failedEnterMode = false
                     self.currentStep = self.currentStep.nextStep() ?? .done
                     self.startMonitoringChangeState(requestSentAt: sentAt)
                 } else {
+                    // The pump answered and refused, so its state is known and a retry is safe.
                     self.failedEnterMode = true
                     self.isProcessing = false
                 }
@@ -183,24 +201,58 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         }
     }
 
-    /// Estimates the ready state instead of observing it, since the pump isn't currently emitting
-    /// the change-cartridge control stream. Switch to `EnterChangeCartridgeModeStateStreamResponse`
-    /// `.readyToChange` once it works.
+    private func recoverFromUnansweredEnterMode() {
+        pumpManager?.exitChangeCartridgeMode { response in
+            DispatchQueue.main.async {
+                self.loadingEnterMode = false
+                self.isProcessing = false
+
+                if let response = response, response.status == 0 {
+                    // Known to be out of change mode now, so the user can safely try again.
+                    self.failedEnterMode = true
+                } else {
+                    self.indeterminateEnterMode = true
+                }
+            }
+        }
+    }
+
+    /// Advances on whichever comes first: the pump's own `.readyToChange`, or the estimate in
+    /// `readyToChangeDelay`. The estimate exists because the change-cartridge stream is not
+    /// currently emitting; the pump's signal takes precedence whenever it does arrive.
     func startMonitoringChangeState(requestSentAt: Date) {
         let capacity = pumpManager?.pumpReservoirCapacity ?? Self.defaultCartridgeCapacity
         let delay = readyToChangeDelay(unitsRemaining: cartridgeUnitsRemaining, capacity: capacity)
         let remaining = max(0, delay - Date().timeIntervalSince(requestSentAt))
 
         changeCartridgeState = nil
+        readyToChangeResolved = false
         readyToChangeWorkItem?.cancel()
 
+        pumpManager?.changeCartridgeStateStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                guard response.state == .readyToChange else { return }
+                self?.resolveReadyToChange()
+            }
+            .store(in: &streamCancellables)
+
         let workItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.changeCartridgeState = .readyToChange
-            self.currentStep = self.currentStep.nextStep() ?? .done
+            self?.resolveReadyToChange()
         }
         readyToChangeWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + remaining, execute: workItem)
+    }
+
+    private func resolveReadyToChange() {
+        guard !readyToChangeResolved else { return }
+        readyToChangeResolved = true
+        streamCancellables.removeAll()
+        readyToChangeWorkItem?.cancel()
+        readyToChangeWorkItem = nil
+
+        changeCartridgeState = .readyToChange
+        currentStep = currentStep.nextStep() ?? .done
     }
 
     /// The pump retracts a drive mechanism that has advanced in proportion to the insulin already
@@ -220,11 +272,26 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
         isDetecting = true
         detectingProgress = 0
         failedExitMode = false
+        detectingResolved = false
+        simulatedDetectingTimer?.invalidate()
 
-        // Monitor detection progress
-        // In a real implementation, this would subscribe to DetectingCartridgeStateStreamResponse
-        // For now, simulate progress
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+        // Real progress takes over as soon as the pump reports any. The simulated ramp below only
+        // drives the bar while the detecting stream stays dark, which is its current state.
+        pumpManager?.detectingCartridgeStateStream
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] response in
+                guard let self = self else { return }
+                self.simulatedDetectingTimer?.invalidate()
+                self.simulatedDetectingTimer = nil
+                self.detectingProgress = min(max(response.percentComplete, 0), 100)
+
+                if response.isComplete {
+                    self.finishDetecting()
+                }
+            }
+            .store(in: &streamCancellables)
+
+        simulatedDetectingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
             guard let self = self else {
                 timer.invalidate()
                 return
@@ -234,14 +301,24 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
                 self.detectingProgress += 10
 
                 if self.detectingProgress >= 100 {
-                    timer.invalidate()
-                    self.isDetecting = false
-                    self.pumpManager?.recordCartridgeChange()
-                    // Exit change cartridge mode before completing
-                    self.exitChangeCartridgeMode()
+                    self.finishDetecting()
                 }
             }
         }
+    }
+
+    private func finishDetecting() {
+        guard !detectingResolved else { return }
+        detectingResolved = true
+        simulatedDetectingTimer?.invalidate()
+        simulatedDetectingTimer = nil
+        streamCancellables.removeAll()
+
+        detectingProgress = 100
+        isDetecting = false
+        pumpManager?.recordCartridgeChange()
+        // Exit change cartridge mode before completing
+        exitChangeCartridgeMode()
     }
 
     func retryExitCartridgeMode() {
@@ -273,6 +350,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     func cancelOperation() {
         readyToChangeWorkItem?.cancel()
         readyToChangeWorkItem = nil
+        simulatedDetectingTimer?.invalidate()
+        simulatedDetectingTimer = nil
+        streamCancellables.removeAll()
 
         // Attempt to exit change cartridge mode if we're in it
         if currentStep.rawValue >= CartridgeChangeStep.enterMode.rawValue,
