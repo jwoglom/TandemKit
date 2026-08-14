@@ -51,7 +51,7 @@ Responses:
 - [x] PumpingStateStreamResponse
 
 ### CurrentStatus
-_Remaining unchecked CurrentStatus tests: 95_
+_Remaining unchecked CurrentStatus tests: 94_
 Requests:
 - [x] AlarmStatusRequest
    - [x] Tests for AlarmStatusRequest
@@ -221,7 +221,7 @@ Responses:
 - [x] CurrentBatteryV1Response
    - [x] Tests for CurrentBatteryV1Response
 - [x] CurrentBatteryV2Response
-   - [ ] Tests for CurrentBatteryV2Response
+   - [x] Tests for CurrentBatteryV2Response
 - [x] CurrentBolusStatusResponse
    - [ ] Tests for CurrentBolusStatusResponse
 - [x] CurrentEGVGuiDataResponse

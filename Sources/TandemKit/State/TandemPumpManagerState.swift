@@ -8,10 +8,14 @@ public struct TandemPumpManagerState: RawRepresentable {
     public struct BatteryReading: Equatable {
         public let date: Date
         public let chargeRemaining: Double
+        /// Whether the pump was charging. Pumps on API versions without a charging field
+        /// always report false.
+        public let isCharging: Bool
 
-        public init(date: Date, chargeRemaining: Double) {
+        public init(date: Date, chargeRemaining: Double, isCharging: Bool = false) {
             self.date = date
             self.chargeRemaining = chargeRemaining
+            self.isCharging = isCharging
         }
     }
 
@@ -448,7 +452,8 @@ private extension TandemPumpManagerState {
     static func encodeBatteryReading(_ reading: BatteryReading) -> [String: Any] {
         [
             "date": reading.date.timeIntervalSinceReferenceDate,
-            "chargeRemaining": reading.chargeRemaining
+            "chargeRemaining": reading.chargeRemaining,
+            "isCharging": reading.isCharging
         ]
     }
 
@@ -461,7 +466,9 @@ private extension TandemPumpManagerState {
 
         return BatteryReading(
             date: Date(timeIntervalSinceReferenceDate: timestamp),
-            chargeRemaining: chargeRemaining
+            chargeRemaining: chargeRemaining,
+            // Absent in state saved before charging was tracked.
+            isCharging: raw["isCharging"] as? Bool ?? false
         )
     }
 
