@@ -111,7 +111,7 @@ struct TandemKitFillTubingView: View {
                         text: Text("Complete tubing fill", comment: "Button text"),
                         loading: $viewModel.loadingExitMode,
                         disabled: Binding(
-                            get: { viewModel.hasActiveNotifications },
+                            get: { !viewModel.canCompleteFill },
                             set: { _ in }
                         )
                     ) {
@@ -341,6 +341,21 @@ struct TandemKitFillTubingView: View {
                     .font(.body)
                 }
                 .padding()
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            }
+
+            // The pump may have stopped the fill and be waiting to be confirmed; until this read
+            // lands we cannot say whether there is anything for the user to acknowledge.
+            if viewModel.isCheckingNotifications {
+                HStack(spacing: 12) {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text("Checking pump status...", comment: "Status text shown while re-reading pump notifications")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.secondarySystemGroupedBackground))
                 .cornerRadius(12)
             }

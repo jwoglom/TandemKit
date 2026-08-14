@@ -257,6 +257,29 @@ extension TandemPumpManager {
         }
     }
 
+    /// Re-reads only the pump's notification surfaces (alerts, alarms, CGM alerts, malfunctions)
+    /// and reports whether the pump could be reached.
+    ///
+    /// This is the cheap counterpart to `syncPumpData` for screens that only care about what the
+    /// pump is currently asking the user to acknowledge. It matters most during a tubing fill: the
+    /// pump can stop mid-fill and wait for confirmation before it delivers more, and the screen has
+    /// no way to know that until the notification state is read again (#248). Pulling reservoir,
+    /// battery, bolus and basal along with it would make that read far too expensive to repeat as
+    /// often as the fill screen needs to.
+    func refreshNotifications(completion: @escaping (Bool) -> Void) {
+        let completion = watchdogged(timeoutResult: false, completion)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for notification refresh: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            self.fetchNotifications()
+            completion(true)
+        }
+    }
+
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
         for request in NotificationBundle.allRequests() {

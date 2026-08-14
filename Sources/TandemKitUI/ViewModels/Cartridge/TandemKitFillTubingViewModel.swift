@@ -44,10 +44,18 @@ class TandemKitFillTubingViewModel: ObservableObject {
     @Published var hasDisplayedFlow = false
     @Published var exitState: ExitFillTubingModeStateStreamResponse.ExitFillTubingModeState?
 
+    /// True while the notification read triggered by the pump button coming back up is running.
+    /// The fill cannot be completed until it lands, because it is what tells us whether the pump
+    /// stopped the fill and is waiting to be confirmed.
+    @Published var isCheckingNotifications = false
+
+    /// Last button state the pump reported, or nil before it has reported any. Used to spot the
+    /// moment the button is released rather than reacting to every repeat of the same state.
+    private var lastReportedButtonDown: Bool?
+
     let done: () -> Void
     let toFillingCannula: () -> Void
     private let pumpManager: TandemPumpManager?
-    private let processQueue = DispatchQueue(label: "TandemKit.tubing.processQueue")
 
     // Notifications
     @Published var notificationsViewModel: TandemKitNotificationsViewModel
@@ -57,6 +65,17 @@ class TandemKitFillTubingViewModel: ObservableObject {
     var hasActiveNotifications: Bool {
         !notificationsViewModel.notifications.isEmpty
     }
+
+    /// Whether the user may finish the fill. Blocked while the pump has something outstanding for
+    /// them to acknowledge, and while the post-release notification read is still in flight — until
+    /// it returns we cannot tell those two cases apart.
+    var canCompleteFill: Bool {
+        !hasActiveNotifications && !isCheckingNotifications
+    }
+
+    /// How often notifications are re-read while the tubing fill screen is up. Short, because the
+    /// pump can stop a fill on its own and wait for the user to confirm before delivering more.
+    static let notificationPollInterval: TimeInterval = 5
 
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void, toFillingCannula: @escaping () -> Void) {
         self.pumpManager = pumpManager
@@ -80,19 +99,18 @@ class TandemKitFillTubingViewModel: ObservableObject {
         // Cancel any existing task
         notificationCheckTask?.cancel()
 
-        // Create a new task that checks every 15 seconds
+        let interval = UInt64(Self.notificationPollInterval * 1_000_000_000)
         notificationCheckTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self = self else { return }
 
                 // Refresh notifications
                 await MainActor.run {
-                    self.notificationsViewModel.refreshNotifications()
+                    self.notificationsViewModel.refreshNotificationsIfIdle()
                 }
 
-                // Wait 15 seconds before next check
                 do {
-                    try await Task.sleep(nanoseconds: 15_000_000_000) // 15 seconds
+                    try await Task.sleep(nanoseconds: interval)
                 } catch {
                     // Task was cancelled
                     break
@@ -169,20 +187,47 @@ class TandemKitFillTubingViewModel: ObservableObject {
         pumpManager.fillTubingStateStream
             .receive(on: DispatchQueue.main)
             .sink { [weak self] response in
-                self?.buttonDown = response.buttonDown
-                if response.buttonDown {
-                    self?.hasDisplayedFlow = true
-                } else {
-                    self?.requestAlertStatus()
-                }
+                self?.handleButtonState(buttonDown: response.buttonDown)
             }
             .store(in: &cancellables)
     }
 
-    private func requestAlertStatus() {
-        processQueue.async { [weak self] in
-//            guard let transport = self?.pumpManager?.pairedTransport else { return }
-//            _ = try? transport.sendMessage(AlertStatusRequest()) as? AlertStatusResponse
+    /// Handles one button-state report from the pump's fill tubing stream.
+    ///
+    /// The pump stops the fill on its own once it has delivered the maximum it will give in one
+    /// go, and raises a notification asking the user to confirm before it delivers any more. That
+    /// happens exactly when the button comes back up, so the notification state is re-read right
+    /// then rather than waiting for the next poll — otherwise the screen offers to complete a fill
+    /// the pump has actually paused (#248).
+    func handleButtonState(buttonDown isDown: Bool) {
+        let previous = lastReportedButtonDown
+        lastReportedButtonDown = isDown
+        buttonDown = isDown
+
+        if isDown {
+            hasDisplayedFlow = true
+        }
+
+        guard Self.shouldCheckNotifications(previouslyDown: previous, nowDown: isDown) else { return }
+        checkNotificationsAfterRelease()
+    }
+
+    /// Whether a button-state report warrants an immediate notification read.
+    ///
+    /// True when the button just came up: either from a reported press, or on the pump's first
+    /// report if that already has the button up, since a press we never saw reported may still
+    /// have stopped the fill. Repeats of a state we already have are ignored, so a chatty stream
+    /// does not turn into a stream of pump reads.
+    static func shouldCheckNotifications(previouslyDown: Bool?, nowDown: Bool) -> Bool {
+        guard !nowDown else { return false }
+        // Nothing reported yet is treated as a release: a press we never saw is still a press.
+        return previouslyDown ?? true
+    }
+
+    private func checkNotificationsAfterRelease() {
+        isCheckingNotifications = true
+        notificationsViewModel.refreshNotifications { [weak self] in
+            self?.isCheckingNotifications = false
         }
     }
 
