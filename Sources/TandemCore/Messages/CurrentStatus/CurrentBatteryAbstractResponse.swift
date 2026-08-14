@@ -15,9 +15,15 @@ public protocol CurrentBatteryAbstractResponse: Message {
     var currentBatteryAbc: Int { get }
     /// Used battery capacity percentage displayed by the pump UI.
     var currentBatteryIbc: Int { get }
+    /// Whether the pump is currently charging.
+    var isCharging: Bool { get }
 }
 
 public extension CurrentBatteryAbstractResponse {
     /// Convenience accessor mapping to battery percent used by the pump UI.
     var batteryPercent: Int { currentBatteryIbc }
+
+    /// Charging state is only carried by newer API versions. Responses without the field
+    /// (such as `CurrentBatteryV1Response`) always report not charging.
+    var isCharging: Bool { false }
 }

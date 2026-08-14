@@ -88,7 +88,7 @@ public class CurrentBatteryV2Response: Message {
     }
 
     /// Returns true if the pump is currently charging.
-    public func isCharging() -> Bool {
+    public var isCharging: Bool {
         chargingStatus == 1
     }
 

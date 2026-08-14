@@ -51,7 +51,7 @@ Responses:
 - [x] PumpingStateStreamResponse
 
 ### CurrentStatus
-_Remaining unchecked CurrentStatus tests: 95_
+_Remaining unchecked CurrentStatus tests: 94_
 Requests:
 - [x] AlarmStatusRequest
    - [x] Tests for AlarmStatusRequest
@@ -221,7 +221,7 @@ Responses:
 - [x] CurrentBatteryV1Response
    - [x] Tests for CurrentBatteryV1Response
 - [x] CurrentBatteryV2Response
-   - [ ] Tests for CurrentBatteryV2Response
+   - [x] Tests for CurrentBatteryV2Response
 - [x] CurrentBolusStatusResponse
    - [ ] Tests for CurrentBolusStatusResponse
 - [x] CurrentEGVGuiDataResponse
@@ -361,6 +361,26 @@ Responses:
 ### QualifyingEvent
 Responses:
 - [x] QualifyingEvent
+   - [x] Tests for QualifyingEvent
+
+Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
+- [x] Ported from pumpX2's suggested-handler table, including the version-dependent
+  Control-IQ info / last-bolus / battery / IOB request selection. `QualifyingEventContext`
+  carries the api version, Control-IQ support, and in-progress bolus id that pumpX2 reads out
+  of its global `PumpStateSupplier`. `groupSuggestedHandlers` dedupes by request type *and*
+  cargo (`ActiveAamBitsRequest` differs only by cargo) and drops requests whose `minApi` is
+  newer than the pump's.
+- [x] `QualifyingEventFetch` (`Sources/TandemKit/PumpManager`) maps each *suggested-handler
+  request* onto the `TandemPumpManager` status fetch that both issues it and applies the
+  response, so the ported catalog stays the single source of truth instead of a second event
+  table that could drift. `handleQualifyingEvents` runs the deduped set on the command queue and
+  acknowledges afterwards. A request that maps to no fetch is not sent: nothing in the driver
+  consumes IOB, CGM/EGV, home screen mirror, profile status, Basal-IQ, temp rate, localization,
+  load status or bolus permission change reason today, so `iobChange`, `bg`, `cgmChange`,
+  `profileChange`, `activeProfileSegmentChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`,
+  `extendedBolusChange`, `pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
+  One deliberate addition to pumpX2's table: `pumpSuspend`/`pumpResume` also refresh the basal
+  status, since that is what emits the suspend/resume dose to LoopKit.
 
 ---
 
