@@ -38,36 +38,35 @@ struct TandemKitSettingsView: View {
     @State fileprivate var activeAlert: SettingsAlertType?
     @StateObject var viewModel: TandemKitSettingsViewModel
 
-    var removePumpManagerActionSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")
-                .font(.headline),
+    var removePumpManagerActionSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion confirmation dialog."),
             message: Text(String(format: String(
                 localized:
                 "Are you sure you want to remove the pump from %@? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
-                comment: "Message for Tandem PumpManager deletion action sheet"
+                comment: "Message for Tandem PumpManager deletion confirmation dialog"
             ), viewModel.appName)),
-            buttons: [
+            actions: [
                 .destructive(Text(
                     "Delete Pump",
                     comment: "Button text to confirm Tandem PumpManager deletion"
                 )) {
                     viewModel.removePump()
                 },
-                .cancel()
+                .cancel(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
 
-    var syncPumpTime: ActionSheet {
-        ActionSheet(
-            title: Text("Time Change Detected", comment: "Title for pod sync time action sheet."),
+    var syncPumpTime: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Time Change Detected", comment: "Title for pod sync time confirmation dialog."),
             message: Text(
                 "The time on your pump is different from the current time. Do you want to update the time on your pump to the current time?",
-                comment: "Message for pod sync time action sheet"
+                comment: "Message for pod sync time confirmation dialog"
             ),
-            buttons: [
-                .default(Text("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync")) {
+            actions: [
+                .standard(Text("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync")) {
                     self.viewModel.syncPumpTime()
                 },
                 .cancel(Text("No, Keep Pump As Is", comment: "Button text to cancel pump time sync"))
@@ -472,7 +471,7 @@ struct TandemKitSettingsView: View {
                         .foregroundColor(.accentColor)
                 }
                 .disabled(viewModel.isUpdatingTime)
-                .actionSheet(isPresented: $viewModel.showingTimeSyncConfirmation) {
+                .confirmationDialog(isPresented: $viewModel.showingTimeSyncConfirmation) {
                     syncPumpTime
                 }
             }
@@ -495,7 +494,7 @@ struct TandemKitSettingsView: View {
                     Text("Delete Pump", comment: "Label for PumpManager deletion button")
                         .foregroundColor(guidanceColors.critical)
                 }
-                .actionSheet(isPresented: $viewModel.showingDeleteConfirmation) {
+                .confirmationDialog(isPresented: $viewModel.showingDeleteConfirmation) {
                     removePumpManagerActionSheet
                 }
             }
