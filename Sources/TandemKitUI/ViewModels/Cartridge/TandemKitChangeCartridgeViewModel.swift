@@ -87,7 +87,7 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
                 // Refresh notifications
                 await MainActor.run {
-                    self.notificationsViewModel.refreshNotifications()
+                    self.notificationsViewModel.refreshNotificationsIfIdle()
                 }
 
                 // Wait 15 seconds before next check
