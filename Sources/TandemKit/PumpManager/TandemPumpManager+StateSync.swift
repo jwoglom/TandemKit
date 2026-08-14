@@ -365,13 +365,28 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchReservoirStatus() {
+    /// Runs its own command job, so it is safe to call from anywhere.
+    func fetchReservoirStatus(completion: @escaping (Double?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for reservoir status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            completion(self.fetchReservoirStatus())
+        }
+    }
+
+    /// Returns the units remaining, or nil on failure.
+    @discardableResult
+    func fetchReservoirStatus() -> Double? {
         guard let response = bluetooth.write(
             message: InsulinStatusRequest(),
             expecting: InsulinStatusResponse.self
         ) as? InsulinStatusResponse else {
             logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
-            return
+            return nil
         }
 
         let timestamp = Date.now
@@ -397,6 +412,8 @@ extension TandemPumpManager {
                 completion: { _ in }
             )
         }
+
+        return units
     }
 
     func fetchBatteryStatus() {

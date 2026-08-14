@@ -80,7 +80,7 @@ struct TandemKitChangeCartridgeView: View {
                 text: Text("Start cartridge change", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
-                    get: { viewModel.hasActiveNotifications },
+                    get: { viewModel.hasActiveNotifications || viewModel.indeterminateEnterMode },
                     set: { _ in }
                 )
             ) {
@@ -286,6 +286,24 @@ struct TandemKitChangeCartridgeView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
+            }
+
+            if viewModel.indeterminateEnterMode {
+                Label(
+                    String(
+                        localized: """
+                        The pump did not respond, so it is unclear whether it started the cartridge change. \
+                        Cancel to take the pump back out of cartridge change mode, then start again.
+                        """,
+                        comment: "Error message shown when the pump did not answer the change cartridge request"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
                 .cornerRadius(12)
             }
         }

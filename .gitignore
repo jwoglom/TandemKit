@@ -68,3 +68,10 @@ fastlane/test_output
 .clangModuleCache/
 
 build
+
+# The root Package.resolved has no consumer and cannot be correct for both
+# platforms at once. The supported build (TandemKit.xcodeproj) keeps its own
+# under project.xcworkspace/xcshareddata/swiftpm/, and Package.swift declares
+# disjoint dependencies per platform, so every Linux `swift build` rewrites the
+# root file with pins the Apple branch never uses -- and vice versa.
+/Package.resolved
