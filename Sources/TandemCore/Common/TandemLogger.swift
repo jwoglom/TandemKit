@@ -1,4 +1,6 @@
 import Foundation
+
+#if canImport(OSLog)
 import OSLog
 
 public final class TandemLogger {
@@ -137,3 +139,42 @@ private extension Data {
 private extension String {
     var file: String { components(separatedBy: "/").last ?? "" }
 }
+
+#else
+import Logging
+
+// Desktop/Linux SwiftPM fallback. Apple's OSLog and the app's Documents-based
+// file logging are unavailable, so route through swift-log. The public API is
+// identical to the OSLog implementation above.
+public final class TandemLogger {
+    private let logger: Logger
+
+    public init(category: String) {
+        logger = Logger(label: "com.jwoglom.TandemKit.\(category)")
+    }
+
+    public func debug(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        logger.debug("\(file.file) - \(function)#\(line): \(msg)")
+    }
+
+    public func info(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        logger.info("\(file.file) - \(function)#\(line): \(msg)")
+    }
+
+    public func warning(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        logger.warning("\(file.file) - \(function)#\(line): \(msg)")
+    }
+
+    public func error(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
+        logger.error("\(file.file) - \(function)#\(line): \(msg)")
+    }
+
+    func getDebugLogs() -> [URL] {
+        []
+    }
+}
+
+private extension String {
+    var file: String { components(separatedBy: "/").last ?? "" }
+}
+#endif

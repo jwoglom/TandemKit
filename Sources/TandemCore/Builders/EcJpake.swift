@@ -1,3 +1,8 @@
+// EC-JPAKE requires SwiftECC/BigInt, which are only present in the SwiftPM build
+// graph on Apple platforms (they do not compile on Linux). The type is therefore
+// gated to those platforms; on Linux the JPAKE path is provided by the stub in
+// SwiftECCJpakeProvider.swift, which traps if invoked.
+#if canImport(SwiftECC) && canImport(BigInt)
 import BigInt
 import Foundation
 import SwiftECC
@@ -304,3 +309,5 @@ private extension Data {
         Swift.withUnsafeBytes(of: &be) { append(contentsOf: $0) }
     }
 }
+
+#endif
