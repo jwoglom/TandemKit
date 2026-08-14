@@ -19,7 +19,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
     // Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
-    public static var onboardingSupportedBasalRates: [Double] = [0.0] + strideRange(from: 0.1, through: 15.0, by: 0.01)
+    public static var onboardingSupportedBasalRates: [Double] = TandemPumpCapabilities.supportedBasalRates
 
     // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus in 0.05u chunks
     public static var onboardingSupportedBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.05)
