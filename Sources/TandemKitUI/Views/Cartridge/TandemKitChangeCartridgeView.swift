@@ -28,7 +28,7 @@ struct TandemKitChangeCartridgeView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(item: $actionSheet) { sheet in
+        .confirmationDialog(item: $actionSheet) { sheet in
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .suspend: return suspendInsulinSheet
@@ -511,16 +511,16 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    // MARK: - Action Sheets
+    // MARK: - Confirmation Dialogs
 
-    var suspendInsulinSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+    var suspendInsulinSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Suspend insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "This will stop all insulin delivery until you resume.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
@@ -529,14 +529,14 @@ struct TandemKitChangeCartridgeView: View {
         )
     }
 
-    var cancelOperationSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Cancel cartridge change?", comment: "Action sheet title"),
+    var cancelOperationSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Cancel cartridge change?", comment: "Confirmation dialog title"),
             message: Text(
                 "The cartridge change is not complete. The pump will attempt to exit change mode.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
                     viewModel.done()
