@@ -75,6 +75,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var isCGMActiveOnPump: Bool = false
     @Published var pendingEnableClosedLoop: Bool = false
     @Published var showCGMRequiredForCIQ: Bool = false
+    @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
 
@@ -211,6 +212,16 @@ class TandemKitSettingsViewModel: ObservableObject {
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
+
+        // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
+        // it has neither, so the driver refuses the enable. Open the screen where they can be
+        // entered instead of attempting a request that cannot succeed (#223).
+        guard pumpManager.state.controlIQWeightLbs != nil,
+              pumpManager.state.controlIQTotalDailyInsulin != nil
+        else {
+            showControlIQValuesRequired = true
+            return
+        }
 
         isCheckingCGMForCIQ = true
         pumpManager.getCGMStatus { response in
