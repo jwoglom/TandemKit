@@ -80,6 +80,7 @@ public class IdpListHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Data([UInt8(truncatingIfNeeded: numProfiles)]),
+                Data(repeating: 0, count: 3),
                 Data([UInt8(truncatingIfNeeded: slot1)]),
                 Data([UInt8(truncatingIfNeeded: slot2)]),
                 Data([UInt8(truncatingIfNeeded: slot3)]),
