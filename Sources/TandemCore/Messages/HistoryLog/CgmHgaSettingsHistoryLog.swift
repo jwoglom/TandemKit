@@ -60,6 +60,17 @@ public class CgmHgaSettingsHistoryLog: HistoryLog {
         )
     }
 
+    public enum ModifiedField: Int {
+        case enable = 0
+        case threshold = 1
+        case duration = 2
+        case invalid = 3
+    }
+
+    public var modifiedFieldEnum: ModifiedField {
+        ModifiedField(rawValue: modifiedField) ?? .invalid
+    }
+
     public var description: String {
         "CgmHgaSettingsHistoryLog(cargo=\(cargo.hexadecimalString), alertLevel=\(alertLevel), repeatDuration=\(repeatDuration), isEnabled=\(isEnabled), modifiedField=\(modifiedField))"
     }
