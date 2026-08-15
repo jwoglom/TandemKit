@@ -47,6 +47,24 @@ jobs:
       XCODEBUILD_COMMON_FLAGS: >-
         -skipMacroValidation
         -skipPackagePluginValidation
+      # Ad-hoc ("sign to run locally") signing, which is what a simulator build
+      # normally gets from Xcode. It must NOT be turned off: CODE_SIGNING_ALLOWED=NO
+      # leaves the app with no signature and therefore no entitlements, and an iOS
+      # Simulator app with no application-identifier entitlement gets an error back
+      # from every Security-framework call. Trio asserts on a failed keychain read
+      # (BaseKeychain reportError -> assertionFailure), so the unsigned test host
+      # traps during launch and xcodebuild reports "Early unexpected exit ...
+      # Test crashed with signal trap before establishing connection".
+      #
+      # Manual style with the "-" identity keeps this hermetic: the simulator SDK
+      # needs no provisioning profile and no Apple Developer account, so nothing
+      # here depends on secrets.
+      SIMULATOR_CODE_SIGN_FLAGS: >-
+        CODE_SIGNING_ALLOWED=YES
+        CODE_SIGNING_REQUIRED=YES
+        CODE_SIGN_STYLE=Manual
+        CODE_SIGN_IDENTITY=-
+        PROVISIONING_PROFILE_SPECIFIER=
     steps:
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -216,7 +234,7 @@ jobs:
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             ${XCODEBUILD_COMMON_FLAGS} \
             -quiet \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
             2>&1 | tee "xcodebuild-build-for-testing.log"
 
       - name: Wait for the simulator to finish booting
@@ -237,7 +255,7 @@ jobs:
             ${XCODEBUILD_COMMON_FLAGS} \
             -retry-tests-on-failure \
             -quiet \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
             2>&1 | tee "xcodebuild-test.log"
 
       - name: Upload test logs/results (on failure)
