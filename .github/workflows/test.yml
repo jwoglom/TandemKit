@@ -36,7 +36,10 @@ jobs:
       github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
     runs-on: macos-latest
-    timeout-minutes: 25
+    # A warm DerivedData cache builds Trio in ~9 minutes, but the first run
+    # after the cache generation marker moves has to compile everything, which
+    # does not fit in 25.
+    timeout-minutes: 50
     environment: ${{ github.event_name == 'pull_request_target' && 'pr-testing' || '' }}
     env:
       TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
@@ -212,16 +215,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-
 
+      # `-v2-` is a cache generation marker. Bump it whenever a build setting
+      # changes in a way the hashed files do not capture -- the signing flags
+      # above are part of Xcode's build description, so a snapshot taken under
+      # the old flags forces a full rebuild on every restore and, because the
+      # key already exists, never gets replaced.
       - name: Cache Xcode DerivedData intermediates
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/Build
             ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
           restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-
 
       - name: Build Trio tests for execution (no test run)
         run: |
