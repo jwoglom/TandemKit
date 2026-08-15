@@ -16,6 +16,21 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
     public let currentPcm: Int
     public let previousPcm: Int
 
+    public enum PCM: Int {
+        case noControl = 0
+        case openLoop = 1
+        case cgmInactive = 2
+        case closedLoop = 3
+    }
+
+    public var currentPcmEnum: PCM? {
+        PCM(rawValue: currentPcm)
+    }
+
+    public var previousPcmEnum: PCM? {
+        PCM(rawValue: previousPcm)
+    }
+
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
         currentPcm = Int(raw[10])
