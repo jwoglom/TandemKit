@@ -18,6 +18,10 @@ public class BolexCompletedHistoryLog: HistoryLog {
     public let insulinDelivered: Float
     public let insulinRequested: Float
 
+    public var completionStatusEnum: LastBolusStatusAbstractResponseBolusStatus? {
+        LastBolusStatusAbstractResponseBolusStatus(rawValue: completionStatus)
+    }
+
     public required init(cargo: Data) {
         completionStatus = Bytes.readShort(cargo, 10)
         bolusId = Bytes.readShort(cargo, 12)
