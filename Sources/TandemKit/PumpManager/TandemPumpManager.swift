@@ -261,6 +261,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
         logger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
     }
 
+    // MARK: - Feature Flags
+
+    public func isFeatureEnabled(_ flag: TandemFeatureFlags.Flag) -> Bool {
+        state.featureFlags[flag]
+    }
+
+    public func setFeatureFlag(_ flag: TandemFeatureFlags.Flag, enabled: Bool) {
+        state.featureFlags[flag] = enabled
+        notifyDelegateStateUpdated()
+
+        logger.info("Feature flag \(flag.rawValue) \(enabled ? "enabled" : "disabled")")
+    }
+
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
@@ -297,7 +310,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchPumpInformation()
 
                 self.state.lastSettingsCheckedAt = Date.now
+            } else if !self.state.featureFlags.quickBolusButtonSupport {
+                // The quick bolus button is confirmed off every cycle, which needs a fresh read.
+                self.fetchGlobalPumpSettings()
             }
+
+            self.enforceQuickBolusDisabled()
 
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()

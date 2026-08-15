@@ -78,6 +78,15 @@ struct TandemKitDebugView: View {
                 }
             }
 
+            Section {
+                Button {
+                    viewModel.openFeatureFlags?()
+                } label: {
+                    Label("Feature Flags", systemImage: "flag")
+                }
+                .disabled(viewModel.openFeatureFlags == nil)
+            }
+
             Section(header: Text("Silent Tones")) {
                 Toggle(isOn: Binding(
                     get: { viewModel.useSilentMode },

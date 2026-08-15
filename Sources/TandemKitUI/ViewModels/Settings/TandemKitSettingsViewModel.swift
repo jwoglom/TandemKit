@@ -84,6 +84,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
+    /// Gates the Control-IQ settings screen and the switch *to* Control-IQ. Switching back to the
+    /// DIY algorithm is never gated, so a pump already running Control-IQ stays recoverable.
+    @Published var controlIQSupportEnabled: Bool = false
+    @Published var quickBolusButtonSupportEnabled: Bool = false
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
@@ -138,6 +142,8 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
+        controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
+        quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -225,6 +231,11 @@ class TandemKitSettingsViewModel: ObservableObject {
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
+
+        guard pumpManager.state.featureFlags.controlIQSupport else {
+            log.debug("Ignoring switch to Control-IQ: controlIQSupport feature flag is off")
+            return
+        }
 
         // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
         // it has neither, so the driver refuses the enable. Open the screen where they can be
@@ -434,6 +445,8 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
+            self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
+            self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
             self.pumpState = pumpManager.state.pumpState

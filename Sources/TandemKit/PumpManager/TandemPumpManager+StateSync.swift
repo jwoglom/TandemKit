@@ -398,6 +398,34 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
+    /// Turns the pump's quick bolus button off when `quickBolusButtonSupport` is off and the pump
+    /// reports it enabled. Reads `state.quickBolusEnabled`, so it needs a `fetchGlobalPumpSettings`
+    /// earlier in the same sync.
+    func enforceQuickBolusDisabled() {
+        guard !state.featureFlags.quickBolusButtonSupport, state.quickBolusEnabled == true else {
+            return
+        }
+
+        logger.warning("Quick bolus button is enabled on the pump; disabling it")
+
+        guard let response = bluetooth.write(
+            message: SetQuickBolusSettingsRequest(enabled: false, mode: .units, increment: .disabled),
+            expecting: SetQuickBolusSettingsResponse.self
+        ) as? SetQuickBolusSettingsResponse else {
+            logger.error("Failed to disable quick bolus button: no response")
+            return
+        }
+
+        guard response.isStatusOK else {
+            logger.error("Failed to disable quick bolus button: status \(response.status)")
+            return
+        }
+
+        state.quickBolusEnabled = false
+        logger.info("Disabled the quick bolus button on the pump")
+        notifyDelegateStateUpdated()
+    }
+
     /// Runs its own command job, so it is safe to call from anywhere.
     func fetchReservoirStatus(completion: @escaping (Double?) -> Void) {
         bluetooth.ensureConnected { error in

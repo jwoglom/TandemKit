@@ -248,7 +248,7 @@ struct TandemKitSettingsView: View {
                             .onLongPressGesture(minimumDuration: 0.5) {
                                 if viewModel.useControlIQ {
                                     activeAlert = .switchToDIY
-                                } else {
+                                } else if viewModel.controlIQSupportEnabled {
                                     // Switching to Control-IQ requires a CGM connected to the pump;
                                     // verify one is configured before offering the confirmation.
                                     viewModel.attemptSwitchToControlIQ()
@@ -393,20 +393,24 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openSoundSettings() }
                 )
 
-                navigationLink(
-                    label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
-                    action: { viewModel.openControlIQSettings() }
-                )
+                if viewModel.controlIQSupportEnabled {
+                    navigationLink(
+                        label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
+                        action: { viewModel.openControlIQSettings() }
+                    )
+                }
 
                 navigationLink(
                     label: Text("CGM Settings", comment: "Label for CGM settings"),
                     action: { viewModel.openCgmSettings() }
                 )
 
-                navigationLink(
-                    label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
-                    action: { viewModel.openQuickBolus() }
-                )
+                if viewModel.quickBolusButtonSupportEnabled {
+                    navigationLink(
+                        label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
+                        action: { viewModel.openQuickBolus() }
+                    )
+                }
 
                 navigationLink(
                     label: Text("Alert Settings", comment: "Label for alert settings"),
