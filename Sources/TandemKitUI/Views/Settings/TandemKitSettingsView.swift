@@ -247,8 +247,11 @@ struct TandemKitSettingsView: View {
                             // algorithm-switch confirmation, so it can't be triggered inadvertently.
                             .onLongPressGesture(minimumDuration: 0.5) {
                                 if viewModel.useControlIQ {
+                                    // Switching back to the DIY algorithm is never gated by the
+                                    // feature flag: a pump already running Control-IQ has to be
+                                    // recoverable even if the flag was turned back off.
                                     activeAlert = .switchToDIY
-                                } else {
+                                } else if viewModel.controlIQSupportEnabled {
                                     // Switching to Control-IQ requires a CGM connected to the pump;
                                     // verify one is configured before offering the confirmation.
                                     viewModel.attemptSwitchToControlIQ()
@@ -393,10 +396,15 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openSoundSettings() }
                 )
 
-                navigationLink(
-                    label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
-                    action: { viewModel.openControlIQSettings() }
-                )
+                // Behind the controlIQSupport feature flag (Debug Options → Feature Flags). The
+                // Control-IQ User mode row above is not gated: it reports what the pump is doing,
+                // and hiding that would misrepresent the pump's state.
+                if viewModel.controlIQSupportEnabled {
+                    navigationLink(
+                        label: Text("Control-IQ Settings", comment: "Label for Control-IQ settings"),
+                        action: { viewModel.openControlIQSettings() }
+                    )
+                }
 
                 navigationLink(
                     label: Text("CGM Settings", comment: "Label for CGM settings"),

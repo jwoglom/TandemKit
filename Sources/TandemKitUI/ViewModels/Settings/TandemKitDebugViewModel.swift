@@ -54,6 +54,10 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     @Published var useSilentMode: Bool = false
 
+    /// Current value of every feature flag, mirrored out of the pump manager state so the toggles
+    /// re-render when one is changed.
+    @Published private(set) var featureFlagValues: [TandemFeatureFlags.Flag: Bool] = [:]
+
     private let pumpManager: TandemPumpManager?
     private var lastRequestMessage: Message?
     let openHistoryLogViewer: (() -> Void)?
@@ -62,11 +66,31 @@ final class TandemKitDebugViewModel: ObservableObject {
         self.pumpManager = pumpManager
         self.openHistoryLogViewer = openHistoryLogViewer
         useSilentMode = pumpManager?.state.useSilentTones ?? false
+        featureFlagValues = Dictionary(uniqueKeysWithValues: TandemFeatureFlags.Flag.allCases.map { flag in
+            (flag, pumpManager?.state.featureFlags[flag] ?? flag.defaultValue)
+        })
     }
 
     func setSilentMode(_ enabled: Bool) {
         pumpManager?.configureSilentMode(enabled)
         useSilentMode = enabled
+    }
+
+    // MARK: - Feature Flags
+
+    /// Every known flag, in declaration order, so a new flag shows up in Debug Options without any
+    /// further UI work.
+    var featureFlags: [TandemFeatureFlags.Flag] {
+        TandemFeatureFlags.Flag.allCases
+    }
+
+    func isFeatureEnabled(_ flag: TandemFeatureFlags.Flag) -> Bool {
+        featureFlagValues[flag] ?? flag.defaultValue
+    }
+
+    func setFeatureFlag(_ flag: TandemFeatureFlags.Flag, enabled: Bool) {
+        pumpManager?.setFeatureFlag(flag, enabled: enabled)
+        featureFlagValues[flag] = enabled
     }
 
     var pumpStateDebugDescription: String {

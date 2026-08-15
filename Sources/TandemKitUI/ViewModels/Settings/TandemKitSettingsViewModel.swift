@@ -84,6 +84,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
+    /// Whether the Control-IQ feature flag is on. Gates the Control-IQ settings screen and the
+    /// switch *to* Control-IQ; switching back to the DIY algorithm is deliberately never gated, so
+    /// a user whose pump is already running Control-IQ can always hand dosing back to the app.
+    @Published var controlIQSupportEnabled: Bool = false
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
@@ -138,6 +142,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
+        controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -225,6 +230,13 @@ class TandemKitSettingsViewModel: ObservableObject {
     func attemptSwitchToControlIQ() {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
+
+        // The view hides the gesture that gets here when the flag is off; this is the backstop so
+        // no other caller can start the switch behind the flag's back.
+        guard pumpManager.state.featureFlags.controlIQSupport else {
+            log.debug("Ignoring switch to Control-IQ: controlIQSupport feature flag is off")
+            return
+        }
 
         // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
         // it has neither, so the driver refuses the enable. Open the screen where they can be
@@ -434,6 +446,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
+            self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
             self.pumpState = pumpManager.state.pumpState

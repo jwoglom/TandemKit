@@ -261,6 +261,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
         logger.info("Heartbeat mode silent tones \(enabled ? "enabled" : "disabled")")
     }
 
+    // MARK: - Feature Flags
+
+    /// Whether an opt-in feature is turned on. Gates what the UI offers; it never relaxes a safety
+    /// guard, so callers must not use it to skip a validation check.
+    public func isFeatureEnabled(_ flag: TandemFeatureFlags.Flag) -> Bool {
+        state.featureFlags[flag]
+    }
+
+    public func setFeatureFlag(_ flag: TandemFeatureFlags.Flag, enabled: Bool) {
+        state.featureFlags[flag] = enabled
+        notifyDelegateStateUpdated()
+
+        logger.info("Feature flag \(flag.rawValue) \(enabled ? "enabled" : "disabled")")
+    }
+
     // MARK: - PumpManager Additional Methods
 
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {

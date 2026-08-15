@@ -43,6 +43,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var isConnected: Bool = false
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
+    /// Opt-in switches for driver features that are not on for everyone yet. See
+    /// `TandemFeatureFlags`; toggled from Debug Options.
+    public var featureFlags: TandemFeatureFlags = .default
     public var latestInsulinOnBoard: Double?
     public var lastReservoirReading: ReservoirValue?
     public var lastBatteryReading: BatteryReading?
@@ -176,6 +179,14 @@ public struct TandemPumpManagerState: RawRepresentable {
             settings = decodedSettings
         } else {
             settings = .default
+        }
+
+        if let flagsRaw = rawValue["featureFlags"] as? TandemFeatureFlags.RawValue,
+           let decodedFlags = TandemFeatureFlags(rawValue: flagsRaw)
+        {
+            featureFlags = decodedFlags
+        } else {
+            featureFlags = .default
         }
 
         if let reservoirRaw = rawValue["lastReservoirReading"] as? [String: Any] {
@@ -361,6 +372,13 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["settings"] = settingsRaw
         }
 
+        // Only explicit choices are stored, so an untouched install keeps following the defaults
+        // even if a default changes in a later release.
+        let featureFlagsRaw = featureFlags.rawValue
+        if !featureFlagsRaw.isEmpty {
+            raw["featureFlags"] = featureFlagsRaw
+        }
+
         if let lastReservoirReading = lastReservoirReading {
             raw["lastReservoirReading"] = TandemPumpManagerState.encodeReservoirValue(lastReservoirReading)
         }
@@ -400,6 +418,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* pumpState: \(String(describing: pumpState.debugDescription))",
             "* lastReconciliation: \(String(describing: lastReconciliation))",
             "* settings: \(settings)",
+            "* featureFlags: \(featureFlags)",
             "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
             "* lastReservoirReading: \(String(describing: lastReservoirReading))",
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
