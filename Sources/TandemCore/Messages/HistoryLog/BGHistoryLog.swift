@@ -19,7 +19,9 @@ public class BGHistoryLog: HistoryLog {
     public let iob: Float
     public let targetBG: Int
     public let isf: Int
-    public let spare: UInt32
+    public let selectedIOB: Int
+    public let bgSourceType: Int
+    public let spare: Int
 
     public required init(cargo: Data) {
         let raw = HistoryLog.fillCargo(cargo)
@@ -29,7 +31,9 @@ public class BGHistoryLog: HistoryLog {
         iob = Bytes.readFloat(raw, 14)
         targetBG = Bytes.readShort(raw, 18)
         isf = Bytes.readShort(raw, 20)
-        spare = Bytes.readUint32(raw, 22)
+        selectedIOB = Int(raw[22])
+        bgSourceType = Int(raw[23])
+        spare = Bytes.readShort(raw, 24)
         super.init(cargo: raw)
     }
 
@@ -42,7 +46,9 @@ public class BGHistoryLog: HistoryLog {
         iob: Float,
         targetBG: Int,
         isf: Int,
-        spare: UInt32
+        selectedIOB: Int,
+        bgSourceType: Int,
+        spare: Int
     ) {
         let payload = BGHistoryLog.buildCargo(
             pumpTimeSec: pumpTimeSec,
@@ -53,6 +59,8 @@ public class BGHistoryLog: HistoryLog {
             iob: iob,
             targetBG: targetBG,
             isf: isf,
+            selectedIOB: selectedIOB,
+            bgSourceType: bgSourceType,
             spare: spare
         )
         self.bg = bg
@@ -61,6 +69,8 @@ public class BGHistoryLog: HistoryLog {
         self.iob = iob
         self.targetBG = targetBG
         self.isf = isf
+        self.selectedIOB = selectedIOB
+        self.bgSourceType = bgSourceType
         self.spare = spare
         super.init(cargo: payload)
     }
@@ -74,7 +84,9 @@ public class BGHistoryLog: HistoryLog {
         iob: Float,
         targetBG: Int,
         isf: Int,
-        spare: UInt32
+        selectedIOB: Int,
+        bgSourceType: Int,
+        spare: Int
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
@@ -87,7 +99,9 @@ public class BGHistoryLog: HistoryLog {
                 Bytes.toFloat(iob),
                 Bytes.firstTwoBytesLittleEndian(targetBG),
                 Bytes.firstTwoBytesLittleEndian(isf),
-                Bytes.toUint32(spare)
+                Data([UInt8(selectedIOB & 0xFF)]),
+                Data([UInt8(bgSourceType & 0xFF)]),
+                Bytes.firstTwoBytesLittleEndian(spare)
             )
         )
     }
@@ -98,6 +112,6 @@ public class BGHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), spare=\(spare))"
+        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), selectedIOB=\(selectedIOB), bgSourceType=\(bgSourceType), spare=\(spare))"
     }
 }
