@@ -57,6 +57,7 @@ public class IdpActionHistoryLog: HistoryLog {
                 Data([UInt8(truncatingIfNeeded: idp)]),
                 Data([UInt8(truncatingIfNeeded: status)]),
                 Data([UInt8(truncatingIfNeeded: sourceIdp)]),
+                Data(repeating: 0, count: 5),
                 Bytes.writeString(name, 8)
             )
         )
