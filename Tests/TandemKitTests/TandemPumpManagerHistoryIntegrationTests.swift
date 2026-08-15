@@ -37,6 +37,7 @@ import XCTest
             pumpTimeSec: 1000 + sequenceNum,
             sequenceNum: sequenceNum,
             bolusId: Int(sequenceNum),
+            selectedIob: 0,
             iob: 0,
             bolusSize: 1.0
         )

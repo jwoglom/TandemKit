@@ -13,37 +13,42 @@ public class BolusActivatedHistoryLog: HistoryLog {
     public static let typeId = 55
 
     public let bolusId: Int
+    public let selectedIob: Int
     public let iob: Float
     public let bolusSize: Float
 
     public required init(cargo: Data) {
         bolusId = Bytes.readShort(cargo, 10)
+        selectedIob = Int(cargo[12])
         iob = Bytes.readFloat(cargo, 14)
         bolusSize = Bytes.readFloat(cargo, 18)
         super.init(cargo: cargo)
     }
 
-    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, iob: Float, bolusSize: Float) {
+    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, selectedIob: Int, iob: Float, bolusSize: Float) {
         let payload = BolusActivatedHistoryLog.buildCargo(
             pumpTimeSec: pumpTimeSec,
             sequenceNum: sequenceNum,
             bolusId: bolusId,
+            selectedIob: selectedIob,
             iob: iob,
             bolusSize: bolusSize
         )
         self.bolusId = bolusId
+        self.selectedIob = selectedIob
         self.iob = iob
         self.bolusSize = bolusSize
         super.init(cargo: payload)
     }
 
-    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, iob: Float, bolusSize: Float) -> Data {
+    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, bolusId: Int, selectedIob: Int, iob: Float, bolusSize: Float) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
                 Data([UInt8(typeId), 0]),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(bolusId),
+                Data([UInt8(selectedIob & 0xFF), 0]),
                 Bytes.toFloat(iob),
                 Bytes.toFloat(bolusSize)
             )
@@ -51,6 +56,6 @@ public class BolusActivatedHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BolusActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), iob=\(iob), bolusSize=\(bolusSize))"
+        "BolusActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), selectedIob=\(selectedIob), iob=\(iob), bolusSize=\(bolusSize))"
     }
 }
