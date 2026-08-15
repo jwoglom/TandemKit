@@ -106,4 +106,33 @@ final class HistoryLogSyncIdentifierTests: XCTestCase {
             0
         )
     }
+
+    func testStoredLogExposesItsSequenceIdentity() throws {
+        let log = StoredHistoryLog(
+            pumpSerial: 12345,
+            sequenceNum: 42,
+            typeId: 3,
+            pumpTimeSec: 1000,
+            cargo: Data(count: HistoryLog.length)
+        )
+
+        XCTAssertEqual(
+            log.logSequenceSyncIdentifier,
+            HistoryLogSyncIdentifier.logSequence(pumpSerial: try serial(12345), sequenceNum: 42)
+        )
+    }
+
+    /// A stored entry can carry the zero placeholder, so the identity has to be unavailable rather
+    /// than minted under a serial no pump reports.
+    func testStoredLogWithUnknownSerialHasNoSequenceIdentity() {
+        let log = StoredHistoryLog(
+            pumpSerial: 0,
+            sequenceNum: 42,
+            typeId: 3,
+            pumpTimeSec: 1000,
+            cargo: Data(count: HistoryLog.length)
+        )
+
+        XCTAssertNil(log.logSequenceSyncIdentifier)
+    }
 }
