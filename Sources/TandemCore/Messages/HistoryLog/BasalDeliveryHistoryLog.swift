@@ -70,6 +70,7 @@ public class BasalDeliveryHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(commandedRateSource),
+                Data([0, 0]),
                 Bytes.firstTwoBytesLittleEndian(commandedRate),
                 Bytes.firstTwoBytesLittleEndian(profileBasalRate),
                 Bytes.firstTwoBytesLittleEndian(algorithmRate),
