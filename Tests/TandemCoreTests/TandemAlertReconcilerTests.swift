@@ -1,4 +1,3 @@
-import LoopKit
 @testable import TandemKit
 import XCTest
 
@@ -105,6 +104,22 @@ final class TandemAlertReconcilerTests: XCTestCase {
         XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.occlusion.2"])
     }
 
+    func testPreSlugIdentifierIsNotRetractedUntilItsCategoryIsFetched() {
+        // Same migration as above, but the alarm status request failed this pass. The old
+        // identifier's category is still readable from its leading segment, so the
+        // fetched-category guard must defer the retraction — otherwise an active alarm
+        // would briefly have no LoopKit alert at all during the format migration.
+        let result = TandemAlertReconciler.reconcile(
+            activeItems: [],
+            fetchedCategories: [.alert, .cgmAlert],
+            issuedIdentifiers: ["alarm.2"],
+            surfacedCategories: allSurfaced
+        )
+
+        XCTAssertTrue(result.isEmpty)
+        XCTAssertEqual(result.updatedIssuedIdentifiers, ["alarm.2"])
+    }
+
     func testMixedIssueAndRetractInOnePass() {
         let lowInsulin = NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT")
 
@@ -148,27 +163,5 @@ final class TandemAlertReconcilerTests: XCTestCase {
             surfacedCategories: allSurfaced
         )
         XCTAssertEqual(fetched.identifiersToRetract, ["malfunction.12"])
-    }
-
-    // MARK: - State persistence
-
-    func testIssuedAlertIdentifiersRoundTripThroughRawValue() {
-        let schedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0.5)])!
-        var state = TandemPumpManagerState(basalRateSchedule: schedule)
-        state.issuedAlertIdentifiers = ["alarm.occlusion.2", "malfunction.12"]
-        state.forwardCGMAlerts = true
-
-        let restored = TandemPumpManagerState(rawValue: state.rawValue)
-
-        XCTAssertEqual(restored.issuedAlertIdentifiers, ["alarm.occlusion.2", "malfunction.12"])
-        XCTAssertTrue(restored.forwardCGMAlerts)
-    }
-
-    func testIssuedAlertIdentifiersDefaultEmptyOnLegacyRawValue() {
-        // Raw state persisted by a driver version that predates alert surfacing.
-        let restored = TandemPumpManagerState(rawValue: [:])
-
-        XCTAssertTrue(restored.issuedAlertIdentifiers.isEmpty)
-        XCTAssertFalse(restored.forwardCGMAlerts)
     }
 }

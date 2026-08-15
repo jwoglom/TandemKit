@@ -71,28 +71,41 @@ extension TandemPumpManager {
 
     /// Diffs the freshly-fetched notification bundle against the persisted issued-alert set
     /// and issues/retracts LoopKit alerts through the delegate. Every `fetchNotifications()`
-    /// pass ends here (Loop sync, qualifying events, the 5-minute poll, and post-dismiss
-    /// refreshes all funnel through the same reconcile).
+    /// pass ends here (Loop sync, qualifying events, and post-dismiss refreshes all funnel
+    /// through the same reconcile).
+    ///
+    /// The diff, the delegate calls, and the `issuedAlertIdentifiers` update all run together
+    /// inside `pumpDelegate.notify`, for two reasons:
+    /// - The persisted set must never get ahead of delivery. If the delegate is not attached
+    ///   yet (e.g. a qualifying event racing app launch), recording an alarm as issued without
+    ///   having delivered it would silence that alarm on every later pass. Instead the whole
+    ///   pass is deferred untouched, so the next fetch delivers it.
+    /// - `notify` runs on the single serialized delegate queue, so concurrent reconciles
+    ///   (sync-driven on the command queue vs. settings-driven on the main thread) cannot
+    ///   interleave their read-modify-writes of `issuedAlertIdentifiers` and lose updates.
     func reconcileLoopKitAlerts() {
+        // Snapshot the bundle-derived inputs up front; the issued set is read inside the
+        // serialized block so the diff always runs against its latest value.
         let bundle = notificationBundle
-        let reconciliation = TandemAlertReconciler.reconcile(
-            activeItems: surfacedNotificationItems(from: bundle),
-            fetchedCategories: bundle.fetchedCategories,
-            issuedIdentifiers: state.issuedAlertIdentifiers,
-            surfacedCategories: surfacedAlertCategories
-        )
-
-        guard !reconciliation.isEmpty else {
-            return
-        }
-
-        state.issuedAlertIdentifiers = reconciliation.updatedIssuedIdentifiers
-        notifyDelegateStateUpdated()
-
+        let activeItems = surfacedNotificationItems(from: bundle)
+        let fetchedCategories = bundle.fetchedCategories
+        let surfacedCategories = surfacedAlertCategories
         let managerIdentifier = TandemPumpManager.managerIdentifier
+
         pumpDelegate.notify { delegate in
             guard let delegate else {
-                self.logger.warning("No pump delegate, not issuing/retracting alerts...")
+                self.logger.warning("No pump delegate; deferring alert reconciliation")
+                return
+            }
+
+            let reconciliation = TandemAlertReconciler.reconcile(
+                activeItems: activeItems,
+                fetchedCategories: fetchedCategories,
+                issuedIdentifiers: self.state.issuedAlertIdentifiers,
+                surfacedCategories: surfacedCategories
+            )
+
+            guard !reconciliation.isEmpty else {
                 return
             }
 
@@ -108,6 +121,9 @@ extension TandemPumpManager {
                     alertIdentifier: identifier
                 ))
             }
+
+            self.state.issuedAlertIdentifiers = reconciliation.updatedIssuedIdentifiers
+            self.notifyDelegateStateUpdated()
         }
     }
 
@@ -117,9 +133,21 @@ extension TandemPumpManager {
 
         logger.info("CGM alert forwarding \(enabled ? "enabled" : "disabled")")
 
-        // Reconcile immediately so switching forwarding off retracts already-issued CGM
-        // alerts without waiting for the next fetch (the reconciler retracts
-        // no-longer-surfaced categories regardless of fetch state).
-        reconcileLoopKitAlerts()
+        if enabled {
+            // Don't issue time-sensitive alerts from a possibly hours-stale bundle: read the
+            // pump's current state instead, which reconciles (and issues) on completion.
+            bluetooth.ensureConnected { error in
+                if let error {
+                    // The next sync or qualifying event picks the new setting up.
+                    self.logger.warning("CGM alert forwarding enabled but fetch failed: \(error.localizedDescription)")
+                    return
+                }
+                self.fetchNotifications()
+            }
+        } else {
+            // Retract-only direction: the reconciler drops no-longer-surfaced categories
+            // regardless of fetch state, so this is safe against a stale bundle.
+            reconcileLoopKitAlerts()
+        }
     }
 }

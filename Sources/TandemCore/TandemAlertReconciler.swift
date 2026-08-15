@@ -54,14 +54,20 @@ enum TandemAlertReconciler {
         for identifier in issuedIdentifiers.sorted() {
             guard !activeIdentifiers.contains(identifier) else { continue }
 
-            let parsed = NotificationItem.parseStableIdentifier(identifier)
-            let stillSurfaced = parsed.map { surfacedCategories.contains($0.type) } ?? false
-            if stillSurfaced {
+            // Category from the leading segment, even for identifiers whose full format no
+            // longer parses (e.g. the pre-slug "<category>.<id>" form): the fetched-category
+            // guard must still protect an active alarm from being dropped by a failed status
+            // request in the middle of an identifier-format migration.
+            let category = NotificationItem.NotificationType(
+                rawValue: String(identifier.prefix(while: { $0 != "." }))
+            )
+
+            if let category, surfacedCategories.contains(category) {
                 // Absence is only trustworthy when the category's status response arrived.
-                guard let parsed, fetchedCategories.contains(parsed.type) else { continue }
+                guard fetchedCategories.contains(category) else { continue }
             }
-            // Unparseable identifiers (from an older driver version) and no-longer-surfaced
-            // categories are retracted unconditionally.
+            // No-longer-surfaced categories and truly foreign identifiers are retracted
+            // unconditionally.
 
             identifiersToRetract.append(identifier)
             updatedIssuedIdentifiers.remove(identifier)

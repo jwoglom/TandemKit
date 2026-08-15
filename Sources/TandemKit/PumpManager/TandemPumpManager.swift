@@ -1752,9 +1752,36 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
             $0.type == parsed.type && $0.notificationId == parsed.notificationId
         }) {
             dismissNotification(notification: item) { success in
-                completion(success ? nil : PumpCommError.errorResponse(
-                    context: "Failed to dismiss \(alertIdentifier) on the pump"
-                ))
+                if success {
+                    completion(nil)
+                    return
+                }
+
+                // The bundle row may be stale: the pump rejects a dismiss for a notification
+                // it already cleared itself (e.g. dismissed on the pump between polls), and
+                // that must acknowledge cleanly rather than leave the alert stuck. Re-read
+                // the pump and only fail the acknowledgement if the notification is really
+                // still active (or its state could not be determined).
+                self.bluetooth.ensureConnected { error in
+                    if let error {
+                        completion(error)
+                        return
+                    }
+
+                    self.fetchNotifications()
+
+                    let bundle = self.notificationBundle
+                    let categoryFetched = bundle.fetchedCategories.contains(parsed.type)
+                    let stillActive = bundle.isActive(type: parsed.type, id: parsed.notificationId)
+                    if categoryFetched, !stillActive {
+                        // Already cleared on the pump; the re-fetch's reconcile retracted it.
+                        completion(nil)
+                    } else {
+                        completion(PumpCommError.errorResponse(
+                            context: "Failed to dismiss \(alertIdentifier) on the pump"
+                        ))
+                    }
+                }
             }
             return
         }

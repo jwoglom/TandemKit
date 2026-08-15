@@ -27,6 +27,22 @@ struct TandemKitAlertSettingsView: View {
                     }
                 }
 
+                if viewModel.alertSnoozeEnabled {
+                    Picker(
+                        String(localized: "Snooze Duration", comment: "Label for snooze duration picker"),
+                        selection: Binding(
+                            get: { viewModel.alertSnoozeDurationMins },
+                            set: { mins in
+                                viewModel.setAlertSnooze(enabled: true, durationMins: mins)
+                            }
+                        )
+                    ) {
+                        Text("10 min").tag(10)
+                        Text("20 min").tag(20)
+                        Text("30 min").tag(30)
+                    }
+                }
+
                 Toggle(isOn: Binding(
                     get: { viewModel.forwardCGMAlerts },
                     set: { viewModel.setForwardCGMAlerts($0) }
@@ -42,22 +58,6 @@ struct TandemKitAlertSettingsView: View {
                         )
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    }
-                }
-
-                if viewModel.alertSnoozeEnabled {
-                    Picker(
-                        String(localized: "Snooze Duration", comment: "Label for snooze duration picker"),
-                        selection: Binding(
-                            get: { viewModel.alertSnoozeDurationMins },
-                            set: { mins in
-                                viewModel.setAlertSnooze(enabled: true, durationMins: mins)
-                            }
-                        )
-                    ) {
-                        Text("10 min").tag(10)
-                        Text("20 min").tag(20)
-                        Text("30 min").tag(30)
                     }
                 }
             } footer: {
