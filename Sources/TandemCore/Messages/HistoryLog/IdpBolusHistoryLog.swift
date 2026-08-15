@@ -76,6 +76,7 @@ public class IdpBolusHistoryLog: HistoryLog {
                 Data([UInt8(truncatingIfNeeded: idp)]),
                 Data([UInt8(truncatingIfNeeded: modification)]),
                 Data([UInt8(truncatingIfNeeded: bolusStatus)]),
+                Data(repeating: 0, count: 1),
                 Bytes.firstTwoBytesLittleEndian(insulinDuration),
                 Bytes.firstTwoBytesLittleEndian(maxBolusSize),
                 Data([UInt8(truncatingIfNeeded: bolusEntryType)])
