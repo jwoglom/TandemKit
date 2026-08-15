@@ -69,6 +69,7 @@ public class ParamChangeRemSettingsHistoryLog: HistoryLog {
                 Bytes.toUint32(sequenceNum),
                 Data([UInt8(truncatingIfNeeded: modification)]),
                 Data([UInt8(truncatingIfNeeded: status)]),
+                Data([0, 0]),
                 Bytes.firstTwoBytesLittleEndian(lowBgThreshold),
                 Bytes.firstTwoBytesLittleEndian(highBgThreshold),
                 Data([UInt8(truncatingIfNeeded: siteChangeDays)])
