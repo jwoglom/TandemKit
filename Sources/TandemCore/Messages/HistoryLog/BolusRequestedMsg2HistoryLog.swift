@@ -24,6 +24,30 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
     public let selectedIOB: Int
     public let spare2: Int
 
+    public enum BolusOption: Int {
+        case standard = 0
+        case extended = 1
+        case quick = 2
+        case automatic = 3
+        case bleStandard = 4
+        case bleExtended = 5
+        case eatingSoonAutomatic = 6
+        case lateBolus = 7
+    }
+
+    public enum SelectedIOBType: Int {
+        case mudaliarIOB = 0
+        case swanIOBMeal = 1
+    }
+
+    public var bolusOption: BolusOption? {
+        BolusOption(rawValue: options)
+    }
+
+    public var selectedIOBType: SelectedIOBType? {
+        SelectedIOBType(rawValue: selectedIOB)
+    }
+
     public required init(cargo: Data) {
         bolusId = Bytes.readShort(cargo, 10)
         options = Int(cargo[12])
