@@ -96,7 +96,21 @@ jobs:
           
           with open(os.environ["GITHUB_ENV"], "a") as f:
             f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
+            f.write(f"SIMULATOR_UDID={udid}\n")
           PY
+
+      # First boot of a simulator device on a fresh runner takes ~5-6 minutes,
+      # almost all of it CoreSimulator running one-shot data-migration plugins.
+      # `simctl boot` only kicks the boot off -- simd carries it out, so this
+      # returns immediately and the device keeps booting while we check out and
+      # build. The wait happens in "Wait for the simulator to finish booting",
+      # immediately before the tests. Nothing before that needs a live
+      # simulator: xcodebuild only needs the destination to *exist* to pick an
+      # SDK and architecture.
+      - name: Start booting the simulator in the background
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${SIMULATOR_UDID}" || true
 
       - name: Ensure TRIO_REPO_TOKEN is available (required for private Trio repo)
         if: ${{ env.TRIO_REPO == 'jwoglom/Trio-tandem' && env.TRIO_REPO_TOKEN == '' }}
@@ -191,12 +205,6 @@ jobs:
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
 
-      - name: Boot selected simulator
-        run: |
-          set -euo pipefail
-          UDID="${SIMULATOR_DESTINATION##*id=}"
-          xcrun simctl bootstatus "${UDID}" -b || true
-
       - name: Build Trio tests for execution (no test run)
         run: |
           set -o pipefail
@@ -210,6 +218,11 @@ jobs:
             -quiet \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Wait for the simulator to finish booting
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
 
       - name: Run Trio tests without rebuilding
         run: |

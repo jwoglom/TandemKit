@@ -32,6 +32,38 @@ Use the same LoopKit revision Trio's submodule points at. Upstream
 the setup: it checks out the pinned LoopKit, writes a two-project workspace, and
 runs the `TandemKitTests` scheme against an iOS simulator.
 
+### Host apps must embed the shared SwiftPM products
+
+The `TandemKit` target links four remote SwiftPM products for the JPAKE path:
+`SwiftECC`, `BigInt`, `ASN1` and `Digest`. All four are "automatic" library
+products, so Xcode normally links them statically into `TandemKit.framework` and
+the host app needs to do nothing.
+
+That stops being true as soon as another framework in the same workspace links
+one of the same products. Xcode then rebuilds that product as an auto-generated
+dynamic framework -- `ASN1_<hash>_PackageProduct.framework` -- so the two
+clients share one copy instead of each carrying duplicate symbols. A dynamic
+framework has to be embedded in the `.app`, and Xcode only embeds package
+products that the *application* target itself links. If only the two frameworks
+link it, nothing embeds it and the app dies at launch, before any of its code
+runs:
+
+```
+Library not loaded: @rpath/ASN1_<hash>_PackageProduct.framework/ASN1_<hash>_PackageProduct
+Referenced from: .../Trio.app/Frameworks/AccuChekKit.framework/AccuChekKit
+Termination Reason: DYLD 1 Library missing
+```
+
+Trio hits exactly this: `loopandlearn/AccuChekKit` links `leif-ibsen/ASN1` too,
+and `ASN1` in turn depends on `BigInt`. The fix belongs in the host app, not
+here -- add `ASN1` and `BigInt` to the **app** target's "Frameworks, Libraries,
+and Embedded Content", the same way Trio already lists `SlideButton` and
+`CryptoSwift`. Xcode embeds them from there whether it ends up building them
+statically or dynamically, so the setting is correct either way.
+
+Anything that changes which products TandemKit links, or that adds a framework
+linking one of them, should be checked against this before it ships.
+
 ## Tests
 
 The unit tests live in `Tests/` and are built by the `TandemKitTests` target in
@@ -48,8 +80,16 @@ ruby scripts/check_xcodeproj_source_membership.rb --check
 ruby scripts/check_xcodeproj_source_membership.rb --fix
 ```
 
-Files deliberately left out of the target are listed, with a reason each, in
-`EXCLUDED_TEST_PATHS` inside that script.
+There is no exclusion list: every `.swift` file under `Tests/` must be a member
+of `TandemKitTests`, and every directory under `Tests/` is discovered by the
+script rather than registered by hand, so a new test file or a new test
+directory cannot be silently left out of the CI run. A test that no longer
+compiles has to be fixed or deleted. The same applies to `Sources/` — a
+directory holding Swift files that no target claims fails the check too.
+
+CI runs `--check` in every workflow, and `unit-tests.yml` additionally fails the
+run if the test bundle executes zero tests, so "green" cannot mean "nothing
+ran".
 
 ## Swift Package Manager
 

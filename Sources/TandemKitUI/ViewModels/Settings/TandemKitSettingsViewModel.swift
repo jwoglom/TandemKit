@@ -42,6 +42,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var currentProfileBaseBasalRate: Double? = nil
     @Published var currentBasalRateForDisplay: String = ""
     @Published var batteryPercentage: String? = nil
+    /// Remaining charge as a 0...1 fraction, used to draw the battery indicator.
+    @Published var batteryChargeRemaining: Double? = nil
+    @Published var batteryIsCharging: Bool = false
     @Published var pumpTimeCheckedAt: String = ""
     @Published var currentPumpTime: String = ""
     @Published var reservoirUnitsText: String? = nil
@@ -71,11 +74,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
     @Published var showNoCGMWarning: Bool = false
-    @Published var isCGMActiveOnPump: Bool = false
+    /// Whether a CGM sensor session is established on the pump, or nil while that is unknown (the
+    /// pump has not been read yet, or the read failed). Unknown is deliberately distinct from
+    /// `false`: only a confirmed absence should raise the "no CGM connected" warning.
+    @Published var isCGMActiveOnPump: Bool?
     @Published var pendingEnableClosedLoop: Bool = false
     @Published var showCGMRequiredForCIQ: Bool = false
+    @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
+
+    /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
+    /// has no sensor session earns the warning; an unknown session state does not.
+    var showsNoCGMConnectedBanner: Bool {
+        useControlIQ && isCGMActiveOnPump == false
+    }
 
     private var numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -123,6 +136,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openDebug = openDebug
         self.allowDebugFeatures = allowDebugFeatures
         useControlIQ = pumpManager?.state.useControlIQ ?? false
+        isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
@@ -210,6 +224,16 @@ class TandemKitSettingsViewModel: ObservableObject {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
 
+        // Control-IQ doses from body weight and total daily insulin, and a pump that has never run
+        // it has neither, so the driver refuses the enable. Open the screen where they can be
+        // entered instead of attempting a request that cannot succeed (#223).
+        guard pumpManager.state.controlIQWeightLbs != nil,
+              pumpManager.state.controlIQTotalDailyInsulin != nil
+        else {
+            showControlIQValuesRequired = true
+            return
+        }
+
         isCheckingCGMForCIQ = true
         pumpManager.getCGMStatus { response in
             DispatchQueue.main.async {
@@ -226,24 +250,32 @@ class TandemKitSettingsViewModel: ObservableObject {
     func switchAlgorithmToControlIQ() {
         isUpdatingPumpState = true
 
+        // Weight and TDI come from the pump, and are absent until Control-IQ has been configured
+        // there at least once. Sending a placeholder in their place only earns a rejection, so pass
+        // the absence through and let the driver refuse with an error that names what is missing.
         let request = ChangeControlIQSettingsRequest(
             enabled: true,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+            weightLbs: pumpManager?.state.controlIQWeightLbs ?? 0,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 0
         )
-        pumpManager?.configureControlIQMode(request) { success, cgmResponse in
-            if success {
-                let cgmActive = cgmResponse?.sessionState == .active
+        pumpManager?.configureControlIQMode(request) { result in
+            switch result {
+            case let .success(cgmResponse):
+                // A sensor that is still warming up counts as connected — it will start feeding
+                // Control-IQ shortly — matching the check that gated this switch in the first
+                // place (`attemptSwitchToControlIQ`). A missing response leaves the session state
+                // unknown, and an unknown state is not grounds for the warning.
+                let cgmConfigured = cgmResponse?.isSensorSessionConfigured
 
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                     self.useControlIQ = true
-                    self.isCGMActiveOnPump = cgmActive
-                    if !cgmActive {
+                    self.isCGMActiveOnPump = cgmConfigured
+                    if cgmConfigured == false {
                         self.showNoCGMWarning = true
                     }
                 }
-            } else {
+            case .failure:
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                     self.commandFailure = .controlIQ
@@ -255,18 +287,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     func switchAlgorithmToDIY() {
         isUpdatingPumpState = true
 
+        // Turning Control-IQ off carries the same fields but does not depend on them, so an unset
+        // weight/TDI is no obstacle here.
         let request = ChangeControlIQSettingsRequest(
             enabled: false,
-            weightLbs: pumpManager?.state.controlIQWeight ?? 30,
-            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 30
+            weightLbs: pumpManager?.state.controlIQWeightLbs ?? 0,
+            totalDailyInsulinUnits: pumpManager?.state.controlIQTotalDailyInsulin ?? 0
         )
-        pumpManager?.configureControlIQMode(request) { success, _ in
+        pumpManager?.configureControlIQMode(request) { result in
             DispatchQueue.main.async {
                 self.isUpdatingPumpState = false
-                if success {
+                switch result {
+                case .success:
                     self.useControlIQ = false
                     self.showReenableClosedLoopPrompt = true
-                } else {
+                case .failure:
                     self.commandFailure = .controlIQ
                 }
             }
@@ -392,6 +427,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
+            self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
             self.pumpState = pumpManager.state.pumpState
             self.controlIQEnabled = pumpManager.state.controlIQEnabled ?? false
@@ -409,8 +445,11 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
                 self.suspendResumeText = String(localized: "Suspend Insulin Delivery", comment: "suspend delivery")
             }
 
-            if let battery = pumpManager.state.lastBatteryReading?.chargeRemaining {
+            if let batteryReading = pumpManager.state.lastBatteryReading {
+                let battery = batteryReading.chargeRemaining
                 self.batteryPercentage = self.numberFormatter.string(from: (battery * 100) as NSNumber)
+                self.batteryChargeRemaining = battery
+                self.batteryIsCharging = batteryReading.isCharging
             }
 
             if let lastPumpTimeCheckDate = pumpManager.state.lastPumpTimeCheckDate {

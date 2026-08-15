@@ -7,7 +7,7 @@ private final class ConnectResultBox {
     var error: Error?
 }
 
-class TandemBluetoothManager: NSObject {
+class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     private let logger = TandemLogger(category: "TandemBluetoothManager")
     private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.bluetoothManagerQueue", qos: .unspecified)
 
@@ -108,7 +108,12 @@ class TandemBluetoothManager: NSObject {
         manager.connect(peripheral)
     }
 
+    /// Blocks until the pump responds, so it must run as part of a serialized command job — i.e.
+    /// inside an `ensureConnected` block. Off-queue writes race the command pipeline and were a
+    /// root cause of the wedged-connection failures.
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+        dispatchPrecondition(condition: .onQueue(commandQueue))
+
         guard let peripheralManager else {
             logger.error("No peripheralManager -> Not connected...")
             return nil

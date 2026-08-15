@@ -13,13 +13,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var managerIdentifier: String = "Tandem"
     public typealias RawStateValue = [String: Any]
 
-    let bluetooth: TandemBluetoothManager
+    let bluetooth: PumpBluetoothConnection
 
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
     // Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
-    public static var onboardingSupportedBasalRates: [Double] = [0.0] + strideRange(from: 0.1, through: 15.0, by: 0.01)
+    public static var onboardingSupportedBasalRates: [Double] = TandemPumpCapabilities.supportedBasalRates
 
     // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus in 0.05u chunks
     public static var onboardingSupportedBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.05)
@@ -38,6 +38,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     public let fillCannulaStateStream = PassthroughSubject<FillCannulaStateStreamResponse, Never>()
+    public let changeCartridgeStateStream = PassthroughSubject<EnterChangeCartridgeModeStateStreamResponse, Never>()
+    public let detectingCartridgeStateStream = PassthroughSubject<DetectingCartridgeStateStreamResponse, Never>()
     public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
@@ -49,12 +51,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Backstop timeout for pump commands. This MUST stay comfortably larger than the worst-case
     // real command duration, otherwise it could report a spurious failure for a command that is
     // still in progress — and for a bolus a false failure can prompt the loop to retry, risking a
-    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
-    // so a command always self-completes via the lower-level bounded waits well before this fires;
-    // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
+    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips, each of
+    // which is bounded by TandemPeripheralManager.responseTimeout (30s), so a command always
+    // self-completes via the lower-level bounded waits well before this fires; the watchdog is
+    // purely a last-resort guarantee that the loop receives exactly one result.
     // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
-    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
+    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -88,10 +91,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
         )
     }
 
-    public init(state: TandemPumpManagerState) {
+    public convenience init(state: TandemPumpManagerState) {
+        self.init(state: state, bluetooth: TandemBluetoothManager())
+    }
+
+    /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
+    /// without CoreBluetooth; production goes through `init(state:)`.
+    init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection) {
         self.state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
-        bluetooth = TandemBluetoothManager()
+        self.bluetooth = bluetooth
         bluetooth.pumpManager = self
 
         let nc = NotificationCenter.default
@@ -299,6 +308,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
+            self.fetchCGMSessionStatus()
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
@@ -337,6 +347,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Returns the reason `units` is not a deliverable bolus, or nil when it is.
+    ///
+    /// `settings.maxBolus` mirrors the delivery limit the host app last synced (see
+    /// `syncDeliveryLimits`); when it has never been synced the limit is nil and only the
+    /// positive-amount check applies.
+    func validateBolusRequest(units: Double) -> TandemPumpManagerValidationError? {
+        guard units > 0 else {
+            return .invalidBolusAmount(requested: units)
+        }
+
+        if let maxBolus = state.settings.maxBolus, units > maxBolus {
+            return .maximumBolusExceeded(requested: units, maximum: maxBolus)
+        }
+
+        return nil
+    }
+
     public func enactBolus(
         units: Double,
         activationType: BolusActivationType,
@@ -349,6 +376,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
         if state.useControlIQ, activationType.isAutomatic {
             logger.warning("[enactBolus] Blocked automatic bolus: Control-IQ mode is active")
             completion(.deviceState(TandemPumpManagerValidationError.controlIQModeActive))
+            return
+        }
+
+        // The pump enforces its own max bolus limit (pushed down by syncDeliveryLimits via
+        // SetMaxBolusLimitRequest), but check here too so an out-of-range request fails fast with a
+        // specific error instead of being rejected mid-handshake as a generic permission denial.
+        if let error = validateBolusRequest(units: units) {
+            logger.error("[enactBolus] Rejected bolus request of \(units)U: \(error)")
+            completion(.deviceState(error))
             return
         }
 
@@ -1092,7 +1128,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func getControlIQData(completion: @escaping (ControlIQInfoV2Response?, ControlIQSleepScheduleResponse?) -> Void) {
+    func getControlIQData(completion: @escaping (ControlIQInfoAbstractResponse?, ControlIQSleepScheduleResponse?) -> Void) {
         logger.info("Getting controlIQ info")
 
         bluetooth.ensureConnected { error in
@@ -1102,10 +1138,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Pumps at or below API 2.1 only answer the V1 request, so ask for the variant this pump
+            // speaks rather than always asking for V2 and reporting nothing when it goes unanswered.
+            let (request, expecting) = ControlIQInfoRequestBuilder.create(apiVersion: self.state.pumpState.apiVersion)
             let iqInfo = self.bluetooth.write(
-                message: ControlIQInfoV2Request(),
-                expecting: ControlIQInfoV2Response.self
-            ) as? ControlIQInfoV2Response
+                message: request,
+                expecting: expecting
+            ) as? ControlIQInfoAbstractResponse
 
             let scheduleInfo = self.bluetooth.write(
                 message: ControlIQSleepScheduleRequest(),
@@ -1139,16 +1178,33 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Applies a Control-IQ settings change, reporting the CGM status that follows it on success.
+    ///
+    /// Enabling Control-IQ requires a weight and total daily insulin the pump will accept; a pump on
+    /// which Control-IQ has never been configured reports zeroes for both, and rejects a request
+    /// carrying them. Those are checked here so the request never leaves the phone -- and, just as
+    /// importantly, so a doomed request does not first cancel a running temp basal below.
+    /// Disabling Control-IQ carries the same fields but does not depend on them, so it is not gated.
     func configureControlIQMode(
         _ request: ChangeControlIQSettingsRequest,
-        completion: @escaping (Bool, CGMStatusV2Response?) -> Void
+        completion: @escaping (Result<CGMStatusV2Response?, Error>) -> Void
     ) {
         logger.info("Configure controlIQ mode: \(request.enabled)")
+
+        if request.enabled, let failure = ControlIQSettingsLimits.validate(
+            weightLbs: request.weightLbs,
+            totalDailyInsulinUnits: request.totalDailyInsulinUnits
+        ) {
+            let error = ControlIQConfigurationError(failure)
+            logger.error("Refusing to enable ControlIQ: \(error.localizedDescription)")
+            completion(.failure(error))
+            return
+        }
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for controlIQ mode: \(error.localizedDescription)")
-                completion(false, nil)
+                completion(.failure(error))
                 return
             }
 
@@ -1174,13 +1230,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 expecting: ChangeControlIQSettingsResponse.self
             ) as? ChangeControlIQSettingsResponse else {
                 self.logger.error("Failed to change controlIQ mode")
-                completion(false, nil)
+                completion(.failure(ControlIQConfigurationError.noResponse))
                 return
             }
 
             guard response.isStatusOK else {
                 self.logger.error("Failed to change controlIQ mode - Status: \(response.status)")
-                completion(false, nil)
+                completion(.failure(ControlIQConfigurationError.pumpRejected(status: response.status)))
                 return
             }
 
@@ -1189,9 +1245,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
 
+            if let cgmResponse {
+                self.updateCGMSessionState(from: cgmResponse)
+            }
+
             // Pump accepted -- update local preference
             self.state.useControlIQ = request.enabled
-            self.state.controlIQWeight = request.weightLbs
+            self.state.controlIQWeightLbs = request.weightLbs
             self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
             self.notifyDelegateStateUpdated()
 
@@ -1200,9 +1260,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Refresh pump state to confirm ControlIQ status
             Thread.sleep(forTimeInterval: 1.0)
             self.syncPumpData { _ in
-                completion(true, cgmResponse)
+                completion(.success(cgmResponse))
             }
         }
+    }
+
+    /// Whether this pump's model and API version can be expected to handle `messageType`, so the UI
+    /// can hide a control instead of offering a write the pump will never answer.
+    func supports<T: Message>(_ messageType: T.Type) -> Bool {
+        messageType.props.isSupported(
+            pumpModel: state.pumpState.pumpModel,
+            apiVersion: state.pumpState.apiVersion
+        )
     }
 
     func setSleepSchedule(
@@ -1211,6 +1280,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         completion: @escaping (Bool) -> Void
     ) {
         logger.info("Setting sleep schedule")
+
+        guard supports(SetSleepScheduleRequest.self) else {
+            logger.error("Pump does not support setting sleep schedules")
+            completion(false)
+            return
+        }
 
         bluetooth.ensureConnected { error in
             if let error {
@@ -1332,6 +1407,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 message: CGMStatusV2Request(),
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
+
+            if let response {
+                self.updateCGMSessionState(from: response)
+            }
 
             completion(response)
         }
@@ -1468,13 +1547,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
 
-        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
-        guard events.contains(where: { actionableEvents.contains($0) }) else {
+        let context = qualifyingEventContext
+        for qualifyingEvent in events
+            where QualifyingEventFetch.fetches(for: [qualifyingEvent], context: context).isEmpty {
+            logger.info("Skipping event: \(qualifyingEvent)")
+        }
+
+        // Deduplicated across the batch, so an alert+alarm pair reloads the notification bundle
+        // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
+        // suggested handlers on QualifyingEvent.
+        let fetches = QualifyingEventFetch.fetches(for: events, context: context)
+        guard !fetches.isEmpty else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
             // acknowledge; ack immediately.
-            for qualifyingEvent in events {
-                logger.info("Skipping event: \(qualifyingEvent)")
-            }
             completion()
             return
         }
@@ -1490,22 +1575,44 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            for qualifyingEvent in events {
-                switch qualifyingEvent {
-                case .bolusChange:
-                    self.fetchBolusStatus(fromSync: false)
-                case .basalChange:
-                    self.fetchBasalStatus()
-                case .alert:
-                    self.fetchNotifications()
-                case .battery:
-                    self.fetchBatteryStatus()
-                default:
-                    self.logger.info("Skipping event: \(qualifyingEvent)")
-                }
+            for fetch in fetches {
+                self.runFetch(fetch)
             }
 
             completion()
+        }
+    }
+
+    /// The pump state the suggested handlers are selected against. PumpX2 reads the equivalent
+    /// out of its global `PumpStateSupplier`.
+    var qualifyingEventContext: QualifyingEventContext {
+        QualifyingEventContext(
+            apiVersion: state.pumpState.apiVersion,
+            controlIQSupported: state.controlIQEnabled ?? false,
+            inProgressBolusId: state.bolusDose?.bolusId
+        )
+    }
+
+    private func runFetch(_ fetch: QualifyingEventFetch) {
+        switch fetch {
+        case .notifications:
+            fetchNotifications()
+        case .controlIQStatus:
+            fetchControlIQStatus()
+        case .basalStatus:
+            fetchBasalStatus()
+        case .bolusStatus:
+            fetchBolusStatus(fromSync: false)
+        case .reservoirStatus:
+            fetchReservoirStatus()
+        case .batteryStatus:
+            fetchBatteryStatus()
+        case .deliveryLimits:
+            fetchDeliveryLimits()
+        case .globalPumpSettings:
+            fetchGlobalPumpSettings()
+        case .timeSinceReset:
+            fetchTimeSinceReset()
         }
     }
 }

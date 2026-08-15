@@ -5,6 +5,7 @@ private enum SettingsAlertType: Identifiable {
     case switchToCIQ
     case switchToDIY
     case cgmRequiredForCIQ
+    case controlIQValuesRequired
     case diyRestored
     case noCGMConnected
     case stopTempRate
@@ -17,6 +18,7 @@ private enum SettingsAlertType: Identifiable {
         case .switchToCIQ: return "switchToCIQ"
         case .switchToDIY: return "switchToDIY"
         case .cgmRequiredForCIQ: return "cgmRequiredForCIQ"
+        case .controlIQValuesRequired: return "controlIQValuesRequired"
         case .diyRestored: return "diyRestored"
         case .noCGMConnected: return "noCGMConnected"
         case .stopTempRate: return "stopTempRate"
@@ -36,36 +38,35 @@ struct TandemKitSettingsView: View {
     @State fileprivate var activeAlert: SettingsAlertType?
     @StateObject var viewModel: TandemKitSettingsViewModel
 
-    var removePumpManagerActionSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion action sheet.")
-                .font(.headline),
+    var removePumpManagerActionSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Remove Pump", comment: "Title for Tandem PumpManager deletion confirmation dialog."),
             message: Text(String(format: String(
                 localized:
                 "Are you sure you want to remove the pump from %@? You will need to re-pair the device to reconnect with it which will require access to the charging pad.",
-                comment: "Message for Tandem PumpManager deletion action sheet"
+                comment: "Message for Tandem PumpManager deletion confirmation dialog"
             ), viewModel.appName)),
-            buttons: [
+            actions: [
                 .destructive(Text(
                     "Delete Pump",
                     comment: "Button text to confirm Tandem PumpManager deletion"
                 )) {
                     viewModel.removePump()
                 },
-                .cancel()
+                .cancel(Text("Cancel", comment: "Cancel button"))
             ]
         )
     }
 
-    var syncPumpTime: ActionSheet {
-        ActionSheet(
-            title: Text("Time Change Detected", comment: "Title for pod sync time action sheet."),
+    var syncPumpTime: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Time Change Detected", comment: "Title for pod sync time confirmation dialog."),
             message: Text(
                 "The time on your pump is different from the current time. Do you want to update the time on your pump to the current time?",
-                comment: "Message for pod sync time action sheet"
+                comment: "Message for pod sync time confirmation dialog"
             ),
-            buttons: [
-                .default(Text("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync")) {
+            actions: [
+                .standard(Text("Yes, Sync to Current Time", comment: "Button text to confirm pump time sync")) {
                     self.viewModel.syncPumpTime()
                 },
                 .cancel(Text("No, Keep Pump As Is", comment: "Button text to cancel pump time sync"))
@@ -183,28 +184,40 @@ struct TandemKitSettingsView: View {
                         .padding(.bottom, -25)
                         .frame(maxWidth: .infinity)
 
-                    HStack(alignment: .top) {
+                    // Centered so the percentage sits level with the battery, and the battery
+                    // sits level with the sound button across from it.
+                    HStack(alignment: .center) {
                         if let battery = viewModel.batteryPercentage {
-                            HStack(alignment: .top, spacing: 4) {
-                                Image(systemName: batteryIconName(battery))
-                                    .font(.system(size: 16))
-                                    .foregroundColor(batteryColor(battery))
+                            HStack(alignment: .center, spacing: 4) {
+                                BatteryIndicatorView(
+                                    chargeRemaining: viewModel.batteryChargeRemaining,
+                                    isCharging: viewModel.batteryIsCharging
+                                )
                                 Text("\(battery)")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(
+                                        BatteryIndicatorView.tintColor(
+                                            chargeRemaining: viewModel.batteryChargeRemaining,
+                                            isCharging: viewModel.batteryIsCharging
+                                        )
+                                    )
                             }
                         }
 
                         Spacer()
 
                         Button(action: { viewModel.playSound() }) {
-                            if viewModel.isPlayingSound {
-                                ActivityIndicator(isAnimating: .constant(true), style: .medium)
-                            } else {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 18))
-                                    .foregroundColor(.accentColor)
+                            Group {
+                                if viewModel.isPlayingSound {
+                                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                                } else {
+                                    Image(systemName: "speaker.wave.2.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.accentColor)
+                                }
                             }
+                            // Fixed footprint so swapping in the spinner doesn't shift the row.
+                            .frame(width: 24, height: 20)
                         }
                         .buttonStyle(.plain)
                         .disabled(viewModel.isPlayingSound)
@@ -252,7 +265,7 @@ struct TandemKitSettingsView: View {
                         title: String(localized: "Pump Disconnected", comment: "title for pump disconnected notice"),
                         color: .red
                     )
-                } else if viewModel.useControlIQ && !viewModel.isCGMActiveOnPump {
+                } else if viewModel.showsNoCGMConnectedBanner {
                     statusBanner(
                         title: String(localized: "No CGM connected to pump", comment: "title for CIQ no CGM notice"),
                         subtitle: String(
@@ -470,7 +483,7 @@ struct TandemKitSettingsView: View {
                         .foregroundColor(.accentColor)
                 }
                 .disabled(viewModel.isUpdatingTime)
-                .actionSheet(isPresented: $viewModel.showingTimeSyncConfirmation) {
+                .confirmationDialog(isPresented: $viewModel.showingTimeSyncConfirmation) {
                     syncPumpTime
                 }
             }
@@ -493,7 +506,7 @@ struct TandemKitSettingsView: View {
                     Text("Delete Pump", comment: "Label for PumpManager deletion button")
                         .foregroundColor(guidanceColors.critical)
                 }
-                .actionSheet(isPresented: $viewModel.showingDeleteConfirmation) {
+                .confirmationDialog(isPresented: $viewModel.showingDeleteConfirmation) {
                     removePumpManagerActionSheet
                 }
             }
@@ -570,6 +583,25 @@ struct TandemKitSettingsView: View {
                     primaryButton: .default(
                         Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
                         action: { viewModel.openCgmSettings() }
+                    ),
+                    secondaryButton: .cancel(Text("OK"))
+                )
+            case .controlIQValuesRequired:
+                return Alert(
+                    title: Text(
+                        "Control-IQ Setup Needed",
+                        comment: "Title for alert blocking the switch to Control-IQ when weight/TDI are unset"
+                    ),
+                    message: Text(
+                        "Control-IQ uses your weight and total daily insulin to dose, and your pump does not have them yet.\n\nEnter them in Control-IQ Settings, then try switching again.",
+                        comment: "Message for alert blocking the switch to Control-IQ when weight/TDI are unset"
+                    ),
+                    primaryButton: .default(
+                        Text(
+                            "Control-IQ Settings",
+                            comment: "Button to open Control-IQ settings from the missing-values alert"
+                        ),
+                        action: { viewModel.openControlIQSettings() }
                     ),
                     secondaryButton: .cancel(Text("OK"))
                 )
@@ -676,6 +708,12 @@ struct TandemKitSettingsView: View {
             if show {
                 activeAlert = .cgmRequiredForCIQ
                 viewModel.showCGMRequiredForCIQ = false
+            }
+        }
+        .onChange(of: viewModel.showControlIQValuesRequired) { show in
+            if show {
+                activeAlert = .controlIQValuesRequired
+                viewModel.showControlIQValuesRequired = false
             }
         }
         .navigationBarItems(trailing: doneButton)
@@ -855,28 +893,6 @@ struct TandemKitSettingsView: View {
         .padding(.vertical, 8)
     }
 
-    private func batteryIconName(_ percentage: String) -> String {
-        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
-            return "battery.0"
-        }
-        switch value {
-        case 75 ... 100: return "battery.100"
-        case 50 ..< 75: return "battery.75"
-        case 25 ..< 50: return "battery.50"
-        case 1 ..< 25: return "battery.25"
-        default: return "battery.0"
-        }
-    }
-
-    private func batteryColor(_ percentage: String) -> Color {
-        guard let value = Int(percentage.replacingOccurrences(of: "%", with: "")) else {
-            return .secondary
-        }
-        if value <= 10 { return .red }
-        if value <= 25 { return .orange }
-        return .green
-    }
-
     private func userModeText(_ mode: Int) -> String {
         switch mode {
         case 0,
@@ -926,6 +942,23 @@ private extension TandemKitSettingsViewModel {
             openAlertSettings: {}
         )
         viewModel.reservoirValue = SimpleReservoirValue(startDate: Date(), unitVolume: 180)
+        viewModel.batteryPercentage = "100%"
+        viewModel.batteryChargeRemaining = 1.0
+        return viewModel
+    }
+
+    static var previewDataLowBattery: TandemKitSettingsViewModel {
+        let viewModel = previewData
+        viewModel.batteryPercentage = "15%"
+        viewModel.batteryChargeRemaining = 0.15
+        return viewModel
+    }
+
+    static var previewDataCharging: TandemKitSettingsViewModel {
+        let viewModel = previewData
+        viewModel.batteryPercentage = "62%"
+        viewModel.batteryChargeRemaining = 0.62
+        viewModel.batteryIsCharging = true
         return viewModel
     }
 
@@ -959,6 +992,20 @@ private final class PreviewTandemKitSettingsViewModel: TandemKitSettingsViewMode
 #Preview("Overview") {
     NavigationView {
         TandemKitSettingsView(viewModel: .previewData)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Low Battery") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewDataLowBattery)
+    }
+    .environment(\.guidanceColors, GuidanceColors())
+}
+
+#Preview("Charging") {
+    NavigationView {
+        TandemKitSettingsView(viewModel: .previewDataCharging)
     }
     .environment(\.guidanceColors, GuidanceColors())
 }

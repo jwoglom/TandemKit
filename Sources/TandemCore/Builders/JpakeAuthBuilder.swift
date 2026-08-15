@@ -9,6 +9,9 @@ public class JpakeAuthBuilder {
     public private(set) var receivedMessages: [Message]
     var step: JpakeStep
     private var clientRound1: Data?
+    /// The two frames `clientRound1` is sent as, split on the real group boundary rather than at a
+    /// fixed offset — see `JpakeRound1Framing`.
+    private var clientRound1Frames: (first: Data, second: Data)?
     private var serverRound1: Data?
     private var clientRound2: Data?
     private var serverRound2: Data?
@@ -72,23 +75,25 @@ public class JpakeAuthBuilder {
         var request: (Message, Message.Type)?
         switch step {
         case .BOOTSTRAP_INITIAL:
-            clientRound1 = cryptoProvider.makeRound1()
-            if let round1 = clientRound1, round1.count >= 165 {
-                let challenge = round1.subdata(in: 0 ..< 165)
+            let round1 = cryptoProvider.makeRound1()
+            clientRound1 = round1
+            // Split on the group boundary, not at byte 165: a ZKP scalar drops its leading zero
+            // bytes, so round 1 is 330 bytes only ~99.2% of the time.
+            if let frames = JpakeRound1Framing.splitRound1(round1) {
+                clientRound1Frames = frames
                 request = (
-                    Jpake1aRequest(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake1aRequest(appInstanceId: 0, centralChallenge: frames.first),
                     Jpake1aResponse.self
                 )
                 step = .ROUND_1A_SENT
             } else {
-                log.error("[JpakeAuthBuilder] Round 1 payload missing")
+                log.error("[JpakeAuthBuilder] Round 1 payload malformed (\(round1.count) bytes)")
                 step = .INVALID
             }
         case .ROUND_1A_RECEIVED:
-            if let round1 = clientRound1, round1.count >= 330 {
-                let challenge = round1.subdata(in: 165 ..< 330)
+            if let frames = clientRound1Frames {
                 request = (
-                    Jpake1bRequest(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake1bRequest(appInstanceId: 0, centralChallenge: frames.second),
                     Jpake1bResponse.self
                 )
                 step = .ROUND_1B_SENT
@@ -97,16 +102,18 @@ public class JpakeAuthBuilder {
                 step = .INVALID
             }
         case .ROUND_1B_RECEIVED:
-            clientRound2 = cryptoProvider.makeRound2()
-            if let round2 = clientRound2, round2.count >= 165 {
-                let challenge = round2.subdata(in: 0 ..< 165)
+            let round2 = cryptoProvider.makeRound2()
+            clientRound2 = round2
+            // Round 2 is a single group, so it fits one frame; it is short for the same
+            // leading-zero reason round 1 is, and gets the same zero padding.
+            if JpakeRound1Framing.groupLength(in: round2, at: 0) != nil {
                 request = (
-                    Jpake2Request(appInstanceId: 0, centralChallenge: challenge),
+                    Jpake2Request(appInstanceId: 0, centralChallenge: JpakeRound1Framing.padToFrame(round2)),
                     Jpake2Response.self
                 )
                 step = .ROUND_2_SENT
             } else {
-                log.error("[JpakeAuthBuilder] Round 2 payload missing")
+                log.error("[JpakeAuthBuilder] Round 2 payload malformed (\(round2.count) bytes)")
                 step = .INVALID
             }
         case .ROUND_2_RECEIVED:
@@ -178,7 +185,10 @@ public class JpakeAuthBuilder {
             step = .ROUND_1A_RECEIVED
         } else if let m = response as? Jpake1bResponse {
             if let sr1 = serverRound1 {
-                let full = Bytes.combine(sr1, m.centralChallengeHash)
+                // The pump's halves are fixed-size frames too, so its first half carries trailing
+                // padding whenever its own scalar came up short. Concatenating them raw would put
+                // that padding in the middle of the stream and misalign the second group.
+                let full = JpakeRound1Framing.joinRound1(first: sr1, second: m.centralChallengeHash)
                 serverRound1 = full
                 cryptoProvider.readRound1(full)
             }

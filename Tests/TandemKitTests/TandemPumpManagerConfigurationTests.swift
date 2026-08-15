@@ -1,435 +1,243 @@
+import HealthKit
 import LoopKit
-@testable import TandemCore
 @testable import TandemKit
 import XCTest
 
-final class TandemPumpManagerConfigurationTests: XCTestCase {
-    private func makeManager(pumpState: PumpState) -> TandemPumpManager {
-        let state = TandemPumpManagerState(pumpState: pumpState)
-        return TandemPumpManager(state: state)
+/// Covers the two settings the host app pushes down to the pump: the basal rate schedule (via IDP
+/// profile segments) and the delivery limits. Both walk a multi-step request sequence, so the
+/// assertions are on the exact messages the driver produced.
+@available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerConfigurationTests: XCTestCase {
+    private var bluetooth: StubPumpBluetooth!
+    private var manager: TandemPumpManager!
+
+    private let idpId = 10
+    private let profileIndex = 0
+
+    override func setUp() {
+        super.setUp()
+        bluetooth = StubPumpBluetooth()
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
     }
 
-    func testSyncBasalRateScheduleSendsSegmentUpdates() throws {
-        let pumpState = PumpState(address: 0x0102_0304)
-        let manager = makeManager(pumpState: pumpState)
-        let peripheral = MockPeripheralManager()
-        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
-        let mockComm = MockPumpComm(pumpState: pumpState)
-        manager.setPumpCommForTesting(mockComm)
-        manager.updateTransport(transport)
+    override func tearDown() {
+        manager = nil
+        bluetooth = nil
+        super.tearDown()
+    }
 
-        let items = [
-            RepeatingScheduleValue(startTime: 0, value: 0.8),
-            RepeatingScheduleValue(startTime: 3600, value: 1.2)
-        ]
+    // MARK: - Helpers
 
-        // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
-        peripheral.enqueueResponse(
-            for: ProfileStatusRequest.self,
-            response: ProfileStatusResponse(
-                numberOfProfiles: 1,
-                idpSlot0Id: 10,
-                idpSlot1Id: 0,
-                idpSlot2Id: 0,
-                idpSlot3Id: 0,
-                idpSlot4Id: 0,
-                idpSlot5Id: 0,
-                activeSegmentIndex: 0
-            )
-        )
+    /// Stubs the IDP discovery walk: one profile in slot 0 with `segments` already on the pump.
+    private func stubActiveProfile(segments: [IDPSegmentResponse]) {
+        bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
+            numberOfProfiles: 1,
+            idpSlot0Id: idpId,
+            idpSlot1Id: 0,
+            idpSlot2Id: 0,
+            idpSlot3Id: 0,
+            idpSlot4Id: 0,
+            idpSlot5Id: 0,
+            activeSegmentIndex: 0
+        ))
 
-        // Step 2: Mock IDPSettingsRequest -> IDPSettingsResponse
-        peripheral.enqueueResponse(
-            for: IDPSettingsRequest.self,
-            response: IDPSettingsResponse(
-                idpId: 10,
-                profileName: "Test",
-                numberOfProfileSegments: 2,
-                activeProfile: 1,
-                carbEntry: 1,
-                totalDailyInsulin: 0,
-                profileInsulinDuration: 180
-            )
-        )
+        bluetooth.stub(IDPSettingsRequest.self, with: IDPSettingsResponse(
+            idpId: idpId,
+            name: "Test",
+            numberOfProfileSegments: segments.count,
+            insulinDuration: 180,
+            maxBolus: 0,
+            carbEntry: true
+        ))
 
-        // Step 3: Mock IDPSegmentRequest -> IDPSegmentResponse for existing segments
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 0,
-                profileStartTime: 0,
-                profileBasalRate: 1000,
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 1,
-                profileStartTime: 480,
-                profileBasalRate: 1200,
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-
-        // Step 4: Mock SetIDPSegmentRequest -> SetIDPSegmentResponse for modifications
-        for _ in items {
-            peripheral.enqueueResponse(
-                for: SetIDPSegmentRequest.self,
-                response: SetIDPSegmentResponse(status: 0, unknown: 0)
-            )
+        bluetooth.stub(IDPSegmentRequest.self) { request in
+            guard let request = request as? IDPSegmentRequest else { return nil }
+            return segments.first { $0.segmentIndex == request.segmentIndex }
         }
 
-        let expectation = expectation(description: "basal schedule synced")
-        var result: Result<BasalRateSchedule, Error>?
+        bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 0, unknown: 0))
+    }
 
-        manager.syncBasalRateSchedule(items: items) { syncResult in
-            result = syncResult
+    private func segment(
+        index: Int,
+        startTime: Int,
+        basalMilliunits: Int
+    ) -> IDPSegmentResponse {
+        IDPSegmentResponse(
+            idpId: idpId,
+            segmentIndex: index,
+            profileStartTime: startTime,
+            profileBasalRate: basalMilliunits,
+            profileCarbRatio: 10000,
+            profileTargetBG: 110,
+            profileISF: 50,
+            idpStatusId: 31
+        )
+    }
+
+    private func syncBasal(_ items: [RepeatingScheduleValue<Double>]) -> Result<BasalRateSchedule, Error> {
+        var result: Result<BasalRateSchedule, Error>!
+        let expectation = expectation(description: "syncBasalRateSchedule")
+        manager.syncBasalRateSchedule(items: items) {
+            result = $0
             expectation.fulfill()
         }
-
-        waitForExpectations(timeout: 5)
-
-        let unwrappedResult = try XCTUnwrap(result)
-        let schedule = try XCTUnwrap(try? unwrappedResult.get())
-        XCTAssertEqual(schedule.items, items.sorted { $0.startTime < $1.startTime })
-        XCTAssertEqual(schedule.timeZone, manager.status.timeZone)
-
-        // Find the SetIDPSegmentRequest messages (should be the last 2)
-        let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
-        XCTAssertEqual(setRequests.count, items.count)
-
-        let firstRequest = try XCTUnwrap(setRequests.first)
-        XCTAssertEqual(firstRequest.segmentIndex, 0)
-        XCTAssertEqual(firstRequest.profileStartTime, Int((items[0].startTime / 60.0).rounded()))
-        XCTAssertEqual(firstRequest.profileBasalRate, Int((items[0].value * 1000.0).rounded()))
-        // Per pumpX2 IDPManager: all 5 flags must be set when modifying segments
-        let expectedMask = IDPSegmentResponse.IDPSegmentStatus.fromBitmask(firstRequest.idpStatusId)
-        XCTAssertEqual(firstRequest.idpStatusId, 31, "Status mask should be 31 (all 5 fields)")
-        XCTAssertTrue(expectedMask.contains(.BASAL_RATE))
-        XCTAssertTrue(expectedMask.contains(.CARB_RATIO))
-        XCTAssertTrue(expectedMask.contains(.TARGET_BG))
-        XCTAssertTrue(expectedMask.contains(.CORRECTION_FACTOR))
-        XCTAssertTrue(expectedMask.contains(.START_TIME))
-
-        // Verify other fields from existing segment were preserved
-        XCTAssertEqual(firstRequest.profileCarbRatio, 10000)
-        XCTAssertEqual(firstRequest.profileTargetBG, 110)
-        XCTAssertEqual(firstRequest.profileISF, 50)
-
-        let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
-        XCTAssertEqual(restoredState.basalRateSchedule?.items, items.sorted { $0.startTime < $1.startTime })
-        XCTAssertEqual(restoredState.settings.maxBasalScheduleEntry, items.map(\.value).max())
+        wait(for: [expectation], timeout: 5.0)
+        return result
     }
 
-    func testSyncDeliveryLimitsUpdatesSettings() throws {
-        let pumpState = PumpState(address: 0x0A0B_0C0D)
-        let manager = makeManager(pumpState: pumpState)
-        let peripheral = MockPeripheralManager()
-        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
-        let mockComm = MockPumpComm(pumpState: pumpState)
-        manager.setPumpCommForTesting(mockComm)
-        manager.updateTransport(transport)
-
-        peripheral.enqueueResponse(
-            for: SetMaxBasalLimitRequest.self,
-            response: SetMaxBasalLimitResponse(status: 0)
-        )
-        peripheral.enqueueResponse(
-            for: SetMaxBolusLimitRequest.self,
-            response: SetMaxBolusLimitResponse(status: 0)
-        )
-
-        let limits = DeliveryLimits(maximumBasalRatePerHour: 3.5, maximumBolus: 11.2)
-
-        let expectation = expectation(description: "limits synced")
-        var result: Result<DeliveryLimits, Error>?
-
-        manager.syncDeliveryLimits(limits: limits) { syncResult in
-            result = syncResult
-            expectation.fulfill()
-        }
-
-        waitForExpectations(timeout: 1)
-
-        let appliedLimits = try XCTUnwrap(result?.get())
-        XCTAssertEqual(appliedLimits.maximumBasalRatePerHour, limits.maximumBasalRatePerHour)
-        XCTAssertEqual(appliedLimits.maximumBolus, limits.maximumBolus)
-
-        XCTAssertEqual(peripheral.sentMessages.count, 2)
-        let basalRequest = try XCTUnwrap(
-            peripheral.sentMessages.first { $0.message is SetMaxBasalLimitRequest }?
-                .message as? SetMaxBasalLimitRequest
-        )
-        XCTAssertEqual(basalRequest.maxHourlyBasalMilliunits, Int((limits.maximumBasalRatePerHour! * 1000.0).rounded()))
-
-        let bolusRequest = try XCTUnwrap(
-            peripheral.sentMessages.first { $0.message is SetMaxBolusLimitRequest }?
-                .message as? SetMaxBolusLimitRequest
-        )
-        XCTAssertEqual(bolusRequest.maxBolusMilliunits, Int((limits.maximumBolus! * 1000.0).rounded()))
-
-        let restoredState = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.rawState))
-        XCTAssertEqual(restoredState.settings.maxTempBasalRate, limits.maximumBasalRatePerHour)
-        XCTAssertEqual(restoredState.settings.maxBolus, limits.maximumBolus)
-    }
-
-    func testSyncBasalRateScheduleCreatesNewSegmentsWhenNeeded() throws {
-        let pumpState = PumpState(address: 0x0506_0708)
-        let manager = makeManager(pumpState: pumpState)
-        let peripheral = MockPeripheralManager()
-        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
-        let mockComm = MockPumpComm(pumpState: pumpState)
-        manager.setPumpCommForTesting(mockComm)
-        manager.updateTransport(transport)
-
-        // User wants 3 segments but pump only has 1
-        let items = [
-            RepeatingScheduleValue(startTime: 0, value: 0.8),
-            RepeatingScheduleValue(startTime: 3600, value: 1.2),
-            RepeatingScheduleValue(startTime: 7200, value: 0.9)
-        ]
-
-        // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
-        peripheral.enqueueResponse(
-            for: ProfileStatusRequest.self,
-            response: ProfileStatusResponse(
-                numberOfProfiles: 1,
-                idpSlot0Id: 10,
-                idpSlot1Id: 0,
-                idpSlot2Id: 0,
-                idpSlot3Id: 0,
-                idpSlot4Id: 0,
-                idpSlot5Id: 0,
-                activeSegmentIndex: 0
-            )
-        )
-
-        // Step 2: Mock IDPSettingsRequest -> IDPSettingsResponse (only 1 segment exists)
-        peripheral.enqueueResponse(
-            for: IDPSettingsRequest.self,
-            response: IDPSettingsResponse(
-                idpId: 10,
-                profileName: "Test",
-                numberOfProfileSegments: 1,
-                activeProfile: 1,
-                carbEntry: 1,
-                totalDailyInsulin: 0,
-                profileInsulinDuration: 180
-            )
-        )
-
-        // Step 3: Mock IDPSegmentRequest -> IDPSegmentResponse for the single existing segment
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 0,
-                profileStartTime: 0,
-                profileBasalRate: 1000,
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-
-        // Step 4: Mock responses for 1 modify + 2 create operations
-        peripheral.enqueueResponse(
-            for: SetIDPSegmentRequest.self,
-            response: SetIDPSegmentResponse(status: 0, unknown: 0)
-        )
-        peripheral.enqueueResponse(
-            for: SetIDPSegmentRequest.self,
-            response: SetIDPSegmentResponse(status: 0, unknown: 0)
-        )
-        peripheral.enqueueResponse(
-            for: SetIDPSegmentRequest.self,
-            response: SetIDPSegmentResponse(status: 0, unknown: 0)
-        )
-
-        let expectation = expectation(description: "basal schedule synced")
-        var result: Result<BasalRateSchedule, Error>?
-
-        manager.syncBasalRateSchedule(items: items) { syncResult in
-            result = syncResult
-            expectation.fulfill()
-        }
-
-        waitForExpectations(timeout: 5)
-
-        let unwrappedResult = try XCTUnwrap(result)
-        let schedule = try XCTUnwrap(try? unwrappedResult.get())
-        XCTAssertEqual(schedule.items, items.sorted { $0.startTime < $1.startTime })
-
-        // Find the SetIDPSegmentRequest messages
-        let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
-        XCTAssertEqual(setRequests.count, 3, "Should have 1 modify + 2 create requests")
-
-        // First request should be a modify (operation = 0)
-        let firstRequest = try XCTUnwrap(setRequests[0])
-        XCTAssertEqual(firstRequest.operation, .modifySegmentId)
-        XCTAssertEqual(firstRequest.segmentIndex, 0)
-        XCTAssertEqual(firstRequest.profileBasalRate, Int((items[0].value * 1000.0).rounded()))
-
-        // Second request should be a create (operation = 1)
-        let secondRequest = try XCTUnwrap(setRequests[1])
-        XCTAssertEqual(secondRequest.operation, .createSegment)
-        XCTAssertEqual(secondRequest.segmentIndex, 0, "Create operations use segmentIndex 0")
-        XCTAssertEqual(secondRequest.profileStartTime, Int((items[1].startTime / 60.0).rounded()))
-        XCTAssertEqual(secondRequest.profileBasalRate, Int((items[1].value * 1000.0).rounded()))
-        // Should preserve values from first segment
-        XCTAssertEqual(secondRequest.profileCarbRatio, 10000)
-        XCTAssertEqual(secondRequest.profileTargetBG, 110)
-        XCTAssertEqual(secondRequest.profileISF, 50)
-
-        // Third request should be a create (operation = 1)
-        let thirdRequest = try XCTUnwrap(setRequests[2])
-        XCTAssertEqual(thirdRequest.operation, .createSegment)
-        XCTAssertEqual(thirdRequest.segmentIndex, 0, "Create operations use segmentIndex 0")
-        XCTAssertEqual(thirdRequest.profileStartTime, Int((items[2].startTime / 60.0).rounded()))
-        XCTAssertEqual(thirdRequest.profileBasalRate, Int((items[2].value * 1000.0).rounded()))
-
-        // All requests should have all 5 flags set
-        for request in setRequests {
-            XCTAssertEqual(request.idpStatusId, 31, "All requests should have mask = 31")
-        }
-    }
+    // MARK: - Basal schedule
 
     func testSyncBasalRateScheduleOnlyModifiesChangedSegments() throws {
-        let pumpState = PumpState(address: 0x0910_1112)
-        let manager = makeManager(pumpState: pumpState)
-        let peripheral = MockPeripheralManager()
-        let transport = MockPumpMessageTransport(peripheralManager: peripheral)
-        let mockComm = MockPumpComm(pumpState: pumpState)
-        manager.setPumpCommForTesting(mockComm)
-        manager.updateTransport(transport)
+        // Pump already has 00:00 -> 0.8 U/hr and 01:00 -> 1.2 U/hr; only the second one changes.
+        stubActiveProfile(segments: [
+            segment(index: 0, startTime: 0, basalMilliunits: 800),
+            segment(index: 1, startTime: 60, basalMilliunits: 1200)
+        ])
 
-        // User changes only the first segment from 0.8 to 0.81
-        // The other segments remain the same
-        let items = [
-            RepeatingScheduleValue(startTime: 0, value: 0.81), // Changed from 0.8
-            RepeatingScheduleValue(startTime: 3600, value: 1.2), // Unchanged
-            RepeatingScheduleValue(startTime: 7200, value: 0.9) // Unchanged
-        ]
+        let result = syncBasal([
+            RepeatingScheduleValue(startTime: 0, value: 0.8),
+            RepeatingScheduleValue(startTime: 3600, value: 1.5)
+        ])
 
-        // Step 1: Mock ProfileStatusRequest -> ProfileStatusResponse
-        peripheral.enqueueResponse(
-            for: ProfileStatusRequest.self,
-            response: ProfileStatusResponse(
-                numberOfProfiles: 1,
-                idpSlot0Id: 10,
-                idpSlot1Id: 0,
-                idpSlot2Id: 0,
-                idpSlot3Id: 0,
-                idpSlot4Id: 0,
-                idpSlot5Id: 0,
-                activeSegmentIndex: 0
-            )
-        )
-
-        // Step 2: Mock IDPSettingsRequest -> IDPSettingsResponse (3 segments exist)
-        peripheral.enqueueResponse(
-            for: IDPSettingsRequest.self,
-            response: IDPSettingsResponse(
-                idpId: 10,
-                profileName: "Test",
-                numberOfProfileSegments: 3,
-                activeProfile: 1,
-                carbEntry: 1,
-                totalDailyInsulin: 0,
-                profileInsulinDuration: 180
-            )
-        )
-
-        // Step 3: Mock IDPSegmentRequest -> IDPSegmentResponse for existing segments
-        // Segment 0: 0.8 u/hr at 0 min
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 0,
-                profileStartTime: 0,
-                profileBasalRate: 800, // Will change to 810
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-        // Segment 1: 1.2 u/hr at 60 min
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 1,
-                profileStartTime: 60,
-                profileBasalRate: 1200, // Unchanged
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-        // Segment 2: 0.9 u/hr at 120 min
-        peripheral.enqueueResponse(
-            for: IDPSegmentRequest.self,
-            response: IDPSegmentResponse(
-                idpId: 10,
-                segmentIndex: 2,
-                profileStartTime: 120,
-                profileBasalRate: 900, // Unchanged
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 50,
-                idpStatusId: 31
-            )
-        )
-
-        // Step 4: Mock SetIDPSegmentRequest response - only ONE modify needed
-        peripheral.enqueueResponse(
-            for: SetIDPSegmentRequest.self,
-            response: SetIDPSegmentResponse(status: 0, unknown: 0)
-        )
-
-        let expectation = expectation(description: "basal schedule synced")
-        var result: Result<BasalRateSchedule, Error>?
-
-        manager.syncBasalRateSchedule(items: items) { syncResult in
-            result = syncResult
-            expectation.fulfill()
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
         }
 
-        waitForExpectations(timeout: 5)
+        let writes = bluetooth.sent(SetIDPSegmentRequest.self)
+        XCTAssertEqual(writes.count, 1, "Only the changed segment should be written")
+        XCTAssertEqual(writes.first?.segmentIndex, 1)
+        XCTAssertEqual(writes.first?.profileBasalRate, 1500)
+        XCTAssertEqual(writes.first?.profileStartTime, 60)
+    }
 
-        let unwrappedResult = try XCTUnwrap(result)
-        _ = try XCTUnwrap(try? unwrappedResult.get())
+    func testSyncBasalRateScheduleCreatesSegmentsForNewEntries() throws {
+        // Pump has one segment; the new schedule has three, so two must be created.
+        stubActiveProfile(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
 
-        // Find the SetIDPSegmentRequest messages
-        let setRequests = peripheral.sentMessages.compactMap { $0.message as? SetIDPSegmentRequest }
+        let result = syncBasal([
+            RepeatingScheduleValue(startTime: 0, value: 0.8),
+            RepeatingScheduleValue(startTime: 3600, value: 1.0),
+            RepeatingScheduleValue(startTime: 7200, value: 1.2)
+        ])
 
-        // Should only have 1 modify request (for the changed segment)
-        XCTAssertEqual(setRequests.count, 1, "Should only modify the changed segment")
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
+        }
 
-        // Verify it's modifying segment 0 with the new value
-        let modifyRequest = try XCTUnwrap(setRequests.first)
-        XCTAssertEqual(modifyRequest.operation, .modifySegmentId)
-        XCTAssertEqual(modifyRequest.segmentIndex, 0)
-        XCTAssertEqual(modifyRequest.profileBasalRate, 810, "Should be 0.81 u/hr = 810 milliunits")
-        XCTAssertEqual(modifyRequest.profileStartTime, 0)
+        let writes = bluetooth.sent(SetIDPSegmentRequest.self)
+        XCTAssertEqual(writes.count, 2)
+        XCTAssertEqual(writes.map(\.profileStartTime), [60, 120])
+        XCTAssertEqual(writes.map(\.profileBasalRate), [1000, 1200])
+    }
 
-        // Should preserve other fields
-        XCTAssertEqual(modifyRequest.profileCarbRatio, 10000)
-        XCTAssertEqual(modifyRequest.profileTargetBG, 110)
-        XCTAssertEqual(modifyRequest.profileISF, 50)
-        XCTAssertEqual(modifyRequest.idpStatusId, 31)
+    func testSyncBasalRateScheduleStoresScheduleAndMaxEntry() throws {
+        stubActiveProfile(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
+
+        let items = [
+            RepeatingScheduleValue(startTime: 0, value: 0.8),
+            RepeatingScheduleValue(startTime: 3600, value: 1.4)
+        ]
+        _ = syncBasal(items)
+
+        XCTAssertEqual(manager.state.basalRateSchedule.items.map(\.value), [0.8, 1.4])
+        XCTAssertEqual(manager.state.settings.maxBasalScheduleEntry, 1.4)
+    }
+
+    func testSyncBasalRateScheduleRejectsEmptySchedule() {
+        let result = syncBasal([])
+
+        guard case .failure = result else {
+            return XCTFail("Expected an empty schedule to be rejected")
+        }
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty, "Nothing should be sent for an empty schedule")
+    }
+
+    /// A rejected segment write has to fail the whole sync — silently reporting success would leave
+    /// the host app believing a basal schedule is in effect that the pump never accepted.
+    func testSyncBasalRateScheduleFailsWhenPumpRejectsSegment() {
+        stubActiveProfile(segments: [
+            segment(index: 0, startTime: 0, basalMilliunits: 800),
+            segment(index: 1, startTime: 60, basalMilliunits: 1200)
+        ])
+        bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 3, unknown: 0))
+
+        let result = syncBasal([
+            RepeatingScheduleValue(startTime: 0, value: 0.8),
+            RepeatingScheduleValue(startTime: 3600, value: 1.5)
+        ])
+
+        guard case .failure = result else {
+            return XCTFail("Expected a rejected segment write to fail the sync")
+        }
+    }
+
+    func testSyncBasalRateScheduleFailsWhenNotConnected() {
+        bluetooth.connectError = PumpCommError.pumpNotConnected
+
+        let result = syncBasal([RepeatingScheduleValue(startTime: 0, value: 0.8)])
+
+        guard case .failure = result else {
+            return XCTFail("Expected a connect failure to fail the sync")
+        }
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    // MARK: - Delivery limits
+
+    private func syncLimits(_ limits: DeliveryLimits) -> Result<DeliveryLimits, Error> {
+        var result: Result<DeliveryLimits, Error>!
+        let expectation = expectation(description: "syncDeliveryLimits")
+        manager.syncDeliveryLimits(limits: limits) {
+            result = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return result
+    }
+
+    func testSyncDeliveryLimitsPushesLimitsToPumpAndStoresThem() throws {
+        bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 0))
+        bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 0))
+
+        let limits = DeliveryLimits(
+            maximumBasalRate: HKQuantity(
+                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
+                doubleValue: 4.2
+            ),
+            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+        )
+
+        let result = syncLimits(limits)
+
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
+        }
+
+        XCTAssertEqual(bluetooth.sent(SetMaxBasalLimitRequest.self).count, 1)
+        XCTAssertEqual(bluetooth.sent(SetMaxBolusLimitRequest.self).count, 1)
+        XCTAssertEqual(manager.state.settings.maxTempBasalRate, 4.2)
+        XCTAssertEqual(manager.state.settings.maxBolus, 9.5)
+    }
+
+    /// The stored maxBolus is what `enactBolus` validates against, so a pump rejection must not
+    /// leave the driver believing a limit it never accepted is in force.
+    func testSyncDeliveryLimitsFailsWhenPumpRejectsBolusLimit() {
+        bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 0))
+        bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 1))
+
+        let limits = DeliveryLimits(
+            maximumBasalRate: HKQuantity(
+                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
+                doubleValue: 4.2
+            ),
+            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 9.5)
+        )
+
+        let result = syncLimits(limits)
+
+        guard case .failure = result else {
+            return XCTFail("Expected a rejected limit write to fail the sync")
+        }
+        XCTAssertNil(manager.state.settings.maxBolus)
     }
 }

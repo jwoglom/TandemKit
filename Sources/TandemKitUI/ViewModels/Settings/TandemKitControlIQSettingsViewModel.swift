@@ -2,21 +2,35 @@ import LoopKit
 import SwiftUI
 
 class TandemKitControlIQSettingsViewModel: ObservableObject {
-    @Published var controlIQEnabled = false { didSet { checkDirtyState() } }
-    @Published var weight: Int = 70 { didSet { checkDirtyState() } }
-    @Published var totalDailyInsulin: Int = 30 { didSet { checkDirtyState() } }
+    /// Values the pickers scroll from when the pump has none configured. `weightLbs` and
+    /// `totalDailyInsulin` stay nil until the user picks a value, so a seed is never saved as if the
+    /// user had entered it.
+    static let weightSeedLbs = 150
+    static let totalDailyInsulinSeedUnits = 30
+
+    @Published var controlIQEnabled = false { didSet { recomputeSaveState() } }
+    /// nil until Control-IQ has been configured on the pump, or the user picks a value.
+    @Published var weightLbs: Int? { didSet { recomputeSaveState() } }
+    /// nil until Control-IQ has been configured on the pump, or the user picks a value.
+    @Published var totalDailyInsulin: Int? { didSet { recomputeSaveState() } }
 
     @Published var sleepSchedules: [SleepScheduleSlot] = []
+    /// False when the pump cannot accept sleep schedule writes, in which case they are shown but not
+    /// editable.
+    @Published var canEditSleepSchedules: Bool = false
 
     @Published var isFetching: Bool = true
     @Published var isDirty: Bool = false
-    @Published var disabled: Bool = false
+    @Published var disabled: Bool = true
     @Published var isLoading: Bool = false
     @Published var saveError: String?
+    /// Why saving is blocked, shown inline under the fields. nil when it is not.
+    @Published var validationMessage: String?
 
     private var originalEnabled: Bool = false
-    private var originalWeight: Int = 70
-    private var originalTDI: Int = 30
+    private var originalWeightLbs: Int?
+    private var originalTDI: Int?
+    private var originalSleepSchedules: [SleepScheduleSlot] = []
 
     private let pumpManager: TandemPumpManager?
 
@@ -25,17 +39,15 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
         if let state = pumpManager?.state {
             controlIQEnabled = state.useControlIQ
-
-            if let w = state.controlIQWeight {
-                weight = w
-                originalWeight = w
-            }
-            if let tdi = state.controlIQTotalDailyInsulin {
-                totalDailyInsulin = tdi
-                originalTDI = tdi
-            }
+            originalEnabled = state.useControlIQ
+            weightLbs = state.controlIQWeightLbs
+            originalWeightLbs = state.controlIQWeightLbs
+            totalDailyInsulin = state.controlIQTotalDailyInsulin
+            originalTDI = state.controlIQTotalDailyInsulin
         }
+        canEditSleepSchedules = pumpManager?.supports(SetSleepScheduleRequest.self) ?? false
 
+        recomputeSaveState()
         fetchCurrentSettings()
     }
 
@@ -47,26 +59,35 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
         pumpManager?.getControlIQData { ciqResponse, scheduleResponse in
             DispatchQueue.main.async {
                 if let ciqResponse {
-                    self.controlIQEnabled = ciqResponse.closedLoopEnabled
-                    self.weight = ciqResponse.weight
-                    self.originalEnabled = ciqResponse.closedLoopEnabled
-                    self.originalWeight = ciqResponse.weight
-                    self.totalDailyInsulin = ciqResponse.totalDailyInsulin
-                    self.originalTDI = ciqResponse.totalDailyInsulin
-                    self.isDirty = false
+                    // The pump reports the weight in whichever unit it displays; the request
+                    // always carries pounds, so normalize before it reaches the picker. Zero means
+                    // Control-IQ has never been configured on this pump.
+                    let reportedWeight = ControlIQSettingsLimits.pounds(
+                        from: ciqResponse.getWeight(),
+                        unit: ciqResponse.weightUnit
+                    )
+                    let reportedTDI = ciqResponse.getTotalDailyInsulin()
+
+                    self.controlIQEnabled = ciqResponse.getClosedLoopEnabled()
+                    self.originalEnabled = ciqResponse.getClosedLoopEnabled()
+                    self.weightLbs = reportedWeight == 0 ? nil : reportedWeight
+                    self.originalWeightLbs = self.weightLbs
+                    self.totalDailyInsulin = reportedTDI == 0 ? nil : reportedTDI
+                    self.originalTDI = self.totalDailyInsulin
                 }
 
                 if let scheduleResponse {
-                    let slots = [
-                        SleepScheduleSlot(from: scheduleResponse.schedule0),
-                        SleepScheduleSlot(from: scheduleResponse.schedule1),
-                        SleepScheduleSlot(from: scheduleResponse.schedule2),
-                        SleepScheduleSlot(from: scheduleResponse.schedule3)
-                    ]
-                    self.sleepSchedules = slots
+                    self.sleepSchedules = [
+                        scheduleResponse.schedule0,
+                        scheduleResponse.schedule1,
+                        scheduleResponse.schedule2,
+                        scheduleResponse.schedule3
+                    ].enumerated().map { SleepScheduleSlot(from: $0.element, index: $0.offset) }
+                    self.originalSleepSchedules = self.sleepSchedules
                 }
 
                 self.isFetching = false
+                self.recomputeSaveState()
             }
         }
     }
@@ -75,27 +96,37 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     func saveControlIQSettings() {
         saveError = nil
+
+        // The Save button is already disabled in this state, and the driver refuses the request
+        // anyway. Checked here so a programmatic call cannot skip both.
+        if controlIQEnabled, weightLbs == nil || totalDailyInsulin == nil {
+            recomputeSaveState()
+            return
+        }
+
         isLoading = true
 
         let request = ChangeControlIQSettingsRequest(
             enabled: controlIQEnabled,
-            weightLbs: weight,
-            totalDailyInsulinUnits: totalDailyInsulin
+            weightLbs: weightLbs ?? 0,
+            totalDailyInsulinUnits: totalDailyInsulin ?? 0
         )
 
-        pumpManager?.configureControlIQMode(request) { success, _ in
+        pumpManager?.configureControlIQMode(request) { result in
             DispatchQueue.main.async {
                 self.isLoading = false
-                if success {
-                    self.originalWeight = self.weight
+                switch result {
+                case .success:
+                    self.originalEnabled = self.controlIQEnabled
+                    self.originalWeightLbs = self.weightLbs
                     self.originalTDI = self.totalDailyInsulin
-                    self.isDirty = false
-                } else {
-                    self.saveError = String(
-                        localized:
-                        "Failed to update Control-IQ settings. Check pump connection.",
-                        comment: "Error when Control-IQ settings save fails"
-                    )
+                    self.recomputeSaveState()
+                case let .failure(error):
+                    // Report what actually went wrong -- an unset weight or TDI, or the status the
+                    // pump rejected the change with -- instead of blaming the connection.
+                    self.saveError = [error.localizedDescription, (error as? LocalizedError)?.recoverySuggestion]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
                 }
             }
         }
@@ -103,15 +134,29 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     // MARK: - Save Sleep Schedule
 
+    /// Whether slot `index` differs from what the pump reported, i.e. whether there is anything to
+    /// save.
+    func isSleepScheduleDirty(_ index: Int) -> Bool {
+        guard index >= 0, index < sleepSchedules.count, index < originalSleepSchedules.count else {
+            return false
+        }
+        return sleepSchedules[index] != originalSleepSchedules[index]
+    }
+
     func saveSleepSchedule(slot: Int) {
         guard slot >= 0, slot < sleepSchedules.count else { return }
+        saveError = nil
         isLoading = true
 
         let schedule = sleepSchedules[slot].toProtocol()
         pumpManager?.setSleepSchedule(slot: slot, schedule: schedule) { success in
             DispatchQueue.main.async {
                 self.isLoading = false
-                if !success {
+                if success {
+                    if slot < self.originalSleepSchedules.count {
+                        self.originalSleepSchedules[slot] = self.sleepSchedules[slot]
+                    }
+                } else {
                     self.saveError = String(
                         localized:
                         "Failed to update sleep schedule. Check pump connection.",
@@ -124,29 +169,90 @@ class TandemKitControlIQSettingsViewModel: ObservableObject {
 
     // MARK: - Helpers
 
-    private func checkDirtyState() {
-        DispatchQueue.main.async {
-            self.isDirty = (
-                self.controlIQEnabled != self.originalEnabled ||
-                    self.weight != self.originalWeight ||
-                    self.totalDailyInsulin != self.originalTDI
-            )
+    private func recomputeSaveState() {
+        let message = Self.validationMessage(
+            enabled: controlIQEnabled,
+            weightLbs: weightLbs,
+            totalDailyInsulin: totalDailyInsulin
+        )
+        let dirty = controlIQEnabled != originalEnabled
+            || weightLbs != originalWeightLbs
+            || totalDailyInsulin != originalTDI
 
-            self.disabled = !self.isDirty
+        // Deferred to the next main-queue turn: `didSet` can fire while the view is reading these
+        // properties, and publishing from inside a view update is not allowed. Ordering is FIFO, so
+        // the last recompute wins.
+        DispatchQueue.main.async { self.apply(validationMessage: message, isDirty: dirty) }
+    }
+
+    private func apply(validationMessage message: String?, isDirty dirty: Bool) {
+        validationMessage = message
+        isDirty = dirty
+        disabled = !dirty || message != nil
+    }
+
+    /// Why the settings cannot be saved as they stand.
+    ///
+    /// Control-IQ doses from body weight and total daily insulin, and a pump that has never had them
+    /// set reports neither, so both have to be entered before it can be turned on. Sending the
+    /// reported zeroes instead is what produced a bare "Failed to update Control-IQ settings"
+    /// (#223).
+    static func validationMessage(enabled: Bool, weightLbs: Int?, totalDailyInsulin: Int?) -> String? {
+        guard enabled else { return nil }
+
+        switch (weightLbs, totalDailyInsulin) {
+        case (nil, nil):
+            return String(
+                localized: "Enter your weight and total daily insulin to turn on Control-IQ.",
+                comment: "Blocking message when both Control-IQ values are missing"
+            )
+        case (nil, _):
+            return String(
+                localized: "Enter your weight to turn on Control-IQ.",
+                comment: "Blocking message when the Control-IQ weight is missing"
+            )
+        case (_, nil):
+            return String(
+                localized: "Enter your total daily insulin to turn on Control-IQ.",
+                comment: "Blocking message when the Control-IQ total daily insulin is missing"
+            )
+        default:
+            break
+        }
+
+        switch ControlIQSettingsLimits.validate(
+            weightLbs: weightLbs ?? 0,
+            totalDailyInsulinUnits: totalDailyInsulin ?? 0
+        ) {
+        case .totalDailyInsulinOutOfRange:
+            return String(
+                format: String(
+                    localized: "Control-IQ needs a total daily insulin of at least %@ units.",
+                    comment: "Blocking message when the Control-IQ total daily insulin is too low"
+                ),
+                String(ControlIQSettingsLimits.allowedTotalDailyInsulinUnits.lowerBound)
+            )
+        case .weightOutOfRange:
+            return String(
+                localized: "Enter your weight to turn on Control-IQ.",
+                comment: "Blocking message when the Control-IQ weight is missing"
+            )
+        case nil:
+            return nil
         }
     }
 }
 
 // MARK: - Sleep Schedule Model
 
-struct SleepScheduleSlot: Identifiable {
+struct SleepScheduleSlot: Identifiable, Equatable {
     let id: Int
     var enabled: Bool
     var activeDays: Int
     var startTime: Int // minutes from midnight
     var endTime: Int // minutes from midnight
 
-    init(from schedule: ControlIQSleepScheduleResponse.SleepSchedule, index: Int = 0) {
+    init(from schedule: ControlIQSleepScheduleResponse.SleepSchedule, index: Int) {
         id = index
         enabled = schedule.enabled != 0
         activeDays = schedule.activeDays
@@ -172,27 +278,38 @@ struct SleepScheduleSlot: Identifiable {
     }
 
     var startTimeText: String {
-        formatMinutes(startTime)
+        SleepScheduleSlot.formatMinutes(startTime)
     }
 
     var endTimeText: String {
-        formatMinutes(endTime)
+        SleepScheduleSlot.formatMinutes(endTime)
     }
 
-    private func formatMinutes(_ minutes: Int) -> String {
+    static func formatMinutes(_ minutes: Int) -> String {
         let h = minutes / 60
         let m = minutes % 60
         return String(format: "%d:%02d", h, m)
     }
 
-    var activeDaysText: String {
-        let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
-        var result: [String] = []
-        for i in 0 ..< 7 {
-            if activeDays & (1 << i) != 0 {
-                result.append(dayLetters[i])
-            }
+    /// Day-of-week letters in the order of the pump's `activeDays` bitmask, bit 0 being Sunday.
+    static let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
+
+    func isActive(day: Int) -> Bool {
+        activeDays & (1 << day) != 0
+    }
+
+    mutating func setActive(day: Int, _ active: Bool) {
+        if active {
+            activeDays |= (1 << day)
+        } else {
+            activeDays &= ~(1 << day)
         }
-        return result.isEmpty ? "None" : result.joined(separator: " ")
+    }
+
+    var activeDaysText: String {
+        let result = (0 ..< 7).filter { isActive(day: $0) }.map { SleepScheduleSlot.dayLetters[$0] }
+        return result.isEmpty
+            ? String(localized: "None", comment: "Shown when a sleep schedule has no active days")
+            : result.joined(separator: " ")
     }
 }

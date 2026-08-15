@@ -44,9 +44,51 @@ extension TandemPumpManager {
             state.controlIQUserMode = nil
         }
 
-        state.controlIQWeight = response.getWeight()
-        state.controlIQTotalDailyInsulin = response.getTotalDailyInsulin()
+        // A pump on which Control-IQ has never been configured reports zeroes here. Those are not
+        // values that can be sent back to it -- it rejects a ChangeControlIQSettingsRequest built
+        // from them -- so they are stored as "unset" rather than as a weight of nothing.
+        let reportedWeight = response.getWeight()
+        state.controlIQWeightUnit = response.weightUnit
+        state.controlIQWeightLbs = reportedWeight == 0
+            ? nil
+            : ControlIQSettingsLimits.pounds(from: reportedWeight, unit: response.weightUnit)
+
+        let reportedTotalDailyInsulin = response.getTotalDailyInsulin()
+        state.controlIQTotalDailyInsulin = reportedTotalDailyInsulin == 0 ? nil : reportedTotalDailyInsulin
         state.lastControlIQUpdate = Date.now
+
+        notifyDelegateStateUpdated()
+    }
+
+    /// Reads the pump's CGM sensor session status into `state.cgmSessionState`.
+    ///
+    /// The settings screen warns that Control-IQ is running open-loop when no CGM is connected, so
+    /// the session state has to be refreshed on every sync — the user can pair or stop a sensor on
+    /// the pump itself, and Control-IQ may have been enabled long before the app was launched.
+    /// A failed read leaves the previous value in place rather than clearing it, so a dropped
+    /// message never reads as "sensor disconnected".
+    func fetchCGMSessionStatus() {
+        // The request is Mobi-only; sending it to a pump that cannot answer would just burn a
+        // round-trip timeout on every sync.
+        guard supports(CGMStatusV2Request.self) else {
+            return
+        }
+
+        guard let response = bluetooth.write(
+            message: CGMStatusV2Request(),
+            expecting: CGMStatusV2Response.self
+        ) as? CGMStatusV2Response else {
+            logger.error("Failed to fetch CGM status")
+            return
+        }
+
+        updateCGMSessionState(from: response)
+    }
+
+    /// Stores the session state from a CGM status response, whatever triggered the read.
+    func updateCGMSessionState(from response: CGMStatusV2Response) {
+        state.cgmSessionState = response.sessionState
+        state.lastCGMStatusUpdate = Date.now
 
         notifyDelegateStateUpdated()
     }
@@ -248,6 +290,29 @@ extension TandemPumpManager {
         }
     }
 
+    /// Re-reads only the pump's notification surfaces (alerts, alarms, CGM alerts, malfunctions)
+    /// and reports whether the pump could be reached.
+    ///
+    /// This is the cheap counterpart to `syncPumpData` for screens that only care about what the
+    /// pump is currently asking the user to acknowledge. It matters most during a tubing fill: the
+    /// pump can stop mid-fill and wait for confirmation before it delivers more, and the screen has
+    /// no way to know that until the notification state is read again (#248). Pulling reservoir,
+    /// battery, bolus and basal along with it would make that read far too expensive to repeat as
+    /// often as the fill screen needs to.
+    func refreshNotifications(completion: @escaping (Bool) -> Void) {
+        let completion = watchdogged(timeoutResult: false, completion)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for notification refresh: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            self.fetchNotifications()
+            completion(true)
+        }
+    }
+
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
         for request in NotificationBundle.allRequests() {
@@ -333,13 +398,28 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchReservoirStatus() {
+    /// Runs its own command job, so it is safe to call from anywhere.
+    func fetchReservoirStatus(completion: @escaping (Double?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for reservoir status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            completion(self.fetchReservoirStatus())
+        }
+    }
+
+    /// Returns the units remaining, or nil on failure.
+    @discardableResult
+    func fetchReservoirStatus() -> Double? {
         guard let response = bluetooth.write(
             message: InsulinStatusRequest(),
             expecting: InsulinStatusResponse.self
         ) as? InsulinStatusResponse else {
             logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
-            return
+            return nil
         }
 
         let timestamp = Date.now
@@ -365,6 +445,8 @@ extension TandemPumpManager {
                 completion: { _ in }
             )
         }
+
+        return units
     }
 
     func fetchBatteryStatus() {
@@ -374,11 +456,12 @@ extension TandemPumpManager {
             return
         }
 
-        logger.debug("Battery updated: \(response.batteryPercent)% remaining")
+        logger.debug("Battery updated: \(response.batteryPercent)% remaining, charging=\(response.isCharging)")
 
         state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
             date: Date.now,
-            chargeRemaining: Double(response.batteryPercent) / 100.0
+            chargeRemaining: Double(response.batteryPercent) / 100.0,
+            isCharging: response.isCharging
         )
         notifyDelegateStateUpdated()
     }

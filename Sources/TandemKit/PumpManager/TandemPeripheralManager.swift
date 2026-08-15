@@ -49,6 +49,13 @@ class TandemPeripheralManager: NSObject {
     private let writeSemaphore = DispatchSemaphore(value: 1)
     private var currentTxId: UInt8 = 0
 
+    // Sized for the slowest command, not the typical one: EnterChangeCartridgeMode doesn't respond
+    // until the cartridge is safe to remove, which takes 5-20s. Timing out early reports a failure
+    // for a command still in progress, inviting a re-send of an insulin-affecting request.
+    private static let responseTimeout: DispatchTimeInterval = .seconds(30)
+    // Above responseTimeout, so a caller queued behind one slow write waits it out.
+    private static let writeLockTimeout: DispatchTimeInterval = .seconds(45)
+
     private var authBuilder: JpakeAuthBuilder
 
     // Reassembles the (possibly multi-packet) unsolicited HistoryLogStreamResponse
@@ -109,7 +116,7 @@ class TandemPeripheralManager: NSObject {
         // unbounded wait that used to live here was a primary cause of the connection hang).
         // On the success path the matching signal() is registered immediately via defer; on the
         // timeout path we never acquired the lock, so we must not signal.
-        guard writeSemaphore.wait(timeout: .now() + .seconds(15)) == .success else {
+        guard writeSemaphore.wait(timeout: .now() + Self.writeLockTimeout) == .success else {
             logger.error("Timed out acquiring write lock; pump I/O unexpectedly contended")
             return nil
         }
@@ -159,7 +166,7 @@ class TandemPeripheralManager: NSObject {
         currentTxId = currentTxId &+ 1
         while response.needsMorePacket {
             // Wait for result from pump
-            guard let result = writeQ.wait(timeout: .now() + .seconds(10)) else {
+            guard let result = writeQ.wait(timeout: .now() + Self.responseTimeout) else {
                 logger.error("Timeout hit, no response from pump...")
                 return nil
             }
@@ -333,6 +340,29 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        if characteristic.uuid == EnterChangeCartridgeModeStateStreamResponse.props.characteristic,
+           data[2] == EnterChangeCartridgeModeStateStreamResponse.props.opCode
+        {
+            let response = EnterChangeCartridgeModeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            pumpManager.changeCartridgeStateStream.send(response)
+            return
+        }
+
+        // DetectingCartridgeStateStreamResponse and LoadCartridgeStateStreamResponse share opcode
+        // -29 and are told apart by total packet length, the same split ControlStreamMessages makes.
+        if characteristic.uuid == DetectingCartridgeStateStreamResponse.props.characteristic,
+           data[2] == DetectingCartridgeStateStreamResponse.props.opCode
+        {
+            if data.count >= 26 {
+                let response = DetectingCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+                pumpManager.detectingCartridgeStateStream.send(response)
+            } else {
+                let response = LoadCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+                logger.info("Received load cartridge state: \(response.description)")
+            }
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {
@@ -386,6 +416,11 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 }
 
 extension TandemPeripheralManager {
+    /// Runs off the command queue and writes to the peripheral directly, bypassing
+    /// TandemBluetoothManager.write and its queue precondition. That is safe only because this runs
+    /// during connection setup, while connectIfNeeded is parked in its wait on the command queue —
+    /// no other command can be in flight. Keep it that way: setup must stay confined to the window
+    /// before connectIfNeeded returns.
     func performInitialSetup() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }

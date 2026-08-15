@@ -1,186 +1,165 @@
-@testable import TandemCore
+import LoopKit
 @testable import TandemKit
 import XCTest
 
+/// Covers the per-sync status fetches. The battery and Control-IQ reads are API-version dependent,
+/// so the request the driver picks has to follow the version the pump reported during pairing —
+/// asking a v2.1 pump for a v2 battery response gets no answer at all.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerTelemetryTests: XCTestCase {
-    override func tearDown() {
-        super.tearDown()
-        PumpStateSupplier.pumpApiVersion = nil
+    private var bluetooth: StubPumpBluetooth!
+
+    override func setUp() {
+        super.setUp()
+        bluetooth = StubPumpBluetooth()
     }
 
-    func testBatteryTelemetryUsesV1RequestWhenApiIsLegacy() {
-        PumpStateSupplier.pumpApiVersion = { KnownApiVersion.apiV2_1.value }
+    override func tearDown() {
+        bluetooth = nil
+        super.tearDown()
+    }
 
-        let mockPeripheralManager = MockPeripheralManager()
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBatteryV1Request.self,
-            response: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: InsulinStatusRequest.self,
-            response: InsulinStatusResponse(currentInsulinAmount: 120_000, isEstimate: 0, insulinLowAmount: 0)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(profileBasalRate: 1000, currentBasalRate: 1000, basalModifiedBitmask: 0)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBolusStatusRequest.self,
-            response: CurrentBolusStatusResponse(
-                statusId: 0,
-                bolusId: 0,
-                timestamp: 0,
-                requestedVolume: 0,
-                bolusSourceId: 0,
-                bolusTypeBitmask: 0
-            )
+    private func makeManager(apiVersion: KnownApiVersion?) -> TandemPumpManager {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.pumpState.apiVersion = apiVersion?.value
+        return TandemPumpManager(state: state, bluetooth: bluetooth)
+    }
+
+    // MARK: - Battery
+
+    func testBatteryTelemetryUsesV1RequestOnLegacyApi() {
+        let manager = makeManager(apiVersion: .apiV2_1)
+        bluetooth.stub(
+            CurrentBatteryV1Request.self,
+            with: CurrentBatteryV1Response(currentBatteryAbc: 20, currentBatteryIbc: 80)
         )
 
-        let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
-        let mockPumpComm = MockPumpComm(pumpState: nil)
-        let manager = TandemPumpManager(state: TandemPumpManagerState())
-        manager.setPumpCommForTesting(mockPumpComm)
+        manager.fetchBatteryStatus()
 
-        let expectation = expectation(description: "Battery request dispatched")
-        mockPumpComm.onSend = { message in
-            if message is CurrentBatteryV1Request {
-                expectation.fulfill()
-            }
-        }
-
-        manager.updateTransport(transport)
-        wait(for: [expectation], timeout: 1.0)
-
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-
-        XCTAssertNotNil(
-            mockPumpComm.calls
-                .first(where: {
-                    $0.requestType == CurrentBatteryV1Request.self && $0.expectedResponseType == CurrentBatteryV1Response.self }),
-            "Expected PumpComm to request CurrentBatteryV1Response for legacy API"
-        )
-        XCTAssertTrue(
-            mockPeripheralManager.sentMessages.contains(where: { $0.message is CurrentBatteryV1Request }),
-            "Legacy battery request should be sent via transport"
-        )
-        XCTAssertTrue(
-            mockPeripheralManager.sentMessages.contains(where: { $0.message is CurrentBolusStatusRequest }),
-            "Bolus status request should be sent via transport"
-        )
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining, 0.8, accuracy: 0.01)
+        XCTAssertTrue(bluetooth.didSend(CurrentBatteryV1Request.self))
+        XCTAssertFalse(bluetooth.didSend(CurrentBatteryV2Request.self))
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.8, accuracy: 0.001)
+        // V1 carries no charging field, so it always reports not charging.
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, false)
     }
 
     func testBatteryTelemetryUsesV2RequestWhenApiSupportsIt() {
-        PumpStateSupplier.pumpApiVersion = { KnownApiVersion.apiV3_4.value }
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(CurrentBatteryV2Request.self, with: CurrentBatteryV2Response(
+            currentBatteryAbc: 10,
+            currentBatteryIbc: 60,
+            chargingStatus: 0,
+            unknown1: 0,
+            unknown2: 0,
+            unknown3: 0,
+            unknown4: 0
+        ))
 
-        let mockPeripheralManager = MockPeripheralManager()
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBatteryV2Request.self,
-            response: CurrentBatteryV2Response(
-                currentBatteryAbc: 10,
-                currentBatteryIbc: 60,
-                chargingStatus: 0,
-                unknown1: 0,
-                unknown2: 0,
-                unknown3: 0,
-                unknown4: 0
-            )
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: InsulinStatusRequest.self,
-            response: InsulinStatusResponse(currentInsulinAmount: 150_000, isEstimate: 0, insulinLowAmount: 0)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(profileBasalRate: 900, currentBasalRate: 900, basalModifiedBitmask: 0)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBolusStatusRequest.self,
-            response: CurrentBolusStatusResponse(
-                statusId: 0,
-                bolusId: 0,
-                timestamp: 0,
-                requestedVolume: 0,
-                bolusSourceId: 0,
-                bolusTypeBitmask: 0
-            )
-        )
+        manager.fetchBatteryStatus()
 
-        let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
-        let mockPumpComm = MockPumpComm(pumpState: nil)
-        let manager = TandemPumpManager(state: TandemPumpManagerState())
-        manager.setPumpCommForTesting(mockPumpComm)
-
-        let expectation = expectation(description: "Battery V2 request dispatched")
-        mockPumpComm.onSend = { message in
-            if message is CurrentBatteryV2Request {
-                expectation.fulfill()
-            }
-        }
-
-        manager.updateTransport(transport)
-        wait(for: [expectation], timeout: 1.0)
-
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-
-        XCTAssertNotNil(
-            mockPumpComm.calls
-                .first(where: {
-                    $0.requestType == CurrentBatteryV2Request.self && $0.expectedResponseType == CurrentBatteryV2Response.self }),
-            "Expected PumpComm to request CurrentBatteryV2Response for newer API"
-        )
-        XCTAssertTrue(
-            mockPeripheralManager.sentMessages.contains(where: { $0.message is CurrentBatteryV2Request }),
-            "Newer API battery request should be sent via transport"
-        )
-        XCTAssertEqual(manager.pumpBatteryChargeRemaining, 0.6, accuracy: 0.01)
+        XCTAssertTrue(bluetooth.didSend(CurrentBatteryV2Request.self))
+        XCTAssertFalse(bluetooth.didSend(CurrentBatteryV1Request.self))
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, false)
     }
 
-    func testBatteryTelemetryErrorDoesNotUpdateCharge() {
-        PumpStateSupplier.pumpApiVersion = { KnownApiVersion.apiV3_4.value }
+    /// The charging flag drives the battery indicator's charging appearance, so it has to survive
+    /// the trip from the V2 response into persisted state.
+    func testBatteryTelemetryRecordsChargingState() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(CurrentBatteryV2Request.self, with: CurrentBatteryV2Response(
+            currentBatteryAbc: 10,
+            currentBatteryIbc: 45,
+            chargingStatus: 1,
+            unknown1: 0,
+            unknown2: 0,
+            unknown3: 0,
+            unknown4: 0
+        ))
 
-        let mockPeripheralManager = MockPeripheralManager()
-        mockPeripheralManager.enqueueError(for: CurrentBatteryV2Request.self, error: PumpCommError.noResponse)
-        mockPeripheralManager.enqueueResponse(
-            for: InsulinStatusRequest.self,
-            response: InsulinStatusResponse(currentInsulinAmount: 110_000, isEstimate: 0, insulinLowAmount: 0)
+        manager.fetchBatteryStatus()
+
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.45, accuracy: 0.001)
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, true)
+    }
+
+    /// An unknown API version has to fall back to the request every firmware answers.
+    func testBatteryTelemetryFallsBackToV1WhenApiVersionUnknown() {
+        let manager = makeManager(apiVersion: nil)
+        bluetooth.stub(
+            CurrentBatteryV1Request.self,
+            with: CurrentBatteryV1Response(currentBatteryAbc: 5, currentBatteryIbc: 45)
         )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBasalStatusRequest.self,
-            response: CurrentBasalStatusResponse(profileBasalRate: 1200, currentBasalRate: 1200, basalModifiedBitmask: 0)
-        )
-        mockPeripheralManager.enqueueResponse(
-            for: CurrentBolusStatusRequest.self,
-            response: CurrentBolusStatusResponse(
-                statusId: 0,
-                bolusId: 0,
-                timestamp: 0,
-                requestedVolume: 0,
-                bolusSourceId: 0,
-                bolusTypeBitmask: 0
-            )
-        )
 
-        let transport = MockPumpMessageTransport(peripheralManager: mockPeripheralManager)
-        let mockPumpComm = MockPumpComm(pumpState: nil)
-        let manager = TandemPumpManager(state: TandemPumpManagerState())
-        manager.setPumpCommForTesting(mockPumpComm)
+        manager.fetchBatteryStatus()
 
-        let expectation = expectation(description: "Battery error dispatched")
-        mockPumpComm.onSend = { message in
-            if message is CurrentBatteryV2Request {
-                expectation.fulfill()
-            }
-        }
+        XCTAssertTrue(bluetooth.didSend(CurrentBatteryV1Request.self))
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.45, accuracy: 0.001)
+    }
 
-        manager.updateTransport(transport)
-        wait(for: [expectation], timeout: 1.0)
+    /// A failed read must leave the last known charge alone rather than reporting a bogus level.
+    func testBatteryTelemetryErrorLeavesChargeUnchanged() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(CurrentBatteryV2Request.self) { _ in nil }
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        manager.fetchBatteryStatus()
 
-        XCTAssertNil(manager.pumpBatteryChargeRemaining)
-        XCTAssertNotNil(
-            mockPumpComm.calls.first(where: { $0.requestType == CurrentBatteryV2Request.self })
-        )
+        XCTAssertTrue(bluetooth.didSend(CurrentBatteryV2Request.self))
+        XCTAssertNil(manager.status.pumpBatteryChargeRemaining)
+    }
+
+    // MARK: - Reservoir
+
+    func testReservoirTelemetryUpdatesStateAndNotifiesDelegate() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        let delegate = MockPumpManagerDelegate()
+        manager.delegateQueue = DispatchQueue(label: "reservoir-telemetry-test")
+        manager.pumpManagerDelegate = delegate
+
+        let readReservoir = expectation(description: "delegate received reservoir value")
+        delegate.didReadReservoirExpectation = readReservoir
+
+        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
+            currentInsulinAmount: 150,
+            isEstimate: 0,
+            insulinLowAmount: 0
+        ))
+
+        manager.fetchReservoirStatus()
+
+        wait(for: [readReservoir], timeout: 2.0)
+
+        XCTAssertEqual(manager.reservoirLevel?.unitVolume, 150)
+        XCTAssertEqual(delegate.reservoirReadings.last?.units, 150)
+        XCTAssertNotNil(manager.state.lastReconciliation)
+    }
+
+    func testReservoirTelemetryErrorLeavesLastReadingUnchanged() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(InsulinStatusRequest.self) { _ in nil }
+
+        manager.fetchReservoirStatus()
+
+        XCTAssertNil(manager.reservoirLevel)
+    }
+
+    // MARK: - Delivery limits read back from the pump
+
+    func testDeliveryLimitsAreReadIntoState() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(BasalLimitSettingsRequest.self, with: BasalLimitSettingsResponse(
+            basalLimit: 4200,
+            basalLimitDefault: 3000
+        ))
+        bluetooth.stub(GlobalMaxBolusSettingsRequest.self, with: GlobalMaxBolusSettingsResponse(
+            maxBolus: 9500,
+            maxBolusDefault: 10000
+        ))
+
+        manager.fetchDeliveryLimits()
+
+        XCTAssertEqual(manager.state.maxBasalLimitMilliunits, 4200)
+        XCTAssertEqual(manager.state.maxBasalLimitDefaultMilliunits, 3000)
+        XCTAssertEqual(manager.state.maxBolusLimitMilliunits, 9500)
+        XCTAssertEqual(manager.state.maxBolusLimitDefaultMilliunits, 10000)
     }
 }

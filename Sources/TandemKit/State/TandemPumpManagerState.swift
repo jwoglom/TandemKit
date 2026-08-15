@@ -8,10 +8,14 @@ public struct TandemPumpManagerState: RawRepresentable {
     public struct BatteryReading: Equatable {
         public let date: Date
         public let chargeRemaining: Double
+        /// Whether the pump was charging. Pumps on API versions without a charging field
+        /// always report false.
+        public let isCharging: Bool
 
-        public init(date: Date, chargeRemaining: Double) {
+        public init(date: Date, chargeRemaining: Double, isCharging: Bool = false) {
             self.date = date
             self.chargeRemaining = chargeRemaining
+            self.isCharging = isCharging
         }
     }
 
@@ -85,9 +89,36 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var pendingEnableClosedLoop: Bool = false
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
-    public var controlIQWeight: Int?
+    /// Body weight Control-IQ is configured with, always in pounds -- the unit
+    /// `ChangeControlIQSettingsRequest` carries on the wire, regardless of the unit the pump
+    /// displays. nil when Control-IQ has never been configured on the pump.
+    public var controlIQWeightLbs: Int?
+    /// Unit the pump displays the weight in. Display only; `controlIQWeightLbs` is the value sent.
+    public var controlIQWeightUnit: ControlIQInfoAbstractResponse.WeightUnit?
+    /// nil when Control-IQ has never been configured on the pump.
     public var controlIQTotalDailyInsulin: Int?
     public var lastControlIQUpdate: Date?
+
+    // CGM sensor session on the pump. `nil` means we have not (yet) been able to read the pump's
+    // CGM status — which is not the same as "no sensor", so callers must not treat it as absence.
+    public var cgmSessionState: CGMStatusV2Response.SessionState?
+    public var lastCGMStatusUpdate: Date?
+
+    /// Whether the pump has a CGM sensor session established — running (`active`) or warming up
+    /// (`startPending`). `nil` when the pump's CGM status is unknown.
+    ///
+    /// Control-IQ can only close the loop with a CGM feeding the pump, so this is what gates the
+    /// "no CGM connected" warning; see `CGMStatusV2Response.isSensorSessionConfigured`.
+    public var isCGMSensorSessionConfigured: Bool? {
+        switch cgmSessionState {
+        case .none:
+            return nil
+        case .active, .startPending:
+            return true
+        case .stopPending, .stopped, .unknown:
+            return false
+        }
+    }
 
     // Alert snooze settings
     public var alertSnoozeEnabled: Bool = false
@@ -120,7 +151,12 @@ public struct TandemPumpManagerState: RawRepresentable {
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
-        controlIQWeight = rawValue["controlIQWeight"] as? Int
+        // The legacy "controlIQWeight" key is deliberately not read: it stored whatever unit the
+        // pump reported in, so an old value cannot be safely interpreted as pounds. It is
+        // repopulated by the next `fetchControlIQStatus`, i.e. on the next sync.
+        controlIQWeightLbs = rawValue["controlIQWeightLbs"] as? Int
+        controlIQWeightUnit = (rawValue["controlIQWeightUnit"] as? Int)
+            .flatMap(ControlIQInfoAbstractResponse.WeightUnit.init(rawValue:))
         controlIQTotalDailyInsulin = rawValue["controlIQTotalDailyInsulin"] as? Int
         alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
@@ -253,6 +289,18 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastControlIQUpdate = nil
         }
 
+        if let cgmSessionStateRaw = rawValue["cgmSessionState"] as? Int {
+            cgmSessionState = CGMStatusV2Response.SessionState(rawValue: cgmSessionStateRaw)
+        } else {
+            cgmSessionState = nil
+        }
+
+        if let lastCGMStatusInterval = rawValue["lastCGMStatusUpdate"] as? TimeInterval {
+            lastCGMStatusUpdate = Date(timeIntervalSinceReferenceDate: lastCGMStatusInterval)
+        } else {
+            lastCGMStatusUpdate = nil
+        }
+
         if let lastNotificationInterval = rawValue["lastNotificationUpdate"] as? TimeInterval {
             lastNotificationUpdate = Date(timeIntervalSinceReferenceDate: lastNotificationInterval)
         } else {
@@ -298,9 +346,12 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["basalDose"] = basalDose.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
         raw["controlIQUserMode"] = controlIQUserMode?.rawValue
-        raw["controlIQWeight"] = controlIQWeight
+        raw["controlIQWeightLbs"] = controlIQWeightLbs
+        raw["controlIQWeightUnit"] = controlIQWeightUnit?.rawValue
         raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
+        raw["cgmSessionState"] = cgmSessionState?.rawValue
+        raw["lastCGMStatusUpdate"] = lastCGMStatusUpdate?.timeIntervalSinceReferenceDate
         raw["alertSnoozeEnabled"] = alertSnoozeEnabled
         raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["notificationCount"] = notificationCount
@@ -374,9 +425,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",
-            "* controlIQWeight: \(String(describing: controlIQWeight))",
+            "* controlIQWeightLbs: \(String(describing: controlIQWeightLbs))",
+            "* controlIQWeightUnit: \(String(describing: controlIQWeightUnit))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
+            "* cgmSessionState: \(String(describing: cgmSessionState))",
+            "* lastCGMStatusUpdate: \(String(describing: lastCGMStatusUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
@@ -441,7 +495,8 @@ private extension TandemPumpManagerState {
     static func encodeBatteryReading(_ reading: BatteryReading) -> [String: Any] {
         [
             "date": reading.date.timeIntervalSinceReferenceDate,
-            "chargeRemaining": reading.chargeRemaining
+            "chargeRemaining": reading.chargeRemaining,
+            "isCharging": reading.isCharging
         ]
     }
 
@@ -454,7 +509,9 @@ private extension TandemPumpManagerState {
 
         return BatteryReading(
             date: Date(timeIntervalSinceReferenceDate: timestamp),
-            chargeRemaining: chargeRemaining
+            chargeRemaining: chargeRemaining,
+            // Absent in state saved before charging was tracked.
+            isCharging: raw["isCharging"] as? Bool ?? false
         )
     }
 

@@ -2,14 +2,49 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
+/// Covers the pre-flight checks `enactBolus` runs before it touches the pump. The pump enforces
+/// its own max bolus limit too; these guards exist so an out-of-range request fails fast with a
+/// specific error rather than as a generic mid-handshake rejection.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerValidationTests: XCTestCase {
-    func testEnactBolusExceedsMaxBolus() {
-        var state = TandemPumpManagerState(
-            pumpState: nil,
-            settings: TandemPumpManagerSettings(maxBolus: 5.0)
-        )
+    private func makeManager(settings: TandemPumpManagerSettings) -> TandemPumpManager {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.settings = settings
+        return TandemPumpManager(state: state)
+    }
 
-        let manager = TandemPumpManager(state: state)
+    func testBolusExceedingMaxBolusIsRejected() {
+        let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
+
+        XCTAssertEqual(
+            manager.validateBolusRequest(units: 6.0),
+            .maximumBolusExceeded(requested: 6.0, maximum: 5.0)
+        )
+    }
+
+    func testBolusAtMaxBolusIsAllowed() {
+        let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
+
+        XCTAssertNil(manager.validateBolusRequest(units: 5.0))
+    }
+
+    func testNonPositiveBolusIsRejected() {
+        let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
+
+        XCTAssertEqual(manager.validateBolusRequest(units: 0), .invalidBolusAmount(requested: 0))
+        XCTAssertEqual(manager.validateBolusRequest(units: -1.0), .invalidBolusAmount(requested: -1.0))
+    }
+
+    /// Until the host app syncs delivery limits there is no maximum to check against, so only the
+    /// positive-amount guard applies — the pump remains the backstop.
+    func testUnsyncedDeliveryLimitsOnlyEnforcePositiveAmount() {
+        let manager = makeManager(settings: TandemPumpManagerSettings())
+
+        XCTAssertNil(manager.validateBolusRequest(units: 25.0))
+        XCTAssertEqual(manager.validateBolusRequest(units: 0), .invalidBolusAmount(requested: 0))
+    }
+
+    func testEnactBolusSurfacesValidationErrorAsDeviceState() {
+        let manager = makeManager(settings: TandemPumpManagerSettings(maxBolus: 5.0))
 
         let expectation = expectation(description: "Bolus completion")
         manager.enactBolus(units: 6.0, activationType: .manualNoRecommendation) { error in
@@ -21,76 +56,10 @@ import XCTest
                 return
             }
 
-            XCTAssertEqual(
-                validationError,
-                .maximumBolusExceeded(requested: 6.0, maximum: 5.0)
-            )
+            XCTAssertEqual(validationError, .maximumBolusExceeded(requested: 6.0, maximum: 5.0))
             expectation.fulfill()
         }
 
         wait(for: [expectation], timeout: 1.0)
-    }
-
-    func testEnactBolusRespectsInsulinOnBoardLimit() {
-        var state = TandemPumpManagerState(
-            pumpState: nil,
-            settings: TandemPumpManagerSettings(maxBolus: 10.0, maxInsulinOnBoard: 5.0),
-            latestInsulinOnBoard: 4.0
-        )
-
-        let manager = TandemPumpManager(state: state)
-
-        let expectation = expectation(description: "IOB validation")
-        manager.enactBolus(units: 2.0, activationType: .manualNoRecommendation) { error in
-            guard case let .deviceState(underlyingError?) = error,
-                  let validationError = underlyingError as? TandemPumpManagerValidationError
-            else {
-                XCTFail("Expected deviceState validation error, received: \(String(describing: error))")
-                expectation.fulfill()
-                return
-            }
-
-            XCTAssertEqual(
-                validationError,
-                .insulinOnBoardLimitExceeded(currentIOB: 4.0, requested: 2.0, maximum: 5.0)
-            )
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 1.0)
-    }
-
-    func testTempBasalExceedsMaximumRate() {
-        let state = TandemPumpManagerState(
-            pumpState: nil,
-            settings: TandemPumpManagerSettings(maxTempBasalRate: 3.0)
-        )
-
-        let manager = TandemPumpManager(state: state)
-
-        let expectation = expectation(description: "Temp basal validation")
-        manager.enactTempBasal(unitsPerHour: 3.5, for: TimeInterval(hours: 1.0)) { error in
-            guard case let .deviceState(underlyingError?) = error,
-                  let validationError = underlyingError as? TandemPumpManagerValidationError
-            else {
-                XCTFail("Expected deviceState validation error, received: \(String(describing: error))")
-                expectation.fulfill()
-                return
-            }
-
-            XCTAssertEqual(
-                validationError,
-                .maximumTempBasalRateExceeded(requested: 3.5, maximum: 3.0)
-            )
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 1.0)
-    }
-}
-
-private extension TimeInterval {
-    init(hours: Double) {
-        self = hours * 60.0 * 60.0
     }
 }

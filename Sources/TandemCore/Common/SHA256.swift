@@ -1,8 +1,16 @@
 import Foundation
-import CryptoKit
+#if canImport(CryptoKit)
+    import CryptoKit
+#else
+    import Crypto
+#endif
 
 enum SHA256 {
     static func hash(_ data: Data) -> Data {
-        return Data(CryptoKit.SHA256.hash(data: data))
+        #if canImport(CryptoKit)
+            return Data(CryptoKit.SHA256.hash(data: data))
+        #else
+            return Data(Crypto.SHA256.hash(data: data))
+        #endif
     }
 }

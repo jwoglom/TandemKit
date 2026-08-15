@@ -30,7 +30,7 @@ struct TandemKitFillCannulaView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(item: $actionSheet) { sheet in
+        .confirmationDialog(item: $actionSheet) { sheet in
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .resume: return resumeInsulinSheet
@@ -257,14 +257,14 @@ struct TandemKitFillCannulaView: View {
 
     // MARK: - Action Sheets
 
-    var suspendInsulinSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+    var suspendInsulinSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Suspend insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "This will stop all insulin delivery until you resume.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
@@ -273,15 +273,15 @@ struct TandemKitFillCannulaView: View {
         )
     }
 
-    var resumeInsulinSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Resume insulin delivery?", comment: "Action sheet title"),
+    var resumeInsulinSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Resume insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "This will restart your scheduled basal insulin.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
-                .default(Text("Yes, Resume Insulin", comment: "Confirm button")) {
+            actions: [
+                .standard(Text("Yes, Resume Insulin", comment: "Confirm button")) {
                     viewModel.resumePumping()
                 },
                 .cancel(Text("Cancel", comment: "Cancel button"))
@@ -289,14 +289,14 @@ struct TandemKitFillCannulaView: View {
         )
     }
 
-    var cancelOperationSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Cancel cannula fill?", comment: "Action sheet title"),
+    var cancelOperationSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Cancel cannula fill?", comment: "Confirmation dialog title"),
             message: Text(
                 "The cannula fill is not complete.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.done()
                 },
