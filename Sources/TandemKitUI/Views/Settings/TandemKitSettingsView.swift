@@ -405,10 +405,12 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openCgmSettings() }
                 )
 
-                navigationLink(
-                    label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
-                    action: { viewModel.openQuickBolus() }
-                )
+                if viewModel.quickBolusButtonSupportEnabled {
+                    navigationLink(
+                        label: Text("Quick Bolus Settings", comment: "Label for quick bolus settings"),
+                        action: { viewModel.openQuickBolus() }
+                    )
+                }
 
                 navigationLink(
                     label: Text("Alert Settings", comment: "Label for alert settings"),

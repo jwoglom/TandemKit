@@ -135,14 +135,30 @@ import XCTest
         XCTAssertFalse(viewModel.controlIQSupportEnabled)
     }
 
-    func testSettingsViewModelReportsTheFlagWhenItIsOn() {
+    func testSettingsViewModelReportsTheFlagsWhenTheyAreOn() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
         manager.setFeatureFlag(.controlIQSupport, enabled: true)
+        manager.setFeatureFlag(.quickBolusButtonSupport, enabled: true)
 
-        XCTAssertTrue(makeSettingsViewModel(manager).controlIQSupportEnabled)
+        let viewModel = makeSettingsViewModel(manager)
+
+        XCTAssertTrue(viewModel.controlIQSupportEnabled)
+        XCTAssertTrue(viewModel.quickBolusButtonSupportEnabled)
+    }
+
+    func testSettingsViewModelHidesTheGatedRowsByDefault() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+
+        let viewModel = makeSettingsViewModel(manager)
+
+        XCTAssertFalse(viewModel.controlIQSupportEnabled)
+        XCTAssertFalse(viewModel.quickBolusButtonSupportEnabled)
     }
 
     private func makeSettingsViewModel(_ pumpManager: TandemPumpManager) -> TandemKitSettingsViewModel {

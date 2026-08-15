@@ -87,6 +87,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// Gates the Control-IQ settings screen and the switch *to* Control-IQ. Switching back to the
     /// DIY algorithm is never gated, so a pump already running Control-IQ stays recoverable.
     @Published var controlIQSupportEnabled: Bool = false
+    @Published var quickBolusButtonSupportEnabled: Bool = false
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
@@ -142,6 +143,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
+        quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
@@ -444,6 +446,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
             self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
+            self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
             self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
             self.pumpState = pumpManager.state.pumpState
