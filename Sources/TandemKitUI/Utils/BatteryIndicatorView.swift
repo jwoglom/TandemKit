@@ -59,9 +59,12 @@ struct BatteryIndicatorView: View {
                 }
             }
             .frame(width: bodyWidth, height: bodyHeight)
-            .overlay(chargingBolt)
+            .overlay(chargingBoltCutout)
             // Lets the bolt cut through both the fill and the outline, the way iOS draws it.
             .compositingGroup()
+            // Drawn after the compositing group so it paints over the empty part of the body
+            // instead of punching a hole in it.
+            .overlay(chargingBoltHighlight)
 
             RoundedRectangle(cornerRadius: capWidth / 2)
                 .fill(tintColor.opacity(0.4))
@@ -71,15 +74,54 @@ struct BatteryIndicatorView: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
+    /// The bolt is drawn twice, split at the edge of the level fill: the part over the fill is
+    /// punched out, and the part over the empty body is painted in. Punching alone left the bolt
+    /// invisible wherever it extended past the fill, so a charging pump above roughly 40% was the
+    /// only case where the bolt read clearly.
+    private var boltImage: some View {
+        Image(systemName: "bolt.fill")
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(height: bodyHeight * 0.75)
+            .frame(width: bodyWidth, height: bodyHeight)
+    }
+
+    /// The half of the bolt sitting on top of the level fill, knocked out of it.
     @ViewBuilder
-    private var chargingBolt: some View {
+    private var chargingBoltCutout: some View {
         if isCharging {
-            Image(systemName: "bolt.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(height: bodyHeight * 0.75)
+            boltImage
+                .mask(boltMask(overFill: true))
                 .blendMode(.destinationOut)
         }
+    }
+
+    /// The half of the bolt sitting on the empty part of the body, drawn in the tint color.
+    @ViewBuilder
+    private var chargingBoltHighlight: some View {
+        if isCharging {
+            boltImage
+                .foregroundColor(tintColor)
+                .mask(boltMask(overFill: false))
+        }
+    }
+
+    /// Splits the body at the fill edge, keeping either the filled or the empty side.
+    private func boltMask(overFill: Bool) -> some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .frame(width: fillEdgeX)
+                .opacity(overFill ? 1 : 0)
+            Rectangle()
+                .opacity(overFill ? 0 : 1)
+        }
+        .frame(width: bodyWidth, height: bodyHeight)
+    }
+
+    /// Distance from the leading edge of the body to the trailing edge of the level fill.
+    private var fillEdgeX: CGFloat {
+        guard let clampedCharge = clampedCharge, clampedCharge > 0 else { return 0 }
+        return innerInset + fillWidth(for: clampedCharge)
     }
 
     private func fillWidth(for charge: Double) -> CGFloat {
@@ -120,8 +162,11 @@ struct BatteryIndicatorView: View {
         BatteryIndicatorView(chargeRemaining: 0.55, isCharging: false)
         BatteryIndicatorView(chargeRemaining: 0.2, isCharging: false)
         BatteryIndicatorView(chargeRemaining: 0.05, isCharging: false)
+        BatteryIndicatorView(chargeRemaining: 1.0, isCharging: true)
         BatteryIndicatorView(chargeRemaining: 0.65, isCharging: true)
+        BatteryIndicatorView(chargeRemaining: 0.4, isCharging: true)
         BatteryIndicatorView(chargeRemaining: 0.1, isCharging: true)
+        BatteryIndicatorView(chargeRemaining: 0, isCharging: true)
         BatteryIndicatorView(chargeRemaining: nil, isCharging: false)
     }
     .padding()
