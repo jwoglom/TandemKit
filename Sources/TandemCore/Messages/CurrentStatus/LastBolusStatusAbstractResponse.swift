@@ -13,7 +13,12 @@ public protocol LastBolusStatusAbstractResponse: StatusMessage {
 
 public enum LastBolusStatusAbstractResponseBolusStatus: Int {
     case stopped = 0
+    case stoppedAlarm = 1
+    case stoppedMalfunction = 2
     case complete = 3
+    case stoppedWireless = 4
+    case rejectedWireless = 5
+    case terminatedPLGS = 6
 }
 
 public extension LastBolusStatusAbstractResponse {
