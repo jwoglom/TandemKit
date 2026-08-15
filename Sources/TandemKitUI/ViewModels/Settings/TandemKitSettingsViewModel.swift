@@ -84,9 +84,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
-    /// Whether the Control-IQ feature flag is on. Gates the Control-IQ settings screen and the
-    /// switch *to* Control-IQ; switching back to the DIY algorithm is deliberately never gated, so
-    /// a user whose pump is already running Control-IQ can always hand dosing back to the app.
+    /// Gates the Control-IQ settings screen and the switch *to* Control-IQ. Switching back to the
+    /// DIY algorithm is never gated, so a pump already running Control-IQ stays recoverable.
     @Published var controlIQSupportEnabled: Bool = false
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
@@ -231,8 +230,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         guard let pumpManager else { return }
         guard !isCheckingCGMForCIQ else { return }
 
-        // The view hides the gesture that gets here when the flag is off; this is the backstop so
-        // no other caller can start the switch behind the flag's back.
         guard pumpManager.state.featureFlags.controlIQSupport else {
             log.debug("Ignoring switch to Control-IQ: controlIQSupport feature flag is off")
             return

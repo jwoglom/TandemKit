@@ -1,9 +1,8 @@
 @testable import TandemKit
 import XCTest
 
-/// Feature flags decide which surfaces the app offers, and they are stored in `rawState`, so two
-/// things have to hold: an untouched install follows the declared default, and an explicit choice
-/// survives the trip through `[String: Any]` and back.
+/// Two things have to hold: an untouched install follows the declared default, and an explicit
+/// choice survives the trip through `rawState` and back.
 @available(macOS 13.0, iOS 14.0, *) final class TandemFeatureFlagsTests: XCTestCase {
     // MARK: - Defaults
 
@@ -37,8 +36,6 @@ import XCTest
     // MARK: - Raw value
 
     func testAnUntouchedFlagIsNotWrittenOut() {
-        // Nothing is persisted until the user makes a choice, so a later change to a default moves
-        // everyone who never touched the switch.
         XCTAssertTrue(TandemFeatureFlags.default.rawValue.isEmpty)
     }
 
@@ -53,8 +50,8 @@ import XCTest
     }
 
     func testTurningAFlagBackOffIsItselfPersisted() throws {
-        // Explicitly off has to be distinguishable from never-set, otherwise a flag that later
-        // defaults to on would silently switch back on for someone who turned it off.
+        // Explicitly off must stay distinguishable from never-set, or a flag that later defaults
+        // to on would switch back on for someone who turned it off.
         var flags = TandemFeatureFlags.default
         flags[.controlIQSupport] = false
 
@@ -66,7 +63,6 @@ import XCTest
     }
 
     func testFlagsFromANewerBuildArePreserved() throws {
-        // Downgrading and upgrading again must not discard a choice this build cannot interpret.
         let restored = try XCTUnwrap(TandemFeatureFlags(rawValue: [
             "controlIQSupport": true,
             "someFutureFlag": true
@@ -122,14 +118,11 @@ import XCTest
 
     // MARK: - Settings screen gating
 
-    /// The pump settings screen hides the gesture that switches the algorithm to Control-IQ while
-    /// the flag is off; this pins the view model's backstop so no other caller can start the switch.
     func testSwitchToControlIQIsRefusedWhileTheFlagIsOff() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
-        // Both values present, so the only thing standing in the way is the flag.
         manager.state.controlIQWeightLbs = 154
         manager.state.controlIQTotalDailyInsulin = 42
 

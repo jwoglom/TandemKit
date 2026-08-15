@@ -263,8 +263,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Feature Flags
 
-    /// Whether an opt-in feature is turned on. Gates what the UI offers; it never relaxes a safety
-    /// guard, so callers must not use it to skip a validation check.
     public func isFeatureEnabled(_ flag: TandemFeatureFlags.Flag) -> Bool {
         state.featureFlags[flag]
     }
@@ -312,7 +310,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchPumpInformation()
 
                 self.state.lastSettingsCheckedAt = Date.now
+            } else if !self.state.featureFlags.quickBolusButtonSupport {
+                // The quick bolus button is confirmed off every cycle, which needs a fresh read.
+                self.fetchGlobalPumpSettings()
             }
+
+            self.enforceQuickBolusDisabled()
 
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()

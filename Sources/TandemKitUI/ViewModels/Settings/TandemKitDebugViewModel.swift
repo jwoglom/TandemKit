@@ -54,8 +54,6 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     @Published var useSilentMode: Bool = false
 
-    /// Current value of every feature flag, mirrored out of the pump manager state so the toggles
-    /// re-render when one is changed.
     @Published private(set) var featureFlagValues: [TandemFeatureFlags.Flag: Bool] = [:]
 
     private let pumpManager: TandemPumpManager?
@@ -78,8 +76,6 @@ final class TandemKitDebugViewModel: ObservableObject {
 
     // MARK: - Feature Flags
 
-    /// Every known flag, in declaration order, so a new flag shows up in Debug Options without any
-    /// further UI work.
     var featureFlags: [TandemFeatureFlags.Flag] {
         TandemFeatureFlags.Flag.allCases
     }
