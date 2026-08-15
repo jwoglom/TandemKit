@@ -30,7 +30,7 @@ struct TandemKitFillTubingView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(item: $actionSheet) { sheet in
+        .confirmationDialog(item: $actionSheet) { sheet in
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .resume: return resumeOperationSheet
@@ -111,7 +111,7 @@ struct TandemKitFillTubingView: View {
                         text: Text("Complete tubing fill", comment: "Button text"),
                         loading: $viewModel.loadingExitMode,
                         disabled: Binding(
-                            get: { viewModel.hasActiveNotifications },
+                            get: { !viewModel.canCompleteFill },
                             set: { _ in }
                         )
                     ) {
@@ -345,6 +345,21 @@ struct TandemKitFillTubingView: View {
                 .cornerRadius(12)
             }
 
+            // The pump may have stopped the fill and be waiting to be confirmed; until this read
+            // lands we cannot say whether there is anything for the user to acknowledge.
+            if viewModel.isCheckingNotifications {
+                HStack(spacing: 12) {
+                    ActivityIndicator(isAnimating: .constant(true), style: .medium)
+                    Text("Checking pump status...", comment: "Status text shown while re-reading pump notifications")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemGroupedBackground))
+                .cornerRadius(12)
+            }
+
             // Show active notifications warning during fill
             if viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
@@ -464,16 +479,16 @@ struct TandemKitFillTubingView: View {
         }
     }
 
-    // MARK: - Action Sheets
+    // MARK: - Confirmation Dialogs
 
-    var suspendInsulinSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+    var suspendInsulinSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Suspend insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "This will stop all insulin delivery until you resume.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
@@ -482,14 +497,14 @@ struct TandemKitFillTubingView: View {
         )
     }
 
-    var cancelOperationSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Cancel tubing fill?", comment: "Action sheet title"),
+    var cancelOperationSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Cancel tubing fill?", comment: "Confirmation dialog title"),
             message: Text(
                 "The tubing fill is not complete. The pump will attempt to exit fill mode.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
                     presentationMode.wrappedValue.dismiss()
@@ -499,15 +514,15 @@ struct TandemKitFillTubingView: View {
         )
     }
 
-    var resumeOperationSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Resume insulin delivery?", comment: "Action sheet title"),
+    var resumeOperationSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Resume insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "The tubing fill is complete. The pump will attempt to exit fill mode.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
-                .default(Text("Yes, Resume delivery", comment: "Confirm button")) {
+            actions: [
+                .standard(Text("Yes, Resume delivery", comment: "Confirm button")) {
                     viewModel.resumeDelivery()
                 },
                 .cancel(Text("No, Go back", comment: "Cancel button"))

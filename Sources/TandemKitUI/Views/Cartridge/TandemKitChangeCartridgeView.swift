@@ -28,7 +28,7 @@ struct TandemKitChangeCartridgeView: View {
             bottomActionView
                 .padding()
         }
-        .actionSheet(item: $actionSheet) { sheet in
+        .confirmationDialog(item: $actionSheet) { sheet in
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .suspend: return suspendInsulinSheet
@@ -80,7 +80,7 @@ struct TandemKitChangeCartridgeView: View {
                 text: Text("Start cartridge change", comment: "Button text"),
                 loading: $viewModel.loadingEnterMode,
                 disabled: Binding(
-                    get: { viewModel.hasActiveNotifications },
+                    get: { viewModel.hasActiveNotifications || viewModel.indeterminateEnterMode },
                     set: { _ in }
                 )
             ) {
@@ -286,6 +286,24 @@ struct TandemKitChangeCartridgeView: View {
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(guidanceColors.critical.opacity(0.1))
+                .cornerRadius(12)
+            }
+
+            if viewModel.indeterminateEnterMode {
+                Label(
+                    String(
+                        localized: """
+                        The pump did not respond, so it is unclear whether it started the cartridge change. \
+                        Cancel to take the pump back out of cartridge change mode, then start again.
+                        """,
+                        comment: "Error message shown when the pump did not answer the change cartridge request"
+                    ),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundColor(guidanceColors.warning)
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(guidanceColors.warning.opacity(0.1))
                 .cornerRadius(12)
             }
         }
@@ -511,16 +529,16 @@ struct TandemKitChangeCartridgeView: View {
         }
     }
 
-    // MARK: - Action Sheets
+    // MARK: - Confirmation Dialogs
 
-    var suspendInsulinSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Suspend insulin delivery?", comment: "Action sheet title"),
+    var suspendInsulinSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Suspend insulin delivery?", comment: "Confirmation dialog title"),
             message: Text(
                 "This will stop all insulin delivery until you resume.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Suspend Insulin", comment: "Confirm button")) {
                     viewModel.suspendPumping()
                 },
@@ -529,14 +547,14 @@ struct TandemKitChangeCartridgeView: View {
         )
     }
 
-    var cancelOperationSheet: ActionSheet {
-        ActionSheet(
-            title: Text("Cancel cartridge change?", comment: "Action sheet title"),
+    var cancelOperationSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Cancel cartridge change?", comment: "Confirmation dialog title"),
             message: Text(
                 "The cartridge change is not complete. The pump will attempt to exit change mode.",
-                comment: "Action sheet message"
+                comment: "Confirmation dialog message"
             ),
-            buttons: [
+            actions: [
                 .destructive(Text("Yes, Cancel", comment: "Confirm button")) {
                     viewModel.cancelOperation()
                     viewModel.done()

@@ -19,7 +19,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
     // Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
-    public static var onboardingSupportedBasalRates: [Double] = [0.0] + strideRange(from: 0.1, through: 15.0, by: 0.01)
+    public static var onboardingSupportedBasalRates: [Double] = TandemPumpCapabilities.supportedBasalRates
 
     // Tandem Mobi and t:slim X2: 0.05 - 25.00 unit bolus in 0.05u chunks
     public static var onboardingSupportedBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.05)
@@ -38,6 +38,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Stream message publishers
     public let fillTubingStateStream = PassthroughSubject<FillTubingStateStreamResponse, Never>()
     public let fillCannulaStateStream = PassthroughSubject<FillCannulaStateStreamResponse, Never>()
+    public let changeCartridgeStateStream = PassthroughSubject<EnterChangeCartridgeModeStateStreamResponse, Never>()
+    public let detectingCartridgeStateStream = PassthroughSubject<DetectingCartridgeStateStreamResponse, Never>()
     public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
@@ -49,12 +51,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Backstop timeout for pump commands. This MUST stay comfortably larger than the worst-case
     // real command duration, otherwise it could report a spurious failure for a command that is
     // still in progress — and for a bolus a false failure can prompt the loop to retry, risking a
-    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips (~12s each),
-    // so a command always self-completes via the lower-level bounded waits well before this fires;
-    // the watchdog is purely a last-resort guarantee that the loop receives exactly one result.
+    // double dose. Worst case ≈ connectTimeout (30s) + a few bounded write round-trips, each of
+    // which is bounded by TandemPeripheralManager.responseTimeout (30s), so a command always
+    // self-completes via the lower-level bounded waits well before this fires; the watchdog is
+    // purely a last-resort guarantee that the loop receives exactly one result.
     // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
-    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(90)
+    var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -1541,13 +1544,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
     func handleQualifyingEvents(events: Set<QualifyingEvent>, completion: @escaping () -> Void) {
         logger.info("Received qualifying events: \(events)")
 
-        let actionableEvents: Set<QualifyingEvent> = [.bolusChange, .basalChange, .alert, .battery]
-        guard events.contains(where: { actionableEvents.contains($0) }) else {
+        let context = qualifyingEventContext
+        for qualifyingEvent in events
+            where QualifyingEventFetch.fetches(for: [qualifyingEvent], context: context).isEmpty {
+            logger.info("Skipping event: \(qualifyingEvent)")
+        }
+
+        // Deduplicated across the batch, so an alert+alarm pair reloads the notification bundle
+        // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
+        // suggested handlers on QualifyingEvent.
+        let fetches = QualifyingEventFetch.fetches(for: events, context: context)
+        guard !fetches.isEmpty else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
             // acknowledge; ack immediately.
-            for qualifyingEvent in events {
-                logger.info("Skipping event: \(qualifyingEvent)")
-            }
             completion()
             return
         }
@@ -1563,22 +1572,44 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            for qualifyingEvent in events {
-                switch qualifyingEvent {
-                case .bolusChange:
-                    self.fetchBolusStatus(fromSync: false)
-                case .basalChange:
-                    self.fetchBasalStatus()
-                case .alert:
-                    self.fetchNotifications()
-                case .battery:
-                    self.fetchBatteryStatus()
-                default:
-                    self.logger.info("Skipping event: \(qualifyingEvent)")
-                }
+            for fetch in fetches {
+                self.runFetch(fetch)
             }
 
             completion()
+        }
+    }
+
+    /// The pump state the suggested handlers are selected against. PumpX2 reads the equivalent
+    /// out of its global `PumpStateSupplier`.
+    var qualifyingEventContext: QualifyingEventContext {
+        QualifyingEventContext(
+            apiVersion: state.pumpState.apiVersion,
+            controlIQSupported: state.controlIQEnabled ?? false,
+            inProgressBolusId: state.bolusDose?.bolusId
+        )
+    }
+
+    private func runFetch(_ fetch: QualifyingEventFetch) {
+        switch fetch {
+        case .notifications:
+            fetchNotifications()
+        case .controlIQStatus:
+            fetchControlIQStatus()
+        case .basalStatus:
+            fetchBasalStatus()
+        case .bolusStatus:
+            fetchBolusStatus(fromSync: false)
+        case .reservoirStatus:
+            fetchReservoirStatus()
+        case .batteryStatus:
+            fetchBatteryStatus()
+        case .deliveryLimits:
+            fetchDeliveryLimits()
+        case .globalPumpSettings:
+            fetchGlobalPumpSettings()
+        case .timeSinceReset:
+            fetchTimeSinceReset()
         }
     }
 }

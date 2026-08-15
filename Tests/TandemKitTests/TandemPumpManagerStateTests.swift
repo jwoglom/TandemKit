@@ -30,7 +30,8 @@ final class TandemPumpManagerStateTests: XCTestCase {
         state.lastReservoirReading = SimpleReservoirValue(startDate: timestamp, unitVolume: 142.5)
         state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
             date: timestamp.addingTimeInterval(-120),
-            chargeRemaining: 0.65
+            chargeRemaining: 0.65,
+            isCharging: true
         )
         state.lastBasalStatusDate = timestamp
         state.insulinType = .novolog
@@ -85,6 +86,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restored.lastReservoirReading?.unitVolume, 142.5)
         XCTAssertEqual(restored.lastBatteryReading?.date, timestamp.addingTimeInterval(-120))
         XCTAssertEqual(restored.lastBatteryReading?.chargeRemaining, 0.65)
+        XCTAssertEqual(restored.lastBatteryReading?.isCharging, true)
         XCTAssertEqual(restored.insulinType, .novolog)
         XCTAssertEqual(restored.basalRateSchedule, state.basalRateSchedule)
     }

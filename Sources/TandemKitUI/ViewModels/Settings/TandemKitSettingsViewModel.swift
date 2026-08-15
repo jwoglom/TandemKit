@@ -42,6 +42,9 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var currentProfileBaseBasalRate: Double? = nil
     @Published var currentBasalRateForDisplay: String = ""
     @Published var batteryPercentage: String? = nil
+    /// Remaining charge as a 0...1 fraction, used to draw the battery indicator.
+    @Published var batteryChargeRemaining: Double? = nil
+    @Published var batteryIsCharging: Bool = false
     @Published var pumpTimeCheckedAt: String = ""
     @Published var currentPumpTime: String = ""
     @Published var reservoirUnitsText: String? = nil
@@ -449,8 +452,11 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
                 self.suspendResumeText = String(localized: "Suspend Insulin Delivery", comment: "suspend delivery")
             }
 
-            if let battery = pumpManager.state.lastBatteryReading?.chargeRemaining {
+            if let batteryReading = pumpManager.state.lastBatteryReading {
+                let battery = batteryReading.chargeRemaining
                 self.batteryPercentage = self.numberFormatter.string(from: (battery * 100) as NSNumber)
+                self.batteryChargeRemaining = battery
+                self.batteryIsCharging = batteryReading.isCharging
             }
 
             if let lastPumpTimeCheckDate = pumpManager.state.lastPumpTimeCheckDate {

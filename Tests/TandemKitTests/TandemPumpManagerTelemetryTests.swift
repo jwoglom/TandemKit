@@ -38,6 +38,8 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV1Request.self))
         XCTAssertFalse(bluetooth.didSend(CurrentBatteryV2Request.self))
         XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.8, accuracy: 0.001)
+        // V1 carries no charging field, so it always reports not charging.
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, false)
     }
 
     func testBatteryTelemetryUsesV2RequestWhenApiSupportsIt() {
@@ -57,6 +59,27 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(CurrentBatteryV2Request.self))
         XCTAssertFalse(bluetooth.didSend(CurrentBatteryV1Request.self))
         XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, false)
+    }
+
+    /// The charging flag drives the battery indicator's charging appearance, so it has to survive
+    /// the trip from the V2 response into persisted state.
+    func testBatteryTelemetryRecordsChargingState() {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(CurrentBatteryV2Request.self, with: CurrentBatteryV2Response(
+            currentBatteryAbc: 10,
+            currentBatteryIbc: 45,
+            chargingStatus: 1,
+            unknown1: 0,
+            unknown2: 0,
+            unknown3: 0,
+            unknown4: 0
+        ))
+
+        manager.fetchBatteryStatus()
+
+        XCTAssertEqual(manager.status.pumpBatteryChargeRemaining ?? 0, 0.45, accuracy: 0.001)
+        XCTAssertEqual(manager.state.lastBatteryReading?.isCharging, true)
     }
 
     /// An unknown API version has to fall back to the request every firmware answers.

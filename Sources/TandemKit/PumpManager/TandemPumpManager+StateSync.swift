@@ -290,6 +290,29 @@ extension TandemPumpManager {
         }
     }
 
+    /// Re-reads only the pump's notification surfaces (alerts, alarms, CGM alerts, malfunctions)
+    /// and reports whether the pump could be reached.
+    ///
+    /// This is the cheap counterpart to `syncPumpData` for screens that only care about what the
+    /// pump is currently asking the user to acknowledge. It matters most during a tubing fill: the
+    /// pump can stop mid-fill and wait for confirmation before it delivers more, and the screen has
+    /// no way to know that until the notification state is read again (#248). Pulling reservoir,
+    /// battery, bolus and basal along with it would make that read far too expensive to repeat as
+    /// often as the fill screen needs to.
+    func refreshNotifications(completion: @escaping (Bool) -> Void) {
+        let completion = watchdogged(timeoutResult: false, completion)
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for notification refresh: \(error.localizedDescription)")
+                completion(false)
+                return
+            }
+
+            self.fetchNotifications()
+            completion(true)
+        }
+    }
+
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
         for request in NotificationBundle.allRequests() {
@@ -375,13 +398,28 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchReservoirStatus() {
+    /// Runs its own command job, so it is safe to call from anywhere.
+    func fetchReservoirStatus(completion: @escaping (Double?) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for reservoir status: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            completion(self.fetchReservoirStatus())
+        }
+    }
+
+    /// Returns the units remaining, or nil on failure.
+    @discardableResult
+    func fetchReservoirStatus() -> Double? {
         guard let response = bluetooth.write(
             message: InsulinStatusRequest(),
             expecting: InsulinStatusResponse.self
         ) as? InsulinStatusResponse else {
             logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
-            return
+            return nil
         }
 
         let timestamp = Date.now
@@ -407,6 +445,8 @@ extension TandemPumpManager {
                 completion: { _ in }
             )
         }
+
+        return units
     }
 
     func fetchBatteryStatus() {
@@ -416,11 +456,12 @@ extension TandemPumpManager {
             return
         }
 
-        logger.debug("Battery updated: \(response.batteryPercent)% remaining")
+        logger.debug("Battery updated: \(response.batteryPercent)% remaining, charging=\(response.isCharging)")
 
         state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
             date: Date.now,
-            chargeRemaining: Double(response.batteryPercent) / 100.0
+            chargeRemaining: Double(response.batteryPercent) / 100.0,
+            isCharging: response.isCharging
         )
         notifyDelegateStateUpdated()
     }
