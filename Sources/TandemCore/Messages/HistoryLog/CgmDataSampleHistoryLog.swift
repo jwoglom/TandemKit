@@ -32,6 +32,7 @@ public class CgmDataSampleHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(status),
+                Data(repeating: 0, count: 7),
                 Bytes.firstTwoBytesLittleEndian(value)
             )
         )
