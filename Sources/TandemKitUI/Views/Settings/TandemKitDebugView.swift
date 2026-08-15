@@ -78,28 +78,13 @@ struct TandemKitDebugView: View {
                 }
             }
 
-            Section(
-                header: Text("Feature Flags", comment: "Header for the feature flags debug section"),
-                footer: Text(
-                    "Feature flags turn on driver features that are still being validated. Leave them off unless you have been asked to test one.",
-                    comment: "Footer explaining what feature flags are"
-                )
-            ) {
-                ForEach(viewModel.featureFlags) { flag in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle(isOn: Binding(
-                            get: { viewModel.isFeatureEnabled(flag) },
-                            set: { viewModel.setFeatureFlag(flag, enabled: $0) }
-                        )) {
-                            Text(flag.title)
-                        }
-
-                        Text(flag.flagDescription)
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.vertical, 2)
+            Section {
+                Button {
+                    viewModel.openFeatureFlags?()
+                } label: {
+                    Label("Feature Flags", systemImage: "flag")
                 }
+                .disabled(viewModel.openFeatureFlags == nil)
             }
 
             Section(header: Text("Silent Tones")) {

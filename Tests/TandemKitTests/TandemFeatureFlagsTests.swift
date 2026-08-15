@@ -116,6 +116,36 @@ import XCTest
         XCTAssertTrue(restored.featureFlags.controlIQSupport)
     }
 
+    // MARK: - Feature flags screen
+
+    /// The screen hides the flag list behind a triple tap unless something is already on, so a flag
+    /// that is enabled can never be left unreachable.
+    func testTheFlagListIsShownWithoutTheTripleTapOnceAFlagIsOn() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+
+        XCTAssertFalse(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasEnabledFlag)
+
+        manager.setFeatureFlag(.controlIQSupport, enabled: true)
+
+        XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasEnabledFlag)
+    }
+
+    func testTheFlagsScreenWritesThroughToTheManager() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+        let viewModel = TandemKitFeatureFlagsViewModel(pumpManager: manager)
+
+        viewModel.setFlag(.quickBolusButtonSupport, enabled: true)
+
+        XCTAssertTrue(viewModel.isEnabled(.quickBolusButtonSupport))
+        XCTAssertTrue(manager.state.featureFlags.quickBolusButtonSupport)
+    }
+
     // MARK: - Settings screen gating
 
     func testSwitchToControlIQIsRefusedWhileTheFlagIsOff() {
