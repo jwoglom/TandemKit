@@ -5,6 +5,10 @@ public class CgmAlertAckHistoryLog: HistoryLog {
 
     public let alertId: UInt32
 
+    public var alert: CGMAlertStatusResponse.CGMAlert? {
+        CGMAlertStatusResponse.CGMAlert(rawValue: Int(alertId))
+    }
+
     public required init(cargo: Data) {
         alertId = Bytes.readUint32(cargo, 10)
         super.init(cargo: cargo)
