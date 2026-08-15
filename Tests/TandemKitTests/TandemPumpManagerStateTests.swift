@@ -220,25 +220,18 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restored.pumpState.derivedSecret, state.pumpState.derivedSecret)
     }
 
+    /// Auto-acknowledgement of basal alerts is mandatory: oref routinely sets a zero basal rate and
+    /// the pump alerts on every one, so a fresh install starts with it on and cannot turn it off.
     func testAutoAcknowledgeBasalAlertsDefaultsOn() {
-        let schedule = BasalRateSchedule(
-            items: [RepeatingScheduleValue(startTime: 0, value: 0.75)],
-            timeZone: TimeZone(secondsFromGMT: 0)!
-        )
-
-        XCTAssertTrue(TandemPumpManagerState(basalRateSchedule: schedule).autoAcknowledgeBasalAlerts)
+        XCTAssertTrue(TandemPumpManagerState(rawValue: [:]).autoAcknowledgeBasalAlerts)
     }
 
-    func testAutoAcknowledgeBasalAlertsMigratesOnFromPersistedState() throws {
-        // State persisted before auto-acknowledge became mandatory may hold `false`, and state
-        // persisted before the flag existed omits the key entirely. Both must come back enabled.
-        let disabledRaw: [String: Any] = [
-            "version": 1,
-            "autoAcknowledgeBasalAlerts": false
-        ]
-        let legacyRaw: [String: Any] = ["version": 1]
+    /// State persisted while the setting was still user-facing may hold `false`. Those pumps have to
+    /// migrate on rather than stay silently off, so the stored value is ignored on decode.
+    func testAutoAcknowledgeBasalAlertsMigratesOnFromPersistedState() {
+        var raw = makePopulatedState().rawValue
+        raw["autoAcknowledgeBasalAlerts"] = false
 
-        XCTAssertTrue(try XCTUnwrap(TandemPumpManagerState(rawValue: disabledRaw)).autoAcknowledgeBasalAlerts)
-        XCTAssertTrue(try XCTUnwrap(TandemPumpManagerState(rawValue: legacyRaw)).autoAcknowledgeBasalAlerts)
+        XCTAssertTrue(TandemPumpManagerState(rawValue: raw).autoAcknowledgeBasalAlerts)
     }
 }
