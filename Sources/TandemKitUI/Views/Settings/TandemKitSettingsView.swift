@@ -265,7 +265,7 @@ struct TandemKitSettingsView: View {
                         title: String(localized: "Pump Disconnected", comment: "title for pump disconnected notice"),
                         color: .red
                     )
-                } else if viewModel.useControlIQ && !viewModel.isCGMActiveOnPump {
+                } else if viewModel.showsNoCGMConnectedBanner {
                     statusBanner(
                         title: String(localized: "No CGM connected to pump", comment: "title for CIQ no CGM notice"),
                         subtitle: String(

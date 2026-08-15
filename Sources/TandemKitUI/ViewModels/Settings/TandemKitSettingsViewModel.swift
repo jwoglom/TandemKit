@@ -75,12 +75,21 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var useControlIQ: Bool = false
     @Published var showReenableClosedLoopPrompt: Bool = false
     @Published var showNoCGMWarning: Bool = false
-    @Published var isCGMActiveOnPump: Bool = false
+    /// Whether a CGM sensor session is established on the pump, or nil while that is unknown (the
+    /// pump has not been read yet, or the read failed). Unknown is deliberately distinct from
+    /// `false`: only a confirmed absence should raise the "no CGM connected" warning.
+    @Published var isCGMActiveOnPump: Bool?
     @Published var pendingEnableClosedLoop: Bool = false
     @Published var showCGMRequiredForCIQ: Bool = false
     @Published var showControlIQValuesRequired: Bool = false
     @Published var showSwitchToCIQConfirm: Bool = false
     @Published var isCheckingCGMForCIQ: Bool = false
+
+    /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
+    /// has no sensor session earns the warning; an unknown session state does not.
+    var showsNoCGMConnectedBanner: Bool {
+        useControlIQ && isCGMActiveOnPump == false
+    }
 
     private var numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -129,6 +138,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.allowDebugFeatures = allowDebugFeatures
         autoAcknowledgeBasalAlerts = pumpManager?.autoAcknowledgeBasalAlerts ?? false
         useControlIQ = pumpManager?.state.useControlIQ ?? false
+        isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
         isConnected = false
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
@@ -253,13 +263,17 @@ class TandemKitSettingsViewModel: ObservableObject {
         pumpManager?.configureControlIQMode(request) { result in
             switch result {
             case let .success(cgmResponse):
-                let cgmActive = cgmResponse?.sessionState == .active
+                // A sensor that is still warming up counts as connected — it will start feeding
+                // Control-IQ shortly — matching the check that gated this switch in the first
+                // place (`attemptSwitchToControlIQ`). A missing response leaves the session state
+                // unknown, and an unknown state is not grounds for the warning.
+                let cgmConfigured = cgmResponse?.isSensorSessionConfigured
 
                 DispatchQueue.main.async {
                     self.isUpdatingPumpState = false
                     self.useControlIQ = true
-                    self.isCGMActiveOnPump = cgmActive
-                    if !cgmActive {
+                    self.isCGMActiveOnPump = cgmConfigured
+                    if cgmConfigured == false {
                         self.showNoCGMWarning = true
                     }
                 }
@@ -420,6 +434,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ
+            self.isCGMActiveOnPump = pumpManager.state.isCGMSensorSessionConfigured
             self.scheduledBasal = pumpManager.getScheduledBasalRate()
             self.pumpState = pumpManager.state.pumpState
             self.controlIQEnabled = pumpManager.state.controlIQEnabled ?? false

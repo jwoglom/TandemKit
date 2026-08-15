@@ -60,6 +60,39 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
+    /// Reads the pump's CGM sensor session status into `state.cgmSessionState`.
+    ///
+    /// The settings screen warns that Control-IQ is running open-loop when no CGM is connected, so
+    /// the session state has to be refreshed on every sync — the user can pair or stop a sensor on
+    /// the pump itself, and Control-IQ may have been enabled long before the app was launched.
+    /// A failed read leaves the previous value in place rather than clearing it, so a dropped
+    /// message never reads as "sensor disconnected".
+    func fetchCGMSessionStatus() {
+        // The request is Mobi-only; sending it to a pump that cannot answer would just burn a
+        // round-trip timeout on every sync.
+        guard supports(CGMStatusV2Request.self) else {
+            return
+        }
+
+        guard let response = bluetooth.write(
+            message: CGMStatusV2Request(),
+            expecting: CGMStatusV2Response.self
+        ) as? CGMStatusV2Response else {
+            logger.error("Failed to fetch CGM status")
+            return
+        }
+
+        updateCGMSessionState(from: response)
+    }
+
+    /// Stores the session state from a CGM status response, whatever triggered the read.
+    func updateCGMSessionState(from response: CGMStatusV2Response) {
+        state.cgmSessionState = response.sessionState
+        state.lastCGMStatusUpdate = Date.now
+
+        notifyDelegateStateUpdated()
+    }
+
     func fetchPumpInformation() {
         guard let apiResponse = bluetooth.write(
             message: ApiVersionRequest(),

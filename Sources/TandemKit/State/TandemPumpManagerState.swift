@@ -95,6 +95,27 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var controlIQTotalDailyInsulin: Int?
     public var lastControlIQUpdate: Date?
 
+    // CGM sensor session on the pump. `nil` means we have not (yet) been able to read the pump's
+    // CGM status — which is not the same as "no sensor", so callers must not treat it as absence.
+    public var cgmSessionState: CGMStatusV2Response.SessionState?
+    public var lastCGMStatusUpdate: Date?
+
+    /// Whether the pump has a CGM sensor session established — running (`active`) or warming up
+    /// (`startPending`). `nil` when the pump's CGM status is unknown.
+    ///
+    /// Control-IQ can only close the loop with a CGM feeding the pump, so this is what gates the
+    /// "no CGM connected" warning; see `CGMStatusV2Response.isSensorSessionConfigured`.
+    public var isCGMSensorSessionConfigured: Bool? {
+        switch cgmSessionState {
+        case .none:
+            return nil
+        case .active, .startPending:
+            return true
+        case .stopPending, .stopped, .unknown:
+            return false
+        }
+    }
+
     // Alert snooze settings
     public var alertSnoozeEnabled: Bool = false
     public var alertSnoozeDuration: TimeInterval = .minutes(10)
@@ -262,6 +283,18 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastControlIQUpdate = nil
         }
 
+        if let cgmSessionStateRaw = rawValue["cgmSessionState"] as? Int {
+            cgmSessionState = CGMStatusV2Response.SessionState(rawValue: cgmSessionStateRaw)
+        } else {
+            cgmSessionState = nil
+        }
+
+        if let lastCGMStatusInterval = rawValue["lastCGMStatusUpdate"] as? TimeInterval {
+            lastCGMStatusUpdate = Date(timeIntervalSinceReferenceDate: lastCGMStatusInterval)
+        } else {
+            lastCGMStatusUpdate = nil
+        }
+
         if let lastNotificationInterval = rawValue["lastNotificationUpdate"] as? TimeInterval {
             lastNotificationUpdate = Date(timeIntervalSinceReferenceDate: lastNotificationInterval)
         } else {
@@ -311,6 +344,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["controlIQWeightUnit"] = controlIQWeightUnit?.rawValue
         raw["controlIQTotalDailyInsulin"] = controlIQTotalDailyInsulin
         raw["lastControlIQUpdate"] = lastControlIQUpdate?.timeIntervalSinceReferenceDate
+        raw["cgmSessionState"] = cgmSessionState?.rawValue
+        raw["lastCGMStatusUpdate"] = lastCGMStatusUpdate?.timeIntervalSinceReferenceDate
         raw["alertSnoozeEnabled"] = alertSnoozeEnabled
         raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["notificationCount"] = notificationCount
@@ -388,6 +423,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* controlIQWeightUnit: \(String(describing: controlIQWeightUnit))",
             "* controlIQTotalDailyInsulin: \(String(describing: controlIQTotalDailyInsulin))",
             "* lastControlIQUpdate: \(String(describing: lastControlIQUpdate))",
+            "* cgmSessionState: \(String(describing: cgmSessionState))",
+            "* lastCGMStatusUpdate: \(String(describing: lastCGMStatusUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",

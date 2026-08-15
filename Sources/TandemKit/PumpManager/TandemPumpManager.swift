@@ -305,6 +305,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
+            self.fetchCGMSessionStatus()
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
@@ -1241,6 +1242,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
 
+            if let cgmResponse {
+                self.updateCGMSessionState(from: cgmResponse)
+            }
+
             // Pump accepted -- update local preference
             self.state.useControlIQ = request.enabled
             self.state.controlIQWeightLbs = request.weightLbs
@@ -1399,6 +1404,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 message: CGMStatusV2Request(),
                 expecting: CGMStatusV2Response.self
             ) as? CGMStatusV2Response
+
+            if let response {
+                self.updateCGMSessionState(from: response)
+            }
 
             completion(response)
         }
