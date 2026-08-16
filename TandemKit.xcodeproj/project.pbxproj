@@ -486,6 +486,7 @@
 		8C8A1A4A33A35DC0405CDAA6 /* CarbEnteredHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADECC77FEBCCD4DBD9C4EC51 /* CarbEnteredHistoryLogTests.swift */; };
 		8DACCF68C29D3196A6A58522 /* CurrentBatteryV1ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3EAAE92BF96A5C7542F30 /* CurrentBatteryV1ResponseTests.swift */; };
 		8E35DA904F883F6B7BA87024 /* ResumeWithAlarmAcknowledgementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 756FF1C2396F116135901B30 /* ResumeWithAlarmAcknowledgementTests.swift */; };
+		8ED35B5699DC7D936E788778 /* AlertActivatedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01649B48CC01F5D805C5C0D /* AlertActivatedHistoryLogTests.swift */; };
 		8F822072D942BEBA7056F8FF /* CgmDataFsl3HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190AABDCD962A0E49181FD0F /* CgmDataFsl3HistoryLogTests.swift */; };
 		8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */; };
 		9132D4C4EFB6B0FBD7659CAE /* TubingFilledHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD813F15B60D8BA3ACB2BE71 /* TubingFilledHistoryLogTests.swift */; };
@@ -551,6 +552,7 @@
 		DEB28B6D27663077F18D53FF /* DailyStatusHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F540659FBCEE9181FC99F7B9 /* DailyStatusHistoryLogTests.swift */; };
 		DF0AA721638E106F6AAACCF1 /* Jpake2ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA6DA9CF4DC167FB023A240 /* Jpake2ResponseTests.swift */; };
 		DF3B300802DA6A772CFB918C /* RemoteBgEntryRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C775FFBEB5739FB6B1864096 /* RemoteBgEntryRequestTests.swift */; };
+		DF838A209352DF7679DA49D8 /* AlarmActivatedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AE56CF2EECB610781747474 /* AlarmActivatedHistoryLogTests.swift */; };
 		DFA9EE667146D7338E520D00 /* BolusRequestedMsg1HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4079287E1E6DE71E0962A0F2 /* BolusRequestedMsg1HistoryLogTests.swift */; };
 		E1288F8EEF4CE1217286BF5B /* MessageTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41A8431E5D17AFDA41C2E66C /* MessageTester.swift */; };
 		E1A8296D5AF99217DC9FCF05 /* ControlIQConfigurationError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11AF56D520EF37E58A6DA2D /* ControlIQConfigurationError.swift */; };
@@ -677,6 +679,7 @@
 		1A9EB4F4A560F4F7E6A6BB06 /* PlaySoundRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlaySoundRequestTests.swift; sourceTree = "<group>"; };
 		1AAA186E2D2B1E060061C043 /* TandemKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TandemKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		1AAA18782D2B1E060061C043 /* TandemKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		1AE56CF2EECB610781747474 /* AlarmActivatedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlarmActivatedHistoryLogTests.swift; sourceTree = "<group>"; };
 		1B28D518B85DD31510B4A5AE /* AaTdiEstChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaTdiEstChangeHistoryLog.swift; sourceTree = "<group>"; };
 		1BAB054EE5AA0BC8FC02F19D /* ChangeTimeDateRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChangeTimeDateRequestTests.swift; sourceTree = "<group>"; };
 		1ED4A7344ACC05B6BFB62474 /* TandemKitControlIQSettingsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitControlIQSettingsViewModelTests.swift; sourceTree = "<group>"; };
@@ -1098,6 +1101,7 @@
 		ADECC77FEBCCD4DBD9C4EC51 /* CarbEnteredHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarbEnteredHistoryLogTests.swift; sourceTree = "<group>"; };
 		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
+		B01649B48CC01F5D805C5C0D /* AlertActivatedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlertActivatedHistoryLogTests.swift; sourceTree = "<group>"; };
 		B1356FB43A6D8C0DA9F7F1F3 /* TandemPumpManagerStateAlertTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerStateAlertTests.swift; sourceTree = "<group>"; };
 		B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillTubingView.swift; sourceTree = "<group>"; };
 		B27AEA9EADF4DEEE18B1EF27 /* TempRateCompletedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempRateCompletedHistoryLogTests.swift; sourceTree = "<group>"; };
@@ -2208,6 +2212,8 @@
 				5F87E6C9EE1E54E3383D3C32 /* VersionsAHistoryLogTests.swift */,
 				090A0E92F492CEFD874DD625 /* CgmJoinSessionG7HistoryLogTests.swift */,
 				3CFEA76CD323B6F5B266F02D /* CgmStopSessionG7HistoryLogTests.swift */,
+				1AE56CF2EECB610781747474 /* AlarmActivatedHistoryLogTests.swift */,
+				B01649B48CC01F5D805C5C0D /* AlertActivatedHistoryLogTests.swift */,
 			);
 			name = HistoryLog;
 			path = HistoryLog;
@@ -2974,6 +2980,8 @@
 				76BCC0DDD814BFB9049D9DE0 /* VersionsAHistoryLogTests.swift in Sources */,
 				31DB957C79E45C44A01CEF79 /* CgmJoinSessionG7HistoryLogTests.swift in Sources */,
 				B95A4FD03FC8D053A7D048ED /* CgmStopSessionG7HistoryLogTests.swift in Sources */,
+				DF838A209352DF7679DA49D8 /* AlarmActivatedHistoryLogTests.swift in Sources */,
+				8ED35B5699DC7D936E788778 /* AlertActivatedHistoryLogTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
