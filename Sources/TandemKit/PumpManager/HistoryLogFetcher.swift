@@ -7,6 +7,11 @@ import Foundation
 /// `startLog`), and a chunk is considered done once every sequence number in it has arrived or
 /// a timeout elapses. Entries are deduplicated by sequence number, and after the initial walk a
 /// single gap-healing pass re-requests any ranges that never arrived.
+///
+/// The pump manager's session `historyLogStore` is consulted first: entries it already holds are
+/// served through the normal callbacks without touching the pump, and only the store's gaps are
+/// requested. (Everything this fetcher streams in lands in that store via the manager's
+/// subscription, so repeat fetches over the same window get cheaper as the session goes on.)
 public final class HistoryLogFetcher {
     public struct Progress {
         public let fetchedCount: Int
@@ -215,8 +220,16 @@ public final class HistoryLogFetcher {
         windowEnd = end
         lock.unlock()
 
+        // Serve whatever the session store already holds for this window, then only walk the
+        // ranges it doesn't. A window fully covered by earlier fetches costs one status request
+        // and zero chunk requests.
+        seedFromStore(startId: start, endId: end)
+
         logger.info("Fetching history logs \(start)-\(end) (pump has \(first)-\(last))")
-        walkRange(startId: start, endId: end)
+        let toFetch = missingRanges(startId: start, endId: end)
+        for range in toFetch.reversed() where !isCancelled {
+            walkRange(startId: range.lowerBound, endId: range.upperBound)
+        }
 
         // Gap-healing pass: re-request whatever never arrived, newest range first, like
         // ControlX2 does on its next status cycle.
@@ -261,6 +274,60 @@ public final class HistoryLogFetcher {
             }
 
             i = chunkStart - 1
+        }
+    }
+
+    /// Marks every entry the session store already holds within [startId, endId] as received and
+    /// delivers it through the same per-log/progress callbacks a streamed entry would use, so
+    /// callers can't tell cached history from fetched history. `onStreamMessage` is deliberately
+    /// not fired — it captures stream traffic that actually happened during this fetch.
+    ///
+    /// No-op until the pump serial is known: the store is keyed by serial, so nothing can have
+    /// been stored yet either.
+    private func seedFromStore(startId: Int64, endId: Int64) {
+        guard endId >= startId, let serial = pumpManager.historyLogStoreSerial else {
+            return
+        }
+
+        let stored: [StoredHistoryLog]
+        do {
+            stored = try pumpManager.historyLogStore.logs(
+                pumpSerial: serial.rawValue,
+                in: UInt32(startId) ... UInt32(endId)
+            )
+        } catch {
+            logger.warning("Could not read stored history logs \(startId)-\(endId): \(error)")
+            return
+        }
+        guard !stored.isEmpty else {
+            return
+        }
+
+        lock.lock()
+        var seededLogs: [HistoryLog] = []
+        for entry in stored where !receivedSeqNums.contains(entry.sequenceNum) {
+            receivedSeqNums.insert(entry.sequenceNum)
+            seededLogs.append(entry.parsed())
+            if earliestPumpTimeSec.map({ entry.pumpTimeSec < $0 }) ?? true {
+                earliestPumpTimeSec = entry.pumpTimeSec
+            }
+            if latestPumpTimeSec.map({ entry.pumpTimeSec > $0 }) ?? true {
+                latestPumpTimeSec = entry.pumpTimeSec
+            }
+        }
+        let progress = progressLocked()
+        lock.unlock()
+
+        guard !seededLogs.isEmpty else {
+            return
+        }
+        logger.info("Seeded \(seededLogs.count) history logs from the session store")
+
+        DispatchQueue.main.async {
+            for log in seededLogs {
+                self.onLog?(log)
+            }
+            self.onProgress?(progress)
         }
     }
 

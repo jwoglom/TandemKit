@@ -41,6 +41,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public let changeCartridgeStateStream = PassthroughSubject<EnterChangeCartridgeModeStateStreamResponse, Never>()
     public let detectingCartridgeStateStream = PassthroughSubject<DetectingCartridgeStateStreamResponse, Never>()
     public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
+
+    /// Session-scoped working memory of raw history logs, fed by `historyLogStream` (see
+    /// `TandemPumpManager+HistoryStore.swift`).
+    ///
+    /// Deliberately in-memory (#232): the pump-manager layer stays storage-free — durable dose
+    /// storage is the host app's job — so this holds only what has streamed in since launch.
+    /// Anything that must survive a relaunch belongs in `state`, not here.
+    public let historyLogStore: HistoryLogStore = InMemoryHistoryLogStore()
+    private var historyLogStoreSubscription: AnyCancellable?
+    // Guards lastHistoryLogPruneAt: inserts arrive on the BLE notification path while tests and
+    // future scheduler hooks may prune from other threads.
+    let historyLogPruneLock = NSLock()
+    var lastHistoryLogPruneAt: Date?
+
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -102,6 +116,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         bluetooth.pumpManager = self
+
+        // Every history log that streams in — telemetry, viewer fetches, probes — lands in the
+        // session store, so later readers within the session don't go back to the pump for it.
+        historyLogStoreSubscription = historyLogStream.sink { [weak self] response in
+            self?.storeHistoryLogs(response.historyLogs)
+        }
 
         let nc = NotificationCenter.default
         nc.addObserver(
