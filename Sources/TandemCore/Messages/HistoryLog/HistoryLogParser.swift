@@ -235,6 +235,40 @@ public enum HistoryLogParser {
             return CgmInactiveG7HistoryLog(cargo: raw)
         case CgmStopSessionReqG7HistoryLog.typeId:
             return CgmStopSessionReqG7HistoryLog(cargo: raw)
+        case LogErasedHistoryLog.typeId:
+            return LogErasedHistoryLog(cargo: raw)
+        case BGHistoryLog.typeId:
+            return BGHistoryLog(cargo: raw)
+        case BolexCompletedHistoryLog.typeId:
+            return BolexCompletedHistoryLog(cargo: raw)
+        case CartridgeFilledHistoryLog.typeId:
+            return CartridgeFilledHistoryLog(cargo: raw)
+        case UsbConnectedHistoryLog.typeId:
+            return UsbConnectedHistoryLog(cargo: raw)
+        case UsbDisconnectedHistoryLog.typeId:
+            return UsbDisconnectedHistoryLog(cargo: raw)
+        case CarbEnteredHistoryLog.typeId:
+            return CarbEnteredHistoryLog(cargo: raw)
+        case BolexActivatedHistoryLog.typeId:
+            return BolexActivatedHistoryLog(cargo: raw)
+        case CannulaFilledHistoryLog.typeId:
+            return CannulaFilledHistoryLog(cargo: raw)
+        case BolusRequestedMsg1HistoryLog.typeId:
+            return BolusRequestedMsg1HistoryLog(cargo: raw)
+        case BolusRequestedMsg2HistoryLog.typeId:
+            return BolusRequestedMsg2HistoryLog(cargo: raw)
+        case BolusRequestedMsg3HistoryLog.typeId:
+            return BolusRequestedMsg3HistoryLog(cargo: raw)
+        case UsbEnumeratedHistoryLog.typeId:
+            return UsbEnumeratedHistoryLog(cargo: raw)
+        case ControlIQUserModeChangeHistoryLog.typeId:
+            return ControlIQUserModeChangeHistoryLog(cargo: raw)
+        case ControlIQPcmChangeHistoryLog.typeId:
+            return ControlIQPcmChangeHistoryLog(cargo: raw)
+        case BasalDeliveryHistoryLog.typeId:
+            return BasalDeliveryHistoryLog(cargo: raw)
+        case BolusDeliveryHistoryLog.typeId:
+            return BolusDeliveryHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
