@@ -36,7 +36,10 @@ jobs:
       github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
     runs-on: macos-latest
-    timeout-minutes: 25
+    # A warm DerivedData cache builds Trio in ~9 minutes, but the first run
+    # after the cache generation marker moves has to compile everything, which
+    # does not fit in 25.
+    timeout-minutes: 50
     environment: ${{ github.event_name == 'pull_request_target' && 'pr-testing' || '' }}
     env:
       TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
@@ -47,6 +50,24 @@ jobs:
       XCODEBUILD_COMMON_FLAGS: >-
         -skipMacroValidation
         -skipPackagePluginValidation
+      # Ad-hoc ("sign to run locally") signing, which is what a simulator build
+      # normally gets from Xcode. It must NOT be turned off: CODE_SIGNING_ALLOWED=NO
+      # leaves the app with no signature and therefore no entitlements, and an iOS
+      # Simulator app with no application-identifier entitlement gets an error back
+      # from every Security-framework call. Trio asserts on a failed keychain read
+      # (BaseKeychain reportError -> assertionFailure), so the unsigned test host
+      # traps during launch and xcodebuild reports "Early unexpected exit ...
+      # Test crashed with signal trap before establishing connection".
+      #
+      # Manual style with the "-" identity keeps this hermetic: the simulator SDK
+      # needs no provisioning profile and no Apple Developer account, so nothing
+      # here depends on secrets.
+      SIMULATOR_CODE_SIGN_FLAGS: >-
+        CODE_SIGNING_ALLOWED=YES
+        CODE_SIGNING_REQUIRED=YES
+        CODE_SIGN_STYLE=Manual
+        CODE_SIGN_IDENTITY=-
+        PROVISIONING_PROFILE_SPECIFIER=
     steps:
       - name: Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -194,16 +215,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-
 
+      # `-v2-` is a cache generation marker. Bump it whenever a build setting
+      # changes in a way the hashed files do not capture -- the signing flags
+      # above are part of Xcode's build description, so a snapshot taken under
+      # the old flags forces a full rebuild on every restore and, because the
+      # key already exists, never gets replaced.
       - name: Cache Xcode DerivedData intermediates
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.DERIVED_DATA_PATH }}/Build
             ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
           restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-${{ hashFiles('trio/**/Package.resolved') }}-
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-
 
       - name: Build Trio tests for execution (no test run)
         run: |
@@ -216,7 +242,7 @@ jobs:
             -derivedDataPath "${DERIVED_DATA_PATH}" \
             ${XCODEBUILD_COMMON_FLAGS} \
             -quiet \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
             2>&1 | tee "xcodebuild-build-for-testing.log"
 
       - name: Wait for the simulator to finish booting
@@ -237,7 +263,7 @@ jobs:
             ${XCODEBUILD_COMMON_FLAGS} \
             -retry-tests-on-failure \
             -quiet \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
             2>&1 | tee "xcodebuild-test.log"
 
       - name: Upload test logs/results (on failure)
