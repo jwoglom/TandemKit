@@ -9,4 +9,21 @@ public class AlarmClearedHistoryLog: HistoryLog {
         alarmId = Bytes.readUint32(cargo, 10)
         super.init(cargo: cargo)
     }
+
+    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, alarmId: UInt32) {
+        let payload = AlarmClearedHistoryLog.buildCargo(pumpTimeSec: pumpTimeSec, sequenceNum: sequenceNum, alarmId: alarmId)
+        self.alarmId = alarmId
+        super.init(cargo: payload)
+    }
+
+    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, alarmId: UInt32) -> Data {
+        HistoryLog.fillCargo(
+            Bytes.combine(
+                HistoryLog.typeIdBytes(typeId),
+                Bytes.toUint32(pumpTimeSec),
+                Bytes.toUint32(sequenceNum),
+                Bytes.toUint32(alarmId)
+            )
+        )
+    }
 }

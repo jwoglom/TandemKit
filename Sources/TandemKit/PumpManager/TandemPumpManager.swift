@@ -1378,6 +1378,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // An ordinary (non-merged) row is done once its notification is acked.
             guard !item.mergedMembers.isEmpty else {
+                // Refresh the bundle so the LoopKit alert reconciler retracts the
+                // dismissed notification instead of waiting for the next poll.
+                self.fetchNotifications()
                 completion(true)
                 return
             }
@@ -1742,8 +1745,87 @@ extension TandemPumpManager: AlertResponder, AlertSoundVendor {
         []
     }
 
-    public func acknowledgeAlert(alertIdentifier _: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
-        completion(nil)
+    public func acknowledgeAlert(alertIdentifier: LoopKit.Alert.AlertIdentifier, completion: @escaping ((any Error)?) -> Void) {
+        guard let parsed = NotificationItem.parseStableIdentifier(alertIdentifier) else {
+            // Not an identifier this driver minted (e.g. from a newer version) — nothing to
+            // relay to the pump, so acknowledge phone-side rather than leave the alert stuck.
+            logger.warning("acknowledgeAlert: unrecognized identifier \(alertIdentifier)")
+            completion(nil)
+            return
+        }
+
+        guard let dismissType = parsed.type.dismissType else {
+            // Malfunctions cannot be dismissed remotely: acknowledging only silences the
+            // phone-side notification. The identifier stays in issuedAlertIdentifiers so the
+            // still-active malfunction is not re-issued; it is retracted once the pump
+            // reports it cleared.
+            logger.info("acknowledgeAlert: \(alertIdentifier) is not dismissible on the pump")
+            completion(nil)
+            return
+        }
+
+        // Prefer the live bundle row for this identifier: a merged row (see
+        // `MergedNotificationGroup`) carries the group's primary as its type/notificationId,
+        // and `dismissNotification` knows how to acknowledge the merged members the pump
+        // does not auto-clear. Both of its paths re-fetch, which runs the alert reconciler.
+        if let item = notificationBundle.get().first(where: {
+            $0.type == parsed.type && $0.notificationId == parsed.notificationId
+        }) {
+            dismissNotification(notification: item) { success in
+                if success {
+                    completion(nil)
+                    return
+                }
+
+                // The bundle row may be stale: the pump rejects a dismiss for a notification
+                // it already cleared itself (e.g. dismissed on the pump between polls), and
+                // that must acknowledge cleanly rather than leave the alert stuck. Re-read
+                // the pump and only fail the acknowledgement if the notification is really
+                // still active (or its state could not be determined).
+                self.bluetooth.ensureConnected { error in
+                    if let error {
+                        completion(error)
+                        return
+                    }
+
+                    self.fetchNotifications()
+
+                    let bundle = self.notificationBundle
+                    let categoryFetched = bundle.fetchedCategories.contains(parsed.type)
+                    let stillActive = bundle.isActive(type: parsed.type, id: parsed.notificationId)
+                    if categoryFetched, !stillActive {
+                        // Already cleared on the pump; the re-fetch's reconcile retracted it.
+                        completion(nil)
+                    } else {
+                        completion(PumpCommError.errorResponse(
+                            context: "Failed to dismiss \(alertIdentifier) on the pump"
+                        ))
+                    }
+                }
+            }
+            return
+        }
+
+        // The notification is no longer in the bundle (stale alert or bundle not yet
+        // fetched this session) — send a single dismiss for the primary and re-fetch so the
+        // reconciler retracts whatever the pump reports as cleared.
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("acknowledgeAlert: failed to connect: \(error.localizedDescription)")
+                completion(error)
+                return
+            }
+
+            // A rejected dismiss here most likely means the pump already cleared the
+            // notification itself; don't fail the acknowledgement over it — the re-fetch
+            // below retracts the alert if it is really gone.
+            if !self.acknowledgeNotification(type: dismissType, id: parsed.notificationId) {
+                self.logger.warning("acknowledgeAlert: pump rejected dismiss of stale \(alertIdentifier)")
+            }
+
+            self.fetchNotifications()
+            completion(nil)
+        }
     }
 }
 

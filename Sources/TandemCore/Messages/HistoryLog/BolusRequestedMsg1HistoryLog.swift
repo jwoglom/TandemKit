@@ -90,8 +90,23 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
         )
     }
 
-    public var bolusType: Set<BolusDeliveryHistoryLog.BolusType> {
-        BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeId)
+    /// How the bolus was requested, or `nil` if the raw value is not recognized.
+    ///
+    /// Treated as a scalar enum over `bolusTypeId` (mirroring pumpX2's
+    /// `BolusRequestedMsg1HistoryLog.BolusType`), *not* a bitmask -- deliberately distinct from
+    /// `BolusDeliveryHistoryLog.BolusType`, which decodes a different field as a bitmask of the
+    /// components making up a bolus.
+    public var bolusType: BolusType? {
+        BolusType(rawValue: bolusTypeId)
+    }
+
+    /// Mirrors pumpX2's `BolusRequestedMsg1HistoryLog.BolusType`. Value names ported from
+    /// tconnectsync and not independently verified against pump firmware; see the Java class doc.
+    public enum BolusType: Int {
+        case INSULIN = 0
+        case CARB = 1
+        case AUTOMATIC_CORRECTION = 2
+        case REMOTE = 3
     }
 
     public var description: String {

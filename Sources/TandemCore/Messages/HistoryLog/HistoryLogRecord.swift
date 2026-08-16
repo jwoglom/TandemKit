@@ -27,6 +27,20 @@ open class HistoryLog {
         return ret
     }
 
+
+    /// Returns a copy of this log whose header high nibble (top 4 bits of the little-endian
+    /// uint16 at cargo offset 0) is set to `headerHighNibble`.
+    ///
+    /// Mirrors pumpX2's `HistoryLog.withHeaderHighNibble(int)`. The nibble's meaning is unknown
+    /// and capture-dependent (records from some pumps carry 1, older fixtures carry 0), so
+    /// serializers emit 0 and callers reproducing a captured record byte-exact apply the observed
+    /// nibble with this method. Parsed fields are unaffected.
+    public func withHeaderHighNibble(_ headerHighNibble: Int) -> Self {
+        var updated = cargo
+        updated[updated.startIndex + 1] = UInt8((Int(updated[updated.startIndex + 1]) & 0x0F) | ((headerHighNibble & 0x0F) << 4))
+        return Self(cargo: updated)
+    }
+
     /// Builds the two-byte little-endian header found at cargo offset 0.
     ///
     /// Mirrors pumpX2's `HistoryLog.typeIdBytes(int typeId, int headerHighNibble)`: the low 12
