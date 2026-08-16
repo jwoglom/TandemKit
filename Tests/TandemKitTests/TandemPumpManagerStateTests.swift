@@ -219,4 +219,19 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restored.settings.maxBolus, 9.5)
         XCTAssertEqual(restored.pumpState.derivedSecret, state.pumpState.derivedSecret)
     }
+
+    /// Auto-acknowledgement of basal alerts is mandatory: oref routinely sets a zero basal rate and
+    /// the pump alerts on every one, so a fresh install starts with it on and cannot turn it off.
+    func testAutoAcknowledgeBasalAlertsDefaultsOn() {
+        XCTAssertTrue(TandemPumpManagerState(rawValue: [:]).autoAcknowledgeBasalAlerts)
+    }
+
+    /// State persisted while the setting was still user-facing may hold `false`. Those pumps have to
+    /// migrate on rather than stay silently off, so the stored value is ignored on decode.
+    func testAutoAcknowledgeBasalAlertsMigratesOnFromPersistedState() {
+        var raw = makePopulatedState().rawValue
+        raw["autoAcknowledgeBasalAlerts"] = false
+
+        XCTAssertTrue(TandemPumpManagerState(rawValue: raw).autoAcknowledgeBasalAlerts)
+    }
 }

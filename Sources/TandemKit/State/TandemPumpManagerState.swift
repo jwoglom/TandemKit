@@ -53,7 +53,11 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusDose: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
-    public var autoAcknowledgeBasalAlerts: Bool = false
+    /// Basal min/max alerts are auto-acknowledged unconditionally: oref routinely sets a zero
+    /// basal rate, which the pump would otherwise announce with a notification every time. Kept as
+    /// state rather than a constant so tests can exercise the disabled path, but there is no
+    /// user-facing way to turn it off.
+    public var autoAcknowledgeBasalAlerts: Bool = true
     public var useSilentTones: Bool = false
 
     // Pump time
@@ -142,7 +146,9 @@ public struct TandemPumpManagerState: RawRepresentable {
         isConnected = false // To prevent having an old isConnected state
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
-        autoAcknowledgeBasalAlerts = rawValue["autoAcknowledgeBasalAlerts"] as? Bool ?? false
+        // Intentionally ignores any persisted value: state saved before auto-acknowledge became
+        // mandatory may hold `false`, and those pumps should migrate on, not stay off.
+        autoAcknowledgeBasalAlerts = true
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
