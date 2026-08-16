@@ -15,12 +15,7 @@ final class AlertActivatedHistoryLogTests: XCTestCase {
             "040024c0981aadde020033000000000000000000000000800044",
             expected
         )
-        // pumpX2's Java test asserts CONTROL_IQ_LOW here; the Swift AlertResponseType enum
-        // (Sources/TandemCore/Messages/CurrentStatus/AlertStatus.swift) currently names alert id
-        // 51 `DEFAULT_ALERT_51` rather than `CONTROL_IQ_LOW` -- a pre-existing naming gap in
-        // AlertStatus.swift, out of scope for this history-log parity pass. The rawValue (51)
-        // still matches, so this assertion is behaviorally equivalent to the Java test.
-        XCTAssertEqual(AlertStatusResponse.AlertResponseType.DEFAULT_ALERT_51, parsedRes.alertResponseType)
+        XCTAssertEqual(AlertStatusResponse.AlertResponseType.CONTROL_IQ_LOW, parsedRes.alertResponseType)
     }
 
     func testAlertActivatedHistoryLog2() {
