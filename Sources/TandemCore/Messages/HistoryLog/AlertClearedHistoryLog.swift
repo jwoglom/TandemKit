@@ -11,4 +11,28 @@ public class AlertClearedHistoryLog: HistoryLog {
         faultLocatorData = Bytes.readUint32(cargo, 14)
         super.init(cargo: cargo)
     }
+
+    public init(pumpTimeSec: UInt32, sequenceNum: UInt32, alertId: UInt32, faultLocatorData: UInt32) {
+        let payload = AlertClearedHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            alertId: alertId,
+            faultLocatorData: faultLocatorData
+        )
+        self.alertId = alertId
+        self.faultLocatorData = faultLocatorData
+        super.init(cargo: payload)
+    }
+
+    public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, alertId: UInt32, faultLocatorData: UInt32) -> Data {
+        HistoryLog.fillCargo(
+            Bytes.combine(
+                HistoryLog.typeIdBytes(typeId),
+                Bytes.toUint32(pumpTimeSec),
+                Bytes.toUint32(sequenceNum),
+                Bytes.toUint32(alertId),
+                Bytes.toUint32(faultLocatorData)
+            )
+        )
+    }
 }
