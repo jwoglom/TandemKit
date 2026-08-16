@@ -53,7 +53,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertEqual(dose.startDate, pumpDate(1000))
         XCTAssertEqual(dose.endDate, pumpDate(1300))
         XCTAssertEqual(event.date, pumpDate(1300))
-        XCTAssertEqual(dose.value, 2.5)
+        XCTAssertEqual(dose.programmedUnits, 2.5)
         XCTAssertEqual(dose.deliveredUnits, 2.5)
         XCTAssertFalse(dose.isMutable)
         XCTAssertEqual(dose.syncIdentifier, event.raw.hexadecimalString)
@@ -98,7 +98,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         ])
 
         let dose = try XCTUnwrap(events.first?.dose)
-        XCTAssertEqual(dose.value, 0.9)
+        XCTAssertEqual(dose.programmedUnits, 0.9)
         XCTAssertEqual(dose.deliveredUnits, 0.9)
     }
 
@@ -117,7 +117,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         ])
 
         let dose = try XCTUnwrap(events.first?.dose)
-        XCTAssertEqual(dose.value, 2.5)
+        XCTAssertEqual(dose.programmedUnits, 2.5)
         XCTAssertEqual(dose.deliveredUnits, 1.041)
     }
 
@@ -133,7 +133,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         let dose = try XCTUnwrap(event.dose)
         XCTAssertTrue(dose.isMutable)
         XCTAssertEqual(dose.startDate, pumpDate(1000))
-        XCTAssertEqual(dose.value, 3.0)
+        XCTAssertEqual(dose.programmedUnits, 3.0)
         XCTAssertNil(dose.deliveredUnits)
         XCTAssertEqual(dose.syncIdentifier, event.raw.hexadecimalString)
     }
@@ -154,7 +154,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         let dose = try XCTUnwrap(events.first?.dose)
         XCTAssertEqual(dose.startDate, pumpDate(1300))
         XCTAssertEqual(dose.endDate, pumpDate(1300))
-        XCTAssertEqual(dose.value, 1.2)
+        XCTAssertEqual(dose.programmedUnits, 1.2)
         XCTAssertFalse(dose.isMutable)
     }
 
@@ -185,7 +185,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         let dose = try XCTUnwrap(event.dose)
         XCTAssertEqual(dose.type, .tempBasal)
         XCTAssertEqual(dose.unit, .unitsPerHour)
-        XCTAssertEqual(dose.value, 1.2, accuracy: 1e-9)
+        XCTAssertEqual(dose.unitsPerHour, 1.2, accuracy: 1e-9)
         XCTAssertEqual(dose.startDate, pumpDate(1000))
         XCTAssertEqual(dose.endDate, pumpDate(1000 + 1800))
         XCTAssertFalse(dose.isMutable)
@@ -257,7 +257,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         let dose = try XCTUnwrap(event.dose)
         XCTAssertEqual(dose.type, .basal)
         XCTAssertEqual(dose.startDate, pumpDate(2000))
-        XCTAssertEqual(dose.value, 1.15, accuracy: 1e-6)
+        XCTAssertEqual(dose.unitsPerHour, 1.15, accuracy: 1e-6)
         XCTAssertEqual(dose.unit, .unitsPerHour)
     }
 
