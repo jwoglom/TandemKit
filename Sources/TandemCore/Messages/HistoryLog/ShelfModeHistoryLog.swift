@@ -19,4 +19,62 @@ public class ShelfModeHistoryLog: HistoryLog {
         lipoMv = Bytes.readUint32(cargo, 22)
         super.init(cargo: cargo)
     }
+
+    public init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        msecSinceReset: UInt32,
+        lipoIbc: Int,
+        lipoAbc: Int,
+        lipoCurrent: Int,
+        lipoRemCap: UInt32,
+        lipoMv: UInt32
+    ) {
+        let payload = ShelfModeHistoryLog.buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            msecSinceReset: msecSinceReset,
+            lipoIbc: lipoIbc,
+            lipoAbc: lipoAbc,
+            lipoCurrent: lipoCurrent,
+            lipoRemCap: lipoRemCap,
+            lipoMv: lipoMv
+        )
+        self.msecSinceReset = msecSinceReset
+        self.lipoIbc = lipoIbc
+        self.lipoAbc = lipoAbc
+        self.lipoCurrent = lipoCurrent
+        self.lipoRemCap = lipoRemCap
+        self.lipoMv = lipoMv
+        super.init(cargo: payload)
+    }
+
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        msecSinceReset: UInt32,
+        lipoIbc: Int,
+        lipoAbc: Int,
+        lipoCurrent: Int,
+        lipoRemCap: UInt32,
+        lipoMv: UInt32
+    ) -> Data {
+        HistoryLog.fillCargo(
+            Bytes.combine(
+                HistoryLog.typeIdBytes(typeId),
+                Bytes.toUint32(pumpTimeSec),
+                Bytes.toUint32(sequenceNum),
+                Bytes.toUint32(msecSinceReset),
+                Data([UInt8(truncatingIfNeeded: lipoIbc)]),
+                Data([UInt8(truncatingIfNeeded: lipoAbc)]),
+                Bytes.firstTwoBytesLittleEndian(lipoCurrent),
+                Bytes.toUint32(lipoRemCap),
+                Bytes.toUint32(lipoMv)
+            )
+        )
+    }
+
+    public var description: String {
+        "ShelfModeHistoryLog(cargo=\(cargo.hexadecimalString), msecSinceReset=\(msecSinceReset), lipoIbc=\(lipoIbc), lipoAbc=\(lipoAbc), lipoCurrent=\(lipoCurrent), lipoRemCap=\(lipoRemCap), lipoMv=\(lipoMv))"
+    }
 }

@@ -96,10 +96,13 @@ public class CGMAlertStatusResponse: Message, NotificationMessage {
         case DEFAULT_CGM_ALERT_42 = 42
         case DEFAULT_CGM_ALERT_43 = 43
         case DEFAULT_CGM_ALERT_44 = 44
-        case DEFAULT_CGM_ALERT_45 = 45
-        case DEFAULT_CGM_ALERT_46 = 46
+        /// Name derived from tconnectsync's cloud-export dictionaries (CGM_ALERTS_DICT["45"] == "CGM Transmitter Expiring Soon").
+        case TRANSMITTER_EXPIRING_CGM_ALERT = 45
+        /// Name derived from tconnectsync's cloud-export dictionaries (CGM_ALERTS_DICT["46"] == "CGM Transmitter Expiring 2").
+        case TRANSMITTER_EXPIRING_CGM_ALERT2 = 46
         case DEFAULT_CGM_ALERT_47 = 47
-        case DEFAULT_CGM_ALERT_48 = 48
+        /// Name derived from tconnectsync's cloud-export dictionaries (CGM_ALERTS_DICT["48"] == "CGM Unavailable").
+        case UNAVAILABLE_CGM_ALERT = 48
         case DEFAULT_CGM_ALERT_49 = 49
         case DEFAULT_CGM_ALERT_50 = 50
         case DEFAULT_CGM_ALERT_51 = 51

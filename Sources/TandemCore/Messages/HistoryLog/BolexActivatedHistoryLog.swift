@@ -44,6 +44,11 @@ public class BolexActivatedHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(bolusId),
+                // Two bytes of padding at offsets 12-13 so iob/bolexSize land at 14/18,
+                // matching init(cargo:). Opcode 55's BolusActivatedHistoryLog has a
+                // confirmed selectedIob field at byte 12, but there is no capture evidence
+                // that byte 12 carries the same meaning here, so this is left as plain padding.
+                Bytes.emptyBytes(2),
                 Bytes.toFloat(iob),
                 Bytes.toFloat(bolexSize)
             )

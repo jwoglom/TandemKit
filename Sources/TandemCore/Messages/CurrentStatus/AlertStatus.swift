@@ -101,7 +101,8 @@ public class AlertStatusResponse: Message, NotificationMessage {
         case CGM_UNAVAILABLE = 48
         case FILL_TUBING_STILL_IN_PROGRESS = 49
         case DEFAULT_ALERT_50 = 50
-        case DEFAULT_ALERT_51 = 51
+        /// Control-IQ has reduced basal insulin delivery due to a low or predicted low glucose value.
+        case CONTROL_IQ_LOW = 51
         case DEFAULT_ALERT_52 = 52
         case DEFAULT_ALERT_53 = 53
         case DEVICE_PAIRED = 54

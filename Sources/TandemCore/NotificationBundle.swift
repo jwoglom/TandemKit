@@ -279,6 +279,31 @@ public class NotificationBundle {
         let typeName = String(describing: type)
         return lastUpdatedTimes[typeName]
     }
+
+    /// Notification categories whose status response actually arrived in this bundle.
+    ///
+    /// The bundle is rebuilt on every fetch pass, so a `nil` response field means the
+    /// corresponding status request failed (or was never sent) during that pass — the pump's
+    /// state for that category is unknown, not empty. Consumers reconciling externally-issued
+    /// notifications (e.g. LoopKit alerts) must only treat a category's notifications as
+    /// cleared when the category appears here; otherwise a single dropped BLE round trip
+    /// would retract alerts that are still active on the pump.
+    ///
+    /// Malfunctions key off `HighestAamResponse` alone: the corroborating
+    /// `MalfunctionBitmaskStatusResponse`/`ActiveAamBitsResponse` may legitimately be absent
+    /// (filtered by `minApi`), and `get()` already treats missing corroboration as best-effort.
+    public var fetchedCategories: Set<NotificationItem.NotificationType> {
+        lock.lock()
+        defer { lock.unlock() }
+
+        var categories: Set<NotificationItem.NotificationType> = []
+        if alertStatusResponse != nil { categories.insert(.alert) }
+        if alarmStatusResponse != nil { categories.insert(.alarm) }
+        if reminderStatusResponse != nil { categories.insert(.reminder) }
+        if cgmAlertStatusResponse != nil { categories.insert(.cgmAlert) }
+        if highestAamResponse != nil { categories.insert(.malfunction) }
+        return categories
+    }
 }
 
 /// Represents a single notification item.
@@ -327,7 +352,7 @@ public struct NotificationItem: Identifiable, Hashable {
     /// Names of the other notifications merged into this row, in display order.
     public var mergedNames: [String] { mergedMembers.map(\.name) }
 
-    public enum NotificationType {
+    public enum NotificationType: String, CaseIterable {
         case alert
         case reminder
         case alarm
@@ -405,6 +430,50 @@ public struct NotificationItem: Identifiable, Hashable {
             }
         }
         return result
+    }
+
+    /// Identity that is stable across fetch passes, unlike `id` (a `UUID` minted per fetch).
+    /// Used as the `LoopKit.Alert.AlertIdentifier` so the same pump notification maps to the
+    /// same alert across polls and app restarts.
+    ///
+    /// Format: `<category>.<slug>.<id>` (e.g. `alarm.occlusion.2`, `alert.other.37`), where
+    /// the slug is the human-readable condition name (`alertSlug`) that hosts key severity
+    /// and display grouping on without hardcoding bit positions, and the trailing id is the
+    /// bitmask bit position that keeps per-bit identity and routes acknowledgements back to
+    /// `DismissNotificationRequest`. Malfunctions are `malfunction.<aamId>` — at most one is
+    /// surfaced at a time and there is no condition enum to slug.
+    public var stableIdentifier: String {
+        if type == .malfunction {
+            return "\(type.rawValue).\(notificationId)"
+        }
+        return "\(type.rawValue).\(alertSlug).\(notificationId)"
+    }
+
+    /// Inverse of `stableIdentifier`, used to route a LoopKit alert acknowledgement back to
+    /// the pump notification it was issued for. The slug segment is not validated — routing
+    /// only needs the category and id, so identifiers survive future slug-table refinements.
+    /// Returns nil for identifiers this driver did not mint (including the pre-slug
+    /// `<category>.<id>` format, which the reconciler then retracts and re-issues).
+    public static func parseStableIdentifier(_ identifier: String) -> (type: NotificationType, notificationId: UInt32)? {
+        let segments = identifier.split(separator: ".", omittingEmptySubsequences: false)
+        guard let first = segments.first,
+              let type = NotificationType(rawValue: String(first)),
+              let last = segments.last,
+              let notificationId = UInt32(last)
+        else {
+            return nil
+        }
+
+        switch (type, segments.count) {
+        case (.malfunction, 2):
+            return (type, notificationId)
+        case (.malfunction, _):
+            return nil
+        case (_, 3) where !segments[1].isEmpty:
+            return (type, notificationId)
+        default:
+            return nil
+        }
     }
 }
 

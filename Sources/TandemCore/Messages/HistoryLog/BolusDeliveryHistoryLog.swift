@@ -126,11 +126,16 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         case bluetoothRemoteBolus = 8
     }
 
+    /// Bitmask values validated against a real-pump capture (286/286 records cross-checked
+    /// against per-bolus carb/correction/override data). Supersedes the previous
+    /// {FOOD1=1, CORRECTION=2, EXTENDED=4, FOOD2=8} guess, which did not match observed data.
     public enum BolusType: Int, CaseIterable {
-        case food1 = 1
-        case correction = 2
-        case extended = 4
-        case food2 = 8
+        case now = 1
+        case later = 2
+        case `override` = 4
+        case correction = 8
+        case carb = 16
+        case eatingSoonMode = 32
 
         public static func fromBitmask(_ bitmask: Int) -> Set<BolusType> {
             var ret: Set<BolusType> = []
