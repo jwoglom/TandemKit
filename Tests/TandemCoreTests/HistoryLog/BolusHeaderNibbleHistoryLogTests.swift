@@ -25,13 +25,8 @@ import XCTest
 /// - There is no `HistoryLog.INSULIN_FLOAT_EPSILON` constant; a local constant of the same value
 ///   (`1e-6`) is used instead.
 /// - `BolusRequestedMsg1HistoryLog.BolusType` (INSULIN/CARB/AUTOMATIC_CORRECTION/REMOTE, a scalar
-///   enum over `bolusTypeId`) does not exist on the Swift class -- it only exposes an unrelated
-///   `bolusType: Set<BolusDeliveryHistoryLog.BolusType>` computed from a bitmask read of the same
-///   field, which is a different scheme with different semantics (see
-///   `BolusDeliveryHistoryLog.BolusType` for the bitmask this actually reflects). The
-///   `testEnumsDecodeFixtureValues` portion asserting `BolusRequestedMsg1HistoryLog.BolusType` is
-///   therefore dropped; the `BolusRequestedMsg2HistoryLog.BolusOption`/`SelectedIOBType` portion,
-///   which matches Java exactly, is kept.
+///   enum over `bolusTypeId`) mirrors Java exactly; the full `testEnumsDecodeFixtureValues` is
+///   ported below, including the `BolusRequestedMsg1HistoryLog.BolusType` portion.
 final class BolusHeaderNibbleHistoryLogTests: XCTestCase {
     private static let highNibble = 1
 
@@ -207,10 +202,12 @@ final class BolusHeaderNibbleHistoryLogTests: XCTestCase {
         XCTAssertEqual(msg2Of(Self.b2Msg2).selectedIOB, second.selectedIob)
     }
 
-    /// Only the `BolusRequestedMsg2HistoryLog.BolusOption`/`SelectedIOBType` portion of Java's
-    /// `testEnumsDecodeFixtureValues` is ported; see the class doc for why the
-    /// `BolusRequestedMsg1HistoryLog.BolusType` portion is dropped.
     func testEnumsDecodeFixtureValues() {
+        XCTAssertEqual(BolusRequestedMsg1HistoryLog.BolusType.REMOTE,
+            (HistoryLogParser.parse(Data(hexadecimalString: Self.b1Msg1)!) as! BolusRequestedMsg1HistoryLog).bolusType)
+        XCTAssertEqual(BolusRequestedMsg1HistoryLog.BolusType.CARB,
+            (HistoryLogParser.parse(Data(hexadecimalString: Self.b3Msg1)!) as! BolusRequestedMsg1HistoryLog).bolusType)
+
         XCTAssertEqual(BolusRequestedMsg2HistoryLog.BolusOption.bleStandard, msg2Of(Self.b1Msg2).bolusOption)
         XCTAssertEqual(BolusRequestedMsg2HistoryLog.BolusOption.standard, msg2Of(Self.b3Msg2).bolusOption)
 
