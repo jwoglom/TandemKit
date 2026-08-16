@@ -421,7 +421,8 @@
         public let type: DoseType
         public let startDate: Date
         public var endDate: Date
-        public let value: Double
+        // Internal in real LoopKit too — read doses through programmedUnits/unitsPerHour.
+        let value: Double
         public let unit: DoseUnit
         public let deliveredUnits: Double?
         public let description: String?
@@ -434,7 +435,23 @@
         public let wasProgrammedByPumpUI: Bool
 
         /// Units programmed for delivery (LoopKit parity shim).
-        public var programmedUnits: Double { value }
+        public var programmedUnits: Double {
+            switch unit {
+            case .units: return value
+            case .unitsPerHour: return value * (endDate.timeIntervalSince(startDate) / 3600)
+            }
+        }
+
+        /// Rate in U/hr (LoopKit parity shim).
+        public var unitsPerHour: Double {
+            switch unit {
+            case .units:
+                let hours = endDate.timeIntervalSince(startDate) / 3600
+                return hours > 0 ? value / hours : 0
+            case .unitsPerHour:
+                return value
+            }
+        }
 
         public init(
             suspendDate: Date,
