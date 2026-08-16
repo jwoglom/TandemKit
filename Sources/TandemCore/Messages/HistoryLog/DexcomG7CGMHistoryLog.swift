@@ -79,7 +79,7 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(399 & 0xFF), 0x11]),
+                HistoryLog.typeIdBytes(typeId, 1),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(glucoseValueStatus),

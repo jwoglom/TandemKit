@@ -44,7 +44,7 @@ public class PumpingSuspendedHistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, preSuspendState: UInt32, insulinAmount: Int, reasonId: Int, rpaTimeout: Int) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId), 0]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(preSuspendState),

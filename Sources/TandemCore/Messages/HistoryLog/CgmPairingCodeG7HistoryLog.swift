@@ -30,7 +30,7 @@ public class CgmPairingCodeG7HistoryLog: HistoryLog {
         }
         return HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 codeBytes

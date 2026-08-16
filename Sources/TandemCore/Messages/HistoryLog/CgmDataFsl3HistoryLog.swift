@@ -75,7 +75,7 @@ public class CgmDataFsl3HistoryLog: HistoryLog {
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(status),

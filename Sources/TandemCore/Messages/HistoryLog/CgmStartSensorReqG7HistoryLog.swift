@@ -14,7 +14,7 @@ public class CgmStartSensorReqG7HistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum)
             )

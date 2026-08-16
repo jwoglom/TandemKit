@@ -76,7 +76,7 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId), 0]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(bolusId),

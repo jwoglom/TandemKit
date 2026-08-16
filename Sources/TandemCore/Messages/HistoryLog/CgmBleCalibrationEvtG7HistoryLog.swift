@@ -23,7 +23,7 @@ public class CgmBleCalibrationEvtG7HistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, isCalibrationAccepted: Bool) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Data([isCalibrationAccepted ? 1 : 0])
