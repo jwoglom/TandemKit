@@ -31,7 +31,7 @@ public class LogErasedHistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, numErased: UInt32) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([0, 0]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(numErased)

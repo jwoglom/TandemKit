@@ -53,7 +53,7 @@ public class ControlIQPcmChangeHistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32, currentPcm: Int, previousPcm: Int) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(bitPattern: Int8(-26)), 0]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Data([UInt8(currentPcm & 0xFF)]),

@@ -49,7 +49,7 @@ public class TipsErrorHistoryLog: HistoryLog {
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([UInt8(typeId & 0xFF), UInt8((typeId >> 8) & 0xFF)]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Data([UInt8(messageType & 0xFF), UInt8(requestCode & 0xFF), UInt8(errorCode & 0xFF), isDataMasked ? 1 : 0])

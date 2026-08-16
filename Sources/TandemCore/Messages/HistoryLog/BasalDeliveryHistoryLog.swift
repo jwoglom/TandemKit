@@ -66,7 +66,7 @@ public class BasalDeliveryHistoryLog: HistoryLog {
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([23, 0]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.firstTwoBytesLittleEndian(commandedRateSource),

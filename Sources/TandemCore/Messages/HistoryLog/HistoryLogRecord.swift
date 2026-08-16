@@ -26,4 +26,15 @@ open class HistoryLog {
         ret.replaceSubrange(0 ..< min(cargo.count, length), with: cargo.prefix(length))
         return ret
     }
+
+    /// Builds the two-byte little-endian header found at cargo offset 0.
+    ///
+    /// Mirrors pumpX2's `HistoryLog.typeIdBytes(int typeId, int headerHighNibble)`: the low 12
+    /// bits carry `typeId`, and the top 4 bits carry an unknown "header high nibble" that some
+    /// records reproduce byte-exact from real pump captures (e.g. Dexcom G7 uses 1). Building the
+    /// header bytes by hand (e.g. `Data([UInt8(typeId), 0])`) truncates any `typeId` above 255,
+    /// since it drops bits 8-11 entirely — always route through this helper instead.
+    public static func typeIdBytes(_ typeId: Int, _ headerHighNibble: Int = 0) -> Data {
+        Data([UInt8(typeId & 0xFF), UInt8(((typeId >> 8) & 0x0F) | ((headerHighNibble & 0x0F) << 4))])
+    }
 }

@@ -23,7 +23,7 @@ public class AaExerciseChoiceChangeHistoryLog: HistoryLog {
     public static func buildCargo(pumpTimeSec: UInt32, sequenceNum: UInt32) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
-                Data([63, 1]),
+                HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum)
             )
