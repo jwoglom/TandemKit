@@ -315,7 +315,7 @@ extension TandemPumpManager {
 
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
-        for request in NotificationBundle.allRequests() {
+        for request in NotificationBundle.allRequests(apiVersion: state.pumpState.apiVersion) {
             guard let expecting = expectedNotificationResponseType(for: request) else {
                 logger.error("No response type mapping for \(type(of: request))")
                 continue
@@ -339,6 +339,8 @@ extension TandemPumpManager {
         state.notificationCount = notificationBundle.getNotificationCount()
         state.lastNotificationUpdate = Date.now
         notifyDelegateStateUpdated()
+
+        reconcileLoopKitAlerts()
     }
 
     /// Resolves the concrete response type expected on the wire for a notification status request.

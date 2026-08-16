@@ -129,6 +129,16 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var notificationCount: Int?
     public var lastNotificationUpdate: Date?
 
+    // LoopKit alert surfacing
+    /// Stable identifiers (`NotificationItem.stableIdentifier`) of pump notifications
+    /// currently issued as LoopKit alerts. Persisted so alerts issued before an app restart
+    /// are retracted (not re-issued) once the pump reports them cleared.
+    public var issuedAlertIdentifiers: Set<String> = []
+    /// Whether CGM alerts are forwarded as LoopKit alerts in addition to alerts, alarms,
+    /// and malfunctions. Off by default: users running their CGM vendor's app already
+    /// receive these and duplicates are noisy.
+    public var forwardCGMAlerts: Bool = false
+
     // Consumable change tracking
     /// Last cannula / infusion-set change. Set when the user fills the cannula.
     public var lastSiteChangeDate: Date?
@@ -162,6 +172,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         alertSnoozeEnabled = rawValue["alertSnoozeEnabled"] as? Bool ?? false
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
         notificationCount = rawValue["notificationCount"] as? Int
+        issuedAlertIdentifiers = Set(rawValue["issuedAlertIdentifiers"] as? [String] ?? [])
+        forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
 
@@ -365,6 +377,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["alertSnoozeDuration"] = alertSnoozeDuration
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
+        raw["issuedAlertIdentifiers"] = Array(issuedAlertIdentifiers).sorted()
+        raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
         raw["insulinType"] = insulinType?.rawValue
@@ -449,6 +463,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastCGMStatusUpdate: \(String(describing: lastCGMStatusUpdate))",
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
+            "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
+            "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",

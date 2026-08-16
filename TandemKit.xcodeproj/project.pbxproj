@@ -20,6 +20,7 @@
 		132BEDBBDB86C2DC06F23527 /* AlarmStatusResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA4A37C16D11C239B5E16D58 /* AlarmStatusResponseTests.swift */; };
 		137D452E967F6DD0ADA70507 /* SetActiveIDPRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6ECAF561F4B7B70F3431066 /* SetActiveIDPRequestTests.swift */; };
 		144664A9105CDDA816A48B7E /* DisconnectPumpRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4107717674FD288CE480768 /* DisconnectPumpRequestTests.swift */; };
+		14A4780AD94FDE931F20CD11 /* TandemPumpManagerStateAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1356FB43A6D8C0DA9F7F1F3 /* TandemPumpManagerStateAlertTests.swift */; };
 		15221F2B94A4C4B4F8FF12D0 /* BasalLimitSettingsRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16BA8B1B1D69CF75F761499F /* BasalLimitSettingsRequestTests.swift */; };
 		16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */; };
 		1A02E3EE2F2C949900203519 /* ErrorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A02E3ED2F2C949900203519 /* ErrorSheet.swift */; };
@@ -63,6 +64,9 @@
 		3E945F052F2E103300F38431 /* NibLoadable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F042F2E103200F38431 /* NibLoadable.swift */; };
 		3E945F072F2E107800F38431 /* TandemKitHUDProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E945F062F2E107800F38431 /* TandemKitHUDProvider.swift */; };
 		3E9F1CDC2FCA208A008D538A /* LastBolusRequestBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9F1CDB2FCA2085008D538A /* LastBolusRequestBuilder.swift */; };
+		3EA1CA022FF0A00100A1B2C3 /* PumpNotificationAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA1CA012FF0A00100A1B2C3 /* PumpNotificationAlert.swift */; };
+		3EA1CA042FF0A00100A1B2C3 /* TandemAlertReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA1CA032FF0A00100A1B2C3 /* TandemAlertReconciler.swift */; };
+		3EA1CA062FF0A00100A1B2C3 /* TandemPumpManager+Alerts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA1CA052FF0A00100A1B2C3 /* TandemPumpManager+Alerts.swift */; };
 		3EA22B7C2FBF8186002EBC9F /* TandemPumpManager+StateSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA22B7B2FBF817F002EBC9F /* TandemPumpManager+StateSync.swift */; };
 		3EB807442FBCDCAB0075D19E /* NotificationBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A0E17262ED105CC00E75219 /* NotificationBundle.swift */; };
 		3EB807452FBCDCB50075D19E /* ServiceUUID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345142EC91299008A07F6 /* ServiceUUID.swift */; };
@@ -450,6 +454,8 @@
 		77E85FDF591A0F94A7408BFB /* ExitChangeCartridgeModeRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A38CF8F5D56BC1BA34FBCC /* ExitChangeCartridgeModeRequestTests.swift */; };
 		79A4D7BA809EEF21C561EBB4 /* CGMGlucoseAlertSettingsRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9442D6F69EB42BDDD7A77F5D /* CGMGlucoseAlertSettingsRequestTests.swift */; };
 		7A13B9CF099C60230F0494A2 /* CurrentBatteryV1RequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D5AF82736542CC77066E6F /* CurrentBatteryV1RequestTests.swift */; };
+		7AE2219BF87F5FDEAEA3AE60 /* PumpNotificationAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AC5051D618C0A8197F5B84 /* PumpNotificationAlertTests.swift */; };
+		7BE69ED22156F14CF255B7B5 /* TandemAlertReconcilerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86B94FDCC5CA511054E4C9E9 /* TandemAlertReconcilerTests.swift */; };
 		7E3EC467531DC5AA2A0A09D6 /* QualifyingEventFetch.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95488EFDECE4981A9B14993 /* QualifyingEventFetch.swift */; };
 		822B7440F68930413450B8D8 /* CGMStatusRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB60DF8752502C7D8FB10E0 /* CGMStatusRequestTests.swift */; };
 		82C8844B99C4A711602AC179 /* DismissNotificationRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC70DD804588BCF232F5FB1 /* DismissNotificationRequestTests.swift */; };
@@ -677,6 +683,9 @@
 		3E945F042F2E103200F38431 /* NibLoadable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NibLoadable.swift; sourceTree = "<group>"; };
 		3E945F062F2E107800F38431 /* TandemKitHUDProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitHUDProvider.swift; sourceTree = "<group>"; };
 		3E9F1CDB2FCA2085008D538A /* LastBolusRequestBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastBolusRequestBuilder.swift; sourceTree = "<group>"; };
+		3EA1CA012FF0A00100A1B2C3 /* PumpNotificationAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PumpNotificationAlert.swift; sourceTree = "<group>"; };
+		3EA1CA032FF0A00100A1B2C3 /* TandemAlertReconciler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemAlertReconciler.swift; sourceTree = "<group>"; };
+		3EA1CA052FF0A00100A1B2C3 /* TandemPumpManager+Alerts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TandemPumpManager+Alerts.swift"; sourceTree = "<group>"; };
 		3EA22B7B2FBF817F002EBC9F /* TandemPumpManager+StateSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TandemPumpManager+StateSync.swift"; sourceTree = "<group>"; };
 		3EB807422FBCDC470075D19E /* String.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = String.swift; sourceTree = "<group>"; };
 		3EBE90F72FC0E7210048A57F /* TandemBluetoothManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemBluetoothManager.swift; sourceTree = "<group>"; };
@@ -981,6 +990,7 @@
 		8301F800A589672C77CE8024 /* CgmStopSessionHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmStopSessionHistoryLog.swift; sourceTree = "<group>"; };
 		844120DA2457989518F91C39 /* TandemKitControlIQSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitControlIQSettingsView.swift; sourceTree = "<group>"; };
 		8612E4486B6AD928BAA8816A /* WizardProgressBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WizardProgressBar.swift; sourceTree = "<group>"; };
+		86B94FDCC5CA511054E4C9E9 /* TandemAlertReconcilerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemAlertReconcilerTests.swift; sourceTree = "<group>"; };
 		86F1203D1C52C0FB473577F3 /* CgmTransmitterVersionGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmTransmitterVersionGxHistoryLog.swift; sourceTree = "<group>"; };
 		87CF23AB8CA6A79E227EF4B8 /* TandemPumpManagerBolusSyncTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerBolusSyncTests.swift; sourceTree = "<group>"; };
 		886A5098DE886A946542F2DB /* BolusPermissionRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusPermissionRequestTests.swift; sourceTree = "<group>"; };
@@ -1018,6 +1028,7 @@
 		AC51B819CF4603EBA9DC6BFF /* TandemFeatureFlagsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemFeatureFlagsTests.swift; sourceTree = "<group>"; };
 		ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl2HistoryLog.swift; sourceTree = "<group>"; };
 		AFCF003CBA2085EB6CC3A01D /* VersionInfoHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLog.swift; sourceTree = "<group>"; };
+		B1356FB43A6D8C0DA9F7F1F3 /* TandemPumpManagerStateAlertTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemPumpManagerStateAlertTests.swift; sourceTree = "<group>"; };
 		B17B5F19BB584A6491E48275 /* TandemKitFillTubingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillTubingView.swift; sourceTree = "<group>"; };
 		B3C3067AB0B8A0494B861A05 /* CommandWatchdogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommandWatchdogTests.swift; sourceTree = "<group>"; };
 		B4C06134E3D5E14EC3B99671 /* CgmAlertActivatedFsl2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmAlertActivatedFsl2HistoryLog.swift; sourceTree = "<group>"; };
@@ -1096,6 +1107,7 @@
 		E30D9E5C3141560950708C87 /* CgmOorSettingsHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmOorSettingsHistoryLog.swift; sourceTree = "<group>"; };
 		E37E2A577341B9469A704D90 /* QualifyingEventHandlingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QualifyingEventHandlingTests.swift; sourceTree = "<group>"; };
 		E95488EFDECE4981A9B14993 /* QualifyingEventFetch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QualifyingEventFetch.swift; sourceTree = "<group>"; };
+		E9AC5051D618C0A8197F5B84 /* PumpNotificationAlertTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PumpNotificationAlertTests.swift; sourceTree = "<group>"; };
 		EBD406F43412727EF07D3FE6 /* ExitFillTubingModeRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExitFillTubingModeRequestTests.swift; sourceTree = "<group>"; };
 		EE1F95E62859FEA0EB9C48B0 /* CGMStatusV2ResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CGMStatusV2ResponseTests.swift; sourceTree = "<group>"; };
 		F0394A71EFA6B622C5D8EE71 /* AlertStatusRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlertStatusRequestTests.swift; sourceTree = "<group>"; };
@@ -1168,6 +1180,8 @@
 				76E2DA3A17981B36EB144966 /* TestHelpers */,
 				6F29D40336592447A8EC3385 /* EcJpakePerformanceTests.swift */,
 				C2E73754783543D972D143D4 /* JpakeRound1FramingTests.swift */,
+				E9AC5051D618C0A8197F5B84 /* PumpNotificationAlertTests.swift */,
+				86B94FDCC5CA511054E4C9E9 /* TandemAlertReconcilerTests.swift */,
 			);
 			name = TandemCoreTests;
 			path = Tests/TandemCoreTests;
@@ -1192,6 +1206,7 @@
 				1A2FA9492EC8FD0800DF080F /* PumpTelemetryScheduler.swift */,
 				3EF00DD92F0AAFB600776DCD /* TandemDoseProgressReporter.swift */,
 				1A2FA9572EC8FD0800DF080F /* TandemPumpManager.swift */,
+				3EA1CA052FF0A00100A1B2C3 /* TandemPumpManager+Alerts.swift */,
 				3EA22B7B2FBF817F002EBC9F /* TandemPumpManager+StateSync.swift */,
 				3E3A79992FCCBB2B008F5FC2 /* TandemPumpManager+SyncBasal.swift */,
 				3EBE90F72FC0E7210048A57F /* TandemBluetoothManager.swift */,
@@ -1833,6 +1848,8 @@
 				1A0E17262ED105CC00E75219 /* NotificationBundle.swift */,
 				3E7A11012FD00A010011AA01 /* MergedNotification.swift */,
 				1A2FA94E2EC8FD0800DF080F /* PumpCommError.swift */,
+				3EA1CA012FF0A00100A1B2C3 /* PumpNotificationAlert.swift */,
+				3EA1CA032FF0A00100A1B2C3 /* TandemAlertReconciler.swift */,
 				3E3A71662FCC8332008F5FC2 /* TandemPumpScan.swift */,
 			);
 			name = TandemCore;
@@ -2023,6 +2040,7 @@
 				6AA4460654835A4AEBA7A81B /* HistoryLogStoreTests.swift */,
 				AC51B819CF4603EBA9DC6BFF /* TandemFeatureFlagsTests.swift */,
 				229FCA65BFA3AFDCA02FF991 /* QuickBolusEnforcementTests.swift */,
+				B1356FB43A6D8C0DA9F7F1F3 /* TandemPumpManagerStateAlertTests.swift */,
 			);
 			name = TandemKitTests;
 			path = Tests/TandemKitTests;
@@ -2249,6 +2267,9 @@
 				3EE346172EC92751008A07F6 /* Bundle.swift in Sources */,
 				3E0F4D462F2662BC008290A3 /* TandemKitSoundSettingsView.swift in Sources */,
 				1A2FA9622EC8FD0800DF080F /* PumpTelemetryScheduler.swift in Sources */,
+				3EA1CA022FF0A00100A1B2C3 /* PumpNotificationAlert.swift in Sources */,
+				3EA1CA042FF0A00100A1B2C3 /* TandemAlertReconciler.swift in Sources */,
+				3EA1CA062FF0A00100A1B2C3 /* TandemPumpManager+Alerts.swift in Sources */,
 				3EEECBC82EC900F00063D7BC /* TandemUICoordinator.swift in Sources */,
 				3E0F4D402F265C14008290A3 /* TandemSilentToneManager.swift in Sources */,
 				3EF00DDA2F0AAFB600776DCD /* TandemDoseProgressReporter.swift in Sources */,
@@ -2769,6 +2790,9 @@
 				F96A2F2DE1F4ED8DC13D87E0 /* HistoryLogStoreTests.swift in Sources */,
 				386A79ED13685B8F7CFF31DA /* TandemFeatureFlagsTests.swift in Sources */,
 				E28C73A6953063400486E30C /* QuickBolusEnforcementTests.swift in Sources */,
+				7AE2219BF87F5FDEAEA3AE60 /* PumpNotificationAlertTests.swift in Sources */,
+				7BE69ED22156F14CF255B7B5 /* TandemAlertReconcilerTests.swift in Sources */,
+				14A4780AD94FDE931F20CD11 /* TandemPumpManagerStateAlertTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
