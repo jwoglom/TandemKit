@@ -487,7 +487,7 @@ struct TandemKitSettingsView: View {
                         .foregroundColor(.accentColor)
                 }
                 .disabled(viewModel.isUpdatingTime)
-                .confirmationDialog(isPresented: $viewModel.showingTimeSyncConfirmation) {
+                .confirmationAlert(isPresented: $viewModel.showingTimeSyncConfirmation) {
                     syncPumpTime
                 }
             }
@@ -510,7 +510,7 @@ struct TandemKitSettingsView: View {
                     Text("Delete Pump", comment: "Label for PumpManager deletion button")
                         .foregroundColor(guidanceColors.critical)
                 }
-                .confirmationDialog(isPresented: $viewModel.showingDeleteConfirmation) {
+                .confirmationAlert(isPresented: $viewModel.showingDeleteConfirmation) {
                     removePumpManagerActionSheet
                 }
             }

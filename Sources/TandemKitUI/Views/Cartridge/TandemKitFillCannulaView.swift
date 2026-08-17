@@ -30,7 +30,7 @@ struct TandemKitFillCannulaView: View {
             bottomActionView
                 .padding()
         }
-        .confirmationDialog(item: $actionSheet) { sheet in
+        .confirmationAlert(item: $actionSheet) { sheet in
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .resume: return resumeInsulinSheet

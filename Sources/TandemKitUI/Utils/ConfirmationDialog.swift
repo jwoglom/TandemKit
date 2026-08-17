@@ -3,13 +3,17 @@ import SwiftUI
 /// The title, message and buttons of a confirmation dialog.
 ///
 /// This mirrors the shape of `ActionSheet` so call sites read the same, but it is
-/// presented through `confirmationDialog` instead. `ActionSheet` and the
-/// `actionSheet(...)` modifiers have been deprecated since iOS 15, and once the host
-/// app links against the iOS 26 SDK they are presented as a popover with no source
-/// anchor: the dialog is drawn over the navigation bar and loses its title, message
-/// and cancel button, leaving only the confirming action on screen. For a dialog that
-/// gates suspending or resuming insulin delivery that is a safety problem, not just a
-/// layout one.
+/// presented through `Alert` instead. `ActionSheet`/`actionSheet(...)` and
+/// `confirmationDialog(...)` are both implemented as a popover-style
+/// `UIAlertController(style: .actionSheet)` under the hood, which needs a source
+/// anchor (`sourceView`/`sourceRect`). When one of these dialogs is attached to a
+/// full-screen container - such as the fill-cannula, fill-tubing, and
+/// change-cartridge wizard steps - SwiftUI computes that anchor from the container's
+/// bounds instead of screen center, so the dialog renders as a small card pinned near
+/// the top of the screen, overlapping the step progress bar and nav buttons. `Alert`
+/// has no such anchor requirement and always renders as a centered, modal card. For a
+/// dialog that gates suspending or resuming insulin delivery that is a safety
+/// problem, not just a layout one.
 struct ConfirmationDialogContent {
     struct Action {
         let title: Text
@@ -36,13 +40,32 @@ struct ConfirmationDialogContent {
     let actions: [Action]
 }
 
-@ViewBuilder
-private func confirmationDialogActions(for dialog: ConfirmationDialogContent) -> some View {
-    ForEach(dialog.actions.indices, id: \.self) { index in
-        let action = dialog.actions[index]
-        Button(role: action.role, action: action.action) {
-            action.title
-        }
+private func alertButton(for action: ConfirmationDialogContent.Action) -> Alert.Button {
+    switch action.role {
+    case .destructive:
+        return .destructive(action.title, action: action.action)
+    case .cancel:
+        return .cancel(action.title, action: action.action)
+    default:
+        return .default(action.title, action: action.action)
+    }
+}
+
+private func makeAlert(for dialog: ConfirmationDialogContent) -> Alert {
+    let cancelAction = dialog.actions.first { $0.role == .cancel }
+    let otherActions = dialog.actions.filter { $0.role != .cancel }
+
+    if let cancelAction, let primaryAction = otherActions.first {
+        return Alert(
+            title: dialog.title,
+            message: dialog.message,
+            primaryButton: alertButton(for: primaryAction),
+            secondaryButton: alertButton(for: cancelAction)
+        )
+    } else if let onlyAction = dialog.actions.first {
+        return Alert(title: dialog.title, message: dialog.message, dismissButton: alertButton(for: onlyAction))
+    } else {
+        return Alert(title: dialog.title, message: dialog.message)
     }
 }
 
@@ -51,20 +74,8 @@ private struct ItemConfirmationDialog<Item: Identifiable>: ViewModifier {
     let dialog: (Item) -> ConfirmationDialogContent
 
     func body(content base: Content) -> some View {
-        let presented = item.map(dialog)
-
-        return base.confirmationDialog(
-            presented?.title ?? Text(verbatim: ""),
-            isPresented: Binding(
-                get: { item != nil },
-                set: { if !$0 { item = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: presented
-        ) { content in
-            confirmationDialogActions(for: content)
-        } message: { content in
-            content.message
+        base.alert(item: $item) { item in
+            makeAlert(for: dialog(item))
         }
     }
 }
@@ -74,36 +85,27 @@ private struct BoolConfirmationDialog: ViewModifier {
     let dialog: () -> ConfirmationDialogContent
 
     func body(content base: Content) -> some View {
-        let presented = dialog()
-
-        return base.confirmationDialog(
-            presented.title,
-            isPresented: $isPresented,
-            titleVisibility: .visible,
-            presenting: presented
-        ) { content in
-            confirmationDialogActions(for: content)
-        } message: { content in
-            content.message
+        base.alert(isPresented: $isPresented) {
+            makeAlert(for: dialog())
         }
     }
 }
 
 extension View {
-    /// Presents a confirmation dialog whose content is driven by an optional item.
+    /// Presents a confirmation alert whose content is driven by an optional item.
     ///
-    /// Replaces `actionSheet(item:)`.
-    func confirmationDialog<Item: Identifiable>(
+    /// Replaces `actionSheet(item:)`/`confirmationDialog(item:)`.
+    func confirmationAlert<Item: Identifiable>(
         item: Binding<Item?>,
         content: @escaping (Item) -> ConfirmationDialogContent
     ) -> some View {
         modifier(ItemConfirmationDialog(item: item, dialog: content))
     }
 
-    /// Presents a confirmation dialog with fixed content.
+    /// Presents a confirmation alert with fixed content.
     ///
-    /// Replaces `actionSheet(isPresented:)`.
-    func confirmationDialog(
+    /// Replaces `actionSheet(isPresented:)`/`confirmationDialog(isPresented:)`.
+    func confirmationAlert(
         isPresented: Binding<Bool>,
         content: @escaping () -> ConfirmationDialogContent
     ) -> some View {
