@@ -23,6 +23,8 @@ public final class HistoryLogFetcher {
     public enum FetchError: LocalizedError {
         case noStatusResponse
         case cancelled
+        /// Another history reader holds the pump's history stream.
+        case busy
 
         public var errorDescription: String? {
             switch self {
@@ -30,6 +32,8 @@ public final class HistoryLogFetcher {
                 return "Unable to read the history log status from the pump"
             case .cancelled:
                 return "History log fetch was cancelled"
+            case .busy:
+                return "Another history log read is already in progress"
             }
         }
     }
@@ -105,6 +109,11 @@ public final class HistoryLogFetcher {
             logger.warning("Ignoring probeLog(\(sequenceNum)): fetch in progress")
             return nil
         }
+        guard pumpManager.historyFetchGate.tryAcquire() else {
+            logger.warning("Ignoring probeLog(\(sequenceNum)): another history reader holds the stream")
+            return nil
+        }
+        defer { pumpManager.historyFetchGate.release() }
 
         let captureLock = NSLock()
         var captured: HistoryLog?
@@ -159,6 +168,17 @@ public final class HistoryLogFetcher {
             logger.warning("Ignoring start(): fetch already in progress")
             return
         }
+        lock.unlock()
+
+        // Another fetcher on this pump (typically the log viewer) is mid-read. Report it rather
+        // than returning silently: a caller sequencing several ranges needs its completion.
+        guard pumpManager.historyFetchGate.tryAcquire() else {
+            logger.warning("Ignoring start(): another history reader holds the stream")
+            DispatchQueue.main.async { completion(.failure(.busy)) }
+            return
+        }
+
+        lock.lock()
         fetchActive = true
         cancelled = false
         receivedSeqNums = []
@@ -181,6 +201,7 @@ public final class HistoryLogFetcher {
             self.lock.unlock()
             self.streamSubscription?.cancel()
             self.streamSubscription = nil
+            self.pumpManager.historyFetchGate.release()
 
             DispatchQueue.main.async {
                 completion(result)

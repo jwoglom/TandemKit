@@ -55,6 +55,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
     let historyLogPruneLock = NSLock()
     var lastHistoryLogPruneAt: Date?
 
+    /// Held for the duration of any history read, so the log viewer and the background backfill
+    /// can't consume each other's entries off the shared `historyLogStream`.
+    let historyFetchGate = HistoryFetchGate()
+
+    /// Keeps the session store caught up with the pump's log, a slice at a time. Driven from
+    /// `syncPumpData` rather than `telemetryScheduler`, which the bolus path cancels wholesale.
+    lazy var historyBackfillCoordinator = HistoryBackfillCoordinator(pumpManager: self)
+
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -267,6 +275,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// The earliest date the host app will accept pump events for; nil when no delegate is
+    /// attached yet. Its own store ages out, so this moves forward over time and events below it
+    /// would be discarded on arrival — the backfill uses it to bound both what it reads and what
+    /// it will later report.
+    ///
+    /// Read through `pumpDelegate.call`, which hops to the delegate queue and waits, so the host
+    /// answers on the queue it expects. Never call this from the delegate queue itself.
+    var hostEventFloor: Date? {
+        pumpDelegate.call { $0?.startDateToFilterNewPumpEvents(for: self) }
+    }
+
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
     /// oref sets zero basal rates as a matter of course, and the pump would alert on each one.
     /// This remains only so tests can exercise the disabled path — do not expose it to the UI.
@@ -350,6 +369,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
+
+            // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
+            // and the loop is waiting on `completion` for the status reads above, not on
+            // history. Overlapping ticks are dropped by the coordinator.
+            self.historyBackfillCoordinator.runTick()
 
             completion(self.state.lastReconciliation)
         }

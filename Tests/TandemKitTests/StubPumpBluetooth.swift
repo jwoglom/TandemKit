@@ -57,6 +57,17 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     // MARK: - Assertions
 
+    /// Forget the traffic recorded so far, so a later phase of a test can assert on its own
+    /// messages alone. Registered stubs and `onWrite` are left in place.
+    func resetRecordedTraffic() {
+        lock.lock()
+        sentMessages = []
+        unhandledRequests = []
+        ensureConnectedCount = 0
+        disconnectCount = 0
+        lock.unlock()
+    }
+
     func sent<T: Message>(_ type: T.Type) -> [T] {
         lock.lock()
         defer { lock.unlock() }
