@@ -280,10 +280,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// would be discarded on arrival — the backfill uses it to bound both what it reads and what
     /// it will later report.
     ///
-    /// Read through `pumpDelegate.call`, which hops to the delegate queue and waits, so the host
-    /// answers on the queue it expects. Never call this from the delegate queue itself.
+    /// Deliberately reads `pumpDelegate.delegate` (a plain lock-guarded read) and calls the
+    /// delegate directly, rather than going through `pumpDelegate.call`. `call` does a
+    /// `queue.sync` onto the delegate queue, which defaults to the main queue — so any caller
+    /// already on that queue deadlocks, whether or not a delegate is even attached. The backfill
+    /// reads this from whatever queue its tick happens to run on, so it cannot make that
+    /// promise. The delegate side is a cheap date read, not work that needs serializing.
     var hostEventFloor: Date? {
-        pumpDelegate.call { $0?.startDateToFilterNewPumpEvents(for: self) }
+        pumpDelegate.delegate?.startDateToFilterNewPumpEvents(for: self)
     }
 
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
