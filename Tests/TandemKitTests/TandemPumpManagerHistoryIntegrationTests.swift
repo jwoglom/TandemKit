@@ -32,9 +32,13 @@ import XCTest
 
     // MARK: - Helpers
 
+    /// A recent pump-clock base for generated entries. Timestamps must be inside the retention
+    /// window, or the manager's store would prune them as they arrive.
+    private lazy var basePumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(Date()))
+
     private func log(sequenceNum: UInt32) -> BolusActivatedHistoryLog {
         BolusActivatedHistoryLog(
-            pumpTimeSec: 1000 + sequenceNum,
+            pumpTimeSec: basePumpTimeSec + sequenceNum,
             sequenceNum: sequenceNum,
             bolusId: Int(sequenceNum),
             selectedIob: 0,
@@ -267,5 +271,117 @@ import XCTest
         bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: 7))
 
         XCTAssertNil(fetcher.probeLog(sequenceNum: 42, timeout: 0.5))
+    }
+
+    // MARK: - Session store
+
+    private static let pumpSerial: UInt32 = 123_456
+
+    private func setPumpSerial() {
+        manager.state.pumpState.pumpSerial = Self.pumpSerial
+    }
+
+    func testStreamedLogsArePersistedToSessionStore() throws {
+        setPumpSerial()
+        stubStatus(first: 1, last: 5)
+        stubHistoryStream()
+
+        _ = runFetch(numberOfLogs: 5)
+
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 5)
+        XCTAssertEqual(try manager.historyLogStore.newest(pumpSerial: Self.pumpSerial)?.sequenceNum, 5)
+        XCTAssertEqual(try manager.historyLogStore.oldest(pumpSerial: Self.pumpSerial)?.sequenceNum, 1)
+    }
+
+    /// Until a PumpVersionResponse has populated the serial, entries cannot be keyed and must not
+    /// be stored — an entry filed under a placeholder serial would never be found again.
+    func testLogsAreNotStoredBeforeSerialIsKnown() throws {
+        stubStatus(first: 1, last: 3)
+        stubHistoryStream()
+
+        _ = runFetch(numberOfLogs: 3)
+
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: 0), 0)
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 0)
+    }
+
+    func testRepeatFetchIsServedFromStoreWithoutChunkRequests() {
+        setPumpSerial()
+        stubStatus(first: 1, last: 5)
+        stubHistoryStream()
+
+        _ = runFetch(numberOfLogs: 5)
+        let requestsAfterFirst = bluetooth.sent(HistoryLogRequest.self).count
+        XCTAssertGreaterThan(requestsAfterFirst, 0)
+
+        var received: [UInt32] = []
+        fetcher.onLog = { received.append($0.sequenceNum) }
+        let result = runFetch(numberOfLogs: 5)
+
+        guard case let .success(progress) = result else {
+            return XCTFail("Expected success, got \(String(describing: result))")
+        }
+        XCTAssertEqual(progress.fetchedCount, 5)
+        XCTAssertEqual(received.sorted(), [1, 2, 3, 4, 5], "Stored entries must reach onLog like streamed ones")
+        XCTAssertEqual(
+            bluetooth.sent(HistoryLogRequest.self).count,
+            requestsAfterFirst,
+            "A window fully covered by the store must not request chunks from the pump"
+        )
+    }
+
+    func testFetchRequestsOnlyRangesMissingFromStore() throws {
+        setPumpSerial()
+        stubStatus(first: 1, last: 5)
+        stubHistoryStream()
+
+        // Pre-store the middle of the window, as an earlier fetch would have.
+        try manager.historyLogStore.insert([2, 3, 4].map { log(sequenceNum: $0) }, pumpSerial: Self.pumpSerial)
+
+        var received: [UInt32] = []
+        fetcher.onLog = { received.append($0.sequenceNum) }
+        let result = runFetch(numberOfLogs: 5)
+
+        guard case let .success(progress) = result else {
+            return XCTFail("Expected success, got \(String(describing: result))")
+        }
+        XCTAssertEqual(progress.fetchedCount, 5)
+        XCTAssertEqual(received.sorted(), [1, 2, 3, 4, 5])
+
+        // Only the store's gaps are requested, newest range first.
+        let requests = bluetooth.sent(HistoryLogRequest.self)
+        XCTAssertEqual(requests.map(\.startLog), [5, 1])
+        XCTAssertTrue(requests.allSatisfy { $0.numberOfLogs == 1 })
+    }
+
+    func testRetentionPruneRunsAtMostOncePerInterval() throws {
+        setPumpSerial()
+        let now = Date()
+
+        // The first insert primes the prune clock (nothing is expired yet).
+        manager.storeHistoryLogs([log(sequenceNum: 1)], now: now)
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 1)
+
+        // An entry far past retention survives when it arrives inside the prune interval...
+        let expired = BolusActivatedHistoryLog(
+            pumpTimeSec: 1000, // 2008, far outside the 90-day retention window
+            sequenceNum: 2,
+            bolusId: 2,
+            selectedIob: 0,
+            iob: 0,
+            bolusSize: 1.0
+        )
+        manager.storeHistoryLogs([expired], now: now.addingTimeInterval(60))
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 2)
+
+        // ...and is pruned by the first insert after the interval elapses.
+        manager.storeHistoryLogs(
+            [log(sequenceNum: 3)],
+            now: now.addingTimeInterval(TandemPumpManager.historyLogPruneInterval + 1)
+        )
+        XCTAssertEqual(
+            try manager.historyLogStore.sequenceNumbers(pumpSerial: Self.pumpSerial, in: 1 ... 3),
+            [1, 3]
+        )
     }
 }
