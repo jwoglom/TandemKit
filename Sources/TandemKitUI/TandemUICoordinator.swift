@@ -301,7 +301,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitDebugViewModel(
                 pumpManager: pumpManager,
                 openHistoryLogViewer: { self.navigateTo(.historyLogViewer) },
-                openFeatureFlags: { self.navigateTo(.featureFlags) }
+                openFeatureFlags: { self.navigateTo(.featureFlags) },
+                rerunInitialSetup: {
+                    self.pumpManager.deleteSavedPumpState()
+                    self.resetNavigationTo([.setup])
+                }
             )
             return hostingController(
                 rootView: TandemKitDebugView(viewModel: viewModel),

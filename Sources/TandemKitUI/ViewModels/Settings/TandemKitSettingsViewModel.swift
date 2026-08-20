@@ -411,11 +411,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func removePump() {
-        pumpManager?.notifyDelegateOfDeactivation {
-            DispatchQueue.main.async {
-                self.nextStep()
-            }
-        }
+        // Advance the flow. The coordinator's stepFinished runs prepareForDeactivation, which tears
+        // down the BLE transport (stopping auto-reconnect) and notifies the delegate — both required
+        // for the pump to actually be removed rather than reconnect and re-persist its state.
+        nextStep()
     }
 
     deinit {

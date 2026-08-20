@@ -23,6 +23,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     private(set) var sentMessages: [Message] = []
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
+    private(set) var deactivateCount = 0
     private(set) var unhandledRequests: [Message] = []
 
     private var fixedResponses: [ObjectIdentifier: (Message) -> Message?] = [:]
@@ -114,5 +115,13 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         lock.lock()
         disconnectCount += 1
         lock.unlock()
+    }
+
+    func deactivate() {
+        lock.lock()
+        deactivateCount += 1
+        lock.unlock()
+        disconnect()
+        pumpManager = nil
     }
 }

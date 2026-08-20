@@ -1051,11 +1051,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
         logger.debug("Preparing for pump deactivation – tearing down transport")
-        bluetooth.disconnect()
+        bluetooth.deactivate()
 
         notifyDelegateOfDeactivation {
             completion(nil)
         }
+    }
+
+    /// Clears the saved pairing/pump state (derived secret, server nonce, pincode, cached pump
+    /// identity) so the next setup run pairs from scratch. `isOnboarded` becomes false once this
+    /// runs. Used by the debug "Re-run Pump Setup" action, which intentionally breaks the state.
+    public func deleteSavedPumpState() {
+        logger.debug("Deleting saved pump state for re-setup")
+        state.pumpState = PumpState()
+        notifyDelegateStateUpdated()
     }
 
     func setPumpSound(request: SetPumpSoundsRequest, completion: @escaping () -> Void) {

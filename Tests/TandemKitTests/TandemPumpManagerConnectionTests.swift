@@ -152,12 +152,16 @@ import XCTest
 
     // MARK: - Teardown
 
-    func testPrepareForDeactivationDisconnects() {
+    func testPrepareForDeactivationDeactivatesTransport() {
         let expectation = expectation(description: "prepareForDeactivation completes")
         manager.prepareForDeactivation { _ in expectation.fulfill() }
 
         wait(for: [expectation], timeout: 5.0)
 
+        // deactivate() (not plain disconnect()) is what suppresses auto-reconnect and drops the
+        // back-reference, so a deleted pump cannot reconnect and re-persist its state.
+        XCTAssertEqual(bluetooth.deactivateCount, 1)
         XCTAssertEqual(bluetooth.disconnectCount, 1)
+        XCTAssertNil(bluetooth.pumpManager)
     }
 }
