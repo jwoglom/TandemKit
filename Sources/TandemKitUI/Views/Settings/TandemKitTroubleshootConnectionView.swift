@@ -69,7 +69,7 @@ struct TandemKitTroubleshootConnectionView: View {
                 }
             } footer: {
                 Text(
-                    "Retries a connection to your pump. Keep your pump nearby and awake (double-tap the button on Tandem Mobi).",
+                    "Retries a connection to your pump. Keep your pump nearby and powered on.",
                     comment: "Footer explaining the reconnect button"
                 )
             }
@@ -78,8 +78,8 @@ struct TandemKitTroubleshootConnectionView: View {
                 stepRow(
                     number: 1,
                     text: String(
-                        localized: "Make sure your pump is nearby, powered on, and awake. Double-tap the button on your Tandem Mobi to wake it.",
-                        comment: "Troubleshooting step: wake pump"
+                        localized: "Make sure your pump is nearby and powered on.",
+                        comment: "Troubleshooting step: pump nearby"
                     )
                 )
                 stepRow(
