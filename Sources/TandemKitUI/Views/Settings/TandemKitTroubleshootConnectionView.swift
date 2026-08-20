@@ -103,8 +103,8 @@ struct TandemKitTroubleshootConnectionView: View {
                     number: 4,
                     text: String(
                         format: String(
-                            localized: "If your saved pump is not recognized by iOS Bluetooth, it may have been removed in the iOS Settings app, and you may need to re-run pump setup. Re-pairing the pump will require a wireless charging pad. DO NOT remove the pump from %@ unless you have a pump charger available.",
-                            comment: "Troubleshooting step: pump removed from iOS, with charger caveat"
+                            localized: "Re-pairing the pump will require a wireless charging pad. DO NOT remove the pump from %@ unless you have a pump charger available.",
+                            comment: "Troubleshooting step: re-pairing charger caveat"
                         ),
                         HostApp.current.appName
                     )
