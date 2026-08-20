@@ -31,6 +31,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openQuickBolus: () -> Void
     let openAlertSettings: () -> Void
     let openDebug: () -> Void
+    let openTroubleshootConnection: () -> Void
     let allowDebugFeatures: Bool
 
     var appName: String { HostApp.current.appName }
@@ -122,6 +123,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         openQuickBolus: @escaping () -> Void,
         openAlertSettings: @escaping () -> Void,
         openDebug: @escaping () -> Void = {},
+        openTroubleshootConnection: @escaping () -> Void = {},
         allowDebugFeatures: Bool = false
     ) {
         self.pumpManager = pumpManager
@@ -138,6 +140,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openQuickBolus = openQuickBolus
         self.openAlertSettings = openAlertSettings
         self.openDebug = openDebug
+        self.openTroubleshootConnection = openTroubleshootConnection
         self.allowDebugFeatures = allowDebugFeatures
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false

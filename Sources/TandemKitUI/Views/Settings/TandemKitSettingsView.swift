@@ -261,10 +261,25 @@ struct TandemKitSettingsView: View {
                 .padding(.bottom, 5)
 
                 if !viewModel.isConnected {
-                    statusBanner(
-                        title: String(localized: "Pump Disconnected", comment: "title for pump disconnected notice"),
-                        color: .red
-                    )
+                    Button(action: { viewModel.openTroubleshootConnection() }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Pump Disconnected", comment: "title for pump disconnected notice")
+                                    .font(Font.subheadline.weight(.bold))
+                                    .foregroundColor(.red)
+                                Text("Troubleshoot connection", comment: "subtitle linking to the connection troubleshooter")
+                                    .font(Font.caption)
+                                    .foregroundColor(.accentColor)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(Font.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 } else if viewModel.showsNoCGMConnectedBanner {
                     statusBanner(
                         title: String(localized: "No CGM connected to pump", comment: "title for CIQ no CGM notice"),
