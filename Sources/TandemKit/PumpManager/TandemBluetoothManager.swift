@@ -11,7 +11,10 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     private let logger = TandemLogger(category: "TandemBluetoothManager")
     private let managerQueue = DispatchQueue(label: "com.jwoglom.TandemKit.bluetoothManagerQueue", qos: .unspecified)
 
-    public var pumpManager: TandemPumpManager?
+    // Weak: the pump manager owns this bluetooth manager, so a strong back-reference here forms a
+    // retain cycle that keeps a deleted TandemPumpManager (and its auto-reconnecting BLE session)
+    // alive forever. StubPumpBluetooth already models this as weak.
+    public weak var pumpManager: TandemPumpManager?
 
     private(set) var manager: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -34,6 +37,16 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // Guarded by connectStateLock because it is set on commandQueue and cancelled on managerQueue.
     private let connectStateLock = NSLock()
     private var inFlightConnectGroup: TandemDispatchGroup?
+    // Set once the pump is deactivated/deleted. Suppresses the automatic reconnect paths so a
+    // removed pump does not silently re-establish its session and re-persist its state. Guarded by
+    // connectStateLock because it is set off-queue (from deactivate()) and read on managerQueue.
+    private var isDeactivated = false
+
+    private var shouldAutoReconnect: Bool {
+        connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        return !isDeactivated
+    }
 
     private func setInFlightConnectGroup(_ group: TandemDispatchGroup?) {
         connectStateLock.lock()
@@ -211,6 +224,17 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             }
         }
     }
+
+    /// Tear down for good: stop the automatic reconnect paths, drop the pump peripheral, and release
+    /// the back-reference. Called when the pump is deleted so the session cannot resurrect itself.
+    func deactivate() {
+        connectStateLock.lock()
+        isDeactivated = true
+        connectStateLock.unlock()
+
+        disconnect()
+        pumpManager = nil
+    }
 }
 
 extension TandemBluetoothManager: CBCentralManagerDelegate {
@@ -225,6 +249,11 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             logger.info("Bluetooth not powered on; cancelling pending operations")
             cancelInFlightConnect()
             peripheralManager?.cancelPendingOperations()
+            return
+        }
+
+        guard shouldAutoReconnect else {
+            logger.info("Pump deactivated; not auto-reconnecting")
             return
         }
 
@@ -299,13 +328,15 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             connectCompletion(PumpCommError.pumpNotConnected)
             self.connectCompletion = nil
 
-        } else {
+        } else if shouldAutoReconnect {
             logger.debug("Auto reconnect...")
             ensureConnected { error in
                 if let error = error {
                     self.logger.warning("Failed to auto-reconnect: \(error)")
                 }
             }
+        } else {
+            logger.info("Pump deactivated; skipping auto-reconnect")
         }
     }
 

@@ -35,6 +35,10 @@ protocol PumpBluetoothConnection: AnyObject {
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int?) -> Message?
 
     func disconnect()
+
+    /// Permanent teardown for a deleted pump: disconnect and suppress every automatic reconnect so
+    /// the session cannot re-establish itself (and re-persist the pump's state) after removal.
+    func deactivate()
 }
 
 extension PumpBluetoothConnection {
