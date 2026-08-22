@@ -1,4 +1,5 @@
 import LoopKit
+import LoopKitUI
 @testable import TandemKit
 import XCTest
 
@@ -307,5 +308,27 @@ import XCTest
 
         XCTAssertTrue(bluetooth.didSend(ControlIQInfoV2Request.self))
         XCTAssertFalse(bluetooth.didSend(ControlIQInfoV1Request.self))
+    }
+
+    // MARK: - Status highlight
+
+    /// While Control-IQ is on the driver refuses every automatic bolus and temp basal, so the host
+    /// app is not dosing. Without a status highlight the only trace of that is one loop failure per
+    /// cycle, and a loop that fails earlier for some other reason (no glucose, say) hides it
+    /// entirely.
+    func testControlIQIsSurfacedAsAStatusHighlight() throws {
+        manager.state.useControlIQ = true
+
+        let highlight = try XCTUnwrap(manager.pumpStatusHighlight)
+
+        let message = highlight.localizedMessage
+        XCTAssertTrue(message.localizedCaseInsensitiveContains("control-iq"), "Got: \(message)")
+        XCTAssertEqual(highlight.state, .warning)
+    }
+
+    func testNoStatusHighlightWhileControlIQIsOff() {
+        manager.state.useControlIQ = false
+
+        XCTAssertNil(manager.pumpStatusHighlight)
     }
 }

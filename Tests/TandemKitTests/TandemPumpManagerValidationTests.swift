@@ -62,4 +62,60 @@ import XCTest
 
         wait(for: [expectation], timeout: 1.0)
     }
+
+    // MARK: - Control-IQ
+
+    private func makeControlIQManager() -> TandemPumpManager {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.settings = TandemPumpManagerSettings(maxBolus: 5.0)
+        state.useControlIQ = true
+        return TandemPumpManager(state: state, bluetooth: StubPumpBluetooth())
+    }
+
+    private func validationError(from error: PumpManagerError?) -> TandemPumpManagerValidationError? {
+        guard case let .deviceState(underlyingError?) = error else { return nil }
+        return underlyingError as? TandemPumpManagerValidationError
+    }
+
+    func testAutomaticBolusIsBlockedWhileControlIQIsActive() {
+        let manager = makeControlIQManager()
+
+        let expectation = expectation(description: "Bolus completion")
+        var error: PumpManagerError?
+        manager.enactBolus(units: 1.0, activationType: .automatic) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1.0)
+
+        XCTAssertEqual(validationError(from: error), .controlIQModeActive)
+    }
+
+    func testTempBasalIsBlockedWhileControlIQIsActive() {
+        let manager = makeControlIQManager()
+
+        let expectation = expectation(description: "Temp basal completion")
+        var error: PumpManagerError?
+        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1.0)
+
+        XCTAssertEqual(validationError(from: error), .controlIQModeActive)
+    }
+
+    /// The host app is the only thing that renders this, and it wraps it in its own generic
+    /// wording -- Trio prefixes pump errors with "Trio could not communicate with the pump". The
+    /// text therefore has to name Control-IQ and say that dosing is paused all by itself, or the
+    /// user is left reading what looks like a Bluetooth problem.
+    func testControlIQBlockExplainsItselfWithoutHostContext() throws {
+        let message = try XCTUnwrap(TandemPumpManagerValidationError.controlIQModeActive.errorDescription)
+
+        XCTAssertTrue(message.localizedCaseInsensitiveContains("control-iq"), "Got: \(message)")
+        XCTAssertTrue(message.localizedCaseInsensitiveContains("paused"), "Got: \(message)")
+
+        let recovery = try XCTUnwrap(TandemPumpManagerValidationError.controlIQModeActive.recoverySuggestion)
+        XCTAssertTrue(recovery.localizedCaseInsensitiveContains("control-iq"), "Got: \(recovery)")
+    }
 }
