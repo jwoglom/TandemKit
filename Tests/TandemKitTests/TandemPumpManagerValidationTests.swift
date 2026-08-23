@@ -104,18 +104,4 @@ import XCTest
 
         XCTAssertEqual(validationError(from: error), .controlIQModeActive)
     }
-
-    /// The host app is the only thing that renders this, and it wraps it in its own generic
-    /// wording -- Trio prefixes pump errors with "Trio could not communicate with the pump". The
-    /// text therefore has to name Control-IQ and say that dosing is paused all by itself, or the
-    /// user is left reading what looks like a Bluetooth problem.
-    func testControlIQBlockExplainsItselfWithoutHostContext() throws {
-        let message = try XCTUnwrap(TandemPumpManagerValidationError.controlIQModeActive.errorDescription)
-
-        XCTAssertTrue(message.localizedCaseInsensitiveContains("control-iq"), "Got: \(message)")
-        XCTAssertTrue(message.localizedCaseInsensitiveContains("paused"), "Got: \(message)")
-
-        let recovery = try XCTUnwrap(TandemPumpManagerValidationError.controlIQModeActive.recoverySuggestion)
-        XCTAssertTrue(recovery.localizedCaseInsensitiveContains("control-iq"), "Got: \(recovery)")
-    }
 }

@@ -83,12 +83,8 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 maximum
             )
         case .controlIQModeActive:
-            // This is the reason the host app's loop is not dosing, and for most surfaces it is
-            // the only text the user sees -- Trio, for one, prefixes it with a generic "could not
-            // communicate with the pump". So it has to name the cause on its own rather than read
-            // as one more communication failure.
             return String(
-                localized: "Control-IQ is on: the pump is automating insulin delivery, so closed-loop dosing is paused",
+                localized: "Control-IQ is active on the pump",
                 comment: "Error when a command is blocked because the pump is running Control-IQ"
             )
         case .bolusIsRunning:
@@ -109,7 +105,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             )
         case .controlIQModeActive:
             return String(
-                localized: "Turn Control-IQ off from this app's pump settings screen, or on the pump itself, to resume closed-loop dosing.",
+                localized: "Turn off Control-IQ on the pump to let this app control delivery.",
                 comment: "Recovery suggestion when Control-IQ blocks a command"
             )
         case .bolusIsRunning:
