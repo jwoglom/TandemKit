@@ -62,4 +62,46 @@ import XCTest
 
         wait(for: [expectation], timeout: 1.0)
     }
+
+    // MARK: - Control-IQ
+
+    private func makeControlIQManager() -> TandemPumpManager {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.settings = TandemPumpManagerSettings(maxBolus: 5.0)
+        state.useControlIQ = true
+        return TandemPumpManager(state: state, bluetooth: StubPumpBluetooth())
+    }
+
+    private func validationError(from error: PumpManagerError?) -> TandemPumpManagerValidationError? {
+        guard case let .deviceState(underlyingError?) = error else { return nil }
+        return underlyingError as? TandemPumpManagerValidationError
+    }
+
+    func testAutomaticBolusIsBlockedWhileControlIQIsActive() {
+        let manager = makeControlIQManager()
+
+        let expectation = expectation(description: "Bolus completion")
+        var error: PumpManagerError?
+        manager.enactBolus(units: 1.0, activationType: .automatic) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1.0)
+
+        XCTAssertEqual(validationError(from: error), .controlIQModeActive)
+    }
+
+    func testTempBasalIsBlockedWhileControlIQIsActive() {
+        let manager = makeControlIQManager()
+
+        let expectation = expectation(description: "Temp basal completion")
+        var error: PumpManagerError?
+        manager.enactTempBasal(unitsPerHour: 1.0, for: .minutes(30)) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 1.0)
+
+        XCTAssertEqual(validationError(from: error), .controlIQModeActive)
+    }
 }

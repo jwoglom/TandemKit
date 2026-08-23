@@ -130,6 +130,20 @@ extension TandemPumpManager {
             )
         }
 
+        // Control-IQ owning delivery is a standing condition, not a one-off failure: while it is on
+        // the driver refuses every automatic bolus and temp basal, so without this the only trace of
+        // it in the host app is a loop failure once a cycle, worded by the host rather than by us.
+        if state.useControlIQ {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Control-IQ On",
+                    comment: "Status highlight that the pump's Control-IQ algorithm is controlling delivery."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .warning
+            )
+        }
+
         return nil
     }
 }
