@@ -48,6 +48,9 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
+    /// Returned from `startDateToFilterNewPumpEvents(for:)`; settable so tests can model the host
+    /// app's dose-history boundary.
+    var startDateToFilterNewPumpEvents: Date = .distantPast
 
     // MARK: - DeviceManagerDelegate
 
@@ -155,6 +158,6 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
-        .distantPast
+        synchronized { startDateToFilterNewPumpEvents }
     }
 }

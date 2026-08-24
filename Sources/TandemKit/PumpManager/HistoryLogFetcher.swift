@@ -43,7 +43,11 @@ public final class HistoryLogFetcher {
     private static let chunkTimeout: TimeInterval = 8.0
     private static let sendTimeout: DispatchTimeInterval = .seconds(45)
 
-    private let pumpManager: TandemPumpManager
+    // Weak: the pump manager owns a fetcher of its own for the sync-driven backfill, and a
+    // strong reference here would cycle — leaking the manager (and its BLE stack) after the
+    // user deletes the pump. A nil manager means the fetch's owner is gone; every entry point
+    // fails soft.
+    private weak var pumpManager: TandemPumpManager?
     private let logger = TandemLogger(category: "HistoryLogFetcher")
     private let queue = DispatchQueue(label: "com.jwoglom.TandemKit.historyLogFetcher")
 
@@ -77,12 +81,16 @@ public final class HistoryLogFetcher {
 
     /// Reads the pump's history log status (entry count and first/last sequence numbers).
     public func fetchStatus(completion: @escaping (HistoryLogStatusResponse?) -> Void) {
+        guard let pumpManager else {
+            completion(nil)
+            return
+        }
         pumpManager.bluetooth.ensureConnected { error in
             guard error == nil else {
                 completion(nil)
                 return
             }
-            let response = self.pumpManager.bluetooth.write(
+            let response = pumpManager.bluetooth.write(
                 message: HistoryLogStatusRequest(),
                 expecting: HistoryLogStatusResponse.self
             ) as? HistoryLogStatusResponse
@@ -106,6 +114,10 @@ public final class HistoryLogFetcher {
             return nil
         }
 
+        guard let pumpManager else {
+            return nil
+        }
+
         let captureLock = NSLock()
         var captured: HistoryLog?
         let streamSemaphore = DispatchSemaphore(value: 0)
@@ -126,7 +138,7 @@ public final class HistoryLogFetcher {
         pumpManager.bluetooth.ensureConnected { error in
             defer { sendSemaphore.signal() }
             guard error == nil else { return }
-            _ = self.pumpManager.bluetooth.write(
+            _ = pumpManager.bluetooth.write(
                 message: HistoryLogRequest(startLog: sequenceNum, numberOfLogs: 1),
                 expecting: HistoryLogResponse.self
             )
@@ -168,7 +180,7 @@ public final class HistoryLogFetcher {
         windowEnd = -1
         lock.unlock()
 
-        streamSubscription = pumpManager.historyLogStream
+        streamSubscription = pumpManager?.historyLogStream
             .sink { [weak self] response in
                 self?.handleStreamResponse(response)
             }
@@ -285,7 +297,7 @@ public final class HistoryLogFetcher {
     /// No-op until the pump serial is known: the store is keyed by serial, so nothing can have
     /// been stored yet either.
     private func seedFromStore(startId: Int64, endId: Int64) {
-        guard endId >= startId, let serial = pumpManager.historyLogStoreSerial else {
+        guard endId >= startId, let pumpManager, let serial = pumpManager.historyLogStoreSerial else {
             return
         }
 
@@ -412,6 +424,9 @@ public final class HistoryLogFetcher {
     }
 
     private func sendSync(_ message: Message, expecting: Message.Type) -> Message? {
+        guard let pumpManager else {
+            return nil
+        }
         let semaphore = DispatchSemaphore(value: 0)
         var response: Message?
         pumpManager.bluetooth.ensureConnected { error in
@@ -419,7 +434,7 @@ public final class HistoryLogFetcher {
             guard error == nil else {
                 return
             }
-            response = self.pumpManager.bluetooth.write(message: message, expecting: expecting)
+            response = pumpManager.bluetooth.write(message: message, expecting: expecting)
         }
         _ = semaphore.wait(timeout: .now() + Self.sendTimeout)
         return response

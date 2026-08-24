@@ -55,6 +55,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
     let historyLogPruneLock = NSLock()
     var lastHistoryLogPruneAt: Date?
 
+    // Fetcher owned by the sync-driven backfill (`TandemPumpManager+HistoryBackfill.swift`).
+    // Manager-owned so its single-fetch-at-a-time state spans windows within one pass; lazy
+    // because it captures `self`. Stored here rather than in the extension because extensions
+    // cannot declare stored properties.
+    lazy var historyBackfillFetcher: HistoryLogFetcher = HistoryLogFetcher(pumpManager: self)
+    // Guards the two fields below: a backfill pass is started from the BLE command queue while
+    // its window completions arrive on the main queue.
+    let historyBackfillLock = NSLock()
+    var historyBackfillInFlight = false
+    var historyBackfillWindowsThisPass = 0
+
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -325,6 +336,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Must run before the status fetches below — fetchBolusStatus/fetchBasalStatus emit
+            // events dated ≈now, which advance the host's pumpEventQueryAfterDate; reading the
+            // floor after them would defeat the cold-start backfill.
+            self.establishHistoryEmitFloorIfNeeded()
+
             let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
             if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
                 self.fetchControlIQStatus()
@@ -347,6 +363,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchNotifications()
             self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()
+
+            // Fire-and-forget: the fetcher runs on its own queue and each chunk is its own
+            // command-queue job, so therapy commands interleave and sync timing is unaffected.
+            self.backfillHistoryIfNeeded()
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()

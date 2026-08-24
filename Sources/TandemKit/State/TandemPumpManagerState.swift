@@ -145,6 +145,23 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// Last cartridge / reservoir change. Set when the user changes the cartridge.
     public var lastCartridgeChangeDate: Date?
 
+    // History backfill bookkeeping (see TandemPumpManager+HistoryBackfill.swift)
+    /// Boundary below which pump history is never surfaced to the host app as dose events.
+    /// Seeded ONCE from Loop's DoseStore boundary (`startDateToFilterNewPumpEvents` →
+    /// `pumpEventQueryAfterDate`) so a cold start backfills exactly the window the host app is
+    /// missing. Read-once because the live boundary advances to ≈now whenever a commanded dose
+    /// finalizes, which would raise the floor past unreported pump-UI doses. Nothing consumes it
+    /// for emission yet — the dose-emission layer gates on it; the backfill uses it to bound
+    /// fetch depth.
+    public var historyEmitFloor: Date?
+    /// Set when the initial deep backfill reaches its target date (or the start of pump
+    /// history). While nil, every sync continues the deep backfill — deliberately, so an
+    /// interrupted backfill RESUMES instead of being stranded with its tail unfetched forever.
+    public var historyBackfillCompletedAt: Date?
+    /// Highest sequence number known to be fetched — the incremental resume point. Lives in
+    /// rawState because the session history store is in-memory and empty after relaunch.
+    public var historyLastFetchedSequenceNum: UInt32?
+
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
         pumpState = PumpState()
@@ -331,6 +348,21 @@ public struct TandemPumpManagerState: RawRepresentable {
         lastSiteChangeDate = rawValue["lastSiteChangeDate"] as? Date
         lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
 
+        if let emitFloorInterval = rawValue["historyEmitFloor"] as? TimeInterval {
+            historyEmitFloor = Date(timeIntervalSinceReferenceDate: emitFloorInterval)
+        } else {
+            historyEmitFloor = nil
+        }
+
+        if let backfillCompletedInterval = rawValue["historyBackfillCompletedAt"] as? TimeInterval {
+            historyBackfillCompletedAt = Date(timeIntervalSinceReferenceDate: backfillCompletedInterval)
+        } else {
+            historyBackfillCompletedAt = nil
+        }
+
+        historyLastFetchedSequenceNum = (rawValue["historyLastFetchedSequenceNum"] as? Int)
+            .flatMap { $0 >= 0 ? UInt32($0) : nil }
+
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
         } else {
@@ -381,6 +413,9 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
+        raw["historyEmitFloor"] = historyEmitFloor?.timeIntervalSinceReferenceDate
+        raw["historyBackfillCompletedAt"] = historyBackfillCompletedAt?.timeIntervalSinceReferenceDate
+        raw["historyLastFetchedSequenceNum"] = historyLastFetchedSequenceNum.map(Int.init)
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -467,6 +502,9 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
+            "* historyEmitFloor: \(String(describing: historyEmitFloor))",
+            "* historyBackfillCompletedAt: \(String(describing: historyBackfillCompletedAt))",
+            "* historyLastFetchedSequenceNum: \(String(describing: historyLastFetchedSequenceNum))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
             "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
             "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",
