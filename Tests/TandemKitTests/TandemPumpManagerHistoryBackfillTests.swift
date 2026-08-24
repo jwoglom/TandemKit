@@ -43,15 +43,11 @@ import XCTest
     /// window, or the manager's store would prune them as they arrive.
     private lazy var nowPumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(Date()))
 
-    /// Entries below `oldBelow` are stamped `oldAge` in the past (still inside retention), so a
-    /// test can place the deep backfill's target date partway down the pump's history.
-    private func log(
-        sequenceNum: UInt32,
-        oldBelow: UInt32 = 0,
-        oldAge: TimeInterval = .days(3)
-    ) -> BolusActivatedHistoryLog {
+    /// An entry stamped `age` in the past (must stay inside retention, or the store prunes it on
+    /// arrival), so a test can place the backfill's time boundaries partway down pump history.
+    private func log(sequenceNum: UInt32, age: TimeInterval = 0) -> BolusActivatedHistoryLog {
         BolusActivatedHistoryLog(
-            pumpTimeSec: sequenceNum < oldBelow ? nowPumpTimeSec - UInt32(oldAge) : nowPumpTimeSec,
+            pumpTimeSec: nowPumpTimeSec - UInt32(age),
             sequenceNum: sequenceNum,
             bolusId: Int(sequenceNum),
             selectedIob: 0,
@@ -70,7 +66,10 @@ import XCTest
 
     /// Acknowledges every `HistoryLogRequest` and streams back the entries it asked for, the way
     /// the pump does: the ack comes from the write, the entries arrive as notifications.
-    private func stubHistoryStream(oldBelow: UInt32 = 0, streamId: Int = 7) {
+    private func stubHistoryStream(
+        streamId: Int = 7,
+        ageFor: @escaping (UInt32) -> TimeInterval = { _ in 0 }
+    ) {
         bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: streamId))
 
         bluetooth.onWrite = { [weak self] message in
@@ -80,7 +79,7 @@ import XCTest
             let bottom = max(0, top - max(request.numberOfLogs, 1) + 1)
 
             let logs = stride(from: top, through: bottom, by: -1)
-                .map { self.log(sequenceNum: UInt32($0), oldBelow: oldBelow) }
+                .map { self.log(sequenceNum: UInt32($0), age: ageFor(UInt32($0))) }
 
             guard !logs.isEmpty else { return }
 
@@ -190,7 +189,7 @@ import XCTest
         // Entries below 346 are days older than the floor. Window 1 covers [346, 600] (recent);
         // window 2 covers [91, 345] and crosses the target, so the walk must stop there.
         stubStatus(first: 0, last: 600)
-        stubHistoryStream(oldBelow: 346)
+        stubHistoryStream { $0 < 346 ? .days(3) : 0 }
 
         runBackfillPass()
 
@@ -206,13 +205,18 @@ import XCTest
 
     func testDeepBackfillHonorsWindowCapAndResumes() throws {
         setPumpSerial()
-        attachDelegate()
-        delegate.startDateToFilterNewPumpEvents = Date().addingTimeInterval(-.hours(1))
+        attachDelegate() // .distantPast boundary, so the 24h window bounds the target.
         XCTAssertTrue(manager.establishHistoryEmitFloorIfNeeded())
-        // 8 windows of 255 walk the frontier from 5000 down to 2961; everything below that is
-        // old, so the resumed pass terminates after a single further window.
+        // Window 1 [4746, 5000] is recent; the walk clears the 6h priority boundary on window 2
+        // (12h-old entries), after which the cap paces the background tail: 8 windows walk the
+        // frontier from 5000 down to 2961. Everything below that is older than the 24h target,
+        // so the resumed pass terminates after a single further window.
         stubStatus(first: 0, last: 5000)
-        stubHistoryStream(oldBelow: 2961)
+        stubHistoryStream { seq in
+            if seq >= 4746 { return 0 }
+            if seq >= 2961 { return .hours(12) }
+            return .days(3)
+        }
 
         runBackfillPass()
 
@@ -229,6 +233,29 @@ import XCTest
         XCTAssertEqual(
             resumedRequests.first?.startLog, 2960,
             "The resumed pass must continue below the previous frontier"
+        )
+    }
+
+    /// The window cap must never starve the IOB-relevant hours: while the walk's oldest entry is
+    /// still inside the priority window, a single pass keeps going past the cap.
+    func testDeepBackfillIgnoresWindowCapInsidePriorityWindow() throws {
+        setPumpSerial()
+        attachDelegate()
+        XCTAssertTrue(manager.establishHistoryEmitFloorIfNeeded())
+        // 2300 recent entries need 10 windows — more than the cap — and never clear the 6h
+        // priority boundary, so one pass fetches all of them (terminating at the start of pump
+        // history) instead of pausing after 8.
+        stubStatus(first: 1, last: 2300)
+        stubHistoryStream()
+
+        runBackfillPass(timeout: 90)
+
+        XCTAssertNotNil(manager.state.historyBackfillCompletedAt)
+        XCTAssertEqual(try manager.historyLogStore.oldest(pumpSerial: Self.pumpSerial)?.sequenceNum, 1)
+        XCTAssertGreaterThan(
+            bluetooth.sent(HistoryLogRequest.self).count,
+            TandemPumpManager.historyBackfillMaxWindowsPerSync,
+            "The pass must not pause at the cap while inside the priority window"
         )
     }
 

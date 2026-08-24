@@ -8,16 +8,24 @@ extension TandemPumpManager {
     /// goes when the host app's boundary is ancient (a fresh install reports `.distantPast`).
     static let historyBackfillWindow: TimeInterval = .hours(24)
 
-    /// Clock-skew slop below the emit floor so an event right at the boundary isn't clipped.
-    static let historyBackfillFloorSlop: TimeInterval = .minutes(1)
+    /// Margin below the emit floor covering pump/app clock skew, so an event stamped right at
+    /// the boundary isn't clipped.
+    static let historyBackfillFloorMargin: TimeInterval = .minutes(1)
+
+    /// The IOB-relevant lookback (≈ insulin action duration). On first connect the doses in this
+    /// window are what IOB is computed from, so the deep backfill covers it in a single
+    /// uninterrupted pass — the per-sync window cap below only applies to history older than
+    /// this.
+    static let historyBackfillPriorityWindow: TimeInterval = .hours(6)
 
     /// Entries per backfill step. 255 is the most a single HistoryLogRequest can carry, so one
     /// step costs exactly one chunk round-trip.
     static let historyBackfillWindowEntries = 255
 
-    /// Cap on backward windows per sync pass; the walk resumes on the next sync. A full 24 h is
-    /// ≈2.2k entries at ~90/hr ≈ 9 windows, so the cap keeps one sync from monopolizing BLE while
-    /// the whole backfill still finishes within a couple of sync cycles.
+    /// Cap on backward windows per sync pass, applied only once the walk has cleared the
+    /// priority window — the IOB-relevant hours are never paced, only the background tail out to
+    /// the full lookback. Keeps one sync from monopolizing BLE on a chatty pump; the walk
+    /// resumes on the next sync.
     static let historyBackfillMaxWindowsPerSync = 8
 
     /// Most entries an incremental catch-up requests in one pass.
@@ -87,16 +95,18 @@ extension TandemPumpManager {
     /// `historyBackfillCompletedAt` stays nil every sync re-enters here, so an interrupted walk
     /// resumes instead of being stranded.
     private func continueDeepBackfill(emitFloor: Date, now: Date) {
-        // Slop below the floor for clock skew; the fixed window bounds a floor far in the past.
+        // Margin below the floor for clock skew; the fixed window bounds a floor far in the past.
         let target = max(
-            emitFloor.addingTimeInterval(-Self.historyBackfillFloorSlop),
+            emitFloor.addingTimeInterval(-Self.historyBackfillFloorMargin),
             now.addingTimeInterval(-Self.historyBackfillWindow)
         )
+        // Everything newer than this feeds IOB; the window cap holds off until the walk clears it.
+        let priorityBoundary = max(target, now.addingTimeInterval(-Self.historyBackfillPriorityWindow))
         logger.info("[HISTORY-BACKFILL] Continuing deep backfill toward \(target)")
-        deepBackfillStep(target: target, now: now)
+        deepBackfillStep(target: target, priorityBoundary: priorityBoundary, now: now)
     }
 
-    private func deepBackfillStep(target: Date, now: Date) {
+    private func deepBackfillStep(target: Date, priorityBoundary: Date, now: Date) {
         guard let serial = historyLogStoreSerial else {
             finishBackfillPass()
             return
@@ -135,6 +145,7 @@ extension TandemPumpManager {
                     progress: progress,
                     frontierBefore: frontierBefore,
                     target: target,
+                    priorityBoundary: priorityBoundary,
                     now: now
                 )
             }
@@ -145,6 +156,7 @@ extension TandemPumpManager {
         progress: HistoryLogFetcher.Progress,
         frontierBefore: UInt32?,
         target: Date,
+        priorityBoundary: Date,
         now: Date
     ) {
         guard let serial = historyLogStoreSerial else {
@@ -181,7 +193,11 @@ extension TandemPumpManager {
         let windows = historyBackfillWindowsThisPass
         historyBackfillLock.unlock()
 
-        if windows >= Self.historyBackfillMaxWindowsPerSync {
+        // The cap never interrupts the IOB-relevant window: until the walk's oldest entry clears
+        // the priority boundary, a pass keeps going regardless of how many windows a chatty pump
+        // takes to cover those hours. Only the background tail is paced across syncs.
+        let priorityCovered = oldest.map { $0.pumpDate <= priorityBoundary } ?? false
+        if priorityCovered, windows >= Self.historyBackfillMaxWindowsPerSync {
             // Left incomplete on purpose: `historyBackfillCompletedAt` stays nil, so the next
             // sync resumes the walk from the store's new frontier.
             logger.info("[HISTORY-BACKFILL] Window cap (\(windows)) reached; resuming next sync")
@@ -189,7 +205,7 @@ extension TandemPumpManager {
             return
         }
 
-        deepBackfillStep(target: target, now: now)
+        deepBackfillStep(target: target, priorityBoundary: priorityBoundary, now: now)
     }
 
     private func completeDeepBackfill(at now: Date, reason: String) {
