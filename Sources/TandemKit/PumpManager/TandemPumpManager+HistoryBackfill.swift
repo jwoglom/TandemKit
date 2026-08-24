@@ -13,14 +13,14 @@ extension TandemPumpManager {
     static let historyBackfillFloorMargin: TimeInterval = .minutes(1)
 
     /// The IOB-relevant lookback (≈ insulin action duration). On first connect the doses in this
-    /// window are what IOB is computed from, so the deep backfill covers it in a single
+    /// window are what IOB is computed from, so the deep fetch covers it in a single
     /// uninterrupted pass — the per-sync window cap below only applies to history older than
     /// this.
-    static let historyBackfillPriorityWindow: TimeInterval = .hours(6)
+    static let historyDeepFetchWindow: TimeInterval = .hours(6)
 
-    /// Entries per backfill step. 255 is the most a single HistoryLogRequest can carry, so one
+    /// Entries per deep-fetch step. 255 is the most a single HistoryLogRequest can carry, so one
     /// step costs exactly one chunk round-trip.
-    static let historyBackfillWindowEntries = 255
+    static let historyDeepStepEntries = 255
 
     /// Cap on backward windows per sync pass, applied only once the walk has cleared the
     /// priority window — the IOB-relevant hours are never paced, only the background tail out to
@@ -58,7 +58,7 @@ extension TandemPumpManager {
     /// Sync-cycle entry point. While the deep backfill has not completed, continues it; afterwards
     /// catches up incrementally from the persisted watermark. Fire-and-forget: window completions
     /// arrive on the main queue and the pass releases itself when done or on the first failure.
-    func backfillHistoryIfNeeded(now: Date = Date()) {
+    func fetchAndLogPumpHistory(now: Date = Date()) {
         guard historyLogStoreSerial != nil else {
             logger.info("[HISTORY-BACKFILL] Skipping: pump serial not yet known")
             return
@@ -81,7 +81,7 @@ extension TandemPumpManager {
         historyBackfillLock.unlock()
 
         if state.historyBackfillCompletedAt == nil {
-            continueDeepBackfill(emitFloor: emitFloor, now: now)
+            startCooperativeDeepFetch(emitFloor: emitFloor, now: now)
         } else {
             performIncrementalFetch()
         }
@@ -94,19 +94,19 @@ extension TandemPumpManager {
     /// date is reached, the pump runs out of history, or the per-pass window cap is hit. While
     /// `historyBackfillCompletedAt` stays nil every sync re-enters here, so an interrupted walk
     /// resumes instead of being stranded.
-    private func continueDeepBackfill(emitFloor: Date, now: Date) {
+    private func startCooperativeDeepFetch(emitFloor: Date, now: Date) {
         // Margin below the floor for clock skew; the fixed window bounds a floor far in the past.
-        let target = max(
+        let backfillTarget = max(
             emitFloor.addingTimeInterval(-Self.historyBackfillFloorMargin),
             now.addingTimeInterval(-Self.historyBackfillWindow)
         )
         // Everything newer than this feeds IOB; the window cap holds off until the walk clears it.
-        let priorityBoundary = max(target, now.addingTimeInterval(-Self.historyBackfillPriorityWindow))
-        logger.info("[HISTORY-BACKFILL] Continuing deep backfill toward \(target)")
-        deepBackfillStep(target: target, priorityBoundary: priorityBoundary, now: now)
+        let diaBoundary = max(backfillTarget, now.addingTimeInterval(-Self.historyDeepFetchWindow))
+        logger.info("[HISTORY-BACKFILL] Continuing deep backfill toward \(backfillTarget)")
+        stepDeepFetch(backfillTarget: backfillTarget, diaBoundary: diaBoundary, now: now)
     }
 
-    private func deepBackfillStep(target: Date, priorityBoundary: Date, now: Date) {
+    private func stepDeepFetch(backfillTarget: Date, diaBoundary: Date, now: Date) {
         guard let serial = historyLogStoreSerial else {
             finishBackfillPass()
             return
@@ -130,7 +130,7 @@ extension TandemPumpManager {
         let endingAt = frontierBefore.map { $0 - 1 }
 
         historyBackfillFetcher.start(
-            numberOfLogs: Self.historyBackfillWindowEntries,
+            numberOfLogs: Self.historyDeepStepEntries,
             endingAtSequenceNum: endingAt
         ) { [weak self] result in
             guard let self else { return }
@@ -141,22 +141,22 @@ extension TandemPumpManager {
                 self.logger.error("[HISTORY-BACKFILL] Window fetch failed: \(error)")
                 self.finishBackfillPass()
             case let .success(progress):
-                self.handleDeepBackfillWindow(
+                self.handleDeepFetchWindow(
                     progress: progress,
                     frontierBefore: frontierBefore,
-                    target: target,
-                    priorityBoundary: priorityBoundary,
+                    backfillTarget: backfillTarget,
+                    diaBoundary: diaBoundary,
                     now: now
                 )
             }
         }
     }
 
-    private func handleDeepBackfillWindow(
+    private func handleDeepFetchWindow(
         progress: HistoryLogFetcher.Progress,
         frontierBefore: UInt32?,
-        target: Date,
-        priorityBoundary: Date,
+        backfillTarget: Date,
+        diaBoundary: Date,
         now: Date
     ) {
         guard let serial = historyLogStoreSerial else {
@@ -183,8 +183,8 @@ extension TandemPumpManager {
             return
         }
 
-        if let oldestDate = oldest?.pumpDate, oldestDate <= target {
-            completeDeepBackfill(at: now, reason: "reached target date \(target)")
+        if let oldestDate = oldest?.pumpDate, oldestDate <= backfillTarget {
+            completeDeepBackfill(at: now, reason: "reached target date \(backfillTarget)")
             return
         }
 
@@ -196,7 +196,7 @@ extension TandemPumpManager {
         // The cap never interrupts the IOB-relevant window: until the walk's oldest entry clears
         // the priority boundary, a pass keeps going regardless of how many windows a chatty pump
         // takes to cover those hours. Only the background tail is paced across syncs.
-        let priorityCovered = oldest.map { $0.pumpDate <= priorityBoundary } ?? false
+        let priorityCovered = oldest.map { $0.pumpDate <= diaBoundary } ?? false
         if priorityCovered, windows >= Self.historyBackfillMaxWindowsPerSync {
             // Left incomplete on purpose: `historyBackfillCompletedAt` stays nil, so the next
             // sync resumes the walk from the store's new frontier.
@@ -205,7 +205,7 @@ extension TandemPumpManager {
             return
         }
 
-        deepBackfillStep(target: target, priorityBoundary: priorityBoundary, now: now)
+        stepDeepFetch(backfillTarget: backfillTarget, diaBoundary: diaBoundary, now: now)
     }
 
     private func completeDeepBackfill(at now: Date, reason: String) {
@@ -223,7 +223,7 @@ extension TandemPumpManager {
             // Completed-but-no-watermark should not normally occur; fetch one window ending at
             // the pump's newest so the watermark re-establishes itself.
             logger.warning("[HISTORY-BACKFILL] No watermark despite completed backfill; fetching one window")
-            startIncrementalFetch(numberOfLogs: Self.historyBackfillWindowEntries)
+            startIncrementalFetch(numberOfLogs: Self.historyDeepStepEntries)
             return
         }
 

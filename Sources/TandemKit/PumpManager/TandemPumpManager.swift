@@ -366,7 +366,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Fire-and-forget: the fetcher runs on its own queue and each chunk is its own
             // command-queue job, so therapy commands interleave and sync timing is unaffected.
-            self.backfillHistoryIfNeeded()
+            self.fetchAndLogPumpHistory()
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
@@ -1647,6 +1647,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             for fetch in fetches {
                 self.runFetch(fetch)
+            }
+
+            // A bolus just changed on the pump — precisely when a pump-UI (Quick Bolus /
+            // Control-IQ) bolus appears in history. Fetch now so it lands in the store within
+            // seconds instead of waiting for the next full sync, which the freshness gate in
+            // ensureCurrentPumpData can push well past one loop cycle.
+            if events.contains(.bolusChange) {
+                self.fetchAndLogPumpHistory()
             }
 
             completion()

@@ -95,7 +95,7 @@ import XCTest
     /// releases itself. Each fetch window burns real wall-clock time inside HistoryLogFetcher
     /// (post-request delay plus polling), so the timeout is generous.
     private func runBackfillPass(timeout: TimeInterval = 60, file: StaticString = #filePath, line: UInt = #line) {
-        manager.backfillHistoryIfNeeded()
+        manager.fetchAndLogPumpHistory()
         waitUntil(timeout: timeout, file: file, line: line) {
             self.manager.historyBackfillLock.lock()
             defer { self.manager.historyBackfillLock.unlock() }

@@ -152,7 +152,8 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// missing. Read-once because the live boundary advances to ≈now whenever a commanded dose
     /// finalizes, which would raise the floor past unreported pump-UI doses. Nothing consumes it
     /// for emission yet — the dose-emission layer gates on it; the backfill uses it to bound
-    /// fetch depth.
+    /// fetch depth. (The equivalent field in the original #224 implementation is
+    /// `commandedTrackingStartedAt`.)
     public var historyEmitFloor: Date?
     /// Set when the initial deep backfill reaches its target date (or the start of pump
     /// history). While nil, every sync continues the deep backfill — deliberately, so an
