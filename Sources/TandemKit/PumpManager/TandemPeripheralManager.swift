@@ -7,7 +7,10 @@ class TandemPeripheralManager: NSObject {
     private var peripheral: CBPeripheral
     private let pumpManager: TandemPumpManager
     private let bluetoothManager: TandemBluetoothManager
-    private var connectCompletion: ((Error?) -> Void)?
+    // Claimed exactly once by finishSetup, which may be called from the CB delegate queue (a
+    // discovery error) or from the setup task on a global queue (every performInitialSetup exit),
+    // so the take-and-clear happens under queueLock.
+    private var _connectCompletion: ((Error?) -> Void)?
 
     // These three handoff slots are written on the command thread (write/read/startNotify) and read
     // on the CB delegate queue (didUpdateValueFor / didWriteValueFor / cancelPendingOperations).
@@ -72,12 +75,35 @@ class TandemPeripheralManager: NSObject {
         self.bluetoothManager = bluetoothManager
         self.peripheral = peripheral
         self.pumpManager = pumpManager
-        self.connectCompletion = connectCompletion
+        _connectCompletion = connectCompletion
 
         authBuilder = JpakeAuthBuilder.initializeWithPairingCode(pumpManager.state.pumpState.pincode ?? fallbackPairingCode)
         super.init()
 
         peripheral.delegate = self
+    }
+
+    /// Ends this connection attempt as a failure. Only disconnects while this peripheral manager
+    /// is still the live one: a setup task orphaned by a mid-handshake drop keeps running for
+    /// seconds, and by then the auto-reconnect may own an authenticated session it must not kill.
+    private func failSetup(_ error: Error) {
+        if bluetoothManager.isCurrentPeripheralManager(self) {
+            bluetoothManager.disconnect()
+        } else {
+            logger.info("Setup failed on a superseded connection; not disconnecting the live session")
+        }
+
+        finishSetup(error)
+    }
+
+    /// Reports this attempt's outcome exactly once; several discovery callbacks can each fail.
+    private func finishSetup(_ error: Error?) {
+        queueLock.lock()
+        let completion = _connectCompletion
+        _connectCompletion = nil
+        queueLock.unlock()
+
+        completion?(error)
     }
 
     func read(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> Data? {
@@ -166,8 +192,14 @@ class TandemPeripheralManager: NSObject {
         currentTxId = currentTxId &+ 1
         while response.needsMorePacket {
             // Wait for result from pump
-            guard let result = writeQ.wait(timeout: .now() + Self.responseTimeout) else {
-                logger.error("Timeout hit, no response from pump...")
+            let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout)
+            guard case let .completed(result) = outcome else {
+                if outcome == .cancelled {
+                    // Torn down by cancelPendingOperations, not the pump going quiet.
+                    logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
+                } else {
+                    logger.error("Timeout hit, no response from pump...")
+                }
                 return nil
             }
 
@@ -238,7 +270,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
         if let error = error {
             logger.error("Failed to discoverServices: \(error.localizedDescription)")
-            connectCompletion?(PumpCommError.errorResponse(context: "Failed to discoverServices: \(error.localizedDescription)"))
+            finishSetup(PumpCommError.errorResponse(context: "Failed to discoverServices: \(error.localizedDescription)"))
             return
         }
 
@@ -246,7 +278,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 
         guard let pumpService = peripheral.services?.first(where: { $0.uuid == ServiceUUID.PUMP_SERVICE }) else {
             logger.error("No pump service found...")
-            connectCompletion?(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.PUMP_SERVICE)"))
+            finishSetup(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.PUMP_SERVICE)"))
             return
         }
         peripheral.discoverCharacteristics(CharacteristicUUID.allPumpCharacteristics, for: pumpService)
@@ -256,7 +288,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         if let error = error {
             let message = "Failed to didDiscoverCharacteristics: \(error.localizedDescription)"
             logger.error(message)
-            connectCompletion?(PumpCommError.errorResponse(context: message))
+            finishSetup(PumpCommError.errorResponse(context: message))
             return
         }
 
@@ -265,7 +297,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         if service.uuid == ServiceUUID.PUMP_SERVICE {
             guard let deviceInfoService = peripheral.services?.first(where: { $0.uuid == ServiceUUID.DIS_SERVICE }) else {
                 logger.error("No device info service found...")
-                connectCompletion?(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.DIS_SERVICE)"))
+                finishSetup(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.DIS_SERVICE)"))
                 return
             }
             peripheral.discoverCharacteristics(CharacteristicUUID.allDeviceInfoCharacteristics, for: deviceInfoService)
@@ -447,16 +479,14 @@ extension TandemPeripheralManager {
                 characteristicUUID: CharacteristicUUID.DIS_MANUFACTURER_NAME
             ) else {
                 logger.error("Failed to read Manufacturer...")
-                bluetoothManager.disconnect()
-                connectCompletion?(PumpCommError.noResponse)
+                failSetup(PumpCommError.noResponse)
                 return
             }
 
             guard let _ = read(serviceUUID: ServiceUUID.DIS_SERVICE, characteristicUUID: CharacteristicUUID.DIS_MODEL_NUMBER)
             else {
                 logger.error("Failed to read model number...")
-                bluetoothManager.disconnect()
-                connectCompletion?(PumpCommError.noResponse)
+                failSetup(PumpCommError.noResponse)
                 return
             }
 
@@ -484,8 +514,7 @@ extension TandemPeripheralManager {
                 while let (request, expectedResponse) = authBuilder.nextRequest() {
                     guard let response = write(message: request, expecting: expectedResponse) else {
                         logger.error("Failed to send JPAKE confirm")
-                        bluetoothManager.disconnect()
-                        connectCompletion?(PumpCommError.noResponse)
+                        failSetup(PumpCommError.noResponse)
                         return
                     }
 
@@ -503,8 +532,7 @@ extension TandemPeripheralManager {
 
                     // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
                     // full connectTimeout and stalls every queued command behind it.
-                    bluetoothManager.disconnect()
-                    connectCompletion?(PumpCommError.noResponse)
+                    failSetup(PumpCommError.noResponse)
                     return
                 }
 
@@ -518,8 +546,7 @@ extension TandemPeripheralManager {
                 expecting: TimeSinceResetResponse.self
             ) as? TimeSinceResetResponse else {
                 self.logger.error("Failed to send TimeSinceResetRequest...")
-                bluetoothManager.disconnect()
-                connectCompletion?(PumpCommError.noResponse)
+                failSetup(PumpCommError.noResponse)
                 return
             }
 
@@ -528,7 +555,7 @@ extension TandemPeripheralManager {
             pumpManager.notifyDelegateStateUpdated()
 
             logger.info("Connected to pump!")
-            connectCompletion?(nil)
+            finishSetup(nil)
         }
     }
 }

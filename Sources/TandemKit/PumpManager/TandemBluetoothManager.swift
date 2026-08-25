@@ -18,7 +18,27 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
     private(set) var manager: CBCentralManager?
     private var peripheral: CBPeripheral?
-    private var peripheralManager: TandemPeripheralManager?
+
+    // Read from the command queue and from setup tasks on global queues, written on managerQueue,
+    // so the reference access goes through connectStateLock. The lock only covers get/set of the
+    // reference; blocking pump I/O on the referenced manager happens outside it.
+    private var _peripheralManager: TandemPeripheralManager?
+    private var peripheralManager: TandemPeripheralManager? {
+        get { connectStateLock.lock()
+            defer { connectStateLock.unlock() }
+            return _peripheralManager }
+        set { connectStateLock.lock()
+            _peripheralManager = newValue
+            connectStateLock.unlock() }
+    }
+
+    /// True while `candidate` is still the live peripheral manager. An orphaned setup task keeps
+    /// running after a drop and must not act on a connection that is no longer its own.
+    func isCurrentPeripheralManager(_ candidate: TandemPeripheralManager) -> Bool {
+        connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        return _peripheralManager === candidate
+    }
 
     private var scanCompletion: ((_ result: TandemPumpScan) -> Void)?
     private var connectCompletion: ((Error?) -> Void)?
@@ -41,6 +61,13 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // removed pump does not silently re-establish its session and re-persist its state. Guarded by
     // connectStateLock because it is set off-queue (from deactivate()) and read on managerQueue.
     private var isDeactivated = false
+    // Consecutive connect attempts that ended without a usable session. Only touched from
+    // connectIfNeeded, i.e. only on commandQueue, so it needs no lock.
+    private var consecutiveConnectFailures = 0
+    // Failures tolerated on the fast paths (a cached CBPeripheral, or one CoreBluetooth still
+    // lists as connected) before they are discarded and the pump is rediscovered by scanning.
+    // Two, so a single dropout that resolves itself does not pay for a rescan.
+    private let staleFastPathThreshold = 2
 
     private var shouldAutoReconnect: Bool {
         connectStateLock.lock()
@@ -155,6 +182,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// this queue being blocked — which is exactly the failure mode of the previous design.
     private func connectIfNeeded() -> Error? {
         if let peripheral, peripheral.state == .connected, peripheralManager != nil {
+            consecutiveConnectFailures = 0
             return nil
         }
 
@@ -164,6 +192,18 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         guard manager.state == .poweredOn else {
             logger.error("Bluetooth not powered on (state \(manager.state.rawValue)); cannot connect")
             return PumpCommError.pumpNotConnected
+        }
+
+        // A run of failures means the fast paths below are no longer working, and replaying one
+        // forever gets nowhere. Discard the cached references so the pump is rediscovered.
+        var rediscovering = false
+        if consecutiveConnectFailures >= staleFastPathThreshold {
+            logger
+                .info(
+                    "\(consecutiveConnectFailures) consecutive connect failures; discarding cached peripheral and rediscovering"
+                )
+            discardCachedPeripheral(on: manager)
+            rediscovering = true
         }
 
         let group = TandemDispatchGroup()
@@ -182,10 +222,15 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         if let peripheral {
             // Reuse the peripheral reference from a previous connection.
             connect(peripheral, completion: onConnect)
-        } else if let peripheral = manager.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]).first {
+        } else if !rediscovering,
+                  let peripheral = manager.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]).first
+        {
             // Phone is already connected to the pump, but the app is not.
             connect(peripheral, completion: onConnect)
         } else if let identifier = pumpManager?.state.pumpState.peripheralUuid {
+            // When rediscovering, this is the only path taken: cancelPeripheralConnection is
+            // asynchronous, so the peripheral we just discarded can still be in the OS's
+            // connected list for a moment, and reusing it from there would defeat the rescan.
             let scanStarted = startScan { result in
                 guard result.bleIdentifier == identifier else {
                     return
@@ -202,11 +247,63 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         }
 
         // Cancelled by cancelInFlightConnect() on disconnect/Bluetooth-off, or times out on its own.
-        if group.wait(timeout: .now() + connectTimeout) == nil {
+        switch group.waitForOutcome(timeout: .now() + connectTimeout) {
+        case .timedOut:
             logger.error("Connect attempt did not complete within \(connectTimeout)")
+            abandonConnectAttempt(on: manager)
+            consecutiveConnectFailures += 1
             return PumpCommError.pumpNotConnected
+
+        case .cancelled:
+            // Released early because the link went away, not out of time. Distinct from .timedOut.
+            logger.error("Connect attempt cancelled before completing; link or Bluetooth went away")
+            abandonConnectAttempt(on: manager)
+            consecutiveConnectFailures += 1
+            return PumpCommError.pumpNotConnected
+
+        case .completed:
+            if let error = resultBox.error {
+                consecutiveConnectFailures += 1
+                return error
+            }
+            consecutiveConnectFailures = 0
+            return nil
         }
-        return resultBox.error
+    }
+
+    /// Releases the CoreBluetooth resources of a connect attempt we have stopped waiting for.
+    /// `CBCentralManager.connect(_:)` has no timeout and stays pending until cancelled, so
+    /// abandoned attempts otherwise pile up in the OS. MUST be called on `commandQueue`.
+    private func abandonConnectAttempt(on manager: CBCentralManager) {
+        stopScan()
+
+        guard let peripheral else {
+            return
+        }
+        // A session may have landed between the wait giving up and this call; that one is live and
+        // is not ours to tear down.
+        if peripheral.state == .connected, peripheralManager != nil {
+            return
+        }
+        manager.cancelPeripheralConnection(peripheral)
+    }
+
+    /// Drops the cached peripheral reference, and cancels any connection CoreBluetooth still holds
+    /// to the pump, so the next attempt has to rediscover it by scanning. MUST be called on
+    /// `commandQueue`, and only when there is no live session (see the caller's guard).
+    private func discardCachedPeripheral(on manager: CBCentralManager) {
+        if let peripheral {
+            manager.cancelPeripheralConnection(peripheral)
+        }
+        // Also drop anything the OS still lists as a connected pump: that list is the second fast
+        // path, and a stale entry in it is just as able to wedge every future attempt.
+        for stale in manager.retrieveConnectedPeripherals(withServices: [ServiceUUID.PUMP_SERVICE]) {
+            manager.cancelPeripheralConnection(stale)
+        }
+
+        peripheral = nil
+        peripheralManager = nil
+        consecutiveConnectFailures = 0
     }
 
     func disconnect() {
