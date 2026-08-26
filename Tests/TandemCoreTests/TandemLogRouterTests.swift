@@ -86,3 +86,19 @@ final class TandemLogRouterTests: XCTestCase {
         XCTAssertTrue(TandemLogLevel.info < TandemLogLevel.warning)
     }
 }
+
+extension TandemLogRouterTests {
+    func testHostGeneralLogToggleIsANoOpWhereThereIsNoDocumentsDirectory() {
+        // On Apple platforms the toggle adds/removes the shared-log destination; on Linux there
+        // is no Documents directory so it stays off. Either way it must not throw or duplicate.
+        TandemLogRouter.resetToDefaults()
+        let baseline = TandemLogRouter.destinations.count
+
+        TandemLogRouter.isHostGeneralLogEnabled = false
+        XCTAssertFalse(TandemLogRouter.isHostGeneralLogEnabled)
+
+        TandemLogRouter.isHostGeneralLogEnabled = true
+        TandemLogRouter.isHostGeneralLogEnabled = true
+        XCTAssertEqual(TandemLogRouter.destinations.count, baseline, "toggling must not duplicate the destination")
+    }
+}

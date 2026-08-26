@@ -89,6 +89,36 @@ public enum TandemLogRouter {
         storage = defaultDestinations()
     }
 
+    /// Whether driver lines are mirrored into the host app's general log.
+    ///
+    /// Enabled by default. Turn it off to confine driver output to TandemKit's own file, e.g.
+    /// on a host whose log writer is not append-atomic (see
+    /// `docs/host-patches/trio-simplelogreporter-atomic-append.patch`).
+    public static var isHostGeneralLogEnabled: Bool {
+        get {
+            #if canImport(Darwin)
+            lock.lock()
+            defer { lock.unlock() }
+            return storage.contains { $0 === TandemFileLogDestination.hostGeneralLog }
+            #else
+            return false
+            #endif
+        }
+        set {
+            #if canImport(Darwin)
+            lock.lock()
+            defer { lock.unlock() }
+            let destination = TandemFileLogDestination.hostGeneralLog
+            let present = storage.contains { $0 === destination }
+            if newValue, !present {
+                storage.append(destination)
+            } else if !newValue, present {
+                storage.removeAll { $0 === destination }
+            }
+            #endif
+        }
+    }
+
     static func emit(
         category: String,
         level: TandemLogLevel,
@@ -140,6 +170,14 @@ public enum TandemLogRouter {
 ///   the same file. Rotation is deliberately **disabled** here: Trio owns that file and
 ///   rotates it itself, and a second rotator would race it and could move a file out from
 ///   under an in-flight write.
+///
+/// Sharing a file needs *both* writers to append atomically. Ours does; Trio's
+/// `SimpleLogReporter` seeks to end-of-file and then writes, which can overwrite lines
+/// appended in between. `docs/host-patches/trio-simplelogreporter-atomic-append.patch` fixes
+/// the host side; until it is applied, driver lines can be lost from the shared log (Trio's
+/// own lines can be too). Set ``TandemLogRouter/isHostGeneralLogEnabled`` to `false` to stop
+/// writing there. Nothing else depends on the shared log, so the driver's own file remains
+/// the authoritative record either way.
 public final class TandemFileLogDestination: TandemLogDestination {
     public enum Format {
         /// `[<date> <LEVEL>] File.swift - function#line: message` — TandemKit's own format.
