@@ -89,8 +89,7 @@ final class TandemLogRouterTests: XCTestCase {
 
 extension TandemLogRouterTests {
     func testHostGeneralLogToggleIsANoOpWhereThereIsNoDocumentsDirectory() {
-        // On Apple platforms the toggle adds/removes the shared-log destination; on Linux there
-        // is no Documents directory so it stays off. Either way it must not throw or duplicate.
+        // No Documents directory on Linux, so the toggle stays off there either way.
         TandemLogRouter.resetToDefaults()
         let baseline = TandemLogRouter.destinations.count
 

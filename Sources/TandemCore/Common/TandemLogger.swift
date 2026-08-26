@@ -3,14 +3,9 @@ import Foundation
 #if canImport(OSLog)
 import OSLog
 
-/// Driver-facing logger.
-///
-/// Every line goes to Apple's unified log (`com.jwoglom.TandemKit`) and, at `.info` and above,
-/// to each destination registered with ``TandemLogRouter``. By default that is TandemKit's own
-/// `Documents/tandem/tandem_log.txt` **and** the host app's general log
-/// (`Documents/logs/log.txt`, i.e. the file Trio's `SimpleLogReporter` writes and that Trio's
-/// "Share logs" collects), so driver activity shows up in a Trio log bundle without the user
-/// having to export the Tandem log separately.
+/// Driver-facing logger. Every line goes to Apple's unified log, and at `.info` and above to
+/// each ``TandemLogRouter`` destination — by default TandemKit's own file and the host app's
+/// general log, so driver activity shows up in a Trio log bundle.
 public final class TandemLogger {
     private let category: String
     private let logger: Logger
@@ -55,8 +50,7 @@ public final class TandemLogger {
         )
     }
 
-    /// TandemKit's own log files, for the driver settings "share logs" affordance. The host's
-    /// general log is intentionally not included here — the host app shares that one itself.
+    /// TandemKit's own log files. The host shares its general log itself.
     func getDebugLogs() -> [URL] {
         TandemFileLogDestination.tandem.existingLogFiles
     }
@@ -69,9 +63,8 @@ private extension String {
 #else
 import Logging
 
-// Desktop/Linux SwiftPM fallback. Apple's OSLog and the app's Documents-based
-// file logging are unavailable, so route through swift-log. The public API is
-// identical to the OSLog implementation above.
+// Desktop/Linux SwiftPM fallback: no OSLog and no Documents directory, so route through
+// swift-log. Same public API as above.
 public final class TandemLogger {
     private let category: String
     private let logger: Logger

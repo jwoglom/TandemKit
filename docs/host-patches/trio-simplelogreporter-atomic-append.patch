@@ -1,24 +1,18 @@
 Subject: [PATCH] Fix non-atomic append in the log file writer
 
-Upstream PR branch: https://github.com/jwoglom/trio/tree/fix/atomic-log-file-append
-Branched from nightscout/Trio dev @ cb9e0ff.
+Branch: https://github.com/jwoglom/trio/tree/fix/atomic-log-file-append
+Base:   nightscout/Trio dev @ cb9e0ff
 
-SimpleLogReporter's appender seeks to end-of-file and then writes. Those are two
-separate operations, so anything appended in between is silently overwritten:
-the write lands at the offset the seek returned, which is no longer the end of
-the file. That is harmless while this reporter is the only writer of
-logs/log.txt, and stops being harmless once a pump driver plugin - loaded
-in-process, sharing the app container - mirrors its lines into the same file.
-
-O_APPEND plus a single write(2) makes the offset-seek and the write one atomic
-kernel operation. Two writers emitting 3000 lines each lost 1088 driver lines
-and 15 of Trio's own before; 0 of 6000 after.
+SimpleLogReporter seeks to end-of-file and then writes, so anything appended in
+between is overwritten. That matters once a pump driver plugin - loaded
+in-process, sharing the app container - also writes to logs/log.txt. O_APPEND
+plus a single write(2) makes it atomic.
 
 Apply from the Trio repository root:
     git apply TandemKit/docs/host-patches/trio-simplelogreporter-atomic-append.patch
 
 diff --git a/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift b/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
-index 2a02082..24c1c69 100644
+index 2a02082..a41d5df 100644
 --- a/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
 +++ b/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
 @@ -1,3 +1,4 @@
@@ -26,23 +20,16 @@ index 2a02082..24c1c69 100644
  import Foundation
  import SwiftDate
  
-@@ -111,15 +112,38 @@ extension SimpleLogReporter {
+@@ -111,15 +112,31 @@ extension SimpleLogReporter {
  }
  
  private extension Data {
-+    /// Appends to the log file with `O_APPEND` and a single `write(2)`.
++    /// `O_APPEND` + a single `write(2)`, so concurrent writers interleave whole lines. Seeking
++    /// to end-of-file and then writing overwrites anything appended in between, which matters
++    /// now that in-process pump driver plugins also write to `logs/log.txt`.
 +    ///
-+    /// Seeking to end-of-file and then writing is not atomic: anything appended between the
-+    /// seek and the write is silently overwritten, because the write lands at the now-stale
-+    /// offset. That is harmless while this reporter is the only writer, but pump driver
-+    /// plugins run in-process and share the app container, so a second writer on
-+    /// `logs/log.txt` would lose its own lines and corrupt ours. `O_APPEND` makes the
-+    /// offset-seek and the write a single atomic operation in the kernel, so concurrent
-+    /// writers interleave whole lines instead of clobbering each other.
-+    ///
-+    /// The `.atomic` fallback is kept for the case where the file cannot be opened at all.
-+    /// Note that it replaces the whole file, so it must not be reached while another writer
-+    /// is active - opening with `O_CREAT` above means it only applies to genuine failures.
++    /// The `.atomic` fallback replaces the whole file, so `O_CREAT` above keeps it reachable
++    /// only on genuine open failures.
      func append(fileURL: URL) throws {
 -        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
 -            defer {

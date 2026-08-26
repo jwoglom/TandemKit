@@ -4,14 +4,13 @@ import Foundation
 import Darwin
 #endif
 
-/// Severity of a driver log line, shared by every ``TandemLogDestination``.
+/// Severity of a driver log line.
 public enum TandemLogLevel: Int, Comparable, Sendable {
     case debug = 0
     case info = 1
     case warning = 2
     case error = 3
 
-    /// Label used by TandemKit's own log file.
     public var label: String {
         switch self {
         case .debug: return "DEBUG"
@@ -21,8 +20,7 @@ public enum TandemLogLevel: Int, Comparable, Sendable {
         }
     }
 
-    /// Prefix Trio's `Logger` puts in front of the message before handing it to its
-    /// `IssueReporter`, reproduced so driver lines read like every other line in Trio's log.
+    /// Matches the prefix Trio's `Logger` uses, so lines read alike in a shared log.
     public var trioPrefix: String {
         switch self {
         case .debug: return "DEV"
@@ -38,10 +36,9 @@ public enum TandemLogLevel: Int, Comparable, Sendable {
 }
 
 /// A sink for driver log lines. `TandemLogger` fans every line out to all registered
-/// destinations, so the same message can land in TandemKit's own file *and* in the host
-/// app's general log.
+/// destinations.
 public protocol TandemLogDestination: AnyObject {
-    /// Lines below this level are dropped by ``TandemLogRouter``.
+    /// Lines below this level are dropped.
     var minimumLevel: TandemLogLevel { get }
 
     func write(
@@ -55,15 +52,8 @@ public protocol TandemLogDestination: AnyObject {
     )
 }
 
-/// Registry + fan-out used by `TandemLogger`.
-///
-/// Hosts can replace the defaults during startup, e.g. to route driver lines through their
-/// own logging framework instead of writing the files directly:
-///
-/// ```swift
-/// TandemLogRouter.removeAllDestinations()
-/// TandemLogRouter.add(MyHostLogDestination())
-/// ```
+/// Registry + fan-out used by `TandemLogger`. Hosts can replace the defaults at startup to
+/// route driver lines through their own logging framework instead.
 public enum TandemLogRouter {
     private static let lock = NSRecursiveLock()
     private static var storage: [TandemLogDestination] = defaultDestinations()
@@ -86,18 +76,14 @@ public enum TandemLogRouter {
         storage.removeAll()
     }
 
-    /// Reinstates the built-in destinations (TandemKit's own file + the host's general log).
     public static func resetToDefaults() {
         lock.lock()
         defer { lock.unlock() }
         storage = defaultDestinations()
     }
 
-    /// Whether driver lines are mirrored into the host app's general log.
-    ///
-    /// Enabled by default. Turn it off to confine driver output to TandemKit's own file, e.g.
-    /// on a host whose log writer is not append-atomic (see
-    /// `docs/host-patches/trio-simplelogreporter-atomic-append.patch`).
+    /// Whether driver lines are mirrored into the host app's general log. On by default; turn
+    /// it off on a host whose log writer is not append-atomic.
     public static var isHostGeneralLogEnabled: Bool {
         get {
             #if canImport(Darwin)
@@ -132,8 +118,7 @@ public enum TandemLogRouter {
         line: Int
     ) {
         let date = Date()
-        // Serialized so two threads never interleave inside a destination. The append itself
-        // is also O_APPEND-atomic, which matters for the host log that Trio writes to as well.
+        // Serialized so two threads never interleave inside a destination.
         lock.lock()
         let targets = storage
         for destination in targets where level >= destination.minimumLevel {
@@ -164,31 +149,17 @@ public enum TandemLogRouter {
 
 /// Appends log lines to a file in the app container's `Documents` directory.
 ///
-/// Two instances are configured by default:
-///
-/// * ``tandem`` — TandemKit's own `Documents/tandem/tandem_log.txt`, rotated daily to
-///   `tandem_log_prev.txt`. TandemKit owns this file, so it rotates it.
-/// * ``hostGeneralLog`` — the host app's general log, `Documents/logs/log.txt`, which is
-///   what Trio's `SimpleLogReporter` writes and what Trio's "Share logs" bundles up. Because
-///   the driver runs in-process with Trio it shares the same container, so this is literally
-///   the same file. Rotation is deliberately **disabled** here: Trio owns that file and
-///   rotates it itself, and a second rotator would race it and could move a file out from
-///   under an in-flight write.
-///
-/// Sharing a file needs *both* writers to append atomically. Ours does; Trio's
-/// `SimpleLogReporter` seeks to end-of-file and then writes, which can overwrite lines
-/// appended in between. `docs/host-patches/trio-simplelogreporter-atomic-append.patch` fixes
-/// the host side; until it is applied, driver lines can be lost from the shared log (Trio's
-/// own lines can be too). Set ``TandemLogRouter/isHostGeneralLogEnabled`` to `false` to stop
-/// writing there. Nothing else depends on the shared log, so the driver's own file remains
-/// the authoritative record either way.
+/// ``hostGeneralLog`` is the host's own log — the driver runs in-process with Trio, so it is
+/// literally the file `SimpleLogReporter` writes and "Share logs" bundles up. Trio rotates it,
+/// so we must not. Sharing it also needs both writers to append atomically: ours does, Trio's
+/// does after `docs/host-patches/trio-simplelogreporter-atomic-append.patch`, and until that
+/// lands either side's lines can be lost. TandemKit's own file is the authoritative record.
 public final class TandemFileLogDestination: TandemLogDestination {
     public enum Format {
-        /// `[<date> <LEVEL>] File.swift - function#line: message` — TandemKit's own format.
+        /// `[<date> <LEVEL>] File.swift - function#line: message`
         case tandem
-        /// `<date> [<Category>] File.swift - function - line - LEVEL: message` — byte-for-byte
-        /// the layout Trio's `SimpleLogReporter` produces, so driver lines sort and parse
-        /// alongside Trio's own.
+        /// `<date> [<Category>] File.swift - function - line - LEVEL: message`, the layout
+        /// Trio's `SimpleLogReporter` produces.
         case trio(category: String)
     }
 
@@ -201,7 +172,6 @@ public final class TandemFileLogDestination: TandemLogDestination {
     private let fileManager = FileManager.default
     private let lock = NSLock()
 
-    /// TandemKit's driver-only log.
     public static let tandem = TandemFileLogDestination(
         directoryName: "tandem",
         fileName: "tandem_log.txt",
@@ -210,7 +180,7 @@ public final class TandemFileLogDestination: TandemLogDestination {
         minimumLevel: .info
     )
 
-    /// The host app's general log (Trio's `Documents/logs/log.txt`).
+    /// The host app's general log.
     public static let hostGeneralLog = TandemFileLogDestination(
         directoryName: "logs",
         fileName: "log.txt",
@@ -236,7 +206,7 @@ public final class TandemFileLogDestination: TandemLogDestination {
 
     public var path: String { fileURL.path }
 
-    /// Existing log files, newest first, for the "share logs" affordances.
+    /// Existing log files, newest first.
     public var existingLogFiles: [URL] {
         var items: [URL] = []
         if fileManager.fileExists(atPath: fileURL.path) {
@@ -288,7 +258,7 @@ public final class TandemFileLogDestination: TandemLogDestination {
             return
         }
 
-        // Only files we own get rotated; see the type doc for why the host log does not.
+        // Only files we own get rotated.
         guard let previousFileURL else { return }
 
         if let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path),
@@ -301,9 +271,8 @@ public final class TandemFileLogDestination: TandemLogDestination {
         }
     }
 
-    /// `O_APPEND` + a single `write(2)`, so a line cannot land in the middle of one written by
-    /// the host app. Seek-to-end then write, which is what both TandemKit and Trio used to do,
-    /// is not safe when two writers share a file.
+    /// `O_APPEND` + a single `write(2)`: seek-to-end then write is not safe when two writers
+    /// share a file.
     private func appendAtomically(_ entry: String) {
         guard let data = entry.data(using: .utf8) else { return }
 
