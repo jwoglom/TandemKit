@@ -1,40 +1,48 @@
-Subject: [PATCH] SimpleLogReporter: append to the log file atomically
+Subject: [PATCH] Fix non-atomic append in the log file writer
 
-TandemKit mirrors its driver log lines into Trio's general log
-(Documents/logs/log.txt) so pump activity shows up in a shared log bundle.
-Pump driver plugins run in-process and share the app container, so log.txt now
-has two writers.
+Upstream PR branch: https://github.com/jwoglom/trio/tree/fix/atomic-log-file-append
+Branched from nightscout/Trio dev @ cb9e0ff.
 
-SimpleLogReporter's appender seeks to end-of-file and then writes, which is not
-atomic: anything appended between the seek and the write is silently overwritten,
-because the write lands at the now-stale offset. Under contention this loses
-lines from *both* writers - a 3000-line-each stress test lost 1088 driver lines
-and 15 of Trio's own.
+SimpleLogReporter's appender seeks to end-of-file and then writes. Those are two
+separate operations, so anything appended in between is silently overwritten:
+the write lands at the offset the seek returned, which is no longer the end of
+the file. That is harmless while this reporter is the only writer of
+logs/log.txt, and stops being harmless once a pump driver plugin - loaded
+in-process, sharing the app container - mirrors its lines into the same file.
 
-Using O_APPEND plus a single write(2) makes the seek-and-write one atomic kernel
-operation, so concurrent writers interleave whole lines instead of clobbering
-each other. The same stress test then loses 0 of 6000 lines.
-
-The .atomic fallback is kept for the case where the file cannot be opened at all,
-but note it replaces the whole file and so must never be reached when a second
-writer is active.
+O_APPEND plus a single write(2) makes the offset-seek and the write one atomic
+kernel operation. Two writers emitting 3000 lines each lost 1088 driver lines
+and 15 of Trio's own before; 0 of 6000 after.
 
 Apply from the Trio repository root:
     git apply TandemKit/docs/host-patches/trio-simplelogreporter-atomic-append.patch
 
+diff --git a/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift b/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
+index 2a02082..24c1c69 100644
 --- a/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
 +++ b/Trio/Sources/Logger/IssueReporter/SimpleLogReporter.swift
-@@
+@@ -1,3 +1,4 @@
++import Darwin
+ import Foundation
+ import SwiftDate
+ 
+@@ -111,15 +112,38 @@ extension SimpleLogReporter {
+ }
+ 
  private extension Data {
 +    /// Appends to the log file with `O_APPEND` and a single `write(2)`.
 +    ///
 +    /// Seeking to end-of-file and then writing is not atomic: anything appended between the
 +    /// seek and the write is silently overwritten, because the write lands at the now-stale
-+    /// offset. That is harmless while `SimpleLogReporter` is the only writer, but pump driver
-+    /// plugins run in-process and share this container, so a second writer on `logs/log.txt`
-+    /// would both lose its own lines and corrupt Trio's. `O_APPEND` makes the offset-seek and
-+    /// the write a single atomic operation in the kernel, so concurrent writers interleave
-+    /// whole lines instead of clobbering each other.
++    /// offset. That is harmless while this reporter is the only writer, but pump driver
++    /// plugins run in-process and share the app container, so a second writer on
++    /// `logs/log.txt` would lose its own lines and corrupt ours. `O_APPEND` makes the
++    /// offset-seek and the write a single atomic operation in the kernel, so concurrent
++    /// writers interleave whole lines instead of clobbering each other.
++    ///
++    /// The `.atomic` fallback is kept for the case where the file cannot be opened at all.
++    /// Note that it replaces the whole file, so it must not be reached while another writer
++    /// is active - opening with `O_CREAT` above means it only applies to genuine failures.
      func append(fileURL: URL) throws {
 -        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
 -            defer {

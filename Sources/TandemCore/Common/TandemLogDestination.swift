@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#endif
+
 /// Severity of a driver log line, shared by every ``TandemLogDestination``.
 public enum TandemLogLevel: Int, Comparable, Sendable {
     case debug = 0
