@@ -3,136 +3,62 @@ import Foundation
 #if canImport(OSLog)
 import OSLog
 
+/// Driver-facing logger.
+///
+/// Every line goes to Apple's unified log (`com.jwoglom.TandemKit`) and, at `.info` and above,
+/// to each destination registered with ``TandemLogRouter``. By default that is TandemKit's own
+/// `Documents/tandem/tandem_log.txt` **and** the host app's general log
+/// (`Documents/logs/log.txt`, i.e. the file Trio's `SimpleLogReporter` writes and that Trio's
+/// "Share logs" collects), so driver activity shows up in a Trio log bundle without the user
+/// having to export the Tandem log separately.
 public final class TandemLogger {
+    private let category: String
     private let logger: Logger
-    private let fileManager = FileManager.default
 
     public init(category: String) {
+        self.category = category
         logger = Logger(subsystem: "com.jwoglom.TandemKit", category: category)
     }
 
     public func debug(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let message = "\(file.file) - \(function)#\(line): \(msg)"
         logger.debug("\(message, privacy: .public)")
+        emit(.debug, msg, file, function, line)
     }
 
     public func info(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let message = "\(file.file) - \(function)#\(line): \(msg)"
         logger.info("\(message, privacy: .public)")
-        writeToFile(message, .info)
+        emit(.info, msg, file, function, line)
     }
 
     public func warning(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let message = "\(file.file) - \(function)#\(line): \(msg)"
         logger.warning("\(message, privacy: .public)")
-        writeToFile(message, .notice)
+        emit(.warning, msg, file, function, line)
     }
 
     public func error(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let message = "\(file.file) - \(function)#\(line): \(msg)"
         logger.error("\(message, privacy: .public)")
-        writeToFile(message, .error)
+        emit(.error, msg, file, function, line)
     }
 
-    private func writeToFile(_ msg: String, _ type: OSLogEntryLog.Level) {
-        if !fileManager.fileExists(atPath: logDir) {
-            try? fileManager.createDirectory(
-                atPath: logDir,
-                withIntermediateDirectories: false,
-                attributes: nil
-            )
-        }
-
-        if !fileManager.fileExists(atPath: logFile) {
-            createFile(at: startOfDay)
-        } else if let attributes = try? fileManager.attributesOfItem(atPath: logFile),
-                  let creationDate = attributes[.creationDate] as? Date, creationDate < startOfDay
-        {
-            try? fileManager.removeItem(atPath: logFilePrev)
-            try? fileManager.moveItem(atPath: logFile, toPath: logFilePrev)
-            createFile(at: startOfDay)
-        }
-
-        let logEntry = "[\(dateFormatter.string(from: Date())) \(getLevel(type))] \(msg)\n"
-        let data = logEntry.data(using: .utf8)!
-        try? data.append(fileURL: URL(fileURLWithPath: logFile))
+    private func emit(_ level: TandemLogLevel, _ msg: String, _ file: String, _ function: String, _ line: Int) {
+        TandemLogRouter.emit(
+            category: category,
+            level: level,
+            message: msg,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 
-    private var logFile: String {
-        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log.txt").path
-    }
-
-    private var logDir: String {
-        getDocumentsDirectory().appendingPathComponent("tandem").path
-    }
-
-    private var logFilePrev: String {
-        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log_prev.txt").path
-    }
-
-    private var startOfDay: Date {
-        Calendar.current.startOfDay(for: Date())
-    }
-
-    private func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let documentsDirectory = paths[0]
-        return documentsDirectory
-    }
-
-    private var dateFormatter: DateFormatter {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        return dateFormatter
-    }
-
-    private func createFile(at date: Date) {
-        fileManager.createFile(atPath: logFile, contents: nil, attributes: [.creationDate: date])
-    }
-
-    private func getLevel(_ type: OSLogEntryLog.Level) -> String {
-        switch type {
-        case .info:
-            return "INFO"
-        case .notice:
-            return "WARNING"
-        case .error:
-            return "ERROR"
-        case .fault:
-            return "FAULT"
-        case .debug:
-            return "DEBUG"
-        default:
-            return "UNKNOWN"
-        }
-    }
-
+    /// TandemKit's own log files, for the driver settings "share logs" affordance. The host's
+    /// general log is intentionally not included here — the host app shares that one itself.
     func getDebugLogs() -> [URL] {
-        var items: [URL] = []
-
-        if fileManager.fileExists(atPath: logFile) {
-            items.append(URL(fileURLWithPath: logFile))
-        }
-
-        if fileManager.fileExists(atPath: logFilePrev) {
-            items.append(URL(fileURLWithPath: logFilePrev))
-        }
-
-        return items
-    }
-}
-
-private extension Data {
-    func append(fileURL: URL) throws {
-        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
-            defer {
-                fileHandle.closeFile()
-            }
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(self)
-        } else {
-            try write(to: fileURL, options: .atomic)
-        }
+        TandemFileLogDestination.tandem.existingLogFiles
     }
 }
 
@@ -147,26 +73,43 @@ import Logging
 // file logging are unavailable, so route through swift-log. The public API is
 // identical to the OSLog implementation above.
 public final class TandemLogger {
+    private let category: String
     private let logger: Logger
 
     public init(category: String) {
+        self.category = category
         logger = Logger(label: "com.jwoglom.TandemKit.\(category)")
     }
 
     public func debug(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         logger.debug("\(file.file) - \(function)#\(line): \(msg)")
+        emit(.debug, msg, file, function, line)
     }
 
     public func info(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         logger.info("\(file.file) - \(function)#\(line): \(msg)")
+        emit(.info, msg, file, function, line)
     }
 
     public func warning(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         logger.warning("\(file.file) - \(function)#\(line): \(msg)")
+        emit(.warning, msg, file, function, line)
     }
 
     public func error(_ msg: String, file: String = #file, _ function: String = #function, _ line: Int = #line) {
         logger.error("\(file.file) - \(function)#\(line): \(msg)")
+        emit(.error, msg, file, function, line)
+    }
+
+    private func emit(_ level: TandemLogLevel, _ msg: String, _ file: String, _ function: String, _ line: Int) {
+        TandemLogRouter.emit(
+            category: category,
+            level: level,
+            message: msg,
+            file: file,
+            function: function,
+            line: line
+        )
     }
 
     func getDebugLogs() -> [URL] {
