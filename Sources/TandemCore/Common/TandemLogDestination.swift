@@ -1,7 +1,7 @@
 import Foundation
 
-#if canImport(Darwin)
-import Darwin
+#if canImport(System)
+import System
 #endif
 
 /// Severity of a driver log line.
@@ -274,24 +274,16 @@ public final class TandemFileLogDestination: TandemLogDestination {
     /// `O_APPEND` + a single `write(2)`: seek-to-end then write is not safe when two writers
     /// share a file.
     private func appendAtomically(_ entry: String) {
-        guard let data = entry.data(using: .utf8) else { return }
+        guard let data = entry.data(using: .utf8),
+              let descriptor = try? FileDescriptor.open(
+                  FilePath(fileURL.path),
+                  .writeOnly,
+                  options: [.append, .create],
+                  permissions: [.ownerReadWrite, .groupRead, .otherRead]
+              )
+        else { return }
 
-        let descriptor = open(fileURL.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-        guard descriptor >= 0 else { return }
-        defer { close(descriptor) }
-
-        data.withUnsafeBytes { buffer in
-            guard let base = buffer.baseAddress else { return }
-            var written = 0
-            while written < buffer.count {
-                let result = Darwin.write(descriptor, base.advanced(by: written), buffer.count - written)
-                if result <= 0 {
-                    if errno == EINTR { continue }
-                    break
-                }
-                written += result
-            }
-        }
+        try? descriptor.closeAfter { _ = try descriptor.writeAll(data) }
     }
 
     private static let dateFormatter: DateFormatter = {
