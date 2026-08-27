@@ -1,0 +1,101 @@
+# Pull-request CI: everything that can be checked without a macOS runner.
+#
+# This is the only workflow that runs on a pull request. It builds and tests
+# the Linux slice of the package (TandemCore, via the LinuxShims -- see
+# Package.swift) and validates TandemKit.xcodeproj's source membership, which
+# is plain Ruby and needs no Xcode.
+#
+# The macOS half -- TandemKitTests in the simulator and the Trio app build and
+# test -- runs in integration.yml on pushes to main/dev, and on demand for a
+# pull request labelled `trigger-ci`.
+name: CI (Linux)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+  push:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+jobs:
+  linux-build-test:
+    name: Build and test (Linux)
+    runs-on: ubuntu-latest
+    # Pinned to the toolchain scripts/claude-web-setup.sh installs, so a
+    # session that passes `swift test` locally sees the same compiler here.
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Cache SwiftPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/.cache/org.swift.swiftpm
+          key: linux-swiftpm-${{ hashFiles('Package.resolved', 'Package.swift') }}
+          restore-keys: |
+            linux-swiftpm-
+
+      - name: Build (including test targets)
+        run: swift build --build-tests
+
+      - name: Test
+        run: |
+          set -o pipefail
+          swift test --skip-build 2>&1 | tee swift-test.log
+
+      # An empty test bundle passes, which is exactly how TandemKitTests sat
+      # broken for months. Insist on a positive executed-test count so "green"
+      # cannot mean "nothing ran".
+      - name: Check that tests actually ran
+        run: |
+          set -euo pipefail
+          EXECUTED="$(
+            grep -oE 'Executed [0-9]+ test' swift-test.log \
+              | grep -oE '[0-9]+' \
+              | sort -rn \
+              | head -1 \
+              || true
+          )"
+          if [[ -z "${EXECUTED}" || "${EXECUTED}" -eq 0 ]]; then
+            echo "No tests were executed (or swift test changed its reporting format)."
+            exit 1
+          fi
+          echo "TandemCoreTests: ${EXECUTED} tests executed." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload test log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-log
+          path: swift-test.log
+
+  xcodeproj-source-membership:
+    name: Validate Xcode source membership
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Validate Xcode source membership (all targets)
+        run: |
+          set -euo pipefail
+          gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check

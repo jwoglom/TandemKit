@@ -19,8 +19,8 @@ import PackageDescription
 //
 // The unit tests are deliberately not declared here for the same reason: they
 // `@testable import TandemKit` and expect that one module. They are built and
-// run by the TandemKitTests target in TandemKit.xcodeproj; see
-// .github/workflows/unit-tests.yml.
+// run by the TandemKitTests target in TandemKit.xcodeproj; see the
+// tandemkit-tests job in .github/workflows/integration.yml.
 
 // On Linux there is no Xcode project to fall back on, and Claude Code web
 // sessions run in Linux containers (scripts/claude-web-setup.sh), so `swift
@@ -68,8 +68,8 @@ let package = Package(
             path: "Tests/TandemCoreTests"
         )
         // Tests/TandemKitTests is not declared: it drives TandemPumpManager and
-        // the rest of the iOS-only layer. It is built and run on macOS by
-        // .github/workflows/unit-tests.yml.
+        // the rest of the iOS-only layer. It is built and run on macOS by the
+        // tandemkit-tests job in .github/workflows/integration.yml.
     ]
 )
 

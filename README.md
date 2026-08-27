@@ -28,9 +28,10 @@ Use the same LoopKit revision Trio's submodule points at. Upstream
 `LoopKit/LoopKit` is not a drop-in substitute -- it has no `Pluggable`, which
 `TandemPumpManager` conforms to.
 
-`.github/workflows/unit-tests.yml` does exactly this and is the reference for
-the setup: it checks out the pinned LoopKit, writes a two-project workspace, and
-runs the `TandemKitTests` scheme against an iOS simulator.
+The `tandemkit-tests` job in `.github/workflows/integration.yml` does exactly
+this and is the reference for the setup: it checks out the pinned LoopKit,
+builds its two framework targets into `BUILT_PRODUCTS_DIR`, and runs the
+`TandemKitTests` scheme against an iOS simulator.
 
 ### Host apps must embed the shared SwiftPM products
 
@@ -87,11 +88,31 @@ directory cannot be silently left out of the CI run. A test that no longer
 compiles has to be fixed or deleted. The same applies to `Sources/` — a
 directory holding Swift files that no target claims fails the check too.
 
-CI runs `--check` in every workflow, and `unit-tests.yml` additionally fails the
-run if the test bundle executes zero tests, so "green" cannot mean "nothing
-ran".
+`.github/workflows/ci.yml` runs `--check` on every pull request, and both it and
+the `tandemkit-tests` job in `integration.yml` fail the run if the test bundle
+executes zero tests, so "green" cannot mean "nothing ran".
 
 ## Swift Package Manager
 
-`Package.swift` describes the source layout but cannot currently compile it; see
-the comment at the top of the manifest for why. Use the Xcode project.
+On Apple platforms `Package.swift` describes the source layout but cannot
+compile it; see the comment at the top of the manifest for why. Use the Xcode
+project.
+
+On Linux the manifest declares the subset that does build -- `Sources/TandemCore`
+against the source shims in `LinuxShims/`, plus `Tests/TandemCoreTests` -- so
+`swift build` and `swift test` work with a plain swift.org toolchain and no
+Xcode. That is what CI checks on every pull request.
+
+## Continuous integration
+
+CI is split in two, by what a check actually needs:
+
+| Workflow | Runs on | What it does |
+| --- | --- | --- |
+| `ci.yml` (CI (Linux)) | every pull request and every push to `main`/`dev` | `swift build` + `swift test` of the Linux slice in a `swift:6.1.2-noble` container, and the `check_xcodeproj_source_membership.rb --check` validation (plain Ruby, no Xcode needed) |
+| `integration.yml` (Integration (macOS)) | pushes to `main`/`dev`, `workflow_dispatch`, and pull requests labelled `trigger-ci` | `TandemKitTests` in the iOS Simulator against a pinned LoopKit, and the real integration: build the Trio app with this TandemKit as its submodule, then build and run the Trio test suite |
+
+Pull requests deliberately get the Linux tier only -- macOS runners are slow and
+scarce, and everything that can be checked without one is checked there. Put the
+`trigger-ci` label on a pull request to run the macOS tier against it before
+merge.

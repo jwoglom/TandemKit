@@ -1,0 +1,493 @@
+# Integration CI: the macOS half, in the iOS Simulator.
+#
+# Runs on pushes to the integration branches (main, dev) rather than on every
+# pull request -- macOS runners are slow and scarce, and a PR gets the Linux
+# checks in ci.yml. To run this against an open pull request anyway, add the
+# `trigger-ci` label to it.
+#
+# Two jobs:
+#   tandemkit-tests -- TandemKitTests from TandemKit.xcodeproj, against LoopKit
+#                      built from a pinned public revision. No secrets, so it
+#                      also works for forks.
+#   trio            -- the real integration: build the Trio app with this
+#                      TandemKit wired in as its submodule, then build and run
+#                      the Trio test suite. Needs TRIO_REPO_TOKEN.
+name: Integration (macOS)
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request_target:
+    types: [ labeled ]
+    branches: [ main, dev ]
+  workflow_dispatch:
+    inputs:
+      trio_repo:
+        description: "Repo to build (must contain TandemKit submodule at path TandemKit)"
+        required: false
+        default: "jwoglom/Trio-tandem"
+      trio_ref:
+        description: "Git ref (branch/tag/SHA) for trio_repo"
+        required: false
+        default: ""
+
+env:
+  XCODEBUILD_COMMON_FLAGS: >-
+    -skipMacroValidation
+    -skipPackagePluginValidation
+
+jobs:
+  # The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
+  # BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own --
+  # some other project has to produce them first. The `trio` job below gets that
+  # from Trio's workspace, which needs the private Trio repo and a secret.
+  #
+  # Instead, check out LoopKit (public, pinned below) next to this repo and build
+  # its two framework targets straight into the shared derived data. That keeps
+  # this job free of Trio and of secrets, so it also runs for forks.
+  #
+  # Those frameworks only depend on the pinned LoopKit revision and the Xcode
+  # version, so they are cached under exactly that key and rebuilt only when one
+  # of the two moves. On a cache hit the LoopKit checkout is skipped entirely and
+  # TandemKit is built with -project (no workspace), which keeps the LoopKit
+  # targets out of the build graph so nothing can decide to recompile them.
+  #
+  # LOOPKIT_REPOSITORY/LOOPKIT_REVISION below mirror Trio's LoopKit submodule,
+  # which is the real source of truth -- Trio pulls its dependencies in as git
+  # submodules (see .gitmodules in nightscout/Trio), and TandemKit is one of
+  # them. Upstream LoopKit/LoopKit is not interchangeable with Trio's
+  # loopandlearn fork: upstream has no `Pluggable`, which TandemPumpManager
+  # conforms to. When Trio bumps its LoopKit submodule, bump the revision here
+  # to match.
+  tandemkit-tests:
+    name: TandemKitTests (iOS Simulator)
+    if: >
+      github.event_name != 'pull_request_target' ||
+      github.event.label.name == 'trigger-ci'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      DERIVED_DATA_PATH: DerivedData
+      PRODUCTS_DIR: DerivedData/Build/Products/Debug-iphonesimulator
+      LOOPKIT_PRODUCTS_CACHE: LoopKitProducts
+      LOOPKIT_REPOSITORY: loopandlearn/LoopKit
+      LOOPKIT_REVISION: 0229bb18d30b095420aae1e8fa04c37794e0a378
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Select an available iPhone simulator
+        run: python3 TandemKit/scripts/ci/select_simulator.py
+
+      # First boot of a simulator device on a fresh runner takes ~5-6 minutes,
+      # almost all of it CoreSimulator running one-shot data-migration plugins.
+      # `simctl boot` only kicks the boot off -- simd carries it out, so this
+      # returns in a second or two and the device keeps booting while we check
+      # out and build. The wait happens in "Wait for the simulator to finish
+      # booting", immediately before the tests, by which point the boot is
+      # usually done or nearly so. Nothing before that step needs a live
+      # simulator: xcodebuild only needs the destination to *exist* to pick an
+      # SDK and architecture.
+      - name: Start booting the simulator in the background
+        run: xcrun simctl boot "${SIMULATOR_UDID}" || true
+
+      # Keyed on the pinned LoopKit revision and the Xcode version, and nothing
+      # else -- those are the only two inputs to these frameworks. The key is
+      # deliberately narrow so it stays a hit across branches and the ~hundreds
+      # of MB are re-uploaded only when the pin or the toolchain moves.
+      - name: Cache prebuilt LoopKit frameworks
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.LOOPKIT_PRODUCTS_CACHE }}
+          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loopkit-frameworks-${{ env.LOOPKIT_REVISION }}
+
+      # Don't trust the restore blindly: a partial or truncated cache entry
+      # should fall back to a real build rather than fail the job at link time.
+      - name: Check for usable prebuilt LoopKit frameworks
+        id: loopkit
+        run: |
+          set -euo pipefail
+          if [[ -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKit.framework" && -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKitUI.framework" ]]; then
+            echo "Using cached LoopKit frameworks."
+            echo "prebuilt=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No usable cached LoopKit frameworks; they will be built from source."
+            echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Checkout LoopKit at the pinned revision
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LOOPKIT_REPOSITORY }}
+          ref: ${{ env.LOOPKIT_REVISION }}
+          path: LoopKit
+          fetch-depth: 1
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
+
+      # LoopKit.xcodeproj shares schemes only for its example app and test
+      # bundles, and xcodebuild refuses -target together with -derivedDataPath,
+      # so generate a scheme per target and share it. Generated schemes land in
+      # xcuserdata, which xcodebuild resolves against $USER; move them to
+      # xcshareddata so the lookup does not depend on who the runner runs as.
+      - name: Generate LoopKit schemes
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        run: |
+          set -euo pipefail
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby -e '
+            require "xcodeproj"
+            Xcodeproj::Project.open("LoopKit/LoopKit.xcodeproj").recreate_user_schemes
+          '
+          mkdir -p "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes"
+          for scheme in LoopKit LoopKitUI; do
+            find "LoopKit/LoopKit.xcodeproj/xcuserdata" -name "${scheme}.xcscheme" -exec \
+              cp {} "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes/${scheme}.xcscheme" \;
+          done
+          xcodebuild -project "LoopKit/LoopKit.xcodeproj" -list
+
+      # LoopKitUI depends on LoopKit, but build both explicitly so a missing
+      # dependency edge upstream cannot leave us with half of what TandemKit
+      # links against.
+      - name: Build LoopKit frameworks
+        if: steps.loopkit.outputs.prebuilt != 'true'
+        run: |
+          set -o pipefail
+          for scheme in LoopKit LoopKitUI; do
+            xcodebuild build \
+              -project "LoopKit/LoopKit.xcodeproj" \
+              -scheme "${scheme}" \
+              -configuration Debug \
+              -destination "${SIMULATOR_DESTINATION}" \
+              -derivedDataPath "${DERIVED_DATA_PATH}" \
+              ${XCODEBUILD_COMMON_FLAGS} \
+              -quiet \
+              ONLY_ACTIVE_ARCH=YES \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              2>&1 | tee -a "xcodebuild-loopkit.log"
+          done
+          mkdir -p "${LOOPKIT_PRODUCTS_CACHE}"
+          rsync -a --delete "${PRODUCTS_DIR}/" "${LOOPKIT_PRODUCTS_CACHE}/"
+
+      # TandemKit.xcodeproj resolves LoopKit.framework/LoopKitUI.framework out of
+      # BUILT_PRODUCTS_DIR, so putting them there is all the wiring the build
+      # needs -- which is why the TandemKit build below can use -project and skip
+      # the LoopKit project entirely.
+      - name: Stage LoopKit frameworks into BUILT_PRODUCTS_DIR
+        run: |
+          set -euo pipefail
+          mkdir -p "${PRODUCTS_DIR}"
+          rsync -a "${LOOPKIT_PRODUCTS_CACHE}/" "${PRODUCTS_DIR}/"
+          for framework in LoopKit LoopKitUI; do
+            if [[ ! -d "${PRODUCTS_DIR}/${framework}.framework" ]]; then
+              echo "${framework}.framework is missing from ${PRODUCTS_DIR} after staging."
+              exit 1
+            fi
+          done
+
+      - name: Build TandemKitTests for execution
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -project "TandemKit/TandemKit.xcodeproj" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      # -disableAutomaticPackageResolution is safe here and not on the build
+      # above: build-for-testing has already resolved the graph into
+      # DerivedData/SourcePackages, so re-resolving is pure network latency.
+      - name: Run TandemKitTests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -project "TandemKit/TandemKit.xcodeproj" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            -resultBundlePath "TandemKitTests.xcresult" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -disableAutomaticPackageResolution \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-test.log"
+
+      # An .xctest bundle with no test cases in it passes. That is exactly how
+      # the TandemKitTests target sat broken for so long -- an empty Sources
+      # build phase, a green build, and nothing actually run. Insist the run
+      # reports a positive test count so "green" cannot mean "empty".
+      - name: Check that tests actually ran
+        run: |
+          set -euo pipefail
+          EXECUTED="$(
+            grep -oE 'Executed [0-9]+ test' xcodebuild-test.log \
+              | grep -oE '[0-9]+' \
+              | sort -rn \
+              | head -1 \
+              || true
+          )"
+          if [[ -z "${EXECUTED}" ]]; then
+            echo "Could not find an 'Executed N tests' line in the xcodebuild output."
+            echo "Either the tests did not run or xcodebuild changed its reporting format."
+            exit 1
+          fi
+          if [[ "${EXECUTED}" -eq 0 ]]; then
+            echo "The test bundle ran 0 tests."
+            exit 1
+          fi
+          echo "Executed ${EXECUTED} tests."
+          echo "TandemKitTests: ${EXECUTED} tests executed." >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload test logs/results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tandemkit-unit-test-artifacts
+          path: |
+            xcodebuild-loopkit.log
+            xcodebuild-build-for-testing.log
+            xcodebuild-test.log
+            TandemKitTests.xcresult
+
+  trio:
+    name: Trio app build and tests (iOS Simulator)
+    if: >
+      github.event_name != 'pull_request_target' ||
+      github.event.label.name == 'trigger-ci'
+    runs-on: macos-latest
+    # A warm DerivedData cache builds Trio in ~9 minutes, but the first run
+    # after the cache generation marker moves has to compile everything, which
+    # does not fit in 25.
+    timeout-minutes: 50
+    environment: ${{ github.event_name == 'pull_request_target' && 'pr-testing' || '' }}
+    env:
+      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
+      TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
+      DERIVED_DATA_PATH: DerivedData
+      SPM_CACHE_PATH: .spm
+      TRIO_REPO_TOKEN: ${{ secrets.TRIO_REPO_TOKEN }}
+      # Ad-hoc ("sign to run locally") signing, which is what a simulator build
+      # normally gets from Xcode. It must NOT be turned off: CODE_SIGNING_ALLOWED=NO
+      # leaves the app with no signature and therefore no entitlements, and an iOS
+      # Simulator app with no application-identifier entitlement gets an error back
+      # from every Security-framework call. Trio asserts on a failed keychain read
+      # (BaseKeychain reportError -> assertionFailure), so the unsigned test host
+      # traps during launch and xcodebuild reports "Early unexpected exit ...
+      # Test crashed with signal trap before establishing connection".
+      #
+      # Manual style with the "-" identity keeps this hermetic: the simulator SDK
+      # needs no provisioning profile and no Apple Developer account, so nothing
+      # here depends on secrets. The plain app build below uses the same flags on
+      # purpose -- signing settings are part of Xcode's build description, so
+      # building the app under one set and the tests under another would
+      # invalidate DerivedData between the two steps.
+      SIMULATOR_CODE_SIGN_FLAGS: >-
+        CODE_SIGNING_ALLOWED=YES
+        CODE_SIGNING_REQUIRED=YES
+        CODE_SIGN_STYLE=Manual
+        CODE_SIGN_IDENTITY=-
+        PROVISIONING_PROFILE_SPECIFIER=
+    steps:
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Ensure TRIO_REPO_TOKEN is available (required for private Trio repo)
+        if: ${{ env.TRIO_REPO == 'jwoglom/Trio-tandem' && env.TRIO_REPO_TOKEN == '' }}
+        run: |
+          echo "Missing required secret TRIO_REPO_TOKEN."
+          echo "This is expected for forked PRs (secrets are not provided)."
+          echo "Fix: run CI from a branch in the main repo, or enable secrets for fork PRs in repo Settings -> Actions."
+          exit 1
+
+      - name: Checkout Trio app repository (default branch, no submodules)
+        if: env.TRIO_REF == ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TRIO_REPO }}
+          path: trio
+          submodules: false
+          fetch-depth: 1
+          # For private repos in other orgs, set TRIO_REPO_TOKEN as a repo secret.
+          token: ${{ env.TRIO_REPO_TOKEN }}
+
+      - name: Checkout Trio app repository (specific ref, no submodules)
+        if: env.TRIO_REF != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TRIO_REPO }}
+          ref: ${{ env.TRIO_REF }}
+          path: trio
+          submodules: false
+          fetch-depth: 1
+          token: ${{ env.TRIO_REPO_TOKEN }}
+
+      - name: Remove Trio TandemKit submodule working tree placeholder
+        run: rm -rf "trio/TandemKit"
+
+      - name: Checkout TandemKit under test into Trio/TandemKit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          path: trio/TandemKit
+          fetch-depth: 1
+
+      - name: Select an available iPhone simulator
+        run: python3 trio/TandemKit/scripts/ci/select_simulator.py
+
+      # See the note in the tandemkit-tests job: this only kicks the boot off,
+      # and the wait happens immediately before the tests run.
+      - name: Start booting the simulator in the background
+        run: xcrun simctl boot "${SIMULATOR_UDID}" || true
+
+      - name: Initialize Trio submodules (excluding TandemKit)
+        run: |
+          set -euo pipefail
+          cd trio
+
+          if [[ ! -f ".gitmodules" ]]; then
+            exit 0
+          fi
+
+          git submodule sync --recursive
+
+          submodule_paths=()
+          while IFS= read -r path; do
+            [[ -z "${path}" ]] && continue
+            [[ "${path}" == "TandemKit" ]] && continue
+            submodule_paths+=("${path}")
+          done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+          if [[ ${#submodule_paths[@]} -eq 0 ]]; then
+            exit 0
+          fi
+
+          git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+            ${{ env.SPM_CACHE_PATH }}
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-${{ hashFiles('trio/**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-spm-
+
+      # `-v2-` is a cache generation marker. Bump it whenever a build setting
+      # changes in a way the hashed files do not capture -- the signing flags
+      # above are part of Xcode's build description, so a snapshot taken under
+      # the old flags forces a full rebuild on every restore and, because the
+      # key already exists, never gets replaced.
+      - name: Cache Xcode DerivedData intermediates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/Build
+            ${{ env.DERIVED_DATA_PATH }}/ModuleCache.noindex
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved', 'trio/**/*.xcodeproj/project.pbxproj', 'trio/**/*.xcworkspace/contents.xcworkspacedata') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-${{ hashFiles('trio/**/Package.resolved') }}-
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-dd-trio-v2-
+
+      - name: Build the Trio app (iOS Simulator)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace "trio/Trio.xcworkspace" \
+            -scheme "Trio" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
+            2>&1 | tee "xcodebuild-build.log"
+
+      - name: Build Trio tests for execution (no test run)
+        run: |
+          set -o pipefail
+          xcodebuild build-for-testing \
+            -workspace "trio/Trio.xcworkspace" \
+            -scheme "Trio Tests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -quiet \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
+            2>&1 | tee "xcodebuild-build-for-testing.log"
+
+      - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      - name: Run Trio tests without rebuilding
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building \
+            -workspace "trio/Trio.xcworkspace" \
+            -scheme "Trio Tests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            -resultBundlePath "TrioTests.xcresult" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            -retry-tests-on-failure \
+            -quiet \
+            ${SIMULATOR_CODE_SIGN_FLAGS} \
+            2>&1 | tee "xcodebuild-test.log"
+
+      - name: Upload test logs/results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trio-test-artifacts
+          path: |
+            xcodebuild-build.log
+            xcodebuild-build-for-testing.log
+            xcodebuild-test.log
+            TrioTests.xcresult
