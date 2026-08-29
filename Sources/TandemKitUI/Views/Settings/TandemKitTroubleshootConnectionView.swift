@@ -5,6 +5,20 @@ struct TandemKitTroubleshootConnectionView: View {
 
     var body: some View {
         List {
+            if let connectionIssue = viewModel.connectionIssue {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(connectionIssue.title)
+                            .font(Font.subheadline.weight(.bold))
+                            .foregroundColor(.red)
+                        Text(connectionIssue.detail(appName: viewModel.appName))
+                            .font(.footnote)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
             Section(header: Text("Status", comment: "Header for connection status section")) {
                 statusRow(
                     label: String(localized: "Pump connection", comment: "Label for pump connection status"),

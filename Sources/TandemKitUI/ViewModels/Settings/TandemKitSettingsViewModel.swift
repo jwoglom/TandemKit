@@ -69,7 +69,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
-    @Published var isConnected: Bool = false
+    /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top of the
+    /// screen, which names the specific problem rather than only that there is one — "Bluetooth
+    /// Off" and "Pump Disconnected" call for different things from the user.
+    @Published var connectionIssue: PumpConnectionIssue?
     @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
@@ -147,7 +150,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
-        isConnected = false
+        connectionIssue = pumpManager?.connectionIssue
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalDose = pumpManager?.state.basalDose
 
@@ -436,7 +439,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
-            self.isConnected = pumpManager.state.isConnected
+            self.connectionIssue = pumpManager.connectionIssue
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ

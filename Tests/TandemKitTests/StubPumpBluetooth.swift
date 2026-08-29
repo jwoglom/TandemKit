@@ -19,6 +19,9 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     weak var pumpManager: TandemPumpManager?
     var manager: CBCentralManager? { nil }
+    /// Defaults to a working radio so a test that says nothing about Bluetooth exercises the pump
+    /// link rather than a phone-level fault.
+    var bluetoothState: CBManagerState = .poweredOn
 
     private(set) var sentMessages: [Message] = []
     private(set) var ensureConnectedCount = 0
