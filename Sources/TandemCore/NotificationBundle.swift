@@ -32,8 +32,8 @@ public class NotificationBundle {
     ///
     /// When `apiVersion` is provided, requests whose `minApi` exceeds it are filtered out
     /// (e.g. `ActiveAamBitsRequest` requires Mobi API v3.5).
-    public static func allRequests(apiVersion: ApiVersion? = nil) -> [Message] {
-        let requests: [Message] = [
+    public static func allRequests(apiVersion: ApiVersion? = nil) -> [any PumpRequest] {
+        let requests: [any PumpRequest] = [
             AlertStatusRequest(),
             AlarmStatusRequest(),
             CGMAlertStatusRequest(),

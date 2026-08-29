@@ -192,6 +192,8 @@ public enum MessageRegistry {
         ControlIQInfoV2Response.self,
         ControlIQSleepScheduleRequest.self,
         ControlIQSleepScheduleResponse.self,
+        CreateHistoryLogRequest.self,
+        CreateHistoryLogResponse.self,
         CreateIDPRequest.self,
         CreateIDPResponse.self,
         CurrentActiveIdpValuesRequest.self,

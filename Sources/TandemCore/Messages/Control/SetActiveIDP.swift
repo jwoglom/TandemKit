@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to activate an insulin delivery profile.
-public class SetActiveIDPRequest: Message {
+public class SetActiveIDPRequest: PumpRequest {
+    public typealias Response = SetActiveIDPResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-20)),
         size: 2,

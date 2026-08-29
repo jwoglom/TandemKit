@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request additional pump feature information (API 2.5+).
-public class PumpFeaturesV2Request: Message {
+public class PumpFeaturesV2Request: PumpRequest {
+    public typealias Response = PumpFeaturesV2Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-96)),
         size: 1,

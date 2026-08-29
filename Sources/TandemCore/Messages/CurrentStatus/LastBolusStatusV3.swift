@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request last bolus status (V3) with dual standard/extended bolus structure.
-public class LastBolusStatusV3Request: Message {
+public class LastBolusStatusV3Request: PumpRequest {
+    public typealias Response = LastBolusStatusV3Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-70)),
         size: 0,

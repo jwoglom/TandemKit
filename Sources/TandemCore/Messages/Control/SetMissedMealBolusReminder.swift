@@ -9,7 +9,9 @@ import Foundation
 ///   [4-5] endTime          uint16  - end time in minutes since midnight
 ///   [6]   selectedDays     uint8   - days-of-week bitmask (bit 0=Mon, 1=Tue, ..., 6=Sun)
 ///   [7]   bitmask          uint8   - change bitmask (bits: 0=enabled, 1=startTime, 2=endTime, 3=selectedDays)
-public class SetMissedMealBolusReminderRequest: Message {
+public class SetMissedMealBolusReminderRequest: PumpRequest {
+    public typealias Response = SetMissedMealBolusReminderResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-38)),
         size: 8,

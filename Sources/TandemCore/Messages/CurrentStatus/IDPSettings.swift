@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the settings for a specific insulin delivery profile ID.
-public class IDPSettingsRequest: Message {
+public class IDPSettingsRequest: PumpRequest {
+    public typealias Response = IDPSettingsResponse
+
     public static let props = MessageProps(
         opCode: 64,
         size: 1,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// First half of the first JPAKE round containing a 165-byte challenge.
-public class Jpake1aRequest: AbstractCentralChallengeRequest {
+public class Jpake1aRequest: AbstractCentralChallengeRequest, PumpRequest {
+    public typealias Response = Jpake1aResponse
+
     public static let props = MessageProps(
         opCode: 32,
         size: 167,

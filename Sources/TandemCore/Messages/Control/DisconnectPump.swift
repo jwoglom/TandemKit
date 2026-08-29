@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to disconnect the pump from the paired device.
-public class DisconnectPumpRequest: Message {
+public class DisconnectPumpRequest: PumpRequest {
+    public typealias Response = DisconnectPumpResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-66)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the primary pump features bitmask.
-public class PumpFeaturesV1Request: Message {
+public class PumpFeaturesV1Request: PumpRequest {
+    public typealias Response = PumpFeaturesV1Response
+
     public static let props = MessageProps(
         opCode: 78,
         size: 0,

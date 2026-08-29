@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request additional battery information available on newer API versions.
-public class CurrentBatteryV2Request: Message {
+public class CurrentBatteryV2Request: PumpRequest {
+    public typealias Response = CurrentBatteryV2Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-112)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request CGM rate-of-change alert settings from the pump.
-public class CGMRateAlertSettingsRequest: Message {
+public class CGMRateAlertSettingsRequest: PumpRequest {
+    public typealias Response = CGMRateAlertSettingsResponse
+
     public static let props = MessageProps(
         opCode: 92,
         size: 0,

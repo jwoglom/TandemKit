@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to play a notification sound on the pump.
-public class PlaySoundRequest: Message {
+public class PlaySoundRequest: PumpRequest {
+    public typealias Response = PlaySoundResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-12)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request global pump settings such as quick bolus configuration.
-public class PumpGlobalsRequest: Message {
+public class PumpGlobalsRequest: PumpRequest {
+    public typealias Response = PumpGlobalsResponse
+
     public static let props = MessageProps(
         opCode: 86,
         size: 0,

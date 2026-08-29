@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request information on why bolus permission changed for a given bolus.
-public class BolusPermissionChangeReasonRequest: Message {
+public class BolusPermissionChangeReasonRequest: PumpRequest {
+    public typealias Response = BolusPermissionChangeReasonResponse
+
     public static let props = MessageProps(
         opCode: 168,
         size: 2,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request current CGM alerts from the pump.
-public class CGMAlertStatusRequest: Message {
+public class CGMAlertStatusRequest: PumpRequest {
+    public typealias Response = CGMAlertStatusResponse
+
     public static let props = MessageProps(
         opCode: 74,
         size: 0,

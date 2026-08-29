@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to fill the cannula with insulin. Pump must be suspended.
-public class FillCannulaRequest: Message {
+public class FillCannulaRequest: PumpRequest {
+    public typealias Response = FillCannulaResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-104)),
         size: 2,

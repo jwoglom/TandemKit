@@ -1,6 +1,8 @@
 import Foundation
 
-public class ActiveAamBitsRequest: Message {
+public class ActiveAamBitsRequest: PumpRequest {
+    public typealias Response = ActiveAamBitsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-110)),
         size: 1,

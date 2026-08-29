@@ -8,7 +8,9 @@ import Foundation
 ///   [4]   alertType         uint8   - 0=HIGH, 1=LOW
 ///   [5]   enableAlert       uint8   - 0=disabled, 1=enabled
 ///   [6]   bitmask           uint8   - change bitmask (bits: 0=enabled, 1=threshold, 2=repeatDuration)
-public class CgmHighLowAlertRequest: Message {
+public class CgmHighLowAlertRequest: PumpRequest {
+    public typealias Response = CgmHighLowAlertResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-62)),
         size: 7,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to send a TIPS control generic test command.
-public class SendTipsControlGenericTestRequest: Message {
+public class SendTipsControlGenericTestRequest: PumpRequest {
+    public typealias Response = SendTipsControlGenericTestResponse
+
     public static let props = MessageProps(
         opCode: 118,
         size: 0,

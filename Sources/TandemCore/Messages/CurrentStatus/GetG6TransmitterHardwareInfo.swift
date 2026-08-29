@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request Dexcom G6 transmitter hardware info.
-public class GetG6TransmitterHardwareInfoRequest: Message {
+public class GetG6TransmitterHardwareInfoRequest: PumpRequest {
+    public typealias Response = GetG6TransmitterHardwareInfoResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-60)),
         size: 0,

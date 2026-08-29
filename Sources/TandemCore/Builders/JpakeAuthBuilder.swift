@@ -71,8 +71,8 @@ public class JpakeAuthBuilder {
         step = Self.decideInitialStep(derivedSecret: derivedSecret)
     }
 
-    public func nextRequest() -> (Message, Message.Type)? {
-        var request: (Message, Message.Type)?
+    public func nextRequest() -> (any PumpRequest)? {
+        var request: (any PumpRequest)?
         switch step {
         case .BOOTSTRAP_INITIAL:
             let round1 = cryptoProvider.makeRound1()
@@ -81,10 +81,7 @@ public class JpakeAuthBuilder {
             // bytes, so round 1 is 330 bytes only ~99.2% of the time.
             if let frames = JpakeRound1Framing.splitRound1(round1) {
                 clientRound1Frames = frames
-                request = (
-                    Jpake1aRequest(appInstanceId: 0, centralChallenge: frames.first),
-                    Jpake1aResponse.self
-                )
+                request = Jpake1aRequest(appInstanceId: 0, centralChallenge: frames.first)
                 step = .ROUND_1A_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 1 payload malformed (\(round1.count) bytes)")
@@ -92,10 +89,7 @@ public class JpakeAuthBuilder {
             }
         case .ROUND_1A_RECEIVED:
             if let frames = clientRound1Frames {
-                request = (
-                    Jpake1bRequest(appInstanceId: 0, centralChallenge: frames.second),
-                    Jpake1bResponse.self
-                )
+                request = Jpake1bRequest(appInstanceId: 0, centralChallenge: frames.second)
                 step = .ROUND_1B_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 1 client material missing for 1b request")
@@ -107,20 +101,14 @@ public class JpakeAuthBuilder {
             // Round 2 is a single group, so it fits one frame; it is short for the same
             // leading-zero reason round 1 is, and gets the same zero padding.
             if JpakeRound1Framing.groupLength(in: round2, at: 0) != nil {
-                request = (
-                    Jpake2Request(appInstanceId: 0, centralChallenge: JpakeRound1Framing.padToFrame(round2)),
-                    Jpake2Response.self
-                )
+                request = Jpake2Request(appInstanceId: 0, centralChallenge: JpakeRound1Framing.padToFrame(round2))
                 step = .ROUND_2_SENT
             } else {
                 log.error("[JpakeAuthBuilder] Round 2 payload malformed (\(round2.count) bytes)")
                 step = .INVALID
             }
         case .ROUND_2_RECEIVED:
-            request = (
-                Jpake3SessionKeyRequest(challengeParam: 0),
-                Jpake3SessionKeyResponse.self
-            )
+            request = Jpake3SessionKeyRequest(challengeParam: 0)
             derivedSecret = cryptoProvider.deriveSecret()
             step = .CONFIRM_3_SENT
         case .CONFIRM_INITIAL:
@@ -129,10 +117,7 @@ public class JpakeAuthBuilder {
                 step = .INVALID
                 break
             }
-            request = (
-                Jpake3SessionKeyRequest(challengeParam: 0),
-                Jpake3SessionKeyResponse.self
-            )
+            request = Jpake3SessionKeyRequest(challengeParam: 0)
             step = .CONFIRM_3_SENT
         case .CONFIRM_3_RECEIVED:
             guard let serverNonce3, let derivedSecret else {
@@ -145,15 +130,12 @@ public class JpakeAuthBuilder {
                 clientNonce4!,
                 key: Hkdf.build(nonce: serverNonce3, keyMaterial: derivedSecret)
             )
-            request = (
-                Jpake4KeyConfirmationRequest(
+            request = Jpake4KeyConfirmationRequest(
                     appInstanceId: 0,
                     nonce: clientNonce4!,
                     reserved: Jpake4KeyConfirmationRequest.RESERVED,
                     hashDigest: hashDigest3
-                ),
-                Jpake4KeyConfirmationResponse.self
-            )
+                )
             step = .CONFIRM_4_SENT
         case .CONFIRM_4_RECEIVED:
             guard let serverNonce4, let serverNonce3, let derivedSecret, let serverHashDigest4 else {
@@ -172,7 +154,7 @@ public class JpakeAuthBuilder {
             request = nil
         }
         if let request {
-            sentMessages.append(request.0)
+            sentMessages.append(request)
         }
         log.debug("[JpakeAuthBuilder] nextRequest end step=\(step)")
         return request

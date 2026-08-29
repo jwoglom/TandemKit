@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to enable or disable pump alert snooze timers.
-public class SetPumpAlertSnoozeRequest: Message {
+public class SetPumpAlertSnoozeRequest: PumpRequest {
+    public typealias Response = SetPumpAlertSnoozeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-44)),
         size: 2,

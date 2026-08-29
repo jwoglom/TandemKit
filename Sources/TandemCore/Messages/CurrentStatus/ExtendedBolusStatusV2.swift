@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request information on the current extended bolus (V2).
-public class ExtendedBolusStatusV2Request: Message {
+public class ExtendedBolusStatusV2Request: PumpRequest {
+    public typealias Response = ExtendedBolusStatusV2Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-74)),
         size: 0,

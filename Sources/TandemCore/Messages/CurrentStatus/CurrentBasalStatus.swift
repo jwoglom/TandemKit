@@ -2,7 +2,9 @@ import Foundation
 import LoopKit
 
 /// Request information about the current basal delivery rate.
-public class CurrentBasalStatusRequest: Message {
+public class CurrentBasalStatusRequest: PumpRequest {
+    public typealias Response = CurrentBasalStatusResponse
+
     public static let props = MessageProps(
         opCode: 40,
         size: 0,

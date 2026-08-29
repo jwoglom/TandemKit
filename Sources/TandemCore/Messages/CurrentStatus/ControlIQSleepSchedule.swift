@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the Control-IQ sleep schedule settings.
-public class ControlIQSleepScheduleRequest: Message {
+public class ControlIQSleepScheduleRequest: PumpRequest {
+    public typealias Response = ControlIQSleepScheduleResponse
+
     public static let props = MessageProps(
         opCode: 106,
         size: 0,

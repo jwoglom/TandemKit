@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to enable or change Control-IQ settings.
-public class ChangeControlIQSettingsRequest: Message {
+public class ChangeControlIQSettingsRequest: PumpRequest {
+    public typealias Response = ChangeControlIQSettingsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-54)),
         size: 6,

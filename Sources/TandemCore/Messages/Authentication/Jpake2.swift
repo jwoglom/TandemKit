@@ -1,7 +1,9 @@
 import Foundation
 
 /// Second JPAKE round message.
-public class Jpake2Request: Message {
+public class Jpake2Request: PumpRequest {
+    public typealias Response = Jpake2Response
+
     public static let props = MessageProps(
         opCode: 36,
         size: 167,

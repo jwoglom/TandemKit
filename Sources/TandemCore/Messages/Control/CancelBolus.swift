@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to cancel an in-progress bolus.
-public class CancelBolusRequest: Message {
+public class CancelBolusRequest: PumpRequest {
+    public typealias Response = CancelBolusResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-96)),
         size: 4,

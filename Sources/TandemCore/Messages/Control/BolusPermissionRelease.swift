@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to release bolus permission for a previously granted bolus.
-public class BolusPermissionReleaseRequest: Message {
+public class BolusPermissionReleaseRequest: PumpRequest {
+    public typealias Response = BolusPermissionReleaseResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-16)),
         size: 4,

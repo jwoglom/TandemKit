@@ -6,7 +6,9 @@ import Foundation
 ///   [0]   enableAutoOff    uint8   - 0=disabled, 1=enabled
 ///   [1-2] autoOffDuration  uint16  - duration in minutes before auto-off
 ///   [3]   bitmask          uint8   - change bitmask (bits: 0=enableAutoOff, 1=autoOffDuration)
-public class SetAutoOffAlertRequest: Message {
+public class SetAutoOffAlertRequest: PumpRequest {
+    public typealias Response = SetAutoOffAlertResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-32)),
         size: 4,

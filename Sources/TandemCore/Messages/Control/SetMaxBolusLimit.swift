@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to set the maximum bolus amount.
-public class SetMaxBolusLimitRequest: Message {
+public class SetMaxBolusLimitRequest: PumpRequest {
+    public typealias Response = SetMaxBolusLimitResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-122)),
         size: 2,

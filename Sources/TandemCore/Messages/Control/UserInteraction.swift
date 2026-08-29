@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to signal user interaction with the pump.
-public class UserInteractionRequest: Message {
+public class UserInteractionRequest: PumpRequest {
+    public typealias Response = UserInteractionResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-124)),
         size: 0,
