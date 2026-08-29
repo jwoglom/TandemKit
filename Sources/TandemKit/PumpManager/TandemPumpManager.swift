@@ -702,7 +702,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
             if currentTempResponse.active {
-                _ = self.bluetooth.write(StopTempRateRequest())
+                let stopResponse = self.bluetooth.write(StopTempRateRequest())
+                if let stopResponse, stopResponse.isStatusOK {
+                    self.logger.info("Current temp basal cancelled!")
+                } else {
+                    self.logger
+                        .error(
+                            "Failed to stop temp rate before suspending - Status: \(stopResponse?.status ?? -1)"
+                        )
+                }
             }
 
             let response = self.bluetooth.write(SuspendPumpingRequest())
