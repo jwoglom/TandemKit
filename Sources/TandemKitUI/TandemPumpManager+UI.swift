@@ -108,6 +108,16 @@ extension TandemPumpManager {
     }
 
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
+        // Ahead of the therapy highlights below: those are all read from a pump we have stopped
+        // hearing from, and reconnecting is the prerequisite for acting on any of them.
+        if let issue = sustainedConnectionIssue {
+            return PumpStatusHighlight(
+                localizedMessage: issue.title,
+                imageName: issue.imageName,
+                state: .critical
+            )
+        }
+
         if state.basalDose.type == .suspend {
             return PumpStatusHighlight(
                 localizedMessage: String(

@@ -7,6 +7,8 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
 
     @Published var isConnected: Bool = false
+    /// Why the pump cannot be reached, named at the top so the user knows which step applies.
+    @Published var connectionIssue: PumpConnectionIssue?
     @Published var isAttemptingReconnect: Bool = false
 
     @Published var bluetoothStatusText: String = ""
@@ -21,6 +23,8 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     @Published var lastConnectedText: String = ""
     /// Outcome of the most recent manual reconnect attempt, shown until the next attempt.
     @Published var reconnectResultText: String?
+
+    var appName: String { HostApp.current.appName }
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -46,8 +50,9 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
         }
 
         isConnected = pumpManager.state.isConnected
+        connectionIssue = pumpManager.connectionIssue
 
-        let bluetoothState = pumpManager.bluetooth.manager?.state ?? .unknown
+        let bluetoothState = pumpManager.bluetooth.bluetoothState
         isBluetoothPoweredOn = bluetoothState == .poweredOn
         bluetoothStatusText = Self.describe(bluetoothState)
 

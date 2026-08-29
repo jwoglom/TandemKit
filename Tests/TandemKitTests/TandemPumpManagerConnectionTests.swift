@@ -119,6 +119,119 @@ import XCTest
         XCTAssertEqual(reportedLastSync, manager.state.lastReconciliation)
     }
 
+    /// A session can stay up at the link layer while every read times out. `lastSync` is Loop's
+    /// measure of how far back its insulin data can be trusted, so a sync the pump answered nothing
+    /// to must not advance it.
+    func testSyncThePumpAnswersNothingToDoesNotAdvanceLastSync() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        // No stubs registered: the link is up and every read returns nil, as a wedged session does.
+
+        let expectation = expectation(description: "syncPumpData completes")
+        var reportedLastSync: Date?
+        manager.syncPumpData { lastSync in
+            reportedLastSync = lastSync
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertFalse(bluetooth.sentMessages.isEmpty, "The sync should still have tried to read")
+        XCTAssertEqual(manager.state.lastReconciliation, previousSync)
+        XCTAssertEqual(reportedLastSync, previousSync)
+    }
+
+    /// The settings re-read is stamped for 24 hours, so stamping it after a silent pump would hide
+    /// the failure for a day.
+    func testSyncThePumpAnswersNothingToDoesNotStampTheSettingsCheck() {
+        let expectation = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in expectation.fulfill() }
+
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertNil(manager.state.lastSettingsCheckedAt)
+    }
+
+    /// One answer is enough: a partially responsive pump has still been reconciled with.
+    func testSyncAdvancesLastSyncOnASingleResponse() {
+        let previousSync = Date().addingTimeInterval(-2 * 60 * 60)
+        manager.state.lastReconciliation = previousSync
+        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(
+            currentInsulinAmount: 150,
+            isEstimate: 0,
+            insulinLowAmount: 0
+        ))
+
+        let expectation = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in expectation.fulfill() }
+
+        wait(for: [expectation], timeout: 5.0)
+
+        XCTAssertNotEqual(manager.state.lastReconciliation, previousSync)
+    }
+
+    // MARK: - Not stacking up
+
+    /// A sync against an unresponsive pump holds the command queue for about as long as Loop's poll
+    /// interval, so polls that stack up behind it put every user command — a bolus included — in a
+    /// queue minutes deep.
+    func testAutomaticPollStandsDownWhileASyncIsAlreadyRunning() {
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60 * 60)
+        stubSyncResponses()
+
+        var polled = false
+        bluetooth.onWrite = { [weak self] _ in
+            // Runs while the outer sync still holds the queue. Guarded so an unguarded poll shows
+            // up as one extra sync rather than as runaway recursion.
+            guard !polled, let self else { return }
+            polled = true
+            self.manager.ensureCurrentPumpData { _ in }
+        }
+
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5.0)
+
+        XCTAssertTrue(polled, "The poll should have been attempted from inside the sync")
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 1, "The poll must not queue a second sync")
+    }
+
+    /// Only the automatic poll stands down. A sync the user asked for is not a duplicate of one
+    /// already grinding through timeouts.
+    func testAUserRequestedSyncRunsEvenWhileOneIsAlreadyRunning() {
+        stubSyncResponses()
+
+        var reSynced = false
+        bluetooth.onWrite = { [weak self] _ in
+            guard !reSynced, let self else { return }
+            reSynced = true
+            self.manager.syncPumpData { _ in }
+        }
+
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5.0)
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 2)
+    }
+
+    /// The stand-down must not leave the flag set: the next poll after a sync finishes has to run.
+    func testPollRunsAgainOnceTheEarlierSyncHasFinished() {
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60 * 60)
+        stubSyncResponses()
+
+        let first = expectation(description: "first sync completes")
+        manager.syncPumpData { _ in first.fulfill() }
+        wait(for: [first], timeout: 5.0)
+
+        manager.state.lastReconciliation = Date().addingTimeInterval(-60 * 60)
+        let second = expectation(description: "poll syncs")
+        manager.ensureCurrentPumpData { _ in second.fulfill() }
+        wait(for: [second], timeout: 5.0)
+
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 2)
+    }
+
     /// `ensureCurrentPumpData` is Loop's periodic poll; it must not re-hit the pump when the last
     /// sync is still fresh.
     func testEnsureCurrentPumpDataSkipsRecentSync() {

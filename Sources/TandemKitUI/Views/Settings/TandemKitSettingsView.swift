@@ -260,13 +260,16 @@ struct TandemKitSettingsView: View {
                 }
                 .padding(.bottom, 5)
 
-                if !viewModel.isConnected {
+                if let connectionIssue = viewModel.connectionIssue {
                     Button(action: { viewModel.openTroubleshootConnection() }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Pump Disconnected", comment: "title for pump disconnected notice")
+                                Text(connectionIssue.title)
                                     .font(Font.subheadline.weight(.bold))
                                     .foregroundColor(.red)
+                                Text(connectionIssue.detail(appName: viewModel.appName))
+                                    .font(Font.footnote.weight(.semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Text("Troubleshoot connection", comment: "subtitle linking to the connection troubleshooter")
                                     .font(Font.caption)
                                     .foregroundColor(.accentColor)

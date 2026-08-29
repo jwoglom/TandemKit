@@ -15,6 +15,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// low connection latency during pairing); a stub returns nil.
     var manager: CBCentralManager? { get }
 
+    /// State of the phone's Bluetooth radio. Separate from `manager` so it can be driven in tests,
+    /// where `CBCentralManager.state` is read-only.
+    var bluetoothState: CBManagerState { get }
+
     /// Starts scanning for Tandem pumps, calling `completion` once per advertisement. Returns false
     /// when Bluetooth is not powered on, in which case `completion` is never called.
     func startScan(_ completion: @escaping (_ result: TandemPumpScan) -> Void) -> Bool
@@ -29,6 +33,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// every other command. `completion` runs exactly once, with a non-nil error if the connection
     /// could not be established.
     func ensureConnected(completion: @escaping (Error?) -> Void)
+
+    /// Responses the pump has actually returned. Compared before and after a sequence of reads to
+    /// tell a pump that answered something from one that answered nothing.
+    var responseCount: Int { get }
 
     /// Sends `request` and blocks until its response arrives, or nil on failure. Must be called
     /// from inside an `ensureConnected` job.

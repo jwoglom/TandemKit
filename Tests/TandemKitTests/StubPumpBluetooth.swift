@@ -19,8 +19,11 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     weak var pumpManager: TandemPumpManager?
     var manager: CBCentralManager? { nil }
+    /// Defaults to a working radio, so a test that says nothing about Bluetooth exercises the link.
+    var bluetoothState: CBManagerState = .poweredOn
 
     private(set) var sentMessages: [Message] = []
+    private(set) var responseCount = 0
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
@@ -116,7 +119,13 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         }
         lock.unlock()
 
-        return handler?(message)
+        let response = handler?(message)
+        if response != nil {
+            lock.lock()
+            responseCount += 1
+            lock.unlock()
+        }
+        return response
     }
 
     func disconnect() {
