@@ -1,6 +1,7 @@
 import CoreBluetooth
 import Foundation
 @testable import TandemKit
+import XCTest
 
 /// In-memory stand-in for `TandemBluetoothManager`.
 ///
@@ -21,6 +22,8 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     var manager: CBCentralManager? { nil }
 
     private(set) var sentMessages: [Message] = []
+    /// The `expecting:` argument of each write, positionally aligned with `sentMessages`.
+    private(set) var expectedResponseTypes: [Message.Type] = []
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
@@ -70,6 +73,16 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         return sentMessages.contains { Swift.type(of: $0) == type }
     }
 
+    /// The response type the driver said it expected for the first write of `requestType`.
+    func expectedResponse(for requestType: Message.Type) -> Message.Type? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let index = sentMessages.firstIndex(where: { Swift.type(of: $0) == requestType }) else {
+            return nil
+        }
+        return expectedResponseTypes[index]
+    }
+
     // MARK: - PumpBluetoothConnection
 
     func startScan(_: @escaping (_ result: TandemPumpScan) -> Void) -> Bool { false }
@@ -88,11 +101,18 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         completion(error)
     }
 
-    func write(message: Message, expecting _: Message.Type, maxChunkSize _: Int?) -> Message? {
+    func write(message: Message, expecting: Message.Type, maxChunkSize _: Int?) -> Message? {
         onWrite?(message)
+
+        XCTAssertEqual(
+            expecting.props.type,
+            .Response,
+            "\(type(of: message)) was written expecting \(expecting), which is not a response type"
+        )
 
         lock.lock()
         sentMessages.append(message)
+        expectedResponseTypes.append(expecting)
         let key = ObjectIdentifier(type(of: message))
 
         var handler: ((Message) -> Message?)?

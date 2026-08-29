@@ -136,6 +136,14 @@ class TandemPeripheralManager: NSObject {
     }
 
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+        guard expecting.props.type == .Response else {
+            logger
+                .error(
+                    "Cannot write \(type(of: message)): expected-response type \(expecting) is not a Response"
+                )
+            return nil
+        }
+
         // Pump I/O is already serialized by TandemBluetoothManager.commandQueue, so this lock
         // should never actually contend. It is kept purely as defense-in-depth, and the acquire
         // is bounded so that even an unexpected off-pipeline caller can never deadlock here (the
