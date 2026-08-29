@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request any malfunction status from the pump.
-public class MalfunctionStatusRequest: Message {
+public class MalfunctionStatusRequest: PumpRequest {
+    public typealias Response = MalfunctionBitmaskStatusResponse
+
     public static let props = MessageProps(
         opCode: 118,
         size: 0,

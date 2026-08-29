@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request BLE software device firmware information.
-public class BleSoftwareInfoRequest: Message {
+public class BleSoftwareInfoRequest: PumpRequest {
+    public typealias Response = BleSoftwareInfoResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-120)),
         size: 0,

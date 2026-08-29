@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the currently active insulin delivery profile values.
-public class CurrentActiveIdpValuesRequest: Message {
+public class CurrentActiveIdpValuesRequest: PumpRequest {
+    public typealias Response = CurrentActiveIdpValuesResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-106)),
         size: 0,

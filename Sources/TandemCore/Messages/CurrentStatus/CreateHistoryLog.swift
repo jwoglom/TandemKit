@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the pump to create history log entries.
-public class CreateHistoryLogRequest: Message {
+public class CreateHistoryLogRequest: PumpRequest {
+    public typealias Response = CreateHistoryLogResponse
+
     public static let props = MessageProps(
         opCode: 126,
         size: 4,

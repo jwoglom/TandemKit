@@ -151,7 +151,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// Blocks until the pump responds, so it must run as part of a serialized command job — i.e.
     /// inside an `ensureConnected` block. Off-queue writes race the command pipeline and were a
     /// root cause of the wedged-connection failures.
-    func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+    func write<R: PumpRequest>(_ request: R, maxChunkSize: Int? = nil) -> R.Response? {
         dispatchPrecondition(condition: .onQueue(commandQueue))
 
         guard let peripheralManager else {
@@ -159,7 +159,18 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             return nil
         }
 
-        return peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
+        return peripheralManager.write(request, maxChunkSize: maxChunkSize)
+    }
+
+    func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int? = nil) -> (any Message)? {
+        dispatchPrecondition(condition: .onQueue(commandQueue))
+
+        guard let peripheralManager else {
+            logger.error("No peripheralManager -> Not connected...")
+            return nil
+        }
+
+        return peripheralManager.writeUntyped(message, expecting: expecting, maxChunkSize: maxChunkSize)
     }
 
     /// Runs `completion` as a serialized command job: the pump is connected if necessary, then
@@ -308,7 +319,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
     func disconnect() {
         if let peripheralManager {
-            _ = peripheralManager.write(message: DisconnectPumpRequest(), expecting: DisconnectPumpResponse.self)
+            _ = peripheralManager.write(DisconnectPumpRequest())
         }
 
         if let manager {

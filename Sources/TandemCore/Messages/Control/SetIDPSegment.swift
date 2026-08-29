@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to modify a single segment within an insulin delivery profile.
-public class SetIDPSegmentRequest: Message {
+public class SetIDPSegmentRequest: PumpRequest {
+    public typealias Response = SetIDPSegmentResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-86)),
         size: 17,

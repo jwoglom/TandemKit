@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to start a Dexcom G6 sensor session.
-public class StartDexcomG6SensorSessionRequest: Message {
+public class StartDexcomG6SensorSessionRequest: PumpRequest {
+    public typealias Response = StartDexcomG6SensorSessionResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-78)),
         size: 2,

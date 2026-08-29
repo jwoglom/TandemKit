@@ -1,7 +1,9 @@
 import Foundation
 
 /// Second authorization message carrying the HMACed pairing code.
-public class PumpChallengeRequest: Message {
+public class PumpChallengeRequest: PumpRequest {
+    public typealias Response = PumpChallengeResponse
+
     public static let props = MessageProps(
         opCode: 18,
         size: 22,

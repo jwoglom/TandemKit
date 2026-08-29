@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current amount of insulin remaining in the pump.
-public class InsulinStatusRequest: Message {
+public class InsulinStatusRequest: PumpRequest {
+    public typealias Response = InsulinStatusResponse
+
     public static let props = MessageProps(
         opCode: 36,
         size: 0,

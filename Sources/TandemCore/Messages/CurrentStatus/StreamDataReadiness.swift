@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request stream data readiness status.
-public class StreamDataReadinessRequest: Message {
+public class StreamDataReadinessRequest: PumpRequest {
+    public typealias Response = StreamDataReadinessResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-58)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request metadata about the pump's history log.
-public class HistoryLogStatusRequest: Message {
+public class HistoryLogStatusRequest: PumpRequest {
+    public typealias Response = HistoryLogStatusResponse
+
     public static let props = MessageProps(
         opCode: 58,
         size: 0,

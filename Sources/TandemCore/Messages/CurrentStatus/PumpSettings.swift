@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request pump configuration settings.
-public class PumpSettingsRequest: Message {
+public class PumpSettingsRequest: PumpRequest {
+    public typealias Response = PumpSettingsResponse
+
     public static let props = MessageProps(
         opCode: 82,
         size: 0,

@@ -88,7 +88,15 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         completion(error)
     }
 
-    func write(message: Message, expecting _: Message.Type, maxChunkSize _: Int?) -> Message? {
+    func write<R: PumpRequest>(_ request: R, maxChunkSize _: Int?) -> R.Response? {
+        respond(to: request) as? R.Response
+    }
+
+    func writeUntyped(_ message: any Message, expecting _: any Message.Type, maxChunkSize _: Int?) -> (any Message)? {
+        respond(to: message)
+    }
+
+    private func respond(to message: any Message) -> (any Message)? {
         onWrite?(message)
 
         lock.lock()

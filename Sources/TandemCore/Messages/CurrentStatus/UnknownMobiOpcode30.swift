@@ -1,6 +1,8 @@
 import Foundation
 
-public class UnknownMobiOpcode30Request: Message {
+public class UnknownMobiOpcode30Request: PumpRequest {
+    public typealias Response = UnknownMobiOpcode30Response
+
     public static let props = MessageProps(
         opCode: 30,
         size: 0,

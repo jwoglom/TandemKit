@@ -1,7 +1,9 @@
 import Foundation
 
 /// First message in the pump authorization handshake containing a random challenge.
-public class CentralChallengeRequest: AbstractCentralChallengeRequest {
+public class CentralChallengeRequest: AbstractCentralChallengeRequest, PumpRequest {
+    public typealias Response = CentralChallengeResponse
+
     public static let props = MessageProps(
         opCode: 16,
         size: 10,

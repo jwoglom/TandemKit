@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request for stream data preflight check.
-public class StreamDataPreflightRequest: Message {
+public class StreamDataPreflightRequest: PumpRequest {
+    public typealias Response = StreamDataPreflightResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-126)),
         size: 0,

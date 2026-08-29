@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to create or duplicate an insulin delivery profile.
-public class CreateIDPRequest: Message {
+public class CreateIDPRequest: PumpRequest {
+    public typealias Response = CreateIDPResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-26)),
         size: 35,

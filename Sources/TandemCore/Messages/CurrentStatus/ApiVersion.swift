@@ -3,7 +3,9 @@ import Foundation
 /**
  * Returns the major and minor API version of the pump.
  */
-public class ApiVersionRequest: Message {
+public class ApiVersionRequest: PumpRequest {
+    public typealias Response = ApiVersionResponse
+
     public static let props = MessageProps(
         opCode: 32,
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request alternative pump version information.
-public class PumpVersionBRequest: Message {
+public class PumpVersionBRequest: PumpRequest {
+    public typealias Response = PumpVersionBResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-124)),
         size: 0,

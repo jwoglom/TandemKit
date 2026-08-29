@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the last BG entered via the Bolus Calculator.
-public class LastBGRequest: Message {
+public class LastBGRequest: PumpRequest {
+    public typealias Response = LastBGResponse
+
     public static let props = MessageProps(
         opCode: 50,
         size: 0,

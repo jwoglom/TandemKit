@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to update profile-wide settings on an insulin delivery profile.
-public class SetIDPSettingsRequest: Message {
+public class SetIDPSettingsRequest: PumpRequest {
+    public typealias Response = SetIDPSettingsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-84)),
         size: 6,

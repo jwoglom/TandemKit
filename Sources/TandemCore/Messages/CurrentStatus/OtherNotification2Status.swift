@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request additional notification status codes.
-public class OtherNotification2StatusRequest: Message {
+public class OtherNotification2StatusRequest: PumpRequest {
+    public typealias Response = OtherNotification2StatusResponse
+
     public static let props = MessageProps(
         opCode: 118,
         size: 0,

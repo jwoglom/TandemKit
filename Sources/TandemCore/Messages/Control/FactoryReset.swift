@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to perform a factory reset on the pump.
-public class FactoryResetRequest: Message {
+public class FactoryResetRequest: PumpRequest {
+    public typealias Response = FactoryResetResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-24)),
         size: 0,

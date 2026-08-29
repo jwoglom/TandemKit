@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current temporary basal rate status with extended fields.
-public class TempRateStatusRequest: Message {
+public class TempRateStatusRequest: PumpRequest {
+    public typealias Response = TempRateStatusResponse
+
     public static let props = MessageProps(
         opCode: 30,
         size: 0,

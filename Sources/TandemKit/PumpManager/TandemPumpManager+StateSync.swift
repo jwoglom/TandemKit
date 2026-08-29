@@ -3,10 +3,7 @@ import LoopKit
 
 extension TandemPumpManager {
     func fetchTimeSinceReset() {
-        guard let response = bluetooth.write(
-            message: TimeSinceResetRequest(),
-            expecting: TimeSinceResetResponse.self
-        ) as? TimeSinceResetResponse else {
+        guard let response = bluetooth.write(TimeSinceResetRequest()) else {
             logger.error("Failed to fetch ControlIQ info: \(type(of: TimeSinceResetRequest.self))")
             return
         }
@@ -23,8 +20,8 @@ extension TandemPumpManager {
     }
 
     func fetchControlIQStatus() {
-        let (request, expecting) = ControlIQInfoRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
-        guard let response = bluetooth.write(message: request, expecting: expecting) as? ControlIQInfoAbstractResponse else {
+        let request = ControlIQInfoRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        guard let response = bluetooth.write(request) as? ControlIQInfoAbstractResponse else {
             logger.error("Failed to fetch ControlIQ info: \(type(of: request))")
             return
         }
@@ -74,10 +71,7 @@ extension TandemPumpManager {
             return
         }
 
-        guard let response = bluetooth.write(
-            message: CGMStatusV2Request(),
-            expecting: CGMStatusV2Response.self
-        ) as? CGMStatusV2Response else {
+        guard let response = bluetooth.write(CGMStatusV2Request()) else {
             logger.error("Failed to fetch CGM status")
             return
         }
@@ -94,20 +88,14 @@ extension TandemPumpManager {
     }
 
     func fetchPumpInformation() {
-        guard let apiResponse = bluetooth.write(
-            message: ApiVersionRequest(),
-            expecting: ApiVersionResponse.self
-        ) as? ApiVersionResponse else {
+        guard let apiResponse = bluetooth.write(ApiVersionRequest()) else {
             logger.error("Failed to fetch apiVersion")
             return
         }
 
         state.pumpState.apiVersion = apiResponse.getApiVersion()
 
-        guard let pumpVersionResponse = bluetooth.write(
-            message: PumpVersionBRequest(),
-            expecting: PumpVersionBResponse.self
-        ) as? PumpVersionBResponse else {
+        guard let pumpVersionResponse = bluetooth.write(PumpVersionBRequest()) else {
             logger.error("Failed to fetch PumpVersionB")
             return
         }
@@ -133,10 +121,7 @@ extension TandemPumpManager {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: CurrentBasalStatusRequest(),
-                expecting: CurrentBasalStatusResponse.self
-            ) as? CurrentBasalStatusResponse else {
+            guard let response = self.bluetooth.write(CurrentBasalStatusRequest()) else {
                 self.logger.error("Failed to fetch basal Status for suspend: \(type(of: HomeScreenMirrorRequest.self))")
                 completion(nil)
                 return
@@ -147,10 +132,7 @@ extension TandemPumpManager {
     }
 
     func fetchBasalStatus() {
-        guard let response = bluetooth.write(
-            message: CurrentBasalStatusRequest(),
-            expecting: CurrentBasalStatusResponse.self
-        ) as? CurrentBasalStatusResponse else {
+        guard let response = bluetooth.write(CurrentBasalStatusRequest()) else {
             logger.error("Failed to fetch basal Status: \(type(of: HomeScreenMirrorRequest.self))")
             return
         }
@@ -226,10 +208,7 @@ extension TandemPumpManager {
             logger.warning("Bolus \(bolusDose.bolusId ?? -1) past estimated end; reconciling stale bolus state")
         }
 
-        guard let response = bluetooth.write(
-            message: CurrentBolusStatusRequest(),
-            expecting: CurrentBolusStatusResponse.self
-        ) as? CurrentBolusStatusResponse else {
+        guard let response = bluetooth.write(CurrentBolusStatusRequest()) else {
             logger.error("Failed to fetch bolus status: \(type(of: CurrentBolusStatusRequest.self))")
             return
         }
@@ -316,11 +295,7 @@ extension TandemPumpManager {
     func fetchNotifications() {
         notificationBundle = NotificationBundle()
         for request in NotificationBundle.allRequests(apiVersion: state.pumpState.apiVersion) {
-            guard let expecting = expectedNotificationResponseType(for: request) else {
-                logger.error("No response type mapping for \(type(of: request))")
-                continue
-            }
-            guard let response = bluetooth.write(message: request, expecting: expecting) else {
+            guard let response = bluetooth.write(request) else {
                 logger.error("Failed to fetch notification status of \(type(of: request))")
                 continue
             }
@@ -343,30 +318,13 @@ extension TandemPumpManager {
         reconcileLoopKitAlerts()
     }
 
-    /// Resolves the concrete response type expected on the wire for a notification status request.
-    /// Most pairings follow the `Request`/`Response` naming convention resolved by
-    /// `MessageRegistry`; `MalfunctionStatusRequest` is the exception, since its response is
-    /// `MalfunctionBitmaskStatusResponse`.
-    private func expectedNotificationResponseType(for request: Message) -> Message.Type? {
-        if request is MalfunctionStatusRequest {
-            return MalfunctionBitmaskStatusResponse.self
-        }
-        return MessageRegistry.responseMetadata(for: request)?.type
-    }
-
     func fetchDeliveryLimits() {
-        guard let basalResponse = bluetooth.write(
-            message: BasalLimitSettingsRequest(),
-            expecting: BasalLimitSettingsResponse.self
-        ) as? BasalLimitSettingsResponse else {
+        guard let basalResponse = bluetooth.write(BasalLimitSettingsRequest()) else {
             logger.error("Failed to fetch basal limits: \(type(of: BasalLimitSettingsRequest.self))")
             return
         }
 
-        guard let bolusResponse = bluetooth.write(
-            message: GlobalMaxBolusSettingsRequest(),
-            expecting: GlobalMaxBolusSettingsResponse.self
-        ) as? GlobalMaxBolusSettingsResponse else {
+        guard let bolusResponse = bluetooth.write(GlobalMaxBolusSettingsRequest()) else {
             logger.error("Failed to fetch bolus limits: \(type(of: GlobalMaxBolusSettingsRequest.self))")
             return
         }
@@ -379,10 +337,7 @@ extension TandemPumpManager {
     }
 
     func fetchGlobalPumpSettings() {
-        guard let response = bluetooth.write(
-            message: PumpGlobalsRequest(),
-            expecting: PumpGlobalsResponse.self
-        ) as? PumpGlobalsResponse else {
+        guard let response = bluetooth.write(PumpGlobalsRequest()) else {
             logger.error("Failed to fetch global pump settings: \(type(of: PumpGlobalsRequest.self))")
             return
         }
@@ -410,10 +365,7 @@ extension TandemPumpManager {
 
         logger.warning("Quick bolus button is enabled on the pump; disabling it")
 
-        guard let response = bluetooth.write(
-            message: SetQuickBolusSettingsRequest(enabled: false, mode: .units, increment: .disabled),
-            expecting: SetQuickBolusSettingsResponse.self
-        ) as? SetQuickBolusSettingsResponse else {
+        guard let response = bluetooth.write(SetQuickBolusSettingsRequest(enabled: false, mode: .units, increment: .disabled)) else {
             logger.error("Failed to disable quick bolus button: no response")
             return
         }
@@ -444,10 +396,7 @@ extension TandemPumpManager {
     /// Returns the units remaining, or nil on failure.
     @discardableResult
     func fetchReservoirStatus() -> Double? {
-        guard let response = bluetooth.write(
-            message: InsulinStatusRequest(),
-            expecting: InsulinStatusResponse.self
-        ) as? InsulinStatusResponse else {
+        guard let response = bluetooth.write(InsulinStatusRequest()) else {
             logger.error("Failed to fetch reservoir status: \(type(of: InsulinStatusRequest.self))")
             return nil
         }
@@ -480,8 +429,8 @@ extension TandemPumpManager {
     }
 
     func fetchBatteryStatus() {
-        let (request, expecting) = CurrentBatteryRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
-        guard let response = bluetooth.write(message: request, expecting: expecting) as? CurrentBatteryAbstractResponse else {
+        let request = CurrentBatteryRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        guard let response = bluetooth.write(request) as? CurrentBatteryAbstractResponse else {
             logger.error("Failed to fetch Battery status: \(type(of: request))")
             return
         }
@@ -543,12 +492,9 @@ extension TandemPumpManager {
     /// Used after both cancellation and natural completion to get the real delivered amount.
     /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
     func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
-        let (request, expecting) = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
 
-        guard let response = bluetooth.write(
-            message: request,
-            expecting: expecting
-        ) as? LastBolusStatusAbstractResponse else {
+        guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
             logger.error("Failed to get lastBolusStatus: \(type(of: request))")
             return nil
         }
@@ -576,13 +522,10 @@ extension TandemPumpManager {
 
         logger.info("[auto-ack] Found \(basalAlertsToAck.count) basal alert(s) to acknowledge: \(basalAlertsToAck)")
         for alert in basalAlertsToAck {
-            guard let response = bluetooth.write(
-                message: DismissNotificationRequest(
+            guard let response = bluetooth.write(DismissNotificationRequest(
                     notificationType: .alert,
                     notificationId: UInt32(alert.rawValue)
-                ),
-                expecting: DismissNotificationResponse.self
-            ) as? DismissNotificationResponse else {
+                )) else {
                 logger.error("Failed to send DismissNotificationRequest")
                 return
             }

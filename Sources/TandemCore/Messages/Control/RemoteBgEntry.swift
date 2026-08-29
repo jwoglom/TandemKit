@@ -25,7 +25,9 @@ public enum BloodGlucoseReadingSource: UInt8 {
 }
 
 /// Request to add a blood glucose entry on the pump during bolusing.
-public class RemoteBgEntryRequest: Message {
+public class RemoteBgEntryRequest: PumpRequest {
+    public typealias Response = RemoteBgEntryResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-74)),
         size: 11,

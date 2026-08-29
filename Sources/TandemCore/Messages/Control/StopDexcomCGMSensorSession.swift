@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to stop an active Dexcom CGM sensor session.
-public class StopDexcomCGMSensorSessionRequest: Message {
+public class StopDexcomCGMSensorSessionRequest: PumpRequest {
+    public typealias Response = StopDexcomCGMSensorSessionResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-76)),
         size: 0,

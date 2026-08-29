@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to set the CGM sensor type.
-public class SetSensorTypeRequest: Message {
+public class SetSensorTypeRequest: PumpRequest {
+    public typealias Response = SetSensorTypeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-64)),
         size: 1,

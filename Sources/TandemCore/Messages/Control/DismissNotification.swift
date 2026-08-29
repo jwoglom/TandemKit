@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to dismiss an alert/alarm/notification on the pump.
-public class DismissNotificationRequest: Message {
+public class DismissNotificationRequest: PumpRequest {
+    public typealias Response = DismissNotificationResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-72)),
         size: 6,

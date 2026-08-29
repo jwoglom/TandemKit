@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to change the pump's date/time.
-public class ChangeTimeDateRequest: Message {
+public class ChangeTimeDateRequest: PumpRequest {
+    public typealias Response = ChangeTimeDateResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-42)),
         size: 4,

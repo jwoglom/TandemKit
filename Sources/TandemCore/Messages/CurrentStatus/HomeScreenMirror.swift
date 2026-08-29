@@ -2,7 +2,9 @@ import Foundation
 import LoopKit
 
 /// Request basic home screen status info.
-public class HomeScreenMirrorRequest: Message {
+public class HomeScreenMirrorRequest: PumpRequest {
+    public typealias Response = HomeScreenMirrorResponse
+
     public static let props = MessageProps(
         opCode: 56,
         size: 0,

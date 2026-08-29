@@ -1,7 +1,9 @@
 import Foundation
 
 /// Third JPAKE message triggering session key validation.
-public class Jpake3SessionKeyRequest: Message {
+public class Jpake3SessionKeyRequest: PumpRequest {
+    public typealias Response = Jpake3SessionKeyResponse
+
     public static let props = MessageProps(
         opCode: 38,
         size: 2,

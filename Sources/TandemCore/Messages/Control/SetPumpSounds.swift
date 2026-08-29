@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to update pump annunciation (audio/vibrate) settings.
-public class SetPumpSoundsRequest: Message {
+public class SetPumpSoundsRequest: PumpRequest {
+    public typealias Response = SetPumpSoundsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-28)),
         size: 9,

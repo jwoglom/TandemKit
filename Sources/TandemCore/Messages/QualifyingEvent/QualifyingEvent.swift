@@ -254,19 +254,19 @@ public extension QualifyingEvent {
 }
 
 private extension QualifyingEventContext {
-    var iobRequest: Message {
-        IOBRequestBuilder.create(controlIQSupported: controlIQSupported).0
+    var iobRequest: any PumpRequest {
+        IOBRequestBuilder.create(controlIQSupported: controlIQSupported)
     }
 
-    var controlIQInfoRequest: Message {
-        ControlIQInfoRequestBuilder.create(apiVersion: apiVersion).0
+    var controlIQInfoRequest: any PumpRequest {
+        ControlIQInfoRequestBuilder.create(apiVersion: apiVersion)
     }
 
-    var lastBolusStatusRequest: Message {
-        LastBolusRequestBuilder.create(apiVersion: apiVersion).0
+    var lastBolusStatusRequest: any PumpRequest {
+        LastBolusRequestBuilder.create(apiVersion: apiVersion)
     }
 
-    var currentBatteryRequest: Message {
-        CurrentBatteryRequestBuilder.create(apiVersion: apiVersion).0
+    var currentBatteryRequest: any PumpRequest {
+        CurrentBatteryRequestBuilder.create(apiVersion: apiVersion)
     }
 }
