@@ -69,9 +69,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
-    /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top of the
-    /// screen, which names the specific problem rather than only that there is one — "Bluetooth
-    /// Off" and "Pump Disconnected" call for different things from the user.
+    /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top.
     @Published var connectionIssue: PumpConnectionIssue?
     @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false

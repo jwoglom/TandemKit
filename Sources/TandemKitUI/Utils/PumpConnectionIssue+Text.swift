@@ -2,14 +2,9 @@ import Foundation
 
 /// User-facing wording for each way the pump can be out of reach.
 ///
-/// Every case names what is wrong in the user's terms and what they can do about it, because the
-/// remedies are not interchangeable: "Bluetooth Off" is fixed in the Settings app, "Pump
-/// Disconnected" by moving the pump closer. A driver that only ever said the second is one the user
-/// learns to ignore.
-///
-/// Each detail also says what is still happening to their insulin. Losing the connection stops the
-/// app from reading or commanding the pump; it does not stop the pump, which goes on delivering
-/// from its own settings. That is the first thing someone reading a red banner needs to know.
+/// Every detail says what is still happening to their insulin: losing the connection stops the app
+/// from reading or commanding the pump, but not the pump itself, which goes on delivering from its
+/// own settings. That is the first thing someone reading a red banner needs to know.
 extension PumpConnectionIssue {
     /// Short label, for the home-screen status highlight and as the banner heading.
     var title: String {
@@ -36,7 +31,7 @@ extension PumpConnectionIssue {
         }
     }
 
-    /// What it means and what to do about it, for the screens with room for a sentence or two.
+    /// What it means and what to do, for the screens with room for a sentence or two.
     func detail(appName: String) -> String {
         switch self {
         case .bluetoothOff:

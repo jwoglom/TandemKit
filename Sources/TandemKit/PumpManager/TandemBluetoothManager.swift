@@ -92,8 +92,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         manager?.state ?? .unknown
     }
 
-    /// Whether there is a usable pump session right now: CoreBluetooth reports the peripheral
-    /// connected, and setup has produced a peripheral manager for it.
+    /// A peripheral CoreBluetooth reports connected, with a peripheral manager from setup.
     private var hasLiveSession: Bool {
         guard let peripheral else {
             return false
@@ -101,12 +100,9 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         return peripheral.state == .connected && peripheralManager != nil
     }
 
-    /// Records that the pump session is gone: drops the now-invalid peripheral manager and
-    /// publishes the change, so `state.isConnected` — and every UI surface reading it — stops
-    /// claiming a link that no longer exists.
-    ///
-    /// Called from each of the three ways a session ends: the peripheral disconnecting, the radio
-    /// leaving `poweredOn`, and a connect attempt that never produced one.
+    /// Drops the now-invalid peripheral manager and publishes the change, so nothing above goes on
+    /// claiming a link that no longer exists. Called from each of the three ways a session ends:
+    /// the peripheral disconnecting, the radio leaving `poweredOn`, and a connect attempt failing.
     private func markLinkDown() {
         peripheralManager = nil
 
@@ -198,11 +194,8 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     func ensureConnected(completion: @escaping (Error?) -> Void) {
         commandQueue.async {
             let error = self.connectIfNeeded()
-            // A command job that could not get a session means there is no link, whatever the
-            // reason. Recording it here covers every way connectIfNeeded can fail, including the
-            // ones CoreBluetooth never reports as a disconnect, so nothing can leave the driver
-            // claiming a connection it does not have. Unless a session landed in the gap between
-            // the attempt giving up and this check — that one is live and not ours to tear down.
+            // Covers every way connectIfNeeded can fail, including the ones CoreBluetooth never
+            // reports as a disconnect. A session that landed since the attempt gave up is live.
             if error != nil, !self.hasLiveSession {
                 self.markLinkDown()
             }
@@ -373,8 +366,8 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         handleBluetoothStateChange(central.state)
     }
 
-    /// Handles the radio changing state. Split out of the delegate callback so it can be driven
-    /// without a live `CBCentralManager`, whose `state` cannot be set on Apple platforms.
+    /// Split out of the delegate callback so it can be driven without a live `CBCentralManager`,
+    /// whose `state` cannot be set on Apple platforms.
     func handleBluetoothStateChange(_ state: CBManagerState) {
         logger.info("\(String(describing: state.rawValue))")
 
@@ -386,17 +379,12 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             logger.info("Bluetooth not powered on; cancelling pending operations")
             cancelInFlightConnect()
             peripheralManager?.cancelPendingOperations()
-            // CoreBluetooth invalidates every peripheral connection when the radio leaves
-            // poweredOn and does not call didDisconnectPeripheral for them, so this callback is
-            // the only notice the driver gets that the session is gone. Without recording it,
-            // isConnected stays true for as long as Bluetooth is off and the UI goes on showing
-            // a pump it cannot reach.
+            // No didDisconnectPeripheral arrives for those, so this is the only notice.
             markLinkDown()
             return
         }
 
-        // Publish the radio coming back before the reconnect is attempted, so anything explaining
-        // the outage stops blaming Bluetooth as soon as that stops being the reason.
+        // So the UI stops blaming Bluetooth before the reconnect has even been attempted.
         pumpManager?.notifyDelegateStateUpdated()
 
         guard shouldAutoReconnect else {

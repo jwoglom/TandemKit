@@ -108,11 +108,8 @@ extension TandemPumpManager {
     }
 
     private func buildPumpStatusHighlight() -> DeviceStatusHighlight? {
-        // First, ahead of every therapy state below it: those are all read from the pump, so once
-        // the link is gone they describe a pump we stopped hearing from rather than the pump the
-        // user is wearing. Reconnecting is also the prerequisite for the app doing anything about
-        // any of them. `sustainedConnectionIssue` (not `connectionIssue`) so a drop that
-        // auto-reconnect clears in seconds never displaces a real therapy warning.
+        // Ahead of the therapy highlights below: those are all read from a pump we have stopped
+        // hearing from, and reconnecting is the prerequisite for acting on any of them.
         if let issue = sustainedConnectionIssue {
             return PumpStatusHighlight(
                 localizedMessage: issue.title,

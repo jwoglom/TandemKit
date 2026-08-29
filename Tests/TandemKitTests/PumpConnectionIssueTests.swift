@@ -3,10 +3,8 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The driver's answer to "can we talk to the pump right now?" — the one every screen that reports
-/// a disconnection is built on. These tests pin the two halves of it: that the answer is derived
-/// from both the phone's radio and the pump link, and that it turns to "no" on every route by which
-/// the link can actually go away.
+/// The driver's answer to "can we talk to the pump right now?", which every screen reporting a
+/// disconnection is built on. Derived from both the phone's radio and the pump link.
 @available(macOS 13.0, iOS 14.0, *) final class PumpConnectionIssueTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -23,7 +21,7 @@ import XCTest
         super.tearDown()
     }
 
-    /// A live session, synced a moment ago: the one combination that is not an issue.
+    /// The one combination that is not an issue.
     private func makeConnected() {
         bluetooth.bluetoothState = .poweredOn
         manager.state.isConnected = true
@@ -39,9 +37,8 @@ import XCTest
         XCTAssertNil(manager.sustainedConnectionIssue)
     }
 
-    /// The reported bug: with Bluetooth switched off, CoreBluetooth invalidates the session without
-    /// ever calling didDisconnectPeripheral, so a driver that only watched the pump link would go
-    /// on reporting a connection. The radio has to be part of the answer, not only the link.
+    /// The reported bug: CoreBluetooth invalidates the session without calling
+    /// didDisconnectPeripheral, so the radio has to be part of the answer, not only the link.
     func testBluetoothOffIsReportedEvenWhileTheLinkStillLooksUp() {
         makeConnected()
         bluetooth.bluetoothState = .poweredOff
@@ -65,8 +62,7 @@ import XCTest
         }
     }
 
-    /// `.unknown` is what CoreBluetooth reports until the central has started up. That is not a
-    /// fault of its own, so the pump link gets to give the more specific answer.
+    /// `.unknown` is the transient before the central starts up, not a fault of its own.
     func testUnknownRadioStateDefersToTheLinkState() {
         makeConnected()
         bluetooth.bluetoothState = .unknown
@@ -85,8 +81,7 @@ import XCTest
         XCTAssertEqual(manager.connectionIssue, .pumpUnreachable)
     }
 
-    /// A session can stay up at the link layer while nothing gets through it — from CoreBluetooth's
-    /// point of view a wedged connection is indistinguishable from a healthy one. The age of the
+    /// A wedged session is indistinguishable from a healthy one at the link layer; the age of the
     /// last completed sync is the only evidence that it is not.
     func testConnectedButLongUnsyncedReportsAsStale() {
         makeConnected()
@@ -106,9 +101,8 @@ import XCTest
 
     // MARK: - What reaches the home screen
 
-    /// Auto-reconnect clears most drops in seconds. Putting each one on the host app's home screen
-    /// would train the user to ignore the banner that matters, so a fresh drop stays on the pump's
-    /// own screens until it has cost loop cycles.
+    /// Auto-reconnect clears most drops in seconds; putting each one on the home screen would
+    /// train the user to ignore the banner that matters.
     func testARecentlyDroppedLinkIsNotYetWorthTheHomeScreen() {
         makeConnected()
         manager.state.isConnected = false
@@ -137,8 +131,7 @@ import XCTest
         XCTAssertNil(manager.sustainedConnectionIssue)
     }
 
-    /// Radio-level problems are definite, are the user's to fix, and will not clear on their own,
-    /// so they skip the grace period a dropped link gets.
+    /// Radio problems will not clear on their own, so they skip the grace period.
     func testRadioProblemsReachTheHomeScreenImmediately() {
         makeConnected()
 
@@ -153,8 +146,8 @@ import XCTest
     }
 }
 
-/// The BLE layer's side of the same question: `state.isConnected` has to actually go false when the
-/// session ends, or everything above it reports a pump that is not there.
+/// The BLE layer's side of it: `state.isConnected` has to actually go false when the session ends,
+/// or everything above reports a pump that is not there.
 @available(macOS 13.0, iOS 14.0, *) final class TandemBluetoothManagerLinkStateTests: XCTestCase {
     private var bluetooth: TandemBluetoothManager!
     private var manager: TandemPumpManager!
@@ -172,9 +165,8 @@ import XCTest
         super.tearDown()
     }
 
-    /// Turning Bluetooth off in the Settings app is the case that went unreported: CoreBluetooth
-    /// tears down the session but does not call didDisconnectPeripheral for it, so this callback is
-    /// the driver's only notice that the pump is gone.
+    /// The case that went unreported. CoreBluetooth tears the session down without calling
+    /// didDisconnectPeripheral, so this callback is the driver's only notice.
     func testPoweringBluetoothOffMarksThePumpDisconnected() {
         bluetooth.handleBluetoothStateChange(.poweredOff)
 
@@ -191,8 +183,7 @@ import XCTest
         }
     }
 
-    /// Marking the link down is only half of it: nothing on screen reads `state` directly, so the
-    /// change has to be published or the UI keeps drawing the connection it last heard about.
+    /// Nothing on screen reads `state` directly, so the change has to be published as well.
     func testLosingBluetoothPublishesAStatusUpdate() {
         let delegate = MockPumpManagerDelegate()
         manager.delegateQueue = DispatchQueue(label: "bluetooth-off-test")
@@ -212,8 +203,8 @@ import XCTest
 // The status highlight is drawn by LoopKitUI, which has no Linux build.
 #if canImport(SwiftUI)
 
-/// What the host app's home screen shows. This is the surface the user actually looks at, and the
-/// one that reported nothing at all when Bluetooth was switched off.
+/// What the host app's home screen shows — the surface that reported nothing at all when
+/// Bluetooth was switched off.
 @available(macOS 13.0, iOS 14.0, *) final class PumpConnectionStatusHighlightTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -261,8 +252,7 @@ import XCTest
         )
     }
 
-    /// Every other highlight describes something read off the pump, so once the pump is out of
-    /// reach they describe a pump we stopped hearing from. Reconnecting comes first.
+    /// The other highlights all describe a pump we have stopped hearing from.
     func testAnUnreachablePumpOutranksTheOtherHighlights() throws {
         manager.state.basalDose = UnfinalizedDose(suspendStartTime: Date.now)
         makeLongDisconnected()
@@ -275,8 +265,7 @@ import XCTest
         )
     }
 
-    /// The other side of that: a drop auto-reconnect is about to clear must not displace a warning
-    /// about insulin the user has to act on.
+    /// And the other way: a drop about to clear must not displace a warning about insulin.
     func testAMomentaryDropDoesNotDisplaceATherapyWarning() throws {
         manager.state.basalDose = UnfinalizedDose(suspendStartTime: Date.now)
         manager.state.isConnected = false

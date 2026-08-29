@@ -15,9 +15,8 @@ protocol PumpBluetoothConnection: AnyObject {
     /// low connection latency during pairing); a stub returns nil.
     var manager: CBCentralManager? { get }
 
-    /// State of the phone's Bluetooth radio. Separate from `manager` so the driver can reason about
-    /// the radio — and be tested doing so — without a live `CBCentralManager`, whose `state` is
-    /// read-only on Apple platforms.
+    /// State of the phone's Bluetooth radio. Separate from `manager` so it can be driven in tests,
+    /// where `CBCentralManager.state` is read-only.
     var bluetoothState: CBManagerState { get }
 
     /// Starts scanning for Tandem pumps, calling `completion` once per advertisement. Returns false

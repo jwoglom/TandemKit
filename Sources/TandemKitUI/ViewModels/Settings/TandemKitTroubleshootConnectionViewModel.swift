@@ -7,8 +7,7 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
 
     @Published var isConnected: Bool = false
-    /// Why the pump cannot be reached, or nil when it can. Named at the top of the screen so the
-    /// user is told which of the steps below is the one that applies to them.
+    /// Why the pump cannot be reached, named at the top so the user knows which step applies.
     @Published var connectionIssue: PumpConnectionIssue?
     @Published var isAttemptingReconnect: Bool = false
 
