@@ -1,3 +1,9 @@
+// The silent-tone trick is an iOS background-execution mechanism: it needs
+// AVFoundation, the Objective-C runtime (#selector) and the app bundle. None
+// of that exists on Linux, where this type is only ever constructed and never
+// meaningfully used, so the Linux build gets an inert stub with the same
+// surface instead. See LinuxShims/README.md.
+#if canImport(AVFoundation)
 import AVFoundation
 
 /// A trick used to keep the app alive
@@ -51,3 +57,13 @@ class TandemSilentToneManager {
         }
     }
 }
+
+#else
+
+/// Linux stub: the host app has no background-audio keep-alive to manage.
+class TandemSilentToneManager {
+    func startBackgroundTask() {}
+    func stopBackgroundTask() {}
+}
+
+#endif

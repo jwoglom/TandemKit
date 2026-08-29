@@ -1,5 +1,9 @@
-import Dispatch
-import Foundation
+// Apple's CoreBluetooth re-exports Foundation and Dispatch, so files that
+// `import CoreBluetooth` alone still see Data, NSObject, NSLock, DispatchQueue
+// and friends. The shim must do the same or those files fail to compile here
+// for reasons that have nothing to do with Bluetooth.
+@_exported import Dispatch
+@_exported import Foundation
 
 public struct BluetoothUUID: Hashable, Sendable {
     public let uuid: UUID
@@ -57,15 +61,33 @@ public protocol CBPeripheralDelegate: AnyObject {
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?)
 }
 
+// On Apple, CBPeripheralDelegate is an @objc protocol whose members are all
+// optional. Swift protocols have no optional members, so default no-op
+// implementations stand in -- otherwise a conformer must implement callbacks
+// it never uses.
+public extension CBPeripheralDelegate {
+    func peripheral(_: CBPeripheral, didDiscoverServices _: Error?) {}
+    func peripheral(_: CBPeripheral, didDiscoverCharacteristicsFor _: CBService, error _: Error?) {}
+    func peripheral(_: CBPeripheral, didUpdateNotificationStateFor _: CBCharacteristic, error _: Error?) {}
+    func peripheral(_: CBPeripheral, didWriteValueFor _: CBCharacteristic, error _: Error?) {}
+    func peripheral(_: CBPeripheral, didUpdateValueFor _: CBCharacteristic, error _: Error?) {}
+    func peripheral(_: CBPeripheral, didReadRSSI _: NSNumber, error _: Error?) {}
+}
+
 public protocol CBAttribute { var uuid: CBUUID { get } }
 
 public class CBCharacteristic: CBAttribute {
     public let uuid: CBUUID
     public var value: Data?
     public var isNotifying: Bool = false
-    public init(uuid: CBUUID, value: Data? = nil) {
+    /// Weak on Apple (the service owns its characteristics); mirrored here so
+    /// logging that walks characteristic -> service compiles.
+    public weak var service: CBService?
+
+    public init(uuid: CBUUID, value: Data? = nil, service: CBService? = nil) {
         self.uuid = uuid
         self.value = value
+        self.service = service
     }
 }
 
@@ -85,13 +107,15 @@ public enum CBCharacteristicWriteType {
 
 public class CBPeripheral {
     public let identifier: UUID
+    public var name: String?
     public var services: [CBService]?
     public weak var delegate: CBPeripheralDelegate?
     public enum State { case disconnected, connecting, connected }
     public var state: State = .disconnected
 
-    public init(identifier: UUID) {
+    public init(identifier: UUID, name: String? = nil) {
         self.identifier = identifier
+        self.name = name
     }
 
     public func discoverServices(_: [CBUUID]?) {}
@@ -326,3 +350,12 @@ public class CBPeripheralManager {
         delegate?.peripheralManager(self, didReceiveRead: request)
     }
 }
+
+/// Scan-option keys. Apple vends these as global `let`s in CoreBluetooth.
+public let CBCentralManagerScanOptionAllowDuplicatesKey = "kCBScanOptionAllowDuplicates"
+public let CBCentralManagerScanOptionSolicitedServiceUUIDsKey = "kCBScanOptionSolicitedServiceUUIDs"
+public let CBCentralManagerOptionShowPowerAlertKey = "kCBInitOptionShowPowerAlert"
+public let CBCentralManagerOptionRestoreIdentifierKey = "kCBInitOptionRestoreIdentifier"
+public let CBAdvertisementDataLocalNameKey = "kCBAdvDataLocalName"
+public let CBAdvertisementDataManufacturerDataKey = "kCBAdvDataManufacturerData"
+public let CBAdvertisementDataServiceUUIDsKey = "kCBAdvDataServiceUUIDs"

@@ -1,5 +1,10 @@
 import LoopKit
+// Unused here, but kept (guarded) rather than deleted so the Apple build's
+// import list is unchanged. LoopKitUI has no Linux shim -- it is SwiftUI all
+// the way down.
+#if canImport(LoopKitUI)
 import LoopKitUI
+#endif
 @testable import TandemKit
 import XCTest
 
@@ -312,6 +317,11 @@ import XCTest
 
     // MARK: - Status highlight
 
+    // pumpStatusHighlight lives in Sources/TandemKitUI (TandemPumpManager+UI),
+    // which is SwiftUI and so is not part of the Linux build. The rest of this
+    // file is driver logic and runs on both.
+    #if canImport(SwiftUI)
+
     /// While Control-IQ is on the driver refuses every automatic bolus and temp basal, so the host
     /// app is not dosing. Without a status highlight the only trace of that is one loop failure per
     /// cycle, and a loop that fails earlier for some other reason (no glucose, say) hides it
@@ -331,4 +341,6 @@ import XCTest
 
         XCTAssertNil(manager.pumpStatusHighlight)
     }
+
+    #endif
 }

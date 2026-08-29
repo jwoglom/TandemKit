@@ -4,7 +4,9 @@ import Dispatch
 import Foundation
 import HealthKit
 import LoopKit
+#if canImport(UIKit)
 import UIKit
+#endif
 
 public class TandemPumpManager: PumpManager, Pluggable {
     public static var pluginIdentifier: String = "TandemPumpManager"
@@ -73,6 +75,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
+    // Reached only via #selector from the UIKit lifecycle observers in init,
+    // so both the handlers and the registration are UIKit-only. Off Apple
+    // there is no app lifecycle to observe and no ObjC runtime to dispatch
+    // through.
+    #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
             logger.info("Starting silent tones")
@@ -83,6 +90,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     @objc func appMovedToForeground() {
         silentToneManager.stopBackgroundTask()
     }
+    #endif
 
     public var delegateQueue: DispatchQueue! {
         get {
@@ -123,6 +131,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self?.storeHistoryLogs(response.historyLogs)
         }
 
+        #if canImport(UIKit)
         let nc = NotificationCenter.default
         nc.addObserver(
             self,
@@ -136,6 +145,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+        #endif
     }
 
     public required convenience init?(rawState: RawStateValue) {

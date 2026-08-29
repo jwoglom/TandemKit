@@ -1,81 +1,18 @@
 @_exported import Foundation
+// Real LoopKit re-exports HealthKit types (HKQuantity is its currency for
+// doses and limits), so the shim does too -- code doing `import LoopKit`
+// alone still sees HKUnit/HKQuantity.
+@_exported import HealthKit
+
+#if canImport(UIKit)
+    import UIKit
+#endif
+#if canImport(UserNotifications)
+    import UserNotifications
+#endif
 
 // This file is a shim for building on non-Apple platforms.
 #if os(Linux)
-
-    // MARK: - Lightweight HealthKit shims
-
-    public struct HKUnit: Codable, Equatable {
-        private let symbol: String
-
-        public init(symbol: String) {
-            self.symbol = symbol
-        }
-
-        public static func internationalUnit() -> HKUnit {
-            HKUnit(symbol: "IU")
-        }
-
-        public static func internationalUnitPerHour() -> HKUnit {
-            HKUnit(symbol: "IU/hr")
-        }
-
-        public func unitDivided(by unit: HKUnit) -> HKUnit {
-            HKUnit(symbol: "\(symbol)/\(unit.symbol)")
-        }
-    }
-
-    public struct HKQuantity: Codable, Equatable {
-        public let unit: HKUnit
-        public let value: Double
-
-        public init(unit: HKUnit, doubleValue: Double) {
-            self.unit = unit
-            value = doubleValue
-        }
-
-        public func doubleValue(for _: HKUnit) -> Double {
-            value
-        }
-    }
-
-    public struct HKDevice: Equatable {
-        public var name: String?
-        public var manufacturer: String?
-        public var model: String?
-        public var hardwareVersion: String?
-        public var firmwareVersion: String?
-        public var softwareVersion: String?
-        public var localIdentifier: String?
-        public var udiDeviceIdentifier: String?
-
-        public init(
-            name: String?,
-            manufacturer: String?,
-            model: String?,
-            hardwareVersion: String?,
-            firmwareVersion: String?,
-            softwareVersion: String?,
-            localIdentifier: String?,
-            udiDeviceIdentifier: String?
-        ) {
-            self.name = name
-            self.manufacturer = manufacturer
-            self.model = model
-            self.hardwareVersion = hardwareVersion
-            self.firmwareVersion = firmwareVersion
-            self.softwareVersion = softwareVersion
-            self.localIdentifier = localIdentifier
-            self.udiDeviceIdentifier = udiDeviceIdentifier
-        }
-    }
-
-    #if canImport(UIKit)
-        import UIKit
-    #endif
-    #if canImport(UserNotifications)
-        import UserNotifications
-    #endif
 
     // MARK: - Shared Protocols & Helpers
 
@@ -109,7 +46,7 @@
 
     // MARK: - Device Manager
 
-    public protocol DeviceManagerDelegate: AnyObject {
+    public protocol DeviceManagerDelegate: AlertIssuer, AnyObject {
         #if canImport(UserNotifications)
             func scheduleNotification(
                 for manager: DeviceManager,
@@ -140,18 +77,16 @@
         typealias RawStateValue = [String: Any]
 
         static var managerIdentifier: String { get }
-        static var localizedTitle: String { get }
+        // Instance-only, matching real LoopKit. The shim previously also
+        // required a `static var localizedTitle` with the instance member
+        // defaulting to it -- TandemPumpManager declares only the instance
+        // property and builds against real LoopKit in Xcode, so the static
+        // requirement was shim invention.
         var localizedTitle: String { get }
 
         init?(rawState: RawStateValue)
         var rawState: RawStateValue { get }
         var isOnboarded: Bool { get }
-    }
-
-    public extension DeviceManager {
-        var localizedTitle: String {
-            type(of: self).localizedTitle
-        }
     }
 
     // MARK: - Pump Manager Status
@@ -270,7 +205,6 @@
             didRequestBasalRateScheduleChange basalRateSchedule: BasalRateSchedule,
             completion: @escaping (Error?) -> Void
         )
-        func pumpManagerRecommendsLoop(_ pumpManager: PumpManager)
         func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date
         var detectedSystemTimeOffset: TimeInterval { get }
         var automaticDosingEnabled: Bool { get }
@@ -282,6 +216,13 @@
         func pumpManager(_ pumpManager: PumpManager, didEnactTempBasal result: PumpManagerResult<DoseEntry>)
         func pumpManager(_ pumpManager: PumpManager, didSuspendDeliveryWithError error: Error?)
         func pumpManager(_ pumpManager: PumpManager, didResumeDeliveryWithError error: Error?)
+    }
+
+    /// Real LoopKit routes alerts through DeviceManagerDelegate (which
+    /// PumpManagerDelegate inherits) into the app's alert manager.
+    @available(macOS 13.0, iOS 14.0, *) public protocol AlertIssuer: AnyObject {
+        func issueAlert(_ alert: Alert)
+        func retractAlert(identifier: Alert.Identifier)
     }
 
     // MARK: - Pump Manager Protocol
@@ -328,7 +269,6 @@
         var lastSync: Date? { get }
         var status: PumpManagerStatus { get }
 
-        var dosingDecisionDelegate: PumpManagerDosingDecisionDelegate? { get set }
 
         func addStatusObserver(_ observer: PumpManagerStatusObserver, queue: DispatchQueue)
         func removeStatusObserver(_ observer: PumpManagerStatusObserver)
@@ -410,6 +350,12 @@
     }
 
     @available(macOS 13.0, iOS 14.0, *) public enum InsulinType: String, Codable {
+        case novolog
+        case humalog
+        case apidra
+        case fiasp
+        case lyumjev
+        case afrezza
         case rapidActingAnalog
         case ultraRapidActing
         case ultraRapidInsulin
@@ -547,22 +493,32 @@
         }
     }
 
+    // Real LoopKit's BasalRateSchedule is a DailyValueSchedule<Double>, whose
+    // only initializer is failable and labelled `dailyItems:` -- it sorts the
+    // items and rejects an empty schedule. Callers rely on both (they force
+    // unwrap, and they pass unsorted items), so the shim mirrors it rather
+    // than offering a more convenient shape.
     @available(macOS 13.0, iOS 14.0, *) public struct BasalRateSchedule: Codable, Equatable {
-        public var items: [RepeatingScheduleValue<Double>]
-        public var timeZone: TimeZone
+        public private(set) var items: [RepeatingScheduleValue<Double>]
+        public private(set) var timeZone: TimeZone
 
-        public init(items: [RepeatingScheduleValue<Double>], timeZone: TimeZone) {
-            self.items = items
-            self.timeZone = timeZone
+        public init?(dailyItems: [RepeatingScheduleValue<Double>], timeZone: TimeZone? = nil) {
+            let sorted = dailyItems.sorted { $0.startTime < $1.startTime }
+            guard !sorted.isEmpty else { return nil }
+            items = sorted
+            self.timeZone = timeZone ?? TimeZone.current
         }
     }
 
-    @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Codable, Equatable {
-        public var maximumBasalRatePerHour: Double?
-        public var maximumBolus: Double?
+    // Real LoopKit expresses both limits as HKQuantity, and callers read them
+    // back with doubleValue(for:). Storing raw Doubles here would compile
+    // against the shim and fail against real LoopKit.
+    @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Equatable {
+        public var maximumBasalRate: HKQuantity?
+        public var maximumBolus: HKQuantity?
 
-        public init(maximumBasalRatePerHour: Double?, maximumBolus: Double?) {
-            self.maximumBasalRatePerHour = maximumBasalRatePerHour
+        public init(maximumBasalRate: HKQuantity?, maximumBolus: HKQuantity?) {
+            self.maximumBasalRate = maximumBasalRate
             self.maximumBolus = maximumBolus
         }
     }
@@ -637,6 +593,300 @@
 
         public var isAutomatic: Bool {
             self == .automatic
+        }
+    }
+
+    // MARK: - Alerts
+
+    @available(macOS 13.0, iOS 14.0, *) public struct Alert: Equatable {
+        public typealias AlertIdentifier = String
+
+        public struct Identifier: Equatable, Hashable {
+            public let managerIdentifier: String
+            public let alertIdentifier: AlertIdentifier
+
+            public init(managerIdentifier: String, alertIdentifier: AlertIdentifier) {
+                self.managerIdentifier = managerIdentifier
+                self.alertIdentifier = alertIdentifier
+            }
+
+            public var value: String { "\(managerIdentifier).\(alertIdentifier)" }
+        }
+
+        public struct Content: Equatable {
+            public let title: String
+            public let body: String
+            public let acknowledgeActionButtonLabel: String
+
+            public init(title: String, body: String, acknowledgeActionButtonLabel: String) {
+                self.title = title
+                self.body = body
+                self.acknowledgeActionButtonLabel = acknowledgeActionButtonLabel
+            }
+        }
+
+        public enum Trigger: Equatable {
+            case immediate
+            case delayed(interval: TimeInterval)
+            case repeating(repeatInterval: TimeInterval)
+        }
+
+        public enum InterruptionLevel: String, Equatable, Codable {
+            case passive
+            case active
+            case timeSensitive
+            case critical
+        }
+
+        public struct Sound: Equatable {
+            public let name: String
+            public init(name: String) { self.name = name }
+            public static let vibrate = Sound(name: "vibrate")
+        }
+
+        public let identifier: Identifier
+        public let foregroundContent: Content?
+        public let backgroundContent: Content?
+        public let trigger: Trigger
+        public let interruptionLevel: InterruptionLevel
+
+        public init(
+            identifier: Identifier,
+            foregroundContent: Content?,
+            backgroundContent: Content?,
+            trigger: Trigger,
+            interruptionLevel: InterruptionLevel = .timeSensitive
+        ) {
+            self.identifier = identifier
+            self.foregroundContent = foregroundContent
+            self.backgroundContent = backgroundContent
+            self.trigger = trigger
+            self.interruptionLevel = interruptionLevel
+        }
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) public protocol AlertResponder: AnyObject {
+        func acknowledgeAlert(alertIdentifier: Alert.AlertIdentifier, completion: @escaping (Error?) -> Void)
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) public protocol AlertSoundVendor {
+        func getSoundBaseURL() -> URL?
+        func getSounds() -> [Alert.Sound]
+    }
+
+    /// An alert as recorded by LoopKit's alert store.
+    @available(macOS 13.0, iOS 14.0, *) public struct PersistedAlert: Equatable {
+        public let alert: Alert
+        public let issuedDate: Date
+        public let retractedDate: Date?
+        public let acknowledgedDate: Date?
+
+        public init(alert: Alert, issuedDate: Date, retractedDate: Date?, acknowledgedDate: Date?) {
+            self.alert = alert
+            self.issuedDate = issuedDate
+            self.retractedDate = retractedDate
+            self.acknowledgedDate = acknowledgedDate
+        }
+    }
+
+    // MARK: - Plugins
+
+    public protocol Pluggable: AnyObject {
+        static var pluginIdentifier: String { get }
+        var pluginIdentifier: String { get }
+        func initializationComplete(for pluggables: [Pluggable])
+    }
+
+    public extension Pluggable {
+        var pluginIdentifier: String { type(of: self).pluginIdentifier }
+        func initializationComplete(for _: [Pluggable]) {}
+    }
+
+    // MARK: - Dose Progress Observation
+
+    @available(macOS 13.0, iOS 14.0, *) public protocol DoseProgressObserver: AnyObject {
+        func doseProgressReporterDidUpdate(_ doseProgressReporter: DoseProgressReporter)
+    }
+
+    // MARK: - Weak Collections
+    //
+    // Ported from LoopKit's WeakSet.swift, WeakSynchronizedSet.swift and
+    // WeakSynchronizedDelegate.swift (loopandlearn/LoopKit @ 0229bb18), keeping
+    // their semantics: weak storage keyed by ObjectIdentifier, elements boxed
+    // as AnyObject so class-constrained protocol existentials can be held, and
+    // callbacks dispatched *asynchronously* on the registered queue.
+    // TandemPumpManager's threading depends on the async part -- notifying
+    // synchronously deadlocks when a delegate callback re-enters the manager.
+    // Only NSLock differs from the original's UnfairLock.
+
+    /// Weak box that accepts class-constrained protocol existentials.
+    public struct Weak<Value> {
+        private weak var _value: AnyObject?
+
+        public var value: Value? { _value as? Value }
+
+        public init(_ value: Value) {
+            precondition(
+                Mirror(reflecting: value).displayStyle == .class,
+                "Weak references can only be held of class types."
+            )
+            _value = value as AnyObject
+        }
+    }
+
+    /// A set holding weak references to its members. A struct with mutating
+    /// insert/remove, as in LoopKit.
+    public struct WeakSet<Element>: Sequence {
+        private var storage: [ObjectIdentifier: Weak<Element>] = [:]
+
+        public init() {}
+
+        public var isEmpty: Bool { storage.values.allSatisfy { $0.value == nil } }
+
+        public func contains(_ member: Element) -> Bool {
+            storage[ObjectIdentifier(member as AnyObject)]?.value != nil
+        }
+
+        @discardableResult
+        public mutating func insert(_ newMember: Element) -> (inserted: Bool, memberAfterInsert: Element) {
+            let id = ObjectIdentifier(newMember as AnyObject)
+            if let existing = storage[id]?.value {
+                return (inserted: false, memberAfterInsert: existing)
+            }
+            storage[id] = Weak(newMember)
+            return (inserted: true, memberAfterInsert: newMember)
+        }
+
+        @discardableResult
+        public mutating func remove(_ member: Element) -> Element? {
+            storage.removeValue(forKey: ObjectIdentifier(member as AnyObject))?.value
+        }
+
+        public mutating func cleanupDeallocatedElements() {
+            storage = storage.filter { $0.value.value != nil }
+        }
+
+        public func makeIterator() -> AnyIterator<Element> {
+            AnyIterator(storage.values.compactMap(\.value).makeIterator())
+        }
+    }
+
+    /// Weakly-held observers, each called back on the queue it registered with.
+    public final class WeakSynchronizedSet<Element> {
+        private struct Container {
+            weak var element: AnyObject?
+            let queue: DispatchQueue
+
+            func call(_ body: @escaping (Element) -> Void) {
+                guard let element = element as? Element else { return }
+                queue.async { body(element) }
+            }
+        }
+
+        private var storage: [ObjectIdentifier: Container] = [:]
+        private let lock = NSLock()
+
+        public init() {}
+
+        public func insert(_ element: Element, queue: DispatchQueue) {
+            let id = ObjectIdentifier(element as AnyObject)
+            lock.lock()
+            defer { lock.unlock() }
+            storage[id] = Container(element: element as AnyObject, queue: queue)
+        }
+
+        public func contains(_ element: Element) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage[ObjectIdentifier(element as AnyObject)] != nil
+        }
+
+        public func removeElement(_ element: Element) {
+            lock.lock()
+            defer { lock.unlock() }
+            storage.removeValue(forKey: ObjectIdentifier(element as AnyObject))
+        }
+
+        @discardableResult
+        public func cleanupDeallocatedElements() -> Self {
+            lock.lock()
+            defer { lock.unlock() }
+            storage = storage.filter { $0.value.element != nil }
+            return self
+        }
+
+        /// Holds the lock while iterating, since each call is dispatched out.
+        public func forEach(_ body: @escaping (Element) -> Void) {
+            lock.lock()
+            defer { lock.unlock() }
+            for container in storage.values {
+                container.call(body)
+            }
+        }
+    }
+
+    /// Weakly-held single delegate, invoked on `queue`.
+    public final class WeakSynchronizedDelegate<Delegate> {
+        private weak var _delegate: AnyObject?
+        private var _queue: DispatchQueue
+        private let lock = NSLock()
+
+        public init(queue: DispatchQueue = .main) {
+            _queue = queue
+        }
+
+        public var delegate: Delegate? {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _delegate as? Delegate
+            }
+            set {
+                lock.lock()
+                _delegate = newValue as AnyObject?
+                lock.unlock()
+            }
+        }
+
+        public var queue: DispatchQueue! {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _queue
+            }
+            set {
+                lock.lock()
+                _queue = newValue ?? .main
+                lock.unlock()
+            }
+        }
+
+        private func currentDelegateAndQueue() -> (Delegate?, DispatchQueue) {
+            lock.lock()
+            defer { lock.unlock() }
+            return (_delegate as? Delegate, _queue)
+        }
+
+        /// Asynchronous, as in LoopKit. Callers must not assume `block` has run
+        /// by the time `notify` returns.
+        public func notify(_ block: @escaping (Delegate?) -> Void) {
+            let (delegate, queue) = currentDelegateAndQueue()
+            queue.async { block(delegate) }
+        }
+
+        public func notifyDelayed(by interval: TimeInterval, _ block: @escaping (Delegate?) -> Void) {
+            let (delegate, queue) = currentDelegateAndQueue()
+            queue.asyncAfter(deadline: .now() + interval) { block(delegate) }
+        }
+
+        public func call<ReturnType>(_ block: (Delegate?) -> ReturnType) -> ReturnType {
+            lock.lock()
+            defer { lock.unlock() }
+            var result: ReturnType!
+            _queue.sync {
+                result = block(_delegate as? Delegate)
+            }
+            return result
         }
     }
 
