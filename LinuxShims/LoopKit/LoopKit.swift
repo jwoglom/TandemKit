@@ -1,7 +1,5 @@
 @_exported import Foundation
-// Real LoopKit re-exports HealthKit types (HKQuantity is its currency for
-// doses and limits), so the shim does too -- code doing `import LoopKit`
-// alone still sees HKUnit/HKQuantity.
+// Re-exported, as real LoopKit does.
 @_exported import HealthKit
 
 #if canImport(UIKit)
@@ -77,11 +75,6 @@
         typealias RawStateValue = [String: Any]
 
         static var managerIdentifier: String { get }
-        // Instance-only, matching real LoopKit. The shim previously also
-        // required a `static var localizedTitle` with the instance member
-        // defaulting to it -- TandemPumpManager declares only the instance
-        // property and builds against real LoopKit in Xcode, so the static
-        // requirement was shim invention.
         var localizedTitle: String { get }
 
         init?(rawState: RawStateValue)
@@ -218,8 +211,6 @@
         func pumpManager(_ pumpManager: PumpManager, didResumeDeliveryWithError error: Error?)
     }
 
-    /// Real LoopKit routes alerts through DeviceManagerDelegate (which
-    /// PumpManagerDelegate inherits) into the app's alert manager.
     @available(macOS 13.0, iOS 14.0, *) public protocol AlertIssuer: AnyObject {
         func issueAlert(_ alert: Alert)
         func retractAlert(identifier: Alert.Identifier)
@@ -493,11 +484,7 @@
         }
     }
 
-    // Real LoopKit's BasalRateSchedule is a DailyValueSchedule<Double>, whose
-    // only initializer is failable and labelled `dailyItems:` -- it sorts the
-    // items and rejects an empty schedule. Callers rely on both (they force
-    // unwrap, and they pass unsorted items), so the shim mirrors it rather
-    // than offering a more convenient shape.
+    // Failable and sorting, as real LoopKit's DailyValueSchedule is.
     @available(macOS 13.0, iOS 14.0, *) public struct BasalRateSchedule: Codable, Equatable {
         public private(set) var items: [RepeatingScheduleValue<Double>]
         public private(set) var timeZone: TimeZone
@@ -510,9 +497,6 @@
         }
     }
 
-    // Real LoopKit expresses both limits as HKQuantity, and callers read them
-    // back with doubleValue(for:). Storing raw Doubles here would compile
-    // against the shim and fail against real LoopKit.
     @available(macOS 13.0, iOS 14.0, *) public struct DeliveryLimits: Equatable {
         public var maximumBasalRate: HKQuantity?
         public var maximumBolus: HKQuantity?
@@ -674,7 +658,6 @@
         func getSounds() -> [Alert.Sound]
     }
 
-    /// An alert as recorded by LoopKit's alert store.
     @available(macOS 13.0, iOS 14.0, *) public struct PersistedAlert: Equatable {
         public let alert: Alert
         public let issuedDate: Date
@@ -710,16 +693,9 @@
 
     // MARK: - Weak Collections
     //
-    // Ported from LoopKit's WeakSet.swift, WeakSynchronizedSet.swift and
-    // WeakSynchronizedDelegate.swift (loopandlearn/LoopKit @ 0229bb18), keeping
-    // their semantics: weak storage keyed by ObjectIdentifier, elements boxed
-    // as AnyObject so class-constrained protocol existentials can be held, and
-    // callbacks dispatched *asynchronously* on the registered queue.
-    // TandemPumpManager's threading depends on the async part -- notifying
-    // synchronously deadlocks when a delegate callback re-enters the manager.
-    // Only NSLock differs from the original's UnfairLock.
+    // Ported from loopandlearn/LoopKit @ 0229bb18. Callbacks must stay async:
+    // a synchronous notify deadlocks when a delegate re-enters the manager.
 
-    /// Weak box that accepts class-constrained protocol existentials.
     public struct Weak<Value> {
         private weak var _value: AnyObject?
 
@@ -734,8 +710,6 @@
         }
     }
 
-    /// A set holding weak references to its members. A struct with mutating
-    /// insert/remove, as in LoopKit.
     public struct WeakSet<Element>: Sequence {
         private var storage: [ObjectIdentifier: Weak<Element>] = [:]
 
@@ -771,7 +745,7 @@
         }
     }
 
-    /// Weakly-held observers, each called back on the queue it registered with.
+    /// Observers called back on the queue each registered with.
     public final class WeakSynchronizedSet<Element> {
         private struct Container {
             weak var element: AnyObject?
@@ -815,7 +789,7 @@
             return self
         }
 
-        /// Holds the lock while iterating, since each call is dispatched out.
+        // Lock held while iterating; each call is dispatched out.
         public func forEach(_ body: @escaping (Element) -> Void) {
             lock.lock()
             defer { lock.unlock() }
@@ -825,7 +799,6 @@
         }
     }
 
-    /// Weakly-held single delegate, invoked on `queue`.
     public final class WeakSynchronizedDelegate<Delegate> {
         private weak var _delegate: AnyObject?
         private var _queue: DispatchQueue
@@ -867,8 +840,7 @@
             return (_delegate as? Delegate, _queue)
         }
 
-        /// Asynchronous, as in LoopKit. Callers must not assume `block` has run
-        /// by the time `notify` returns.
+        /// Async: `block` has not necessarily run when this returns.
         public func notify(_ block: @escaping (Delegate?) -> Void) {
             let (delegate, queue) = currentDelegateAndQueue()
             queue.async { block(delegate) }

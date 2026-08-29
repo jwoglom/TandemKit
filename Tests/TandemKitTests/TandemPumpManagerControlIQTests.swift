@@ -1,7 +1,4 @@
 import LoopKit
-// Unused here, but kept (guarded) rather than deleted so the Apple build's
-// import list is unchanged. LoopKitUI has no Linux shim -- it is SwiftUI all
-// the way down.
 #if canImport(LoopKitUI)
 import LoopKitUI
 #endif
@@ -317,9 +314,7 @@ import XCTest
 
     // MARK: - Status highlight
 
-    // pumpStatusHighlight lives in Sources/TandemKitUI (TandemPumpManager+UI),
-    // which is SwiftUI and so is not part of the Linux build. The rest of this
-    // file is driver logic and runs on both.
+    // pumpStatusHighlight lives in TandemKitUI, which has no Linux build.
     #if canImport(SwiftUI)
 
     /// While Control-IQ is on the driver refuses every automatic bolus and temp basal, so the host

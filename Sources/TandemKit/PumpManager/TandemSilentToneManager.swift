@@ -55,7 +55,6 @@ class TandemSilentToneManager {
 
 #else
 
-/// Inert stub for platforms without AVFoundation.
 class TandemSilentToneManager {
     func startBackgroundTask() {}
     func stopBackgroundTask() {}

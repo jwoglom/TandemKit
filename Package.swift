@@ -24,19 +24,13 @@ import PackageDescription
 
 // On Linux there is no Xcode project to fall back on, and Claude Code web
 // sessions run in Linux containers (scripts/claude-web-setup.sh), so `swift
-// build` is the only way for them to compile anything. It is also how CI tests
-// the driver without a macOS runner.
+// build` is the only way for them to compile anything, and how CI tests the
+// driver without a macOS runner.
 //
-// What builds here: Sources/TandemCore *and* Sources/TandemKit -- the message
-// catalog plus the PumpManager layer -- compiled into one module named
-// TandemKit, matching what TandemKit.xcodeproj produces and what the tests
-// `@testable import`. They build against source shims for LoopKit, HealthKit,
-// CoreBluetooth and Combine kept outside Sources/ (see LinuxShims/README.md).
-//
-// What does not: Sources/TandemKitUI is 53 files of SwiftUI and LoopKitUI, and
-// Sources/TandemKitPlugin depends on it. Test files covering TandemKitUI view
-// models are excluded from the TandemKitTests target below and still run on
-// macOS via TandemKit.xcodeproj.
+// Sources/TandemCore and Sources/TandemKit compile into one module named
+// TandemKit, matching TandemKit.xcodeproj and what the tests `@testable
+// import`, against the shims in LinuxShims/ (see its README). TandemKitUI is
+// SwiftUI and TandemKitPlugin depends on it, so neither builds here.
 //
 // SwiftECC and BigInt call SecRandomCopyBytes unconditionally and do not
 // compile on Linux, so they are attached to Apple platforms only; swift-crypto
@@ -83,12 +77,8 @@ let package = Package(
             dependencies: ["TandemKit", "CoreBluetooth"],
             path: "Tests/TandemCoreTests"
         ),
-        // Excluded here, not deleted: these exercise view models in
-        // Sources/TandemKitUI, which is 53 files of SwiftUI/LoopKitUI and has
-        // no Linux build. They still run in the TandemKitTests target of
-        // TandemKit.xcodeproj on macOS -- this list is a statement about
-        // SwiftPM-on-Linux only. Keep it in sync: a new UI view-model test
-        // must be added here or the Linux build breaks.
+        // TandemKitUI view-model tests; macOS-only, still run via the Xcode
+        // project. A new one must be added here or the Linux build breaks.
         .testTarget(
             name: "TandemKitTests",
             dependencies: ["TandemKit", "CoreBluetooth", "LoopKit", "HealthKit"],

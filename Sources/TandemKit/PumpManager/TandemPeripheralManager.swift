@@ -461,8 +461,7 @@ extension TandemPeripheralManager {
                 JpakeAuthBuilder.clearInstance()
             }
 
-            // Step 1: Requesting high priority. Latency optimisation only; the
-            // unexposed API is reached through the ObjC runtime, so Apple-only.
+            // Step 1: Requesting high priority. Optimisation only.
             #if canImport(ObjectiveC)
             if let central = pumpManager.bluetooth.manager {
                 let selector = NSSelectorFromString("setDesiredConnectionLatency:forPeripheral:")

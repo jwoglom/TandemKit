@@ -1,20 +1,9 @@
-// Linux-only stand-in for the slice of Combine that TandemKit uses.
-//
-// That slice is small and fixed: `PassthroughSubject<T, Never>` for the pump's
-// control/history streams, `sink(receiveValue:)` to observe them, and
-// `AnyCancellable` to own the subscription. Nothing here needs schedulers,
-// operators, backpressure or failure completion, so this is a hand-written
-// stub rather than a dependency on OpenCombine.
-//
-// Semantics deliberately matched to real Combine:
-//   - `sink` returns a cancellable; dropping it ends the subscription.
-//   - `send` delivers to every current subscriber, in subscription order.
-// Never compiled on Apple platforms -- see LinuxShims/README.md.
+// Linux-only Combine stand-in. See LinuxShims/README.md.
 @_exported import Foundation
 
 #if os(Linux)
 
-/// A type-erasing cancellable that cancels on deinit, as Combine's does.
+/// Cancels on deinit, as Combine's does.
 public final class AnyCancellable: Hashable {
     private var cancelBlock: (() -> Void)?
     private let lock = NSLock()
@@ -60,8 +49,7 @@ public final class PassthroughSubject<Output, Failure: Error> {
         lock.lock()
         let handlers = subscribers.map(\.handler)
         lock.unlock()
-        // Delivered outside the lock: a handler may cancel its own
-        // subscription, which would otherwise deadlock on `lock`.
+        // Outside the lock: a handler may cancel its own subscription.
         for handler in handlers {
             handler(value)
         }

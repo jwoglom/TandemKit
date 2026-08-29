@@ -1,7 +1,4 @@
-// Apple's CoreBluetooth re-exports Foundation and Dispatch, so files that
-// `import CoreBluetooth` alone still see Data, NSObject, NSLock, DispatchQueue
-// and friends. The shim must do the same or those files fail to compile here
-// for reasons that have nothing to do with Bluetooth.
+// Re-exported, as Apple's CoreBluetooth does.
 @_exported import Dispatch
 @_exported import Foundation
 
@@ -61,10 +58,7 @@ public protocol CBPeripheralDelegate: AnyObject {
     func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?)
 }
 
-// On Apple, CBPeripheralDelegate is an @objc protocol whose members are all
-// optional. Swift protocols have no optional members, so default no-op
-// implementations stand in -- otherwise a conformer must implement callbacks
-// it never uses.
+// These members are @objc optional on Apple.
 public extension CBPeripheralDelegate {
     func peripheral(_: CBPeripheral, didDiscoverServices _: Error?) {}
     func peripheral(_: CBPeripheral, didDiscoverCharacteristicsFor _: CBService, error _: Error?) {}
@@ -80,8 +74,6 @@ public class CBCharacteristic: CBAttribute {
     public let uuid: CBUUID
     public var value: Data?
     public var isNotifying: Bool = false
-    /// Weak on Apple (the service owns its characteristics); mirrored here so
-    /// logging that walks characteristic -> service compiles.
     public weak var service: CBService?
 
     public init(uuid: CBUUID, value: Data? = nil, service: CBService? = nil) {
@@ -351,7 +343,6 @@ public class CBPeripheralManager {
     }
 }
 
-/// Scan-option keys. Apple vends these as global `let`s in CoreBluetooth.
 public let CBCentralManagerScanOptionAllowDuplicatesKey = "kCBScanOptionAllowDuplicates"
 public let CBCentralManagerScanOptionSolicitedServiceUUIDsKey = "kCBScanOptionSolicitedServiceUUIDs"
 public let CBCentralManagerOptionShowPowerAlertKey = "kCBInitOptionShowPowerAlert"

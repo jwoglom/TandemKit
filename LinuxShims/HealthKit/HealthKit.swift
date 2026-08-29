@@ -1,12 +1,5 @@
-// Linux-only stand-in for Apple's HealthKit.
-//
-// Only the handful of symbols TandemKit actually touches: HKUnit and
-// HKQuantity (LoopKit's currency for doses and limits) and HKDevice (one
-// struct literal in TandemPumpManagerState). Never compiled on Apple
-// platforms -- see LinuxShims/README.md.
+// Linux-only HealthKit stand-in. See LinuxShims/README.md.
 @_exported import Foundation
-
-// MARK: - Lightweight HealthKit shims
 
 public struct HKUnit: Codable, Equatable {
     private let symbol: String
