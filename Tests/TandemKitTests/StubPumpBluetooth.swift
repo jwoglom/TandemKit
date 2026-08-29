@@ -23,6 +23,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     var bluetoothState: CBManagerState = .poweredOn
 
     private(set) var sentMessages: [Message] = []
+    private(set) var responseCount = 0
     private(set) var ensureConnectedCount = 0
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
@@ -110,7 +111,13 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         }
         lock.unlock()
 
-        return handler?(message)
+        let response = handler?(message)
+        if response != nil {
+            lock.lock()
+            responseCount += 1
+            lock.unlock()
+        }
+        return response
     }
 
     func disconnect() {

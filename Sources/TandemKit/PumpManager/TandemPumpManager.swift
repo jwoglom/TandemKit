@@ -331,6 +331,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            let responsesBefore = self.bluetooth.responseCount
+
             let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
             if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
                 self.fetchControlIQStatus()
@@ -338,7 +340,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchGlobalPumpSettings()
                 self.fetchPumpInformation()
 
-                self.state.lastSettingsCheckedAt = Date.now
+                // Same reason as lastSync below: stamping this after a pump that answered nothing
+                // would suppress the next attempt for 24 hours.
+                if self.bluetooth.responseCount > responsesBefore {
+                    self.state.lastSettingsCheckedAt = Date.now
+                }
             } else if !self.state.featureFlags.quickBolusButtonSupport {
                 // The quick bolus button is confirmed off every cycle, which needs a fresh read.
                 self.fetchGlobalPumpSettings()
@@ -354,7 +360,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()
 
-            self.state.lastReconciliation = Date.now
+            // A connected link is not a working one: a session can stay up while every read times
+            // out, and advancing lastSync then promises Loop a reconciliation that never happened.
+            if self.bluetooth.responseCount > responsesBefore {
+                self.state.lastReconciliation = Date.now
+            } else {
+                self.logger.error("Sync got no response from the pump; leaving lastSync where it was")
+            }
+
             self.notifyDelegateStateUpdated()
 
             completion(self.state.lastReconciliation)

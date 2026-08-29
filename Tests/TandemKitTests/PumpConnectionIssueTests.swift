@@ -99,6 +99,21 @@ import XCTest
         XCTAssertNil(manager.connectionIssue)
     }
 
+    /// Both halves together: the sync no longer advances lastSync when the pump answered nothing,
+    /// so a link that is up but silent ends up reported as stale instead of as healthy.
+    func testAWedgedSessionEndsUpReportedAsStale() {
+        makeConnected()
+        manager.state.lastReconciliation = Date.now
+            .addingTimeInterval(-TandemPumpManager.connectionStaleThreshold - 60)
+        // No stubs registered: the link is up and every read returns nil.
+
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5.0)
+
+        XCTAssertEqual(manager.connectionIssue, .noRecentSync)
+    }
+
     // MARK: - What reaches the home screen
 
     /// Auto-reconnect clears most drops in seconds; putting each one on the home screen would

@@ -61,6 +61,9 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // removed pump does not silently re-establish its session and re-persist its state. Guarded by
     // connectStateLock because it is set off-queue (from deactivate()) and read on managerQueue.
     private var isDeactivated = false
+    // Responses the pump has actually returned. Bumped on commandQueue and read from the command
+    // jobs there, but guarded by connectStateLock so an off-queue reader cannot race the increment.
+    private var _responseCount = 0
     // Consecutive connect attempts that ended without a usable session. Only touched from
     // connectIfNeeded, i.e. only on commandQueue, so it needs no lock.
     private var consecutiveConnectFailures = 0
@@ -90,6 +93,12 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
     var bluetoothState: CBManagerState {
         manager?.state ?? .unknown
+    }
+
+    var responseCount: Int {
+        connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        return _responseCount
     }
 
     /// A peripheral CoreBluetooth reports connected, with a peripheral manager from setup.
@@ -184,7 +193,13 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             return nil
         }
 
-        return peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
+        let response = peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
+        if response != nil {
+            connectStateLock.lock()
+            _responseCount += 1
+            connectStateLock.unlock()
+        }
+        return response
     }
 
     /// Runs `completion` as a serialized command job: the pump is connected if necessary, then

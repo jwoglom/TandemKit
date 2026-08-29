@@ -34,6 +34,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// could not be established.
     func ensureConnected(completion: @escaping (Error?) -> Void)
 
+    /// Responses the pump has actually returned. Compared before and after a sequence of reads to
+    /// tell a pump that answered something from one that answered nothing.
+    var responseCount: Int { get }
+
     /// Sends `message` and blocks until the matching response arrives, or nil on failure. Must be
     /// called from inside an `ensureConnected` job.
     func write(message: Message, expecting: Message.Type, maxChunkSize: Int?) -> Message?
