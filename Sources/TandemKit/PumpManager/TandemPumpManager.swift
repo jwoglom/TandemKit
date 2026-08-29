@@ -75,10 +75,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
-    // Reached only via #selector from the UIKit lifecycle observers in init,
-    // so both the handlers and the registration are UIKit-only. Off Apple
-    // there is no app lifecycle to observe and no ObjC runtime to dispatch
-    // through.
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
