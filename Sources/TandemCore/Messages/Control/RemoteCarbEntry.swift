@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to attach carbohydrate info to an in-progress bolus.
-public class RemoteCarbEntryRequest: Message {
+public class RemoteCarbEntryRequest: PumpRequest {
+    public typealias Response = RemoteCarbEntryResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-14)),
         size: 9,

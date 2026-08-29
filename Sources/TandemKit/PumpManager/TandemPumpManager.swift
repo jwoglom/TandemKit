@@ -414,9 +414,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func setMustProvideBLEHeartbeat(_: Bool) {}
 
     /// Sends an arbitrary message to the pump and returns the decoded response, if any.
-    /// Intended for the debug tools only. The expected response type is resolved from the
-    /// message registry's request→response association; if none exists, the request type is
-    /// used as a best effort (which simply yields `nil` when nothing matches).
+    /// Intended for the debug tools only, which pick a message by name and so have no static type
+    /// to take a response from. The expected response type is resolved from the message registry's
+    /// request→response association; a message with no association is refused and yields `nil`.
     public func sendDebugMessage(_ message: Message, completion: @escaping (Message?) -> Void) {
         bluetooth.ensureConnected { error in
             if error != nil {
@@ -424,7 +424,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
             let expecting = MessageRegistry.metadata(for: message)?.associatedType ?? type(of: message)
-            let response = self.bluetooth.write(message: message, expecting: expecting)
+            let response = self.bluetooth.writeUntyped(message, expecting: expecting)
             completion(response)
         }
     }
@@ -489,10 +489,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let permissionResponse = self.bluetooth.write(
-                message: BolusPermissionRequest(),
-                expecting: BolusPermissionResponse.self
-            ) as? BolusPermissionResponse else {
+            guard let permissionResponse = self.bluetooth.write(BolusPermissionRequest()) else {
                 self.logger.error("Failed to request bolus permission")
                 completion(.communication(PumpCommError.noResponse))
                 return
@@ -517,10 +514,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 bolusBG: 0,
                 bolusIOB: 0
             )
-            guard let initiateResponse = self.bluetooth.write(
-                message: bolusRequest,
-                expecting: InitiateBolusResponse.self
-            ) as? InitiateBolusResponse else {
+            guard let initiateResponse = self.bluetooth.write(bolusRequest) else {
                 self.logger.error("Failed to initiate bolus")
                 self.releaseBolusPermission(bolusId: permissionResponse.bolusId)
                 completion(.communication(PumpCommError.noResponse))
@@ -579,10 +573,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: CancelBolusRequest(bolusId: bolusId),
-                expecting: CancelBolusResponse.self
-            ) as? CancelBolusResponse else {
+            guard let response = self.bluetooth.write(CancelBolusRequest(bolusId: bolusId)) else {
                 self.logger.error("Failed to cancel bolus")
                 completion(.failure(.communication(PumpCommError.noResponse)))
                 return
@@ -658,20 +649,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let currentBasal = self.bluetooth.write(
-                message: CurrentBasalStatusRequest(),
-                expecting: CurrentBasalStatusResponse.self
-            ) as? CurrentBasalStatusResponse else {
+            guard let currentBasal = self.bluetooth.write(CurrentBasalStatusRequest()) else {
                 self.logger.error("Failed to fetch current temp rate")
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
 
             if currentBasal.basalType == .tempBasal {
-                guard let stopCurrentRate = self.bluetooth.write(
-                    message: StopTempRateRequest(),
-                    expecting: StopTempRateResponse.self
-                ) as? StopTempRateResponse else {
+                guard let stopCurrentRate = self.bluetooth.write(StopTempRateRequest()) else {
                     self.logger.error("Failed to stop temp rate")
                     completion(.communication(PumpCommError.noResponse))
                     return
@@ -715,10 +700,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
-            guard let response = self.bluetooth.write(
-                message: request,
-                expecting: SetTempRateResponse.self
-            ) as? SetTempRateResponse else {
+            guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
                 completion(.communication(PumpCommError.noResponse))
                 return
@@ -764,22 +746,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let currentTempResponse = self.bluetooth.write(
-                message: TempRateRequest(),
-                expecting: TempRateResponse.self
-            ) as? TempRateResponse else {
+            guard let currentTempResponse = self.bluetooth.write(TempRateRequest()) else {
                 self.logger.error("Failed to get currentTempRate...")
                 completion(PumpCommError.noResponse)
                 return
             }
             if currentTempResponse.active {
-                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateRequest.self)
+                let stopResponse = self.bluetooth.write(StopTempRateRequest())
+                if let stopResponse, stopResponse.isStatusOK {
+                    self.logger.info("Current temp basal cancelled!")
+                } else {
+                    self.logger
+                        .error(
+                            "Failed to stop temp rate before suspending - Status: \(stopResponse?.status ?? -1)"
+                        )
+                }
             }
 
-            let response = self.bluetooth.write(
-                message: SuspendPumpingRequest(),
-                expecting: SuspendPumpingResponse.self
-            ) as? SuspendPumpingResponse
+            let response = self.bluetooth.write(SuspendPumpingRequest())
             guard let response, response.status == 0 else {
                 self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
                 completion(PumpCommError.noResponse)
@@ -860,10 +844,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     ///
     /// Must be called while connected (i.e. inside `bluetooth.ensureConnected`).
     private func sendResumePumping() -> Error? {
-        let response = bluetooth.write(
-            message: ResumePumpingRequest(),
-            expecting: ResumePumpingResponse.self
-        ) as? ResumePumpingResponse
+        let response = bluetooth.write(ResumePumpingRequest())
         guard let response, response.status == 0 else {
             logger.error("Failed to Resume delivery - Status: \(response?.status ?? -1)")
             return PumpCommError.noResponse
@@ -903,10 +884,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             if let maxBasal = limits.maximumBasalRate?.doubleValue(for: hkUnit) {
                 let milliunits = Int((maxBasal * 1000.0).rounded())
-                guard let basalResponse = self.bluetooth.write(
-                    message: SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits),
-                    expecting: SetMaxBasalLimitResponse.self
-                ) as? SetMaxBasalLimitResponse else {
+                guard let basalResponse = self.bluetooth.write(SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)) else {
                     self.logger.error("Failed to set maxBasalLimit")
                     completion(.failure(PumpCommError.invalidPacket))
                     return
@@ -922,10 +900,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if let maxBolus = limits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
                 let milliunits = Int((maxBolus * 1000.0).rounded())
 
-                guard let bolusResponse = self.bluetooth.write(
-                    message: SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits),
-                    expecting: SetMaxBolusLimitResponse.self
-                ) as? SetMaxBolusLimitResponse else {
+                guard let bolusResponse = self.bluetooth.write(SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)) else {
                     self.logger.error("Failed to set maxBolusLimit")
                     completion(.failure(PumpCommError.invalidPacket))
                     return
@@ -956,10 +931,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: EnterChangeCartridgeModeRequest(),
-                expecting: EnterChangeCartridgeModeResponse.self
-            ) as? EnterChangeCartridgeModeResponse
+            let response = self.bluetooth.write(EnterChangeCartridgeModeRequest())
 
             completion(response)
         }
@@ -975,10 +947,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: ExitChangeCartridgeModeRequest(),
-                expecting: ExitChangeCartridgeModeResponse.self
-            ) as? ExitChangeCartridgeModeResponse
+            let response = self.bluetooth.write(ExitChangeCartridgeModeRequest())
 
             completion(response)
         }
@@ -994,10 +963,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: EnterFillTubingModeRequest(),
-                expecting: EnterFillTubingModeResponse.self
-            ) as? EnterFillTubingModeResponse
+            let response = self.bluetooth.write(EnterFillTubingModeRequest())
 
             completion(response)
         }
@@ -1013,10 +979,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: ExitFillTubingModeRequest(),
-                expecting: ExitFillTubingModeResponse.self
-            ) as? ExitFillTubingModeResponse
+            let response = self.bluetooth.write(ExitFillTubingModeRequest())
 
             completion(response)
         }
@@ -1032,10 +995,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: FillCannulaRequest(primeSizeMilliUnits: Int(amount * 1000)),
-                expecting: FillCannulaResponse.self
-            ) as? FillCannulaResponse
+            let response = self.bluetooth.write(FillCannulaRequest(primeSizeMilliUnits: Int(amount * 1000)))
 
             completion(response)
         }
@@ -1072,10 +1032,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
-            guard let response = self.bluetooth.write(
-                message: request,
-                expecting: ChangeTimeDateResponse.self
-            ) as? ChangeTimeDateResponse else {
+            guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to change datetime")
                 completion(.failure(PumpManagerError.communication(PumpCommError.invalidPacket)))
                 return
@@ -1141,7 +1098,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            _ = self.bluetooth.write(message: request, expecting: SetPumpSoundsResponse.self)
+            _ = self.bluetooth.write(request)
 
             // Allow the patch to set values
             Thread.sleep(forTimeInterval: .seconds(1))
@@ -1161,7 +1118,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            _ = self.bluetooth.write(message: PlaySoundRequest(), expecting: PlaySoundResponse.self)
+            _ = self.bluetooth.write(PlaySoundRequest())
             completion()
         }
     }
@@ -1176,10 +1133,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: SetPumpAlertSnoozeRequest(snoozeEnabled: enabled, snoozeDurationMins: durationMins),
-                expecting: SetPumpAlertSnoozeResponse.self
-            ) as? SetPumpAlertSnoozeResponse else {
+            guard let response = self.bluetooth.write(SetPumpAlertSnoozeRequest(snoozeEnabled: enabled, snoozeDurationMins: durationMins)) else {
                 self.logger.error("Failed to set alert snooze")
                 completion(false)
                 return
@@ -1217,10 +1171,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment),
-                expecting: SetQuickBolusSettingsResponse.self
-            ) as? SetQuickBolusSettingsResponse else {
+            guard let response = self.bluetooth.write(SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment)) else {
                 self.logger.error("Failed to set quick bolus")
                 completion(false)
                 return
@@ -1251,16 +1202,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             // Pumps at or below API 2.1 only answer the V1 request, so ask for the variant this pump
             // speaks rather than always asking for V2 and reporting nothing when it goes unanswered.
-            let (request, expecting) = ControlIQInfoRequestBuilder.create(apiVersion: self.state.pumpState.apiVersion)
-            let iqInfo = self.bluetooth.write(
-                message: request,
-                expecting: expecting
-            ) as? ControlIQInfoAbstractResponse
+            let request = ControlIQInfoRequestBuilder.create(apiVersion: self.state.pumpState.apiVersion)
+            let iqInfo = self.bluetooth.write(request) as? ControlIQInfoAbstractResponse
 
-            let scheduleInfo = self.bluetooth.write(
-                message: ControlIQSleepScheduleRequest(),
-                expecting: ControlIQSleepScheduleResponse.self
-            ) as? ControlIQSleepScheduleResponse
+            let scheduleInfo = self.bluetooth.write(ControlIQSleepScheduleRequest())
 
             completion(iqInfo, scheduleInfo)
         }
@@ -1276,10 +1221,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: SetModesRequest(command: mode),
-                expecting: SetModesResponse.self
-            ) as? SetModesResponse else {
+            guard let response = self.bluetooth.write(SetModesRequest(command: mode)) else {
                 self.logger.error("Failed to set controlIQ mode")
                 completion(false)
                 return
@@ -1320,7 +1262,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             if request.enabled, self.state.basalDose.type == .tempBasal {
-                _ = self.bluetooth.write(message: StopTempRateRequest(), expecting: StopTempRateResponse.self)
+                _ = self.bluetooth.write(StopTempRateRequest())
 
                 let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
@@ -1336,10 +1278,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.emitPumpEvents(events)
             }
 
-            guard let response = self.bluetooth.write(
-                message: request,
-                expecting: ChangeControlIQSettingsResponse.self
-            ) as? ChangeControlIQSettingsResponse else {
+            guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to change controlIQ mode")
                 completion(.failure(ControlIQConfigurationError.noResponse))
                 return
@@ -1351,10 +1290,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let cgmResponse = self.bluetooth.write(
-                message: CGMStatusV2Request(),
-                expecting: CGMStatusV2Response.self
-            ) as? CGMStatusV2Response
+            let cgmResponse = self.bluetooth.write(CGMStatusV2Request())
 
             if let cgmResponse {
                 self.updateCGMSessionState(from: cgmResponse)
@@ -1405,14 +1341,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: SetSleepScheduleRequest(
+            guard let response = self.bluetooth.write(SetSleepScheduleRequest(
                     slot: slot,
                     schedule: schedule,
                     flag: 1
-                ),
-                expecting: SetSleepScheduleResponse.self
-            ) as? SetSleepScheduleResponse else {
+                )) else {
                 self.logger.error("Failed to set sleep schedule")
                 completion(false)
                 return
@@ -1493,10 +1426,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// acknowledged it. Must be called while connected (e.g. inside
     /// `bluetooth.ensureConnected`).
     private func acknowledgeNotification(type: DismissNotificationRequest.NotificationType, id: UInt32) -> Bool {
-        guard let response = bluetooth.write(
-            message: DismissNotificationRequest(notificationType: type, notificationId: id),
-            expecting: DismissNotificationResponse.self
-        ) as? DismissNotificationResponse else {
+        guard let response = bluetooth.write(DismissNotificationRequest(notificationType: type, notificationId: id)) else {
             logger.error("Failed to dismiss notification id=\(id) type=\(type)")
             return false
         }
@@ -1517,10 +1447,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let response = self.bluetooth.write(
-                message: CGMStatusV2Request(),
-                expecting: CGMStatusV2Response.self
-            ) as? CGMStatusV2Response
+            let response = self.bluetooth.write(CGMStatusV2Request())
 
             if let response {
                 self.updateCGMSessionState(from: response)
@@ -1540,10 +1467,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(
-                message: StopDexcomCGMSensorSessionRequest(),
-                expecting: StopDexcomCGMSensorSessionResponse.self
-            ) as? StopDexcomCGMSensorSessionResponse else {
+            guard let response = self.bluetooth.write(StopDexcomCGMSensorSessionRequest()) else {
                 self.logger.error("Failed to stop CGM session")
                 completion(false)
                 return
@@ -1563,10 +1487,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let sensorTypeResponse = self.bluetooth.write(
-                message: SetSensorTypeRequest(sensorType: .dexcomG6),
-                expecting: SetSensorTypeResponse.self
-            ) as? SetSensorTypeResponse else {
+            guard let sensorTypeResponse = self.bluetooth.write(SetSensorTypeRequest(sensorType: .dexcomG6)) else {
                 self.logger.error("Failed to set Sensortype to G6")
                 completion(false)
                 return
@@ -1578,10 +1499,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let transmitterResponse = self.bluetooth.write(
-                message: SetG6TransmitterIdRequest(txId: txId),
-                expecting: SetG6TransmitterIdResponse.self
-            ) as? SetG6TransmitterIdResponse else {
+            guard let transmitterResponse = self.bluetooth.write(SetG6TransmitterIdRequest(txId: txId)) else {
                 self.logger.error("Failed to set transmitterId for G6")
                 completion(false)
                 return
@@ -1594,10 +1512,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             if let code {
-                guard let startSensorResponse = self.bluetooth.write(
-                    message: StartDexcomG6SensorSessionRequest(sensorCode: code),
-                    expecting: StartDexcomG6SensorSessionResponse.self
-                ) as? StartDexcomG6SensorSessionResponse else {
+                guard let startSensorResponse = self.bluetooth.write(StartDexcomG6SensorSessionRequest(sensorCode: code)) else {
                     self.logger.error("Failed to set start G6")
                     completion(false)
                     return
@@ -1624,10 +1539,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let sensorTypeResponse = self.bluetooth.write(
-                message: SetSensorTypeRequest(sensorType: .dexcomG7),
-                expecting: SetSensorTypeResponse.self
-            ) as? SetSensorTypeResponse else {
+            guard let sensorTypeResponse = self.bluetooth.write(SetSensorTypeRequest(sensorType: .dexcomG7)) else {
                 self.logger.error("Failed to set Sensortype to G7")
                 completion(false)
                 return
@@ -1639,10 +1551,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let startG7 = self.bluetooth.write(
-                message: SetDexcomG7PairingCodeRequest(pairingCode: code),
-                expecting: SetDexcomG7PairingCodeResponse.self
-            ) as? SetDexcomG7PairingCodeResponse else {
+            guard let startG7 = self.bluetooth.write(SetDexcomG7PairingCodeRequest(pairingCode: code)) else {
                 self.logger.error("Failed to start G7")
                 completion(false)
                 return
@@ -1795,10 +1704,7 @@ extension TandemPumpManager {
 
 private extension TandemPumpManager {
     func releaseBolusPermission(bolusId: Int) {
-        guard let response = bluetooth.write(
-            message: BolusPermissionReleaseRequest(bolusID: bolusId),
-            expecting: BolusPermissionReleaseResponse.self
-        ) as? BolusPermissionReleaseResponse else {
+        guard let response = bluetooth.write(BolusPermissionReleaseRequest(bolusID: bolusId)) else {
             logger.error("Error releasing bolus permission for id \(bolusId)")
             return
         }

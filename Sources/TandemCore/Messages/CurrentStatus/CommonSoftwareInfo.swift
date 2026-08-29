@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request common software information from the pump.
-public class CommonSoftwareInfoRequest: Message {
+public class CommonSoftwareInfoRequest: PumpRequest {
+    public typealias Response = CommonSoftwareInfoResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-114)),
         size: 0,

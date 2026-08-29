@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current CGM reading.
-public class CurrentEGVGuiDataRequest: Message {
+public class CurrentEGVGuiDataRequest: PumpRequest {
+    public typealias Response = CurrentEGVGuiDataResponse
+
     public static let props = MessageProps(
         opCode: 34,
         size: 0,

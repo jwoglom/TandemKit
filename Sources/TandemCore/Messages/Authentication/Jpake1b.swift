@@ -1,7 +1,9 @@
 import Foundation
 
 /// Second half of the first JPAKE round.
-public class Jpake1bRequest: Message {
+public class Jpake1bRequest: PumpRequest {
+    public typealias Response = Jpake1bResponse
+
     public static let props = MessageProps(
         opCode: 34,
         size: 167,

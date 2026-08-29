@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request pump localization settings.
-public class LocalizationRequest: Message {
+public class LocalizationRequest: PumpRequest {
+    public typealias Response = LocalizationResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-90)),
         size: 0,

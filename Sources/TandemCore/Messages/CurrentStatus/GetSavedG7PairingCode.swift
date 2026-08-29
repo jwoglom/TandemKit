@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the saved Dexcom G7 pairing code.
-public class GetSavedG7PairingCodeRequest: Message {
+public class GetSavedG7PairingCodeRequest: PumpRequest {
+    public typealias Response = GetSavedG7PairingCodeResponse
+
     public static let props = MessageProps(
         opCode: 116,
         size: 0,

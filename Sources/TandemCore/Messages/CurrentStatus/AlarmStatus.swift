@@ -3,7 +3,9 @@ import Foundation
 /**
  * Request current alarm status from the pump.
  */
-public class AlarmStatusRequest: Message {
+public class AlarmStatusRequest: PumpRequest {
+    public typealias Response = AlarmStatusResponse
+
     public static let props = MessageProps(
         opCode: 70,
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request Dexcom CGM session status from the pump.
-public class CGMStatusRequest: Message {
+public class CGMStatusRequest: PumpRequest {
+    public typealias Response = CGMStatusResponse
+
     public static let props = MessageProps(
         opCode: 80,
         size: 0,

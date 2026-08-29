@@ -38,9 +38,13 @@ protocol PumpBluetoothConnection: AnyObject {
     /// tell a pump that answered something from one that answered nothing.
     var responseCount: Int { get }
 
-    /// Sends `message` and blocks until the matching response arrives, or nil on failure. Must be
-    /// called from inside an `ensureConnected` job.
-    func write(message: Message, expecting: Message.Type, maxChunkSize: Int?) -> Message?
+    /// Sends `request` and blocks until its response arrives, or nil on failure. Must be called
+    /// from inside an `ensureConnected` job.
+    func write<R: PumpRequest>(_ request: R, maxChunkSize: Int?) -> R.Response?
+
+    /// Escape hatch for callers that only know their message at runtime — the debug tools, which
+    /// pick one by name out of `MessageRegistry`. Everything else uses `write`.
+    func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int?) -> (any Message)?
 
     func disconnect()
 
@@ -51,7 +55,11 @@ protocol PumpBluetoothConnection: AnyObject {
 
 extension PumpBluetoothConnection {
     /// Convenience for the common case; protocol requirements cannot carry default arguments.
-    func write(message: Message, expecting: Message.Type) -> Message? {
-        write(message: message, expecting: expecting, maxChunkSize: nil)
+    func write<R: PumpRequest>(_ request: R) -> R.Response? {
+        write(request, maxChunkSize: nil)
+    }
+
+    func writeUntyped(_ message: any Message, expecting: any Message.Type) -> (any Message)? {
+        writeUntyped(message, expecting: expecting, maxChunkSize: nil)
     }
 }

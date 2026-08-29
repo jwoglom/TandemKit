@@ -5,11 +5,11 @@ import Foundation
 /// Mirrors PumpX2's `IOBRequestBuilder`: the pump reports IOB under two different opcodes
 /// depending on whether Control-IQ is present, and the wrong one goes unanswered.
 public enum IOBRequestBuilder {
-    public static func create(controlIQSupported: Bool) -> (Message, Message.Type) {
+    public static func create(controlIQSupported: Bool) -> any PumpRequest {
         if controlIQSupported {
-            return (ControlIQIOBRequest(), ControlIQIOBResponse.self)
+            return ControlIQIOBRequest()
         } else {
-            return (NonControlIQIOBRequest(), NonControlIQIOBResponse.self)
+            return NonControlIQIOBRequest()
         }
     }
 }

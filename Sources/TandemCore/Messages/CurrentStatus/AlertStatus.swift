@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request current alert status from the pump.
-public class AlertStatusRequest: Message {
+public class AlertStatusRequest: PumpRequest {
+    public typealias Response = AlertStatusResponse
+
     public static let props = MessageProps(
         opCode: 68,
         size: 0,

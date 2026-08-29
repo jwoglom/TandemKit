@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request Control-IQ V1 information.
-public class ControlIQInfoV1Request: Message {
+public class ControlIQInfoV1Request: PumpRequest {
+    public typealias Response = ControlIQInfoV1Response
+
     public static let props = MessageProps(
         opCode: 104,
         size: 0,

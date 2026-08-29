@@ -185,7 +185,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// Blocks until the pump responds, so it must run as part of a serialized command job — i.e.
     /// inside an `ensureConnected` block. Off-queue writes race the command pipeline and were a
     /// root cause of the wedged-connection failures.
-    func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+    func write<R: PumpRequest>(_ request: R, maxChunkSize: Int? = nil) -> R.Response? {
         dispatchPrecondition(condition: .onQueue(commandQueue))
 
         guard let peripheralManager else {
@@ -193,12 +193,29 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             return nil
         }
 
-        let response = peripheralManager.write(message: message, expecting: expecting, maxChunkSize: maxChunkSize)
-        if response != nil {
-            connectStateLock.lock()
-            _responseCount += 1
-            connectStateLock.unlock()
+        return countingResponse(peripheralManager.write(request, maxChunkSize: maxChunkSize))
+    }
+
+    func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int? = nil) -> (any Message)? {
+        dispatchPrecondition(condition: .onQueue(commandQueue))
+
+        guard let peripheralManager else {
+            logger.error("No peripheralManager -> Not connected...")
+            return nil
         }
+
+        return countingResponse(peripheralManager.writeUntyped(message, expecting: expecting, maxChunkSize: maxChunkSize))
+    }
+
+    /// Counts `response` towards `responseCount` when the pump returned one, and passes it through.
+    private func countingResponse<T>(_ response: T?) -> T? {
+        guard response != nil else {
+            return nil
+        }
+
+        connectStateLock.lock()
+        _responseCount += 1
+        connectStateLock.unlock()
         return response
     }
 
@@ -350,7 +367,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
     func disconnect() {
         if let peripheralManager {
-            _ = peripheralManager.write(message: DisconnectPumpRequest(), expecting: DisconnectPumpResponse.self)
+            _ = peripheralManager.write(DisconnectPumpRequest())
         }
 
         if let manager {

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request configured reminders from the pump.
-public class RemindersRequest: Message {
+public class RemindersRequest: PumpRequest {
+    public typealias Response = RemindersResponse
+
     public static let props = MessageProps(
         opCode: 88,
         size: 0,

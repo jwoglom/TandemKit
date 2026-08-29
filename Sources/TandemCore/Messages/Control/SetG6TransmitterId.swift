@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to configure the G6 transmitter ID on Mobi.
-public class SetG6TransmitterIdRequest: Message {
+public class SetG6TransmitterIdRequest: PumpRequest {
+    public typealias Response = SetG6TransmitterIdResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-80)),
         size: 16,

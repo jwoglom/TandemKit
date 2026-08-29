@@ -6,7 +6,9 @@ import Foundation
 ///   [0]  enable      uint8  - 0=disabled, 1=enabled
 ///   [1]  alertDelay  uint8  - delay before alert (minutes)
 ///   [2]  bitmask     uint8  - change bitmask (bits: 0=enabled, 1=delayBeforeAlert)
-public class CgmOutOfRangeAlertRequest: Message {
+public class CgmOutOfRangeAlertRequest: PumpRequest {
+    public typealias Response = CgmOutOfRangeAlertResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-58)),
         size: 3,

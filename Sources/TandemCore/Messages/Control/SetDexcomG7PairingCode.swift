@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to set a Dexcom G7 pairing code.
-public class SetDexcomG7PairingCodeRequest: Message {
+public class SetDexcomG7PairingCodeRequest: PumpRequest {
+    public typealias Response = SetDexcomG7PairingCodeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-4)),
         size: 8,

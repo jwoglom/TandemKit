@@ -18,9 +18,9 @@ import XCTest
         func testNextRequestBootstrap() throws {
             let builder = JpakeAuthBuilder.initializeWithPairingCode("123456")
             let next = try XCTUnwrap(builder.nextRequest())
-            let request = try XCTUnwrap(next.0 as? Jpake1aRequest)
+            let request = try XCTUnwrap(next as? Jpake1aRequest)
             XCTAssertEqual(request.centralChallenge.count, 165)
-            XCTAssertTrue(next.1 is Jpake1aResponse.Type)
+            XCTAssertTrue(type(of: next).responseType is Jpake1aResponse.Type)
             XCTAssertEqual(builder.step, .ROUND_1A_SENT)
         }
     }

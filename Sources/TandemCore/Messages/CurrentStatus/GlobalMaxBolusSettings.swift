@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the global maximum bolus settings.
-public class GlobalMaxBolusSettingsRequest: Message {
+public class GlobalMaxBolusSettingsRequest: PumpRequest {
+    public typealias Response = GlobalMaxBolusSettingsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-116)),
         size: 0,

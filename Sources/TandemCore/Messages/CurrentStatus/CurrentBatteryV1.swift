@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current battery information (legacy API).
-public class CurrentBatteryV1Request: Message {
+public class CurrentBatteryV1Request: PumpRequest {
+    public typealias Response = CurrentBatteryV1Response
+
     public static let props = MessageProps(
         opCode: 52,
         size: 0,

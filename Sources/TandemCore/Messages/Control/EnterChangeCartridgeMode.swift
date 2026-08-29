@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to enter change cartridge mode (pump must be suspended).
-public class EnterChangeCartridgeModeRequest: Message {
+public class EnterChangeCartridgeModeRequest: PumpRequest {
+    public typealias Response = EnterChangeCartridgeModeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-112)),
         size: 0,

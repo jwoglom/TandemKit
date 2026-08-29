@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current temporary basal rate information.
-public class TempRateRequest: Message {
+public class TempRateRequest: PumpRequest {
+    public typealias Response = TempRateResponse
+
     public static let props = MessageProps(
         opCode: 42,
         size: 0,

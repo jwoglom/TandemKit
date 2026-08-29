@@ -4,7 +4,9 @@ import Foundation
 ///
 /// Cargo layout (1 byte):
 ///   [0]  insulinThreshold  uint8  - low insulin threshold in units
-public class SetLowInsulinAlertRequest: Message {
+public class SetLowInsulinAlertRequest: PumpRequest {
+    public typealias Response = SetLowInsulinAlertResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-34)),
         size: 1,

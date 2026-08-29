@@ -36,11 +36,8 @@ public extension TandemPumpManager {
                     return
                 }
 
-                for (request, expecting) in messages {
-                    let response = self.bluetooth.write(
-                        message: request,
-                        expecting: expecting
-                    )
+                for request in messages {
+                    let response = self.bluetooth.write(request)
                     if let response {
                         idpManager.processMessage(response)
                     }
@@ -60,10 +57,7 @@ public extension TandemPumpManager {
                     profileCarbEntryEnabled: false
                 )
 
-                guard let newlyCreatedProfile = self.bluetooth.write(
-                    message: message,
-                    expecting: CreateIDPResponse.self
-                ) as? CreateIDPResponse else {
+                guard let newlyCreatedProfile = self.bluetooth.write(message) else {
                     self.logger.error("No active profile found and got unexpected response creating initial profile")
                     completion(.failure(PumpCommError.requestConstructionFailed(
                         reason: "No active profile found and got unexpected response creating initial profile"
@@ -88,11 +82,8 @@ public extension TandemPumpManager {
                 // Fetch all IDP data until complete
                 while !idpManager.isComplete {
                     let messages = idpManager.nextMessages()
-                    for (request, expecting) in messages {
-                        let response = self.bluetooth.write(
-                            message: request,
-                            expecting: expecting
-                        )
+                    for request in messages {
+                        let response = self.bluetooth.write(request)
                         if let response {
                             idpManager.processMessage(response)
                         }
@@ -158,10 +149,7 @@ public extension TandemPumpManager {
 
             // Step 6: Send all modification requests
             for request in modifyRequests {
-                guard let response = self.bluetooth.write(
-                    message: request,
-                    expecting: SetIDPSegmentResponse.self
-                ) as? SetIDPSegmentResponse else {
+                guard let response = self.bluetooth.write(request) else {
                     self.logger.error("Pump rejected SetIDPSegment")
                     completion(.failure(PumpCommError.requestConstructionFailed(reason: "Pump rejected SetIDPSegment")))
                     return

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request information about any currently delivering bolus.
-public class CurrentBolusStatusRequest: Message {
+public class CurrentBolusStatusRequest: PumpRequest {
+    public typealias Response = CurrentBolusStatusResponse
+
     public static let props = MessageProps(
         opCode: 44,
         size: 0,

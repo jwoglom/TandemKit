@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to suspend insulin delivery.
-public class SuspendPumpingRequest: Message {
+public class SuspendPumpingRequest: PumpRequest {
+    public typealias Response = SuspendPumpingResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-100)),
         size: 0,

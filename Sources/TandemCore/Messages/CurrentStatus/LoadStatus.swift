@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current reservoir/load status.
-public class LoadStatusRequest: Message {
+public class LoadStatusRequest: PumpRequest {
+    public typealias Response = LoadStatusResponse
+
     public static let props = MessageProps(
         opCode: 20,
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to remove an insulin delivery profile.
-public class DeleteIDPRequest: Message {
+public class DeleteIDPRequest: PumpRequest {
+    public typealias Response = DeleteIDPResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-82)),
         size: 2,

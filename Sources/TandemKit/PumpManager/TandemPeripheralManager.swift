@@ -135,7 +135,19 @@ class TandemPeripheralManager: NSObject {
         return readQ.wait(timeout: .now() + .seconds(10))
     }
 
-    func write(message: Message, expecting: Message.Type, maxChunkSize: Int? = nil) -> Message? {
+    func write<R: PumpRequest>(_ request: R, maxChunkSize: Int? = nil) -> R.Response? {
+        writeUntyped(request, expecting: R.Response.self, maxChunkSize: maxChunkSize) as? R.Response
+    }
+
+    /// Escape hatch for callers that only know their message at runtime — the debug tools, which
+    /// pick one by name out of `MessageRegistry`. Everything else goes through the generic `write`,
+    /// which takes the reply type from the request itself.
+    func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int? = nil) -> (any Message)? {
+        guard expecting.props.type == .Response else {
+            logger.error("Cannot write \(type(of: message)): \(expecting) is not a response type")
+            return nil
+        }
+
         // Pump I/O is already serialized by TandemBluetoothManager.commandQueue, so this lock
         // should never actually contend. It is kept purely as defense-in-depth, and the acquire
         // is bounded so that even an unexpected off-pipeline caller can never deadlock here (the
@@ -513,8 +525,8 @@ extension TandemPeripheralManager {
                     authBuilder = JpakeAuthBuilder.initializeWithPairingCode(pincode)
                 }
 
-                while let (request, expectedResponse) = authBuilder.nextRequest() {
-                    guard let response = write(message: request, expecting: expectedResponse) else {
+                while let request = authBuilder.nextRequest() {
+                    guard let response = write(request) else {
                         logger.error("Failed to send JPAKE confirm")
                         failSetup(PumpCommError.noResponse)
                         return
@@ -543,10 +555,7 @@ extension TandemPeripheralManager {
                 pumpManager.state.pumpState.peripheralUuid = peripheral.identifier.uuidString
             }
 
-            guard let response = write(
-                message: TimeSinceResetRequest(),
-                expecting: TimeSinceResetResponse.self
-            ) as? TimeSinceResetResponse else {
+            guard let response = write(TimeSinceResetRequest()) else {
                 self.logger.error("Failed to send TimeSinceResetRequest...")
                 failSetup(PumpCommError.noResponse)
                 return

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to set the maximum hourly basal rate.
-public class SetMaxBasalLimitRequest: Message {
+public class SetMaxBasalLimitRequest: PumpRequest {
+    public typealias Response = SetMaxBasalLimitResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-120)),
         size: 4,

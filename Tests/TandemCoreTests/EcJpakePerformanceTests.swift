@@ -102,7 +102,7 @@ import XCTest
             let next = builder.nextRequest()
             logElapsed("initialize + nextRequest", since: start)
 
-            let request = try XCTUnwrap(next?.0, "The builder should produce a first request")
+            let request = try XCTUnwrap(next, "The builder should produce a first request")
             XCTAssertTrue(request is Jpake1aRequest, "First request should be Jpake1aRequest")
         }
 
