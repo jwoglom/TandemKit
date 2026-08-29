@@ -117,7 +117,7 @@ struct TandemKitDebugView: View {
                 viewModel.rerunInitialSetup?()
             }
         } message: {
-            Text("This restarts pairing and the initial setup flow for this pump without removing the pump manager.")
+            Text("This deletes the saved pairing and restarts the initial setup flow for this pump (the pump manager is not removed). Re-pairing the pump requires a wireless charging pad — do not continue unless you have your pump charger available.")
         }
     }
 }

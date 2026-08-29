@@ -1058,6 +1058,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    /// Forces a fresh connect and full status sync, skipping the freshness short-circuit in
+    /// `ensureCurrentPumpData`. Used by the connection troubleshooter's reconnect button so the
+    /// user can retry a wedged connection on demand. `completion` reports the resulting lastSync.
+    public func attemptReconnect(completion: ((_ lastSync: Date?) -> Void)? = nil) {
+        logger.info("Manual reconnect attempt")
+        syncPumpData(completion: completion)
+    }
+
     /// Clears the saved pairing/pump state (derived secret, server nonce, pincode, cached pump
     /// identity) so the next setup run pairs from scratch. `isOnboarded` becomes false once this
     /// runs. Used by the debug "Re-run Pump Setup" action, which intentionally breaks the state.

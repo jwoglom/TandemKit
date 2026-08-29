@@ -554,6 +554,8 @@
 		DE2158968BB35DD6FDAB324C /* CgmAlertClearedDexHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F512696F29CC0A7099C21D2 /* CgmAlertClearedDexHistoryLogTests.swift */; };
 		DEB0DE00000000000000DA01 /* TandemKitDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000DA02 /* TandemKitDebugView.swift */; };
 		DEB0DE00000000000000DB01 /* TandemKitDebugViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000DB02 /* TandemKitDebugViewModel.swift */; };
+		DEB0DE00000000000000FB01 /* TandemKitTroubleshootConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000FB02 /* TandemKitTroubleshootConnectionView.swift */; };
+		DEB0DE00000000000000FB03 /* TandemKitTroubleshootConnectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000FB04 /* TandemKitTroubleshootConnectionViewModel.swift */; };
 		DEB28B6D27663077F18D53FF /* DailyStatusHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F540659FBCEE9181FC99F7B9 /* DailyStatusHistoryLogTests.swift */; };
 		DF0AA721638E106F6AAACCF1 /* Jpake2ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA6DA9CF4DC167FB023A240 /* Jpake2ResponseTests.swift */; };
 		DF3B300802DA6A772CFB918C /* RemoteBgEntryRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C775FFBEB5739FB6B1864096 /* RemoteBgEntryRequestTests.swift */; };
@@ -1196,6 +1198,8 @@
 		DE6914E2447FB997A91FEDC6 /* BolusRequestedMsg3HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusRequestedMsg3HistoryLogTests.swift; sourceTree = "<group>"; };
 		DEB0DE00000000000000DA02 /* TandemKitDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitDebugView.swift; sourceTree = "<group>"; };
 		DEB0DE00000000000000DB02 /* TandemKitDebugViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitDebugViewModel.swift; sourceTree = "<group>"; };
+		DEB0DE00000000000000FB02 /* TandemKitTroubleshootConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitTroubleshootConnectionView.swift; sourceTree = "<group>"; };
+		DEB0DE00000000000000FB04 /* TandemKitTroubleshootConnectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitTroubleshootConnectionViewModel.swift; sourceTree = "<group>"; };
 		DF6B8F52BFBF735028220939 /* CGMHardwareInfoRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CGMHardwareInfoRequestTests.swift; sourceTree = "<group>"; };
 		DFDD5C86FED4BA729B633F88 /* HistoryLogTimeIndexTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryLogTimeIndexTests.swift; sourceTree = "<group>"; };
 		DKD1XH8Y99W8KKUIS3Z6R90D /* TandemKitNotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitNotificationsView.swift; sourceTree = "<group>"; };
@@ -1420,6 +1424,7 @@
 				29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */,
 				71570600000000000000ED02 /* TandemKitHistoryLogViewerView.swift */,
 				DEB0DE00000000000000DA02 /* TandemKitDebugView.swift */,
+				DEB0DE00000000000000FB02 /* TandemKitTroubleshootConnectionView.swift */,
 				40ABBB4C27A2C22344E21CEE /* TandemKitFeatureFlagsView.swift */,
 			);
 			path = Settings;
@@ -1455,6 +1460,7 @@
 				81DC8A3B85604051225CB808 /* TandemKitControlIQSettingsViewModel.swift */,
 				63B6DBEF24B35125C1052B7C /* TandemKitQuickBolusSettingsViewModel.swift */,
 				DEB0DE00000000000000DB02 /* TandemKitDebugViewModel.swift */,
+				DEB0DE00000000000000FB04 /* TandemKitTroubleshootConnectionViewModel.swift */,
 				5498C06FCC1E9BAA13F652AE /* TandemKitFeatureFlagsViewModel.swift */,
 			);
 			path = Settings;
@@ -2716,6 +2722,8 @@
 				1A55E0F82EC96921006E651D /* TandemKitSettingsViewModel.swift in Sources */,
 				DEB0DE00000000000000DA01 /* TandemKitDebugView.swift in Sources */,
 				DEB0DE00000000000000DB01 /* TandemKitDebugViewModel.swift in Sources */,
+				DEB0DE00000000000000FB01 /* TandemKitTroubleshootConnectionView.swift in Sources */,
+				DEB0DE00000000000000FB03 /* TandemKitTroubleshootConnectionViewModel.swift in Sources */,
 				16C0B7F738FA4EF5954711B6 /* TandemKitChangeCartridgeViewModel.swift in Sources */,
 				D0D5D00BCEFC46EBACE2413D /* TandemKitFillTubingViewModel.swift in Sources */,
 				3EB807452FBCDCB50075D19E /* ServiceUUID.swift in Sources */,
