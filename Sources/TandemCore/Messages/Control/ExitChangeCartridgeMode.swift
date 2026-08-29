@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to exit change cartridge mode after new cartridge inserted.
-public class ExitChangeCartridgeModeRequest: Message {
+public class ExitChangeCartridgeModeRequest: PumpRequest {
+    public typealias Response = ExitChangeCartridgeModeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-110)),
         size: 0,

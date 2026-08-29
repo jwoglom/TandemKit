@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request a specific insulin delivery profile segment.
-public class IDPSegmentRequest: Message {
+public class IDPSegmentRequest: PumpRequest {
+    public typealias Response = IDPSegmentResponse
+
     public static let props = MessageProps(
         opCode: 66,
         size: 2,

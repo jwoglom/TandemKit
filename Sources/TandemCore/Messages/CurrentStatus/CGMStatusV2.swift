@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request CGM status for Mobi pumps (V2).
-public class CGMStatusV2Request: Message {
+public class CGMStatusV2Request: PumpRequest {
+    public typealias Response = CGMStatusV2Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-66)),
         size: 0,

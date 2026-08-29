@@ -82,10 +82,7 @@ public final class HistoryLogFetcher {
                 completion(nil)
                 return
             }
-            let response = self.pumpManager.bluetooth.write(
-                message: HistoryLogStatusRequest(),
-                expecting: HistoryLogStatusResponse.self
-            ) as? HistoryLogStatusResponse
+            let response = self.pumpManager.bluetooth.write(HistoryLogStatusRequest())
             completion(response)
         }
     }
@@ -126,10 +123,7 @@ public final class HistoryLogFetcher {
         pumpManager.bluetooth.ensureConnected { error in
             defer { sendSemaphore.signal() }
             guard error == nil else { return }
-            _ = self.pumpManager.bluetooth.write(
-                message: HistoryLogRequest(startLog: sequenceNum, numberOfLogs: 1),
-                expecting: HistoryLogResponse.self
-            )
+            _ = self.pumpManager.bluetooth.write(HistoryLogRequest(startLog: sequenceNum, numberOfLogs: 1))
         }
 
         // Wait for connect + request acknowledgement, then for the streamed entry itself. The
@@ -201,10 +195,7 @@ public final class HistoryLogFetcher {
     }
 
     private func runFetch(numberOfLogs: Int, endingAtSequenceNum: UInt32?) -> Result<Progress, FetchError> {
-        guard let status = sendSync(
-            HistoryLogStatusRequest(),
-            expecting: HistoryLogStatusResponse.self
-        ) as? HistoryLogStatusResponse else {
+        guard let status = sendSync(HistoryLogStatusRequest()) else {
             logger.error("Failed to fetch history log status")
             return .failure(.noStatusResponse)
         }
@@ -254,10 +245,7 @@ public final class HistoryLogFetcher {
             let count = Int(min(Self.chunkSize, i - startId + 1))
             let chunkStart = i - Int64(count) + 1
 
-            if sendSync(
-                HistoryLogRequest(startLog: UInt32(i), numberOfLogs: count),
-                expecting: HistoryLogResponse.self
-            ) == nil {
+            if sendSync(HistoryLogRequest(startLog: UInt32(i), numberOfLogs: count)) == nil {
                 logger.warning("No HistoryLogResponse for chunk \(chunkStart)-\(i)")
             }
 
@@ -411,15 +399,15 @@ public final class HistoryLogFetcher {
         return ranges
     }
 
-    private func sendSync(_ message: Message, expecting: Message.Type) -> Message? {
+    private func sendSync<R: PumpRequest>(_ request: R) -> R.Response? {
         let semaphore = DispatchSemaphore(value: 0)
-        var response: Message?
+        var response: R.Response?
         pumpManager.bluetooth.ensureConnected { error in
             defer { semaphore.signal() }
             guard error == nil else {
                 return
             }
-            response = self.pumpManager.bluetooth.write(message: message, expecting: expecting)
+            response = self.pumpManager.bluetooth.write(request)
         }
         _ = semaphore.wait(timeout: .now() + Self.sendTimeout)
         return response

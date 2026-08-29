@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to perform a secondary factory reset on the pump.
-public class FactoryResetBRequest: Message {
+public class FactoryResetBRequest: PumpRequest {
+    public typealias Response = FactoryResetBResponse
+
     public static let props = MessageProps(
         opCode: 124,
         size: 0,

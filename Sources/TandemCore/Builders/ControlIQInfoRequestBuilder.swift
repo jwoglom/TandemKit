@@ -1,11 +1,11 @@
 import Foundation
 
 enum ControlIQInfoRequestBuilder {
-    static func create(apiVersion: ApiVersion?) -> (Message, Message.Type) {
+    static func create(apiVersion: ApiVersion?) -> any PumpRequest {
         if let apiVersion, apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) {
-            return (ControlIQInfoV2Request(), ControlIQInfoV2Response.self)
+            return ControlIQInfoV2Request()
         } else {
-            return (ControlIQInfoV1Request(), ControlIQInfoV1Response.self)
+            return ControlIQInfoV1Request()
         }
     }
 }

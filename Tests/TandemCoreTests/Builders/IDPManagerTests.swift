@@ -9,7 +9,7 @@ final class IDPManagerTests: XCTestCase {
         let messages = manager.nextMessages()
 
         XCTAssertEqual(messages.count, 1)
-        XCTAssertTrue(messages.first?.0 is ProfileStatusRequest)
+        XCTAssertTrue(messages.first is ProfileStatusRequest)
         XCTAssertFalse(manager.isComplete)
     }
 
@@ -19,7 +19,7 @@ final class IDPManagerTests: XCTestCase {
         // Step 1: Get profile status request
         var messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 1)
-        XCTAssertTrue(messages.first?.0 is ProfileStatusRequest)
+        XCTAssertTrue(messages.first is ProfileStatusRequest)
 
         // Step 2: Process profile status response with 2 profiles
         let profileStatus = ProfileStatusResponse(
@@ -38,7 +38,7 @@ final class IDPManagerTests: XCTestCase {
         messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 2)
 
-        let settingsRequests = messages.compactMap { $0.0 as? IDPSettingsRequest }
+        let settingsRequests = messages.compactMap { $0 as? IDPSettingsRequest }
         XCTAssertEqual(settingsRequests.count, 2)
         XCTAssertTrue(settingsRequests.contains { $0.idpId == 10 })
         XCTAssertTrue(settingsRequests.contains { $0.idpId == 20 })
@@ -76,7 +76,7 @@ final class IDPManagerTests: XCTestCase {
         let messages = manager.nextMessages()
         XCTAssertEqual(messages.count, 3)
 
-        let segmentRequests = messages.compactMap { $0.0 as? IDPSegmentRequest }
+        let segmentRequests = messages.compactMap { $0 as? IDPSegmentRequest }
         XCTAssertEqual(segmentRequests.count, 3)
         XCTAssertTrue(segmentRequests.contains { $0.segmentIndex == 0 })
         XCTAssertTrue(segmentRequests.contains { $0.segmentIndex == 1 })

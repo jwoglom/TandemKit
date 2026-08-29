@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request insulin on board information when Control-IQ is not supported.
-public class NonControlIQIOBRequest: Message {
+public class NonControlIQIOBRequest: PumpRequest {
+    public typealias Response = NonControlIQIOBResponse
+
     public static let props = MessageProps(
         opCode: 38,
         size: 0,

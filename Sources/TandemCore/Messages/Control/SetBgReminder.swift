@@ -8,7 +8,9 @@ import Foundation
 ///   [2-3] reminderThreshold   uint16  - BG threshold in mg/dL
 ///   [4-7] reminderMinutes     uint32  - reminder time in minutes
 ///   [8]   bitmask             uint8   - change bitmask (bits: 0=enabled, 1=threshold, 2=minutes)
-public class SetBgReminderRequest: Message {
+public class SetBgReminderRequest: PumpRequest {
+    public typealias Response = SetBgReminderResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-40)),
         size: 9,

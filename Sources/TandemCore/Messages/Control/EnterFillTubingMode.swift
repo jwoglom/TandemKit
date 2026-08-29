@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to start fill tubing mode. Pump must be suspended.
-public class EnterFillTubingModeRequest: Message {
+public class EnterFillTubingModeRequest: PumpRequest {
+    public typealias Response = EnterFillTubingModeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-108)),
         size: 0,

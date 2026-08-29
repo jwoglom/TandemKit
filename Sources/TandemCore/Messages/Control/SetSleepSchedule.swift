@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to configure a Control-IQ sleep schedule slot.
-public class SetSleepScheduleRequest: Message {
+public class SetSleepScheduleRequest: PumpRequest {
+    public typealias Response = SetSleepScheduleResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-50)),
         size: 8,

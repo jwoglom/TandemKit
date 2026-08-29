@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request CGM glucose alert settings from the pump.
-public class CGMGlucoseAlertSettingsRequest: Message {
+public class CGMGlucoseAlertSettingsRequest: PumpRequest {
+    public typealias Response = CGMGlucoseAlertSettingsResponse
+
     public static let props = MessageProps(
         opCode: 90,
         size: 0,

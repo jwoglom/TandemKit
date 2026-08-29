@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to enable or disable pump modes like sleep or exercise.
-public class SetModesRequest: Message {
+public class SetModesRequest: PumpRequest {
+    public typealias Response = SetModesResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-52)),
         size: 1,

@@ -7,7 +7,9 @@ import Foundation
 ///   [1]   dayCount     uint8   - number of days between site changes
 ///   [2-5] timeOfDay    uint32  - time of day in minutes since midnight
 ///   [6]   bitmask      uint8   - change bitmask (bits: 0=enable, 1=dayCount, 2=timeOfDay)
-public class SetSiteChangeReminderRequest: Message {
+public class SetSiteChangeReminderRequest: PumpRequest {
+    public typealias Response = SetSiteChangeReminderResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-36)),
         size: 7,

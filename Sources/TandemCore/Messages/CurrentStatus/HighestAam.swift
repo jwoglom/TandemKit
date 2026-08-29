@@ -1,6 +1,8 @@
 import Foundation
 
-public class HighestAamRequest: Message {
+public class HighestAamRequest: PumpRequest {
+    public typealias Response = HighestAamResponse
+
     public static let props = MessageProps(
         opCode: 120,
         size: 0,

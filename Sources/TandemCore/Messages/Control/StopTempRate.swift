@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to stop a running temp basal rate.
-public class StopTempRateRequest: Message {
+public class StopTempRateRequest: PumpRequest {
+    public typealias Response = StopTempRateResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-90)),
         size: 0,

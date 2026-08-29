@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to exit fill tubing mode.
-public class ExitFillTubingModeRequest: Message {
+public class ExitFillTubingModeRequest: PumpRequest {
+    public typealias Response = ExitFillTubingModeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-106)),
         size: 0,

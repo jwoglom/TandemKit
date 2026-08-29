@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to activate shelf mode on the pump.
-public class ActivateShelfModeRequest: Message {
+public class ActivateShelfModeRequest: PumpRequest {
+    public typealias Response = ActivateShelfModeResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-70)),
         size: 0,

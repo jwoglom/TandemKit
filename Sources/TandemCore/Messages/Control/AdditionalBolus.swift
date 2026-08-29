@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request an additional bolus for a previously-permitted bolusID.
-public class AdditionalBolusRequest: Message {
+public class AdditionalBolusRequest: PumpRequest {
+    public typealias Response = AdditionalBolusResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-6)),
         size: 4,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request miscellaneous notification status (Mobi only).
-public class OtherNotificationStatusRequest: Message {
+public class OtherNotificationStatusRequest: PumpRequest {
+    public typealias Response = OtherNotificationStatusResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-110)),
         size: 1,

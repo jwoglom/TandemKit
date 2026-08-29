@@ -1,7 +1,9 @@
 import Foundation
 
 /// Unknown MOBI opcode 110 request.
-public class UnknownMobiOpcode110Request: Message {
+public class UnknownMobiOpcode110Request: PumpRequest {
+    public typealias Response = UnknownMobiOpcode110Response
+
     public static let props = MessageProps(
         opCode: 110,
         size: 0,

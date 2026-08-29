@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request out-of-range CGM alert settings from the pump.
-public class CGMOORAlertSettingsRequest: Message {
+public class CGMOORAlertSettingsRequest: PumpRequest {
+    public typealias Response = CGMOORAlertSettingsResponse
+
     public static let props = MessageProps(
         opCode: 94,
         size: 0,

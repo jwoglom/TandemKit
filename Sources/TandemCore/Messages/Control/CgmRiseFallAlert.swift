@@ -7,7 +7,9 @@ import Foundation
 ///   [1]  enable     uint8  - 0=disabled, 1=enabled
 ///   [2]  mgPerDl    uint8  - rate threshold in mg/dL/min
 ///   [3]  bitmask    uint8  - change bitmask (bits: 0=enabled, 1=minValue)
-public class CgmRiseFallAlertRequest: Message {
+public class CgmRiseFallAlertRequest: PumpRequest {
+    public typealias Response = CgmRiseFallAlertResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-60)),
         size: 4,

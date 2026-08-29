@@ -1,7 +1,9 @@
 import Foundation
 
 /// Final JPAKE message confirming key derivation.
-public class Jpake4KeyConfirmationRequest: Message {
+public class Jpake4KeyConfirmationRequest: PumpRequest {
+    public typealias Response = Jpake4KeyConfirmationResponse
+
     public static let props = MessageProps(
         opCode: 40,
         size: 50,
