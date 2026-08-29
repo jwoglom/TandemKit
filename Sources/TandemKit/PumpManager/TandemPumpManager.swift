@@ -75,6 +75,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
 
+    // Syncs queued or running on the command queue. Loop polls every ~5 minutes, and a sync
+    // against an unresponsive pump spends that long working through bounded write timeouts, so
+    // the polls have to be told to stand down rather than stack up behind it — as would every
+    // user command sharing that queue. Guarded because syncs start and finish on different queues.
+    private let syncStateLock = NSLock()
+    private var inFlightSyncs = 0
+
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -314,10 +321,36 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        syncPumpData(completion: completion)
+        syncPumpData(onlyIfIdle: true, completion: completion)
     }
 
-    func syncPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
+    /// Registers a sync as in flight. Returns false only when `onlyIfIdle` and one already is.
+    private func beginSync(onlyIfIdle: Bool) -> Bool {
+        syncStateLock.lock()
+        defer { syncStateLock.unlock() }
+
+        if onlyIfIdle, inFlightSyncs > 0 {
+            return false
+        }
+        inFlightSyncs += 1
+        return true
+    }
+
+    private func endSync() {
+        syncStateLock.lock()
+        inFlightSyncs -= 1
+        syncStateLock.unlock()
+    }
+
+    /// - Parameter onlyIfIdle: stand down when a sync is already queued or running. Set by the
+    ///   automatic poll; a sync the user asked for runs regardless.
+    func syncPumpData(onlyIfIdle: Bool = false, completion: ((_ lastSync: Date?) -> Void)?) {
+        guard beginSync(onlyIfIdle: onlyIfIdle) else {
+            logger.warning("A sync is already in flight; not queueing another")
+            completion?(state.lastReconciliation)
+            return
+        }
+
         // Layer 1 backstop: always hand the loop a lastSync, even if the layers below wedge.
         // Capture lastReconciliation in a local so the timeoutResult autoclosure doesn't reference
         // `self` — `self.state` here gets stripped by the Swiftformat build phase (redundantSelf),
@@ -325,6 +358,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let lastReconciliation = state.lastReconciliation
         let completion = watchdogged(timeoutResult: lastReconciliation) { completion?($0) }
         bluetooth.ensureConnected { error in
+            // Cleared when the job ends, not when `completion` fires: the watchdog hands Loop a
+            // result at 180s while these blocking reads are still holding the queue.
+            defer { self.endSync() }
+
             if let error {
                 self.logger.error("Failed to connect for sync: \(error.localizedDescription)")
                 completion(self.state.lastReconciliation)
