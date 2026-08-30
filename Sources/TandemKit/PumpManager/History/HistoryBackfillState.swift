@@ -18,17 +18,11 @@ public struct HistoryBackfillState: Equatable {
     /// point for an incremental read: the next one asks for `watermark + 1 ... last`.
     public var watermark: UInt32?
 
-    /// Earliest date this driver will consider for this pump: the deepest the backfill reads,
-    /// and the lower of the two bounds the emission layer filters against.
-    ///
-    /// Set when a pump is first seen and **never moved afterwards**. It deliberately does not
-    /// track the host app's own filter date, which marches forward to ≈now as this driver
-    /// reports events (Trio returns `lastEventDate - 15min`, and every sync reports basal and
-    /// bolus status stamped ≈now). Ratcheting this to follow it would leave the deep backfill
-    /// with a target minutes in the past, so the walk would declare itself finished before
-    /// reading any of the insulin still acting — an under-reported IOB, which is the error
-    /// direction that leads to over-delivery. `HistoryBackfillPlanner.emitFloor` combines this
-    /// with the host's floor for emission, where the host's advancing date *is* the right bound.
+    /// Earliest date this driver will consider for this pump, and the deepest the backfill
+    /// reads. Set at first sight and never moved: the host app's filter date marches forward to
+    /// ≈now as this driver reports events (Trio returns `lastEventDate - 15min`), so tracking it
+    /// would leave the walk with a target minutes old and IOB short. Emission combines the two —
+    /// see `HistoryBackfillPlanner.emitFloor`.
     public var firstSeenFloor: Date?
 
     public init(pumpSerial: UInt32, watermark: UInt32? = nil, firstSeenFloor: Date? = nil) {
@@ -76,17 +70,10 @@ public struct HistoryBackfillState: Equatable {
         return self
     }
 
-    /// This bookkeeping, with the watermark dropped if the pump's newest entry sits below it.
-    ///
-    /// The watermark is a high-water mark over *this* pump's sequence numbers, so the pump can
-    /// never legitimately hold less than has already been read from it. When it does, the log
-    /// was erased (a factory reset, or a service replacement that kept the serial) and the
-    /// counter restarted below the mark. Left alone, `watermark >= lastSequenceNum` reads as
-    /// "nothing new to fetch" on every tick from then on, and the driver would never read
-    /// another entry from this pump — silently, for the life of the install.
-    ///
-    /// The floor is kept: this is still the same pump in the same service, so the window it may
-    /// report for has not changed. Only the read position is meaningless.
+    /// This bookkeeping, with the watermark dropped if the pump's newest entry sits below it —
+    /// the log was erased and the counter restarted. Left alone, `watermark >= lastSequenceNum`
+    /// reads as "nothing new" from then on and the pump is never read again. The floor is kept:
+    /// same pump, same service, so only the read position is meaningless.
     public func resettingWatermarkIfAbove(lastSequenceNum: UInt32) -> HistoryBackfillState {
         guard let watermark, watermark > lastSequenceNum else {
             return self
@@ -107,9 +94,8 @@ extension HistoryBackfillState: RawRepresentable {
             return nil
         }
 
-        // "emitFloor" is the key this field was first persisted under, when it doubled as the
-        // emission floor and was ratcheted forward each tick. Read it so an existing install
-        // keeps its first-seen date rather than re-flooring at now.
+        // "emitFloor" is the key this field was first persisted under; read it so an existing
+        // install keeps its first-seen date rather than re-flooring at now.
         let floor = (rawValue["firstSeenFloor"] as? TimeInterval)
             ?? (rawValue["emitFloor"] as? TimeInterval)
 

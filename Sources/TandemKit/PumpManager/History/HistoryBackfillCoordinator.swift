@@ -21,16 +21,13 @@ final class HistoryBackfillCoordinator {
         var sessionCovered: ClosedRange<UInt32>?
         /// Whether the walk backward has nothing left to reach.
         var isDeepBackfillComplete: Bool
-        /// The earliest date the emission layer may report events for, as of this tick: the
-        /// later of the host app's filter date and this pump's first-seen floor. Derived per
-        /// tick rather than persisted, because the host half advances to ≈now.
+        /// Earliest date the emission layer may report events for, as of this tick.
         var emitFloor: Date?
     }
 
     private let logger = TandemLogger(category: "HistoryBackfill")
-    // Weak, not unowned: the fetcher holds the manager only for the duration of a call, so a
-    // tick can still be unwinding on the fetcher's queue after the user deletes the pump and the
-    // manager goes away. Every use below fails soft rather than trapping.
+    // Weak, not unowned: a tick can still be unwinding on the fetcher's queue after the user
+    // deletes the pump, and the fetcher no longer keeps the manager alive.
     private weak var pumpManager: TandemPumpManager?
     private let fetcher: HistoryLogFetcher
 
@@ -107,10 +104,9 @@ final class HistoryBackfillCoordinator {
                 return
             }
 
-            // A pump holding less than has already been read from it had its log erased and its
-            // counter restarted. Drop the stale read position — left in place it reads as
-            // "nothing new" forever — and the session's view of a numbering that no longer
-            // describes these entries.
+            // A pump holding less than has been read from it had its log erased and its counter
+            // restarted; drop the stale read position and the session's view of the old
+            // numbering.
             let bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
             if bookkeeping.watermark != reconciled.watermark {
                 self.logger.warning(
@@ -168,15 +164,13 @@ final class HistoryBackfillCoordinator {
 
     // MARK: - Plan execution
 
-    /// Runs a plan's ranges one at a time, newest work first, advancing the watermark as each
-    /// range completes, then keeps stepping the deep walk backward until it reaches the
-    /// lookback target.
+    /// Runs a plan's ranges one at a time, newest work first, then steps the deep walk backward
+    /// until it reaches the lookback target.
     ///
     /// Sequential rather than concurrent because every fetch shares the one history log stream:
-    /// two overlapping walks would each see the other's entries and neither could tell when its
-    /// own chunk was complete. A range that fails is skipped rather than retried — the next tick
-    /// re-derives it, as new work or as a gap — and a failed *deep* slice ends the walk for this
-    /// tick, since every slice after it steps down from a frontier that did not move.
+    /// two overlapping walks would each see the other's entries. A failed range is skipped and
+    /// re-derived next tick; a failed *deep* slice ends the walk, since every slice after it
+    /// steps down from a frontier that did not move.
     private func run(
         plan: HistoryBackfillPlanner.Plan,
         bookkeeping: HistoryBackfillState,
@@ -212,10 +206,7 @@ final class HistoryBackfillCoordinator {
             }
         }
 
-        /// Walks the deep slices, re-deriving each one from the frontier the previous slice
-        /// established. The walk continues within this tick because everything short of the
-        /// target is insulin that may still be acting, and pacing it one slice per sync would
-        /// leave IOB short for hours after a pump is added.
+        /// Walks the deep slices, re-deriving each from the frontier the previous one left.
         func stepDeep(_ slice: ClosedRange<UInt32>?) {
             guard let slice else {
                 completion(bookkeeping, read)
@@ -247,10 +238,7 @@ final class HistoryBackfillCoordinator {
         func next(_ remaining: ArraySlice<ClosedRange<UInt32>>) {
             guard let range = remaining.first else {
                 // Re-derived rather than taken from `plan.deep`, which was decided before this
-                // tick read anything. On first contact the plan cannot name a deep slice at all
-                // — the walk has no frontier to step down from until the incremental read
-                // establishes one — and waiting a whole sync to take that first step would put
-                // the newest 255 entries in the store and nothing else for five minutes.
+                // tick read anything — on first contact the plan cannot name a slice at all.
                 stepDeep(self.nextDeepSlice(
                     firstSequenceNum: firstSequenceNum,
                     bookkeeping: bookkeeping,
@@ -264,9 +252,8 @@ final class HistoryBackfillCoordinator {
         next(ranges[...])
     }
 
-    /// The slice the walk should read next, or nil once it has reached the target date or the
-    /// start of the pump's log. Re-derived after every slice rather than precomputed, so the
-    /// walk stops on the first entry at or below the target instead of overshooting.
+    /// The slice to read next, or nil at the target date or the start of the pump's log.
+    /// Re-derived per slice so the walk stops on the first entry past the target, not after it.
     private func nextDeepSlice(
         firstSequenceNum: UInt32,
         bookkeeping: HistoryBackfillState,
@@ -298,12 +285,8 @@ final class HistoryBackfillCoordinator {
         lock.unlock()
     }
 
-    /// Drop this session's view of the store after the pump's numbering restarted.
-    ///
-    /// The store is keyed by (serial, sequence number), so entries filed under the old numbering
-    /// now collide with different entries carrying the same numbers. Clearing this pump's
-    /// records is the only way to keep the two apart; they are re-read from the pump as the walk
-    /// starts over.
+    /// Drop this session's view of the store after the pump's numbering restarted: the store is
+    /// keyed by (serial, sequence number), so old entries now collide with new ones.
     private func forgetSessionCoverage(pumpSerial: HistoryLogSyncIdentifier.PumpSerial) {
         lock.lock()
         sessionCoveredRange = nil

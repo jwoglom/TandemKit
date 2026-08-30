@@ -47,10 +47,8 @@ public final class HistoryLogFetcher {
     private static let chunkTimeout: TimeInterval = 8.0
     private static let sendTimeout: DispatchTimeInterval = .seconds(45)
 
-    // Weak: the manager owns a coordinator that owns a fetcher, so a strong reference back
-    // would cycle and leak the manager — and the whole BLE stack behind it — once the user
-    // deletes the pump. A nil manager means this fetch's owner is gone; every entry point
-    // fails soft rather than trapping.
+    // Weak: manager owns coordinator owns fetcher, so a strong reference back cycles and leaks
+    // the manager, and the BLE stack behind it, past the user deleting the pump.
     private weak var pumpManager: TandemPumpManager?
     private let logger = TandemLogger(category: "HistoryLogFetcher")
     private let queue = DispatchQueue(label: "com.jwoglom.TandemKit.historyLogFetcher")

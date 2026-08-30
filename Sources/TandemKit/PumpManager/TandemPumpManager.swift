@@ -1608,11 +1608,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
         // suggested handlers on QualifyingEvent.
         if events.contains(.bolusChange) {
-            // A bolus just changed on the pump, which is exactly when a bolus delivered from the
-            // pump's own UI (a quick bolus, or a Control-IQ correction) is written to history.
-            // Read history now so it reaches the store within seconds: waiting for the next sync
-            // leaves it out of IOB for a full loop cycle or more, and the pump is already awake.
-            // Fire-and-forget — the coordinator drops the tick if one is already running.
+            // When a bolus delivered from the pump's own UI is written to history. Read now
+            // rather than at the next sync, which is a loop cycle or more out of IOB.
             historyBackfillCoordinator.runTick()
         }
 

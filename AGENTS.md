@@ -517,19 +517,16 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
      persisted watermark (`TandemPumpManagerState.historyBackfill`), cross-tick gap healing via
      `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
      `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
-     event kicks a tick as well, so a bolus delivered from the pump's own UI reaches the store in
-     seconds rather than at the next sync.
+     event kicks a tick as well.
    - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
-     but it is **not** paced one slice per sync: everything short of `deepFetchTarget` is insulin
-     that may still be acting, so a tick keeps stepping until it reaches the target (bounded by
-     `maxDeepSlicesPerTick` as a backstop for a walk that isn't converging).
-   - Two floors, deliberately distinct. `HistoryBackfillState.firstSeenFloor` is set when a pump
-     is first seen and never moves; it alone bounds how deep the walk reads.
-     `HistoryBackfillPlanner.emitFloor` maxes that with the host app's
-     `startDateToFilterNewPumpEvents` and is handed to the emission layer on `TickOutcome`, never
-     persisted. The host's date marches forward to ≈now as this driver reports events (Trio
-     returns `lastEventDate - 15min`), so letting it bound the walk would end the backfill minutes
-     into the past, before it had read the doses IOB is computed from.
+     but is not paced one slice per sync: a tick keeps stepping until it reaches
+     `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.
+   - Two distinct floors. `HistoryBackfillState.firstSeenFloor` is set at first sight, never
+     moves, and alone bounds how deep the walk reads. `HistoryBackfillPlanner.emitFloor` maxes it
+     with the host's `startDateToFilterNewPumpEvents` for the emission layer, and is never
+     persisted — the host's date marches to ≈now as the driver reports events (Trio returns
+     `lastEventDate - 15min`), so letting it bound the walk ends the backfill minutes into the
+     past.
    - Still open: nothing consumes the store's contents. `HistoryToDoseMapper` is not wired to any
      emission path, so mapped doses, in-place finalization of interrupted boluses, and
      gap-aware `lastReconciliation` advancement all remain to be done.
