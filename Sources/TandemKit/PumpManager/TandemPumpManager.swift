@@ -114,9 +114,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// `pumpDelegate.queue` reads back as `.main` until the host sets one, and the host's delegate
-    /// methods assert they are on its own queue, so "is there a queue" has to be tracked here
-    /// rather than inferred from the delegate holder.
+    /// `pumpDelegate.queue` reads back as `.main` until the host sets one, and the host asserts its
+    /// delegate methods run on its own queue, so this cannot be inferred from the holder.
     private var hasDelegateQueue = false
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
@@ -296,18 +295,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// Catches the host app up on anything that only gets pushed once.
-    ///
-    /// The manager runs before the host adopts it — pairing finishes with a full `syncPumpData`,
-    /// and polls can fire while a relaunching app is still wiring itself up — so reads land with
-    /// no delegate to hand them to. Called from both the delegate and the queue setter because
-    /// the host sets them one after the other (Trio sets the delegate first) and `notify` needs
-    /// both; whichever lands second does the work.
+    /// Catches the host up on what only gets pushed once, since the manager reads the pump before
+    /// the host adopts it. Called from both setters — the host sets them one after the other (Trio
+    /// sets the delegate first) and `notify` needs both — so whichever lands second does the work.
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
-        // The status is re-sent on every state change anyway, but sending it now means the host
-        // does not show a blank battery/basal until something happens to move it.
         notifyDelegateStateUpdated()
         flushPendingReservoirReading()
     }

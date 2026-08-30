@@ -417,19 +417,12 @@ extension TandemPumpManager {
         return units
     }
 
-    /// Hands a reservoir reading to the host app.
-    ///
-    /// `didReadReservoirValue` is the only channel the reservoir has: it is what Trio writes to
-    /// its `monitor/reservoir.json`, which drives the home screen and the empty-reservoir dosing
-    /// gate. Unlike the pump status (re-sent on every state change) and the alert reconciliation
-    /// (re-run from the pump's own state on every fetch), it is one-shot — nothing re-derives it
-    /// — so a call made while no delegate is attached leaves the host on a stale value
-    /// indefinitely. The pairing sync (`onPairSuccess` -> `syncPumpData`) runs before the host
-    /// adopts the manager and hits exactly that, which is why the pump and the host disagree
-    /// after a re-pair. Hold the reading instead, and flush it when a delegate turns up.
+    /// `didReadReservoirValue` is the reservoir's only channel to the host and nothing re-derives
+    /// it, so a call made with no delegate attached — the pairing sync runs before the host adopts
+    /// the manager — would strand the host on a stale value. Hold the reading for the flush below
+    /// instead. The pending flag is read and written inside `notify`, serialized on the delegate
+    /// queue, so a flush racing a fresh read cannot report twice.
     func reportReservoirReading(_ reading: ReservoirValue) {
-        // Both the read and the write of the pending flag happen inside `notify`, which is
-        // serialized on the delegate queue, so a flush racing a fresh read cannot report twice.
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
                 self.logger.warning("No pump delegate; holding reservoir reading until one attaches")
@@ -450,8 +443,7 @@ extension TandemPumpManager {
         }
     }
 
-    /// Re-sends the last reservoir reading if it never reached a delegate. Called when one
-    /// attaches; a no-op in the normal case where the reading was delivered as it was taken.
+    /// Sends the last reading if it never reached a delegate. A no-op in the normal case.
     func flushPendingReservoirReading() {
         guard state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading else {
             return
