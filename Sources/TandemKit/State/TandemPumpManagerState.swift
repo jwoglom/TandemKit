@@ -46,6 +46,13 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var featureFlags: TandemFeatureFlags = .default
     public var latestInsulinOnBoard: Double?
     public var lastReservoirReading: ReservoirValue?
+    /// Set when a reservoir reading is taken, cleared once it has actually reached the LoopKit
+    /// delegate. `didReadReservoirValue` is fire-and-forget and is the only way the value reaches
+    /// the host app, so a reading taken while no delegate is attached — the pairing sync, or a
+    /// poll racing app launch — would otherwise be dropped and the host would keep displaying
+    /// (and dosing against) whatever it last stored. Persisted so a reading taken moments before
+    /// a relaunch is still handed over once a delegate attaches.
+    public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
@@ -210,6 +217,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         } else {
             lastReservoirReading = nil
         }
+
+        lastReservoirReadingNeedsReport = rawValue["lastReservoirReadingNeedsReport"] as? Bool ?? false
 
         if let batteryRaw = rawValue["lastBatteryReading"] as? [String: Any] {
             lastBatteryReading = TandemPumpManagerState.decodeBatteryReading(from: batteryRaw)
@@ -400,6 +409,10 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["lastReservoirReading"] = TandemPumpManagerState.encodeReservoirValue(lastReservoirReading)
         }
 
+        if lastReservoirReadingNeedsReport {
+            raw["lastReservoirReadingNeedsReport"] = true
+        }
+
         if let lastBatteryReading = lastBatteryReading {
             raw["lastBatteryReading"] = TandemPumpManagerState.encodeBatteryReading(lastBatteryReading)
         }
@@ -438,6 +451,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* featureFlags: \(featureFlags)",
             "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
             "* lastReservoirReading: \(String(describing: lastReservoirReading))",
+            "* lastReservoirReadingNeedsReport: \(lastReservoirReadingNeedsReport)",
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* bolusState: \(bolusState)",
