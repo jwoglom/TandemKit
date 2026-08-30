@@ -24,14 +24,18 @@ import PackageDescription
 
 // On Linux there is no Xcode project to fall back on, and Claude Code web
 // sessions run in Linux containers (scripts/claude-web-setup.sh), so `swift
-// build` is the only way for them to compile anything. Declare the subset that
-// can actually be built there: TandemCore, against source shims for LoopKit and
-// CoreBluetooth kept outside Sources/ (see LinuxShims/README.md). SwiftECC and
-// BigInt call SecRandomCopyBytes unconditionally and do not compile on Linux,
-// so they are attached to Apple platforms only; swift-crypto stands in for
-// CryptoKit hashing and the JPAKE provider becomes a trapping stub
-// (SwiftECCJpakeProvider.swift). TandemKit/TandemKitUI/TandemKitPlugin import
-// UIKit/SwiftUI/HealthKit/LoopKitUI and are not declared here.
+// build` is the only way for them to compile anything, and how CI tests the
+// driver without a macOS runner.
+//
+// Sources/TandemCore and Sources/TandemKit compile into one module named
+// TandemKit, matching TandemKit.xcodeproj and what the tests `@testable
+// import`, against the shims in LinuxShims/ (see its README). TandemKitUI is
+// SwiftUI and TandemKitPlugin depends on it, so neither builds here.
+//
+// SwiftECC and BigInt call SecRandomCopyBytes unconditionally and do not
+// compile on Linux, so they are attached to Apple platforms only; swift-crypto
+// stands in for CryptoKit hashing and the JPAKE provider becomes a trapping
+// stub (SwiftECCJpakeProvider.swift).
 #if os(Linux)
 
 let package = Package(
@@ -45,7 +49,9 @@ let package = Package(
     ],
     targets: [
         .target(name: "CoreBluetooth", path: "LinuxShims/CoreBluetooth"),
-        .target(name: "LoopKit", path: "LinuxShims/LoopKit"),
+        .target(name: "HealthKit", path: "LinuxShims/HealthKit"),
+        .target(name: "Combine", path: "LinuxShims/Combine"),
+        .target(name: "LoopKit", dependencies: ["HealthKit"], path: "LinuxShims/LoopKit"),
         // Named TandemKit, not TandemCore: the Xcode project compiles
         // Sources/TandemCore, Sources/TandemKit and Sources/TandemKitUI into a
         // single TandemKit framework, and since b00b7bd every file in
@@ -57,15 +63,33 @@ let package = Package(
             dependencies: [
                 "LoopKit",
                 "CoreBluetooth",
+                "HealthKit",
+                "Combine",
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "Crypto", package: "swift-crypto")
             ],
-            path: "Sources/TandemCore"
+            path: "Sources",
+            exclude: ["TandemKit/Info.plist"],
+            sources: ["TandemCore", "TandemKit"]
         ),
         .testTarget(
             name: "TandemCoreTests",
             dependencies: ["TandemKit", "CoreBluetooth"],
             path: "Tests/TandemCoreTests"
+        ),
+        // TandemKitUI view-model tests; macOS-only, still run via the Xcode
+        // project. A new one must be added here or the Linux build breaks.
+        .testTarget(
+            name: "TandemKitTests",
+            dependencies: ["TandemKit", "CoreBluetooth", "LoopKit", "HealthKit"],
+            path: "Tests/TandemKitTests",
+            exclude: [
+                "FillTubingNotificationRefreshTests.swift",
+                "TandemFeatureFlagsTests.swift",
+                "TandemKitChangeCartridgeViewModelTests.swift",
+                "TandemKitControlIQSettingsViewModelTests.swift",
+                "TandemKitNotificationsViewModelTests.swift"
+            ]
         )
         // Tests/TandemKitTests is not declared: it drives TandemPumpManager and
         // the rest of the iOS-only layer. It is built and run on macOS by

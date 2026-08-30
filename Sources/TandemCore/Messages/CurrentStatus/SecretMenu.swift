@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request debug/diagnostic secret menu information.
-public class SecretMenuRequest: Message {
+public class SecretMenuRequest: PumpRequest {
+    public typealias Response = SecretMenuResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-68)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the pump software and hardware version information.
-public class PumpVersionRequest: Message {
+public class PumpVersionRequest: PumpRequest {
+    public typealias Response = PumpVersionResponse
+
     public static let props = MessageProps(
         opCode: 84,
         size: 0,

@@ -7,6 +7,7 @@ struct TandemKitDebugView: View {
     @State private var activeCategory: TandemKitDebugViewModel.CategoryGroup?
     @State private var showingPumpState = false
     @State private var showingManagerState = false
+    @State private var showingRerunSetupConfirmation = false
 
     var body: some View {
         List {
@@ -95,10 +96,28 @@ struct TandemKitDebugView: View {
                     Text("Silent Tones", comment: "Label for silent tones")
                 }
             }
+
+            if viewModel.rerunInitialSetup != nil {
+                Section(footer: Text("Re-runs pairing and the initial setup screens on the current pump. The pump manager is not removed.")) {
+                    Button {
+                        showingRerunSetupConfirmation = true
+                    } label: {
+                        Label("Re-run Pump Setup", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                }
+            }
         }
         .navigationBarTitle("Debug Options", displayMode: .inline)
         .sheet(item: $activeCategory) { group in
             CategoryRequestSheet(viewModel: viewModel, group: group)
+        }
+        .alert("Re-run Pump Setup?", isPresented: $showingRerunSetupConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Re-run Setup") {
+                viewModel.rerunInitialSetup?()
+            }
+        } message: {
+            Text("This deletes the saved pairing and restarts the initial setup flow for this pump (the pump manager is not removed). Re-pairing the pump requires a wireless charging pad — do not continue unless you have your pump charger available.")
         }
     }
 }

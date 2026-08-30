@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request Control-IQ insulin on board information.
-public class ControlIQIOBRequest: Message {
+public class ControlIQIOBRequest: PumpRequest {
+    public typealias Response = ControlIQIOBResponse
+
     public static let props = MessageProps(
         opCode: 108,
         size: 0,

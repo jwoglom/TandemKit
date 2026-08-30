@@ -15,6 +15,10 @@ protocol PumpBluetoothConnection: AnyObject {
     /// low connection latency during pairing); a stub returns nil.
     var manager: CBCentralManager? { get }
 
+    /// State of the phone's Bluetooth radio. Separate from `manager` so it can be driven in tests,
+    /// where `CBCentralManager.state` is read-only.
+    var bluetoothState: CBManagerState { get }
+
     /// Starts scanning for Tandem pumps, calling `completion` once per advertisement. Returns false
     /// when Bluetooth is not powered on, in which case `completion` is never called.
     func startScan(_ completion: @escaping (_ result: TandemPumpScan) -> Void) -> Bool
@@ -30,16 +34,32 @@ protocol PumpBluetoothConnection: AnyObject {
     /// could not be established.
     func ensureConnected(completion: @escaping (Error?) -> Void)
 
-    /// Sends `message` and blocks until the matching response arrives, or nil on failure. Must be
-    /// called from inside an `ensureConnected` job.
-    func write(message: Message, expecting: Message.Type, maxChunkSize: Int?) -> Message?
+    /// Responses the pump has actually returned. Compared before and after a sequence of reads to
+    /// tell a pump that answered something from one that answered nothing.
+    var responseCount: Int { get }
+
+    /// Sends `request` and blocks until its response arrives, or nil on failure. Must be called
+    /// from inside an `ensureConnected` job.
+    func write<R: PumpRequest>(_ request: R, maxChunkSize: Int?) -> R.Response?
+
+    /// Escape hatch for callers that only know their message at runtime — the debug tools, which
+    /// pick one by name out of `MessageRegistry`. Everything else uses `write`.
+    func writeUntyped(_ message: any Message, expecting: any Message.Type, maxChunkSize: Int?) -> (any Message)?
 
     func disconnect()
+
+    /// Permanent teardown for a deleted pump: disconnect and suppress every automatic reconnect so
+    /// the session cannot re-establish itself (and re-persist the pump's state) after removal.
+    func deactivate()
 }
 
 extension PumpBluetoothConnection {
     /// Convenience for the common case; protocol requirements cannot carry default arguments.
-    func write(message: Message, expecting: Message.Type) -> Message? {
-        write(message: message, expecting: expecting, maxChunkSize: nil)
+    func write<R: PumpRequest>(_ request: R) -> R.Response? {
+        write(request, maxChunkSize: nil)
+    }
+
+    func writeUntyped(_ message: any Message, expecting: any Message.Type) -> (any Message)? {
+        writeUntyped(message, expecting: expecting, maxChunkSize: nil)
     }
 }

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to start a bolus after receiving permission.
-public class InitiateBolusRequest: Message {
+public class InitiateBolusRequest: PumpRequest {
+    public typealias Response = InitiateBolusResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-98)),
         size: 37,

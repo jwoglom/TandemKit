@@ -260,11 +260,29 @@ struct TandemKitSettingsView: View {
                 }
                 .padding(.bottom, 5)
 
-                if !viewModel.isConnected {
-                    statusBanner(
-                        title: String(localized: "Pump Disconnected", comment: "title for pump disconnected notice"),
-                        color: .red
-                    )
+                if let connectionIssue = viewModel.connectionIssue {
+                    Button(action: { viewModel.openTroubleshootConnection() }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(connectionIssue.title)
+                                    .font(Font.subheadline.weight(.bold))
+                                    .foregroundColor(.red)
+                                Text(connectionIssue.detail(appName: viewModel.appName))
+                                    .font(Font.footnote.weight(.semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text("Troubleshoot connection", comment: "subtitle linking to the connection troubleshooter")
+                                    .font(Font.caption)
+                                    .foregroundColor(.accentColor)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(Font.caption.weight(.semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 } else if viewModel.showsNoCGMConnectedBanner {
                     statusBanner(
                         title: String(localized: "No CGM connected to pump", comment: "title for CIQ no CGM notice"),
@@ -275,7 +293,9 @@ struct TandemKitSettingsView: View {
                             ),
                             viewModel.algorithmName
                         ),
-                        color: .orange
+                        color: .orange,
+                        actionLabel: disableControlIQLabel,
+                        action: { activeAlert = .switchToDIY }
                     )
                 } else if viewModel.useControlIQ {
                     statusBanner(
@@ -284,7 +304,9 @@ struct TandemKitSettingsView: View {
                             format: String(localized: "%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
                             viewModel.algorithmName
                         ),
-                        color: .orange
+                        color: .orange,
+                        actionLabel: disableControlIQLabel,
+                        action: { activeAlert = .switchToDIY }
                     )
                 } else if !viewModel.isClosedLoopEnabled {
                     statusBanner(
@@ -623,13 +645,19 @@ struct TandemKitSettingsView: View {
                     dismissButton: .default(Text("OK"))
                 )
             case .noCGMConnected:
+                // Control-IQ without a CGM is open-loop on both sides, so turning it straight back
+                // off is a reasonable answer to this warning -- offer it here rather than making
+                // the user find the banner's button afterwards.
                 return Alert(
                     title: Text("No CGM Connected", comment: "Title for no CGM connected warning"),
                     message: Text(
                         "Control-IQ was enabled but no CGM is connected to the pump.\n\nUntil a CGM sensor is connected, your configured profile rates will be used. To connect a sensor, go to CGM Settings below.",
                         comment: "Message for no CGM connected warning after enabling Control-IQ"
                     ),
-                    dismissButton: .default(Text("OK"))
+                    primaryButton: .default(Text(disableControlIQLabel)) {
+                        viewModel.switchAlgorithmToDIY()
+                    },
+                    secondaryButton: .cancel(Text("OK"))
                 )
             case .stopTempRate:
                 return Alert(
@@ -883,7 +911,21 @@ struct TandemKitSettingsView: View {
         return guidanceColors.critical
     }
 
-    private func statusBanner(title: String, subtitle: String? = nil, color: Color) -> some View {
+    /// Turning Control-IQ off is never gated on the `controlIQSupport` feature flag: the flag only
+    /// governs handing dosing *to* Control-IQ, so a pump found running it can always be taken back.
+    private var disableControlIQLabel: String {
+        String(localized: "Disable Control-IQ", comment: "Button on a status banner to turn Control-IQ off on the pump")
+    }
+
+    /// `actionLabel`/`action` add a button under the text. The button is `.borderless` so the list
+    /// row does not swallow the tap, and it is disabled while a pump command is already in flight.
+    private func statusBanner(
+        title: String,
+        subtitle: String? = nil,
+        color: Color,
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil
+    ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(Font.subheadline.weight(.bold))
@@ -892,6 +934,15 @@ struct TandemKitSettingsView: View {
                 Text(subtitle)
                     .font(Font.caption)
                     .foregroundColor(.secondary)
+            }
+            if let actionLabel = actionLabel, let action = action {
+                Button(action: action) {
+                    Text(actionLabel)
+                        .font(Font.footnote.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .disabled(viewModel.isUpdatingPumpState)
+                .padding(.top, 4)
             }
         }
         .padding(.vertical, 8)

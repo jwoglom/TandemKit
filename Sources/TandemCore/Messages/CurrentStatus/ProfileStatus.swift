@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request general information on insulin delivery profiles.
-public class ProfileStatusRequest: Message {
+public class ProfileStatusRequest: PumpRequest {
+    public typealias Response = ProfileStatusResponse
+
     public static let props = MessageProps(
         opCode: 62,
         size: 0,

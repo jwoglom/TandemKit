@@ -209,12 +209,12 @@ public class IDPManager {
     ///
     /// Send each message via `PumpComm.sendMessage`, then pass the responses to `processMessage()`.
     /// Continue calling this until it returns an empty array and `isComplete()` is true.
-    public func nextMessages() -> [(Message, Message.Type)] {
-        var messages: [(Message, Message.Type)] = []
+    public func nextMessages() -> [any PumpRequest] {
+        var messages: [any PumpRequest] = []
 
         // Step 1: Get profile status if we don't have it
         guard let profileStatus = profileStatusResponse else {
-            messages.append((ProfileStatusRequest(), ProfileStatusResponse.self))
+            messages.append(ProfileStatusRequest())
             return messages
         }
 
@@ -227,13 +227,13 @@ public class IDPManager {
                     for i in 0 ..< segmentCount {
                         let hasSegment = profile.segments.contains { $0.segmentIndex == i }
                         if !hasSegment {
-                            messages.append((IDPSegmentRequest(idpId: idpSlotId, segmentIndex: i), IDPSegmentResponse.self))
+                            messages.append(IDPSegmentRequest(idpId: idpSlotId, segmentIndex: i))
                         }
                     }
                 }
             } else {
                 // We don't have this profile yet - fetch its settings
-                messages.append((IDPSettingsRequest(idpId: idpSlotId), IDPSettingsResponse.self))
+                messages.append(IDPSettingsRequest(idpId: idpSlotId))
             }
         }
 

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request CGM hardware information from the pump.
-public class CGMHardwareInfoRequest: Message {
+public class CGMHardwareInfoRequest: PumpRequest {
+    public typealias Response = CGMHardwareInfoResponse
+
     public static let props = MessageProps(
         opCode: 96,
         size: 0,

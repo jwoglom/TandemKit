@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request CGM support package validity status.
-public class CGMSupportPackageStatusRequest: Message {
+public class CGMSupportPackageStatusRequest: PumpRequest {
+    public typealias Response = CGMSupportPackageStatusResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-56)),
         size: 0,

@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to configure quick bolus button behavior.
-public class SetQuickBolusSettingsRequest: Message {
+public class SetQuickBolusSettingsRequest: PumpRequest {
+    public typealias Response = SetQuickBolusSettingsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-46)),
         size: 7,

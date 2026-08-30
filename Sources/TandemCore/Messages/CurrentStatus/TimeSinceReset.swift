@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request information on the pump's internal time since reset.
-public class TimeSinceResetRequest: Message {
+public class TimeSinceResetRequest: PumpRequest {
+    public typealias Response = TimeSinceResetResponse
+
     public static let props = MessageProps(
         opCode: 54,
         size: 0,

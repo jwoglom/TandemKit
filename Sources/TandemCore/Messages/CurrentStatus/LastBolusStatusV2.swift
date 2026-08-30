@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request enhanced details about the last bolus (API 2.5+).
-public class LastBolusStatusV2Request: Message {
+public class LastBolusStatusV2Request: PumpRequest {
+    public typealias Response = LastBolusStatusV2Response
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-92)),
         size: 0,

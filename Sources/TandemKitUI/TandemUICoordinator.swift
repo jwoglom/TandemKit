@@ -21,6 +21,7 @@ enum TandemScreen {
     case debug
     case historyLogViewer
     case featureFlags
+    case troubleshootConnection
 
     func next() -> TandemScreen? {
         switch self {
@@ -209,6 +210,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
                 openQuickBolus: { self.navigateTo(.quickBolus) },
                 openAlertSettings: { self.navigateTo(.alertSettings) },
                 openDebug: { self.navigateTo(.debug) },
+                openTroubleshootConnection: { self.navigateTo(.troubleshootConnection) },
                 allowDebugFeatures: allowDebugFeatures
             )
             let view = TandemKitSettingsView(viewModel: viewModel)
@@ -301,7 +303,11 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitDebugViewModel(
                 pumpManager: pumpManager,
                 openHistoryLogViewer: { self.navigateTo(.historyLogViewer) },
-                openFeatureFlags: { self.navigateTo(.featureFlags) }
+                openFeatureFlags: { self.navigateTo(.featureFlags) },
+                rerunInitialSetup: {
+                    self.pumpManager.deleteSavedPumpState()
+                    self.resetNavigationTo([.setup])
+                }
             )
             return hostingController(
                 rootView: TandemKitDebugView(viewModel: viewModel),
@@ -320,6 +326,13 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(
                 rootView: TandemKitFeatureFlagsView(viewModel: viewModel),
                 title: String(localized: "Feature Flags", comment: "Title for feature flags screen")
+            )
+
+        case .troubleshootConnection:
+            let viewModel = TandemKitTroubleshootConnectionViewModel(pumpManager: pumpManager)
+            return hostingController(
+                rootView: TandemKitTroubleshootConnectionView(viewModel: viewModel),
+                title: String(localized: "Troubleshoot connection", comment: "Title for troubleshoot connection screen")
             )
         }
     }

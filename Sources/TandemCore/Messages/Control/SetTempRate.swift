@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to set a temporary basal rate.
-public class SetTempRateRequest: Message {
+public class SetTempRateRequest: PumpRequest {
+    public typealias Response = SetTempRateResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-92)),
         size: 6,

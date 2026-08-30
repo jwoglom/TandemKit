@@ -1,3 +1,4 @@
+#if canImport(AVFoundation)
 import AVFoundation
 
 /// A trick used to keep the app alive
@@ -51,3 +52,12 @@ class TandemSilentToneManager {
         }
     }
 }
+
+#else
+
+class TandemSilentToneManager {
+    func startBackgroundTask() {}
+    func stopBackgroundTask() {}
+}
+
+#endif

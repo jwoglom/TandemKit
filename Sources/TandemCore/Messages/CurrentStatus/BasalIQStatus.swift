@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the current Basal-IQ status from the pump.
-public class BasalIQStatusRequest: Message {
+public class BasalIQStatusRequest: PumpRequest {
+    public typealias Response = BasalIQStatusResponse
+
     public static let props = MessageProps(
         opCode: 112,
         size: 0,

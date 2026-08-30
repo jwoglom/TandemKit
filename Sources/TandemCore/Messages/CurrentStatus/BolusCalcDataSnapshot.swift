@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request a snapshot of bolus calculator data from the pump.
-public class BolusCalcDataSnapshotRequest: Message {
+public class BolusCalcDataSnapshotRequest: PumpRequest {
+    public typealias Response = BolusCalcDataSnapshotResponse
+
     public static let props = MessageProps(
         opCode: 114,
         size: 0,

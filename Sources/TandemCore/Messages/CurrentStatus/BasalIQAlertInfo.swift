@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the most recent Basal-IQ alert info from the pump.
-public class BasalIQAlertInfoRequest: Message {
+public class BasalIQAlertInfoRequest: PumpRequest {
+    public typealias Response = BasalIQAlertInfoResponse
+
     public static let props = MessageProps(
         opCode: 102,
         size: 0,

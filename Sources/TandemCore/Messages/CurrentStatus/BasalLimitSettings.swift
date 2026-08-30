@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request basal limit settings from the pump.
-public class BasalLimitSettingsRequest: Message {
+public class BasalLimitSettingsRequest: PumpRequest {
+    public typealias Response = BasalLimitSettingsResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-118)),
         size: 0,

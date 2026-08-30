@@ -31,6 +31,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     let openQuickBolus: () -> Void
     let openAlertSettings: () -> Void
     let openDebug: () -> Void
+    let openTroubleshootConnection: () -> Void
     let allowDebugFeatures: Bool
 
     var appName: String { HostApp.current.appName }
@@ -68,7 +69,8 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var scheduledBasal: Double = 0
     @Published var showingDeleteConfirmation = false
     @Published var showingDebugDetails = false
-    @Published var isConnected: Bool = false
+    /// Why the pump cannot be reached, or nil when it can. Drives the banner at the top.
+    @Published var connectionIssue: PumpConnectionIssue?
     @Published var isRefreshing: Bool = false
     @Published var isPlayingSound: Bool = false
     @Published var useControlIQ: Bool = false
@@ -122,6 +124,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         openQuickBolus: @escaping () -> Void,
         openAlertSettings: @escaping () -> Void,
         openDebug: @escaping () -> Void = {},
+        openTroubleshootConnection: @escaping () -> Void = {},
         allowDebugFeatures: Bool = false
     ) {
         self.pumpManager = pumpManager
@@ -138,13 +141,14 @@ class TandemKitSettingsViewModel: ObservableObject {
         self.openQuickBolus = openQuickBolus
         self.openAlertSettings = openAlertSettings
         self.openDebug = openDebug
+        self.openTroubleshootConnection = openTroubleshootConnection
         self.allowDebugFeatures = allowDebugFeatures
         useControlIQ = pumpManager?.state.useControlIQ ?? false
         controlIQSupportEnabled = pumpManager?.state.featureFlags.controlIQSupport ?? false
         quickBolusButtonSupportEnabled = pumpManager?.state.featureFlags.quickBolusButtonSupport ?? false
         isCGMActiveOnPump = pumpManager?.state.isCGMSensorSessionConfigured
         reservoirValue = pumpManager?.reservoirLevel
-        isConnected = false
+        connectionIssue = pumpManager?.connectionIssue
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalDose = pumpManager?.state.basalDose
 
@@ -411,11 +415,10 @@ class TandemKitSettingsViewModel: ObservableObject {
     }
 
     func removePump() {
-        pumpManager?.notifyDelegateOfDeactivation {
-            DispatchQueue.main.async {
-                self.nextStep()
-            }
-        }
+        // Advance the flow. The coordinator's stepFinished runs prepareForDeactivation, which tears
+        // down the BLE transport (stopping auto-reconnect) and notifies the delegate — both required
+        // for the pump to actually be removed rather than reconnect and re-persist its state.
+        nextStep()
     }
 
     deinit {
@@ -434,7 +437,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
         }
 
         DispatchQueue.main.async {
-            self.isConnected = pumpManager.state.isConnected
+            self.connectionIssue = pumpManager.connectionIssue
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
             self.useControlIQ = pumpManager.state.useControlIQ

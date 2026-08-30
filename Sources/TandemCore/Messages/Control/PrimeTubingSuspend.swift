@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to prime tubing with suspend.
-public class PrimeTubingSuspendRequest: Message {
+public class PrimeTubingSuspendRequest: PumpRequest {
+    public typealias Response = PrimeTubingSuspendResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-18)),
         size: 0,

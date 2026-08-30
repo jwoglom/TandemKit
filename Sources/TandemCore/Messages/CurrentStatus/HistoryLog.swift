@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request a set of history log entries starting from a sequence number.
-public class HistoryLogRequest: Message {
+public class HistoryLogRequest: PumpRequest {
+    public typealias Response = HistoryLogResponse
+
     public static let props = MessageProps(
         opCode: 60,
         size: 5,

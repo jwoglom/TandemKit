@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request the bitmask of active reminders.
-public class ReminderStatusRequest: Message {
+public class ReminderStatusRequest: PumpRequest {
+    public typealias Response = ReminderStatusResponse
+
     public static let props = MessageProps(
         opCode: 72,
         size: 0,

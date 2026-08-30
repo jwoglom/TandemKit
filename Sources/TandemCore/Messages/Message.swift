@@ -14,6 +14,20 @@ public extension Message {
     }
 }
 
+/// A request the driver can send to the pump, carrying the type of the reply it will get back.
+///
+/// The stream placeholders (`Nonexistent*StreamRequest`) deliberately do not conform: they stand in
+/// for unsolicited notifications and are never sent.
+public protocol PumpRequest: Message {
+    associatedtype Response: Message
+}
+
+public extension PumpRequest {
+    /// `Response` reachable through `any PumpRequest.Type`, so the pairing can be validated
+    /// against the message catalog without naming each request.
+    static var responseType: any Message.Type { Response.self }
+}
+
 public enum MessageType: Sendable {
     case Request
     case Response

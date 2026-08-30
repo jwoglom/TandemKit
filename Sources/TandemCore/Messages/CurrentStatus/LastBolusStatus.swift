@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request details about the last delivered bolus.
-public class LastBolusStatusRequest: Message {
+public class LastBolusStatusRequest: PumpRequest {
+    public typealias Response = LastBolusStatusResponse
+
     public static let props = MessageProps(
         opCode: 48,
         size: 0,

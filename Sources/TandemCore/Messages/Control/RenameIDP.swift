@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to rename an insulin delivery profile.
-public class RenameIDPRequest: Message {
+public class RenameIDPRequest: PumpRequest {
+    public typealias Response = RenameIDPResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-88)),
         size: 19,

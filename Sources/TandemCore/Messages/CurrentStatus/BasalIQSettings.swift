@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request Basal-IQ configuration settings from the pump.
-public class BasalIQSettingsRequest: Message {
+public class BasalIQSettingsRequest: PumpRequest {
+    public typealias Response = BasalIQSettingsResponse
+
     public static let props = MessageProps(
         opCode: 98,
         size: 0,

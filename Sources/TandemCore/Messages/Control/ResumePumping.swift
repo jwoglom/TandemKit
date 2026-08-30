@@ -1,7 +1,9 @@
 import Foundation
 
 /// Request to resume insulin delivery.
-public class ResumePumpingRequest: Message {
+public class ResumePumpingRequest: PumpRequest {
+    public typealias Response = ResumePumpingResponse
+
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-102)),
         size: 0,
