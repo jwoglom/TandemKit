@@ -101,8 +101,7 @@ public extension TandemPumpManager {
             // Step 3: Get current segments to preserve non-basal fields
             let currentSegments = activeProfile.getSegments()
 
-            // Step 4: Delete the surplus tail segments first, highest index first so the indices of
-            // the segments we are about to modify stay valid.
+            // Step 4: Delete surplus segments, highest index first so the remaining indices hold.
             var requests: [SetIDPSegmentRequest] = []
             if sortedItems.count < currentSegments.count {
                 for index in stride(from: currentSegments.count - 1, through: sortedItems.count, by: -1)
@@ -112,20 +111,18 @@ public extension TandemPumpManager {
                 }
             }
 
-            // Segments that survive the deletes, paired positionally with the new schedule items.
             let retainedSegments = Array(currentSegments.prefix(min(sortedItems.count, currentSegments.count)))
 
-            // Step 5: Work out which segments actually change, and order those writes so that the
-            // profile never transiently holds two segments with the same start time. The pump
-            // rejects such a write with status 1, which is what made a shrinking schedule fail: the
-            // segment being moved forward landed on a start time the next segment still occupied.
+            // Step 5: Order the writes so no two segments ever share a start time. The pump
+            // rejects such a write with status 1, so applying the schedule in index order fails
+            // whenever a segment moves onto a start time the next segment still occupies.
             var pendingWrites = Self.pendingSegmentWrites(
                 items: sortedItems,
                 retainedSegments: retainedSegments
             )
 
-            // Start time currently held by each retained segment, keyed by segment index. Segments
-            // created during this sync get a synthetic negative key so they occupy their slot too.
+            // Start time held by each segment, keyed by segment index. Segments created during
+            // this sync take a synthetic negative key.
             var occupiedStartTimes: [Int: Int] = [:]
             for segment in retainedSegments {
                 occupiedStartTimes[segment.segmentIndex] = segment.profileStartTime
@@ -140,9 +137,8 @@ public extension TandemPumpManager {
                 }
 
                 guard let applicable else {
-                    // Unreachable for well-formed schedules: both the current and the target start
-                    // times are strictly ascending, so a cycle of mutual blocks cannot form. Bail
-                    // out rather than spin if the pump ever hands back something unordered.
+                    // Both start time sequences ascend, so a cycle of mutual blocks cannot form.
+                    // Bail out rather than spin if the pump ever returns unordered segments.
                     self.logger.error("Could not order basal segment writes without a start time collision")
                     completion(.failure(PumpCommError.requestConstructionFailed(
                         reason: "Could not order basal segment writes without a start time collision"
@@ -158,7 +154,6 @@ public extension TandemPumpManager {
                     requests.append(activeProfile.modifySegmentMessage(segment: segment))
                     occupiedStartTimes[segment.segmentIndex] = write.startTime
                 } else {
-                    // Create new segment with default values from first segment
                     let firstSegment = currentSegments.first!
                     requests.append(activeProfile.createSegmentMessage(
                         profileStartTime: write.startTime,
@@ -210,18 +205,14 @@ public extension TandemPumpManager {
         }
     }
 
-    /// A basal segment write the pump still needs, paired with the existing segment it modifies.
-    ///
-    /// `segment` is nil when the new schedule has more entries than the profile has segments, in
-    /// which case the write is a create rather than a modify.
+    /// A pending segment write. `segment` is nil when the write is a create rather than a modify.
     internal struct PendingSegmentWrite {
         let startTime: Int
         let basalRate: Int
         let segment: IDPSegmentResponse?
     }
 
-    /// Pairs each schedule item with the segment at the same position and drops the ones that
-    /// already match, so only genuine changes are sent to the pump.
+    /// Pairs each schedule item with the segment at the same position, dropping ones that match.
     internal static func pendingSegmentWrites(
         items: [RepeatingScheduleValue<Double>],
         retainedSegments: [IDPSegmentResponse]

@@ -2,20 +2,44 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// Covers `syncBasalRateSchedule` against a pump model that enforces the constraint real Tandem
-/// firmware does: two segments in a profile may never hold the same start time. Applying a
-/// schedule segment-by-segment in index order violates that whenever a segment moves onto a start
-/// time the following segment still occupies, which is how a shrinking schedule used to fail with
-/// `status: 1` after having already written part of the profile.
+/// Drives `syncBasalRateSchedule` against a pump model that enforces the constraint real Tandem
+/// firmware does: two segments in a profile may never hold the same start time.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerSyncBasalTests: XCTestCase {
+    private struct Segment: Equatable {
+        var startTime: Int
+        var basalRate: Int
+    }
+
+    private struct Case {
+        let name: String
+        /// Profile segments on the pump, in segment-index order.
+        let existing: [Segment]
+        /// Schedule to sync, as (start hour, U/hr) pairs.
+        let schedule: [(Double, Double)]
+        /// Expected segments once the sync completes.
+        let expected: [Segment]
+        let file: StaticString
+        let line: UInt
+
+        init(
+            _ name: String,
+            existing: [Segment],
+            schedule: [(Double, Double)],
+            expected: [Segment],
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            self.name = name
+            self.existing = existing
+            self.schedule = schedule
+            self.expected = expected
+            self.file = file
+            self.line = line
+        }
+    }
+
     /// Minimal stand-in for a single insulin delivery profile on the pump.
     private final class FakeProfile {
-        struct Segment {
-            var startTime: Int
-            var basalRate: Int
-        }
-
-        /// Indexed by segment index, mirroring how the pump addresses them.
         private(set) var segments: [Segment]
 
         init(segments: [Segment]) {
@@ -26,19 +50,22 @@ import XCTest
         func apply(_ request: SetIDPSegmentRequest) -> Int {
             switch request.operation {
             case .modifySegmentId:
-                guard request.segmentIndex < segments.count else { return 1 }
-                if collides(startTime: request.profileStartTime, excluding: request.segmentIndex) { return 1 }
-                segments[request.segmentIndex].startTime = request.profileStartTime
-                segments[request.segmentIndex].basalRate = request.profileBasalRate
+                guard request.segmentIndex < segments.count,
+                      !collides(startTime: request.profileStartTime, excluding: request.segmentIndex)
+                else {
+                    return 1
+                }
+                segments[request.segmentIndex] = Segment(
+                    startTime: request.profileStartTime,
+                    basalRate: request.profileBasalRate
+                )
                 return 0
             case .createSegment:
-                if collides(startTime: request.profileStartTime, excluding: nil) { return 1 }
+                guard !collides(startTime: request.profileStartTime, excluding: nil) else { return 1 }
                 segments.append(Segment(startTime: request.profileStartTime, basalRate: request.profileBasalRate))
                 return 0
             case .deleteSegmentId:
                 guard request.segmentIndex != 0, request.segmentIndex < segments.count else { return 1 }
-                // The pump only ever gets asked to drop the tail, so removing in place keeps the
-                // remaining indices stable exactly as it does.
                 segments.remove(at: request.segmentIndex)
                 return 0
             case .none:
@@ -51,6 +78,187 @@ import XCTest
                 offset != index && segment.startTime == startTime
             }
         }
+    }
+
+    // MARK: - Cases
+
+    private let cases: [Case] = [
+        Case(
+            "schedule unchanged",
+            existing: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (3, 0.9)],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)]
+        ),
+        Case(
+            "rates change but start times do not",
+            existing: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.15), (3, 0.8)],
+            expected: [.init(startTime: 0, basalRate: 1150), .init(startTime: 180, basalRate: 800)]
+        ),
+        Case(
+            // Each write lands on the next segment's start time, so they have to go back to front.
+            "every entry shifts later",
+            existing: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800),
+                .init(startTime: 540, basalRate: 700)
+            ],
+            schedule: [(0, 1.0), (4, 0.9), (9, 0.8), (12, 0.7)],
+            expected: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 240, basalRate: 900),
+                .init(startTime: 540, basalRate: 800),
+                .init(startTime: 720, basalRate: 700)
+            ]
+        ),
+        Case(
+            "every entry shifts earlier",
+            existing: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 240, basalRate: 900),
+                .init(startTime: 540, basalRate: 800),
+                .init(startTime: 720, basalRate: 700)
+            ],
+            schedule: [(0, 1.0), (3, 0.9), (8, 0.8), (9, 0.7)],
+            expected: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800),
+                .init(startTime: 540, basalRate: 700)
+            ]
+        ),
+        Case(
+            // The reported failure: deleting the surplus tail is not enough, because a segment that
+            // survives the delete still blocks the entry moving from 08:00 to 09:00.
+            "schedule shrinks past a retained segment",
+            existing: [
+                .init(startTime: 0, basalRate: 800),
+                .init(startTime: 180, basalRate: 700),
+                .init(startTime: 480, basalRate: 750),
+                .init(startTime: 540, basalRate: 800),
+                .init(startTime: 840, basalRate: 750),
+                .init(startTime: 960, basalRate: 750),
+                .init(startTime: 1380, basalRate: 750)
+            ],
+            schedule: [(0, 1.15), (3, 0.85), (9, 0.85), (14, 0.75), (20, 0.7)],
+            expected: [
+                .init(startTime: 0, basalRate: 1150),
+                .init(startTime: 180, basalRate: 850),
+                .init(startTime: 540, basalRate: 850),
+                .init(startTime: 840, basalRate: 750),
+                .init(startTime: 1200, basalRate: 700)
+            ]
+        ),
+        Case(
+            "schedule shrinks to a single entry",
+            existing: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800)
+            ],
+            schedule: [(0, 1.25)],
+            expected: [.init(startTime: 0, basalRate: 1250)]
+        ),
+        Case(
+            "schedule grows, created segment must not collide",
+            existing: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800)
+            ],
+            schedule: [(0, 1.0), (5, 0.9), (9, 0.85), (14, 0.8)],
+            expected: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 300, basalRate: 900),
+                .init(startTime: 540, basalRate: 850),
+                .init(startTime: 840, basalRate: 800)
+            ]
+        ),
+        Case(
+            "schedule grows onto start times still occupied",
+            existing: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900)
+            ],
+            schedule: [(0, 1.0), (8, 0.9), (12, 0.8), (3, 0.95)],
+            expected: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 950),
+                .init(startTime: 480, basalRate: 900),
+                .init(startTime: 720, basalRate: 800)
+            ]
+        )
+    ]
+
+    // MARK: - Tests
+
+    func testSyncAppliesScheduleWithoutStartTimeCollisions() {
+        for testCase in cases {
+            let profile = FakeProfile(segments: testCase.existing)
+            let result = sync(profile: profile, schedule: testCase.schedule)
+
+            guard case .success = result else {
+                XCTFail(
+                    "\(testCase.name): expected success, received \(result)",
+                    file: testCase.file,
+                    line: testCase.line
+                )
+                continue
+            }
+
+            XCTAssertEqual(
+                profile.segments,
+                testCase.expected,
+                testCase.name,
+                file: testCase.file,
+                line: testCase.line
+            )
+        }
+    }
+
+    /// A schedule the pump already matches must not produce any writes at all.
+    func testUnchangedScheduleSendsNoSegmentWrites() {
+        let profile = FakeProfile(segments: [
+            .init(startTime: 0, basalRate: 1000),
+            .init(startTime: 180, basalRate: 900)
+        ])
+        let bluetooth = makeStub(profile: profile)
+
+        XCTAssertNoThrow(try runSync(bluetooth: bluetooth, schedule: [(0, 1.0), (3, 0.9)]).get())
+        XCTAssertFalse(bluetooth.didSend(SetIDPSegmentRequest.self))
+    }
+
+    func testEmptyScheduleIsRejectedWithoutTouchingThePump() {
+        let profile = FakeProfile(segments: [.init(startTime: 0, basalRate: 1000)])
+        let bluetooth = makeStub(profile: profile)
+
+        XCTAssertThrowsError(try runSync(bluetooth: bluetooth, schedule: []).get())
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    // MARK: - Harness
+
+    private func sync(profile: FakeProfile, schedule: [(Double, Double)]) -> Result<BasalRateSchedule, Error> {
+        runSync(bluetooth: makeStub(profile: profile), schedule: schedule)
+    }
+
+    private func runSync(
+        bluetooth: StubPumpBluetooth,
+        schedule: [(Double, Double)]
+    ) -> Result<BasalRateSchedule, Error> {
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        let items = schedule.map { RepeatingScheduleValue(startTime: $0.0 * 3600, value: $0.1) }
+
+        var result: Result<BasalRateSchedule, Error>?
+        let expectation = expectation(description: "Sync basal schedule")
+        manager.syncBasalRateSchedule(items: items) {
+            result = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5)
+
+        return result ?? .failure(PumpCommError.requestConstructionFailed(reason: "no completion"))
     }
 
     private func makeStub(profile: FakeProfile) -> StubPumpBluetooth {
@@ -93,125 +301,5 @@ import XCTest
         }
 
         return bluetooth
-    }
-
-    private func sync(
-        profile: FakeProfile,
-        items: [RepeatingScheduleValue<Double>]
-    ) -> Result<BasalRateSchedule, Error> {
-        let bluetooth = makeStub(profile: profile)
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
-
-        var result: Result<BasalRateSchedule, Error>?
-        let expectation = expectation(description: "Sync basal schedule")
-        manager.syncBasalRateSchedule(items: items) {
-            result = $0
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 5)
-
-        return result ?? .failure(PumpCommError.requestConstructionFailed(reason: "no completion"))
-    }
-
-    private func item(hour: Double, rate: Double) -> RepeatingScheduleValue<Double> {
-        RepeatingScheduleValue(startTime: hour * 3600, value: rate)
-    }
-
-    /// The reported failure: seven segments collapse to five. Deleting the two surplus tail
-    /// segments is not enough, because the entry that has to move from 08:00 to 09:00 lands on a
-    /// start time a segment that survives the delete still holds.
-    func testShrinkingScheduleReordersWritesAroundStartTimeCollisions() {
-        let profile = FakeProfile(segments: [
-            .init(startTime: 0, basalRate: 800),
-            .init(startTime: 180, basalRate: 700),
-            .init(startTime: 480, basalRate: 750),
-            .init(startTime: 540, basalRate: 800),
-            .init(startTime: 840, basalRate: 750),
-            .init(startTime: 960, basalRate: 750),
-            .init(startTime: 1380, basalRate: 750)
-        ])
-
-        let result = sync(profile: profile, items: [
-            item(hour: 0, rate: 1.15),
-            item(hour: 3, rate: 0.85),
-            item(hour: 9, rate: 0.85),
-            item(hour: 14, rate: 0.75),
-            item(hour: 20, rate: 0.7)
-        ])
-
-        guard case .success = result else {
-            return XCTFail("Expected success, received: \(result)")
-        }
-
-        XCTAssertEqual(profile.segments.map(\.startTime), [0, 180, 540, 840, 1200])
-        XCTAssertEqual(profile.segments.map(\.basalRate), [1150, 850, 850, 750, 700])
-    }
-
-    /// Every segment slides later by an hour, so each write lands on the next segment's start time
-    /// until the schedule is applied back to front.
-    func testScheduleShiftedLaterAppliesBackToFront() {
-        let profile = FakeProfile(segments: [
-            .init(startTime: 0, basalRate: 1000),
-            .init(startTime: 180, basalRate: 900),
-            .init(startTime: 480, basalRate: 800),
-            .init(startTime: 540, basalRate: 700)
-        ])
-
-        let result = sync(profile: profile, items: [
-            item(hour: 0, rate: 1.0),
-            item(hour: 4, rate: 0.9),
-            item(hour: 9, rate: 0.8),
-            item(hour: 12, rate: 0.7)
-        ])
-
-        guard case .success = result else {
-            return XCTFail("Expected success, received: \(result)")
-        }
-
-        XCTAssertEqual(profile.segments.map(\.startTime), [0, 240, 540, 720])
-        XCTAssertEqual(profile.segments.map(\.basalRate), [1000, 900, 800, 700])
-    }
-
-    /// Growing the schedule appends segments; the created segment must not land on a start time a
-    /// segment still waiting to move occupies.
-    func testGrowingScheduleCreatesSegmentsWithoutCollisions() {
-        let profile = FakeProfile(segments: [
-            .init(startTime: 0, basalRate: 1000),
-            .init(startTime: 180, basalRate: 900),
-            .init(startTime: 480, basalRate: 800)
-        ])
-
-        let result = sync(profile: profile, items: [
-            item(hour: 0, rate: 1.0),
-            item(hour: 5, rate: 0.9),
-            item(hour: 9, rate: 0.85),
-            item(hour: 14, rate: 0.8)
-        ])
-
-        guard case .success = result else {
-            return XCTFail("Expected success, received: \(result)")
-        }
-
-        XCTAssertEqual(profile.segments.map(\.startTime), [0, 300, 540, 840])
-        XCTAssertEqual(profile.segments.map(\.basalRate), [1000, 900, 850, 800])
-    }
-
-    /// A schedule the pump already matches must not produce any writes at all.
-    func testUnchangedScheduleSendsNoSegmentWrites() {
-        let profile = FakeProfile(segments: [
-            .init(startTime: 0, basalRate: 1000),
-            .init(startTime: 180, basalRate: 900)
-        ])
-        let bluetooth = makeStub(profile: profile)
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
-
-        let expectation = expectation(description: "Sync basal schedule")
-        manager.syncBasalRateSchedule(items: [
-            item(hour: 0, rate: 1.0),
-            item(hour: 3, rate: 0.9)
-        ]) { _ in expectation.fulfill() }
-        wait(for: [expectation], timeout: 5)
-
-        XCTAssertFalse(bluetooth.didSend(SetIDPSegmentRequest.self))
     }
 }
