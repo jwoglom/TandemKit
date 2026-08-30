@@ -7,6 +7,33 @@ import XCTest
     import SwiftECC
 
     final class SwiftECCDebugTest: XCTestCase {
+
+        /// Round 1 is two length-prefixed `(point, ZKP)` groups. Each ZKP scalar is written by
+        /// `writeNum` via `BInt.asMagnitudeBytes()`, which strips leading zero bytes, so a group is
+        /// 165 bytes only ~255/256 of the time and the payload is exactly 330 only ~99.2% of the
+        /// time. Asserting that length fails roughly one run in 128, so assert the structure the
+        /// pump's length-prefixed parser actually requires instead.
+        private func assertWellFormedRound1(
+            _ round1: Data,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            guard let first = JpakeRound1Framing.groupLength(in: round1, at: 0),
+                  let second = JpakeRound1Framing.groupLength(in: round1, at: first)
+            else {
+                XCTFail(
+                    "round 1 is not two length-prefixed groups (\(round1.count) bytes)",
+                    file: file,
+                    line: line
+                )
+                return
+            }
+
+            XCTAssertEqual(first + second, round1.count, "round 1 has trailing bytes", file: file, line: line)
+            XCTAssertLessThanOrEqual(first, JpakeRound1Framing.frameSize, "group 1 overflows a frame", file: file, line: line)
+            XCTAssertLessThanOrEqual(second, JpakeRound1Framing.frameSize, "group 2 overflows a frame", file: file, line: line)
+        }
+
         func testSwiftECCOperationsStepByStep() throws {
             print("\n🔍 Testing SwiftECC operations step by step...")
 
@@ -111,7 +138,7 @@ import XCTest
             print("5️⃣ getRound1() returned!")
             print("   📦 Result size: \(result.count) bytes")
 
-            XCTAssertEqual(result.count, 330)
+            assertWellFormedRound1(result)
         }
 
         func testActualGetRound1() throws {
@@ -148,7 +175,7 @@ import XCTest
             print("✅ getRound1() completed in \(elapsed)s")
             print("📦 Result size: \(result.count) bytes")
 
-            XCTAssertEqual(result.count, 330)
+            assertWellFormedRound1(result)
         }
     }
 
