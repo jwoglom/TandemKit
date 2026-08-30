@@ -85,6 +85,12 @@ import XCTest
         }
     }
 
+    /// Ages entries so that `sequences` sequence numbers span exactly one `deepFetchLookback`,
+    /// putting the walk's target a predictable number of slices down.
+    private func secondsPerSequence(spanning sequences: UInt32) -> UInt32 {
+        UInt32(HistoryBackfillPlanner.deepFetchLookback) / sequences
+    }
+
     @discardableResult
     private func runTick(now: Date = Date()) -> HistoryBackfillCoordinator.TickOutcome? {
         var result: HistoryBackfillCoordinator.TickOutcome?
@@ -169,25 +175,36 @@ import XCTest
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: Self.pumpSerial,
             watermark: 900,
-            emitFloor: Date().addingTimeInterval(-.hours(1))
+            firstSeenFloor: Date().addingTimeInterval(-.hours(1))
         )
         // A fresh manager, as after a relaunch: persisted state, empty in-memory store.
         manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         coordinator = HistoryBackfillCoordinator(pumpManager: manager)
 
         stubStatus(first: 1, last: 910)
-        stubHistoryStream()
+        stubHistoryStream(secondsPerSequence: secondsPerSequence(spanning: 600), newestSequenceNum: 910)
 
         let outcome = try XCTUnwrap(runTick())
 
         XCTAssertEqual(
-            requestedStartLogs(),
-            [910],
-            "Only the 10 entries written since the watermark, not the 800-900 span the empty session store lacks"
+            requestedStartLogs().first,
+            910,
+            "The read of new entries starts at the watermark, not at the empty session store's floor"
         )
-        XCTAssertEqual(bluetooth.sent(HistoryLogRequest.self).first?.numberOfLogs, 10)
+        XCTAssertEqual(
+            bluetooth.sent(HistoryLogRequest.self).first?.numberOfLogs,
+            10,
+            "Ten entries written since the watermark, not the 1-900 span the session store lacks"
+        )
         XCTAssertEqual(outcome.bookkeeping.watermark, 910)
-        XCTAssertEqual(outcome.sessionCovered, 901 ... 910)
+
+        // The session store came back empty, so the walk refills the lookback window behind the
+        // watermark — that is what IOB is computed from — and stops there rather than at the
+        // start of the pump's log.
+        let covered = try XCTUnwrap(outcome.sessionCovered)
+        XCTAssertEqual(covered.upperBound, 910)
+        XCTAssertGreaterThan(covered.lowerBound, 1, "The walk stops at the target, not at sequence 1")
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
     }
 
     func testTickWithNothingToDoLeavesTheWatermarkAlone() throws {
@@ -233,27 +250,37 @@ import XCTest
 
     // MARK: - Deep backfill
 
-    /// The walk backward is sliced: a first-run backfill of thousands of entries must not occupy
-    /// the pump's command queue in one uninterruptible block.
-    func testDeepBackfillWalksBackwardOneSlicePerTick() throws {
+    /// The walk is sliced, but not paced one slice per sync: everything short of the target is
+    /// insulin that may still be acting, so the first tick on a new pump reads all of it. A
+    /// slice per five-minute sync would leave IOB short for hours after the pump was added.
+    func testDeepBackfillWalksToTheTargetWithinTheFirstTick() throws {
         setPumpSerial()
+        let now = Date()
         let slice = HistoryBackfillPlanner.maxDeepSliceSize
-        let last: UInt32 = 5000
-        stubStatus(first: 1, last: last)
-        stubHistoryStream()
+        // One lookback spans 1000 sequence numbers, so the target sits four slices down.
+        stubStatus(first: 1, last: 5000)
+        stubHistoryStream(secondsPerSequence: secondsPerSequence(spanning: 1000), newestSequenceNum: 5000)
 
-        let first = try XCTUnwrap(runTick())
-        XCTAssertEqual(first.sessionCovered, (last - slice + 1) ... last)
-        XCTAssertFalse(first.isDeepBackfillComplete)
+        let outcome = try XCTUnwrap(runTick(now: now))
 
-        bluetooth.resetRecordedTraffic()
-        stubStatus(first: 1, last: last)
-        stubHistoryStream()
-        let second = try XCTUnwrap(runTick())
+        XCTAssertTrue(outcome.isDeepBackfillComplete)
+        XCTAssertGreaterThan(
+            requestedStartLogs().count, 1,
+            "The walk continues past the first slice within the same tick"
+        )
+        let covered = try XCTUnwrap(outcome.sessionCovered)
+        XCTAssertEqual(covered.upperBound, 5000)
+        XCTAssertLessThanOrEqual(
+            covered.lowerBound, 5000 - slice,
+            "The window reaches back past the newest slice"
+        )
 
-        XCTAssertEqual(second.sessionCovered, (last - 2 * slice + 1) ... last)
-        XCTAssertEqual(second.rangesRead, [(last - 2 * slice + 1) ... (last - slice)])
-        XCTAssertEqual(requestedStartLogs(), [last - slice])
+        // Each slice is still its own set of command-queue jobs rather than one long block, so
+        // dosing interleaves with the walk.
+        XCTAssertTrue(
+            bluetooth.sent(HistoryLogRequest.self).allSatisfy { $0.numberOfLogs <= Int(slice) },
+            "No request may exceed one chunk"
+        )
     }
 
     /// Once this session's span reaches back past the target date the walk stops, however much
@@ -261,21 +288,97 @@ import XCTest
     func testDeepBackfillStopsOnceTheTargetDateIsCovered() throws {
         setPumpSerial()
         let now = Date()
-        // Age entries steeply enough that one slice reaches past the lookback boundary.
-        let secondsPerSequence = UInt32(HistoryBackfillPlanner.deepFetchLookback / 100)
+        // Age entries steeply enough that the first slice alone reaches past the boundary.
+        let steep = secondsPerSequence(spanning: 100)
         stubStatus(first: 1, last: 5000)
-        stubHistoryStream(secondsPerSequence: secondsPerSequence, newestSequenceNum: 5000)
+        stubHistoryStream(secondsPerSequence: steep, newestSequenceNum: 5000)
 
         let first = try XCTUnwrap(runTick(now: now))
-        XCTAssertFalse(first.isDeepBackfillComplete)
+        XCTAssertTrue(first.isDeepBackfillComplete)
+        XCTAssertEqual(requestedStartLogs(), [5000], "One slice already covers the target")
 
         bluetooth.resetRecordedTraffic()
         stubStatus(first: 1, last: 5000)
-        stubHistoryStream(secondsPerSequence: secondsPerSequence, newestSequenceNum: 5000)
+        stubHistoryStream(secondsPerSequence: steep, newestSequenceNum: 5000)
         let second = try XCTUnwrap(runTick(now: now))
 
         XCTAssertTrue(second.isDeepBackfillComplete)
         XCTAssertTrue(requestedStartLogs().isEmpty, "Nothing left to read once the target is covered")
+    }
+
+    /// The per-tick slice cap is a backstop for a walk that is not converging — a pump clock far
+    /// in the future, say — so one tick can't read the pump's whole log. The walk resumes on the
+    /// next tick rather than being abandoned.
+    func testDeepBackfillStopsAtThePerTickSliceCapAndResumes() throws {
+        setPumpSerial()
+        let slice = HistoryBackfillPlanner.maxDeepSliceSize
+        let cap = HistoryBackfillPlanner.maxDeepSlicesPerTick
+        // Every entry stamped ≈now, so the walk never reaches the target by date.
+        stubStatus(first: 1, last: slice * UInt32(cap + 2))
+        stubHistoryStream()
+
+        let first = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(
+            requestedStartLogs().count, cap + 1,
+            "One incremental read plus the capped number of deep slices"
+        )
+        XCTAssertFalse(first.isDeepBackfillComplete)
+        let covered = try XCTUnwrap(first.sessionCovered)
+        XCTAssertGreaterThan(covered.lowerBound, 1, "The walk stopped short of the pump's oldest entry")
+
+        bluetooth.resetRecordedTraffic()
+        stubStatus(first: 1, last: slice * UInt32(cap + 2))
+        stubHistoryStream()
+        let second = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(
+            requestedStartLogs().first, covered.lowerBound - 1,
+            "The next tick resumes below the frontier the capped tick left"
+        )
+        XCTAssertTrue(second.isDeepBackfillComplete, "The remaining slices reach the start of the log")
+    }
+
+    // MARK: - Floors
+
+    /// The regression this whole separation exists for.
+    ///
+    /// Trio's `startDateToFilterNewPumpEvents` is `lastEventDate - 15min`, and this driver
+    /// reports basal and bolus status stamped ≈now on every sync — so within one cycle of a pump
+    /// being added, the host's floor sits minutes in the past. If that date bounded the walk,
+    /// the backfill would declare itself finished before reading any of the insulin still
+    /// acting, and IOB would be short by however much was delivered before the app arrived.
+    func testHostFloorDoesNotBoundTheWalkOrRatchetTheStoredFloor() throws {
+        setPumpSerial()
+        let now = Date()
+        manager.delegateQueue = DispatchQueue(label: "history-backfill-floor-test")
+        let delegate = MockPumpManagerDelegate()
+        delegate.startDateToFilterNewPumpEvents = now.addingTimeInterval(-.minutes(15))
+        manager.pumpManagerDelegate = delegate
+
+        stubStatus(first: 1, last: 5000)
+        stubHistoryStream(secondsPerSequence: secondsPerSequence(spanning: 1000), newestSequenceNum: 5000)
+
+        let outcome = try XCTUnwrap(runTick(now: now))
+
+        XCTAssertEqual(
+            try XCTUnwrap(outcome.bookkeeping.firstSeenFloor).timeIntervalSince(now),
+            -HistoryBackfillPlanner.deepFetchLookback,
+            accuracy: 1,
+            "The stored floor stays where the pump was first seen; the host's advancing date must not ratchet it"
+        )
+        XCTAssertEqual(
+            manager.state.historyBackfill?.firstSeenFloor,
+            outcome.bookkeeping.firstSeenFloor,
+            "and what is persisted is that same floor"
+        )
+
+        // A walk bounded by the host's floor would have stopped inside the newest slice.
+        let covered = try XCTUnwrap(outcome.sessionCovered)
+        XCTAssertLessThanOrEqual(covered.lowerBound, 5000 - HistoryBackfillPlanner.maxDeepSliceSize)
+
+        // Emission is a different question, and there the host's date is the right bound.
+        XCTAssertEqual(outcome.emitFloor, delegate.startDateToFilterNewPumpEvents)
     }
 
     // MARK: - Pump identity
@@ -289,28 +392,88 @@ import XCTest
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: Self.pumpSerial,
             watermark: 900,
-            emitFloor: .distantPast
+            firstSeenFloor: .distantPast
         )
         manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         coordinator = HistoryBackfillCoordinator(pumpManager: manager)
 
         stubStatus(first: 1, last: 910)
-        stubHistoryStream()
+        stubHistoryStream(secondsPerSequence: secondsPerSequence(spanning: 600), newestSequenceNum: 910)
 
         let outcome = try XCTUnwrap(runTick(now: now))
 
         XCTAssertEqual(outcome.bookkeeping.pumpSerial, 999)
         XCTAssertEqual(
-            outcome.bookkeeping.emitFloor?.timeIntervalSince(now),
+            outcome.bookkeeping.firstSeenFloor?.timeIntervalSince(now),
             -HistoryBackfillPlanner.deepFetchLookback,
             "The old pump's floor is discarded; only this pump's still-acting insulin is imported"
         )
         XCTAssertEqual(
-            requestedStartLogs(),
-            [910],
+            requestedStartLogs().first,
+            910,
             "The old watermark must not be trusted; the read restarts from the newest entry"
         )
         XCTAssertEqual(outcome.bookkeeping.watermark, 910)
+    }
+
+    /// A pump whose log was erased restarts its counter below the watermark. Left alone, the
+    /// watermark reads as "nothing new to fetch" against every later status — so the driver
+    /// would silently never read another entry from this pump.
+    func testErasedLogResetsTheWatermarkAndRereadsThePump() throws {
+        let now = Date()
+        let floor = now.addingTimeInterval(-.hours(3))
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.pumpState.pumpSerial = Self.pumpSerial
+        state.historyBackfill = HistoryBackfillState(
+            pumpSerial: Self.pumpSerial,
+            watermark: 900,
+            firstSeenFloor: floor
+        )
+        manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+
+        // Entries filed under the old numbering, which now names different entries entirely.
+        try manager.historyLogStore.insert(
+            (1 ... 10).map { log(sequenceNum: $0) },
+            pumpSerial: Self.pumpSerial
+        )
+
+        // The pump now holds far less than has already been read from it.
+        stubStatus(first: 1, last: 50)
+        stubHistoryStream()
+
+        let outcome = try XCTUnwrap(runTick(now: now))
+
+        XCTAssertEqual(outcome.bookkeeping.watermark, 50, "The stale read position is dropped and re-established")
+        XCTAssertEqual(
+            outcome.bookkeeping.firstSeenFloor, floor,
+            "Same pump, same service: only the read position was meaningless"
+        )
+        XCTAssertEqual(requestedStartLogs().first, 50, "The pump is read again from its newest entry")
+        XCTAssertEqual(outcome.sessionCovered, 1 ... 50)
+        XCTAssertEqual(
+            try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 50,
+            "Records filed under the old numbering are cleared rather than mixed with the new"
+        )
+    }
+
+    // MARK: - Ownership
+
+    /// The manager owns a coordinator, which owns a fetcher. A strong reference from the fetcher
+    /// back to the manager closes that loop, and the manager — with the whole BLE stack behind
+    /// it — outlives the user deleting the pump.
+    func testDeletingThePumpReleasesTheManager() {
+        weak var released: TandemPumpManager?
+
+        do {
+            let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
+            released = manager
+            // Touching the lazy coordinator is what builds the manager → coordinator → fetcher
+            // chain the cycle would have run back along.
+            _ = manager.historyBackfillCoordinator
+        }
+
+        XCTAssertNil(released, "The pump manager must not be kept alive by its own history fetcher")
     }
 
     // MARK: - Sharing the history stream

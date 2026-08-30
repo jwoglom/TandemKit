@@ -20,10 +20,11 @@ enum HistoryBackfillPlanner {
         /// fetch has ended, so it is re-requested here.
         var gaps: [ClosedRange<UInt32>]
 
-        /// One slice of the walk backward toward `deepFetchTarget`, or nil when the deep
-        /// backfill is finished or has nothing left to reach. Capped at `maxDeepSliceSize` so a
-        /// first-run backfill of thousands of entries is spread over many ticks instead of
-        /// occupying the BLE queue in one uninterruptible block.
+        /// The *first* slice of the walk backward toward `deepFetchTarget`, or nil when the
+        /// deep backfill is finished or has nothing left to reach. Capped at `maxDeepSliceSize`
+        /// so the walk proceeds as a series of ordinary chunk requests the BLE queue can
+        /// interleave with dosing, rather than one uninterruptible block; the coordinator asks
+        /// for each subsequent slice through `deepSlice(...)`.
         var deep: ClosedRange<UInt32>?
 
         /// Whether the walk backward has nothing left to reach: the store already covers the
@@ -39,10 +40,25 @@ enum HistoryBackfillPlanner {
     /// The most entries a single deep-backfill slice may ask for.
     ///
     /// 255 is one `HistoryLogRequest` (`numberOfLogs` is one byte), which the fetcher walks as a
-    /// single chunk. One chunk per tick keeps the pump's command queue free for dosing between
+    /// single chunk. Slicing at one chunk keeps the pump's command queue free for dosing between
     /// slices — a bolus issued during a backfill waits for at most one chunk, not for the whole
     /// walk.
     static let maxDeepSliceSize: UInt32 = 255
+
+    /// How many deep slices one tick may walk before leaving the rest to the next tick.
+    ///
+    /// The walk is *not* paced one slice per sync: everything it reads is inside
+    /// `deepFetchLookback`, which is to say it is all insulin that could still be acting, and a
+    /// slice per five-minute sync would leave IOB under-reported for hours after a pump is added
+    /// — the error direction that leads to over-delivery. Slices are still sequential and each
+    /// is its own set of command-queue jobs, so a bolus issued mid-walk waits for one chunk, not
+    /// for the whole walk.
+    ///
+    /// The cap is a backstop, not the expected stopping point: 16 slices is ~4080 entries, far
+    /// more than any pump writes in `deepFetchLookback`, so it is reached only if the walk is
+    /// not converging (a pump clock far in the future, say) and exists to keep that case from
+    /// reading the pump's whole log in one tick.
+    static let maxDeepSlicesPerTick = 16
 
     /// How far back the deep backfill reads, as an offset from now.
     ///
@@ -53,18 +69,26 @@ enum HistoryBackfillPlanner {
     /// dose isn't clipped by clock skew between the pump and the phone.
     static let deepFetchLookback: TimeInterval = .hours(7)
 
-    /// The date the deep backfill reads back to: far enough for insulin still acting, but never
-    /// past the floor below which events would be discarded anyway.
-    static func deepFetchTarget(emitFloor: Date?, now: Date = Date()) -> Date {
+    /// The date the deep backfill reads back to: far enough to cover insulin still acting, but
+    /// never behind the point at which this pump was first seen.
+    ///
+    /// Takes the bookkeeping's immovable `firstSeenFloor`, never the host app's filter date.
+    /// The host's date advances to ≈now as this driver reports events, and clamping the target
+    /// to it would stop the walk minutes into the past — before it had read the doses IOB is
+    /// computed from. What the host will *accept* bounds emission (`emitFloor` below); it must
+    /// not bound how deep this reads.
+    static func deepFetchTarget(firstSeenFloor: Date?, now: Date = Date()) -> Date {
         let lookbackTarget = now.addingTimeInterval(-deepFetchLookback)
-        guard let emitFloor else {
+        guard let firstSeenFloor else {
             return lookbackTarget
         }
-        return max(lookbackTarget, emitFloor)
+        // Only bites in the moments after first sight, when the pump has been in service for
+        // less than one lookback: it stops a replacement pump's pre-service history being read.
+        return max(lookbackTarget, firstSeenFloor)
     }
 
-    /// The earliest date events may be reported for: the later of what the host app will accept
-    /// and what this pump's bookkeeping allows.
+    /// The earliest date events may be *reported* for: the later of what the host app will
+    /// accept and what this pump's bookkeeping allows.
     ///
     /// The host's floor (`PumpManagerDelegate.startDateToFilterNewPumpEvents`) moves forward as
     /// its own store ages out; events below it are discarded on arrival, so emitting them is
@@ -72,8 +96,12 @@ enum HistoryBackfillPlanner {
     /// which is what separates a *re-paired* pump (same serial, original floor kept, so the gap
     /// while the app was away is still reportable) from a *replacement* pump (new serial, a fresh
     /// floor one lookback back, so nothing but its still-acting insulin reaches the loop).
+    ///
+    /// Derived per tick and handed to the emission layer on `TickOutcome`. Deliberately not
+    /// written back into the bookkeeping: the host half of this max advances to ≈now, and
+    /// persisting it would ratchet `firstSeenFloor` forward and starve the deep backfill.
     static func emitFloor(hostFloor: Date?, bookkeeping: HistoryBackfillState?) -> Date? {
-        switch (hostFloor, bookkeeping?.emitFloor) {
+        switch (hostFloor, bookkeeping?.firstSeenFloor) {
         case let (hostFloor?, pumpFloor?):
             return max(hostFloor, pumpFloor)
         case let (hostFloor?, nil):
@@ -120,17 +148,23 @@ enum HistoryBackfillPlanner {
         let pumpRange = firstSequenceNum ... lastSequenceNum
 
         let incremental: ClosedRange<UInt32>?
-        if let watermark {
-            // `watermark >= lastSequenceNum` when the pump has written nothing new. A pump whose
-            // log was erased reports a last sequence *below* the watermark, which the same
-            // comparison covers: there is still nothing new to read.
-            incremental = watermark < lastSequenceNum
-                ? clamp((watermark + 1) ... lastSequenceNum, to: pumpRange)
-                : nil
-        } else {
-            // Nothing has ever been read from this pump. Take the newest slice and let later
-            // ticks walk backward from it, rather than opening with a read of its whole log.
+        if let watermark, watermark < lastSequenceNum {
+            incremental = clamp((watermark + 1) ... lastSequenceNum, to: pumpRange)
+        } else if watermark == nil || sessionCovered == nil {
+            // No read position to resume from, or none in *this session*: take the newest slice
+            // and let the walk step backward from it, rather than opening with a read of the
+            // pump's whole log. Three cases land here — a pump never read before, one whose
+            // stale watermark the coordinator has just dropped, and a relaunch onto a pump that
+            // has written nothing since the watermark. The last needs this as much as the
+            // others: the walk backward has no frontier to step down from until something is
+            // read, so without it an idle pump would leave the session store empty
+            // indefinitely, however far the persisted watermark had once reached.
             incremental = max(firstSequenceNum, subtractingSliceSize(from: lastSequenceNum)) ... lastSequenceNum
+        } else {
+            // Read up to date, and this session has a frontier already. A pump whose log was
+            // erased reports a last sequence *below* the watermark and lands here too — the
+            // coordinator drops that watermark before planning, so it does not stay stuck.
+            incremental = nil
         }
 
         // Gaps come from the store already clamped to the session span and to the retention
@@ -158,8 +192,9 @@ enum HistoryBackfillPlanner {
     /// The next slice of the backward walk, or nil when there is nothing left to reach.
     ///
     /// Nil before this session has read anything: the walk needs a floor to step down from, and
-    /// the tick's incremental read establishes one.
-    private static func deepSlice(
+    /// the tick's incremental read establishes one. Called by `plan` for a tick's first slice,
+    /// and directly by the coordinator to continue the walk within the same tick.
+    static func deepSlice(
         firstSequenceNum: UInt32,
         sessionCovered: ClosedRange<UInt32>?,
         isDeepTargetCovered: Bool

@@ -21,10 +21,17 @@ final class HistoryBackfillCoordinator {
         var sessionCovered: ClosedRange<UInt32>?
         /// Whether the walk backward has nothing left to reach.
         var isDeepBackfillComplete: Bool
+        /// The earliest date the emission layer may report events for, as of this tick: the
+        /// later of the host app's filter date and this pump's first-seen floor. Derived per
+        /// tick rather than persisted, because the host half advances to ≈now.
+        var emitFloor: Date?
     }
 
     private let logger = TandemLogger(category: "HistoryBackfill")
-    private unowned let pumpManager: TandemPumpManager
+    // Weak, not unowned: the fetcher holds the manager only for the duration of a call, so a
+    // tick can still be unwinding on the fetcher's queue after the user deletes the pump and the
+    // manager goes away. Every use below fails soft rather than trapping.
+    private weak var pumpManager: TandemPumpManager?
     private let fetcher: HistoryLogFetcher
 
     /// Guards `isRunning` and `sessionCoveredRange`. A tick can be triggered while the previous
@@ -52,7 +59,7 @@ final class HistoryBackfillCoordinator {
     ///   (no serial yet, no status, or another reader holds the history stream). Fires on an
     ///   unspecified queue.
     func runTick(now: Date = Date(), completion: ((TickOutcome?) -> Void)? = nil) {
-        guard let serial = pumpManager.historyLogStoreSerial else {
+        guard let pumpManager, let serial = pumpManager.historyLogStoreSerial else {
             // No serial yet means no store key and no bookkeeping identity. Nothing can be
             // filed anywhere findable until a PumpVersionResponse has landed.
             completion?(nil)
@@ -84,14 +91,10 @@ final class HistoryBackfillCoordinator {
 
         // Reconcile the persisted bookkeeping against the pump actually connected before
         // anything is read: a replacement pump's sequence numbers mean nothing here.
-        var bookkeeping = (pumpManager.state.historyBackfill ?? HistoryBackfillState(
+        let reconciled = (pumpManager.state.historyBackfill ?? HistoryBackfillState(
             firstSeenPumpSerial: serial.rawValue,
             now: now
         )).matching(pumpSerial: serial.rawValue, now: now)
-        bookkeeping.emitFloor = HistoryBackfillPlanner.emitFloor(
-            hostFloor: pumpManager.hostEventFloor,
-            bookkeeping: bookkeeping
-        )
 
         fetcher.fetchStatus { [weak self] status in
             guard let self else {
@@ -104,13 +107,32 @@ final class HistoryBackfillCoordinator {
                 return
             }
 
+            // A pump holding less than has already been read from it had its log erased and its
+            // counter restarted. Drop the stale read position — left in place it reads as
+            // "nothing new" forever — and the session's view of a numbering that no longer
+            // describes these entries.
+            let bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
+            if bookkeeping.watermark != reconciled.watermark {
+                self.logger.warning(
+                    "Pump history log restarted below the watermark " +
+                        "(\(String(describing: reconciled.watermark)) > \(status.lastSequenceNum)); " +
+                        "re-reading this pump from scratch"
+                )
+                self.forgetSessionCoverage(pumpSerial: serial)
+            }
+
+            let emitFloor = HistoryBackfillPlanner.emitFloor(
+                hostFloor: self.pumpManager?.hostEventFloor,
+                bookkeeping: bookkeeping
+            )
+
             let plan = HistoryBackfillPlanner.plan(
                 firstSequenceNum: status.firstSequenceNum,
                 lastSequenceNum: status.lastSequenceNum,
                 watermark: bookkeeping.watermark,
                 sessionCovered: self.sessionCoverage,
                 storeGaps: self.storeGaps(pumpSerial: serial),
-                isDeepTargetCovered: self.isDeepTargetCovered(emitFloor: bookkeeping.emitFloor, now: now)
+                isDeepTargetCovered: self.isDeepTargetCovered(bookkeeping: bookkeeping, now: now)
             )
 
             guard !plan.isEmpty else {
@@ -119,18 +141,26 @@ final class HistoryBackfillCoordinator {
                     bookkeeping: bookkeeping,
                     rangesRead: [],
                     sessionCovered: self.sessionCoverage,
-                    isDeepBackfillComplete: plan.isDeepBackfillComplete
+                    isDeepBackfillComplete: plan.isDeepBackfillComplete,
+                    emitFloor: emitFloor
                 ))
                 return
             }
 
-            self.run(plan: plan, bookkeeping: bookkeeping) { updated, rangesRead in
+            self.run(
+                plan: plan,
+                bookkeeping: bookkeeping,
+                firstSequenceNum: status.firstSequenceNum,
+                now: now
+            ) { updated, rangesRead in
                 self.persist(updated)
                 finish(TickOutcome(
                     bookkeeping: updated,
                     rangesRead: rangesRead,
                     sessionCovered: self.sessionCoverage,
-                    isDeepBackfillComplete: plan.isDeepBackfillComplete
+                    isDeepBackfillComplete: self.isDeepTargetCovered(bookkeeping: updated, now: now)
+                        || (self.sessionCoverage.map { $0.lowerBound <= status.firstSequenceNum } ?? false),
+                    emitFloor: emitFloor
                 ))
             }
         }
@@ -139,15 +169,19 @@ final class HistoryBackfillCoordinator {
     // MARK: - Plan execution
 
     /// Runs a plan's ranges one at a time, newest work first, advancing the watermark as each
-    /// range completes.
+    /// range completes, then keeps stepping the deep walk backward until it reaches the
+    /// lookback target.
     ///
     /// Sequential rather than concurrent because every fetch shares the one history log stream:
     /// two overlapping walks would each see the other's entries and neither could tell when its
     /// own chunk was complete. A range that fails is skipped rather than retried — the next tick
-    /// re-derives it, as new work or as a gap.
+    /// re-derives it, as new work or as a gap — and a failed *deep* slice ends the walk for this
+    /// tick, since every slice after it steps down from a frontier that did not move.
     private func run(
         plan: HistoryBackfillPlanner.Plan,
         bookkeeping: HistoryBackfillState,
+        firstSequenceNum: UInt32,
+        now: Date,
         completion: @escaping (HistoryBackfillState, [ClosedRange<UInt32>]) -> Void
     ) {
         var ranges: [ClosedRange<UInt32>] = []
@@ -155,19 +189,12 @@ final class HistoryBackfillCoordinator {
             ranges.append(incremental)
         }
         ranges.append(contentsOf: plan.gaps.sorted { $0.lowerBound > $1.lowerBound })
-        if let deep = plan.deep {
-            ranges.append(deep)
-        }
 
         var bookkeeping = bookkeeping
         var read: [ClosedRange<UInt32>] = []
+        var deepSlicesWalked = 0
 
-        func next(_ remaining: ArraySlice<ClosedRange<UInt32>>) {
-            guard let range = remaining.first else {
-                completion(bookkeeping, read)
-                return
-            }
-
+        func fetch(_ range: ClosedRange<UInt32>, then: @escaping (Bool) -> Void) {
             let count = Int(range.upperBound - range.lowerBound) + 1
             logger.info("Backfilling history \(range.lowerBound)-\(range.upperBound) (\(count) entries)")
 
@@ -177,14 +204,79 @@ final class HistoryBackfillCoordinator {
                     bookkeeping.advanceWatermark(through: range.upperBound)
                     self.noteSessionCoverage(of: range)
                     read.append(range)
+                    then(true)
                 case let .failure(error):
                     self.logger.warning("Backfill range \(range.lowerBound)-\(range.upperBound) failed: \(error)")
+                    then(false)
                 }
-                next(remaining.dropFirst())
             }
         }
 
+        /// Walks the deep slices, re-deriving each one from the frontier the previous slice
+        /// established. The walk continues within this tick because everything short of the
+        /// target is insulin that may still be acting, and pacing it one slice per sync would
+        /// leave IOB short for hours after a pump is added.
+        func stepDeep(_ slice: ClosedRange<UInt32>?) {
+            guard let slice else {
+                completion(bookkeeping, read)
+                return
+            }
+            guard deepSlicesWalked < HistoryBackfillPlanner.maxDeepSlicesPerTick else {
+                logger.warning(
+                    "Deep backfill hit its per-tick slice cap " +
+                        "(\(HistoryBackfillPlanner.maxDeepSlicesPerTick)); resuming next tick"
+                )
+                completion(bookkeeping, read)
+                return
+            }
+            deepSlicesWalked += 1
+
+            fetch(slice) { succeeded in
+                guard succeeded else {
+                    completion(bookkeeping, read)
+                    return
+                }
+                stepDeep(self.nextDeepSlice(
+                    firstSequenceNum: firstSequenceNum,
+                    bookkeeping: bookkeeping,
+                    now: now
+                ))
+            }
+        }
+
+        func next(_ remaining: ArraySlice<ClosedRange<UInt32>>) {
+            guard let range = remaining.first else {
+                // Re-derived rather than taken from `plan.deep`, which was decided before this
+                // tick read anything. On first contact the plan cannot name a deep slice at all
+                // — the walk has no frontier to step down from until the incremental read
+                // establishes one — and waiting a whole sync to take that first step would put
+                // the newest 255 entries in the store and nothing else for five minutes.
+                stepDeep(self.nextDeepSlice(
+                    firstSequenceNum: firstSequenceNum,
+                    bookkeeping: bookkeeping,
+                    now: now
+                ))
+                return
+            }
+            fetch(range) { _ in next(remaining.dropFirst()) }
+        }
+
         next(ranges[...])
+    }
+
+    /// The slice the walk should read next, or nil once it has reached the target date or the
+    /// start of the pump's log. Re-derived after every slice rather than precomputed, so the
+    /// walk stops on the first entry at or below the target instead of overshooting.
+    private func nextDeepSlice(
+        firstSequenceNum: UInt32,
+        bookkeeping: HistoryBackfillState,
+        now: Date
+    ) -> ClosedRange<UInt32>? {
+        HistoryBackfillPlanner.deepSlice(
+            firstSequenceNum: firstSequenceNum,
+            sessionCovered: sessionCoverage,
+            isDeepTargetCovered: isDeepTargetCovered(bookkeeping: bookkeeping, now: now)
+        )
     }
 
     // MARK: - Inputs the planner can't compute itself
@@ -206,6 +298,24 @@ final class HistoryBackfillCoordinator {
         lock.unlock()
     }
 
+    /// Drop this session's view of the store after the pump's numbering restarted.
+    ///
+    /// The store is keyed by (serial, sequence number), so entries filed under the old numbering
+    /// now collide with different entries carrying the same numbers. Clearing this pump's
+    /// records is the only way to keep the two apart; they are re-read from the pump as the walk
+    /// starts over.
+    private func forgetSessionCoverage(pumpSerial: HistoryLogSyncIdentifier.PumpSerial) {
+        lock.lock()
+        sessionCoveredRange = nil
+        lock.unlock()
+
+        do {
+            try pumpManager?.historyLogStore.deleteAll(pumpSerial: pumpSerial.rawValue)
+        } catch {
+            logger.warning("Could not clear the history log store after a log erase: \(error)")
+        }
+    }
+
     /// Holes the store reports inside the span this session has read.
     ///
     /// Distinct from the fetcher's own gap-healing pass, which only re-requests what went
@@ -214,7 +324,7 @@ final class HistoryBackfillCoordinator {
     /// the store's `missingRanges`, which clamps to the retention watermark so pruned history
     /// isn't mistaken for a hole and chased on every tick.
     private func storeGaps(pumpSerial: HistoryLogSyncIdentifier.PumpSerial) -> [ClosedRange<UInt32>] {
-        guard let covered = sessionCoverage else {
+        guard let pumpManager, let covered = sessionCoverage else {
             return []
         }
         do {
@@ -235,8 +345,9 @@ final class HistoryBackfillCoordinator {
     /// shifts the boundary by its own delta, which can only stop the walk an interval early or
     /// late, and emitted events are filtered against the reconciled floor separately. Reading a
     /// little too far is the safe direction, so anything unknown here counts as not covered.
-    private func isDeepTargetCovered(emitFloor: Date?, now: Date) -> Bool {
-        guard let serial = pumpManager.historyLogStoreSerial,
+    private func isDeepTargetCovered(bookkeeping: HistoryBackfillState, now: Date) -> Bool {
+        guard let pumpManager,
+              let serial = pumpManager.historyLogStoreSerial,
               let lowest = sessionCoverage?.lowerBound
         else {
             return false
@@ -257,10 +368,16 @@ final class HistoryBackfillCoordinator {
         }
 
         let boundaryDate = Dates.fromJan12008EpochSecondsToDate(TimeInterval(boundary.pumpTimeSec))
-        return boundaryDate <= HistoryBackfillPlanner.deepFetchTarget(emitFloor: emitFloor, now: now)
+        return boundaryDate <= HistoryBackfillPlanner.deepFetchTarget(
+            firstSeenFloor: bookkeeping.firstSeenFloor,
+            now: now
+        )
     }
 
     private func persist(_ bookkeeping: HistoryBackfillState) {
+        guard let pumpManager else {
+            return
+        }
         pumpManager.state.historyBackfill = bookkeeping
         pumpManager.notifyDelegateStateUpdated()
     }
