@@ -101,62 +101,85 @@ public extension TandemPumpManager {
             // Step 3: Get current segments to preserve non-basal fields
             let currentSegments = activeProfile.getSegments()
 
-            // Step 4: Build modify requests for each new basal schedule item
-            var modifyRequests: [SetIDPSegmentRequest] = []
-
-            for (index, scheduleItem) in sortedItems.enumerated() {
-                let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
-                let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
-
-                if index < currentSegments.count {
-                    // Check if existing segment needs modification
-                    let currentSegment = currentSegments[index]
-                    let needsUpdate = currentSegment.profileStartTime != startMinutes ||
-                        currentSegment.profileBasalRate != basalMilliunits
-
-                    if needsUpdate {
-                        let segment = currentSegment
-                        segment.profileStartTime = startMinutes
-                        segment.profileBasalRate = basalMilliunits
-                        let request = activeProfile.modifySegmentMessage(segment: segment)
-                        modifyRequests.append(request)
-                    }
-                } else {
-                    // Create new segment with default values from first segment
-                    let firstSegment = currentSegments.first!
-                    let request = activeProfile.createSegmentMessage(
-                        profileStartTime: startMinutes,
-                        profileBasalRate: basalMilliunits,
-                        profileCarbRatio: firstSegment.profileCarbRatio,
-                        profileTargetBG: Int(firstSegment.profileTargetBG),
-                        profileISF: firstSegment.profileISF
-                    )
-                    modifyRequests.append(request)
+            // Step 4: Delete surplus segments, highest index first so the remaining indices hold.
+            var requests: [SetIDPSegmentRequest] = []
+            if sortedItems.count < currentSegments.count {
+                for index in stride(from: currentSegments.count - 1, through: sortedItems.count, by: -1)
+                    where index > 0 // segment 0 cannot be deleted
+                {
+                    requests.append(activeProfile.deleteSegmentMessage(segment: currentSegments[index]))
                 }
             }
 
-            // Step 5: If we have fewer items than current segments, delete extra segments
-            if sortedItems.count < currentSegments.count {
-                for i in sortedItems.count ..< currentSegments.count {
-                    if i > 0 { // Can't delete segment 0
-                        let deleteRequest = activeProfile.deleteSegmentMessage(segment: currentSegments[i])
+            let retainedSegments = Array(currentSegments.prefix(min(sortedItems.count, currentSegments.count)))
 
-                        // Prepent delete actions
-                        modifyRequests.insert(deleteRequest, at: 0)
+            // Step 5: Order the writes so no two segments ever share a start time. The pump
+            // rejects such a write with status 1, so applying the schedule in index order fails
+            // whenever a segment moves onto a start time the next segment still occupies.
+            var pendingWrites = Self.pendingSegmentWrites(
+                items: sortedItems,
+                retainedSegments: retainedSegments
+            )
+
+            // Start time held by each segment, keyed by segment index. Segments created during
+            // this sync take a synthetic negative key.
+            var occupiedStartTimes: [Int: Int] = [:]
+            for segment in retainedSegments {
+                occupiedStartTimes[segment.segmentIndex] = segment.profileStartTime
+            }
+            var nextCreatedSegmentKey = -1
+
+            while !pendingWrites.isEmpty {
+                let applicable = pendingWrites.firstIndex { write in
+                    !occupiedStartTimes.contains { segmentIndex, startTime in
+                        startTime == write.startTime && segmentIndex != write.segment?.segmentIndex
                     }
+                }
+
+                guard let applicable else {
+                    // Both start time sequences ascend, so a cycle of mutual blocks cannot form.
+                    // Bail out rather than spin if the pump ever returns unordered segments.
+                    self.logger.error("Could not order basal segment writes without a start time collision")
+                    completion(.failure(PumpCommError.requestConstructionFailed(
+                        reason: "Could not order basal segment writes without a start time collision"
+                    )))
+                    return
+                }
+
+                let write = pendingWrites.remove(at: applicable)
+
+                if let segment = write.segment {
+                    segment.profileStartTime = write.startTime
+                    segment.profileBasalRate = write.basalRate
+                    requests.append(activeProfile.modifySegmentMessage(segment: segment))
+                    occupiedStartTimes[segment.segmentIndex] = write.startTime
+                } else {
+                    let firstSegment = currentSegments.first!
+                    requests.append(activeProfile.createSegmentMessage(
+                        profileStartTime: write.startTime,
+                        profileBasalRate: write.basalRate,
+                        profileCarbRatio: firstSegment.profileCarbRatio,
+                        profileTargetBG: Int(firstSegment.profileTargetBG),
+                        profileISF: firstSegment.profileISF
+                    ))
+                    occupiedStartTimes[nextCreatedSegmentKey] = write.startTime
+                    nextCreatedSegmentKey -= 1
                 }
             }
 
             // Step 6: Send all modification requests
-            for request in modifyRequests {
+            for request in requests {
                 guard let response = self.bluetooth.write(request) else {
-                    self.logger.error("Pump rejected SetIDPSegment")
+                    self.logger.error("No response to SetIDPSegment for segment \(request.segmentIndex)")
                     completion(.failure(PumpCommError.requestConstructionFailed(reason: "Pump rejected SetIDPSegment")))
                     return
                 }
 
                 guard response.status == 0 else {
-                    self.logger.error("Pump rejected SetIDPSegment, status: \(response.status)")
+                    self.logger
+                        .error(
+                            "Pump rejected SetIDPSegment, status: \(response.status), operation: \(String(describing: request.operation)), segment: \(request.segmentIndex), startTime: \(request.profileStartTime)"
+                        )
                     completion(.failure(PumpCommError.errorResponse(
                         context: String(
                             localized: "Error syncing basal rates: Pump rejected SetIDPSegment",
@@ -179,6 +202,34 @@ public extension TandemPumpManager {
                 BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? self.state
                     .basalRateSchedule
             ))
+        }
+    }
+
+    /// A pending segment write. `segment` is nil when the write is a create rather than a modify.
+    internal struct PendingSegmentWrite {
+        let startTime: Int
+        let basalRate: Int
+        let segment: IDPSegmentResponse?
+    }
+
+    /// Pairs each schedule item with the segment at the same position, dropping ones that match.
+    internal static func pendingSegmentWrites(
+        items: [RepeatingScheduleValue<Double>],
+        retainedSegments: [IDPSegmentResponse]
+    ) -> [PendingSegmentWrite] {
+        items.enumerated().compactMap { index, scheduleItem in
+            let startMinutes = Int((scheduleItem.startTime / 60.0).rounded())
+            let basalMilliunits = Int((scheduleItem.value * 1000.0).rounded())
+
+            guard index < retainedSegments.count else {
+                return PendingSegmentWrite(startTime: startMinutes, basalRate: basalMilliunits, segment: nil)
+            }
+
+            let segment = retainedSegments[index]
+            guard segment.profileStartTime != startMinutes || segment.profileBasalRate != basalMilliunits else {
+                return nil
+            }
+            return PendingSegmentWrite(startTime: startMinutes, basalRate: basalMilliunits, segment: segment)
         }
     }
 }

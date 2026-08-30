@@ -55,6 +55,10 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
+    /// How far the driver has read this pump's history log, and the earliest date it may report
+    /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
+    /// pump's whole history into an empty session store.
+    public var historyBackfill: HistoryBackfillState?
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
@@ -230,6 +234,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             lastBasalStatusDate = Date(timeIntervalSinceReferenceDate: lastBasalDateInterval)
         } else {
             lastBasalStatusDate = nil
+        }
+
+        if let historyBackfillRaw = rawValue["historyBackfill"] as? HistoryBackfillState.RawValue {
+            historyBackfill = HistoryBackfillState(rawValue: historyBackfillRaw)
+        } else {
+            historyBackfill = nil
         }
 
         if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
@@ -421,6 +431,10 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["lastBasalStatusDate"] = lastBasalStatusDate.timeIntervalSinceReferenceDate
         }
 
+        if let historyBackfill {
+            raw["historyBackfill"] = historyBackfill.rawValue
+        }
+
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
             raw["bolusState"] = encodedBolusState
         }
@@ -454,6 +468,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastReservoirReadingNeedsReport: \(lastReservoirReadingNeedsReport)",
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
+            "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
