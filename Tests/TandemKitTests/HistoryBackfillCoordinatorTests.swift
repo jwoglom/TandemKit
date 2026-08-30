@@ -19,8 +19,17 @@ import XCTest
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
-        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        manager = TandemPumpManager(state: Self.backfillEnabledState(), bluetooth: bluetooth)
         coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+    }
+
+    /// Reading is gated behind the `historyBackfill` flag, which is off by default. Every test
+    /// below drives the real read path, so they turn it on; the dry-run default has its own
+    /// tests at the end.
+    private static func backfillEnabledState() -> TandemPumpManagerState {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.featureFlags[.historyBackfill] = true
+        return state
     }
 
     override func tearDown() {
@@ -170,7 +179,7 @@ import XCTest
     /// empty session store — the whole reason the bookkeeping is persisted at all.
     func testRelaunchResumesFromThePersistedWatermark() throws {
         setPumpSerial()
-        var state = TandemPumpManagerState(rawValue: [:])
+        var state = Self.backfillEnabledState()
         state.pumpState.pumpSerial = Self.pumpSerial
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: Self.pumpSerial,
@@ -387,7 +396,7 @@ import XCTest
     /// history, and its pre-existing log may predate entering service.
     func testReplacementPumpStartsOverWithAFloorAtFirstSight() throws {
         let now = Date()
-        var state = TandemPumpManagerState(rawValue: [:])
+        var state = Self.backfillEnabledState()
         state.pumpState.pumpSerial = 999
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: Self.pumpSerial,
@@ -422,7 +431,7 @@ import XCTest
     func testErasedLogResetsTheWatermarkAndRereadsThePump() throws {
         let now = Date()
         let floor = now.addingTimeInterval(-.hours(3))
-        var state = TandemPumpManagerState(rawValue: [:])
+        var state = Self.backfillEnabledState()
         state.pumpState.pumpSerial = Self.pumpSerial
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: Self.pumpSerial,
@@ -455,6 +464,74 @@ import XCTest
             try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 50,
             "Records filed under the old numbering are cleared rather than mixed with the new"
         )
+    }
+
+    // MARK: - Dry run (the default)
+
+    /// The `historyBackfill` flag is off unless a user turns it on. A tick then works out what it
+    /// would read and logs it, but issues no history requests and persists nothing.
+    func testDryRunPlansWithoutReadingOrPersisting() throws {
+        bluetooth = StubPumpBluetooth()
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        setPumpSerial()
+        XCTAssertFalse(manager.state.featureFlags.historyBackfill, "Off unless a user turns it on")
+        stubStatus(first: 1, last: 10)
+        stubHistoryStream()
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertTrue(outcome.dryRun)
+        XCTAssertEqual(outcome.plannedRanges, [1 ... 10], "It still works out what it would read")
+        XCTAssertTrue(outcome.rangesRead.isEmpty)
+        XCTAssertTrue(
+            bluetooth.sent(HistoryLogRequest.self).isEmpty,
+            "No history entries may be requested from the pump"
+        )
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 0)
+        XCTAssertNil(outcome.sessionCovered)
+    }
+
+    /// A watermark persisted for entries that were never read would mark them read, and suppress
+    /// them once the flag is turned on.
+    func testDryRunLeavesTheWatermarkUnsetSoEnablingStillReads() throws {
+        bluetooth = StubPumpBluetooth()
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        setPumpSerial()
+        stubStatus(first: 1, last: 10)
+        stubHistoryStream()
+
+        _ = runTick()
+        XCTAssertNil(manager.state.historyBackfill, "Nothing is persisted by a dry run")
+
+        manager.state.featureFlags[.historyBackfill] = true
+        bluetooth.resetRecordedTraffic()
+        stubStatus(first: 1, last: 10)
+        stubHistoryStream()
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertFalse(outcome.dryRun)
+        XCTAssertEqual(outcome.rangesRead, [1 ... 10], "The entries the dry run named are read in full")
+        XCTAssertEqual(outcome.bookkeeping.watermark, 10)
+        XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 10)
+    }
+
+    /// The gate sits after planning, so a dry run still costs the one status read the plan is
+    /// derived from — and nothing else.
+    func testDryRunReadsTheStatusButNoEntries() {
+        bluetooth = StubPumpBluetooth()
+        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        setPumpSerial()
+        stubStatus(first: 1, last: 5000)
+        stubHistoryStream()
+
+        _ = runTick()
+
+        XCTAssertEqual(bluetooth.sent(HistoryLogStatusRequest.self).count, 1)
+        XCTAssertTrue(bluetooth.sent(HistoryLogRequest.self).isEmpty)
     }
 
     // MARK: - Ownership

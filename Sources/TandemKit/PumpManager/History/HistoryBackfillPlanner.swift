@@ -34,6 +34,22 @@ enum HistoryBackfillPlanner {
         var isEmpty: Bool {
             incremental == nil && gaps.isEmpty && deep == nil
         }
+
+        /// The ranges to read before the walk backward begins: new entries first, then gaps from
+        /// the top down.
+        var immediateRanges: [ClosedRange<UInt32>] {
+            var ranges: [ClosedRange<UInt32>] = []
+            if let incremental {
+                ranges.append(incremental)
+            }
+            ranges.append(contentsOf: gaps.sorted { $0.lowerBound > $1.lowerBound })
+            return ranges
+        }
+
+        /// Everything the plan names, in reading order. `deep` is only the walk's first slice.
+        var orderedRanges: [ClosedRange<UInt32>] {
+            deep.map { immediateRanges + [$0] } ?? immediateRanges
+        }
     }
 
     /// The most entries a single deep-backfill slice may ask for.

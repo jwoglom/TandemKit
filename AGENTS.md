@@ -518,6 +518,11 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
      `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
      `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
      event kicks a tick as well.
+   - Reading is gated behind the `historyBackfill` feature flag, which is **off by default**. A
+     tick then plans as normal and logs what it would read (`[dry run]`), but issues no
+     `HistoryLogRequest` and persists no bookkeeping — a watermark for entries that were never
+     read would suppress them once the flag is turned on. The one status read the plan is derived
+     from still happens.
    - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
      but is not paced one slice per sync: a tick keeps stepping until it reaches
      `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.

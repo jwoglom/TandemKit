@@ -18,12 +18,17 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// button is disabled on the pump and turns it off if it is not.
         case quickBolusButtonSupport
 
+        /// Lets the history backfill actually read entries off the pump. While off it plans and
+        /// logs each tick without fetching anything — see `HistoryBackfillCoordinator`.
+        case historyBackfill
+
         public var id: String { rawValue }
 
         public var defaultValue: Bool {
             switch self {
             case .controlIQSupport,
-                 .quickBolusButtonSupport:
+                 .quickBolusButtonSupport,
+                 .historyBackfill:
                 return false
             }
         }
@@ -40,6 +45,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                     localized: "Quick Bolus Button Support",
                     comment: "Title of the quick bolus button support feature flag"
                 )
+            case .historyBackfill:
+                return String(
+                    localized: "History Backfill",
+                    comment: "Title of the history backfill feature flag"
+                )
             }
         }
 
@@ -54,6 +64,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 return String(
                     localized: "Allows the pump's quick bolus button to be used. While off, the app turns the quick bolus button off on the pump every time it syncs.",
                     comment: "Description of the quick bolus button support feature flag"
+                )
+            case .historyBackfill:
+                return String(
+                    localized: "Lets the app read the pump's history log to catch up on insulin delivered while it was not connected. While off, the app works out what it would read and writes that to the log without fetching any history from the pump.",
+                    comment: "Description of the history backfill feature flag"
                 )
             }
         }
@@ -131,6 +146,10 @@ public extension TandemFeatureFlags {
 
     var quickBolusButtonSupport: Bool {
         self[.quickBolusButtonSupport]
+    }
+
+    var historyBackfill: Bool {
+        self[.historyBackfill]
     }
 }
 
