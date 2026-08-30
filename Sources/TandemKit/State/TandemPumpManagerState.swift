@@ -46,6 +46,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var featureFlags: TandemFeatureFlags = .default
     public var latestInsulinOnBoard: Double?
     public var lastReservoirReading: ReservoirValue?
+    /// Cleared once `lastReservoirReading` has reached the delegate. Persisted so a reading taken
+    /// while none was attached survives a relaunch.
+    public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
     /// How far the driver has read this pump's history log, and the earliest date it may report
@@ -214,6 +217,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         } else {
             lastReservoirReading = nil
         }
+
+        lastReservoirReadingNeedsReport = rawValue["lastReservoirReadingNeedsReport"] as? Bool ?? false
 
         if let batteryRaw = rawValue["lastBatteryReading"] as? [String: Any] {
             lastBatteryReading = TandemPumpManagerState.decodeBatteryReading(from: batteryRaw)
@@ -410,6 +415,10 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["lastReservoirReading"] = TandemPumpManagerState.encodeReservoirValue(lastReservoirReading)
         }
 
+        if lastReservoirReadingNeedsReport {
+            raw["lastReservoirReadingNeedsReport"] = true
+        }
+
         if let lastBatteryReading = lastBatteryReading {
             raw["lastBatteryReading"] = TandemPumpManagerState.encodeBatteryReading(lastBatteryReading)
         }
@@ -452,6 +461,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* featureFlags: \(featureFlags)",
             "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
             "* lastReservoirReading: \(String(describing: lastReservoirReading))",
+            "* lastReservoirReadingNeedsReport: \(lastReservoirReadingNeedsReport)",
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",

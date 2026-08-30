@@ -109,8 +109,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
         set {
             pumpDelegate.queue = newValue
+            hasDelegateQueue = newValue != nil
+            deliverStateMissedByTheDelegate()
         }
     }
+
+    /// `pumpDelegate.queue` reads back as `.main` until the host sets one, and the host asserts its
+    /// delegate methods run on its own queue, so this cannot be inferred from the holder.
+    private var hasDelegateQueue = false
 
     private static func makeStatus(from state: TandemPumpManagerState) -> PumpManagerStatus {
         PumpManagerStatus(
@@ -285,7 +291,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
         set {
             pumpDelegate.delegate = newValue
+            deliverStateMissedByTheDelegate()
         }
+    }
+
+    /// Catches the host up on what only gets pushed once, since the manager reads the pump before
+    /// the host adopts it. Called from both setters — the host sets them one after the other (Trio
+    /// sets the delegate first) and `notify` needs both — so whichever lands second does the work.
+    private func deliverStateMissedByTheDelegate() {
+        guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
+
+        notifyDelegateStateUpdated()
+        flushPendingReservoirReading()
     }
 
     /// The earliest date the host app will accept pump events for; nil when no delegate is

@@ -409,23 +409,48 @@ extension TandemPumpManager {
 
         state.lastReconciliation = timestamp
         state.lastReservoirReading = reservoirValue
+        state.lastReservoirReadingNeedsReport = true
         notifyDelegateStateUpdated()
 
+        reportReservoirReading(reservoirValue)
+
+        return units
+    }
+
+    /// `didReadReservoirValue` is the reservoir's only channel to the host and nothing re-derives
+    /// it, so a call made with no delegate attached — the pairing sync runs before the host adopts
+    /// the manager — would strand the host on a stale value. Hold the reading for the flush below
+    /// instead. The pending flag is read and written inside `notify`, serialized on the delegate
+    /// queue, so a flush racing a fresh read cannot report twice.
+    func reportReservoirReading(_ reading: ReservoirValue) {
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
-                self.logger.warning("No pump delegate, not notifying...")
+                self.logger.warning("No pump delegate; holding reservoir reading until one attaches")
                 return
             }
 
+            self.logger.debug("Reporting \(String(format: "%.2f", reading.unitVolume)) U to the host app")
+
             delegate.pumpManager(
                 self,
-                didReadReservoirValue: units,
-                at: timestamp,
+                didReadReservoirValue: reading.unitVolume,
+                at: reading.startDate,
                 completion: { _ in }
             )
+
+            self.state.lastReservoirReadingNeedsReport = false
+            self.notifyDelegateStateUpdated()
+        }
+    }
+
+    /// Sends the last reading if it never reached a delegate. A no-op in the normal case.
+    func flushPendingReservoirReading() {
+        guard state.lastReservoirReadingNeedsReport, let reading = state.lastReservoirReading else {
+            return
         }
 
-        return units
+        logger.info("Delegate attached; reporting the reservoir reading it missed")
+        reportReservoirReading(reading)
     }
 
     func fetchBatteryStatus() {
