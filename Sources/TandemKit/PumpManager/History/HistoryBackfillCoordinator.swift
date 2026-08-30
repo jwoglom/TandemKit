@@ -15,14 +15,8 @@ final class HistoryBackfillCoordinator {
     struct TickOutcome: Equatable {
         /// Bookkeeping as persisted at the end of the tick.
         var bookkeeping: HistoryBackfillState
-        /// Ranges the tick actually read, in the order they were read. Empty on a dry run.
+        /// Ranges the tick actually read, in the order they were read.
         var rangesRead: [ClosedRange<UInt32>]
-        /// Ranges the plan asked for. On a dry run this is the whole tick's output; note it
-        /// holds only the *first* deep slice, since the walk re-derives each subsequent one from
-        /// entries a dry run never fetches.
-        var plannedRanges: [ClosedRange<UInt32>]
-        /// Whether the `historyBackfill` feature flag left this tick planning without reading.
-        var dryRun: Bool
         /// The span this session has read into the store, after the tick.
         var sessionCovered: ClosedRange<UInt32>?
         /// Whether the walk backward has nothing left to reach.
@@ -62,6 +56,15 @@ final class HistoryBackfillCoordinator {
     ///   (no serial yet, no status, or another reader holds the history stream). Fires on an
     ///   unspecified queue.
     func runTick(now: Date = Date(), completion: ((TickOutcome?) -> Void)? = nil) {
+        guard pumpManager?.state.featureFlags.historyBackfill == true else {
+            // Off means off: no status read, no walk, no bookkeeping. Nothing here is a dry run
+            // — a watermark written for entries that were never read would mark them read and
+            // suppress them once the flag goes on.
+            logger.info("Skipping backfill tick: the History Backfill feature flag is off")
+            completion?(nil)
+            return
+        }
+
         guard let pumpManager, let serial = pumpManager.historyLogStoreSerial else {
             // No serial yet means no store key and no bookkeeping identity. Nothing can be
             // filed anywhere findable until a PumpVersionResponse has landed.
@@ -137,32 +140,11 @@ final class HistoryBackfillCoordinator {
                 isDeepTargetCovered: self.isDeepTargetCovered(bookkeeping: bookkeeping, now: now)
             )
 
-            let planned = plan.orderedRanges
-
             guard !plan.isEmpty else {
                 self.persist(bookkeeping)
                 finish(TickOutcome(
                     bookkeeping: bookkeeping,
                     rangesRead: [],
-                    plannedRanges: planned,
-                    dryRun: false,
-                    sessionCovered: self.sessionCoverage,
-                    isDeepBackfillComplete: plan.isDeepBackfillComplete,
-                    emitFloor: emitFloor
-                ))
-                return
-            }
-
-            // Nothing is read and nothing is persisted while the flag is off. Persisting a
-            // watermark here would be worse than useless: it would mark entries as read that
-            // never were, and suppress them once the flag is turned on.
-            guard self.isBackfillEnabled else {
-                self.logDryRun(planned: planned, plan: plan, bookkeeping: bookkeeping, now: now)
-                finish(TickOutcome(
-                    bookkeeping: bookkeeping,
-                    rangesRead: [],
-                    plannedRanges: planned,
-                    dryRun: true,
                     sessionCovered: self.sessionCoverage,
                     isDeepBackfillComplete: plan.isDeepBackfillComplete,
                     emitFloor: emitFloor
@@ -180,8 +162,6 @@ final class HistoryBackfillCoordinator {
                 finish(TickOutcome(
                     bookkeeping: updated,
                     rangesRead: rangesRead,
-                    plannedRanges: planned,
-                    dryRun: false,
                     sessionCovered: self.sessionCoverage,
                     isDeepBackfillComplete: self.isDeepTargetCovered(bookkeeping: updated, now: now)
                         || (self.sessionCoverage.map { $0.lowerBound <= status.firstSequenceNum } ?? false),
@@ -189,35 +169,6 @@ final class HistoryBackfillCoordinator {
                 ))
             }
         }
-    }
-
-    // MARK: - Dry run
-
-    private var isBackfillEnabled: Bool {
-        pumpManager?.state.featureFlags.historyBackfill ?? false
-    }
-
-    /// Writes what the tick would have read. The deep walk is reported as its first slice and a
-    /// target date rather than a full range: each later slice steps down from entries this tick
-    /// is not fetching, so the depth of the walk cannot be known without doing it.
-    private func logDryRun(
-        planned: [ClosedRange<UInt32>],
-        plan: HistoryBackfillPlanner.Plan,
-        bookkeeping: HistoryBackfillState,
-        now: Date
-    ) {
-        let entries = planned.reduce(0) { $0 + Int($1.upperBound - $1.lowerBound) + 1 }
-        let ranges = planned.map { "\($0.lowerBound)-\($0.upperBound)" }.joined(separator: ", ")
-        let target = HistoryBackfillPlanner.deepFetchTarget(
-            firstSeenFloor: bookkeeping.firstSeenFloor,
-            now: now
-        )
-        let walk = plan.deep == nil ? "" : ", then walking back toward \(target)"
-
-        logger.info(
-            "[dry run] Would read \(entries) entries in \(planned.count) range(s): " +
-                "\(ranges)\(walk). Turn on the History Backfill feature flag to read them."
-        )
     }
 
     // MARK: - Plan execution

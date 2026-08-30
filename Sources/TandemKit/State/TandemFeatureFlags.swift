@@ -18,9 +18,14 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// button is disabled on the pump and turns it off if it is not.
         case quickBolusButtonSupport
 
-        /// Lets the history backfill actually read entries off the pump. While off it plans and
-        /// logs each tick without fetching anything — see `HistoryBackfillCoordinator`.
+        /// Runs the history log backfill at all: the incremental read, gap healing and the walk
+        /// backward. While off, `HistoryBackfillCoordinator` does nothing on any tick and the
+        /// driver never reads the pump's history log.
         case historyBackfill
+
+        /// Lets doses found in the pump's history log reach the app's insulin history. Only has
+        /// any effect while `historyBackfill` is on — there is nothing to report otherwise.
+        case historyDoseReporting
 
         public var id: String { rawValue }
 
@@ -28,7 +33,8 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
             switch self {
             case .controlIQSupport,
                  .quickBolusButtonSupport,
-                 .historyBackfill:
+                 .historyBackfill,
+                 .historyDoseReporting:
                 return false
             }
         }
@@ -50,6 +56,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                     localized: "History Backfill",
                     comment: "Title of the history backfill feature flag"
                 )
+            case .historyDoseReporting:
+                return String(
+                    localized: "History Dose Reporting",
+                    comment: "Title of the history dose reporting feature flag"
+                )
             }
         }
 
@@ -67,8 +78,13 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 )
             case .historyBackfill:
                 return String(
-                    localized: "Lets the app read the pump's history log to catch up on insulin delivered while it was not connected. While off, the app works out what it would read and writes that to the log without fetching any history from the pump.",
+                    localized: "Reads the pump's history log to catch up on insulin delivered while the app was not connected. While off, the app does not read pump history at all.",
                     comment: "Description of the history backfill feature flag"
+                )
+            case .historyDoseReporting:
+                return String(
+                    localized: "Adds insulin found in the pump's history log to the app's insulin history, so doses delivered from the pump itself are counted. Needs History Backfill to be on. While off, pump history is read but never changes the app's insulin history.",
+                    comment: "Description of the history dose reporting feature flag"
                 )
             }
         }
@@ -150,6 +166,11 @@ public extension TandemFeatureFlags {
 
     var historyBackfill: Bool {
         self[.historyBackfill]
+    }
+
+    /// Gated on `historyBackfill` as well: there is nothing to report from a log never read.
+    var historyDoseReporting: Bool {
+        self[.historyBackfill] && self[.historyDoseReporting]
     }
 }
 

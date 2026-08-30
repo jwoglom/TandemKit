@@ -56,6 +56,7 @@ import XCTest
         var state = TandemPumpManagerState(rawValue: [:])
         state.pumpState.apiVersion = KnownApiVersion.apiV2_1.value
         state.pumpState.pumpSerial = 123_456
+        state.featureFlags[.historyBackfill] = true
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
         bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
             numEntries: 10,
@@ -79,9 +80,9 @@ import XCTest
         )
     }
 
-    /// Without a serial there is no store key and no bookkeeping identity, so the tick must not
-    /// reach the wire at all.
-    func testBolusChangeDoesNotReadHistoryBeforeTheSerialIsKnown() {
+    /// The backfill flag is off by default, so a bolus change reads the bolus status and
+    /// nothing else.
+    func testBolusChangeDoesNotReadHistoryWhileTheBackfillFlagIsOff() {
         XCTAssertEqual(handle([.bolusChange]), ["CurrentBolusStatusRequest"])
     }
 

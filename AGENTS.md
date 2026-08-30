@@ -518,11 +518,14 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
      `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
      `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
      event kicks a tick as well.
-   - Reading is gated behind the `historyBackfill` feature flag, which is **off by default**. A
-     tick then plans as normal and logs what it would read (`[dry run]`), but issues no
-     `HistoryLogRequest` and persists no bookkeeping — a watermark for entries that were never
-     read would suppress them once the flag is turned on. The one status read the plan is derived
-     from still happens.
+   - Two feature flags, both off by default. `historyBackfill` runs the whole thing: while off,
+     `runTick` returns immediately and the pump's history log is never read. `historyDoseReporting`
+     decides whether doses found in that history reach the app's insulin history; it is `&&`-ed
+     with `historyBackfill`, since there is nothing to report from a log never read. Neither is a
+     dry run — a watermark written for entries that were never read would mark them read and
+     suppress them once the flag goes on. **`historyDoseReporting` has no consumer yet**: the
+     emission layer that must check it does not exist, so today it only fixes the contract that
+     layer will be built against.
    - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
      but is not paced one slice per sync: a tick keeps stepping until it reaches
      `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.

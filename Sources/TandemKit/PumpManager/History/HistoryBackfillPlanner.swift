@@ -45,11 +45,6 @@ enum HistoryBackfillPlanner {
             ranges.append(contentsOf: gaps.sorted { $0.lowerBound > $1.lowerBound })
             return ranges
         }
-
-        /// Everything the plan names, in reading order. `deep` is only the walk's first slice.
-        var orderedRanges: [ClosedRange<UInt32>] {
-            deep.map { immediateRanges + [$0] } ?? immediateRanges
-        }
     }
 
     /// The most entries a single deep-backfill slice may ask for.
