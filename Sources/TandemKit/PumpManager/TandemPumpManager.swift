@@ -1607,6 +1607,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // Deduplicated across the batch, so an alert+alarm pair reloads the notification bundle
         // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
         // suggested handlers on QualifyingEvent.
+        if events.contains(.bolusChange) {
+            // When a bolus delivered from the pump's own UI is written to history. Read now
+            // rather than at the next sync, which is a loop cycle or more out of IOB.
+            historyBackfillCoordinator.runTick()
+        }
+
         let fetches = QualifyingEventFetch.fetches(for: events, context: context)
         guard !fetches.isEmpty else {
             // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to

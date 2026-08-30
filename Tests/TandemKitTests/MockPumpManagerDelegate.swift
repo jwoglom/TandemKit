@@ -49,6 +49,16 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var detectedSystemTimeOffset: TimeInterval = 0
     var automaticDosingEnabled: Bool = false
 
+    /// Returned from `startDateToFilterNewPumpEvents(for:)`. Settable so a test can model a host
+    /// app whose boundary marches forward as events are reported — Trio returns
+    /// `lastEventDate - 15min`, which lands within minutes of now once this driver has reported
+    /// anything.
+    private var _startDateToFilterNewPumpEvents: Date = .distantPast
+    var startDateToFilterNewPumpEvents: Date {
+        get { synchronized { _startDateToFilterNewPumpEvents } }
+        set { synchronized { _startDateToFilterNewPumpEvents = newValue } }
+    }
+
     // MARK: - DeviceManagerDelegate
 
     func deviceManager(
@@ -155,6 +165,6 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
-        .distantPast
+        startDateToFilterNewPumpEvents
     }
 }

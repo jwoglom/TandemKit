@@ -49,6 +49,43 @@ import XCTest
         XCTAssertEqual(handle([.bolusChange]), ["CurrentBolusStatusRequest"])
     }
 
+    /// A bolus changing on the pump is exactly when a bolus delivered from the pump's own UI is
+    /// written to history, and the pump is already awake. Reading history now puts it in the
+    /// store within seconds instead of leaving it out of IOB until the next sync.
+    func testBolusChangeAlsoReadsHistory() {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.pumpState.apiVersion = KnownApiVersion.apiV2_1.value
+        state.pumpState.pumpSerial = 123_456
+        state.featureFlags[.historyBackfill] = true
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
+            numEntries: 10,
+            firstSequenceNum: 1,
+            lastSequenceNum: 10
+        ))
+        bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: 7))
+
+        let acknowledged = expectation(description: "qualifying events acknowledged")
+        manager.handleQualifyingEvents(events: [.bolusChange]) { acknowledged.fulfill() }
+        wait(for: [acknowledged], timeout: 1)
+
+        // The backfill runs on its own queue, so it lands after the acknowledgement.
+        let read = expectation(description: "history status read")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { read.fulfill() }
+        wait(for: [read], timeout: 5)
+
+        XCTAssertFalse(
+            bluetooth.sent(HistoryLogStatusRequest.self).isEmpty,
+            "A bolus change should kick a history read, not wait for the next sync"
+        )
+    }
+
+    /// The backfill flag is off by default, so a bolus change reads the bolus status and
+    /// nothing else.
+    func testBolusChangeDoesNotReadHistoryWhileTheBackfillFlagIsOff() {
+        XCTAssertEqual(handle([.bolusChange]), ["CurrentBolusStatusRequest"])
+    }
+
     func testBasalChangeFetchesBasalStatus() {
         XCTAssertEqual(handle([.basalChange]), ["CurrentBasalStatusRequest"])
     }
