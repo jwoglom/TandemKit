@@ -440,7 +440,7 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
 * **BLE notification handling** – ✅ `PumpNotificationRouter` attaches to the active `PeripheralManager`, validates packets, and forwards typed messages into `PumpCommSession` for handling.
 * **Message response parsing** – ✅ `PeripheralManagerTransport` + `PumpResponseCollector` decode responses via `BTResponseParser`, returning concrete message types back to callers.
 * **Device targeting** – ❌ No logic yet to infer pump model (t:slim X2, Mobi, Trio) from advertisements or `PumpVersionResponse` values.
-* **Status updates** – ⚠️ Basal/bolus/battery/reservoir polling and notification handling feed LoopKit delegates; history streaming now runs through `HistoryFetchSession` with telemetry scheduler hooks, and pump alerts/alarms/malfunctions are issued/retracted as LoopKit `Alert`s from every `fetchNotifications()` pass; CGM data pipelines remain unimplemented.
+* **Status updates** – ⚠️ Basal/bolus/battery/reservoir polling and notification handling feed LoopKit delegates; history streaming now runs through `HistoryLogFetcher` with telemetry scheduler hooks, and pump alerts/alarms/malfunctions are issued/retracted as LoopKit `Alert`s from every `fetchNotifications()` pass; CGM data pipelines remain unimplemented.
 
 #### 5. Safety and Gating
 * **Insulin delivery toggles** – ⚠️ `PumpStateSupplier` exposes enablement flags and TandemPump helpers now persist and forward them; UI/user-consent affordances are still missing.
@@ -464,7 +464,7 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
 
 4. **Phase 3 – Pump session lifecycle** – ⚠️ *Partially completed*
    * `TandemPump` initiates startup status polls and bridges notifications through `PumpNotificationRouter`, but auto-reconnect logic and configuration helpers still need work.
-   * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`; history streaming now flows through `HistoryFetchSession` with telemetry scheduling hooks, but device-model detection is still outstanding.
+   * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`; history streaming now flows through `HistoryLogFetcher` with telemetry scheduling hooks, but device-model detection is still outstanding.
    * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
@@ -512,7 +512,14 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
    - Persist the detected model inside `TandemPumpManagerState` for LoopKit UI.
 
 5. **Add history/log streaming** (`TandemPumpManager.swift`)
-   - History streaming now runs through `HistoryFetchSession` with telemetry scheduling hooks; tighten LoopKit event surfacing and reconciliation.
+   - History streaming runs through `HistoryLogFetcher`, and `HistoryBackfillCoordinator` keeps
+     the session store caught up from every `syncPumpData` pass: an incremental read from the
+     persisted watermark (`TandemPumpManagerState.historyBackfill`), cross-tick gap healing via
+     `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
+     `HistoryBackfillPlanner` holds that decision as pure arithmetic.
+   - Still open: nothing consumes the store's contents. `HistoryToDoseMapper` is not wired to any
+     emission path, so mapped doses, in-place finalization of interrupted boluses, and
+     gap-aware `lastReconciliation` advancement all remain to be done.
 
 6. **Implement TandemPumpManagerState persistence** (`TandemPumpManagerState.swift`) ✅ *Done*
    - Raw state now stores derived secret + server nonce so pairing survives restarts.
@@ -541,7 +548,7 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
     - Parse pump model from BLE advertisement data or `PumpVersionResponse` and persist the result.
 
 14. **Implement message dispatchers for key operations** – ⚠️ *Partially completed*
-    - Basal/bolus/temp basal/suspend dispatchers exist; history streaming now routes through `HistoryFetchSession`, with remaining work focused on CGM/alert pathways.
+    - Basal/bolus/temp basal/suspend dispatchers exist; history streaming now routes through `HistoryLogFetcher`, with remaining work focused on CGM/alert pathways.
 
 15. **Implement BLE notification → PumpComm bridge** ✅ *Done*
     - `PumpNotificationRouter` validates packets and forwards typed messages into `PumpCommSession`.

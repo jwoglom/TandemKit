@@ -4,7 +4,9 @@ import Foundation
 ///
 /// Used by unit tests and by any code path that wants the store's semantics without a file on disk
 /// (for example the CLI, or a manager constructed before a storage directory is available). Nothing
-/// survives process exit — the shipping driver uses `CoreDataHistoryLogStore`.
+/// survives process exit, and that is the shipping behaviour too: the pump-manager layer stays
+/// storage-free (#232), so durable dose storage is the host app's job and only fetch bookkeeping
+/// (`HistoryBackfillState`) is persisted, in `TandemPumpManagerState`.
 public final class InMemoryHistoryLogStore: HistoryLogStore {
     private let lock = NSLock()
     /// pumpSerial -> sequenceNum -> entry
