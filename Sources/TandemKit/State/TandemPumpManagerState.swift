@@ -151,6 +151,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastSiteChangeDate: Date?
     /// Last cartridge / reservoir change. Set when the user changes the cartridge.
     public var lastCartridgeChangeDate: Date?
+    /// Prime amount, in units, of the last successful cannula fill. Persisted so the fill
+    /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
+    public var lastCannulaFillAmount: Double?
 
     public init(basalRateSchedule: BasalRateSchedule) {
         self.basalRateSchedule = basalRateSchedule
@@ -345,6 +348,7 @@ public struct TandemPumpManagerState: RawRepresentable {
 
         lastSiteChangeDate = rawValue["lastSiteChangeDate"] as? Date
         lastCartridgeChangeDate = rawValue["lastCartridgeChangeDate"] as? Date
+        lastCannulaFillAmount = rawValue["lastCannulaFillAmount"] as? Double
 
         if let rawInsulinType = rawValue["insulinType"] as? InsulinType.RawValue {
             insulinType = InsulinType(rawValue: rawInsulinType)
@@ -396,6 +400,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
+        raw["lastCannulaFillAmount"] = lastCannulaFillAmount
         raw["insulinType"] = insulinType?.rawValue
         raw["useSilentTones"] = useSilentTones
         raw["basalRateSchedule"] = TandemPumpManagerState.encodeBasalSchedule(basalRateSchedule)
@@ -492,6 +497,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",
+            "* lastCannulaFillAmount: \(String(describing: lastCannulaFillAmount))",
             "* quickBolusEnabled: \(String(describing: quickBolusEnabled))",
             "* quickBolusEntryType: \(String(describing: quickBolusEntryType))",
             "* quickBolusIncrementUnits: \(String(describing: quickBolusIncrementUnits))",

@@ -181,7 +181,7 @@ struct TandemKitFillCannulaView: View {
 
                 if viewModel.isEditingAmount {
                     Picker("Amount", selection: $viewModel.primeAmount) {
-                        ForEach(Array(stride(from: 0.1, through: 2.0, by: 0.1)), id: \.self) { amount in
+                        ForEach(TandemKitFillCannulaViewModel.primeAmountOptions, id: \.self) { amount in
                             Text(String(format: "%.1f", amount) + self.unitText).tag(amount)
                         }
                     }
@@ -321,7 +321,7 @@ private extension TandemKitFillCannulaViewModel {
         viewModel.isSuspended = true
         viewModel.currentStep = .enterAmount
         viewModel.isEditingAmount = true
-        viewModel.primeAmount = 0.7
+        viewModel.primeAmount = TandemKitFillCannulaViewModel.nearestPrimeAmount(to: 0.7)
         return viewModel
     }
 

@@ -24,7 +24,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     @Published var isSuspended: Bool? = nil
     @Published var isProcessing = false
 
-    @Published var primeAmount: Double = 0.3 // Default 0.3 units
+    @Published var primeAmount: Double
     @Published var isEditingAmount = false
 
     @Published var loadingSuspend = false
@@ -46,9 +46,28 @@ class TandemKitFillCannulaViewModel: ObservableObject {
     // message is dropped or never arrives.
     private let fillTimeout: DispatchTimeInterval = .seconds(30)
 
+    /// Prime amounts the wizard offers, in units. The picker tags rows with these exact values,
+    /// so any amount assigned to `primeAmount` has to come from this list or the picker will show
+    /// no selection — `stride` accumulates floating-point error, so `0.3` is not `options[2]`.
+    static let primeAmountOptions: [Double] = Array(stride(from: 0.1, through: 2.0, by: 0.1))
+
+    /// Prime amount used when the user has not filled a cannula before.
+    static let defaultPrimeAmount: Double = 0.3
+
+    /// The offered amount closest to `amount`, so a remembered or default value always matches a
+    /// picker row exactly.
+    static func nearestPrimeAmount(to amount: Double) -> Double {
+        primeAmountOptions.min { abs($0 - amount) < abs($1 - amount) } ?? amount
+    }
+
     init(pumpManager: TandemPumpManager?, done: @escaping () -> Void) {
         self.pumpManager = pumpManager
         self.done = done
+        // Pre-fill the amount used for the last successful fill, so a user who always primes the
+        // same amount does not have to re-enter it each site change.
+        primeAmount = Self.nearestPrimeAmount(
+            to: pumpManager?.state.lastCannulaFillAmount ?? Self.defaultPrimeAmount
+        )
     }
 
     func checkSuspendedStatus() {
@@ -150,7 +169,7 @@ class TandemKitFillCannulaViewModel: ObservableObject {
 
         if success {
             failedFill = false
-            pumpManager?.recordSiteChange()
+            pumpManager?.recordSiteChange(primeAmount: primeAmount)
             currentStep = currentStep.nextStep() ?? .done
         } else {
             failedFill = true
