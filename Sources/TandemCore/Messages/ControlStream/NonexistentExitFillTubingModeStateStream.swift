@@ -70,13 +70,9 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         self.stateBitmask = stateBitmask
     }
 
-    /// The payload, with the trailing bytes a signed stream message carries stripped off.
-    ///
-    /// Port of pumpX2's `removeSignedRequestHmacBytes`, which drops the 24-byte trailer only when
-    /// what remains is one of the two payload sizes this opcode carries (1 for an exit-fill-tubing
-    /// state, 5 for a pumping state). TandemKit's cargo also keeps the packet's 2-byte CRC, which
-    /// pumpX2's does not, so a 26-byte trailer is accepted as well. Anything else is passed through
-    /// untouched, which is what a locally constructed instance hands in.
+    /// The payload, with the 24-byte signed-message trailer (and the packet CRC that TandemKit's
+    /// cargo also keeps) stripped off. Only stripped when what remains is a payload size this
+    /// opcode carries, so a locally built cargo passes through untouched.
     static func payload(from cargo: Data) -> Data {
         for trailer in [24, 26] where cargo.count > trailer {
             let length = cargo.count - trailer
