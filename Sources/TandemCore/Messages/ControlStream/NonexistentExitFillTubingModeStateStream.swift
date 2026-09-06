@@ -41,11 +41,12 @@ public class ExitFillTubingModeStateStreamResponse: Message {
     public var stateBitmask: UInt32
 
     public required init(cargo: Data) {
-        self.cargo = cargo
-        stateId = Int(cargo[0] & 0xFF)
-        if cargo.count >= 5 {
-            isPumpingStateSetAfterStartUp = cargo[0] != 0
-            stateBitmask = Bytes.readUint32(cargo, 1)
+        let raw = Self.payload(from: cargo)
+        self.cargo = raw
+        stateId = raw.isEmpty ? 0 : Int(raw[0] & 0xFF)
+        if raw.count >= 5 {
+            isPumpingStateSetAfterStartUp = raw[0] != 0
+            stateBitmask = Bytes.readUint32(raw, 1)
         } else {
             isPumpingStateSetAfterStartUp = false
             stateBitmask = 0
@@ -67,6 +68,19 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         stateId = Int(cargo[0] & 0xFF)
         self.isPumpingStateSetAfterStartUp = isPumpingStateSetAfterStartUp
         self.stateBitmask = stateBitmask
+    }
+
+    /// The payload, with the 24-byte signed-message trailer (and the packet CRC that TandemKit's
+    /// cargo also keeps) stripped off. Only stripped when what remains is a payload size this
+    /// opcode carries, so a locally built cargo passes through untouched.
+    static func payload(from cargo: Data) -> Data {
+        for trailer in [24, 26] where cargo.count > trailer {
+            let length = cargo.count - trailer
+            if length == Int(props.size) || length == Int(PumpingStateStreamResponse.props.size) {
+                return Data(cargo.prefix(length))
+            }
+        }
+        return cargo
     }
 
     public var state: ExitFillTubingModeState? { ExitFillTubingModeState(rawValue: stateId) }

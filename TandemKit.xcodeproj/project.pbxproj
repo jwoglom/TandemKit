@@ -454,6 +454,7 @@
 		57EC3330DD5F7EEDA4215F83 /* IDPManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4FC2592021DC146D8622DE8 /* IDPManagerTests.swift */; };
 		590E1B885E346213B8EB71F1 /* CartridgeFilledHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 893A160904DF0639305FCC8B /* CartridgeFilledHistoryLogTests.swift */; };
 		5A1DF0509A882231E3FDAA5F /* PumpChallengeRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74C7FA555A5848A0CA09849 /* PumpChallengeRequestTests.swift */; };
+		5A6FDC2E313FA971B8F365BE /* ControlStreamOpcode23Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 740639F6A180A8F211CBFF7B /* ControlStreamOpcode23Tests.swift */; };
 		5A85AC4D1E6E096F7CB08DB3 /* RenameIDPRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 608CC3E78E8FB90A9E684D42 /* RenameIDPRequestTests.swift */; };
 		5C12C8F7D77518D00141E07B /* DurationFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73B573FEAFD428D412CCF10E /* DurationFormatting.swift */; };
 		5CCBB0BC07487E787F254674 /* HistoryToDoseMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AD1AAB8CCC894F672FD0C2F /* HistoryToDoseMapperTests.swift */; };
@@ -1062,6 +1063,7 @@
 		73B573FEAFD428D412CCF10E /* DurationFormatting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DurationFormatting.swift; sourceTree = "<group>"; };
 		73BFAD5259E3315A45FBCEA9 /* CannulaFilledHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CannulaFilledHistoryLogTests.swift; sourceTree = "<group>"; };
 		73C4BBB517A47A66EEB9CF09 /* CreateIDPRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CreateIDPRequestTests.swift; sourceTree = "<group>"; };
+		740639F6A180A8F211CBFF7B /* ControlStreamOpcode23Tests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlStreamOpcode23Tests.swift; sourceTree = "<group>"; };
 		742314A78CF09FC792E73DCD /* DexcomG7CGMHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DexcomG7CGMHistoryLogTests.swift; sourceTree = "<group>"; };
 		746B539BA0A8F636D57A4819 /* MergedNotificationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MergedNotificationTests.swift; sourceTree = "<group>"; };
 		756EF4F0158B008886A2AC6E /* FillTubingNotificationRefreshTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FillTubingNotificationRefreshTests.swift; sourceTree = "<group>"; };
@@ -1329,6 +1331,7 @@
 				5189CE82F0D0F212FCD6DAD8 /* CurrentStatus */,
 				B789E735DB24D4EB68EB486F /* QualifyingEvent */,
 				4694035E69DBF1FDE239A834 /* Models */,
+				51D36D60CBCDF0590E24FAAE /* ControlStream */,
 			);
 			name = Messages;
 			path = Messages;
@@ -2080,6 +2083,15 @@
 			);
 			name = CurrentStatus;
 			path = CurrentStatus;
+			sourceTree = "<group>";
+		};
+		51D36D60CBCDF0590E24FAAE /* ControlStream */ = {
+			isa = PBXGroup;
+			children = (
+				740639F6A180A8F211CBFF7B /* ControlStreamOpcode23Tests.swift */,
+			);
+			name = ControlStream;
+			path = ControlStream;
 			sourceTree = "<group>";
 		};
 		54245E4D079B674B18F74340 /* Control */ = {
@@ -3066,6 +3078,7 @@
 				91788786B1F4D92311B50E34 /* ReservoirReportDeliveryTests.swift in Sources */,
 				42AA0E0E910FAC13ECF2385F /* TandemPumpManagerSyncBasalTests.swift in Sources */,
 				99811A5DE631D57462E60217 /* TandemKitFillCannulaViewModelTests.swift in Sources */,
+				5A6FDC2E313FA971B8F365BE /* ControlStreamOpcode23Tests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

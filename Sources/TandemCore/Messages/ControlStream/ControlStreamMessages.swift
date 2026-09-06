@@ -34,9 +34,11 @@ public enum ControlStreamMessages {
         case FillCannulaStateStreamResponse.props.opCode:
             return NonexistentFillCannulaStateStreamRequest()
         case UInt8(bitPattern: Int8(-23)):
-            // Both ExitFillTubingModeStateStreamResponse and PumpingStateStreamResponse use this opcode.
-            // Distinguish by payload length: PumpingStateStreamResponse has additional padding bytes.
-            if rawBtValue.count >= 29 {
+            // Both ExitFillTubingModeStateStreamResponse (1-byte cargo) and
+            // PumpingStateStreamResponse (5-byte cargo) use this opcode. Distinguish by the
+            // packet header's payload length at index 4, which is the cargo size plus the
+            // 24-byte trailer every signed message carries.
+            if rawBtValue.count > 4, Int(rawBtValue[4]) == Int(PumpingStateStreamResponse.props.size) + 24 {
                 return NonexistentPumpingStateStreamRequest()
             } else {
                 return NonexistentExitFillTubingModeStateStreamRequest()

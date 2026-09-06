@@ -38,10 +38,12 @@ public class PumpingStateStreamResponse: Message {
     public var stateBitmask: UInt32
 
     public required init(cargo: Data) {
-        let raw = Bytes.dropLastN(cargo, 24)
+        // Shares the trailer-stripping rule with ExitFillTubingModeStateStreamResponse: the two
+        // are the same wire message under opcode -23, told apart only by payload size.
+        let raw = ExitFillTubingModeStateStreamResponse.payload(from: cargo)
         self.cargo = raw
-        isPumpingStateSetAfterStartUp = raw[0] != 0
-        stateBitmask = Bytes.readUint32(raw, 1)
+        isPumpingStateSetAfterStartUp = raw.count >= 5 && raw[0] != 0
+        stateBitmask = raw.count >= 5 ? Bytes.readUint32(raw, 1) : 0
     }
 
     public init(isPumpingStateSetAfterStartUp: Bool, stateBitmask: UInt32) {

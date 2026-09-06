@@ -42,6 +42,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public let fillCannulaStateStream = PassthroughSubject<FillCannulaStateStreamResponse, Never>()
     public let changeCartridgeStateStream = PassthroughSubject<EnterChangeCartridgeModeStateStreamResponse, Never>()
     public let detectingCartridgeStateStream = PassthroughSubject<DetectingCartridgeStateStreamResponse, Never>()
+    public let exitFillTubingModeStateStream = PassthroughSubject<ExitFillTubingModeStateStreamResponse, Never>()
+    public let pumpingStateStream = PassthroughSubject<PumpingStateStreamResponse, Never>()
     public let historyLogStream = PassthroughSubject<HistoryLogStreamResponse, Never>()
 
     /// Session-scoped working memory of raw history logs, fed by `historyLogStream` (see

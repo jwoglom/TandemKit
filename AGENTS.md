@@ -43,12 +43,13 @@ Responses:
 - [x] EnterChangeCartridgeModeStateStreamResponse
    - [ ] Tests for EnterChangeCartridgeModeStateStreamResponse
 - [x] ExitFillTubingModeStateStreamResponse
-   - [ ] Tests for ExitFillTubingModeStateStreamResponse
+   - [x] Tests for ExitFillTubingModeStateStreamResponse
 - [x] FillCannulaStateStreamResponse
    - [ ] Tests for FillCannulaStateStreamResponse
 - [x] FillTubingStateStreamResponse
    - [ ] Tests for FillTubingStateStreamResponse
 - [x] PumpingStateStreamResponse
+   - [x] Tests for PumpingStateStreamResponse
 
 ### CurrentStatus
 _Remaining unchecked CurrentStatus tests: 94_
