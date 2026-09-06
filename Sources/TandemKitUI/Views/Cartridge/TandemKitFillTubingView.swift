@@ -28,7 +28,8 @@ struct TandemKitFillTubingView: View {
         }
         .safeAreaInset(edge: .bottom) {
             bottomActionView
-                .padding()
+                .wizardHorizontalPadding()
+                .padding(.vertical, WizardLayout.verticalPadding)
         }
         .confirmationAlert(item: $actionSheet) { sheet in
             switch sheet {
@@ -162,9 +163,7 @@ struct TandemKitFillTubingView: View {
                     .font(.subheadline)
                 }
             }
-            .padding()
-            .background(guidanceColors.warning.opacity(0.1))
-            .cornerRadius(12)
+            .wizardCard(background: guidanceColors.warning.opacity(0.1))
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
@@ -184,10 +183,7 @@ struct TandemKitFillTubingView: View {
                 )
                 .foregroundColor(.green)
                 .font(.headline)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.green.opacity(0.1))
             } else {
                 if viewModel.failedSuspend {
                     Label(
@@ -195,10 +191,7 @@ struct TandemKitFillTubingView: View {
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(guidanceColors.critical.opacity(0.1))
-                    .cornerRadius(12)
+                    .wizardCard(background: guidanceColors.critical.opacity(0.1))
                 }
             }
         }
@@ -244,7 +237,7 @@ struct TandemKitFillTubingView: View {
                         }
                         Spacer()
                     }
-                    .padding()
+                    .padding(.vertical, WizardLayout.cardPadding)
                 } else if viewModel.notificationsViewModel.notifications.isEmpty {
                     HStack {
                         Spacer()
@@ -258,7 +251,7 @@ struct TandemKitFillTubingView: View {
                         }
                         Spacer()
                     }
-                    .padding()
+                    .padding(.vertical, WizardLayout.cardPadding)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(viewModel.notificationsViewModel.notifications) { item in
@@ -273,9 +266,7 @@ struct TandemKitFillTubingView: View {
                     }
                 }
             }
-            .padding()
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
+            .wizardCard(background: Color(.secondarySystemGroupedBackground))
 
             if viewModel.hasActiveNotifications {
                 Label(
@@ -287,10 +278,7 @@ struct TandemKitFillTubingView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .foregroundColor(guidanceColors.warning)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.warning.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
 
             if viewModel.failedEnterMode {
@@ -303,10 +291,7 @@ struct TandemKitFillTubingView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
         .task {
@@ -340,9 +325,7 @@ struct TandemKitFillTubingView: View {
                     )
                     .font(.body)
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
+                .wizardCard(background: Color(.secondarySystemGroupedBackground))
             }
 
             // The pump may have stopped the fill and be waiting to be confirmed; until this read
@@ -354,10 +337,7 @@ struct TandemKitFillTubingView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
+                .wizardCard(background: Color(.secondarySystemGroupedBackground))
             }
 
             // Show active notifications warning during fill
@@ -381,9 +361,7 @@ struct TandemKitFillTubingView: View {
                         }
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
+                .wizardCard(background: Color(.secondarySystemGroupedBackground))
 
                 Label(
                     String(
@@ -394,10 +372,7 @@ struct TandemKitFillTubingView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .foregroundColor(guidanceColors.warning)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.warning.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
 
             if viewModel.failedExitMode {
@@ -406,10 +381,7 @@ struct TandemKitFillTubingView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
         .task {
@@ -438,10 +410,7 @@ struct TandemKitFillTubingView: View {
                 Text("Exiting fill mode...", comment: "Status text")
                     .font(.headline)
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(12)
+            .wizardCard(background: Color.blue.opacity(0.1))
         }
     }
 

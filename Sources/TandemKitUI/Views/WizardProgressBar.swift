@@ -26,7 +26,8 @@ struct WizardProgressBar: View {
             }
             .frame(height: 4)
         }
-        .padding()
+        .wizardHorizontalPadding()
+        .padding(.vertical, WizardLayout.verticalPadding)
     }
 }
 
