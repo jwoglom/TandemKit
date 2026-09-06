@@ -87,6 +87,7 @@ let package = Package(
                 "FillTubingNotificationRefreshTests.swift",
                 "TandemFeatureFlagsTests.swift",
                 "TandemKitChangeCartridgeViewModelTests.swift",
+                "TandemKitFillCannulaViewModelTests.swift",
                 "TandemKitControlIQSettingsViewModelTests.swift",
                 "TandemKitNotificationsViewModelTests.swift"
             ]

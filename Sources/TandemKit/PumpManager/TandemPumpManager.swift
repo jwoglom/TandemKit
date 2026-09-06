@@ -1048,9 +1048,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// Records a cannula / infusion-set change. Call after the user successfully fills the cannula.
     /// Tracks the date in state and reports a site-change pump event to the host app via the delegate.
-    func recordSiteChange(at date: Date = Date.now) {
+    /// `primeAmount`, when given, is the prime volume in units that was just delivered; it is
+    /// remembered so the fill cannula wizard can pre-fill it next time.
+    func recordSiteChange(at date: Date = Date.now, primeAmount: Double? = nil) {
         logger.info("Recording site change (cannula fill) at \(date)")
         state.lastSiteChangeDate = date
+        if let primeAmount {
+            state.lastCannulaFillAmount = primeAmount
+        }
         notifyDelegateStateUpdated()
         emitPumpEvents([NewPumpEvent.siteChange(date: date)], replacePendingEvents: false)
     }
