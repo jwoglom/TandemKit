@@ -411,6 +411,26 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
+        // ExitFillTubingModeStateStreamResponse and PumpingStateStreamResponse are the same wire
+        // message under opcode -23, told apart only by payload size. The packet header carries it
+        // at data[4] as the cargo size plus the 24-byte trailer every signed message has.
+        if characteristic.uuid == ExitFillTubingModeStateStreamResponse.props.characteristic,
+           data[2] == ExitFillTubingModeStateStreamResponse.props.opCode,
+           data.count > 5
+        {
+            let cargo = Data(data.dropFirst(5))
+            if Int(data[4]) == Int(PumpingStateStreamResponse.props.size) + 24 {
+                let response = PumpingStateStreamResponse(cargo: cargo)
+                logger.info("Received stream message: \(response.description)")
+                pumpManager.pumpingStateStream.send(response)
+            } else {
+                let response = ExitFillTubingModeStateStreamResponse(cargo: cargo)
+                logger.info("Received stream message: \(response.description)")
+                pumpManager.exitFillTubingModeStateStream.send(response)
+            }
+            return
+        }
+
         if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {

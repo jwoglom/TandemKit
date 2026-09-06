@@ -41,11 +41,12 @@ public class ExitFillTubingModeStateStreamResponse: Message {
     public var stateBitmask: UInt32
 
     public required init(cargo: Data) {
-        self.cargo = cargo
-        stateId = Int(cargo[0] & 0xFF)
-        if cargo.count >= 5 {
-            isPumpingStateSetAfterStartUp = cargo[0] != 0
-            stateBitmask = Bytes.readUint32(cargo, 1)
+        let raw = Self.payload(from: cargo)
+        self.cargo = raw
+        stateId = raw.isEmpty ? 0 : Int(raw[0] & 0xFF)
+        if raw.count >= 5 {
+            isPumpingStateSetAfterStartUp = raw[0] != 0
+            stateBitmask = Bytes.readUint32(raw, 1)
         } else {
             isPumpingStateSetAfterStartUp = false
             stateBitmask = 0
@@ -67,6 +68,23 @@ public class ExitFillTubingModeStateStreamResponse: Message {
         stateId = Int(cargo[0] & 0xFF)
         self.isPumpingStateSetAfterStartUp = isPumpingStateSetAfterStartUp
         self.stateBitmask = stateBitmask
+    }
+
+    /// The payload, with the trailing bytes a signed stream message carries stripped off.
+    ///
+    /// Port of pumpX2's `removeSignedRequestHmacBytes`, which drops the 24-byte trailer only when
+    /// what remains is one of the two payload sizes this opcode carries (1 for an exit-fill-tubing
+    /// state, 5 for a pumping state). TandemKit's cargo also keeps the packet's 2-byte CRC, which
+    /// pumpX2's does not, so a 26-byte trailer is accepted as well. Anything else is passed through
+    /// untouched, which is what a locally constructed instance hands in.
+    static func payload(from cargo: Data) -> Data {
+        for trailer in [24, 26] where cargo.count > trailer {
+            let length = cargo.count - trailer
+            if length == Int(props.size) || length == Int(PumpingStateStreamResponse.props.size) {
+                return Data(cargo.prefix(length))
+            }
+        }
+        return cargo
     }
 
     public var state: ExitFillTubingModeState? { ExitFillTubingModeState(rawValue: stateId) }
