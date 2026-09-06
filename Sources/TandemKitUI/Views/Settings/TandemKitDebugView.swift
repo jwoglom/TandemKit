@@ -33,16 +33,23 @@ struct TandemKitDebugView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Response")
                             .font(.headline)
-                        TextEditor(text: .constant(response))
-                            .frame(minHeight: 120)
-                            .disabled(true)
+                        Text(response)
                             .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .accessibilityLabel("Pump response")
-                        Button("Resend") {
-                            viewModel.resendLastMessage()
-                        }
-                        .disabled(viewModel.isSending)
                     }
+
+                    Button("Copy Response") {
+                        UIPasteboard.general.string = response
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button("Resend") {
+                        viewModel.resendLastMessage()
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(viewModel.isSending)
                 }
 
                 if let error = viewModel.lastSendError {
