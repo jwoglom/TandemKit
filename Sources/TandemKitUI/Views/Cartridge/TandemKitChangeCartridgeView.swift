@@ -26,7 +26,8 @@ struct TandemKitChangeCartridgeView: View {
         }
         .safeAreaInset(edge: .bottom) {
             bottomActionView
-                .padding()
+                .wizardHorizontalPadding()
+                .padding(.vertical, WizardLayout.verticalPadding)
         }
         .confirmationAlert(item: $actionSheet) { sheet in
             switch sheet {
@@ -142,9 +143,7 @@ struct TandemKitChangeCartridgeView: View {
                     .font(.subheadline)
                 }
             }
-            .padding()
-            .background(guidanceColors.warning.opacity(0.1))
-            .cornerRadius(12)
+            .wizardCard(background: guidanceColors.warning.opacity(0.1))
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
@@ -164,10 +163,7 @@ struct TandemKitChangeCartridgeView: View {
                 )
                 .foregroundColor(.green)
                 .font(.headline)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.green.opacity(0.1))
             } else {
                 if viewModel.failedSuspend {
                     Label(
@@ -175,10 +171,7 @@ struct TandemKitChangeCartridgeView: View {
                         systemImage: "exclamationmark.circle.fill"
                     )
                     .foregroundColor(guidanceColors.critical)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(guidanceColors.critical.opacity(0.1))
-                    .cornerRadius(12)
+                    .wizardCard(background: guidanceColors.critical.opacity(0.1))
                 }
             }
         }
@@ -224,7 +217,7 @@ struct TandemKitChangeCartridgeView: View {
                         }
                         Spacer()
                     }
-                    .padding()
+                    .padding(.vertical, WizardLayout.cardPadding)
                 } else if viewModel.notificationsViewModel.notifications.isEmpty {
                     HStack {
                         Spacer()
@@ -238,7 +231,7 @@ struct TandemKitChangeCartridgeView: View {
                         }
                         Spacer()
                     }
-                    .padding()
+                    .padding(.vertical, WizardLayout.cardPadding)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(viewModel.notificationsViewModel.notifications) { item in
@@ -253,9 +246,7 @@ struct TandemKitChangeCartridgeView: View {
                     }
                 }
             }
-            .padding()
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
+            .wizardCard(background: Color(.secondarySystemGroupedBackground))
 
             if viewModel.hasActiveNotifications {
                 Label(
@@ -267,10 +258,7 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .foregroundColor(guidanceColors.warning)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.warning.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
 
             if viewModel.failedEnterMode {
@@ -283,10 +271,7 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
 
             if viewModel.indeterminateEnterMode {
@@ -301,10 +286,7 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .foregroundColor(guidanceColors.warning)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.warning.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
         }
         .task {
@@ -331,20 +313,14 @@ struct TandemKitChangeCartridgeView: View {
                 )
                 .foregroundColor(.green)
                 .font(.headline)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.green.opacity(0.1))
             } else {
                 HStack(spacing: 12) {
                     ActivityIndicator(isAnimating: .constant(true), style: .medium)
                     Text("Preparing pump...", comment: "Status text")
                         .font(.headline)
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.blue.opacity(0.1))
             }
         }
     }
@@ -377,10 +353,7 @@ struct TandemKitChangeCartridgeView: View {
                     comment: "Instruction"
                 ))
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color(.secondarySystemGroupedBackground))
-            .cornerRadius(12)
+            .wizardCard(background: Color(.secondarySystemGroupedBackground))
 
             // Show active notifications warning during cartridge change
             if viewModel.hasActiveNotifications {
@@ -403,9 +376,7 @@ struct TandemKitChangeCartridgeView: View {
                         }
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
+                .wizardCard(background: Color(.secondarySystemGroupedBackground))
 
                 Label(
                     String(
@@ -416,10 +387,7 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.triangle.fill"
                 )
                 .foregroundColor(guidanceColors.warning)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.warning.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.warning.opacity(0.1))
             }
         }
         .task {
@@ -451,9 +419,7 @@ struct TandemKitChangeCartridgeView: View {
                             .font(.headline)
                     }
                 }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.blue.opacity(0.1))
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Detecting insulin in cartridge...", comment: "Status text")
@@ -464,9 +430,7 @@ struct TandemKitChangeCartridgeView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.blue.opacity(0.1))
             }
 
             if viewModel.failedExitMode {
@@ -475,10 +439,7 @@ struct TandemKitChangeCartridgeView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
     }

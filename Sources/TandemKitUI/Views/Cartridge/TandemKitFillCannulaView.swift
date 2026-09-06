@@ -28,7 +28,8 @@ struct TandemKitFillCannulaView: View {
         }
         .safeAreaInset(edge: .bottom) {
             bottomActionView
-                .padding()
+                .wizardHorizontalPadding()
+                .padding(.vertical, WizardLayout.verticalPadding)
         }
         .confirmationAlert(item: $actionSheet) { sheet in
             switch sheet {
@@ -108,9 +109,7 @@ struct TandemKitFillCannulaView: View {
                     .font(.subheadline)
                 }
             }
-            .padding()
-            .background(guidanceColors.warning.opacity(0.1))
-            .cornerRadius(12)
+            .wizardCard(background: guidanceColors.warning.opacity(0.1))
 
             // Step header
             VStack(alignment: .leading, spacing: 8) {
@@ -130,20 +129,14 @@ struct TandemKitFillCannulaView: View {
                 )
                 .foregroundColor(.green)
                 .font(.headline)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: Color.green.opacity(0.1))
             } else if viewModel.failedSuspend {
                 Label(
                     String(localized: "Failed to suspend insulin. Please try again.", comment: "Error message"),
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
     }
@@ -170,9 +163,7 @@ struct TandemKitFillCannulaView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(viewModel.isEditingAmount ? Color.blue : Color.primary)
                 }
-                .padding()
-                .background(Color(.secondarySystemGroupedBackground))
-                .cornerRadius(12)
+                .wizardCard(background: Color(.secondarySystemGroupedBackground))
                 .onTapGesture {
                     withAnimation {
                         viewModel.isEditingAmount.toggle()
@@ -201,10 +192,7 @@ struct TandemKitFillCannulaView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
     }
@@ -237,10 +225,7 @@ struct TandemKitFillCannulaView: View {
                     systemImage: "exclamationmark.circle.fill"
                 )
                 .foregroundColor(guidanceColors.critical)
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(guidanceColors.critical.opacity(0.1))
-                .cornerRadius(12)
+                .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
         }
     }
