@@ -372,6 +372,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
            data[2] == FillTubingStateStreamResponse.props.opCode
         {
             let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            logger.info("Received stream message: \(response.description)")
             pumpManager.fillTubingStateStream.send(response)
             return
         }
@@ -380,6 +381,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
            data[2] == FillCannulaStateStreamResponse.props.opCode
         {
             let response = FillCannulaStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            logger.info("Received stream message: \(response.description)")
             pumpManager.fillCannulaStateStream.send(response)
             return
         }
@@ -388,6 +390,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
            data[2] == EnterChangeCartridgeModeStateStreamResponse.props.opCode
         {
             let response = EnterChangeCartridgeModeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+            logger.info("Received stream message: \(response.description)")
             pumpManager.changeCartridgeStateStream.send(response)
             return
         }
@@ -399,10 +402,11 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         {
             if data.count >= 26 {
                 let response = DetectingCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
+                logger.info("Received stream message: \(response.description)")
                 pumpManager.detectingCartridgeStateStream.send(response)
             } else {
                 let response = LoadCartridgeStateStreamResponse(cargo: Data(data.dropFirst(5)))
-                logger.info("Received load cartridge state: \(response.description)")
+                logger.info("Received stream message: \(response.description)")
             }
             return
         }
@@ -439,6 +443,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             logger.warning("Unparseable history log stream message: \(data.hexadecimalString)")
             return
         }
+        logger.info("Received stream message: \(message.description)")
         pumpManager.historyLogStream.send(message)
     }
 
