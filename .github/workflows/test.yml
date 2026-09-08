@@ -35,7 +35,7 @@ jobs:
     if: >
       github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS]
     # A warm DerivedData cache builds Trio in ~9 minutes, but the first run
     # after the cache generation marker moves has to compile everything, which
     # does not fit in 25.
