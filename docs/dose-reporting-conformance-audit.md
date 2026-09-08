@@ -86,6 +86,12 @@ only. Nothing in this report is medical advice; it is engineering review materia
 | P23 | §3 transitions: never happened / zero-delivery cancel | A dose that never happened or was canceled with zero delivery stops being sent (with... | Non-conforming | high | 6 |
 | P24 | §8 DoseStore consequences | Event dates and ordering are chosen so DoseStore behaves predictably: pumpEventQueryAfterDate only... | Partial | medium | 6 |
 | G01 | host consumer (outside the guide) | How Trio actually consumes TandemKit's events: with lastReconciliation and replacePendingEvents ignored... | Non-conforming | high | 8 |
+| G02 | §3 mutable lifecycle, §10 'bolus during BLE loss' analog (register before you can lose contact; pump is source of truth), §9 item 4/5 | Temp-basal command ordering: the running rate is stopped on the pump before the new one is confirmed; a... | Non-conforming | medium | 1 |
+| G03 | §2 value = programmed amount, §9 item 7, §6 trust boundary | Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliveredUnits and... | Partial | medium | 1 |
+| G04 | §6 trust boundary, §10 suspend/resume ('emit a suspend whenever delivery actually stops') | A basal-state transition observed while no delegate is attached (the pairing sync, or notifications... | Non-conforming | medium | 1 |
+| G05 | §3 finalization with actual deliveredUnits, §10 'pump is the source of truth' | Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always sends... | Unsure | medium | 1 |
+| G06 | §3 report-or-delete, §10 suspend on teardown, §9 item 10 | Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and any in-progress... | Partial | low | 1 |
+| G07 | §3 finalization, §7 pump-initiated delivery changes | Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQStatus sets... | Not applicable | none | 1 |
 
 ## Findings that need action first
 
@@ -200,9 +206,41 @@ full evidence are in the per-point sections.
 14. **Bolus `endDate` is detection time, not the pump's completion time.** (P05-3) Both hosts. Verified. Affects the shape of the
     insulin curve for boluses whose completion is noticed a sync late.
 
+15. **The temp basal command is a two-step write whose first step is irreversible, with no self-healing.** (G02) Both hosts.
+    Raised by the completeness pass. `enactTempBasal` stops the running temp rate on the pump (`TandemPumpManager.swift:706`)
+    before the new one is confirmed. If `SetTempRate` then fails or its response is lost, the driver's record is not updated
+    (`TandemPumpManager.swift:750-774`): either the pump is on profile basal while the old temp basal stays mutable in Loop until
+    its scheduled end, or the pump runs the new rate while the driver still reports the old one, and `fetchBasalStatus` has no
+    `.tempBasal` branch to notice. `suspendDelivery` has the same shape. Exposure is bounded by the next loop cycle unless BLE
+    is lost right after the failure. Fix: on a failed or unanswered second step, re-read `CurrentBasalStatus` and `TempRate`
+    and reconcile the record to what the pump reports before returning.
+
+16. **The delivered-volume read may be sending the wrong message on the Mobi.** (G05) Both hosts. Unsure, raised by the
+    completeness pass. `queryLastBolusDeliveredVolume` always sends `LastBolusStatusV2Request`; the Mobi-only
+    `LastBolusStatusV3Request` exists in the message catalog but has no sender, and its response type does not conform to the
+    abstract response the finalization path casts to (`LastBolusRequestBuilder.swift:5`, `LastBolusStatusV3.swift:12,58`). Under
+    the premise the Mobi is the only target, so if Mobi firmware 3.5 and later does not answer the V2 request, every bolus
+    completion finalizes at the programmed amount and every cancel at 0 U, turning item 3 from a failure path into the normal
+    path. This needs a hardware capture before anything else on this list is prioritized.
+
+17. **A basal transition observed while no delegate is attached is consumed into state and never re-emitted.** (G04, with P01-3, P18-5) Both hosts.
+    `fetchBasalStatus` emits only on a type change and updates `state.basalDose` in the same step
+    (`TandemPumpManager+StateSync.swift:141-158`), while `emitPumpEvents` drops the batch when no delegate is attached
+    (`TandemPumpManager.swift:1736`). A pump that is suspended when TandemKit first syncs it, before the host adopts the manager,
+    is therefore recorded as suspended by the driver but never reported, and every later sync stays silent. The reservoir path
+    has a pending-flag replay; pump events do not. Fix: queue events emitted without a delegate and flush them from
+    `deliverStateMissedByTheDelegate`.
+
+18. **Temp basal amounts assume the phone's clock and schedule segment.** (G03, with P07-4, P11-6) Both hosts.
+    Tandem applies the requested percent to the pump's own current profile segment on the pump's clock, while the reported
+    `value` and `deliveredUnits` use the phone's schedule at phone time (`TandemPumpManager.swift:685,1756`). A segment boundary
+    inside a 30-minute temp basal, or a pump clock that differs from the phone after a time-zone or DST change, makes the
+    delivered amount differ from the reported one. Clock drift is surfaced in settings but never corrected automatically or
+    reported through `didAdjustPumpClockBy`, and pairing does not set the pump time.
+
 ### Latent today, high once the history emission layer exists
 
-15. **Dose identity changes over a dose's life, and the live and history identities for the same bolus differ.**
+19. **Dose identity changes over a dose's life, and the live and history identities for the same bolus differ.**
     (P03-1, P03-2, P03-3, P11-1, P16-4, P17-2, P24-2 low; P24-1, P03-6, P08-6 low today) Both hosts.
     The bolus `raw` embeds `units` (programmed at enact, delivered at completion or cancel) and the temp basal `raw` embeds
     `programmedUnits`, which shrinks whenever a temp basal ends early (`Sources/TandemCore/Common/Extensions/NewPumpEvent.swift:10,20`).
@@ -212,7 +250,7 @@ full evidence are in the per-point sections.
     double-count every app-commanded bolus in both hosts (P24-1). Fix before wiring emission: key live doses on the pump's bolus id
     or temp rate id via `HistoryLogSyncIdentifier`, and never change the key on cancel or completion.
 
-16. **The planned emission floor would drop late-discovered doses.** (P24-4) Low today. `HistoryBackfillPlanner.emitFloor` uses
+20. **The planned emission floor would drop late-discovered doses.** (P24-4) Low today. `HistoryBackfillPlanner.emitFloor` uses
     the host's `startDateToFilterNewPumpEvents`, and its comment that older events "are discarded on arrival" describes neither
     host. It matters only under the conditional sources.
 
@@ -225,11 +263,14 @@ history messages is never read (P20-5), `wasProgrammedByPumpUI` cannot be expres
 keeps advancing past doses that were never seen. The history path that would recover them has no production caller and both
 history flags default off (P08-1, P20-2). Keep both flags off until the emission layer, a stable identity, and a foreign-bolus
 handler in `fetchBolusStatus` exist. One narrow default-configuration residual remains: the quick-bolus lockout needs a
-successful `PumpGlobals` read in the same sync and does not cover the window between pairing and the first sync (P20-1).
+successful `PumpGlobals` read in the same sync and does not cover the window between pairing and the first sync (P20-1). The
+completeness pass added one more conditional gap: when the pump itself reports Control-IQ enabled, `fetchControlIQStatus` flips
+the dosing guard but does not finalize the running Loop temp basal, unlike the app-side enable path, which does (G07).
 
 ### Low impact, listed for completeness
 
-No `.prime` event is emitted for tubing or cannula fills (P10-5, P14-4). Alarms are never emitted as pump events on a live path
+Deleting the pump manager tears down the transport without finalizing a running temp basal or an in-flight bolus, so in Loop
+those mutable rows can never be finalized or persisted (G06). No `.prime` event is emitted for tubing or cannula fills (P10-5, P14-4). Alarms are never emitted as pump events on a live path
 and `alarmType` is never populated (P14-1, P14-2, P10-6). No `.replaceComponent(.pump)` is emitted when a different pump is
 paired (P14-5). The basal, suspend and resume `raw` strings have one-second resolution and no discriminator (P03-5). The Linux
 shim cannot express `alarmType` and does not couple `raw` to `syncIdentifier` (P14-6, P03-7, P22-6). No IOB comparison against
@@ -283,8 +324,26 @@ enact signatures change and the id needs to be carried on `UnfinalizedDose` and 
 (P09-2). The shim also lacks `alarmType` on `NewPumpEvent` and does not derive `syncIdentifier` from `raw`, so Linux tests cannot
 observe two of the behaviours the guide depends on (P03-7, P14-6, P22-6).
 
+**What the completeness pass added.** The critic confirmed that every `emitPumpEvents` call site (nine in
+`TandemPumpManager.swift`, four in `TandemPumpManager+StateSync.swift`) is cited by at least one point, so no emission path went
+unexamined. It found six behaviours no point had settled, recorded as G02 to G07: the two-step temp basal command with no
+self-healing (G02), pump clock and segment-boundary effects on temp basal amounts (G03), basal transitions consumed while no
+delegate is attached (G04), the unresolved question of whether the Mobi answers the V2 last-bolus message the finalization path
+depends on (G05), deactivation without finalization (G06), and the pump-reported Control-IQ flip (G07). It also independently
+re-derived two of the Trio-consumer findings, which corroborates G01-2 and G01-4 (it rated the truncation gap lower because the
+root cause is Trio's dedup design; the G01 reviewer rated it high because the driver's percent-100-as-cancel choice makes it recur
+on every neutral temp). Two scenarios it checked and found not applicable: Basal-IQ is not a Mobi feature, and extended boluses
+cannot be requested through `enactBolus`, which always sends a standard bolus.
+
 **Contradictions and near-contradictions between points.** The auditors did not contradict each other on facts, but they
-weighted the same facts differently, and the premise resolved most of it. P23-1 rates finalizing a truly zero-delivery cancel as
+weighted the same facts differently, and the premise resolved most of it. The critic listed five rating disagreements. Pump-side
+stops dated at detection time (P02-5, P13-4, P11-4) now agree at partial and medium after a mis-applied review decision on P02-5
+was reverted. Aborted boluses are "accounted for" in P08-4 and "finalized on a guess when the read fails" in P23-4; both are true,
+of the normal path and the failure path respectively. The running temp basal not being re-reported is rated medium by P04-3, not
+applicable by P17-3 and passed over by P11-3; P04's reading is the one that matters for Loop. Command-path `lastReconciliation`
+stamps are partial and low in P01-A2 but conform under the premise in P02-2, which was re-audited; read P01-A2 as superseded. The
+bolus `raw` changing on cancel is low in the reviewed findings (P03-1, P16-4) and medium in the unreviewed ones (P12-6, P24-2); the
+reviewed rating prevails. P23-1 rates finalizing a truly zero-delivery cancel as
 0 U immutable at medium because IOB is unaffected, while P23-2 rates the same line high because the 0 U also swallows a failed
 read; both are right about different inputs to the same line, and in Trio the 0 U is the only downward update that ever reaches
 the stored bolus (G01-1, P23-4). P17-3 scores "the driver never re-reports an in-progress dose" as not applicable to a test point,
@@ -3364,12 +3423,146 @@ Open questions raised by this point:
 - Does Trio's remaining JavaScript oref path (if still selectable) treat an orphan PumpSuspend the same way as the Swift IobHistory port (G01-3)?
 - Is skipNeutralTemps enabled by default in current Trio releases, which determines how often the zero-duration cancel path in G01-4 is exercised?
 - Does Trio intend to keep skipping deliveredUnits-bearing tempBasal events, or would it accept a host-side change to treat them as truncating records?
+- The completeness critic independently re-derived G01-2 (cancel 0 U overwrites Trio's stored bolus) and G01-4 (the percent-100/cancel path never truncates Trio's stored temp basal) from the Trio sources; it rated the truncation gap low on the grounds that the root cause is Trio's dedup design, whereas the G01 reviewer rated it high because the driver's percent-100-as-cancel choice makes it recur on every neutral temp. The driver-side mitigation (emit a truncating temp basal record) is available either way.
+### G02. Temp-basal command ordering: the running rate is stopped on the pump before the new one is confirmed; a failed or unanswered SetTempRate/SuspendPumping leaves the driver's record (and DoseStore) describing delivery the pump is not doing, with no self-healing path
+
+Guide section: §3 mutable lifecycle, §10 'bolus during BLE loss' analog (register before you can lose contact; pump is source of truth), §9 item 4/5.
+
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+The 24 audits cover a lost InitiateBolus ack (P12-1) and note the stop-then-fail ordering only as a P23 open question; none audits the temp-basal command as a two-step write whose first step is irreversible. Two app-triggered failure shapes, both unaffected by the premise: (a) StopTempRate succeeds, then SetTempRate gets no response or a bad status (lines 750-761) — the pump is on profile basal but state.basalDose still holds the old TBR, which stays mutable in DoseStore until its estimatedEndDate (up to 30 min) and is later finalized by getActivePumpEvents as if it ran until the next enact (over-count of old rate minus profile); (b) the SetTempRate write reached the pump but its response was lost — the pump runs the new rate while state says old TBR or .basal; fetchBasalStatus has no .tempBasal branch, so the unaccounted TBR is invisible until Loop's next enact stops it at line 705. suspendDelivery has the same shape at 802-816. Exposure is bounded by the next loop cycle when the loop keeps running, but a BLE loss right after the failure extends it to the full TBR duration. No test exercises either shape (StubPumpBluetooth can return nil per request but no test sequences StopTempRate-OK/SetTempRate-nil).
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G02-1 | Non-conforming | medium | unverified | Temp-basal command ordering: the running rate is stopped on the pump before the new one is |
+
+**G02-1 Temp-basal command ordering: the running rate is stopped on the pump before the new one is** (Non-conforming, impact medium, unverified)
+
+The 24 audits cover a lost InitiateBolus ack (P12-1) and note the stop-then-fail ordering only as a P23 open question; none audits the temp-basal command as a two-step write whose first step is irreversible. Two app-triggered failure shapes, both unaffected by the premise: (a) StopTempRate succeeds, then SetTempRate gets no response or a bad status (lines 750-761) — the pump is on profile basal but state.basalDose still holds the old TBR, which stays mutable in DoseStore until its estimatedEndDate (up to 30 min) and is later finalized by getActivePumpEvents as if it ran until the next enact (over-count of old rate minus profile); (b) the SetTempRate write reached the pump but its response was lost — the pump runs the new rate while state says old TBR or .basal; fetchBasalStatus has no .tempBasal branch, so the unaccounted TBR is invisible until Loop's next enact stops it at line 705. suspendDelivery has the same shape at 802-816. Exposure is bounded by the next loop cycle when the loop keeps running, but a BLE loss right after the failure extends it to the full TBR duration. No test exercises either shape (StubPumpBluetooth can return nil per request but no test sequences StopTempRate-OK/SetTempRate-nil).
+
+- Evidence:
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:706` guard let stopCurrentRate = self.bluetooth.write(StopTempRateRequest()) else { — running TBR is stopped on the pump before anything else
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:750` guard let response = self.bluetooth.write(request) else { — lost SetTempRate response returns an error; state untouched
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:774` self.state.basalDose = dose — the driver's record changes only on a confirmed OK; on failure it still says the old TBR is running
+  - `Sources/TandemKit/PumpManager/TandemPeripheralManager.swift:207` let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout) — the request was already written when nil comes back
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:141` if activeBasalType != state.basalDose.type { — only .suspend and .basal branches follow; a pump-reported .tempBasal never produces an event or state change
+### G03. Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliveredUnits and .basal rates come from the phone's schedule at phone time, while the pump applies the percent to its own current segment on its own clock; drift is detected and surfaced but never corrected automatically, never reported via didAdjustPumpClockBy, and pairing does not set the pump time
+
+Guide section: §2 value = programmed amount, §9 item 7, §6 trust boundary.
+
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+P07-4/P11-6/P22-8 note that the TBR value is derived from the app schedule rather than the pump's profileBasalRate, but no audit considers the clock dimension or segment boundaries. Because Tandem temp rates are a percent of the pump's current profile segment, the units actually delivered differ from the reported value whenever (1) a segment boundary falls inside the 30-minute TBR (percent is fixed, profile changes), or (2) the pump's clock/time zone differs from the phone's — after a DST change or travel the pump runs a different segment than the one Loop assumes, for every TBR and for the scheduled-basal overlay itself, until the user acts on the settings warning. On a screenless Mobi the pump clock can only be corrected through this driver, so the misalignment persists for hours if the badge is missed. None of this is reconciled from the pump's own currentBasalRate (fetched at line 699 but unused) and the host is never given didAdjustPumpClockBy when the user does sync. The live dose dates themselves are phone-time (Date.now) so they are unaffected; the error is in the amount, not the timestamp.
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G03-1 | Partial | medium | unverified | Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver |
+
+**G03-1 Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver** (Partial, impact medium, unverified)
+
+P07-4/P11-6/P22-8 note that the TBR value is derived from the app schedule rather than the pump's profileBasalRate, but no audit considers the clock dimension or segment boundaries. Because Tandem temp rates are a percent of the pump's current profile segment, the units actually delivered differ from the reported value whenever (1) a segment boundary falls inside the 30-minute TBR (percent is fixed, profile changes), or (2) the pump's clock/time zone differs from the phone's — after a DST change or travel the pump runs a different segment than the one Loop assumes, for every TBR and for the scheduled-basal overlay itself, until the user acts on the settings warning. On a screenless Mobi the pump clock can only be corrected through this driver, so the misalignment persists for hours if the badge is missed. None of this is reconciled from the pump's own currentBasalRate (fetched at line 699 but unused) and the host is never given didAdjustPumpClockBy when the user does sync. The live dose dates themselves are phone-time (Date.now) so they are unaffected; the error is in the amount, not the timestamp.
+
+- Evidence:
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:685` let baselineRate = getScheduledBasalRate() — app-side schedule, evaluated once at enact time
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1756` let startOfDay = Calendar.current.startOfDay(for: now) — phone clock and phone time zone
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:749` let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent) — pump multiplies its own segment rate by percent
+  - `Sources/TandemCore/Common/UnfinalizedDose.swift:190` deliveredUnits: isMutable ? nil : value * (duration / .hours(1)) — a single fixed value across any segment boundary inside the TBR
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+SyncBasal.swift:222` let startMinutes = Int((scheduleItem.startTime / 60.0).rounded()) — segments are keyed to pump-local minutes from midnight
+### G04. A basal-state transition observed while no delegate is attached (the pairing sync, or notifications arriving before the host adopts the manager) is consumed into state and never re-emitted, so a pump-side suspend seen then is permanently missing from the host
+
+Guide section: §6 trust boundary, §10 suspend/resume ('emit a suspend whenever delivery actually stops').
+
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+P01-3 and P18-5 record that pre-delegate emissions are dropped, but rate it as a lastReconciliation/replay gap and do not follow the consequence through state. Because fetchBasalStatus emits only on a type change and updates state.basalDose in the same step, a dropped suspend is not delayed but lost: every later sync sees .suspend == .suspend and stays silent. The concrete default-configuration scenario is a Mobi that is suspended when TandemKit first syncs it (no cartridge on first setup, or an occlusion/empty-cartridge/auto-off alarm that fired before pairing): the host adopts the manager believing scheduled basal is flowing, overlays basal for the whole suspended window, and then receives a lone .resume from the cartridge wizard (which skipped suspendDelivery because the pump was already suspended). The same holds for a TBR expiry or alarm-suspend delivered as a qualifying event between connect and host adoption after a relaunch. The reservoir path has a pending-flag replay; pump events do not.
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G04-1 | Non-conforming | medium | unverified | A basal-state transition observed while no delegate is attached (the pairing sync, or noti |
+
+**G04-1 A basal-state transition observed while no delegate is attached (the pairing sync, or noti** (Non-conforming, impact medium, unverified)
+
+P01-3 and P18-5 record that pre-delegate emissions are dropped, but rate it as a lastReconciliation/replay gap and do not follow the consequence through state. Because fetchBasalStatus emits only on a type change and updates state.basalDose in the same step, a dropped suspend is not delayed but lost: every later sync sees .suspend == .suspend and stays silent. The concrete default-configuration scenario is a Mobi that is suspended when TandemKit first syncs it (no cartridge on first setup, or an occlusion/empty-cartridge/auto-off alarm that fired before pairing): the host adopts the manager believing scheduled basal is flowing, overlays basal for the whole suspended window, and then receives a lone .resume from the cartridge wizard (which skipped suspendDelivery because the pump was already suspended). The same holds for a TBR expiry or alarm-suspend delivered as a qualifying event between connect and host adoption after a relaunch. The reservoir path has a pending-flag replay; pump events do not.
+
+- Evidence:
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1736` self.logger.warning("No pump delegate, not notifying...") — the batch is dropped, not queued
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:141` if activeBasalType != state.basalDose.type { — emission happens only on a transition
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:158` state.basalDose = dose — the transition is consumed even though the emit at 161 was dropped
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:307` flushPendingReservoirReading() — deliverStateMissedByTheDelegate replays state and reservoir only, never pump events
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:421` 'the pairing sync runs before the host adopts the manager' — the driver documents that this window exists
+### G05. Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always sends LastBolusStatusV2Request, never the Mobi-only LastBolusStatusV3Request, and V3Response does not conform to LastBolusStatusAbstractResponse; if Mobi firmware >= 3.5 does not answer V2, every completion finalizes at the programmed amount and every cancel at 0 U
+
+Guide section: §3 finalization with actual deliveredUnits, §10 'pump is the source of truth'.
+
+Overall: **Unsure** (auditor's own overall: Unsure; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+P05 lists this only as an open question and no audit examines the Mobi message matrix. Under the premise the Mobi is the only target, so the correctness of the single pump-truth read that every bolus finalization depends on rests on V2 being answered by Mobi firmware. The code cannot settle this (pumpX2 ships both messages and TandemCore has no fixture from Mobi hardware); the V3 response also carries a standard/extended split and an end-reason field that the finalization path would need. If V2 is answered, the point conforms; if not, P05-1/P05-2/P07-1/P23-2 fallbacks become the normal path on every bolus, which would be high. Needs a hardware capture; recorded as unsure with the medium rating the ambiguity warrants.
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G05-1 | Unsure | medium | unverified | Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always |
+
+**G05-1 Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always** (Unsure, impact medium, unverified)
+
+P05 lists this only as an open question and no audit examines the Mobi message matrix. Under the premise the Mobi is the only target, so the correctness of the single pump-truth read that every bolus finalization depends on rests on V2 being answered by Mobi firmware. The code cannot settle this (pumpX2 ships both messages and TandemCore has no fixture from Mobi hardware); the V3 response also carries a standard/extended split and an end-reason field that the finalization path would need. If V2 is answered, the point conforms; if not, P05-1/P05-2/P07-1/P23-2 fallbacks become the normal path on every bolus, which would be high. Needs a hardware capture; recorded as unsure with the medium rating the ambiguity warrants.
+
+- Evidence:
+  - `Sources/TandemCore/Builders/LastBolusRequestBuilder.swift:5` if let apiVersion, apiVersion.greaterThan(KnownApiVersion.apiV2_1.value) { — V2 for every API above 2.1, including Mobi 3.x
+  - `Sources/TandemCore/Messages/CurrentStatus/LastBolusStatusV3.swift:12` minApi: .mobiApiV3_5, supportedDevices: .mobiOnly — the Mobi-specific message exists but has no sender
+  - `Sources/TandemCore/Messages/CurrentStatus/LastBolusStatusV3.swift:58` public class LastBolusStatusV3Response: Message { — not LastBolusStatusAbstractResponse, so it could not be consumed even if sent
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:522` guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else { ... return nil }
+  - `Sources/TandemKit/PumpManager/TandemDoseProgressReporter.swift:33` let delivered = actualDeliveredUnits ?? total — nil becomes full delivery
+### G06. Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and any in-progress bolus unresolved in the host: no finalization batch, no lastReconciliation, no event
+
+Guide section: §3 report-or-delete, §10 suspend on teardown, §9 item 10.
+
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+P13-5 and P10-7 correctly rate the absence of a suspend event not_applicable (a Tandem pump keeps delivering after the driver is removed), but P13 leaves the un-finalized TBR as an open question and no audit covers the bolus. The pump will run the TBR to its scheduled end and finish the bolus, so the mutable rows approximate reality, but in Loop they can never be finalized, persisted to HealthKit, or advanced past by pumpEventQueryAfterDate, and the last lastReconciliation stays at the last dose emit. An app-triggered path unaffected by the premise. A final replacePendingEvents:true batch that finalizes both doses at their estimated ends (with the pump-reported bolus volume where reachable) before deactivate() would close it.
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G06-1 | Partial | low | unverified | Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and |
+
+**G06-1 Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and** (Partial, impact low, unverified)
+
+P13-5 and P10-7 correctly rate the absence of a suspend event not_applicable (a Tandem pump keeps delivering after the driver is removed), but P13 leaves the un-finalized TBR as an open question and no audit covers the bolus. The pump will run the TBR to its scheduled end and finish the bolus, so the mutable rows approximate reality, but in Loop they can never be finalized, persisted to HealthKit, or advanced past by pumpEventQueryAfterDate, and the last lastReconciliation stays at the last dose emit. An app-triggered path unaffected by the premise. A final replacePendingEvents:true batch that finalizes both doses at their estimated ends (with the pump-reported bolus volume where reachable) before deactivate() would close it.
+
+- Evidence:
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1117` public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1119` bluetooth.deactivate() — transport torn down; getActivePumpEvents/emitPumpEvents are not called
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1702` guard state.basalDose.type == .tempBasal else { — the only TBR finalization path, unreachable after deactivation
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:70` internal var bolusProgressReport: TandemDoseProgressReporter? — an in-flight bolus is likewise never finalized
+  - `reference: loopkit-trio/DoseStore.swift:706` purgePumpEventObjects(matching: 'mutable == YES') — only a later addPumpEvents call resolves mutable rows; none will come
+### G07. Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQStatus sets useControlIQ without finalizing the running Loop temp basal or emitting anything, unlike the app-side configureControlIQMode path which does
+
+Guide section: §3 finalization, §7 pump-initiated delivery changes.
+
+Overall: **Not applicable** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+
+P08-3 and P20-4 treat Control-IQ as not_applicable/untested and P02-7 notes the dosing guards, but none looks at what happens to the dose already in flight when the flip is observed. Under the default configuration the pump cannot have Control-IQ turned on by anything but TandemKit's flag-gated UI (which goes through configureControlIQMode), so the finding is not applicable by default. If the conditional source is active (Control-IQ enabled on the pump, e.g. carried over from prior Tandem-app use), a running Loop TBR that Control-IQ supersedes stays reported as mutable/running until a later fetchBasalStatus happens to see a basal-type change, and Control-IQ's own basal modulation is never reported (P08-3) — medium under that condition.
+
+| Finding | Verdict | Impact | Verification | Area |
+| --- | --- | --- | --- | --- |
+| G07-1 | Not applicable | none | unverified | Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt |
+
+**G07-1 Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt** (Not applicable, impact none, unverified)
+
+P08-3 and P20-4 treat Control-IQ as not_applicable/untested and P02-7 notes the dosing guards, but none looks at what happens to the dose already in flight when the flip is observed. Under the default configuration the pump cannot have Control-IQ turned on by anything but TandemKit's flag-gated UI (which goes through configureControlIQMode), so the finding is not applicable by default. If the conditional source is active (Control-IQ enabled on the pump, e.g. carried over from prior Tandem-app use), a running Loop TBR that Control-IQ supersedes stays reported as mutable/running until a later fetchBasalStatus happens to see a basal-type change, and Control-IQ's own basal modulation is never reported (P08-3) — medium under that condition.
+
+- Evidence:
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:33` if response.getClosedLoopEnabled(), !state.useControlIQ { — flips the dosing guard only
+  - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:35` state.useControlIQ = true — state.basalDose (a mutable TBR) is untouched
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1318` if request.enabled, self.state.basalDose.type == .tempBasal { — the app-side enable path stops and finalizes the TBR
+  - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:673` guard !state.useControlIQ else { — further enactTempBasal calls are refused, so nothing app-side will finalize the stale TBR
+  - `Sources/TandemKit/State/TandemFeatureFlags.swift:38` controlIQSupport ... return false — default off
 ## Method and limitations
 
 Each of the 24 points was audited by a separate agent that read the guide, the relevant TandemKit sources, the two LoopKit
 variants and the tests, and returned findings with file and line evidence. The Trio consumer was audited as its own point
-(G01). A completeness pass then looked for behaviour none of the points had covered; anything it found is recorded as a further
-G-point.
+(G01) and independently reviewed. A completeness pass then read all the point audits, the guide and the code looking for
+behaviour none of the points had covered; each gap it found was audited by the critic itself and is recorded as a G-point (G02
+to G07), single-finding and not independently reviewed. One of its gaps duplicated G01 and was folded into that point's notes.
 
 The first pass was run with Tandem treated as a UI-capable pump, because the driver also lists the t:slim X2 among its targets.
 The analysis was then fixed to the screenless-pump premise described in the scope section. Under that premise the three points
