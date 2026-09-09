@@ -2,15 +2,8 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The pump only accepts a temp basal as a whole percent of the profile basal, so the rate it can
-/// actually run is quantised to `baseline / 100`. Whatever we pick, the rate we *report* is what
-/// the host filters on: Trio drops any temp-basal record whose `unitsPerHour` exceeds its
-/// `maxBasal`, and oref routinely asks for exactly `maxBasal`. A dropped record leaves the loop
-/// counting the previous rate — often zero — while the pump runs at max, so an overshoot of a
-/// single 0.01 U/h is a silent IOB undercount, not a rounding nicety.
-///
-/// These tests pin the invariant that makes that impossible: the rate we enact and report is never
-/// above the rate that was requested.
+/// The rate the driver enacts and reports never exceeds the rate that was requested — a host that
+/// filters on it (Trio drops temp basals above its `maxBasal`) would otherwise discard the record.
 @available(macOS 13.0, iOS 14.0, *) final class TempBasalRateRoundingTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
 

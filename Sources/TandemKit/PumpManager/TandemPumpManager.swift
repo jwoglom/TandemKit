@@ -282,22 +282,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// The percent the pump is told to run, together with the absolute rate that percent will
-    /// actually deliver — resolved in one place so the value sent to the pump and the value
-    /// reported to the host can never disagree.
+    /// The percent the pump is told to run and the rate that percent delivers, resolved together
+    /// so the value sent to the pump and the value reported to the host cannot disagree.
     ///
-    /// The pump takes a temp basal as a whole percent of the profile basal, so the rate it can run
-    /// is quantised to `baseline / 100`. Rounding to the *nearest* percent lets the delivered rate
-    /// land up to `baseline * 0.5%` above what was asked for, and hosts filter on the rate we
-    /// report: Trio discards any temp-basal record whose `unitsPerHour` exceeds its `maxBasal`,
-    /// and oref routinely asks for exactly `maxBasal`. A discarded record leaves the loop counting
-    /// the *previous* rate — often zero — for up to 30 minutes while the pump runs at max, so the
-    /// overshoot is not a rounding nicety but a silent IOB undercount. The overshoot only survives
-    /// the 0.01 U/h grid at baselines of 2 U/h or more, which is exactly where the undercount is
-    /// largest.
-    ///
-    /// So the percent is stepped down until the rate it produces no longer exceeds the request:
-    /// never more insulin than the host asked for, at the cost of at most `baseline / 100` less.
+    /// A temp basal is a whole percent of the profile basal, so rounding to the nearest one can
+    /// deliver up to `baseline * 0.5%` more than was asked for. Trio drops any temp-basal record
+    /// whose `unitsPerHour` exceeds its `maxBasal` and oref routinely requests exactly `maxBasal`,
+    /// so the percent is stepped down until the rate no longer exceeds the request.
     internal func tempBasalPercentAndRate(requestedRate: Double, baseline: Double) -> (percent: Int, rate: Double) {
         guard baseline > 0, requestedRate > 0 else { return (0, 0) }
 
