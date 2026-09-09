@@ -55,7 +55,7 @@ public class LastBolusStatusV3Request: PumpRequest {
 ///   bytes 41-44:  extendedBolusRequestedVolume (uint32 LE)
 ///   bytes 45-48:  extendedBolusSecondsSincePumpReset (uint32 LE)
 ///   bytes 49-52:  extendedBolusDuration (uint32 LE, seconds)
-public class LastBolusStatusV3Response: Message {
+public class LastBolusStatusV3Response: Message, LastBolusStatusAbstractResponse {
     public static let props = MessageProps(
         opCode: UInt8(bitPattern: Int8(-69)),
         size: 53,
@@ -234,4 +234,116 @@ public class LastBolusStatusV3Response: Message {
     public var description: String {
         "LastBolusStatusV3Response(cargo=\(cargo.hexadecimalString), lastBolusTypeBitmask=\(lastBolusTypeBitmask), standardBolusStatusId=\(standardBolusStatusId), standardBolusId=\(standardBolusId), standardBolusTimestamp=\(standardBolusTimestamp), standardBolusDeliveredVolume=\(standardBolusDeliveredVolume), standardBolusEndReasonId=\(standardBolusEndReasonId), standardBolusSourceId=\(standardBolusSourceId), standardBolusTypeBitmask=\(standardBolusTypeBitmask), standardBolusRequestedVolume=\(standardBolusRequestedVolume), standardBolusSecondsSincePumpReset=\(standardBolusSecondsSincePumpReset), extendedBolusStatusId=\(extendedBolusStatusId), extendedBolusId=\(extendedBolusId), extendedBolusTimestamp=\(extendedBolusTimestamp), extendedBolusDeliveredVolume=\(extendedBolusDeliveredVolume), extendedBolusEndReasonId=\(extendedBolusEndReasonId), extendedBolusSourceId=\(extendedBolusSourceId), extendedBolusTypeBitmask=\(extendedBolusTypeBitmask), extendedBolusRequestedVolume=\(extendedBolusRequestedVolume), extendedBolusSecondsSincePumpReset=\(extendedBolusSecondsSincePumpReset), extendedBolusDuration=\(extendedBolusDuration))"
     }
+}
+
+/// One of the two bolus records carried by a `LastBolusStatusV3Response`.
+///
+/// The V3 sections are laid out identically to the single record in
+/// `LastBolusStatusV2Response`, which is what lets both messages be read through
+/// `LastBolusStatusAbstractResponse`: the section's leading byte is V2's `status`
+/// and the byte after the delivered volume is V2's `bolusStatusId` (the
+/// `BolusStatus` end reason), which V3 names `endReasonId`.
+public struct LastBolusStatusV3Section: Equatable {
+    /// Message-level status for this record; 0 indicates success.
+    public let statusId: Int
+    public let bolusId: Int
+    public let timestamp: UInt32
+    public let deliveredVolume: UInt32
+    /// Why the bolus ended; the values of `LastBolusStatusAbstractResponse.BolusStatus`.
+    public let endReasonId: Int
+    public let bolusSourceId: Int
+    public let bolusTypeBitmask: Int
+    public let requestedVolume: UInt32
+    public let secondsSincePumpReset: UInt32
+    /// Programmed duration in seconds. Always 0 for the standard section.
+    public let duration: UInt32
+    /// True for the extended (bolex) section.
+    public let isExtended: Bool
+
+    public var endReason: LastBolusStatusAbstractResponseBolusStatus? {
+        LastBolusStatusAbstractResponseBolusStatus(rawValue: endReasonId)
+    }
+
+    public var bolusSource: BolusSource? { BolusSource.fromId(bolusSourceId) }
+    public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
+    public var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
+}
+
+public extension LastBolusStatusV3Response {
+    /// The standard bolus record, or nil when the presence bitmask does not report one.
+    var standardSection: LastBolusStatusV3Section? {
+        guard isStandardBolusPresent else { return nil }
+        return LastBolusStatusV3Section(
+            statusId: standardBolusStatusId,
+            bolusId: standardBolusId,
+            timestamp: standardBolusTimestamp,
+            deliveredVolume: standardBolusDeliveredVolume,
+            endReasonId: standardBolusEndReasonId,
+            bolusSourceId: standardBolusSourceId,
+            bolusTypeBitmask: standardBolusTypeBitmask,
+            requestedVolume: standardBolusRequestedVolume,
+            secondsSincePumpReset: standardBolusSecondsSincePumpReset,
+            duration: 0,
+            isExtended: false
+        )
+    }
+
+    /// The extended (bolex) bolus record, or nil when the presence bitmask does not report one.
+    var extendedSection: LastBolusStatusV3Section? {
+        guard isExtendedBolusPresent else { return nil }
+        return LastBolusStatusV3Section(
+            statusId: extendedBolusStatusId,
+            bolusId: extendedBolusId,
+            timestamp: extendedBolusTimestamp,
+            deliveredVolume: extendedBolusDeliveredVolume,
+            endReasonId: extendedBolusEndReasonId,
+            bolusSourceId: extendedBolusSourceId,
+            bolusTypeBitmask: extendedBolusTypeBitmask,
+            requestedVolume: extendedBolusRequestedVolume,
+            secondsSincePumpReset: extendedBolusSecondsSincePumpReset,
+            duration: extendedBolusDuration,
+            isExtended: true
+        )
+    }
+
+    /// Every record the response reports as present, standard first.
+    var sections: [LastBolusStatusV3Section] {
+        [standardSection, extendedSection].compactMap { $0 }
+    }
+
+    /// The record the single-record `LastBolusStatusAbstractResponse` view reads.
+    ///
+    /// The standard portion when present, otherwise the extended one. A bolus with
+    /// an extended portion reports both, and the standard portion is the one a
+    /// driver-issued (immediate) bolus lands in.
+    var primarySection: LastBolusStatusV3Section? {
+        standardSection ?? extendedSection
+    }
+
+    /// Total delivered volume in milliunits across every present record carrying
+    /// `bolusId`, or nil when no record matches.
+    ///
+    /// Summing matters for a bolus split into an immediate and an extended portion
+    /// under one bolus id: either portion alone under-reports the insulin delivered.
+    /// When the two records carry different ids, only the matching one contributes.
+    func deliveredVolume(forBolusId bolusId: Int) -> UInt32? {
+        let matching = sections.filter { $0.bolusId == bolusId }
+        guard !matching.isEmpty else { return nil }
+        return matching.reduce(UInt32(0)) { $0 &+ $1.deliveredVolume }
+    }
+}
+
+// MARK: - LastBolusStatusAbstractResponse
+
+/// Reads the `primarySection`, so a bolus with only an extended portion is still
+/// visible through the abstract view. `extendedBolusDuration` is the stored field,
+/// which is 0 unless an extended record is present.
+public extension LastBolusStatusV3Response {
+    var status: Int { primarySection?.statusId ?? standardBolusStatusId }
+    var bolusId: Int { primarySection?.bolusId ?? standardBolusId }
+    var timestamp: UInt32 { primarySection?.timestamp ?? standardBolusTimestamp }
+    var deliveredVolume: UInt32 { primarySection?.deliveredVolume ?? 0 }
+    var bolusStatusId: Int { primarySection?.endReasonId ?? standardBolusEndReasonId }
+    var bolusSourceId: Int { primarySection?.bolusSourceId ?? standardBolusSourceId }
+    var bolusTypeBitmask: Int { primarySection?.bolusTypeBitmask ?? standardBolusTypeBitmask }
 }

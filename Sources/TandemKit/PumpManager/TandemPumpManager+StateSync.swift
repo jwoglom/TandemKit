@@ -517,23 +517,56 @@ extension TandemPumpManager {
     /// Used after both cancellation and natural completion to get the real delivered amount.
     /// Returns the delivered volume in units at the pump's native milliunit resolution, or nil if
     /// the query fails or the bolus ID doesn't match.
+    ///
+    /// Mobi firmware 3.5+ also exposes `LastBolusStatusV3Request`. No capture establishes whether
+    /// such a pump still answers the V2 request, so the version-selected request goes first and V3
+    /// is tried only when the pump did not answer it -- rather than moving every Mobi onto a
+    /// message we have never seen answered. The transport matches replies by opcode, so a pump
+    /// that only answers V3 shows up here as an unanswered V2 write, not as a V3 reply.
     func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
-        let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        var requests: [any PumpRequest] = [LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)]
+        if supports(LastBolusStatusV3Request.self), !(requests[0] is LastBolusStatusV3Request) {
+            requests.append(LastBolusStatusV3Request())
+        }
 
-        guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
-            logger.error("Failed to get lastBolusStatus: \(type(of: request))")
-            return nil
+        for request in requests {
+            guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
+                logger.error("Failed to get lastBolusStatus: \(type(of: request))")
+                continue
+            }
+
+            guard let milliunits = deliveredMilliunits(from: response, bolusId: bolusId) else {
+                return nil
+            }
+
+            // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
+            // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
+            // partial delivery by up to an increment — the direction that lets the loop over-deliver.
+            return HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0)
+        }
+
+        return nil
+    }
+
+    /// Delivered volume in milliunits that `response` reports for `bolusId`, or nil when it
+    /// describes some other bolus.
+    private func deliveredMilliunits(from response: LastBolusStatusAbstractResponse, bolusId: Int) -> UInt32? {
+        // The Mobi-only V3 response carries two records (immediate and extended). Sum the ones
+        // matching this bolus id rather than reading the single-record abstract view, which would
+        // report only the immediate portion of a bolus that has both.
+        if let v3 = response as? LastBolusStatusV3Response {
+            guard let matched = v3.deliveredVolume(forBolusId: bolusId) else {
+                logger.warning("LastBolusStatusV3 has no record for bolusId \(bolusId): \(v3)")
+                return nil
+            }
+            return matched
         }
 
         guard response.bolusId == bolusId else {
             logger.warning("LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
             return nil
         }
-
-        // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
-        // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
-        // partial delivery by up to an increment — the direction that lets the loop over-deliver.
-        return HistoryToDoseMapper.roundToReportingResolution(Double(response.deliveredVolume) / 1000.0)
+        return response.deliveredVolume
     }
 
     func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {
