@@ -515,7 +515,8 @@ extension TandemPumpManager {
 
     /// Queries the pump for the actual delivered volume of the last bolus.
     /// Used after both cancellation and natural completion to get the real delivered amount.
-    /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
+    /// Returns the delivered volume in units at the pump's native milliunit resolution, or nil if
+    /// the query fails or the bolus ID doesn't match.
     func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
         let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
 
@@ -529,7 +530,13 @@ extension TandemPumpManager {
             return nil
         }
 
-        return roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
+        // The pump reports milliunits, so report it back at that resolution rounded to nearest.
+        // NOT `roundToSupportedBolusVolume`: that is the LoopKit *command* rounding, which floors
+        // to the driver's 0.05 U grid and would report a bolus that actually delivered 1.049 U as
+        // 1.00 U. The error is always downward — the direction that understates IOB and lets the
+        // loop over-deliver — and it accumulates across partial deliveries. This matches
+        // `HistoryToDoseMapper`, so the live and history finalization paths agree.
+        return HistoryToDoseMapper.roundToReportingResolution(Double(response.deliveredVolume) / 1000.0)
     }
 
     func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {
