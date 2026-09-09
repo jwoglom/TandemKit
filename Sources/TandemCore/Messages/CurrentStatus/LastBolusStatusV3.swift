@@ -238,11 +238,8 @@ public class LastBolusStatusV3Response: Message, LastBolusStatusAbstractResponse
 
 /// One of the two bolus records carried by a `LastBolusStatusV3Response`.
 ///
-/// The V3 sections are laid out identically to the single record in
-/// `LastBolusStatusV2Response`, which is what lets both messages be read through
-/// `LastBolusStatusAbstractResponse`: the section's leading byte is V2's `status`
-/// and the byte after the delivered volume is V2's `bolusStatusId` (the
-/// `BolusStatus` end reason), which V3 names `endReasonId`.
+/// A section is laid out identically to the single record in `LastBolusStatusV2Response`:
+/// `statusId` is V2's `status`, and `endReasonId` is V2's `bolusStatusId`.
 public struct LastBolusStatusV3Section: Equatable {
     /// Message-level status for this record; 0 indicates success.
     public let statusId: Int
@@ -311,21 +308,15 @@ public extension LastBolusStatusV3Response {
         [standardSection, extendedSection].compactMap { $0 }
     }
 
-    /// The record the single-record `LastBolusStatusAbstractResponse` view reads.
-    ///
-    /// The standard portion when present, otherwise the extended one. A bolus with
-    /// an extended portion reports both, and the standard portion is the one a
-    /// driver-issued (immediate) bolus lands in.
+    /// The record the single-record `LastBolusStatusAbstractResponse` view reads: the standard
+    /// portion when present, otherwise the extended one.
     var primarySection: LastBolusStatusV3Section? {
         standardSection ?? extendedSection
     }
 
-    /// Total delivered volume in milliunits across every present record carrying
-    /// `bolusId`, or nil when no record matches.
-    ///
-    /// Summing matters for a bolus split into an immediate and an extended portion
-    /// under one bolus id: either portion alone under-reports the insulin delivered.
-    /// When the two records carry different ids, only the matching one contributes.
+    /// Total delivered volume in milliunits across every present record carrying `bolusId`,
+    /// or nil when no record matches. A bolus split into an immediate and an extended portion
+    /// under one id is only fully accounted for by summing both.
     func deliveredVolume(forBolusId bolusId: Int) -> UInt32? {
         let matching = sections.filter { $0.bolusId == bolusId }
         guard !matching.isEmpty else { return nil }
@@ -335,9 +326,7 @@ public extension LastBolusStatusV3Response {
 
 // MARK: - LastBolusStatusAbstractResponse
 
-/// Reads the `primarySection`, so a bolus with only an extended portion is still
-/// visible through the abstract view. `extendedBolusDuration` is the stored field,
-/// which is 0 unless an extended record is present.
+/// Reads the `primarySection`, so a bolus with only an extended portion is still visible.
 public extension LastBolusStatusV3Response {
     var status: Int { primarySection?.statusId ?? standardBolusStatusId }
     var bolusId: Int { primarySection?.bolusId ?? standardBolusId }

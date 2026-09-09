@@ -1,9 +1,8 @@
 @testable import TandemKit
 import XCTest
 
-/// Covers the delivered-volume read the bolus finalization path depends on, in particular that a
-/// `LastBolusStatusV3Response` (Mobi, API 3.5+) is consumed rather than dropped by the cast to
-/// `LastBolusStatusAbstractResponse`.
+/// Covers the delivered-volume read the bolus finalization path depends on, on both the V2
+/// response and the Mobi-only V3 response with its two bolus records.
 final class LastBolusDeliveredVolumeTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
 
@@ -56,7 +55,7 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
     }
 
     func testV2ResponseReportsDeliveredVolume() {
-        let manager = makeManager()
+        let manager = makeManager(apiVersion: .apiV3_4)
         bluetooth.stub(LastBolusStatusV2Request.self, with: LastBolusStatusV2Response(
             status: 0,
             bolusId: 2004,
@@ -70,10 +69,11 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
         ))
 
         XCTAssertEqual(2.45, manager.queryLastBolusDeliveredVolume(bolusId: 2004))
+        XCTAssertTrue(bluetooth.didSend(LastBolusStatusV2Request.self))
     }
 
-    /// A Mobi that does not answer the V2 request falls back to V3, so the bolus still
-    /// finalizes at the delivered amount instead of at the programmed one.
+    /// A Mobi is asked with the V3 request, and its reply must finalize at the delivered
+    /// amount instead of falling back to the programmed one.
     func testV3ResponseReportsDeliveredVolume() {
         let manager = makeManager()
         bluetooth.stub(LastBolusStatusV3Request.self, with: v3Response(
@@ -130,40 +130,9 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
         XCTAssertNil(manager.queryLastBolusDeliveredVolume(bolusId: 2004))
     }
 
-    /// The V2 request is still tried first, and a pump that answers it is never asked for V3.
-    func testV3RequestNotSentWhenV2Answered() {
-        let manager = makeManager()
-        bluetooth.stub(LastBolusStatusV2Request.self, with: LastBolusStatusV2Response(
-            status: 0,
-            bolusId: 2004,
-            timestamp: 500_000_000,
-            deliveredVolume: 2450,
-            bolusStatusId: LastBolusStatusAbstractResponseBolusStatus.stoppedWireless.rawValue,
-            bolusSourceId: 0,
-            bolusTypeBitmask: 1,
-            extendedBolusDuration: 0,
-            requestedVolume: 5000
-        ))
-
-        XCTAssertEqual(2.45, manager.queryLastBolusDeliveredVolume(bolusId: 2004))
-        XCTAssertTrue(bluetooth.didSend(LastBolusStatusV2Request.self))
-        XCTAssertFalse(bluetooth.didSend(LastBolusStatusV3Request.self))
-    }
-
-    /// A t:slim never sees the Mobi-only request, even when it leaves the read unanswered.
-    func testV3RequestNotSentOnUnsupportedPump() {
-        var state = TandemPumpManagerState(rawValue: [:])
-        state.pumpState.apiVersion = KnownApiVersion.apiV3_2.value
-        state.pumpState.pumpModel = .TSLIM_X2
-        let manager = TandemPumpManager(state: state, bluetooth: bluetooth)
-
-        XCTAssertNil(manager.queryLastBolusDeliveredVolume(bolusId: 2004))
-        XCTAssertTrue(bluetooth.didSend(LastBolusStatusV2Request.self))
-        XCTAssertFalse(bluetooth.didSend(LastBolusStatusV3Request.self))
-    }
-
     func testUnansweredRequestReportsNil() {
         let manager = makeManager()
         XCTAssertNil(manager.queryLastBolusDeliveredVolume(bolusId: 2004))
+        XCTAssertTrue(bluetooth.didSend(LastBolusStatusV3Request.self))
     }
 }
