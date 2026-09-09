@@ -28,6 +28,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     public static var onboardingSupportedMaximumBolusVolumes: [Double] = strideRange(from: 0.05, through: 25.0, by: 0.01)
 
+    // Tandem Mobi and t:slim X2: a temp rate is a whole percent of the profile basal, 0 - 250%
+    internal static let maximumTempBasalPercent: Int = 250
+
     internal let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
     private var oldState: TandemPumpManagerState
     public var state: TandemPumpManagerState
@@ -279,10 +282,38 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func percentForTempBasal(requestedRate: Double, baseline: Double) -> Int {
-        guard baseline > 0 else { return 0 }
-        let percent = Int((requestedRate / baseline * 100.0).rounded())
-        return max(0, min(percent, 250))
+    /// The percent the pump is told to run, together with the absolute rate that percent will
+    /// actually deliver — resolved in one place so the value sent to the pump and the value
+    /// reported to the host can never disagree.
+    ///
+    /// The pump takes a temp basal as a whole percent of the profile basal, so the rate it can run
+    /// is quantised to `baseline / 100`. Rounding to the *nearest* percent lets the delivered rate
+    /// land up to `baseline * 0.5%` above what was asked for, and hosts filter on the rate we
+    /// report: Trio discards any temp-basal record whose `unitsPerHour` exceeds its `maxBasal`,
+    /// and oref routinely asks for exactly `maxBasal`. A discarded record leaves the loop counting
+    /// the *previous* rate — often zero — for up to 30 minutes while the pump runs at max, so the
+    /// overshoot is not a rounding nicety but a silent IOB undercount. The overshoot only survives
+    /// the 0.01 U/h grid at baselines of 2 U/h or more, which is exactly where the undercount is
+    /// largest.
+    ///
+    /// So the percent is stepped down until the rate it produces no longer exceeds the request:
+    /// never more insulin than the host asked for, at the cost of at most `baseline / 100` less.
+    internal func tempBasalPercentAndRate(requestedRate: Double, baseline: Double) -> (percent: Int, rate: Double) {
+        guard baseline > 0, requestedRate > 0 else { return (0, 0) }
+
+        let ideal = requestedRate / baseline * 100.0
+        var percent = max(0, min(Int(ideal.rounded()), TandemPumpManager.maximumTempBasalPercent))
+        var rate = roundToSupportedBasalRate(unitsPerHour: baseline * Double(percent) / 100.0)
+
+        // One step is enough from a nearest-rounded percent, but loop rather than assume it: the
+        // grid, the ceiling and the rounding mode are all free to change independently. Terminates
+        // because 0% delivers 0 U/h and `requestedRate` is positive.
+        while percent > 0, rate > requestedRate {
+            percent -= 1
+            rate = roundToSupportedBasalRate(unitsPerHour: baseline * Double(percent) / 100.0)
+        }
+
+        return (percent, rate)
     }
 
     // MARK: - Basic Pump Manager Interface
@@ -718,9 +749,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.info("Current temp basal cancelled!")
             }
 
-            let percent = self.percentForTempBasal(requestedRate: unitsPerHour, baseline: baselineRate)
-            let absoluteRate = self
-                .roundToSupportedBasalRate(unitsPerHour: Double(baselineRate * (Double(percent) / 100)))
+            let (percent, absoluteRate) = self
+                .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
 
             if duration < .ulpOfOne || percent == 100 {
                 // We only needed to cancel any current temp basal
