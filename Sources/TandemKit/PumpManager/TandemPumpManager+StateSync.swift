@@ -530,12 +530,9 @@ extension TandemPumpManager {
             return nil
         }
 
-        // The pump reports milliunits, so report it back at that resolution rounded to nearest.
-        // NOT `roundToSupportedBolusVolume`: that is the LoopKit *command* rounding, which floors
-        // to the driver's 0.05 U grid and would report a bolus that actually delivered 1.049 U as
-        // 1.00 U. The error is always downward — the direction that understates IOB and lets the
-        // loop over-deliver — and it accumulates across partial deliveries. This matches
-        // `HistoryToDoseMapper`, so the live and history finalization paths agree.
+        // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
+        // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
+        // partial delivery by up to an increment — the direction that lets the loop over-deliver.
         return HistoryToDoseMapper.roundToReportingResolution(Double(response.deliveredVolume) / 1000.0)
     }
 

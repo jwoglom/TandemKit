@@ -2,14 +2,9 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The pump reports how much of a bolus it actually delivered in **milliunits**, so a bolus that
-/// was cancelled (or that the pump stopped itself) mid-delivery comes back as e.g. 1041 mU. That
-/// number has to reach the host at that resolution: rounding it down to the driver's 0.05 U
-/// *command* grid understates delivered insulin by up to a full increment, every time, which is
-/// the direction that leaves the loop believing there is less IOB than there is.
-///
-/// These tests pin the reporting resolution of `queryLastBolusDeliveredVolume` and of both
-/// finalization paths that use it (cancel, and natural completion via `fetchBolusStatus`).
+/// The pump reports a partial delivery in milliunits (e.g. 1041 mU), and it has to reach the host
+/// at that resolution — flooring to the 0.05 U command grid understates IOB. Pins the rounding of
+/// `queryLastBolusDeliveredVolume` and of both paths that use it: cancel, and natural completion.
 @available(macOS 13.0, iOS 14.0, *) final class BolusDeliveredVolumeTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -52,8 +47,7 @@ import XCTest
         ))
     }
 
-    /// Runs a bolus far enough that the driver is tracking it (`state.bolusDose` and the progress
-    /// reporter are populated), which is what both finalization paths read.
+    /// Runs a bolus far enough that the driver is tracking it, which is what both paths read.
     private func startBolus(units: Double) {
         bluetooth.stub(BolusPermissionRequest.self, with: BolusPermissionResponse(
             status: 0,
@@ -106,9 +100,7 @@ import XCTest
         }
     }
 
-    /// The regression this guards: `roundToSupportedBolusVolume` floors to the 0.05 U grid, so it
-    /// would turn a 1.049 U partial delivery into 1.00 U. It is the rounding for *outgoing*
-    /// commands only.
+    /// `roundToSupportedBolusVolume` would turn a 1.049 U delivery into 1.00 U.
     func testDeliveredVolumeIsNotFlooredToTheCommandGrid() throws {
         stubLastBolus(deliveredVolume: 1049)
 
@@ -118,9 +110,7 @@ import XCTest
         XCTAssertGreaterThan(delivered, 1.04)
     }
 
-    /// The live path and the history path report the same quantity, so they must round it the
-    /// same way — otherwise the same bolus reads differently depending on which one reached the
-    /// host first.
+    /// The live and history paths report the same quantity, so they must round it the same way.
     func testDeliveredVolumeMatchesTheHistoryMappersRounding() throws {
         stubLastBolus(deliveredVolume: 1041)
 
