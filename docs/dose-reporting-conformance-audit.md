@@ -48,10 +48,10 @@ means the code alone could not settle it. **Not applicable** means the requireme
 overall verdict is the most conservative verdict among its findings, so one non-conforming finding makes the point
 non-conforming even when most of its findings conform.
 
-Verification legend: **verified** means an independent reviewer re-read the cited code and confirmed the finding. **amended**
-means the reviewer changed the verdict or impact; the auditor's original is shown. **contested** means one reviewer disagreed.
-**unverified** means no independent review completed for that finding (see the method section for why). Findings marked "added
-by a verifier" were raised during review rather than by the point's auditor.
+Verification legend: **verified** means a reviewer other than the point's auditor (a second agent, or the lead reviewer's
+re-check described in the method section) re-read the cited code and confirmed the finding. **amended** means the reviewer
+changed the verdict or impact; the auditor's original is shown next to it. Every finding in this report was reviewed one of these
+two ways. Findings marked "added by a verifier" were raised during review rather than by the point's auditor.
 
 Safety impact is about insulin accounting. **high** means Loop or Trio could count IOB wrong by a clinically meaningful amount, or
 lose or duplicate a dose. **medium** means wrong metadata or timing that degrades accounting. **low** means cosmetic or upstream
@@ -84,7 +84,7 @@ only. Nothing in this report is medical advice; it is engineering review materia
 | P21 | §11 testing: timeline diff vs pump history | Reported dose timeline is diffed against the pump's own delivery history and expected IOB, so small... | Non-conforming | high | 6 |
 | P22 | §2 data model | NewPumpEvent/DoseEntry fields are populated with the documented semantics: type, startDate/endDate (TBR... | Non-conforming | high | 8 |
 | P23 | §3 transitions: never happened / zero-delivery cancel | A dose that never happened or was canceled with zero delivery stops being sent (with... | Non-conforming | high | 6 |
-| P24 | §8 DoseStore consequences | Event dates and ordering are chosen so DoseStore behaves predictably: pumpEventQueryAfterDate only... | Partial | medium | 6 |
+| P24 | §8 DoseStore consequences | Event dates and ordering are chosen so DoseStore behaves predictably: pumpEventQueryAfterDate only... | Partial | low | 6 |
 | G01 | host consumer (outside the guide) | How Trio actually consumes TandemKit's events: with lastReconciliation and replacePendingEvents ignored... | Non-conforming | high | 8 |
 | G02 | §3 mutable lifecycle, §10 'bolus during BLE loss' analog (register before you can lose contact; pump is source of truth), §9 item 4/5 | Temp-basal command ordering: the running rate is stopped on the pump before the new one is confirmed; a... | Non-conforming | medium | 1 |
 | G03 | §2 value = programmed amount, §9 item 7, §6 trust boundary | Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliveredUnits and... | Partial | medium | 1 |
@@ -342,8 +342,9 @@ was reverted. Aborted boluses are "accounted for" in P08-4 and "finalized on a g
 of the normal path and the failure path respectively. The running temp basal not being re-reported is rated medium by P04-3, not
 applicable by P17-3 and passed over by P11-3; P04's reading is the one that matters for Loop. Command-path `lastReconciliation`
 stamps are partial and low in P01-A2 but conform under the premise in P02-2, which was re-audited; read P01-A2 as superseded. The
-bolus `raw` changing on cancel is low in the reviewed findings (P03-1, P16-4) and medium in the unreviewed ones (P12-6, P24-2); the
-reviewed rating prevails. P23-1 rates finalizing a truly zero-delivery cancel as
+bolus `raw` changing on cancel was low in the reviewed findings (P03-1, P16-4) and medium in the then-unreviewed ones (P12-6,
+P24-2, P03-6, P06-2); the lead re-check lowered P24-2, P03-6 and P06-2 to low to match, and kept P12-6 at medium because it also
+covers the running-bolus purge. P23-1 rates finalizing a truly zero-delivery cancel as
 0 U immutable at medium because IOB is unaffected, while P23-2 rates the same line high because the 0 U also swallows a failed
 read; both are right about different inputs to the same line, and in Trio the 0 U is the only downward update that ever reaches
 the stored bolus (G01-1, P23-4). P17-3 scores "the driver never re-reports an in-progress dose" as not applicable to a test point,
@@ -575,7 +576,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 2 (with §6).
 
-Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). re-audited under the premise; its findings were not independently reviewed (two reviewer decisions that targeted the superseded UI-capable findings P02-4/P02-5 were moved to the superseded file)
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 Re-audited under the screenless-pump premise; the UI-capable reading is summarised in the method section.
 
@@ -583,15 +584,15 @@ Under the screenless-Mobi (Loop-only) premise, TandemKit's lastReconciliation is
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P02-1 | Conforms | none | unverified | Archetype: status-poll timestamp under the Loop-only premise |
-| P02-2 | Conforms | none | unverified | Command-path stamps after a single accepted command |
-| P02-3 | Partial | medium | unverified | Reservoir stamp and DoseStore reservoir arbitration |
-| P02-4 | Conforms | none | unverified | No-response guard, failed sync, relaunch persistence |
-| P02-5 | Partial | medium | unverified | Pump-initiated stops stamped at detection time |
-| P02-6 | Conforms | none | unverified | lastReconciliation doubles as lastSync, poll gate and staleness gate |
-| P02-7 | Not applicable | none | unverified | Conditional sources: quick-bolus flag on or Control-IQ on |
+| P02-1 | Conforms | none | verified | Archetype: status-poll timestamp under the Loop-only premise |
+| P02-2 | Conforms | none | verified | Command-path stamps after a single accepted command |
+| P02-3 | Partial | medium | verified | Reservoir stamp and DoseStore reservoir arbitration |
+| P02-4 | Conforms | none | verified | No-response guard, failed sync, relaunch persistence |
+| P02-5 | Partial | medium | verified | Pump-initiated stops stamped at detection time |
+| P02-6 | Conforms | none | verified | lastReconciliation doubles as lastSync, poll gate and staleness gate |
+| P02-7 | Not applicable | none | verified | Conditional sources: quick-bolus flag on or Control-IQ on |
 
-**P02-1 Archetype: status-poll timestamp under the Loop-only premise** (Conforms, impact none, unverified)
+**P02-1 Archetype: status-poll timestamp under the Loop-only premise** (Conforms, impact none, verified)
 
 The guide's §6 Loop-only rule is 'the last time you received telemetry/status from the pump' (OmnipodKit validTime, MedtrumKit lastSync). Line 445 stamps Date.now only after a sync in which the pump answered at least one status request, and that value is what every hasNewPumpEvents call carries. With the quick-bolus button forced off on every sync (line 362, flag default off) and Control-IQ off, there is no pump-side dose source the status poll could miss, so advancing the boundary to the poll time does not out-run unaccounted delivery. The previous audit's P02-1 (archetype mismatch) is therefore not_applicable under the premise; it re-applies only under the conditional sources (see P02-7).
 
@@ -604,7 +605,10 @@ The guide's §6 Loop-only rule is 'the last time you received telemetry/status f
 
 - Recommendation: Keep the stamp semantics as-is for the default configuration; document in code that lastReconciliation is a Loop-only 'last contact' value and is only valid while quick bolus is disabled and Control-IQ is off.
 
-**P02-2 Command-path stamps after a single accepted command** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P02-2 Command-path stamps after a single accepted command** (Conforms, impact none, verified)
 
 Each of these stamps follows a pump response (a command acknowledgement or a status read), so under the Loop-only rule it is a genuine 'status received' instant, not a fabricated one. The only delivery in flight at these moments is the app's own dose, which the same code path registers as a mutable NewPumpEvent (596 with replacePendingEvents:false; 655/775/825/907 with the active set), so the boundary never moves past delivery the driver has not registered. The previous P02-5 (command paths are not history reconciles) is not_applicable under the premise. The cancelBolus path reads the pump's actual delivered volume before stamping, which is the right order.
 
@@ -616,7 +620,10 @@ Each of these stamps follows a pump response (a command acknowledgement or a sta
 
 - Recommendation: No change required for the default configuration. If lastReconciliation is later split from lastSync (P02-6), keep command paths updating the contact time.
 
-**P02-3 Reservoir stamp and DoseStore reservoir arbitration** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P02-3 Reservoir stamp and DoseStore reservoir arbitration** (Partial, impact medium, verified)
 
 Stamping after a reservoir-only qualifying fetch is acceptable under the Loop-only rule (a status was received), and the previous P02-4 concern that it silences a reservoir fallback needed to reveal pump-UI doses is not_applicable. The residual problem is that the stamp only reaches DoseStore when a dose is emitted (1733), while didReadReservoirValue reaches it on every sync. On quiet syncs DoseStore therefore sees a reservoir reading newer than lastPumpEventsReconciliation and switches to reservoir-derived doses (1217) at 1 U resolution; the next emit carries a later Date.now and switches back. On Loop, IOB between emits alternates between event-based and coarse reservoir-based estimates. On Trio, which ignores the value, there is no effect.
 
@@ -629,7 +636,10 @@ Stamping after a reservoir-only qualifying fetch is acceptable under the Loop-on
 
 - Recommendation: Call hasNewPumpEvents (with the current active events and the fresh stamp) on every sync, as P01 requires, so lastPumpEventsReconciliation always postdates the reservoir reading; alternatively record the reservoir reading with a timestamp not later than the reported reconciliation.
 
-**P02-4 No-response guard, failed sync, relaunch persistence** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: 410 stamps the reservoir timestamp; DoseStore learns lastPumpEventsReconciliation only through addPumpEvents (fork DoseStore.swift:680) and TandemKit calls it only on dose transitions, so the reservoir reading is newer than the stored boundary between transitions and the 1217 branch can fire. Loop-only.
+
+**P02-4 No-response guard, failed sync, relaunch persistence** (Conforms, impact none, verified)
 
 The driver never fabricates contact: a sync on a link that answers nothing leaves the value alone, a failed connect and the 180 s watchdog (401) both hand back the previous value rather than nil or now, and the value survives relaunch so the first post-relaunch emit carries the genuinely old date. A single answered request is enough to advance the stamp (test at 170), which is the correct Loop-only semantics since any pump response is telemetry. The previous P02-7 survives the premise unchanged.
 
@@ -642,7 +652,10 @@ The driver never fabricates contact: a sync on a link that answers nothing leave
 
 - Recommendation: Retain the responseCount guard, previous-value-on-failure and persistence; add a test that a sync during which the pump reports an unexpected bolusId does not advance the boundary if the conditional sources are ever enabled.
 
-**P02-5 Pump-initiated stops stamped at detection time** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P02-5 Pump-initiated stops stamped at detection time** (Partial, impact medium, verified)
 
 Occlusion, empty-cartridge, auto-off and malfunction stops need no screen and are in scope. TandemKit learns of them only when CurrentBasalStatus reports `.suspend`, which happens on the next sync (up to ~5 min) or on a `.pumpSuspend` qualifying event; an `.alarm`/`.malfunction` event alone triggers no basal read. The suspend dose is then dated `now` and lastReconciliation stamped, so basal between the actual stop and detection is trusted as delivered. Whether the pump raises `.pumpSuspend` for alarm-driven stops is unverified. Impact is bounded to one sync interval of basal (IOB over-counted, so Loop under-delivers); the previous audit did not cover this.
 
@@ -655,7 +668,10 @@ Occlusion, empty-cartridge, auto-off and malfunction stops need no screen and ar
 
 - Recommendation: Add `.basalStatus` to the fetches for `.alarm` and `.malfunction` events, and when a stop is detected without a matching `.pumpSuspend`, take the suspend start from the alarm's timestamp (or the PumpingSuspended history entry) rather than the poll time; verify on hardware which events accompany an occlusion.
 
-**P02-6 lastReconciliation doubles as lastSync, poll gate and staleness gate** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: suspend dated at the poll (152) and stamped (159); QualifyingEventFetch maps AlarmStatus/MalfunctionStatus requests to .notifications only (36-43) while pumpSuspend/pumpResume add .basalStatus (80-81).
+
+**P02-6 lastReconciliation doubles as lastSync, poll gate and staleness gate** (Conforms, impact none, verified)
 
 Under the UI-capable reading this coupling was a design obstacle (prior P02-6, partial). Under the Loop-only premise all four consumers want the same quantity — last successful contact — so the coupling is coherent and the prior finding downgrades to conforms. The stamp while a bolus is running or a temp basal is live but not re-reported is likewise legitimate here: status was received, the app's own mutable doses remain registered in Loop because quiet syncs do not call the delegate with replacePendingEvents:true, and their re-reporting cadence is P04's concern, not the boundary's meaning.
 
@@ -667,7 +683,10 @@ Under the UI-capable reading this coupling was a design obstacle (prior P02-6, p
 
 - Recommendation: If the conditional sources are ever supported, split a history-derived lastReconciliation from lastSync so the 4.5-minute and 15-minute gates keep working; until then no change.
 
-**P02-7 Conditional sources: quick-bolus flag on or Control-IQ on** (Not applicable, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P02-7 Conditional sources: quick-bolus flag on or Control-IQ on** (Not applicable, impact none, verified)
 
 Not applicable in the default configuration. If quickBolusButtonSupport is enabled (the button is then not forced off) or Control-IQ is on, the pump delivers doses the status poll cannot see (226, 141) while every sync still stamps Date.now, and no code path ties the boundary to a history read (367, 455; both history flags default off, CLAUDE.md 541). The previous P02-1, P02-2 and P02-3 then all survive verbatim as nonconforming/high: Loop would trust delivery it never saw and under-count IOB by the whole external dose. The verdict for this point flips from partial to nonconforming under either conditional source.
 
@@ -680,6 +699,9 @@ Not applicable in the default configuration. If quickBolusButtonSupport is enabl
 
 - Recommendation: Before either flag or Control-IQ pairing is considered supported, gate lastReconciliation on a completed history read through the pump's current sequence number, or refuse to advance it while `state.quickBolusEnabled == true` or `state.useControlIQ` is set.
 
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
 Open questions raised by this point:
 
 - Does the pump emit a `.pumpSuspend` qualifying event (not only `.alarm`/`.malfunction`) when an occlusion, empty-cartridge or auto-off alarm stops delivery? If not, the suspend is only detected on the next sync and P02-5's timing gap is a full poll interval.
@@ -690,7 +712,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 3 (with §4).
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 3 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit's optimistic (Loop-commanded) doses key `raw` as "<type> <units> <ISO8601 start, second precision>". The start component is stable on every path (all call sites pass dose.startDate; no Date.now default is used; persisted UnfinalizedDose round-trips the Date). The units component is not: cancelBolus keys on deliveredUnits, bolus completion keys on the pump-reported delivered amount, and temp basals key on programmedUnits = rate x duration, which shrinks whenever a temp basal is cut short (the normal case when Loop re-issues every ~5 min). Correct end state currently depends on the replacePendingEvents:true mutable purge, not on identity. The history mapper mints stable pump-assigned ids but is not wired, and uses a different identity scheme than the optimistic path. No test asserts raw stability for the manager path.
 
@@ -699,10 +721,10 @@ TandemKit's optimistic (Loop-commanded) doses key `raw` as "<type> <units> <ISO8
 | P03-1 | Non-conforming | low | amended | Bolus cancellation changes raw (deliveredUnits in key) |
 | P03-2 | Partial | medium | verified | Bolus completion re-keys on pump-reported delivered volume |
 | P03-3 | Non-conforming | low | amended | Temp basal raw derived from programmedUnits (rate x duration) |
-| P03-4 | Conforms | none | unverified | Mutable temp-basal re-reports and start-date component are stable |
-| P03-5 | Partial | low | unverified | Basal/suspend/resume raw has 1-second resolution and no discriminator |
-| P03-6 | Partial | medium | unverified | History identity scheme differs from optimistic scheme; not yet wired |
-| P03-7 | Partial | low | unverified | Linux shim omits raw-to-syncIdentifier coupling; no lifecycle test |
+| P03-4 | Conforms | none | verified | Mutable temp-basal re-reports and start-date component are stable |
+| P03-5 | Partial | low | amended | Basal/suspend/resume raw has 1-second resolution and no discriminator |
+| P03-6 | Partial | low | amended | History identity scheme differs from optimistic scheme; not yet wired |
+| P03-7 | Partial | low | verified | Linux shim omits raw-to-syncIdentifier coupling; no lifecycle test |
 
 **P03-1 Bolus cancellation changes raw (deliveredUnits in key)** (Non-conforming, impact low, amended)
 
@@ -752,7 +774,7 @@ The mutable temp-basal report has endDate = estimatedEndDate, so programmedUnits
 - Verifier notes:
   - [review:amend] Verified: mutable TBR uses estimatedEndDate (UnfinalizedDose:177), finalized uses min(endDate, estimatedEndDate) (178-181), and raw embeds programmedUnits = value*hours (trio DoseEntry:73), so raw shrinks on every early finalization via getActivePumpEvents(endDate:) (1707; callers 736/765/824/1324, StateSync:149/481). Identity survives only when the TBR runs to its programmed end (1716 compares endDate to estimatedEndDate). Every finalizing batch is replace:true, so both LoopKit variants purge-and-reinsert with correct totals; Trio skips finalized TBRs (deliveredUnits != nil) so raw never matters there. No accounting error today; latent identity flaw.
 
-**P03-4 Mutable temp-basal re-reports and start-date component are stable** (Conforms, impact none, unverified)
+**P03-4 Mutable temp-basal re-reports and start-date component are stable** (Conforms, impact none, verified)
 
 When a temp basal is re-reported while still running (from cancelBolus and from bolus completion), toDoseEntry(isMutable:true) uses estimatedEndDate exactly as the initial report did, so programmedUnits and the ISO8601 start string are byte-identical to the enact-time raw. Every NewPumpEvent factory call in the driver passes `date:` explicitly from the dose's own startDate; none rely on the Date.now default. ISO8601DateFormatter truncates to whole seconds, and UnfinalizedDose persists startDate as a Date, so the string is unchanged across BLE reconnect and app relaunch. The instability in P03-1/2/3 is entirely in the units component, not the timestamp.
 
@@ -765,7 +787,10 @@ When a temp basal is re-reported while still running (from cancelBolus and from 
 
 - Recommendation: Keep the explicit `date: dose.startDate` discipline; if the key is redesigned, retain a start-anchored or id-anchored component and drop the mutable units component.
 
-**P03-5 Basal/suspend/resume raw has 1-second resolution and no discriminator** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P03-5 Basal/suspend/resume raw has 1-second resolution and no discriminator** (Partial, impact low, amended)
 
 Scheduled-basal, suspend and resume events are immutable and reported once, so per-dose constancy is trivially met. However their raw is only the type plus a whole-second timestamp. Two events of the same type inside one second collide on DoseStore's unique raw constraint and the second is silently deduplicated. The enactTempBasal 100%-percent path and suspend/configureControlIQ paths can append a scheduled-basal marker from getActivePumpEvents(endDate:) and another from their own code in one batch; only fetchBasalStatus guards against this. Basal markers carry no insulin beyond the schedule, so accounting impact is small, but a lost suspend marker in a rapid suspend/resume/suspend sequence would be more serious.
 
@@ -778,7 +803,10 @@ Scheduled-basal, suspend and resume events are immutable and reported once, so p
 
 - Recommendation: Include a discriminator (sequence counter, UUID, or sub-second component) in basal/suspend/resume raws, and reuse the fetchBasalStatus duplicate-basal guard in the other paths that append a scheduled-basal marker.
 
-**P03-6 History identity scheme differs from optimistic scheme; not yet wired** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:amend] Lead reviewer re-check: raw format and second resolution confirmed (31). The same-batch double basal marker needs getActivePumpEvents to append one, which requires exact Date equality between the finalization endDate and estimatedEndDate (1716), so the collision inside enactTempBasal is theoretical; the finding stays partial/low as a design note.
+
+**P03-6 History identity scheme differs from optimistic scheme; not yet wired** (Partial, impact low, amended)
 
 The history path is designed correctly for this point: bolus activation and completion, and temp-rate activation and completion, share a pump-assigned id in a frozen 10-byte encoding, and tests pin the golden values. But mapToEvents has no caller in Sources, nothing under History/ reaches emitPumpEvents, and historyDoseReporting has no consumer, so none of this is live. Meanwhile the optimistic path keys the same bolus as a text string despite already holding bolusId. If history reporting is wired without first migrating enactBolus to the same identity (or reconciling by bolusId before emit), a Loop-commanded bolus will appear under two identities and be double-counted. Today the impact is nil; the design gap is acknowledged in the code comment.
 
@@ -791,7 +819,10 @@ The history path is designed correctly for this point: bolus activation and comp
 
 - Recommendation: Before wiring history dose reporting, switch enactBolus/cancel/completion to HistoryLogSyncIdentifier.bolus(pumpSerial, bolusId) when the serial is known (fall back to the text key otherwise), and add a test that an optimistic bolus and its history confirmation share raw bytes.
 
-**P03-7 Linux shim omits raw-to-syncIdentifier coupling; no lifecycle test** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:amend] Lead reviewer re-check: facts confirmed (HistoryLogSyncIdentifier.swift:45, HistoryToDoseMapper.swift:183/207, no production caller). The same latent defect is rated low in the reviewed P24-1 and P08-6; lowered from medium to low for consistency. It becomes high once history emission is wired without re-keying the live path.
+
+**P03-7 Linux shim omits raw-to-syncIdentifier coupling; no lifecycle test** (Partial, impact low, verified)
 
 On Linux the shim's NewPumpEvent does not derive dose.syncIdentifier from raw the way the pinned LoopKit does, so Linux CI cannot observe the identity coupling that section 2 describes; the history mapper works around this by stamping syncIdentifier itself, but the optimistic factories in NewPumpEvent.swift do not. Separately, the mock delegate records every hasNewPumpEvents batch, yet no test inspects those events, so the raw drift in P03-1/2/3 is unguarded by any test on either platform. This is test-infrastructure quality rather than a runtime accounting defect on Apple builds.
 
@@ -802,6 +833,9 @@ On Linux the shim's NewPumpEvent does not derive dose.syncIdentifier from raw th
   - `Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift:192` syncIdentifier: raw.hexadecimalString -- mapper sets it explicitly to compensate
 
 - Recommendation: Make the shim init mirror LoopKit (set dose.syncIdentifier = raw.hexadecimalString). Add lifecycle tests using MockPumpManagerDelegate that assert byte-equal raw across enact/re-report/cancel/complete for one bolus and one temp basal.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -814,7 +848,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 4 (with §3 report-or-delete rule).
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 3 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit reports only two kinds of mutable dose: the Loop-commanded bolus and the Loop-commanded temp basal. The bolus is emitted mutable exactly once (enactBolus, replacePendingEvents:false) and is never re-sent; the `.inProgress` bolusState only feeds PumpManagerStatus. Every later replacePendingEvents:true batch (basal-type change on sync, suspend, resume, Control-IQ enable, next enactTempBasal) omits it, so the Trio-pinned DoseStore purges it until finalization is detected; after an app relaunch it is cleared silently and never finalized. The TBR is not re-reported on routine syncs either, but it is finalized inside most replace:true batches, so it is only lost on the resume path. No test observes replacePendingEvents.
 
@@ -822,11 +856,11 @@ TandemKit reports only two kinds of mutable dose: the Loop-commanded bolus and t
 | --- | --- | --- | --- | --- |
 | P04-1 | Non-conforming | high | verified | Running bolus never re-reported; purged by any replace:true batch |
 | P04-2 | Non-conforming | high | amended | After app relaunch a persisted in-progress bolus is cleared without finalization |
-| P04-3 | Partial | medium | unverified | Running temp basal not re-reported on routine syncs, but finalized in most replace:true batches |
+| P04-3 | Partial | low | amended | Running temp basal not re-reported on routine syncs, but finalized in most replace:true batches |
 | P04-4 | Non-conforming | medium | amended | Resume path omits live TBR and bolus from a replace:true batch |
-| P04-5 | Conforms | none | unverified | Suspend/resume/basal reported immutable; only bolus and TBR are ever mutable |
-| P04-6 | Partial | medium | unverified | Estimate-based bolus guard opens the omission window before pump confirms |
-| P04-7 | Non-conforming | low | unverified | No test observes replacePendingEvents or mutable re-reporting |
+| P04-5 | Conforms | none | verified | Suspend/resume/basal reported immutable; only bolus and TBR are ever mutable |
+| P04-6 | Partial | medium | verified | Estimate-based bolus guard opens the omission window before pump confirms |
+| P04-7 | Non-conforming | low | verified | No test observes replacePendingEvents or mutable re-reporting |
 
 **P04-1 Running bolus never re-reported; purged by any replace:true batch** (Non-conforming, impact high, verified)
 
@@ -860,7 +894,7 @@ The manager persists bolusDose but not the progress reporter. On relaunch mid-bo
 - Verifier notes:
   - [review:amend] Code facts confirmed: init rebuilds no reporter, the reporter-nil branch clears bolusDose silently, and the delivering path returns without re-reporting; the trigger (relaunch) is unaffected by the premise. One key fact needs correcting: the mutable row is deleted only in LoopKit DoseStore hosts (both variants purge mutable==YES). Trio ignores replacePendingEvents and stores the enact-time bolus permanently at programmedUnits, so in Trio the dose is not lost; it is over-counted at the full programmed amount if the pump aborted it (occlusion/alarm), and correct if it completed. High holds under either host.
 
-**P04-3 Running temp basal not re-reported on routine syncs, but finalized in most replace:true batches** (Partial, impact medium, unverified)
+**P04-3 Running temp basal not re-reported on routine syncs, but finalized in most replace:true batches** (Partial, impact low, amended)
 
 The TBR is emitted mutable when enacted (772) and again only in cancelBolus and bolus-finish batches. A quiet 5-minute sync sends no hasNewPumpEvents at all, so the guide's "re-reported on every sync" is not met. However, TandemKit does not silently omit the TBR from the replace:true batches it does send: fetchBasalStatus, enactTempBasal, suspendDelivery and configureControlIQMode all call getActivePumpEvents(endDate:) first, which converts the live TBR into a finalized entry in the same batch. Under the Trio-pinned DoseStore the mutable row therefore persists between syncs and is replaced, not dropped — the exception is the resume path (P04-4). Steady-state IOB from the TBR is preserved; the gap is contractual rather than an observed loss.
 
@@ -872,6 +906,9 @@ The TBR is emitted mutable when enacted (772) and again only in cancelBolus and 
   - `reference: loopkit-trio/DoseStore.swift:682` `guard events.count > 0 else { completion(nil); return }` — empty batches neither purge nor re-resolve
 
 - Recommendation: Re-emit the live TBR (same raw, isMutable:true) from every syncPumpData pass, alongside the empty-batch lastReconciliation update, so the batch is always the complete pending set.
+
+- Verifier notes:
+  - [review:amend] Lead reviewer re-check: facts confirmed. The finding's own analysis is that the temp basal is finalized in every complete batch except the resume path (P04-4, rated separately), so steady-state IOB is preserved; the unmet requirement is the re-report cadence with no accounting consequence. Lowered from medium to low.
 
 **P04-4 Resume path omits live TBR and bolus from a replace:true batch** (Non-conforming, impact medium, amended)
 
@@ -889,7 +926,7 @@ sendResumePumping builds a batch of only the resume event. If state.basalDose is
 - Verifier notes:
   - [review:amend] Code facts hold: sendResumePumping emits only [resume] with default replace:true (904-910) and overwrites state.basalDose (906), so a still-.tempBasal basalDose is purged in Loop and never finalized; settings resume is gated on state (SettingsVM:191) but cartridge/tubing/cannula flows check the pump directly (fetchSuspendStatus, StateSync:130 does not update basalDose) and call resumeDelivery (FillTubingVM:244). Key fact corrected for the premise: the trigger is not a pump-UI suspend (N/A on Mobi) but a pump-initiated stop (occlusion/empty-cartridge/auto-off) during BLE loss so no basalStatus fetch ran; qualifying events normally map pumpSuspend to fetchBasalStatus, narrowing it. Trio immune. Loop loses TBR delivered before the stop: medium.
 
-**P04-5 Suspend/resume/basal reported immutable; only bolus and TBR are ever mutable** (Conforms, impact none, unverified)
+**P04-5 Suspend/resume/basal reported immutable; only bolus and TBR are ever mutable** (Conforms, impact none, verified)
 
 An open suspend is reported as an immutable point event, as are resume and scheduled-basal markers. That matches the in-tree reference drivers (Omnipod/Medtrum also report suspend without a duration), so these are never at risk of the report-or-delete purge and nothing mutable of these types can be silently omitted. The guide's §3 wording ("an open suspend — all are mutable") is stricter than LoopKit's own suspend model; noted for completeness, not as a defect. The mutable surface to keep re-reporting is therefore exactly the Loop bolus and Loop TBR examined in P04-1..4.
 
@@ -901,7 +938,10 @@ An open suspend is reported as an immutable point event, as are resume and sched
 
 - Recommendation: No change required; keep suspend/resume immutable, consistent with reference drivers.
 
-**P04-6 Estimate-based bolus guard opens the omission window before pump confirms** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P04-6 Estimate-based bolus guard opens the omission window before pump confirms** (Partial, impact medium, verified)
 
 enactTempBasal is blocked only while the reporter's elapsed-time estimate says the bolus is unfinished. Once the estimate completes — before the pump has confirmed via qualifying event or the deferred sync — Loop's next enactTempBasal is accepted and its replace:true batch omits the still-mutable bolus, deleting it (P04-1 mechanism) deterministically rather than only on rarer paths. If the bolusChange event was lost, the deletion persists until the next sync past the 30s grace finalizes it. With the reporter nil (P04-2) the guard is absent entirely.
 
@@ -913,7 +953,10 @@ enactTempBasal is blocked only while the reporter's elapsed-time estimate says t
 
 - Recommendation: Gate on pump-confirmed completion (state.bolusDose == nil) rather than the estimate, and have enactTempBasal carry the mutable bolus in its batch until it is finalized.
 
-**P04-7 No test observes replacePendingEvents or mutable re-reporting** (Non-conforming, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: the enactTempBasal guard is bolusProgressReport.isUnfinalized() (679), which is the time-based estimate deliveredUnits < total (58, 77), and is absent when the reporter is nil.
+
+**P04-7 No test observes replacePendingEvents or mutable re-reporting** (Non-conforming, impact low, verified)
 
 The mock delegate appends events but drops replacePendingEvents, so no test can assert that a batch marked as the complete pending set actually contains every live mutable dose, nor that a running bolus/TBR is re-sent across syncs. The bolus finish path (StateSync:249-268), cancelBolus (648-657) and enactTempBasal (736-778) have no event-level tests. This is why P04-1/P04-2 have gone unnoticed.
 
@@ -923,6 +966,9 @@ The mock delegate appends events but drops replacePendingEvents, so no test can 
   - `Tests/TandemKitTests/TandemPumpManagerSuspendDeliveryTests.swift:98` testSuspendRecordsASuspendDose asserts state only, not the emitted batch contents
 
 - Recommendation: Record replacePendingEvents in the mock and add tests: mid-bolus sync with TBR expiry, suspend mid-bolus, relaunch mid-bolus, and TBR re-report, asserting each replace:true batch contains all live mutable doses.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -936,7 +982,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 5 (with §3 finalization).
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 6 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 App-commanded boluses that complete or are cancelled while the app process is alive are finalized with isMutable:false and a pump-reported deliveredUnits (LastBolusStatus, milliunits/1000), which is the right shape. But endDate is always Date.now at detection rather than the pump's completion time; the cancel path substitutes 0 U and the completion path substitutes the full programmed amount when the pump query fails; delivered volume is floored to a 0.05 U grid; and after an app relaunch a persisted in-flight bolus is never finalized because the progress reporter is in-memory only, so Loop purges the mutable dose and the insulin is lost. Temp basals finalize with programmed-rate x elapsed and detection-time endDate. The history mapper finalizes correctly but has no production caller and sits behind two default-off flags.
 
@@ -946,7 +992,7 @@ App-commanded boluses that complete or are cancelled while the app process is al
 | P05-2 | Partial | high | verified | cancelBolus finalization falls back to zero delivered |
 | P05-3 | Partial | medium | verified | Bolus endDate is detection time, not pump completion time |
 | P05-4 | Non-conforming | high | amended | Persisted in-flight bolus is never finalized after app relaunch |
-| P05-5 | Partial | low | unverified | Delivered volume floored to 0.05 U grid |
+| P05-5 | Partial | low | verified | Delivered volume floored to 0.05 U grid |
 | P05-6 | Partial | medium | verified | Temp basal finalization: programmed x elapsed, detection-time end |
 | P05-7 | Partial | low | verified | History-log finalization: correct shape, unreachable; extended boluses ignored |
 
@@ -1012,7 +1058,7 @@ enactBolus emits the mutable bolus and persists state.bolusDose, but the object 
 - Verifier notes:
   - [review:amend] Same defect as P04-2 and the code claims check out: bolusDose round-trips (state 244-247, tested in TandemPumpManagerStateTests) but the finalizer lives only on the in-memory reporter, so no isMutable:false event is ever sent after a relaunch. The cited StateSync:161/183 emits are the fetchBasalStatus replace:true batches. Correct the consequence per host: LoopKit DoseStore purges the mutable row (lost dose); Trio never purges and keeps the enact-time row at programmedUnits, so the dose is retained and over-counted only if the pump aborted it. Relaunch is an app-side trigger, unaffected by the premise.
 
-**P05-5 Delivered volume floored to 0.05 U grid** (Partial, impact low, unverified)
+**P05-5 Delivered volume floored to 0.05 U grid** (Partial, impact low, verified)
 
 The pump reports delivered volume in milliunits, i.e. 0.001 U resolution. The status path floors that to the 0.05 U command grid, so a cancelled bolus that delivered 1.049 U is finalized as 1.00 U. The error is bounded (< 0.05 U per bolus) but always understates delivery, which is the direction that lets Loop over-deliver. The repository already recognises this: HistoryToDoseMapper.roundToReportingResolution rounds to nearest 0.001 U precisely to avoid it, so the two finalization surfaces disagree. The guide asks for deliveredUnits rounded to the pump's supported increment; Tandem's reported increment is the milliunit, not 0.05 U.
 
@@ -1023,6 +1069,9 @@ The pump reports delivered volume in milliunits, i.e. 0.001 U resolution. The st
   - `Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift:161` mapper instead rounds to nearest milliunit and documents why floor-to-grid is the unsafe direction
 
 - Recommendation: Use HistoryToDoseMapper.roundToReportingResolution (nearest 0.001 U) for deliveredUnits in queryLastBolusDeliveredVolume; keep roundToSupportedBolusVolume for programming only. Add a test with deliveredVolume = 1049.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P05-6 Temp basal finalization: programmed x elapsed, detection-time end** (Partial, impact medium, verified)
 
@@ -1068,18 +1117,18 @@ Open questions raised by this point:
 
 Guide section: §9 item 6 (with §5).
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 2 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 The flag is used with the right intent: `false` only for the initial mutable bolus (MedtrumKit pattern) and for dose-less site/cartridge events (OmnipodKit pattern); every other batch is `true`. But `true` batches are not the "complete current set": they are assembled from `getActivePumpEvents`, which only ever contributes the temp basal in `state.basalDose` and never the live bolus in `state.bolusDose`. Any `true` batch emitted while a bolus is running purges that mutable bolus. In steady state it is re-inserted immutable at finalization; after an app relaunch (`bolusProgressReport` is nil) it is never finalized and the next temp basal enact deletes it from IOB. `sendResumePumping` also emits `true` without the temp basal. No test asserts the flag.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
 | P06-1 | Partial | high | verified | true batches omit the live mutable bolus |
-| P06-2 | Partial | medium | unverified | initial bolus emitted with false |
-| P06-3 | Conforms | none | unverified | siteChange / cartridgeChange emitted with false |
+| P06-2 | Partial | low | amended | initial bolus emitted with false |
+| P06-3 | Conforms | none | verified | siteChange / cartridgeChange emitted with false |
 | P06-4 | Partial | medium | verified | resume emits true without the active TBR; dead HSM path |
-| P06-5 | Conforms | none | unverified | flag semantics across LoopKit variants and Linux shim |
-| P06-6 | Non-conforming | low | unverified | no test observes replacePendingEvents |
+| P06-5 | Conforms | none | verified | flag semantics across LoopKit variants and Linux shim |
+| P06-6 | Non-conforming | low | verified | no test observes replacePendingEvents |
 
 **P06-1 true batches omit the live mutable bolus** (Partial, impact high, verified)
 
@@ -1097,7 +1146,7 @@ The initial bolus is appended with `false` (correct), but every later `true` bat
 - Verifier notes:
   - [review:confirm] Same defect as P04-1 viewed through the flag semantics; all cited facts check out: getActivePumpEvents guards on basalDose only (1703), the enactTempBasal guard is a timer estimate (679; DoseProgressReporter:58 deliveredUnits < total) and is nil after relaunch since bolusProgressReport is a plain in-memory var (70) with no restore from the persisted bolusDose (State:244), and fetchBolusStatus returns without emitting when the report is nil (217-227). The intent of false/true usage is right (initial bolus, site/cartridge events at 1062/1071), so 'partial' is fair for this point. High in Loop (lost dose after relaunch); Trio ignores the flag. App-triggered; premise unaffected.
 
-**P06-2 initial bolus emitted with false** (Partial, impact medium, unverified)
+**P06-2 initial bolus emitted with false** (Partial, impact low, amended)
 
 Using `false` here is correct and matches MedtrumKit: it appends the mutable bolus without wiping a running temp basal, and because the TBR row survives at the PumpEvent tier it is re-resolved (not deleted) at the InsulinDeliveryStore tier. The §5 compound pitfall (changed identity + `false`) does not fire, because every finalizing emit (`fetchBolusStatus` StateSync:268, `cancelBolus` 657) uses `true`. However the identity is not stable: initial raw uses programmed units, finalization and cancel use delivered units, so on partial delivery the driver relies on the mutable-purge safety net exactly as the guide warns for MedtrumKit. Correct end state today, latent duplicate if any finalizing path ever switches to `false`.
 
@@ -1110,7 +1159,10 @@ Using `false` here is correct and matches MedtrumKit: it appends the mutable bol
 
 - Recommendation: Keep `false` on the initial emit, but build the bolus raw from programmed units and bolusId/startDate in all three sites (initial, finalize, cancel) so identity never changes; finalize by flipping isMutable and setting deliveredUnits only.
 
-**P06-3 siteChange / cartridgeChange emitted with false** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:amend] Lead reviewer re-check: the finding itself concludes the use of replacePendingEvents:false is correct and the end state is right; the residual is the latent identity change rated low in the reviewed P03-1/P16-4. Lowered from medium to low.
+
+**P06-3 siteChange / cartridgeChange emitted with false** (Conforms, impact none, verified)
 
 Both events carry no dose, are immutable, and have a raw fixed at creation from a single date, so they are emitted once and never re-reported. Passing `false` is exactly the OmnipodKit pod-change pattern the guide endorses: a running bolus or temp basal is left untouched. `lastReconciliation` is forwarded unchanged from state, so these emits do not move the trust boundary. No feature flag gates them.
 
@@ -1122,6 +1174,9 @@ Both events carry no dose, are immutable, and have a raw fixed at creation from 
   - `Sources/TandemKitUI/ViewModels/Cartridge/TandemKitFillCannulaViewModel.swift:172` UI calls recordSiteChange after a successful cannula fill
 
 - Recommendation: No change needed for the flag. (Whether cartridge change should be `.replaceComponent(.reservoir)` rather than `.rewind` belongs to the event-type checklist item, not this one.)
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P06-4 resume emits true without the active TBR; dead HSM path** (Partial, impact medium, verified)
 
@@ -1139,7 +1194,7 @@ Both events carry no dose, are immutable, and have a raw fixed at creation from 
 - Verifier notes:
   - [review:confirm] Code fact holds: sendResumePumping emits only the resume event with default replacePendingEvents true, without getActivePumpEvents; handleHomeScreenMirrorResponse has no callers. The original trigger (user suspends on the pump screen) is not applicable under the premise, but the same window exists for pump-initiated suspends the premise keeps in scope: an occlusion/auto-off/resume-pump alarm suspends the pump while state.basalDose is still the TBR, and resumeDeliveryAcknowledgingResumeAlarms is precisely the button for that case; if no sync or pumpSuspend fetch ran first, the true emit purges the mutable TBR with no finalized replacement. partial/medium stands.
 
-**P06-5 flag semantics across LoopKit variants and Linux shim** (Conforms, impact none, unverified)
+**P06-5 flag semantics across LoopKit variants and Linux shim** (Conforms, impact none, verified)
 
 The purge semantics TandemKit relies on are identical in the LoopKit fork it builds against and in next-dev, and both default the flag to `true`, matching `emitPumpEvents`' default. The driver therefore does not need variant-specific handling. On Linux the shim only type-checks the call: nothing purges, and the shim's `NewPumpEvent` differs structurally from real LoopKit (event-level `isMutable`, no raw-derived syncIdentifier), so a Linux test run cannot observe misuse of the flag. `notify` dispatches FIFO on the delegate queue, so the `false` initial bolus emit is never reordered after a later `true` batch.
 
@@ -1152,7 +1207,10 @@ The purge semantics TandemKit relies on are identical in the LoopKit fork it bui
 
 - Recommendation: None for conformance. If Linux CI is meant to catch dose-reporting regressions, add a tiny in-test DoseStore stand-in that applies the mutable purge and raw-based matching.
 
-**P06-6 no test observes replacePendingEvents** (Non-conforming, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P06-6 no test observes replacePendingEvents** (Non-conforming, impact low, verified)
 
 The mock delegate is the only place the flag can be observed in tests, and it drops it; no test inspects the accumulated events either. The P06-1 and P06-4 gaps (a `true` batch missing a live mutable dose) are exactly the kind of regression a batch-content assertion would catch, and the guide's §11 explicitly recommends idempotency and cancel tests. Given CLAUDE.md notes that earlier dose-path coverage was dropped and not re-created, this is a real, current gap rather than a stale note.
 
@@ -1162,6 +1220,9 @@ The mock delegate is the only place the flag can be observed in tests, and it dr
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1733` `func emitPumpEvents(_ events:, replacePendingEvents: Bool = true)` — the only chokepoint, untested
 
 - Recommendation: Record `(events, replacePendingEvents)` pairs in the mock and add StubPumpBluetooth-driven tests: bolus start (`false`, one mutable bolus), TBR enact during bolus (`true` must contain the bolus), cancel (`true`, same raw), relaunch-then-enactTempBasal (bolus still present).
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -1174,7 +1235,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 7.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 4 of 8 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 8 of 8 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 The bolus shape is right: mutable doses carry deliveredUnits nil, and finalized doses carry value=programmed and deliveredUnits from the pump's LastBolusStatus. But the actual amount is floored to the driver's declared 0.05 U grid, coarser than the milliunit wire resolution (and Tandem's 0.01 U bolus increment), systematically under-counting partial deliveries; cancelBolus reports deliveredUnits=0 when the LastBolusStatus read fails or its bolusId mismatches, while the completion path assumes full delivery in the same situation. Temp basal value is derived from the app-side schedule times an integer percent and never reconciled with the pump-reported profile/current rate fetched in the same command; temp basal deliveredUnits is an unrounded value x hours. The history mapper rounds differently (0.001 nearest) but is unwired and behind default-off flags.
 
@@ -1182,12 +1243,12 @@ The bolus shape is right: mutable doses carry deliveredUnits nil, and finalized 
 | --- | --- | --- | --- | --- |
 | P07-1 | Non-conforming | high | verified | cancelBolus deliveredUnits fallback to zero |
 | P07-2 | Partial | medium | verified | deliveredUnits floored to 0.05 U grid, coarser than pump |
-| P07-3 | Partial | medium | unverified | Completion path assumes full delivery when pump read fails |
+| P07-3 | Partial | medium | verified | Completion path assumes full delivery when pump read fails |
 | P07-4 | Partial | medium | verified | Temp basal value derived from app schedule, pump rate ignored |
 | P07-5 | Partial | low | verified | Temp basal deliveredUnits computed, unrounded, not pump-sourced |
-| P07-6 | Partial | low | unverified | Declared increments coarser than protocol; value not re-rounded |
-| P07-7 | Unsure | none | unverified | History mapper rounding vs live path; unwired |
-| P07-8 | Conforms | none | unverified | Mutable/finalized bolus shape (value vs deliveredUnits) |
+| P07-6 | Partial | low | verified | Declared increments coarser than protocol; value not re-rounded |
+| P07-7 | Unsure | none | verified | History mapper rounding vs live path; unwired |
+| P07-8 | Conforms | none | verified | Mutable/finalized bolus shape (value vs deliveredUnits) |
 
 **P07-1 cancelBolus deliveredUnits fallback to zero** (Non-conforming, impact high, verified)
 
@@ -1221,7 +1282,7 @@ The pump reports the actual delivered volume in milliunits, and Tandem's bolus d
 - Verifier notes:
   - [review:confirm] Code fact holds: both finalization paths pass the milliunit deliveredVolume through the floor-to-0.05 command grid. Trigger is app-side (cancelBolus, completion via fetchBolusStatus) or a pump abort for alarm reasons, which the premise keeps in scope. Systematic downward error on partial deliveries degrades IOB accounting; medium stands under the default configuration.
 
-**P07-3 Completion path assumes full delivery when pump read fails** (Partial, impact medium, unverified)
+**P07-3 Completion path assumes full delivery when pump read fails** (Partial, impact medium, verified)
 
 When CurrentBolusStatus reports bolusId 0 (finished), the driver queries LastBolusStatus for the real delivered volume — the right source. If that read fails or the bolusId mismatches, it finalizes with deliveredUnits = programmed total, i.e. assumes full delivery. A bolus stopped by an occlusion/alarm or a BLE-initiated stop (bolusStatus .stoppedAlarm/.stoppedWireless) that then fails the follow-up read is over-counted. This is the opposite fallback direction from cancelBolus (P07-1), so the two paths disagree about what an unknown delivered amount means. The bolusStatus field, which would at least flag an incomplete delivery, is never read.
 
@@ -1233,6 +1294,9 @@ When CurrentBolusStatus reports bolusId 0 (finished), the driver queries LastBol
   - `Sources/TandemCore/Messages/CurrentStatus/LastBolusStatusAbstractResponse.swift:15` BolusStatus stopped/stoppedAlarm/stoppedMalfunction/stoppedWireless exist but are never consulted
 
 - Recommendation: Treat a failed LastBolusStatus read as 'delivered amount unknown': keep the dose mutable and retry on the next sync rather than finalizing with a guess. When the read succeeds, also log/assert bolusStatus == .complete when deliveredVolume equals requested.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: 255-256 read LastBolusStatus, 260 finalizes through getPumpEvent, whose fallback is actualDeliveredUnits ?? total (33). The bolusStatus field of the response is not read.
 
 **P07-4 Temp basal value derived from app schedule, pump rate ignored** (Partial, impact medium, verified)
 
@@ -1265,7 +1329,7 @@ A finalized temp basal's deliveredUnits is value x elapsed hours with full doubl
 - Verifier notes:
   - [review:confirm] Code fact holds: finalized temp basal deliveredUnits is value * (duration / .hours(1)) with no rounding and no pump readback. Trigger is the driver's own finalization path, unaffected by the premise. Sub-milliunit magnitude; low stands.
 
-**P07-6 Declared increments coarser than protocol; value not re-rounded** (Partial, impact low, unverified)
+**P07-6 Declared increments coarser than protocol; value not re-rounded** (Partial, impact low, verified)
 
 The wire carries milliunits for boluses, profile rates and current rate (Tandem specs: 0.001 U/h basal at >=0.1 U/h, 0.01 U bolus — verify), but the driver declares 0.01 U/h and 0.05 U grids and floors to them when reporting. enactBolus does not itself round: value is whatever the host passed, while the wire gets round(units*1000); Loop and Trio round to supportedBolusVolumes first, so in practice value sits on the 0.05 grid, but the driver relies on the host for that. Reported `value` for temp/scheduled basal is floored to 0.01, up to 0.00999 U/h below the pump's 0.001-resolution rate. Small, but it means 'rounded to the pump's supported increment' is only approximately true.
 
@@ -1278,7 +1342,10 @@ The wire carries milliunits for boluses, profile rates and current rate (Tandem 
 
 - Recommendation: Round `value` inside the driver (roundToSupportedBolusVolume in enactBolus) so the reported amount equals the wire amount regardless of host; document that the declared grids are UI-selection grids and use milliunit round-to-nearest for anything read back from the pump.
 
-**P07-7 History mapper rounding vs live path; unwired** (Unsure, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P07-7 History mapper rounding vs live path; unwired** (Unsure, impact none, verified)
 
 The history-derived path correctly keeps value=bolusSize (programmed) and deliveredUnits=insulinDelivered (actual), rounded to nearest 0.001 U with Float32 noise stripped, and leaves temp basal deliveredUnits nil so LoopKit derives it. This is the better-conforming implementation, but it has no production caller (only tests reference HistoryToDoseMapper) and is gated by two default-off flags. Because it rounds differently from the live path (0.05 floor) and mints different raw identifiers, once wired the same bolus could be reported twice with different deliveredUnits. BasalRateChange value is a raw Float (0.8999999 style noise) and unrounded. Cannot judge steady-state behaviour of an emission layer that does not exist yet.
 
@@ -1291,7 +1358,10 @@ The history-derived path correctly keeps value=bolusSize (programmed) and delive
 
 - Recommendation: When wiring the emission layer, make the live paths adopt roundToReportingResolution so both report identical deliveredUnits, apply it to BasalRateChangeHistoryLog.commandBasalRate too, and add tests asserting live-path bolus/temp-basal value and deliveredUnits rounding (none exist today).
 
-**P07-8 Mutable/finalized bolus shape (value vs deliveredUnits)** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P07-8 Mutable/finalized bolus shape (value vs deliveredUnits)** (Conforms, impact none, verified)
 
 Across enact, natural completion and cancel, the DoseEntry keeps value = the programmed units and puts the pump-reported amount in deliveredUnits; in-progress doses carry deliveredUnits nil, the MedtrumKit shape the guide endorses. The 1 s progress estimate (floored to 0.05) is confined to the DoseProgressReporter and never reaches hasNewPumpEvents. Persisted UnfinalizedDose round-trips value and deliveredUnits unchanged, so an app relaunch does not alter amounts. The remaining P07 defects (P07-1..P07-6) are about *which* number lands in deliveredUnits and how it is rounded, not about the field split itself.
 
@@ -1303,6 +1373,9 @@ Across enact, natural completion and cancel, the DoseEntry keeps value = the pro
   - `Sources/TandemKit/State/TandemPumpManagerState.swift:244` bolusDose value/deliveredUnits persisted as Doubles, not re-rounded on relaunch
 
 - Recommendation: Keep this shape; add a unit test pinning value=programmed and deliveredUnits=pump-reported for completion and cancel so the rounding fixes above cannot regress the split.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -1317,7 +1390,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 8 (with §7).
 
-Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). re-audited under the premise; its findings were not independently reviewed
+Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 Re-audited under the screenless-pump premise; the UI-capable reading is summarised in the method section.
 
@@ -1325,14 +1398,14 @@ Under the screenless-Mobi premise, §9 item 8 does not apply in the default conf
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P08-1 | Not applicable | none | unverified | Applicability: default configuration has no user-programmable pump-side dose source |
-| P08-2 | Partial | low | unverified | Conditional: quick-bolus and Control-IQ boluses are invisible to the live status path |
-| P08-3 | Not applicable | none | unverified | Conditional: Control-IQ basal modulation and pump-set temp rates produce no dose |
-| P08-4 | Conforms | none | unverified | Pump-initiated stops (alarm suspends, aborted boluses) are accounted for without the flag |
-| P08-5 | Partial | low | unverified | Latent: dormant history mapper would misflag Loop's own boluses and omit `automatic` |
-| P08-6 | Partial | low | unverified | Latent: no identity bridge between optimistic raw and history identifiers (app-triggered once history emission is enabled) |
+| P08-1 | Not applicable | none | verified | Applicability: default configuration has no user-programmable pump-side dose source |
+| P08-2 | Partial | low | verified | Conditional: quick-bolus and Control-IQ boluses are invisible to the live status path |
+| P08-3 | Not applicable | none | verified | Conditional: Control-IQ basal modulation and pump-set temp rates produce no dose |
+| P08-4 | Conforms | none | verified | Pump-initiated stops (alarm suspends, aborted boluses) are accounted for without the flag |
+| P08-5 | Partial | low | verified | Latent: dormant history mapper would misflag Loop's own boluses and omit `automatic` |
+| P08-6 | Partial | low | verified | Latent: no identity bridge between optimistic raw and history identifiers (app-triggered once history emission is enabled) |
 
-**P08-1 Applicability: default configuration has no user-programmable pump-side dose source** (Not applicable, impact none, unverified)
+**P08-1 Applicability: default configuration has no user-programmable pump-side dose source** (Not applicable, impact none, verified)
 
 With no screen, the Mobi's only user-initiated dose sources are the quick-bolus button and Control-IQ. TandemKit re-reads PumpGlobals and issues SetQuickBolusSettingsRequest(enabled: false) on every sync while quickBolusButtonSupport is off, and Control-IQ can only be turned on from TandemKit's own settings screen when controlIQSupport is on (or by Tandem's phone app, excluded by the premise). Both flags default to false. So in the default configuration every dose is Loop-commanded and the guide's §7/§9-8 requirement (flag user-initiated doses, reconcile them from history) has nothing to apply to; leaving wasProgrammedByPumpUI false is what the guide prescribes for Loop-only pumps. This is the premise's archetype, matched by code.
 
@@ -1345,7 +1418,10 @@ With no screen, the Mobi's only user-initiated dose sources are the quick-bolus 
 
 - Recommendation: Document in the driver's user-facing notes that the quick-bolus button is disabled by TandemKit and that enabling quickBolusButtonSupport or Control-IQ changes the dose-accounting contract (see P08-2). Keep both flags default-off until P08-2 is addressed.
 
-**P08-2 Conditional: quick-bolus and Control-IQ boluses are invisible to the live status path** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P08-2 Conditional: quick-bolus and Control-IQ boluses are invisible to the live status path** (Partial, impact low, verified)
 
 fetchBolusStatus (from sync and from the .bolusChange qualifying event) emits a dose only when a TandemDoseProgressReporter exists, i.e. enactBolus ran in this process. A bolus from the quick-bolus button or a Control-IQ auto-correction arrives as .delivering with a foreign bolusId and returns silently; on completion state is cleared with no event, so it never reaches IOB. The response's bolusSource, which would let the driver set wasProgrammedByPumpUI/automatic, is unused. In the default configuration this is reachable only in a narrow residual: between pairing and the first successful sync, or when the pump rejects the disable (tested at line 109). With quickBolusButtonSupport on, or with Control-IQ enabled, this becomes nonconforming with high impact (lost boluses).
 
@@ -1358,7 +1434,10 @@ fetchBolusStatus (from sync and from the .bolusChange qualifying event) emits a 
 
 - Recommendation: In fetchBolusStatus, when status is .delivering or the id is foreign, emit a dose keyed by HistoryLogSyncIdentifier.bolus with wasProgrammedByPumpUI = (bolusSource != .bluetoothRemoteBolus) and automatic = (bolusSource == .controlIQAutoBolus), finalizing from LastBolusStatus. Until then, make enabling quickBolusButtonSupport or Control-IQ surface a warning that pump-side boluses are not counted in IOB, and consider retrying the quick-bolus disable when the pump rejects it.
 
-**P08-3 Conditional: Control-IQ basal modulation and pump-set temp rates produce no dose** (Not applicable, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: the reporter guard (226) and the clear-without-emit branch (217) are as described; bolusSource is never read anywhere under Sources/TandemKit. Conditional under the premise; low by default.
+
+**P08-3 Conditional: Control-IQ basal modulation and pump-set temp rates produce no dose** (Not applicable, impact none, verified)
 
 A temp rate the app did not set, or Control-IQ raising/attenuating basal, would either fall through fetchBasalStatus's change block with no emission (.tempBasal) or be reported as the app's scheduled rate (.basal). On a screenless Mobi with Tandem's app not in use, the only way to reach this is Control-IQ, which is off by default and gated behind controlIQSupport; when it is on, TandemKit already refuses its own temp basals and automatic boluses, so the app is no longer the dosing authority. Under the default configuration there is no trigger. Under Control-IQ the impact would be high (the pump's actual basal delivery is unaccounted for), but the premise treats that as a conditional mode, not the default.
 
@@ -1371,7 +1450,10 @@ A temp rate the app did not set, or Control-IQ raising/attenuating basal, would 
 
 - Recommendation: Before making controlIQSupport generally available, report CurrentBasalStatusResponse.currentBasalRate (and TempRateRequest percent/remaining for 0x02) as a mutable .tempBasal/.basal dose with automatic = true and a stable tempRateId-based raw, so Control-IQ modulation reaches IOB when the user opts into it.
 
-**P08-4 Pump-initiated stops (alarm suspends, aborted boluses) are accounted for without the flag** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P08-4 Pump-initiated stops (alarm suspends, aborted boluses) are accounted for without the flag** (Conforms, impact none, verified)
 
 The in-scope pump-side events under the premise are stops the pump initiates on its own: occlusion, empty cartridge, auto-off, malfunction, cartridge-change mode, and a bolus it aborts for those reasons. These are detected (sync or pumpSuspend/pumpResume qualifying event) and emitted as suspend doses, and an aborted Loop bolus is finalized from LastBolusStatus.deliveredVolume rather than assumed complete. None of these is a user-programmed dose, so leaving wasProgrammedByPumpUI false is the correct value per §7 for a Loop-only pump; no flag is missing. Detection-time (not pump-time) start stamps for suspends are a timing matter covered by other points, not a flag matter.
 
@@ -1383,7 +1465,10 @@ The in-scope pump-side events under the premise are stops the pump initiates on 
 
 - Recommendation: No change for this item. Keep the suspend/resume and aborted-bolus paths as they are; timing accuracy of the suspend start belongs to the suspend/resume audit point.
 
-**P08-5 Latent: dormant history mapper would misflag Loop's own boluses and omit `automatic`** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P08-5 Latent: dormant history mapper would misflag Loop's own boluses and omit `automatic`** (Partial, impact low, verified)
 
 The mapper's derivation is the right shape, but under the premise every bolus is Loop's own, and nothing in the driver can supply isCommandedBolus: only the in-flight bolusDose.bolusId is kept and it is cleared on completion, so once an emission layer exists every completed Loop bolus found in history would be flagged wasProgrammedByPumpUI = true. Trio ignores that flag (no reference in its consumer), but it does read `automatic`, which the mapper never sets, so history-derived boluses would be recorded as SMBs. Today none of this fires: mapToEvents has no production caller and historyDoseReporting has no consumer. Under Control-IQ the gap would matter more, since auto-boluses would be indistinguishable from user boluses.
 
@@ -1396,7 +1481,10 @@ The mapper's derivation is the right shape, but under the premise every bolus is
 
 - Recommendation: Before wiring the emission layer: persist a bounded set of commanded bolusIds in TandemPumpManagerState for the predicate, and set `automatic` from BolusDeliveryHistoryLog.bolusSourceEnum (controlIQAutoBolus → true, bluetoothRemoteBolus → the activationType Loop recorded).
 
-**P08-6 Latent: no identity bridge between optimistic raw and history identifiers (app-triggered once history emission is enabled)** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P08-6 Latent: no identity bridge between optimistic raw and history identifiers (app-triggered once history emission is enabled)** (Partial, impact low, verified)
 
 §7's history reconciliation is a UI-capable requirement and does not apply under the premise, and TandemKit indeed finalizes Loop's boluses from LastBolusStatus rather than history. This finding survives only as an app-side latent risk: the driver has built flags and a mapper for history-derived doses, but the optimistic raw minted by enactBolus/cancelBolus and the HistoryLogSyncIdentifier raw minted by the mapper are different bytes for the same bolus. If an emission layer were added and historyDoseReporting switched on without first unifying identities, every Loop bolus would appear twice (Trio dedups by date+type, which would only partially mask it). Nothing fires today: both flags default off and no emitter exists.
 
@@ -1409,6 +1497,9 @@ The mapper's derivation is the right shape, but under the premise every bolus is
 
 - Recommendation: Make enactBolus/cancelBolus/getPumpEvent use HistoryLogSyncIdentifier.bolus(pumpSerial:bolusId:) as raw once the serial is known (and tempRateId for temp basals) before any history emission is wired, so history confirmations update in place. Note in the flag's description that it must not be enabled before that change lands.
 
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
 Open questions raised by this point:
 
 - The premise states the host disables closed loop when Control-IQ is on, but the Trio checkout has no reference to Control-IQ or to TandemKit's useControlIQ/controlIQEnabled state; the only enforcement found is TandemKit refusing automatic boluses and temp basals (TandemPumpManager.swift:517, 673). How Trio actually learns to open-loop needs confirming.
@@ -1419,18 +1510,18 @@ Open questions raised by this point:
 
 Guide section: §9 item 9.
 
-Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). 1 of 4 findings independently reviewed
+Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). 4 of 4 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 decisionId does not exist in the LoopKit TandemKit builds against. Trio's pinned loopandlearn fork (rev 0229bb18, unit-tests.yml:46) declares enactBolus(units:activationType:) and enactTempBasal(unitsPerHour:for:) with no decisionId, and its DoseEntry has no such field; the Linux shim matches. TandemKit's signatures mirror the fork exactly and the repo has zero references to decisionId, so the item is not applicable today. Forward-looking: next-dev makes decisionId a required DoseEntry init parameter, and TandemKit has no slot for a host-side id — UnfinalizedDose carries only a pump-assigned bolusId (persisted) and reduces activationType to a Bool. The surrogate metadata actually used (automatic/manuallyEntered) is lossy and inconsistent between the mutable and finalized bolus, with manuallyEntered=true applied to pump-delivered boluses.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P09-1 | Not applicable | none | unverified | decisionId absent from the pinned LoopKit API |
-| P09-2 | Partial | none | unverified | Readiness: correlation id slot for a future decisionId |
-| P09-3 | Partial | medium | unverified | activationType surrogate is lossy and inconsistent across bolus lifecycle |
+| P09-1 | Not applicable | none | verified | decisionId absent from the pinned LoopKit API |
+| P09-2 | Partial | none | verified | Readiness: correlation id slot for a future decisionId |
+| P09-3 | Partial | medium | verified | activationType surrogate is lossy and inconsistent across bolus lifecycle |
 | P09-4 | Partial | low | verified | Temp basal and history-derived doses: automatic flag conventions |
 
-**P09-1 decisionId absent from the pinned LoopKit API** (Not applicable, impact none, unverified)
+**P09-1 decisionId absent from the pinned LoopKit API** (Not applicable, impact none, verified)
 
 The guide's §9 item 9 presupposes the next-dev API where enactBolus/enactTempBasal receive `decisionId: UUID?` and DoseEntry stores it. TandemKit is built (per Package.swift and CI) against Trio's loopandlearn fork, whose PumpManager protocol and DoseEntry have no decisionId at all, and the Linux shim matches. TandemKit's method signatures are the fork's verbatim; a repo-wide grep for `decisionId` returns nothing. There is therefore nothing to thread and nothing to violate on the current target, on any path (steady state, first sync, reconnect, relaunch).
 
@@ -1443,7 +1534,10 @@ The guide's §9 item 9 presupposes the next-dev API where enactBolus/enactTempBa
 
 - Recommendation: No action for the current Trio target. Track the requirement against the LoopKit bump that introduces decisionId (see P09-2).
 
-**P09-2 Readiness: correlation id slot for a future decisionId** (Partial, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P09-2 Readiness: correlation id slot for a future decisionId** (Partial, impact none, verified)
 
 For boluses a durable correlation key exists: the pump-assigned bolusId is stored on UnfinalizedDose, persisted in manager state, and used by HistoryLogSyncIdentifier so a history confirmation can match the optimistic report. A future decisionId could be stored alongside it. But nothing in UnfinalizedDose, its rawValue, or toDoseEntry has a slot for a host-supplied UUID, and temp basals carry no id of any kind. On next-dev, DoseEntry's initializer makes decisionId a required argument, so every construction site (UnfinalizedDose.toDoseEntry, the DoseEntry extension, HistoryToDoseMapper) would need changes, and the value would have to be persisted in rawValue — not in the in-memory TandemDoseProgressReporter — to survive relaunch.
 
@@ -1456,7 +1550,10 @@ For boluses a durable correlation key exists: the pump-assigned bolusId is store
 
 - Recommendation: When adopting a decisionId-bearing LoopKit: add `decisionId: UUID?` to UnfinalizedDose (bolus and tempBasal inits, rawValue round-trip) and pass it through toDoseEntry; give temp basals a stable identity (pump tempRateId if the set response exposes it).
 
-**P09-3 activationType surrogate is lossy and inconsistent across bolus lifecycle** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P09-3 activationType surrogate is lossy and inconsistent across bolus lifecycle** (Partial, impact medium, verified)
 
 Because the fork has no decisionId, the only Loop-side provenance TandemKit records is `automatic`/`manuallyEntered`. The in-progress and cancel representations (UnfinalizedDose.toDoseEntry) carry `automatic` only, while the normal-completion representation (TandemDoseProgressReporter → DoseEntry.bolus) also sets `manuallyEntered = true` for `.manualNoRecommendation`. So the same bolus flips metadata between mutable and finalized, and differs depending on whether it completed or was cancelled. In LoopKit, `manuallyEntered` denotes insulin the user logged that the pump did not deliver; `getManuallyEnteredDoses`/`deleteAllManuallyEnteredDoses` select on it. Flagging a pump-delivered bolus this way misdescribes it and exposes it to host flows that manage external insulin. The fork's getNormalizedDoseEntries does not filter on the flag, so IOB inside LoopKit is unaffected.
 
@@ -1468,6 +1565,9 @@ Because the fork has no decisionId, the only Loop-side provenance TandemKit reco
   - `Sources/TandemCore/Common/Extensions/DoseEntry.swift:24` `manuallyEntered: activationType == .manualNoRecommendation` on a pump-delivered bolus
 
 - Recommendation: Never set manuallyEntered on pump-delivered doses; derive `automatic` from activationType in one place (UnfinalizedDose) and use it for mutable, cancelled and finalized entries alike. Persist activationType (or automatic) in rawValue rather than the reporter.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: UnfinalizedDose keeps only automatic (33, 163); the reporter's activationType (17) is memory-only and feeds DoseEntry.bolus, which sets manuallyEntered for .manualNoRecommendation (Extensions/DoseEntry.swift:24). Same defect as P22-2.
 
 **P09-4 Temp basal and history-derived doses: automatic flag conventions** (Partial, impact low, verified)
 
@@ -1495,7 +1595,7 @@ Open questions raised by this point:
 
 Guide section: §9 item 10.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 8 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 8 of 8 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 App-commanded suspend/resume are emitted as proper .suspend/.resume dose events, and the UI cartridge/cannula wizards emit .rewind and .replaceComponent(.infusionSet). Gaps: a resume performed on the pump itself is detected by CurrentBasalStatus polling and emitted as a .basal dose with no .resume, which can leave an open suspend in Loop/Trio (the only correct handler, handleHomeScreenMirrorResponse, has no callers). No .prime event is ever emitted despite tubing/cannula fill volumes being known. No live path emits NewPumpEvent(type: .alarm); the history mapper does (without alarmType) but is unwired and behind two default-off flags. Site/cartridge changes made on the pump UI are never detected (CannulaFilled/CartridgeFilled logs ignored). No tests assert emitted PumpEventType on manager paths.
 
@@ -1506,7 +1606,7 @@ App-commanded suspend/resume are emitted as proper .suspend/.resume dose events,
 | P10-3 | Conforms | none | amended | Cartridge change as .rewind, wizard-only |
 | P10-4 | Conforms | none | amended | Site change as .replaceComponent(.infusionSet), wizard-only |
 | P10-5 | Non-conforming | low | amended | No .prime event for tubing or cannula fills |
-| P10-6 | Non-conforming | low | unverified | Alarms not emitted as pump events on any live path |
+| P10-6 | Non-conforming | low | verified | Alarms not emitted as pump events on any live path |
 | P10-7 | Not applicable | none | verified | Pump replacement / deactivation events |
 | P10-8 | Partial | none | verified | Test coverage of emitted PumpEventType |
 
@@ -1589,7 +1689,7 @@ grep over Sources finds no NewPumpEvent with type .prime; the only mentions are 
 - Verifier notes:
   - [review:amend] Facts confirmed: no NewPumpEvent of type .prime anywhere in Sources; FillCannulaRequest carries the prime volume and ExitFillTubingModeRequest completes with no event; TubingFilled/CannulaFilled logs fall to the mapper's default: continue. The trigger is the app's own fill wizards, so the premise does not remove it and the guide's checklist item is unmet. The accounting consequence is smaller than rated: Trio never derives doses from reservoir readings and only stores .prime as a marker; Loop uses reservoir doses only when the last reading is newer than lastReconciliation, and syncPumpData stamps lastReconciliation after fetchReservoirStatus, so exposure is confined to qualifying-event reservoir reads (pumpSuspend/pumpResume -> InsulinStatusRequest) until the next sync (<= ~5 min), and a cartridge refill raises the level, masking the tubing-fill drop. Transient, bounded, Loop-only: low.
 
-**P10-6 Alarms not emitted as pump events on any live path** (Non-conforming, impact low, unverified)
+**P10-6 Alarms not emitted as pump events on any live path** (Non-conforming, impact low, verified)
 
 Pump alarms/malfunctions reach the host only as LoopKit Alerts (reconcileLoopKitAlerts), never as NewPumpEvent(type: .alarm, alarmType:). The only code that builds a .alarm event is HistoryToDoseMapper.alarmEvent, which (a) has no production caller — mapToEvents is invoked only from tests and HistoryBackfillCoordinator explicitly emits nothing, (b) is gated by two default-off flags, (c) leaves alarmType nil although AlarmActivatedHistoryLog.alarmResponseType could map occlusion/no-delivery/low-power, and (d) also maps AlertActivatedHistoryLog (e.g. reminders/low reservoir) as .alarm and never emits .alarmClear. Alarm events do not change IOB, but an alarm-induced auto-suspend is only picked up via the basalStatus fetch (P10-2), not via the alarm.
 
@@ -1601,6 +1701,9 @@ Pump alarms/malfunctions reach the host only as LoopKit Alerts (reconcileLoopKit
   - `Sources/TandemCore/Messages/HistoryLog/AlarmActivatedHistoryLog.swift:76` alarmResponseType available for a PumpAlarmType mapping
 
 - Recommendation: When fetchNotifications first sees an active alarm/malfunction, emit NewPumpEvent(type: .alarm, alarmType:) keyed by notification id+timestamp with replacePendingEvents:false, and .alarmClear on retraction. In the mapper, map AlarmActivated to PumpAlarmType, and reconsider emitting alerts as .alarm.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: the only NewPumpEvent with type .alarm is built in HistoryToDoseMapper (296), which has no production caller; the live path issues LoopKit Alerts only (+Alerts.swift:114).
 
 **P10-7 Pump replacement / deactivation events** (Not applicable, impact none, verified)
 
@@ -1641,17 +1744,17 @@ Open questions raised by this point:
 
 Guide section: §10 pitfall: temp basal finalization and overwrite.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 3 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 A running TBR is finalized, not overwritten, when Loop replaces or cancels it, and it survives BLE reconnect and app relaunch because state.basalDose is persisted and the next sync's fetchBasalStatus finalizes it (clamped to the programmed end on natural expiry). However the raw key is "tempBasal <programmedUnits> <start>", and LoopKit computes programmedUnits from the entry's endDate, so every early finalization (Loop's 5-minute re-issue, suspend, Control-IQ enable, pump-side cancel) changes the syncIdentifier; the correct end state depends on the replacePendingEvents purge, the §4 anti-pattern. Pump-side cancellation is stamped at sync time rather than the pump's stop time, deliveredUnits is an unrounded rate×duration product, and the reported rate is derived from the app's schedule rather than the pump's profileBasalRate just fetched.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
 | P11-1 | Partial | medium | verified | Temp basal syncIdentifier stability through finalization |
-| P11-2 | Conforms | none | unverified | Replacing/cancelling a running TBR finalizes instead of overwriting |
-| P11-3 | Conforms | none | unverified | TBR survives BLE reconnect and app relaunch |
+| P11-2 | Conforms | none | verified | Replacing/cancelling a running TBR finalizes instead of overwriting |
+| P11-3 | Conforms | none | verified | TBR survives BLE reconnect and app relaunch |
 | P11-4 | Partial | medium | verified | Pump-side TBR stop stamped at sync time, not pump time |
-| P11-5 | Non-conforming | low | unverified | deliveredUnits rounding to pump increment |
+| P11-5 | Non-conforming | low | verified | deliveredUnits rounding to pump increment |
 | P11-6 | Partial | medium | verified | Reported rate derived from app schedule, not pump's profile rate |
 
 **P11-1 Temp basal syncIdentifier stability through finalization** (Partial, impact medium, verified)
@@ -1670,7 +1773,7 @@ The mutable TBR re-reports (endDate = estimatedEndDate) and the natural-expiry f
 - Verifier notes:
   - [review:confirm] Code fact holds: temp basal raw embeds dose.programmedUnits, which shrinks when toDoseEntry finalizes with an early endDate (Date.now) in getActivePumpEvents. Every early-end trigger is app-side (Loop re-issuing a TBR, suspendDelivery, configureControlIQMode) or a pump alarm stop noticed by fetchBasalStatus, all in scope under the premise. Correctness relies on the replacePendingEvents purge, the pattern §4 warns against. Partial/medium unchanged.
 
-**P11-2 Replacing/cancelling a running TBR finalizes instead of overwriting** (Conforms, impact none, unverified)
+**P11-2 Replacing/cancelling a running TBR finalizes instead of overwriting** (Conforms, impact none, verified)
 
 On enactTempBasal with a TBR already running the driver stops the pump's temp rate, then emits in one batch: the old TBR as an immutable DoseEntry with endDate = the new dose's startDate and computed deliveredUnits, plus the new TBR as mutable. The zero-duration/100% path likewise finalizes the old TBR and emits the scheduled basal. suspendDelivery and configureControlIQMode follow the same finalize-then-replace shape. The old TBR's end is stamped a few seconds after the actual StopTempRate (at the new dose's Date.now), which is negligible. There is no code path that re-emits a different TBR under the old dose's slot without first finalizing it.
 
@@ -1683,7 +1786,10 @@ On enactTempBasal with a TBR already running the driver stops the pump's temp ra
 
 - Recommendation: Keep the finalize-then-start ordering; consider stamping the old TBR's end at the StopTempRate response time rather than the new dose's start to remove the small overlap gap.
 
-**P11-3 TBR survives BLE reconnect and app relaunch** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P11-3 TBR survives BLE reconnect and app relaunch** (Conforms, impact none, verified)
 
 Neither the disconnect callback nor the Bluetooth-off path modifies basalDose or emits events, and auto-reconnect only re-establishes the link. Because UnfinalizedDose is persisted inside TandemPumpManagerState, the same startDate/estimatedEndDate/value regenerate an identical raw after relaunch (ISO8601 formatting drops sub-seconds, so precision is not a factor). At the next ensureCurrentPumpData (≈5 min) or .basalChange qualifying event, fetchBasalStatus sees the pump back on profile basal and finalizes the TBR with endDate clamped to estimatedEndDate on natural expiry. No path emits replacePendingEvents:true while omitting the running TBR except sendResumePumping, which is only reachable when state already says suspended (so no TBR is pending).
 
@@ -1695,6 +1801,9 @@ Neither the disconnect callback nor the Bluetooth-off path modifies basalDose or
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:149` var events = getActivePumpEvents(endDate: now) — finalized, not dropped
 
 - Recommendation: Add a test that drives disconnect → reconnect → fetchBasalStatus with a stubbed CurrentBasalStatusResponse(basal) and asserts the TBR is emitted immutable with the original raw and deliveredUnits.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: didDisconnectPeripheral touches no dose state (TandemBluetoothManager.swift:473); basalDose round-trips through rawValue (272, 386).
 
 **P11-4 Pump-side TBR stop stamped at sync time, not pump time** (Partial, impact medium, verified)
 
@@ -1712,7 +1821,7 @@ Natural expiry is handled correctly because toDoseEntry clamps to estimatedEndDa
 - Verifier notes:
   - [review:confirm] Code fact holds: fetchBasalStatus finalizes a vanished TBR at the poll time (Date.now), polls are ~5 min apart, and TempRateResponse startTimeRaw/duration are only read in suspendDelivery. The premise drops the 'user cancels on the screen' trigger, but pump alarm stops (occlusion, empty cartridge, auto-off) and cartridge-change mode remain in scope and produce the same rate x delay over-count. Partial/medium stands.
 
-**P11-5 deliveredUnits rounding to pump increment** (Non-conforming, impact low, unverified)
+**P11-5 deliveredUnits rounding to pump increment** (Non-conforming, impact low, verified)
 
 The finalized TBR's deliveredUnits is value × elapsed hours with arbitrary double precision (e.g. 0.85 U/h × 17m23s = 0.24626… U). Tandem reports insulin in milliunits, so the guide's expectation is a value rounded to 0.001 U (or the pump's delivery increment). Only the programmed rate is snapped to the 0.01 U/h grid. This is an estimate anyway — the pump is never asked what it actually delivered for the temp rate — so the unrounded figure also misrepresents precision. Impact on IOB is sub-milliunit, but it feeds HealthKit and plotting.
 
@@ -1723,6 +1832,9 @@ The finalized TBR's deliveredUnits is value × elapsed hours with arbitrary doub
   - `Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift:252` history temp basal DoseEntry has no deliveredUnits argument
 
 - Recommendation: Round the finalized temp basal deliveredUnits with HistoryToDoseMapper.roundToReportingResolution (or a shared TandemCore helper) before building the DoseEntry; do the same in the mapper's tempBasalEvent once wired.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P11-6 Reported rate derived from app schedule, not pump's profile rate** (Partial, impact medium, verified)
 
@@ -1752,18 +1864,18 @@ Open questions raised by this point:
 
 Guide section: §10 pitfall: bolus during BLE loss.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 3 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit persists the in-progress bolus (UnfinalizedDose with pump bolusId) and, when the app stays alive across a BLE drop, finalizes it from the pump's own LastBolusStatus delivered volume after the estimated end plus a 30 s grace. Two gaps break the pitfall's intent. First, the mutable dose is only registered after the pump acknowledges InitiateBolusRequest; a response timeout on a request the pump did receive yields a clean failure, no dose, and deliveryIsUncertain stays false. Second, finalization is gated on the memory-only TandemDoseProgressReporter, so after an app relaunch mid-bolus the persisted dose is cleared silently and the earlier mutable event is never finalized (later purged). Additionally the mutable bolus is not re-reported during delivery and its raw changes on partial delivery.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
 | P12-1 | Partial | high | verified | enactBolus registration vs InitiateBolus ack timeout |
-| P12-2 | Conforms | none | unverified | In-progress bolus state persistence |
+| P12-2 | Conforms | none | verified | In-progress bolus state persistence |
 | P12-3 | Non-conforming | high | amended | Recovery after app relaunch mid-bolus |
-| P12-4 | Conforms | none | unverified | Reconnect with app alive: pump supplies delivered amount |
-| P12-5 | Partial | medium | unverified | Fallbacks when the pump query fails; rounding of delivered amount |
-| P12-6 | Partial | medium | unverified | Mutable bolus not re-reported during delivery; raw changes on partial delivery |
+| P12-4 | Conforms | none | verified | Reconnect with app alive: pump supplies delivered amount |
+| P12-5 | Partial | medium | verified | Fallbacks when the pump query fails; rounding of delivered amount |
+| P12-6 | Partial | medium | verified | Mutable bolus not re-reported during delivery; raw changes on partial delivery |
 | P12-7 | Partial | low | verified | History-log path as recovery source |
 
 **P12-1 enactBolus registration vs InitiateBolus ack timeout** (Partial, impact high, verified)
@@ -1782,7 +1894,7 @@ In steady state the mutable dose, bolusId, and lastReconciliation are recorded a
 - Verifier notes:
   - [review:confirm] Verified literally: the packets are written at TandemPeripheralManager:200 and nil is returned at 215 after the 30 s responseTimeout or a cancel, so nil covers both never-sent and ack-lost. enactBolus (564-568) then releases permission, reports .noResponse and registers no dose; makeStatus hard-codes deliveryIsUncertain:false. Trio has no consumer of deliveryIsUncertain, and neither host receives any event, so a started bolus has zero IOB in both. The 180 s watchdog is a different case: CommandWatchdog is once-only, so the late state.bolusDose/emit still lands but Loop already saw a failure. BLE loss is app-side; premise does not lower it.
 
-**P12-2 In-progress bolus state persistence** (Conforms, impact none, unverified)
+**P12-2 In-progress bolus state persistence** (Conforms, impact none, verified)
 
 The guide asks that UnfinalizedDose state not live only in memory. TandemKit persists state.bolusDose (type, value, startDate, estimatedEndDate, deliveredUnits, bolusId) and the LoopKit bolusState into rawState on every notifyDelegateStateUpdated, and decodes both on init. BLE disconnects (markLinkDown / didDisconnectPeripheral) do not touch bolusDose or bolusState, so the record survives both link loss and app termination. Whether that persisted record is actually used to recover is a separate matter (P12-3).
 
@@ -1794,6 +1906,9 @@ The guide asks that UnfinalizedDose state not live only in memory. TandemKit per
   - `Tests/TandemKitTests/TandemPumpManagerStateTests.swift:115` testInProgressBolusRoundTrips asserts bolusId 2004, startDate, estimatedEndDate survive
 
 - Recommendation: No change needed for persistence itself. Consider also persisting the dose's original raw/syncIdentifier so any relaunch recovery re-reports the identical identity (see P12-3, P12-6).
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P12-3 Recovery after app relaunch mid-bolus** (Non-conforming, impact high, amended)
 
@@ -1811,7 +1926,7 @@ The mutable bolus was reported to Loop with replacePendingEvents:false at enact 
 - Verifier notes:
   - [review:amend] Code claims verified, including that StateSync:255 (queryLastBolusDeliveredVolume) sits behind the reporter guard and emitPumpEvents defaults replacePendingEvents to true (1733). The qualifying-event path (.bolusChange → fetchBolusStatus(fromSync:false)) runs the same reporter-gated code, so no path recovers. Correct the downstream fact: the purge that makes the bolus vanish exists in LoopKit DoseStore (both variants); Trio ignores replacePendingEvents and retains the enact-time row at programmedUnits, so under Trio the failure mode is over-count after a pump-side abort rather than loss. Relaunch is app-side; high retained.
 
-**P12-4 Reconnect with app alive: pump supplies delivered amount** (Conforms, impact none, unverified)
+**P12-4 Reconnect with app alive: pump supplies delivered amount** (Conforms, impact none, verified)
 
 When BLE drops but the process survives, nothing resets bolusDose or bolusProgressReport (TandemBluetoothManager only flips isConnected). The pump does not replay the missed bolusChange qualifying event, so the driver relies on the periodic sync: it defers CurrentBolusStatus until estimatedEndDate + 30 s, then, once the pump reports no active bolus, reads LastBolusStatus for the tracked bolusId and finalizes with the pump's deliveredVolume rather than the time-based TandemDoseProgressReporter estimate. This matches the guide's 'pump is the source of truth' rule. ensureCurrentPumpData's 4.5-minute freshness check delays this to the next Loop poll, which is acceptable.
 
@@ -1824,7 +1939,10 @@ When BLE drops but the process survives, nothing resets bolusDose or bolusProgre
 
 - Recommendation: Keep this path; consider triggering fetchBolusStatus(fromSync:true) directly from the auto-reconnect completion so a bolus interrupted by link loss is reconciled within seconds of reconnect rather than at the next poll.
 
-**P12-5 Fallbacks when the pump query fails; rounding of delivered amount** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P12-5 Fallbacks when the pump query fails; rounding of delivered amount** (Partial, impact medium, verified)
 
 The recovery path finalizes from the pump only when LastBolusStatus answers and its bolusId matches. If that single read times out (plausible right after a reconnect) the completion path finalizes with the full programmed amount, while the cancel path finalizes with zero. Both silently commit a guess as an immutable dose that Loop will never revise, in opposite directions. Separately, the pump's milliunit deliveredVolume is floored to the 0.05 U command grid, so an interrupted bolus of e.g. 1.041 U is recorded as 1.00 U; the history mapper explicitly rounds to nearest to avoid this.
 
@@ -1836,7 +1954,10 @@ The recovery path finalizes from the pump only when LastBolusStatus answers and 
 
 - Recommendation: If LastBolusStatus fails or mismatches, keep the dose mutable and retry on the next sync instead of committing programmed or zero. Round delivered volume with round-to-nearest milliunits (as HistoryToDoseMapper does) rather than flooring to the command grid.
 
-**P12-6 Mutable bolus not re-reported during delivery; raw changes on partial delivery** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: completion fallback ?? total (reporter:33), cancel fallback ?? 0 (639), floor to the 0.05 U grid (532, 226). Duplicates P05-2/P07-1/P07-2/P07-3.
+
+**P12-6 Mutable bolus not re-reported during delivery; raw changes on partial delivery** (Partial, impact medium, verified)
 
 After the single replacePendingEvents:false emission at enact time, the in-progress bolus is never re-sent. Any replacePendingEvents:true batch during delivery — most plausibly fetchBasalStatus detecting a temp basal that expired during a BLE outage, since enactTempBasal is blocked while the bolus runs — purges the mutable bolus from Loop, leaving IOB short until finalization re-inserts it. Finalization also mints raw from delivered units, so an interrupted bolus (delivered < programmed) gets a different syncIdentifier than the mutable one; the end state is correct only because the purge removes the stale row, the MedtrumKit safety-net pattern the guide advises against.
 
@@ -1848,6 +1969,9 @@ After the single replacePendingEvents:false emission at enact time, the in-progr
   - `Sources/TandemKit/PumpManager/TandemDoseProgressReporter.swift:44` units: delivered — final event's raw uses delivered, not programmed, units
 
 - Recommendation: Include the in-progress bolus (same raw, isMutable:true) in getActivePumpEvents so every batch re-reports it, and build the bolus raw from programmed units (or the pump bolusId) so cancellation and partial delivery keep the identity constant.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: .delivering branch updates bolusState only (230-236); getActivePumpEvents never returns the bolus (1703); fetchBasalStatus emits replace:true (183) while the sync-path bolus read is deferred (202). The purge is P04-1 (high, Loop-only); the identity part is rated low elsewhere; medium kept as the blend.
 
 **P12-7 History-log path as recovery source** (Partial, impact low, verified)
 
@@ -1874,21 +1998,21 @@ Open questions raised by this point:
 
 Guide section: §10 pitfall: suspend / resume events.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 5 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 Loop-initiated suspend and resume are modeled correctly: suspendDelivery finalizes any running temp basal at the suspend instant and emits an immutable .suspend point event; sendResumePumping emits a .resume carrying insulinType, and with pumpRecordsBasalProfileStartEvents=false LoopKit re-inserts scheduled basal itself. Pump-initiated stops are only partly handled. The live detection path (fetchBasalStatus) stamps a pump-side suspend at detection time, not the pump's time, and—critically—reports a pump-side resume as a .basal dose, which LoopKit's reconciled() does not accept as closing a suspend, so the suspend stays open. The pump-timestamped PumpingSuspended/Resumed history mapping exists but is unwired and behind default-off flags. Teardown correctly emits no suspend because a Tandem pump keeps delivering after the driver is removed.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P13-1 | Conforms | none | unverified | Loop-initiated suspend (suspendDelivery) |
-| P13-2 | Conforms | none | unverified | Loop-initiated resume (sendResumePumping) |
+| P13-1 | Conforms | none | verified | Loop-initiated suspend (suspendDelivery) |
+| P13-2 | Conforms | none | verified | Loop-initiated resume (sendResumePumping) |
 | P13-3 | Non-conforming | medium | amended | Pump-initiated resume reported as .basal, not .resume |
 | P13-4 | Partial | medium | verified | Pump-initiated suspend timing and coverage |
 | P13-5 | Not applicable | none | verified | Teardown / prepareForDeactivation |
 | P13-6 | Partial | medium | verified | Cartridge/cannula/tubing flows with pump already suspended |
 | P13-7 | Partial | medium | verified | Suspend batch drops an in-flight mutable bolus |
 
-**P13-1 Loop-initiated suspend (suspendDelivery)** (Conforms, impact none, unverified)
+**P13-1 Loop-initiated suspend (suspendDelivery)** (Conforms, impact none, verified)
 
 A Loop-commanded suspend is a real dose event with correct timing: it is stamped when the pump acknowledges SuspendPumpingRequest, the in-flight temp basal is finalized at that same instant, and the batch is sent with replacePendingEvents: true. The suspend is an immutable zero-duration entry, which is what LoopKit's reconciled() and DoseStore ('extend an unfinished suspend out to end time') expect; the in-tree Omnipod driver uses the identical DoseEntry(suspendDate:) shape, so not re-reporting it as mutable is the established convention rather than a gap. After app relaunch the persisted basalDose keeps basalDeliveryState at .suspended. Tests exercise the wire sequence and state but not the emitted NewPumpEvent contents.
 
@@ -1901,7 +2025,10 @@ A Loop-commanded suspend is a real dose event with correct timing: it is stamped
 
 - Recommendation: Add a test asserting the emitted batch (finalized temp basal + .suspend, replacePendingEvents true) via StubPumpBluetooth and a recording delegate.
 
-**P13-2 Loop-initiated resume (sendResumePumping)** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P13-2 Loop-initiated resume (sendResumePumping)** (Conforms, impact none, verified)
 
 The resume emitted after a successful ResumePumpingRequest is a real .resume DoseEntry stamped at the acknowledgement time and carries insulinType. It does not carry scheduledBasalRate, but in the LoopKit fork TandemKit builds against that property is internal(set) and is filled in by DoseStore's annotated(with: basalProfile), so the MedtrumKit 'resume missing basal rate' failure cannot be reproduced from the driver side. No explicit .basal dose follows the resume; that is correct because pumpRecordsBasalProfileStartEvents is false and LoopKit's overlayBasalSchedule inserts scheduled basal. LoopKit's reconciled() pairs this .resume with the prior .suspend, restoring the basal picture. Status also flips to .active. (next-dev makes scheduledBasalRate public var; still optional there.)
 
@@ -1913,6 +2040,9 @@ The resume emitted after a successful ResumePumpingRequest is a real .resume Dos
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:216` pumpRecordsBasalProfileStartEvents returns false, so LoopKit inserts scheduled basal after the resume
 
 - Recommendation: No change required. If TandemKit later builds against next-dev LoopKit, consider populating scheduledBasalRate on the resume from getScheduledBasalRate().
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: the fork's DoseEntry.scheduledBasalRate is `public internal(set)` (loopkit-trio DoseEntry.swift:29), so the driver cannot set it and DoseStore fills it in; the resume event is built with insulinType at 900-904.
 
 **P13-3 Pump-initiated resume reported as .basal, not .resume** (Non-conforming, impact medium, amended)
 
@@ -2002,18 +2132,18 @@ Open questions raised by this point:
 
 Guide section: §10 pitfall: faults, alarms, pump replacement.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 4 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit emits .replaceComponent(.infusionSet) on cannula fill and .rewind on cartridge change, both from the TandemKitUI wizards only, with replacePendingEvents:false. Pump faults never reach the pump-event log: HistoryToDoseMapper does map Alarm/AlertActivated logs to type .alarm (alarmType nil, alerts conflated with alarms), but mapToEvents has no caller in Sources, historyBackfill defaults off, and every traced emitPumpEvents call site carries only dose/suspend/resume/basal or the two component events. Alarms and malfunctions reach the host solely through LoopKit Alert issuance (a different channel). Nothing emits .replaceComponent(.pump) when a different pump is paired; only the history-backfill bookkeeping notices a serial change. Faults/alarms done on the pump UI (cartridge/tubing/cannula history logs) are ignored.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
 | P14-1 | Non-conforming | low | verified | Alarm events never reach hasNewPumpEvents |
-| P14-2 | Partial | low | unverified | alarmType not populated; alerts conflated with alarms |
+| P14-2 | Partial | low | verified | alarmType not populated; alerts conflated with alarms |
 | P14-3 | Conforms | none | amended | Cannula fill emits .replaceComponent(.infusionSet) |
 | P14-4 | Partial | low | verified | Cartridge change reported as .rewind, no prime event |
 | P14-5 | Non-conforming | low | verified | No .replaceComponent(.pump) on pairing a different pump |
-| P14-6 | Partial | none | unverified | Linux shim cannot express alarmType |
+| P14-6 | Partial | none | verified | Linux shim cannot express alarmType |
 
 **P14-1 Alarm events never reach hasNewPumpEvents** (Non-conforming, impact low, verified)
 
@@ -2031,7 +2161,7 @@ grep over Sources shows `mapToEvents`/`HistoryToDoseMapper` referenced only insi
 - Verifier notes:
   - [review:confirm] Code fact holds: the only NewPumpEvent(type: .alarm) construction is in the unwired HistoryToDoseMapper; fetchNotifications ends in reconcileLoopKitAlerts, which issues LoopKit Alerts, and no emitPumpEvents call site passes an alarm. Pump alarms and malfunctions (occlusion, empty cartridge, auto-off) are in scope under the premise and are surfaced only via the Alert channel, not the pump-event log Trio maps to pumpAlarm. Dose accounting is unaffected, so nonconforming/low stands.
 
-**P14-2 alarmType not populated; alerts conflated with alarms** (Partial, impact low, unverified)
+**P14-2 alarmType not populated; alerts conflated with alarms** (Partial, impact low, verified)
 
 The (currently unused) mapper populates type .alarm but leaves alarmType nil and uses the generic title "Alarm" for both AlarmActivated and AlertActivated logs. Tandem alerts (low insulin, high BG, reminders) are not faults; reporting them as .alarm would overstate fault history once the mapper is wired. The alarm id is available (alarmId, alarmResponseType) and several Tandem alarms map cleanly onto LoopKit's PumpAlarmType (OCCLUSION_ALARM→occlusion, EMPTY_CARTRIDGE_ALARM→noInsulin, AUTO_OFF_ALARM→autoOff, BATTERY_SHUTDOWN_ALARM→noPower). Test HistoryToDoseMapperTests.swift:285-299 asserts type and raw only. Identity is good: raw is HistoryLogSyncIdentifier.logSequence(pumpSerial, sequenceNum), stable across re-reads.
 
@@ -2043,6 +2173,9 @@ The (currently unused) mapper populates type .alarm but leaves alarmType nil and
   - `reference: loopkit-trio/NewPumpEvent.swift:26` init(..., type: PumpEventType? = nil, alarmType: PumpAlarmType? = nil) — defaults nil
 
 - Recommendation: Restrict .alarm to AlarmActivatedHistoryLog (and malfunctions); map alarmResponseType to PumpAlarmType (.occlusion, .noInsulin, .autoOff, .noPower, else .other(name)) and pass it as alarmType; use a descriptive title. Add a test asserting alarmType.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P14-3 Cannula fill emits .replaceComponent(.infusionSet)** (Conforms, impact none, amended (auditor said Partial))
 
@@ -2090,7 +2223,7 @@ A grep for replaceComponent across Sources finds only the .infusionSet case. Whe
 - Verifier notes:
   - [review:confirm] Code fact holds: the only .replaceComponent in Sources is the .infusionSet case; fetchPumpInformation overwrites pumpSerial without comparison; pairPump and deleteSavedPumpState emit nothing; only HistoryBackfillState.matching reacts to a serial change. Pairing a replacement pump is an app-side action unaffected by the premise. Dose accounting is unaffected, so nonconforming/low stands.
 
-**P14-6 Linux shim cannot express alarmType** (Partial, impact none, unverified)
+**P14-6 Linux shim cannot express alarmType** (Partial, impact none, verified)
 
 Any fix for P14-2 (passing alarmType) would not compile on Linux until the shim gains PumpAlarmType and the alarmType initializer parameter, since CI runs the Linux build. The shim's PumpComponent name differs from LoopKit's ReplaceableComponent, but TandemKit only uses the associated-value shorthand so no drift is exposed today. Purely a build-surface issue, no accounting impact.
 
@@ -2100,6 +2233,9 @@ Any fix for P14-2 (passing alarmType) would not compile on Linux until the shim 
   - `Sources/TandemCore/Common/Extensions/NewPumpEvent.swift:65` uses inferred .replaceComponent(componentType: .infusionSet), so it compiles against both
 
 - Recommendation: Extend LinuxShims/LoopKit/LoopKit.swift with PumpAlarmType (autoOff, lowInsulin, lowPower, noDelivery, noInsulin, noPower, occlusion, other(String)) and an alarmType parameter on NewPumpEvent.init before populating alarmType in the mapper.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -2112,7 +2248,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: interrupt everything.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 2 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 No test interrupts a bolus or a temp basal and asserts on the NewPumpEvents Loop receives. The only "BLE dropped mid-bolus" test (TandemPumpManagerBolusSyncTests.testSyncReconcilesAfterGraceExpires) checks a boolean gate, not that the dose is finalized with the pump's delivered volume. Nothing exercises a temp basal across a drop at all. State-persistence round-trips are tested, but no test rebuilds a manager from persisted in-progress state and syncs. The harness can model unanswered requests and connect failures, but has no link-drop/reconnect event, and MockPumpManagerDelegate discards lastReconciliation/replacePendingEvents and flattens batches, so "not dropped, not duplicated" cannot be asserted today. Reading the code, the relaunch path clears an in-progress bolus without a finalizing event, which such a test would have caught.
 
@@ -2120,10 +2256,10 @@ No test interrupts a bolus or a temp basal and asserts on the NewPumpEvents Loop
 | --- | --- | --- | --- | --- |
 | P15-1 | Non-conforming | high | verified | Mid-bolus BLE loss: recovery/finalization untested |
 | P15-2 | Non-conforming | medium | amended | Mid-temp-basal BLE loss: no coverage at all |
-| P15-3 | Partial | low | unverified | Harness can model drops, not disconnect/reconnect events |
-| P15-4 | Non-conforming | low | unverified | MockPumpManagerDelegate cannot verify drop/duplicate semantics |
-| P15-5 | Partial | medium | unverified | App relaunch: persistence tested, recovery-after-restore not |
-| P15-6 | Partial | low | unverified | History-based recovery tested in isolation, not end to end |
+| P15-3 | Partial | low | verified | Harness can model drops, not disconnect/reconnect events |
+| P15-4 | Non-conforming | low | verified | MockPumpManagerDelegate cannot verify drop/duplicate semantics |
+| P15-5 | Partial | medium | verified | App relaunch: persistence tested, recovery-after-restore not |
+| P15-6 | Partial | low | verified | History-based recovery tested in isolation, not end to end |
 
 **P15-1 Mid-bolus BLE loss: recovery/finalization untested** (Non-conforming, impact high, verified)
 
@@ -2157,7 +2293,7 @@ No test enacts a temp basal, loses the pump (connect failure or unanswered Curre
 - Verifier notes:
   - [review:amend] Coverage absence confirmed: enactTempBasal appears only in ValidationTests:99 (Control-IQ block); ControlIQTests:119 asserts non-cancel; the unanswered StopTempRate case is at SuspendDeliveryTests:81-89 (not :51) and checks command sequence only. But tracing the drop/reconnect path finds no lost or duplicated dose in the default case: basalDose is persisted, a failed sync emits nothing, and finalization caps endDate at estimatedEndDate so a TBR that ran out offline is finalized correctly. The gap hides no identified defect, so medium rather than high. Pump-stopped-early timing is a separate finding (P11-4/P13-4).
 
-**P15-3 Harness can model drops, not disconnect/reconnect events** (Partial, impact low, unverified)
+**P15-3 Harness can model drops, not disconnect/reconnect events** (Partial, impact low, verified)
 
 The stub can express the two observable consequences of a BLE loss (connect failure, unanswered request) and can vary answers across successive syncs, so P15-1/P15-2 scenarios are expressible today. What cannot be expressed is the disconnect notification itself: the reconnect path in TandemBluetoothManager (cancel in-flight operations, mark link down, auto-reconnect) runs only against CoreBluetooth and is never reached through StubPumpBluetooth, so any dose-state side effects of that path are untestable without a hook on the protocol.
 
@@ -2170,7 +2306,10 @@ The stub can express the two observable consequences of a BLE loss (connect fail
 
 - Recommendation: Either add a test-visible 'linkDidDrop' entry point on TandemPumpManager driven from markLinkDown, or document that unit tests cover only the command-level consequences and hardware tests cover reconnect itself.
 
-**P15-4 MockPumpManagerDelegate cannot verify drop/duplicate semantics** (Non-conforming, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P15-4 MockPumpManagerDelegate cannot verify drop/duplicate semantics** (Non-conforming, impact low, verified)
 
 Whether a mutable dose survives DoseStore depends on which call re-sent it and with what replacePendingEvents value (§3/§5 of the guide). The mock records neither the flag nor the per-call batch, and no test reads delegate.pumpEvents at all. So even if an interruption test were written today, it could not distinguish 'dose dropped' (omitted from a replacePendingEvents:true batch) from 'dose re-reported', nor detect a duplicate created by a changed raw.
 
@@ -2183,7 +2322,10 @@ Whether a mutable dose survives DoseStore depends on which call re-sent it and w
 
 - Recommendation: Record each hasNewPumpEvents call as (events, lastReconciliation, replacePendingEvents) and add a helper that folds the calls the way DoseStore.addPumpEvents would, keyed by raw, so tests can assert the surviving dose set.
 
-**P15-5 App relaunch: persistence tested, recovery-after-restore not** (Partial, impact medium, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P15-5 App relaunch: persistence tested, recovery-after-restore not** (Partial, impact medium, verified)
 
 The guide's 'persist the UnfinalizedDose' advice is honoured and its serialization is tested. But no test constructs a TandemPumpManager from a state carrying an in-progress bolus or temp basal and runs syncPumpData/fetchBolusStatus to check what Loop is told. That is the exact scenario where bolusProgressReport (memory only) is nil, so the code path differs from steady state; the missing test hides that the restored bolus is either cleared silently (status .alreadyDeliveredOrInvalid) or never finalized.
 
@@ -2195,7 +2337,10 @@ The guide's 'persist the UnfinalizedDose' advice is honoured and its serializati
 
 - Recommendation: Add a relaunch test: build state with bolusDose past estimatedEndDate, construct manager, stub CurrentBolusStatus (bolusId 0 or alreadyDelivered) and LastBolusStatus; assert a finalized bolus event with the pump's deliveredVolume and same raw as the original.
 
-**P15-6 History-based recovery tested in isolation, not end to end** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: testInProgressBolusRoundTrips and testTempBasalRoundTripsThroughBasalDose exist (115, 145); no test constructs a manager from such a state and syncs; the reporter guard at 226 makes that path differ from steady state.
+
+**P15-6 History-based recovery tested in isolation, not end to end** (Partial, impact low, verified)
 
 The component that would recover a dose from the pump's own log after a drop (HistoryToDoseMapper) has good unit coverage for interrupted and completed records and stable raw identity, and the fetcher is tested for duplicate suppression. However grep finds no production caller of HistoryToDoseMapper and both history flags default off, so these tests verify a component that has no emission path; nothing tests that a bolus interrupted by BLE loss is finalized from history at the manager level. The project's own plan still lists disconnect/reconnect dedup as an unchecked hardware item.
 
@@ -2208,6 +2353,9 @@ The component that would recover a dose from the pump's own log after a drop (Hi
 
 - Recommendation: When the emission layer is wired, add a manager-level test under historyBackfill+historyDoseReporting: mutable bolus from enactBolus, drop, then history stream returns BolusCompleted; assert one finalized event and no duplicate of the command-path event.
 
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
 Open questions raised by this point:
 
 - Outside P15's scope but observed while tracing: TandemPumpManager+StateSync.swift:217-224 clears state.bolusDose on .alreadyDeliveredOrInvalid when bolusProgressReport is nil without emitting a finalized bolus event; whether DoseStore then purges the mutable bolus emitted at enactBolus (TandemPumpManager.swift:598-600) on the next replacePendingEvents:true call should be confirmed by whichever point owns the mutable-dose lifecycle (P3/P4).
@@ -2217,7 +2365,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: cancel everything.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 3 of 5 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 5 of 5 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit has no test that cancels an app-initiated bolus or temp basal and inspects the finalized dose. `cancelBolus` (TandemPumpManager.swift:607) and the zero-duration/percent-100 temp-basal cancel branch (663-747) are never exercised by TandemKitTests; the only cancel-named coverage is CancelBolusRequest serialization and HistoryToDoseMapper tests for a layer with no emission consumer. No test reads the mock delegate's `pumpEvents`, and the mock drops `lastReconciliation`/`replacePendingEvents`, so the §11 assertions (partial deliveredUnits, isMutable false, real endDate, unchanged syncIdentifier) cannot be made today. Had they existed, the bolus assertion would fail: enact keys the event on programmed units, cancel re-keys it on delivered units. Temp-basal identity is stable but equally untested.
 
@@ -2225,9 +2373,9 @@ TandemKit has no test that cancels an app-initiated bolus or temp basal and insp
 | --- | --- | --- | --- | --- |
 | P16-1 | Non-conforming | medium | verified | App-side bolus cancel has no test |
 | P16-2 | Non-conforming | medium | verified | Temp basal cancel has no dose-level test |
-| P16-3 | Non-conforming | low | unverified | Test harness cannot observe hasNewPumpEvents arguments |
+| P16-3 | Non-conforming | low | verified | Test harness cannot observe hasNewPumpEvents arguments |
 | P16-4 | Non-conforming | low | amended | Bolus cancel changes syncIdentifier; test would fail |
-| P16-5 | Partial | low | unverified | Only history-mapper layer has cancel coverage |
+| P16-5 | Partial | low | verified | Only history-mapper layer has cancel coverage |
 
 **P16-1 App-side bolus cancel has no test** (Non-conforming, impact medium, verified)
 
@@ -2260,7 +2408,7 @@ The cancel branch of `enactTempBasal` (zero duration or percent 100) and the Sto
 - Verifier notes:
   - [review:confirm] All three StopTempRate paths verified: enactTempBasal cancel branch (725-743), suspendDelivery (801-802, finalizing via getActivePumpEvents(endDate:) at 821), Control-IQ enable (1316-1317). Finalized deliveredUnits = value*(duration/1h) at UnfinalizedDose:190. No test asserts on those events: SuspendDeliveryTests checks sentTypes and basalDose.type, ControlIQTests:129 checks StopTempRate not sent, ValidationTests:99 checks the block. App-triggered; premise does not apply. Medium is right for a dose-level coverage gap.
 
-**P16-3 Test harness cannot observe hasNewPumpEvents arguments** (Non-conforming, impact low, unverified)
+**P16-3 Test harness cannot observe hasNewPumpEvents arguments** (Non-conforming, impact low, verified)
 
 No test in the repo reads `delegate.pumpEvents` (search for `.pumpEvents` in Tests/ returns nothing); the mock is used only for reservoir readings and status updates. The mock also drops `replacePendingEvents` and `lastReconciliation` and merges all batches, so a test could not distinguish the enact-time `replacePendingEvents:false` (TandemPumpManager.swift:600) from the cancel-time `true` (657), which is what makes the current cancel end-state correct. Additionally, on Linux the shim's `NewPumpEvent` does not derive `syncIdentifier` from `raw`, so a §11 assertion on `dose.syncIdentifier` would pass vacuously there; TandemKitTests run on the simulator against real LoopKit (unit-tests.yml:258), where it would be meaningful.
 
@@ -2271,6 +2419,9 @@ No test in the repo reads `delegate.pumpEvents` (search for `.pumpEvents` in Tes
   - `reference: loopkit-trio/NewPumpEvent.swift:33` real LoopKit: dose?.syncIdentifier = raw.hexadecimalString
 
 - Recommendation: Record each hasNewPumpEvents call as a struct (events, lastReconciliation, replacePendingEvents) in MockPumpManagerDelegate. In cancel tests assert on `event.raw` equality (as HistoryToDoseMapperTests:131 does) rather than only `dose.syncIdentifier`, so the check holds on both Linux and Xcode.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: grep over Tests/ finds no reader of the mock's pumpEvents; the mock discards lastReconciliation and replacePendingEvents (129-130) and flattens batches (133).
 
 **P16-4 Bolus cancel changes syncIdentifier; test would fail** (Non-conforming, impact low, amended)
 
@@ -2287,7 +2438,7 @@ The §11 cancel test asserts the `syncIdentifier` never changed. TandemKit would
 - Verifier notes:
   - [review:amend] Claim correct: bolus raw embeds the units argument (programmed at enact 599, delivered at cancel 652 and completion). Evidence line is wrong: NewPumpEvent.swift is 81 lines; the raw is at line 10, not 251. Downstream, both finalize paths use replacePendingEvents true, so Loop purges the mutable PumpEvent row and soft-deletes the mutable InsulinDeliveryStore dose (excluded by deletedAt == NIL); Trio never reads raw and dedupes by (date,type), updating the smaller bolus amount. The mutable bolus is emitted only once, so no mid-life churn. Checklist §4 fails, but no accounting degradation: low.
 
-**P16-5 Only history-mapper layer has cancel coverage** (Partial, impact low, unverified)
+**P16-5 Only history-mapper layer has cancel coverage** (Partial, impact low, verified)
 
 The repo does contain cancel-shaped tests, but only for `HistoryToDoseMapper`, which maps pump history records to doses with a bolusId-keyed stable `raw` and partial `deliveredUnits`. That layer is not wired to any emission path (no reference to HistoryToDoseMapper outside Sources/TandemKit/PumpManager/History/), and the `historyBackfill`/`historyDoseReporting` flags default off. So the tests that do satisfy the §11 shape exercise code Loop/Trio never sees, while the live cancel paths (`cancelBolus`, `fetchBolusStatus` bolusId==0, `getActivePumpEvents(endDate:)`) have none. Coverage exists in the wrong place.
 
@@ -2299,6 +2450,9 @@ The repo does contain cancel-shaped tests, but only for `HistoryToDoseMapper`, w
 
 - Recommendation: Keep the mapper tests, but add equivalent driver-level tests against the live paths. When the mapper is wired to emission, add a test that a history-finalized cancelled bolus and the live-path finalized one share one raw (today they cannot: bolusId-keyed vs units+date-keyed).
 
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
 Open questions raised by this point:
 
 - After an app relaunch `bolusProgressReport` is nil, so `fetchBolusStatus` (TandemPumpManager+StateSync.swift:217-223) clears a persisted in-progress `bolusDose` on `.alreadyDeliveredOrInvalid` without emitting a finalized dose; the mutable event from enact would then be purged on the next replacePendingEvents:true emission. This belongs to the interrupt/relaunch point but a relaunch-then-cancel test would expose it.
@@ -2308,7 +2462,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: idempotency.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 4 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 No test in the repository re-reports an in-progress dose and checks that it remains a single dose with identical raw. On the live path this is unexercised end to end: no test reads MockPumpManagerDelegate.pumpEvents (the mock even discards lastReconciliation/replacePendingEvents), no test drives enactBolus/enactTempBasal followed by repeated syncs, and no test touches DoseStore/InsulinDeliveryStore or IOB. The history path has identity-level tests (HistoryLogSyncIdentifierTests, HistoryToDoseMapperTests raw asserts) plus fetch/store-tier dedupe tests, but never maps the same log twice and the path is not wired to hasNewPumpEvents. The live raw scheme (bolus units, temp-basal programmedUnits) is phase-dependent, which is exactly the latent bug an idempotency test would catch.
 
@@ -2316,8 +2470,8 @@ No test in the repository re-reports an in-progress dose and checks that it rema
 | --- | --- | --- | --- | --- |
 | P17-1 | Non-conforming | medium | verified | Live path: no repeated-report test against the delegate |
 | P17-2 | Non-conforming | low | amended | Live raw is phase-dependent; nothing tests raw equality across phases |
-| P17-3 | Not applicable | none | unverified | Driver never re-reports an in-progress dose in steady state |
-| P17-4 | Partial | low | unverified | History path: identity tests exist but never re-map the same log |
+| P17-3 | Not applicable | none | verified | Driver never re-reports an in-progress dose in steady state |
+| P17-4 | Partial | low | verified | History path: identity tests exist but never re-map the same log |
 | P17-5 | Partial | low | verified | Fetch/store-tier dedupe is tested, but not at the dose tier |
 | P17-6 | Non-conforming | medium | verified | No IOB or DoseStore-backed assertion anywhere in the test target |
 
@@ -2353,7 +2507,7 @@ The live bolus raw is keyed on whichever units value the call site passes: progr
 - Verifier notes:
   - [review:amend] Facts verified: bolus raw keyed on the units argument (line 10), passed programmed at enact, delivered at completion (reporter :44) and cancel (:652); tempBasal raw embeds dose.programmedUnits = value*hours (loopkit-trio DoseEntry:68-74), with the finalized endDate differing from the mutable estimatedEndDate on early stop. No test asserts raw equality across phases. However mutable re-reports keep a stable raw (estimatedEndDate fixed), the key changes only at finalization, and every finalize path uses replacePendingEvents true, so Loop's end state is one dose; Trio ignores raw. Latent, not active: low.
 
-**P17-3 Driver never re-reports an in-progress dose in steady state** (Not applicable, impact none, unverified)
+**P17-3 Driver never re-reports an in-progress dose in steady state** (Not applicable, impact none, verified)
 
 An idempotency test presupposes the driver re-sends the same mutable dose on each sync. TandemKit does not: emitPumpEvents is reached only on transitions (enact, cancel, completion, suspend/resume, basal-type change, site/cartridge change). A running temp basal or bolus is reported once at enact and then silent until it ends, and the periodic sync never sends an events batch (empty or otherwise). So there is currently no repeated-report behaviour to test — the §11 scenario is not applicable to the code as written. This is itself a §3 report-or-delete concern (a mutable dose reported once and then omitted from a later `replacePendingEvents: true` batch is deleted by DoseStore), but that belongs to the P-points covering §3/§6, not this one.
 
@@ -2366,7 +2520,10 @@ An idempotency test presupposes the driver re-sends the same mutable dose on eac
 
 - Recommendation: Once re-reporting on every sync is implemented (see §3 findings), add the idempotency test from P17-1 at the same time; write it first so it fails until re-reporting lands.
 
-**P17-4 History path: identity tests exist but never re-map the same log** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: quiet syncs emit nothing (fetchBasalStatus 141, deferred bolus read 202). The accounting consequence of that silence is P04-1's finding, not this test point's.
+
+**P17-4 History path: identity tests exist but never re-map the same log** (Partial, impact low, verified)
 
 The history scheme is designed for idempotency — raw is derived from (pumpSerial, bolusId/tempRateId/sequenceNum), never from delivered units or end time — and the tests lock the wire format and check that the mutable activation and the finalized activation+completion each produce the scheme identifier. What is missing is the §11 shape: no test runs mapToEvents twice over the same logs (or over activation alone, then activation+completion) and asserts the raw is byte-identical across the two calls and that a consumer would see one dose. Also, per CLAUDE.md and the grep, HistoryToDoseMapper is not wired to any emission path and `historyBackfill`/`historyDoseReporting` default off, so even a perfect mapper test does not demonstrate delegate-level idempotency today.
 
@@ -2378,6 +2535,9 @@ The history scheme is designed for idempotency — raw is derived from (pumpSeri
   - `Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift:18` mapper class exists; grep finds no emitPumpEvents/hasNewPumpEvents in the History layer
 
 - Recommendation: Add a mapper test that maps [activation] then [activation, completion] for the same bolusId and asserts equal raw and a single event per call; when the emission layer is wired, promote it to a delegate-level test behind the historyDoseReporting flag.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P17-5 Fetch/store-tier dedupe is tested, but not at the dose tier** (Partial, impact low, verified)
 
@@ -2417,7 +2577,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: empty syncs.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 7 of 9 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 9 of 9 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 No test confirms that an empty sync calls hasNewPumpEvents, and none could: MockPumpManagerDelegate discards the lastReconciliation and replacePendingEvents arguments and no test reads its recorded pumpEvents or arms the events expectation. The reason is structural: syncPumpData advances state.lastReconciliation but never calls emitPumpEvents; fetchBasalStatus and fetchBolusStatus emit only on a change, so a steady-state sync makes no delegate dose call and DoseStore.lastPumpEventsReconciliation is not advanced. Existing ConnectionTests do pin the state/completion-callback half well (advances on any response, not on connect failure or a silent pump, persisted across relaunch). The delegate half of the §6/§11 contract is untested and, in production, unimplemented.
 
@@ -2429,9 +2589,9 @@ No test confirms that an empty sync calls hasNewPumpEvents, and none could: Mock
 | P18-4 | Non-conforming | low | verified | Mock delegate cannot observe lastReconciliation or call count |
 | P18-5 | Non-conforming | medium | verified | First sync after pairing: no delegate, events dropped, untested |
 | P18-6 | Partial | low | verified | Relaunch: skip-if-fresh path returns persisted date without delegate call |
-| P18-A1 | Partial | medium | unverified | Reservoir read alone advances lastReconciliation without any delegate event call |
+| P18-A1 | Partial | medium | verified | Reservoir read alone advances lastReconciliation without any delegate event call |
 | P18-A2 | Conforms | none | amended | Test pins lastReconciliation advancing on any single response, not a delivery read |
-| P18-A3 | Partial | low | unverified | emitPumpEvents reads lastReconciliation lazily on the delegate queue |
+| P18-A3 | Partial | low | verified | emitPumpEvents reads lastReconciliation lazily on the delegate queue |
 
 **P18-1 No test asserts hasNewPumpEvents on a sync** (Non-conforming, impact medium, verified)
 
@@ -2528,7 +2688,7 @@ Persistence of lastReconciliation and the ensureCurrentPumpData fresh-skip are b
 - Verifier notes:
   - [code:confirm] Verified: the 4.5-minute skip at 360-363 returns the persisted date through completion only; test at 251 pins that no pump contact occurs; persistence round trip at State 196-197/365 and StateTests 80. Additionally the in-flight stand-down (392) returns state.lastReconciliation without any delegate call, another path where the persisted date is handed only to completion. No test constructs a manager from a persisted rawValue with a delegate attached.
 
-**P18-A1 Reservoir read alone advances lastReconciliation without any delegate event call** (Partial, impact medium, unverified, added by a verifier)
+**P18-A1 Reservoir read alone advances lastReconciliation without any delegate event call** (Partial, impact medium, verified, added by a verifier)
 
 The auditor treated syncPumpData:445 as the place an empty sync advances lastReconciliation, but fetchReservoirStatus stamps it independently of the response-count gate, and is reachable on its own from the cartridge-change UI and from qualifying-event fetches (TandemPumpManager.swift:1688). Each of those advances state.lastReconciliation (feeding lastSync and the next emitPumpEvents date) with no hasNewPumpEvents call, so it is a second production path with the P18-2 gap. TelemetryTests:133 is actually pinning this reservoir-path behaviour, which the auditor attributed to sync.
 
@@ -2539,6 +2699,9 @@ The auditor treated syncPumpData:445 as the place an empty sync advances lastRec
   - `Tests/TandemKitTests/TandemPumpManagerTelemetryTests.swift:133` XCTAssertNotNil(manager.state.lastReconciliation) -- this asserts the reservoir-path stamp, not syncPumpData's
 
 - Recommendation: Either drop the stamp from fetchReservoirStatus (let syncPumpData own it) or follow it with an empty hasNewPumpEvents; add a test that a standalone reservoir fetch does not advance lastReconciliation without informing the host.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: fetchReservoirStatus stamps lastReconciliation itself (410), is reachable standalone (392) and from the cartridge-change view model (169) and the .reservoirStatus qualifying fetch (1688), none of which calls hasNewPumpEvents. Loop-only.
 
 **P18-A2 Test pins lastReconciliation advancing on any single response, not a delivery read** (Conforms, impact none, amended, added by a verifier (auditor said Partial))
 
@@ -2554,7 +2717,7 @@ The existing 'advances lastReconciliation' test enshrines that one answer of any
 - Verifier notes:
   - [review:amend] Code fact holds (any response advances lastReconciliation). The original concern was explicitly for a UI-capable pump. Under the premise's Loop-only clause, lastReconciliation is legitimately the last time TandemKit received status from the pump, which is exactly what the responseCount gate implements and the test pins; a reservoir reading is telemetry. Under conditional sources (Control-IQ on, quick bolus enabled) the original partial/medium rating would return, since pump-originated doses could then fall in the unread window.
 
-**P18-A3 emitPumpEvents reads lastReconciliation lazily on the delegate queue** (Partial, impact low, unverified, added by a verifier)
+**P18-A3 emitPumpEvents reads lastReconciliation lazily on the delegate queue** (Partial, impact low, verified, added by a verifier)
 
 The date passed to hasNewPumpEvents is whatever state.lastReconciliation holds when the delegate queue runs the block, not when the event was produced. Ordering is preserved on a serial queue, but a test asserting the reported date equals the sync's completion value must run the delegate queue to completion first, and a later stamp (e.g. a reservoir read at StateSync:410 on another job) can be observed by an earlier event's delegate call. Relevant to how a P18 test should be written and to the accuracy of the reported boundary.
 
@@ -2563,6 +2726,9 @@ The date passed to hasNewPumpEvents is whatever state.lastReconciliation holds w
   - `LinuxShims/LoopKit/LoopKit.swift:845` queue.async { block(delegate) } -- notify defers the block
 
 - Recommendation: Capture lastReconciliation at the call site and pass it into the notify closure; in tests, drain the delegate queue (queue.sync {}) before asserting the recorded date.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -2574,21 +2740,21 @@ Open questions raised by this point:
 
 Guide section: §11 testing: rounding.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 1 of 7 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 Rounding is unit-tested only in HistoryToDoseMapper (bolus value/deliveredUnits rounded to 0.001 U reporting resolution, deliberately not the 0.05 U command grid) and at the wire layer (InitiateBolusRequest milliunit encoding, Float32 noise in BolusCompletedHistoryLog). But the mapper has no production caller, so those tests cover nothing Loop receives today. The live paths that do reach Loop are untested for rounding: roundToSupportedBolusVolume/roundToSupportedBasalRate and the capability tables, LastBolusStatus -> deliveredUnits (which floors to 0.05 U, contradicting the mapper's own rationale), TandemDoseProgressReporter, and temp-basal value/deliveredUnits (deliveredUnits is never rounded). Verdict: partial.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P19-1 | Partial | none | unverified | HistoryToDoseMapper bolus rounding tests |
-| P19-2 | Non-conforming | low | unverified | Live bolus finalization deliveredUnits floors to 0.05 U, untested |
+| P19-1 | Partial | none | verified | HistoryToDoseMapper bolus rounding tests |
+| P19-2 | Non-conforming | low | verified | Live bolus finalization deliveredUnits floors to 0.05 U, untested |
 | P19-3 | Non-conforming | low | verified | roundToSupported* helpers and capability tables have no tests |
-| P19-4 | Non-conforming | low | unverified | TandemDoseProgressReporter untested |
-| P19-5 | Partial | low | unverified | Temp basal value and deliveredUnits rounding untested |
-| P19-6 | Partial | low | unverified | Wire-level milliunit and Float32 tests |
-| P19-7 | Partial | low | unverified | Basal profile change value not rounded; test tolerates Float noise |
+| P19-4 | Non-conforming | low | verified | TandemDoseProgressReporter untested |
+| P19-5 | Partial | low | verified | Temp basal value and deliveredUnits rounding untested |
+| P19-6 | Partial | low | verified | Wire-level milliunit and Float32 tests |
+| P19-7 | Partial | low | verified | Basal profile change value not rounded; test tolerates Float noise |
 
-**P19-1 HistoryToDoseMapper bolus rounding tests** (Partial, impact none, unverified)
+**P19-1 HistoryToDoseMapper bolus rounding tests** (Partial, impact none, verified)
 
 The history mapper has explicit rounding tests for both value and deliveredUnits, and they pin a documented, defensible choice: round to nearest 0.001 U (the pump's milliunit reporting resolution), not the 0.05 U bolus command increment, because Tandem reports genuine partial deliveries (e.g. 1.041 U) and flooring would understate IOB. This deviates in letter from the guide's 'supported increment' wording but is the safer interpretation. However, grep shows no production caller of HistoryToDoseMapper.mapToEvents outside its own file, so these tests currently verify a path that never reaches the host app.
 
@@ -2600,7 +2766,10 @@ The history mapper has explicit rounding tests for both value and deliveredUnits
 
 - Recommendation: Keep these tests; when the mapper is wired to emission, add an end-to-end test asserting the emitted NewPumpEvent dose values through the delegate. Document the 0.001 U choice in a docs file so reviewers do not 'fix' it to 0.05.
 
-**P19-2 Live bolus finalization deliveredUnits floors to 0.05 U, untested** (Non-conforming, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P19-2 Live bolus finalization deliveredUnits floors to 0.05 U, untested** (Non-conforming, impact low, verified)
 
 The path that actually reaches Loop today (cancel and natural completion, steady state and after reconnect while bolusProgressReport is still in memory) converts LastBolusStatus.deliveredVolume (milliunits) to units and then floors to the 0.05 U command grid. A cancelled bolus that delivered 1.041 U is reported as 1.00 U — the exact 'unsafe direction' the mapper comment warns about. No test in Tests/ references LastBolusStatus or deliveredVolume (only QualifyingEventTests in TandemCoreTests), so neither the milliunit conversion nor the flooring is verified. Two rounding policies for the same quantity coexist without a test pinning either.
 
@@ -2611,6 +2780,9 @@ The path that actually reaches Loop today (cancel and natural completion, steady
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:256` natural completion also uses queryLastBolusDeliveredVolume
 
 - Recommendation: Add StubPumpBluetooth tests stubbing LastBolusStatus responses (e.g. 1041, 1049, 0 mU) and asserting emitted deliveredUnits; switch queryLastBolusDeliveredVolume to round-to-nearest 0.001 U to match the mapper, or document why flooring is intended.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P19-3 roundToSupported* helpers and capability tables have no tests** (Non-conforming, impact low, verified)
 
@@ -2627,7 +2799,7 @@ Grep of Tests/ for roundToSupportedBolusVolume, roundToSupportedBasalRate, strid
 - Verifier notes:
   - [review:confirm] roundToSupportedBolusVolume/roundToSupportedBasalRate (224/229), strideRange (1870) and supportedBasalRates (UnfinalizedDose 234) exist and a grep of Tests/ for any of these symbols returns nothing. Rounding of app-commanded doses is unaffected by the premise. nonconforming/low stands.
 
-**P19-4 TandemDoseProgressReporter untested** (Non-conforming, impact low, unverified)
+**P19-4 TandemDoseProgressReporter untested** (Non-conforming, impact low, verified)
 
 No test file references TandemDoseProgressReporter or DoseProgress. The reporter rounds its time-estimated progress to the 0.05 U grid (UI-only), and builds the finalized bolus NewPumpEvent with value = programmed total and deliveredUnits = pump-reported (already floored by P19-2) or the programmed total. Whether the finalized event's value and deliveredUnits land on a supported increment is therefore never asserted. Note also that `units: delivered` participates in the raw identity string, so a rounding change would change the bolus syncIdentifier (outside this point, see open questions).
 
@@ -2638,7 +2810,10 @@ No test file references TandemDoseProgressReporter or DoseProgress. The reporter
 
 - Recommendation: Add tests for getPumpEvent with nil and explicit actualDeliveredUnits asserting value, deliveredUnits and isMutable == false; add a notify() test with an injected clock asserting progress is on the 0.05 U grid and capped at total.
 
-**P19-5 Temp basal value and deliveredUnits rounding untested** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: grep over Tests/ finds no reference to TandemDoseProgressReporter or DoseProgress.
+
+**P19-5 Temp basal value and deliveredUnits rounding untested** (Partial, impact low, verified)
 
 enactTempBasal does the right thing for `value`: it quantizes the request to an integer percent of the scheduled basal (what the pump actually delivers) and rounds the resulting absolute rate to the 0.01 U/hr grid. But no test drives enactTempBasal through StubPumpBluetooth (SyncBasalTests cover profile writes only), so the percent quantization and the reported rate are unverified — e.g. requesting 0.53 U/hr on a 0.8 U/hr baseline yields 66% -> 0.528 -> 0.52 U/hr, and the test suite would not notice a regression. The finalized deliveredUnits is value*hours with no rounding at all; mathematically correct, but not what the guide asks and untested.
 
@@ -2650,7 +2825,10 @@ enactTempBasal does the right thing for `value`: it quantizes the request to an 
 
 - Recommendation: Add enactTempBasal tests asserting SetTempRateRequest.percent and the emitted mutable/finalized DoseEntry value; decide whether deliveredUnits should be rounded to 0.001 U and pin it in a UnfinalizedDose.toDoseEntry test.
 
-**P19-6 Wire-level milliunit and Float32 tests** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P19-6 Wire-level milliunit and Float32 tests** (Partial, impact low, verified)
 
 The TandemCore message tests verify the milliunit encoding of InitiateBolusRequest and the Float32 parsing of history bolus records, including a real capture showing Float noise (0.89000005). That covers the wire representation, and the manager's units->milliunits conversion uses rounded() so 0.13 U cannot become 129 mU. There are, however, no tests for LastBolusStatus/V2/V3 responses (the source of finalized deliveredUnits), for SetTempRateRequest, or for the manager-side conversion at line 551 itself — so the chain from wire bytes to the DoseEntry Loop receives is only tested at one end.
 
@@ -2662,7 +2840,10 @@ The TandemCore message tests verify the milliunit encoding of InitiateBolusReque
 
 - Recommendation: Add LastBolusStatus response parsing tests with milliunit deliveredVolume fixtures and a SetTempRateRequest test; add one manager test asserting InitiateBolusRequest.totalVolume for an off-grid Double like 0.13.
 
-**P19-7 Basal profile change value not rounded; test tolerates Float noise** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P19-7 Basal profile change value not rounded; test tolerates Float noise** (Partial, impact low, verified)
 
 Within the same mapper, bolus amounts are cleaned of Float32 noise but the .basal rate is passed through unrounded, and the corresponding test is written with an accuracy tolerance rather than asserting the exact 1.15 the pump displays. The mapper's temp-basal test also supplies its own round-to-nearest closure, so the production floor (roundToSupportedBasalRate) is never exercised through the mapper. Impact is cosmetic today (scheduled-basal values with 1e-8 noise, and the mapper is unwired), but it is an inconsistency the tests currently enshrine rather than catch.
 
@@ -2672,6 +2853,9 @@ Within the same mapper, bolus amounts are cleaned of Float32 noise but the .basa
   - `Tests/TandemKitTests/HistoryToDoseMapperTests.swift:16` tests inject roundBasalRate = nearest 0.01, not the production floor helper
 
 - Recommendation: Apply roundToReportingResolution (or the basal 0.01 grid) to commandBasalRate and tighten the test to an exact 1.15; add one mapper test that passes the production roundToSupportedBasalRate closure.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -2684,7 +2868,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: external doses (UI pumps).
 
-Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). re-audited under the premise; its findings were not independently reviewed
+Overall: **Not applicable today (residual findings: Partial)** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). 7 of 7 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 Re-audited under the screenless-pump premise; the UI-capable reading is summarised in the method section.
 
@@ -2692,15 +2876,15 @@ Under the screenless-Mobi premise the guide's external-dose test is not applicab
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P20-1 | Conforms | none | unverified | Quick-bolus enforcement tests remove the default-case external bolus source |
-| P20-2 | Not applicable | none | unverified | Guide's external-dose end-to-end test (bolus on pump → wasProgrammedByPumpUI at delegate) |
-| P20-3 | Partial | low | unverified | Conditional source (1): bolus status with an app-unknown bolusId is untested and silently dropped |
-| P20-4 | Partial | low | unverified | Conditional source (2): pump-reported Control-IQ flip and Control-IQ auto-boluses are untested |
-| P20-5 | Partial | low | unverified | Wire-level bolus origin (bolusSource) exists but is unread and untested |
-| P20-6 | Partial | low | unverified | No test asserts any hasNewPumpEvents payload |
-| P20-7 | Partial | low | unverified | Manual test plan lacks the conditional-configuration steps and overstates history emission |
+| P20-1 | Conforms | none | verified | Quick-bolus enforcement tests remove the default-case external bolus source |
+| P20-2 | Not applicable | none | verified | Guide's external-dose end-to-end test (bolus on pump → wasProgrammedByPumpUI at delegate) |
+| P20-3 | Partial | low | verified | Conditional source (1): bolus status with an app-unknown bolusId is untested and silently dropped |
+| P20-4 | Partial | low | verified | Conditional source (2): pump-reported Control-IQ flip and Control-IQ auto-boluses are untested |
+| P20-5 | Partial | low | verified | Wire-level bolus origin (bolusSource) exists but is unread and untested |
+| P20-6 | Partial | low | verified | No test asserts any hasNewPumpEvents payload |
+| P20-7 | Partial | low | verified | Manual test plan lacks the conditional-configuration steps and overstates history emission |
 
-**P20-1 Quick-bolus enforcement tests remove the default-case external bolus source** (Conforms, impact none, unverified)
+**P20-1 Quick-bolus enforcement tests remove the default-case external bolus source** (Conforms, impact none, verified)
 
 This is the mechanism that makes the guide's UI-pump test not applicable under the premise, and it is tested at the manager level with the stubbed BLE layer: flag off by default, globals re-read every sync, SetQuickBolusSettingsRequest(enabled: false) sent when the pump reports the button on, nothing sent when already off, and a rejected disable keeps state.quickBolusEnabled true so the next sync retries. Residual, untested: enforcement depends on a successful PumpGlobalsRequest read (guard on `state.quickBolusEnabled == true`), so an unanswered globals read leaves the button alone for that cycle, and the window between pairing and the first sync is not closed by the app.
 
@@ -2713,7 +2897,10 @@ This is the mechanism that makes the guide's UI-pump test not applicable under t
 
 - Recommendation: Add one test for an unanswered PumpGlobalsRequest (quickBolusEnabled nil) asserting no disable is sent and that the next sync with a good read does send it; document the pairing-to-first-sync window in the hardware validation notes.
 
-**P20-2 Guide's external-dose end-to-end test (bolus on pump → wasProgrammedByPumpUI at delegate)** (Not applicable, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P20-2 Guide's external-dose end-to-end test (bolus on pump → wasProgrammedByPumpUI at delegate)** (Not applicable, impact none, verified)
 
 The guide scopes this test to UI-capable pumps. With no screen, the quick-bolus button disabled every sync (P20-1) and Control-IQ off, there is no pump-originated bolus for the test to exercise, so the item does not apply in the default configuration. The prior audit's core findings (mapper-only flag assertions, no production caller of HistoryToDoseMapper, coordinator emits nothing, historyDoseReporting unconsumed) remain factually true at HEAD but are now conditional: they would become high-impact requirements only if quickBolusButtonSupport is turned on or Control-IQ is enabled, since either creates boluses the app never commanded and today nothing reports them.
 
@@ -2726,7 +2913,10 @@ The guide scopes this test to UI-capable pumps. With no screen, the quick-bolus 
 
 - Recommendation: Before either conditional source can be enabled for users, build the history emission layer and add the delegate-level test (Quick Bolus / Control-IQ auto-bolus activation+completion in history → `delegate.pumpEvents` contains a `.bolus` with `wasProgrammedByPumpUI == true`, `isMutable == false`). Until then, keep both flags off and Control-IQ support gated.
 
-**P20-3 Conditional source (1): bolus status with an app-unknown bolusId is untested and silently dropped** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P20-3 Conditional source (1): bolus status with an app-unknown bolusId is untested and silently dropped** (Partial, impact low, verified)
 
 With quickBolusButtonSupport on, a button press on the Mobi produces a bolusChange qualifying event and a CurrentBolusStatusResponse whose bolusId the app never issued. fetchBolusStatus returns before building any event when no progress reporter exists, and on completion merely resets bolusState, so the dose never reaches hasNewPumpEvents and lastReconciliation still advances past it (TandemPumpManager.swift:445). No test constructs a CurrentBolusStatusResponse at all, so this drop is unasserted. In the default configuration the path is unreachable because the button is disabled (P20-1), hence the low rating; with the flag on this is a lost dose and an IOB under-count, which would be high.
 
@@ -2739,7 +2929,10 @@ With quickBolusButtonSupport on, a button press on the Mobi produces a bolusChan
 
 - Recommendation: Add a manager test: stub CurrentBolusStatusRequest with `.delivering`, bolusId 42, no app bolus, and assert current behaviour explicitly (no event emitted) as a guard; then, when the flag is offered to users, change the code to report such a bolus mutable with `wasProgrammedByPumpUI: true` and finalize from LastBolusStatus/history.
 
-**P20-4 Conditional source (2): pump-reported Control-IQ flip and Control-IQ auto-boluses are untested** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P20-4 Conditional source (2): pump-reported Control-IQ flip and Control-IQ auto-boluses are untested** (Partial, impact low, verified)
 
 The premise's second conditional source is Control-IQ. The safety interlock that makes it tolerable — the pump reporting closedLoopEnabled during sync flips useControlIQ so automatic dosing is refused — has no test: the Control-IQ test helper always passes closedLoopEnabled false, and the guard tests preset the flag. Nothing tests a Control-IQ auto-bolus (BolusSource.controlIQAutoBolus) arriving in bolus status; per P20-3 it would be dropped. Manual app boluses still pass under Control-IQ, so the app's IOB would omit the pump's auto-corrections while the user boluses from the bolus calculator. Rated low because Control-IQ is off by default and controlIQSupport is a default-off flag; medium under Control-IQ.
 
@@ -2752,7 +2945,10 @@ The premise's second conditional source is Control-IQ. The safety interlock that
 
 - Recommendation: Add a sync test: stub ControlIQInfoV2Request with `closedLoopEnabled: true`, run syncPumpData, assert `state.useControlIQ` becomes true and a subsequent automatic enactBolus/enactTempBasal is refused. Add a test that a Control-IQ auto-bolus in CurrentBolusStatus is not silently discarded once emission exists.
 
-**P20-5 Wire-level bolus origin (bolusSource) exists but is unread and untested** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: grep over Tests/ finds no `closedLoopEnabled: true`; the guard tests set state.useControlIQ directly (ValidationTests:71).
+
+**P20-5 Wire-level bolus origin (bolusSource) exists but is unread and untested** (Partial, impact low, verified)
 
 Both conditional sources are distinguishable on the wire: CurrentBolusStatusResponse and BolusDeliveryHistoryLog carry a bolusSource that names quick-bolus, Control-IQ auto-bolus and Bluetooth (app) boluses. Nothing under Sources/TandemKit reads bolusSource (grep empty), and the mapper's wasProgrammedByPumpUI depends on an isCommandedBolus closure that has no production implementer and could not survive a relaunch since only state.bolusDose is kept. No test exercises bolusSource decoding through the manager. This is the simplest correct basis for the guide's flag and would make the P20 test implementable without a commanded-id ring buffer. Default impact is low since no pump-side boluses occur.
 
@@ -2764,7 +2960,10 @@ Both conditional sources are distinguishable on the wire: CurrentBolusStatusResp
 
 - Recommendation: Derive `wasProgrammedByPumpUI` from `bolusSource != .bluetoothRemoteBolus` (status and history paths) rather than a commanded-id lookup; add unit tests for all four BolusSource values through the manager once emission exists.
 
-**P20-6 No test asserts any hasNewPumpEvents payload** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: grep over Sources/TandemKit finds no reader of bolusSource; the field is defined at CurrentBolusStatus.swift:85 (the cited line 90 has drifted by five lines) and BolusSource enumerates quickBolus, gui, controlIQAutoBolus and bluetoothRemoteBolus.
+
+**P20-6 No test asserts any hasNewPumpEvents payload** (Partial, impact low, verified)
 
 Independent of the premise (trigger is the test harness, not a pump screen): the mock delegate captures events but no test reads `pumpEvents` or sets `didReceivePumpEventsExpectation`, and the mock drops lastReconciliation/replacePendingEvents entirely. So even for app-commanded boluses and the pump-initiated stops that remain fully in scope, there is no assertion on what Loop actually receives, and a future conditional-source test (P20-2/3/4) has no exercised harness to build on. Test-only gap; it does not by itself change insulin accounting.
 
@@ -2775,7 +2974,10 @@ Independent of the premise (trigger is the test harness, not a pump screen): the
 
 - Recommendation: Extend MockPumpManagerDelegate to record lastReconciliation and replacePendingEvents per call, and add at least one manager-level test per dose path (enactBolus start/finish, suspend, pump-aborted bolus) asserting the delegate payload; the conditional-source tests then slot in.
 
-**P20-7 Manual test plan lacks the conditional-configuration steps and overstates history emission** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: grep over Tests/ finds no reader of the mock's pumpEvents and no setter of didReceivePumpEventsExpectation outside the mock.
+
+**P20-7 Manual test plan lacks the conditional-configuration steps and overstates history emission** (Partial, impact low, verified)
 
 Under the premise the Loop-issued-bolus manual step is the right default, so the missing bolus-on-pump step is not a defect by itself. What survives: the plan has no step for the two conditional configurations (quickBolusButtonSupport on: press the button, confirm the app sees it or refuses to enable the flag; Control-IQ on: confirm automatic dosing is refused and auto-boluses are visible), and its progress notes assert a delegate-delivery history path that does not exist at HEAD, which a QA reader would take as coverage. The qualifying-event test comment likewise implies IOB benefit from a store nothing consumes.
 
@@ -2785,6 +2987,9 @@ Under the premise the Loop-issued-bolus manual step is the right default, so the
   - `Tests/TandemKitTests/QualifyingEventHandlingTests.swift:55` `func testBolusChangeAlsoReadsHistory()` — comment says a pump-UI bolus lands in the store "instead of leaving it out of IOB", yet nothing reads the store
 
 - Recommendation: Correct the plan's Phase 6 status to "store only, no emission"; add conditional manual steps for quick-bolus-on and Control-IQ-on; reword the testBolusChangeAlsoReadsHistory comment to say the store is filled for a future emission layer.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -2796,7 +3001,7 @@ Open questions raised by this point:
 
 Guide section: §11 testing: timeline diff vs pump history.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 3 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit never diffs the doses it reports against the pump's own delivery history or against an expected IOB. History log entries are fetched into an in-memory store (only behind the default-off `historyBackfill` flag), but `HistoryToDoseMapper` has no caller, the coordinator explicitly emits nothing, and no code compares store contents with the live-path doses sent via `emitPumpEvents`. The pump's IOB is never read; `latestInsulinOnBoard` is never assigned. The only pump-side cross-check is a `LastBolusStatus` read at bolus end, whose failure is silently absorbed (full programmed units on completion, 0 U on cancel). Tests are component unit tests; the log viewer shows raw records only; docs describe a `HistoryReconciler` that does not exist.
 
@@ -2805,9 +3010,9 @@ TandemKit never diffs the doses it reports against the pump's own delivery histo
 | P21-1 | Non-conforming | low | amended | Live-path vs history-path dose reconciliation |
 | P21-2 | Partial | high | verified | Live-path cross-check against pump status at bolus end |
 | P21-3 | Non-conforming | low | amended | Expected-IOB comparison |
-| P21-4 | Non-conforming | low | unverified | Test coverage for timeline diffing |
-| P21-5 | Partial | low | unverified | Diagnostic tooling for manual diffing |
-| P21-6 | Non-conforming | low | unverified | Documentation claims a reconciler that does not exist |
+| P21-4 | Non-conforming | low | verified | Test coverage for timeline diffing |
+| P21-5 | Partial | low | verified | Diagnostic tooling for manual diffing |
+| P21-6 | Non-conforming | low | verified | Documentation claims a reconciler that does not exist |
 
 **P21-1 Live-path vs history-path dose reconciliation** (Non-conforming, impact low, amended)
 
@@ -2856,7 +3061,7 @@ The pump exposes its own IOB (ControlIQIOBRequest / NonControlIQIOBRequest, and 
 - Verifier notes:
   - [review:amend] Facts verified: latestInsulinOnBoard is only read from and written to rawValue and never assigned from a pump response; no IOB request is sent anywhere in Sources/TandemKit (QualifyingEventFetch explicitly maps iobChange to nothing); BolusCompletedHistoryLog.iob is parsed but completedBolusEvent uses insulinRequested/insulinDelivered only. Under the premise the pump's IOB would be a diagnostic cross-check with no direct effect on accounting in the default configuration: low. Under Control-IQ it would matter more, since the pump's IOB would then be the only view of automatic dosing.
 
-**P21-4 Test coverage for timeline diffing** (Non-conforming, impact low, unverified)
+**P21-4 Test coverage for timeline diffing** (Non-conforming, impact low, verified)
 
 HistoryTimestampReconcilerTests, HistoryLogStoreTests (missingRanges, prune), HistoryToDoseMapperTests and HistoryBackfillCoordinatorTests each test their component in isolation. No test drives `enactBolus`/`enactTempBasal` and a history fixture through the same manager and asserts the two timelines agree (grep finds no test file using both). No test computes IOB from emitted events or compares it to a pump-reported value. The word 'reconcile' in TandemPumpManagerBolusSyncTests refers to un-deferring the sync path, not to diffing against history.
 
@@ -2869,7 +3074,10 @@ HistoryTimestampReconcilerTests, HistoryLogStoreTests (missingRanges, prune), Hi
 
 - Recommendation: Add an integration test with StubPumpBluetooth that enacts a bolus and temp basal, streams the matching Bolus/TempRate Activated+Completed history logs, maps them, and asserts identity (syncIdentifier), amounts and IOB match the events recorded by MockPumpManagerDelegate.
 
-**P21-5 Diagnostic tooling for manual diffing** (Partial, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P21-5 Diagnostic tooling for manual diffing** (Partial, impact low, verified)
 
 A developer can open the debug History Log Viewer to read raw pump records and the state dump to see the live-path bookkeeping, so a manual diff against Loop's insulin history is possible on-device. Nothing automates it: no view or log line juxtaposes reported doses with history, `scripts/` contains only an xcodeproj membership check and a web-setup script, Package.swift declares no executable/CLI target, and the store is in-memory so nothing survives a relaunch for offline analysis.
 
@@ -2881,7 +3089,10 @@ A developer can open the debug History Log Viewer to read raw pump records and t
 
 - Recommendation: Add a debug screen or exportable dump that lists, side by side, the last N emitted NewPumpEvents (kept in state or a ring buffer) and the mapped history doses for the same window, highlighting unmatched entries and the pump's IOB.
 
-**P21-6 Documentation claims a reconciler that does not exist** (Non-conforming, impact low, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P21-6 Documentation claims a reconciler that does not exist** (Non-conforming, impact low, verified)
 
 The plan document marks Phase 4 (matching pending doses to history within ±0.05 U / ±0.01 U/hr, flagging unreconciled doses after 24 h) and Phase 6 (delegate delivery of reconciled events) as done, and KEY_FILES_REFERENCE describes `HistoryReconciler` and `HistoryDeduplicator` as present. Neither file exists in `Sources/TandemKit/PumpManager/History/`, and CLAUDE.md says the coverage was dropped with the code. A reviewer reading the docs would conclude the timeline diff this point asks for is implemented; it is not.
 
@@ -2893,6 +3104,9 @@ The plan document marks Phase 4 (matching pending doses to history within ±0.05
 
 - Recommendation: Update tandemkit-history-integration-plan.md and KEY_FILES_REFERENCE.md to mark Phases 4/6 as removed/not implemented and point to the current HistoryBackfillCoordinator/HistoryLogStore design; keep CLAUDE.md as the source of truth.
 
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: no HistoryReconciler.swift or HistoryDeduplicator.swift exists under Sources/, while docs/KEY_FILES_REFERENCE.md:189 and the plan document list them as present.
+
 Open questions raised by this point:
 
 - Does the host app (Trio or Loop) provide its own pump-history-vs-DoseStore comparison tooling that the project intends to rely on instead of driver-side diffing? Nothing in the repo references one.
@@ -2903,22 +3117,22 @@ Open questions raised by this point:
 
 Guide section: §2 data model.
 
-Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 5 of 8 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 8 of 8 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 The DoseEntry shape on TandemKit's live (optimistic) emission paths is mostly right: type, startDate, mutable TBR endDate = scheduled end, deliveredUnits nil while mutable, isMutable, insulinType and a raw-derived syncIdentifier all follow the guide. Four semantic gaps remain: (1) every finalized commanded bolus with activationType .manualNoRecommendation is stamped manuallyEntered = true, which LoopKit/Trio read as non-pump ("external") insulin; (2) cancelBolus finalizes with deliveredUnits = 0 when the LastBolusStatus read fails, and delivered volumes are floored to 0.05 U; (3) wasProgrammedByPumpUI is never true on any path that runs today (only the unwired, flag-gated HistoryToDoseMapper sets it, and only for boluses); (4) `automatic` is nil for all history-derived doses including Control-IQ auto-boluses, and TBR value/deliveredUnits derive from the host's schedule rather than the pump's profile.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| P22-1 | Conforms | none | unverified | type / startDate / endDate / isMutable shape on optimistic paths |
+| P22-1 | Conforms | none | verified | type / startDate / endDate / isMutable shape on optimistic paths |
 | P22-2 | Non-conforming | medium | verified | manuallyEntered mis-set on finalized commanded boluses |
 | P22-3 | Partial | high | verified | deliveredUnits actual: cancel-path zeroing and floor rounding |
 | P22-4 | Not applicable | none | amended | wasProgrammedByPumpUI never true on any live path |
 | P22-5 | Not applicable | none | amended | automatic flag semantics across sources |
-| P22-6 | Conforms | low | unverified | syncIdentifier derivation, NewPumpEvent date/type, Linux shim divergence |
-| P22-7 | Conforms | none | unverified | insulinType propagation |
+| P22-6 | Conforms | low | verified | syncIdentifier derivation, NewPumpEvent date/type, Linux shim divergence |
+| P22-7 | Conforms | none | verified | insulinType propagation |
 | P22-8 | Partial | low | amended | value (programmed) for temp basal and basal markers |
 
-**P22-1 type / startDate / endDate / isMutable shape on optimistic paths** (Conforms, impact none, unverified)
+**P22-1 type / startDate / endDate / isMutable shape on optimistic paths** (Conforms, impact none, verified)
 
 On every live path traced (enactBolus, cancelBolus, enactTempBasal, suspend, resume, fetchBasalStatus, handleHomeScreenMirrorResponse, configureControlIQMode, getActivePumpEvents) doses are built through UnfinalizedDose.toDoseEntry. Bolus and temp basal use the correct unit (.units / .unitsPerHour), mutable entries have deliveredUnits nil and endDate = programmed end, finalized entries flip isMutable and carry a real endDate. Suspend/resume use LoopKit's dedicated initializers; .basal markers have endDate == startDate and no deliveredUnits, which is how LoopKit models scheduled-basal boundaries. The DoseEntry.bolus helper's mutable branch (Date.now + duration) is dead code — its sole caller (TandemDoseProgressReporter.getPumpEvent) always passes endDate. State persists UnfinalizedDose (rawValue) so shape survives relaunch.
 
@@ -2930,6 +3144,9 @@ On every live path traced (enactBolus, cancelBolus, enactTempBasal, suspend, res
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1707` `toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)` — running TBR re-emitted mutable, finalized at the next dose's start
 
 - Recommendation: No change needed for shape. Consider deleting the unreachable mutable branch of DoseEntry.bolus and the unused DoseEntry.tempBasal/basal/resume/suspend helpers so the only DoseEntry factory is UnfinalizedDose.toDoseEntry.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P22-2 manuallyEntered mis-set on finalized commanded boluses** (Non-conforming, impact medium, verified)
 
@@ -2995,7 +3212,7 @@ For doses the host commands, `automatic` is right: boluses take it from activati
 - Verifier notes:
   - [review:amend] Code facts hold. The identified gap is exclusively pump-originated boluses (Control-IQ auto-boluses, quick-bolus) emitted by the unwired HistoryToDoseMapper with automatic nil. Under the default premise (Control-IQ off, quick bolus disabled) no pump-originated bolus exists, and the live paths conform: bolus automatic from activationType, temp basal true (only the app issues TBRs). Under conditional source (2) with the mapper wired, the original partial/medium applies (Trio would treat CIQ auto-boluses as manual). Suspend automatic=false on pump-initiated suspends is cosmetic.
 
-**P22-6 syncIdentifier derivation, NewPumpEvent date/type, Linux shim divergence** (Conforms, impact low, unverified)
+**P22-6 syncIdentifier derivation, NewPumpEvent date/type, Linux shim divergence** (Conforms, impact low, verified)
 
 On Apple builds (the only production target) the guide's rule holds: the DoseEntry's syncIdentifier is whatever LoopKit derives from raw, because NewPumpEvent.init overwrites it. The mapper's explicit assignment is redundant but harmless — same bytes — and the file's header comment says so. Two low-grade caveats: the Linux shim's NewPumpEvent neither derives syncIdentifier nor falls back type to dose.type, so Linux-only tests cannot catch a raw/syncIdentifier divergence or a missing `type`; and the mapper stamps a completed bolus's event date with endDate while every other path uses startDate, so a dose's `date` moves when it finalizes (identity is unaffected since raw is stable). Titles and .replaceComponent/.rewind types for site/cartridge change are appropriate.
 
@@ -3008,7 +3225,10 @@ On Apple builds (the only production target) the guide's rule holds: the DoseEnt
 
 - Recommendation: Drop the manual `syncIdentifier:` in HistoryToDoseMapper to match the guide, or keep it and add a test asserting it equals raw.hexadecimalString. Bring the shim's NewPumpEvent.init in line with LoopKit (derive syncIdentifier and type). Use startDate for the completed-bolus event date for consistency.
 
-**P22-7 insulinType propagation** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
+
+**P22-7 insulinType propagation** (Conforms, impact none, verified)
 
 state.insulinType is threaded into bolus, temp basal, basal and resume doses on every live path (enactBolus:583, enactTempBasal:769, basal fallbacks:732/1321/1718, resume:902), into the history mapper via its insulinType parameter, and into PumpManagerStatus so LoopKit's 'nil means pump insulin' fallback is consistent. Suspend doses carry nil, matching LoopKit's DoseEntry(suspendDate:) API. The type is captured on the UnfinalizedDose at command time and persisted, so a bolus finalized after relaunch keeps the type it was enacted with even if the user changes the setting meanwhile.
 
@@ -3020,6 +3240,9 @@ state.insulinType is threaded into bolus, temp basal, basal and resume doses on 
   - `Sources/TandemKit/PumpManager/TandemDoseProgressReporter.swift:40` finalized bolus reuses `dose.insulinType` captured at enact time
 
 - Recommendation: None required. Optionally warn in UI if state.insulinType is nil after onboarding, since a nil type falls back to the host's pump-level default.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: the only writer of state.insulinType outside decoding is the settings UI (TandemUICoordinator.swift:172); the type is captured on UnfinalizedDose (139) and persisted.
 
 **P22-8 value (programmed) for temp basal and basal markers** (Partial, impact low, amended)
 
@@ -3049,7 +3272,7 @@ Open questions raised by this point:
 
 Guide section: §3 transitions: never happened / zero-delivery cancel.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 5 of 6 findings independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 TandemKit never retracts a dose. `cancelBolus` finalizes the bolus as an immutable 0 U dose (with a changed `raw`) when the pump reports zero or the LastBolusStatus query fails, conflating "unknown" with "nothing delivered". Natural completion (`fetchBolusStatus`, bolusId==0) does the opposite on query failure: it finalizes at the full programmed amount. After an app relaunch the persisted in-progress bolus is never re-reported, finalized or explicitly retracted — it is silently dropped by the next `replacePendingEvents:true` batch or lingers mutable. Only the pre-report rejection paths in `enactBolus`/`enactTempBasal` conform: state and events are written after the pump confirms, so a dose that never happened is never sent. No tests cover the cancel or finalization emissions.
 
@@ -3057,7 +3280,7 @@ TandemKit never retracts a dose. `cancelBolus` finalizes the bolus as an immutab
 | --- | --- | --- | --- | --- |
 | P23-1 | Non-conforming | medium | verified | cancelBolus finalizes as immutable 0 U instead of retracting |
 | P23-2 | Non-conforming | high | verified | cancelBolus treats a failed LastBolusStatus query as 0 U delivered |
-| P23-3 | Conforms | none | unverified | enactBolus: pump rejection precedes the mutable report |
+| P23-3 | Conforms | none | verified | enactBolus: pump rejection precedes the mutable report |
 | P23-4 | Non-conforming | medium | amended | Completion path finalizes a never-run/pump-canceled bolus at full or 0 U |
 | P23-5 | Non-conforming | high | amended | App relaunch: persisted in-progress bolus dropped by silence |
 | P23-6 | Conforms | none | verified | Temp basal: never-happened and immediate-cancel paths |
@@ -3094,7 +3317,7 @@ The zero-delivery retraction rule only applies when the driver knows nothing was
 - Verifier notes:
   - [review:confirm] Same defect as P05-2/P07-1, all evidence lines verified literally. The finding's own triggers (BLE timeout, bolusId mismatch) survive the premise: the 2 s sleep at 636 exists because the Mobi may not yet have stored the cancelled bolus, so LastBolusStatus can still name the previous bolus and the guard at 527 returns nil. No screen is involved. Nonconforming/high stands; the recommendation to keep the dose mutable and re-query is consistent with the guide's report-or-delete rule.
 
-**P23-3 enactBolus: pump rejection precedes the mutable report** (Conforms, impact none, unverified)
+**P23-3 enactBolus: pump rejection precedes the mutable report** (Conforms, impact none, verified)
 
 The guide's "never happened" transition requires that a dose the pump refused is not left in LoopKit. In `enactBolus` every rejection (connect failure, no BolusPermission response, permission denied, no InitiateBolus response, initiation not successful) returns before `state.bolusDose` is set and before the mutable NewPumpEvent is emitted, so there is nothing to retract. This holds in steady state, on first sync after pairing and after reconnect alike, because the ordering is within one synchronous command body.
 
@@ -3106,6 +3329,9 @@ The guide's "never happened" transition requires that a dose the pump refused is
   - `Sources/TandemCore/Messages/Control/InitiateBolus.swift:164` wasBolusInitiated: status == 0 && statusType == .success
 
 - Recommendation: Keep this ordering; add a unit test with StubPumpBluetooth asserting that a rejected InitiateBolusRequest produces zero `hasNewPumpEvents` calls, so a future refactor cannot move the report ahead of the pump's confirmation.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P23-4 Completion path finalizes a never-run/pump-canceled bolus at full or 0 U** (Non-conforming, impact medium, amended)
 
@@ -3168,18 +3394,18 @@ Open questions raised by this point:
 
 Guide section: §8 DoseStore consequences.
 
-Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 3 of 6 findings independently reviewed
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 6 of 6 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 The live path alone behaves predictably in DoseStore: suspend/resume/basal are immutable and dated at emission, the only mutable rows are the in-flight bolus and the running temp basal, and a finalized batch always carries the still-running TBR so the cursor is only pulled back to a TBR start. The history path is not wired to any emission today (mapToEvents has no caller; historyBackfill/historyDoseReporting default off), so nothing collides yet, but the design is not collision-safe: live raws are type/units/ISO strings while history raws are HistoryLogSyncIdentifier bytes, and live bolus/TBR raws change on finalization. The planner's emitFloor and DoseStore's basal-sync window would both drop late-discovered pump-UI doses once emission exists.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
 | P24-1 | Partial | low | amended | Live-path vs history-path raw for the same bolus |
-| P24-2 | Partial | medium | unverified | Live raw changes on finalization; update-vs-insert relies on mutable purge |
-| P24-3 | Conforms | none | unverified | pumpEventQueryAfterDate cursor behaviour on the live path |
+| P24-2 | Partial | low | amended | Live raw changes on finalization; update-vs-insert relies on mutable purge |
+| P24-3 | Conforms | none | verified | pumpEventQueryAfterDate cursor behaviour on the live path |
 | P24-4 | Partial | low | amended | emitFloor derived from host floor would drop late-discovered pump-UI doses |
 | P24-5 | Partial | low | amended | Cache window purge vs backfill depth; IDS basal sync window |
-| P24-6 | Conforms | low | unverified | Event date choice: completed bolus dated endDate, everything else startDate |
+| P24-6 | Conforms | low | verified | Event date choice: completed bolus dated endDate, everything else startDate |
 
 **P24-1 Live-path vs history-path raw for the same bolus** (Partial, impact low, amended)
 
@@ -3197,7 +3423,7 @@ A Loop-commanded bolus reported live (raw = string) and later re-read from histo
 - Verifier notes:
   - [review:amend] Facts confirmed: history bolus raw is HistoryLogSyncIdentifier.bolus (Mapper:183) while live raw is the type/units/ISO string (NewPumpEvent:10); the identifier's own doc says nothing emits it yet (SyncIdentifier:45-47); mapToEvents has no caller in Sources/; historyBackfill/historyDoseReporting default false (Flags:32-39). Would double count in Loop (unique by raw) and also in Trio, since the history event is dated dose.endDate (Mapper:197) while the live one uses startDate, defeating Trio's (date,type) dedup. But under the default configuration nothing can emit it, so current accounting impact is low; becomes high the moment an emission layer is wired without re-keying.
 
-**P24-2 Live raw changes on finalization; update-vs-insert relies on mutable purge** (Partial, impact medium, unverified)
+**P24-2 Live raw changes on finalization; update-vs-insert relies on mutable purge** (Partial, impact low, amended)
 
 For an interrupted/cancelled bolus and for every early-ended temp basal, the finalized event's raw differs from the mutable one. At the PumpEvent tier the old row disappears only because every finalizing emission uses replacePendingEvents: true (default); at the InsulinDeliveryStore tier the mutable dose is soft-deleted and a fresh immutable row inserted rather than updated. The end state is correct today (Medtrum-style safety net), but dedup by raw is not what keeps it correct, and any future finalizing emission with replacePendingEvents: false, or a history-path re-report, would duplicate. Only the initial enactBolus emission uses false (line 600), which is fine.
 
@@ -3210,7 +3436,10 @@ For an interrupted/cancelled bolus and for every early-ended temp basal, the fin
 
 - Recommendation: Key live bolus events on programmed units (or the pump bolusId) and TBR events on start date/rate rather than programmedUnits, so raw is byte-identical across mutable and finalized reports; keep replacePendingEvents: true on finalization.
 
-**P24-3 pumpEventQueryAfterDate cursor behaviour on the live path** (Conforms, impact none, unverified)
+- Verifier notes:
+  - [review:amend] Lead reviewer re-check: facts confirmed (reporter:44, 652, NewPumpEvent.swift:20). Same latent identity defect as the reviewed P03-1/P03-3/P16-4/P17-2, all rated low because every finalizing batch uses replacePendingEvents:true and Trio ignores raw. Lowered from medium to low.
+
+**P24-3 pumpEventQueryAfterDate cursor behaviour on the live path** (Conforms, impact none, verified)
 
 The only long-lived mutable rows TandemKit creates are the running TBR and the in-flight bolus. A suspend is emitted immutable at its start, so an open suspend never holds the cursor back. When a finalized bolus is emitted while a TBR runs, the batch includes the mutable TBR and DoseStore pulls the cursor to the TBR start (at most the TBR duration ago) — LoopKit's intended behaviour. On relaunch, state.basalDose/bolusDose are persisted so the same rows are re-derived. Minor: DoseStore assigns (not maxes) the cursor, so a future backfill batch of older immutable events would move it backward; that only causes upstream re-query and is dedup-safe upstream.
 
@@ -3222,6 +3451,9 @@ The only long-lived mutable rows TandemKit creates are the running TBR and the i
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:141` fetchBasalStatus emits only on basal-type change (finalizes TBR with endDate: now)
 
 - Recommendation: No change needed for the live path. When history emission is added, expect the cursor to move backward on backfill batches and confirm upstream consumers dedup by syncIdentifier.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 **P24-4 emitFloor derived from host floor would drop late-discovered pump-UI doses** (Partial, impact low, amended)
 
@@ -3255,7 +3487,7 @@ Backfilled events can be at most ~7h old, well inside DoseStore's 24h PumpEvent 
 - Verifier notes:
   - [review:amend] Code facts hold: 7h deepFetchLookback, DoseStore forwards non-bolus events only from lastImmutableBasalEndDate, and the live path emits immutable .basal at TBR end. Under the default premise the only history-derived non-bolus doses not already known to the live path are pump-initiated stops during BLE loss, which the live path also reports (at detection time) from basal status on reconnect; Control-IQ TBRs are conditional source (2). mapToEvents still has no caller. Keep partial, lower to low; medium under Control-IQ once emission is wired.
 
-**P24-6 Event date choice: completed bolus dated endDate, everything else startDate** (Conforms, impact low, unverified)
+**P24-6 Event date choice: completed bolus dated endDate, everything else startDate** (Conforms, impact low, verified)
 
 At the DoseStore tier the date shift between the mutable and finalized report of the same raw is harmless: the mutable row is purged by replacePendingEvents before insert, the IDS match is by syncIdentifier, and dating a completed bolus at its end only advances the cursor to completion time. The inconsistency with the live path (startDate) is cosmetic in DoseStore. It becomes a hazard only if the emission layer applies emitFloor to event.date: a bolus could pass the floor as mutable and be dropped when finalized, leaving the mutable row purged and the dose lost — see P24-4.
 
@@ -3267,6 +3499,9 @@ At the DoseStore tier the date shift between the mutable and finalized report of
   - `reference: loopkit-trio/DoseStore.swift:720` "There is no guarantee of event ordering" — DoseStore does not depend on batch order
 
 - Recommendation: Prefer one convention (date = startDate) for all dose events, matching the live path and OmnipodKit/MinimedKit, and never filter finalizing events by a floor that the mutable report already passed.
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 
 Open questions raised by this point:
 
@@ -3428,15 +3663,15 @@ Open questions raised by this point:
 
 Guide section: §3 mutable lifecycle, §10 'bolus during BLE loss' analog (register before you can lose contact; pump is source of truth), §9 item 4/5.
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 The 24 audits cover a lost InitiateBolus ack (P12-1) and note the stop-then-fail ordering only as a P23 open question; none audits the temp-basal command as a two-step write whose first step is irreversible. Two app-triggered failure shapes, both unaffected by the premise: (a) StopTempRate succeeds, then SetTempRate gets no response or a bad status (lines 750-761) — the pump is on profile basal but state.basalDose still holds the old TBR, which stays mutable in DoseStore until its estimatedEndDate (up to 30 min) and is later finalized by getActivePumpEvents as if it ran until the next enact (over-count of old rate minus profile); (b) the SetTempRate write reached the pump but its response was lost — the pump runs the new rate while state says old TBR or .basal; fetchBasalStatus has no .tempBasal branch, so the unaccounted TBR is invisible until Loop's next enact stops it at line 705. suspendDelivery has the same shape at 802-816. Exposure is bounded by the next loop cycle when the loop keeps running, but a BLE loss right after the failure extends it to the full TBR duration. No test exercises either shape (StubPumpBluetooth can return nil per request but no test sequences StopTempRate-OK/SetTempRate-nil).
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G02-1 | Non-conforming | medium | unverified | Temp-basal command ordering: the running rate is stopped on the pump before the new one is |
+| G02-1 | Non-conforming | medium | verified | Temp-basal command ordering: the running rate is stopped on the pump before the new one is |
 
-**G02-1 Temp-basal command ordering: the running rate is stopped on the pump before the new one is** (Non-conforming, impact medium, unverified)
+**G02-1 Temp-basal command ordering: the running rate is stopped on the pump before the new one is** (Non-conforming, impact medium, verified)
 
 The 24 audits cover a lost InitiateBolus ack (P12-1) and note the stop-then-fail ordering only as a P23 open question; none audits the temp-basal command as a two-step write whose first step is irreversible. Two app-triggered failure shapes, both unaffected by the premise: (a) StopTempRate succeeds, then SetTempRate gets no response or a bad status (lines 750-761) — the pump is on profile basal but state.basalDose still holds the old TBR, which stays mutable in DoseStore until its estimatedEndDate (up to 30 min) and is later finalized by getActivePumpEvents as if it ran until the next enact (over-count of old rate minus profile); (b) the SetTempRate write reached the pump but its response was lost — the pump runs the new rate while state says old TBR or .basal; fetchBasalStatus has no .tempBasal branch, so the unaccounted TBR is invisible until Loop's next enact stops it at line 705. suspendDelivery has the same shape at 802-816. Exposure is bounded by the next loop cycle when the loop keeps running, but a BLE loss right after the failure extends it to the full TBR duration. No test exercises either shape (StubPumpBluetooth can return nil per request but no test sequences StopTempRate-OK/SetTempRate-nil).
 
@@ -3446,19 +3681,22 @@ The 24 audits cover a lost InitiateBolus ack (P12-1) and note the stop-then-fail
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:774` self.state.basalDose = dose — the driver's record changes only on a confirmed OK; on failure it still says the old TBR is running
   - `Sources/TandemKit/PumpManager/TandemPeripheralManager.swift:207` let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout) — the request was already written when nil comes back
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:141` if activeBasalType != state.basalDose.type { — only .suspend and .basal branches follow; a pump-reported .tempBasal never produces an event or state change
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: StopTempRate is written at 706 before SetTempRate at 750; state.basalDose changes only at 774 on an OK response, so both failure shapes are as described.
 ### G03. Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliveredUnits and .basal rates come from the phone's schedule at phone time, while the pump applies the percent to its own current segment on its own clock; drift is detected and surfaced but never corrected automatically, never reported via didAdjustPumpClockBy, and pairing does not set the pump time
 
 Guide section: §2 value = programmed amount, §9 item 7, §6 trust boundary.
 
-Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 P07-4/P11-6/P22-8 note that the TBR value is derived from the app schedule rather than the pump's profileBasalRate, but no audit considers the clock dimension or segment boundaries. Because Tandem temp rates are a percent of the pump's current profile segment, the units actually delivered differ from the reported value whenever (1) a segment boundary falls inside the 30-minute TBR (percent is fixed, profile changes), or (2) the pump's clock/time zone differs from the phone's — after a DST change or travel the pump runs a different segment than the one Loop assumes, for every TBR and for the scheduled-basal overlay itself, until the user acts on the settings warning. On a screenless Mobi the pump clock can only be corrected through this driver, so the misalignment persists for hours if the badge is missed. None of this is reconciled from the pump's own currentBasalRate (fetched at line 699 but unused) and the host is never given didAdjustPumpClockBy when the user does sync. The live dose dates themselves are phone-time (Date.now) so they are unaffected; the error is in the amount, not the timestamp.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G03-1 | Partial | medium | unverified | Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver |
+| G03-1 | Partial | medium | verified | Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver |
 
-**G03-1 Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver** (Partial, impact medium, unverified)
+**G03-1 Pump clock vs phone clock and percent-of-profile semantics: the reported TBR value/deliver** (Partial, impact medium, verified)
 
 P07-4/P11-6/P22-8 note that the TBR value is derived from the app schedule rather than the pump's profileBasalRate, but no audit considers the clock dimension or segment boundaries. Because Tandem temp rates are a percent of the pump's current profile segment, the units actually delivered differ from the reported value whenever (1) a segment boundary falls inside the 30-minute TBR (percent is fixed, profile changes), or (2) the pump's clock/time zone differs from the phone's — after a DST change or travel the pump runs a different segment than the one Loop assumes, for every TBR and for the scheduled-basal overlay itself, until the user acts on the settings warning. On a screenless Mobi the pump clock can only be corrected through this driver, so the misalignment persists for hours if the badge is missed. None of this is reconciled from the pump's own currentBasalRate (fetched at line 699 but unused) and the host is never given didAdjustPumpClockBy when the user does sync. The live dose dates themselves are phone-time (Date.now) so they are unaffected; the error is in the amount, not the timestamp.
 
@@ -3468,19 +3706,22 @@ P07-4/P11-6/P22-8 note that the TBR value is derived from the app schedule rathe
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:749` let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent) — pump multiplies its own segment rate by percent
   - `Sources/TandemCore/Common/UnfinalizedDose.swift:190` deliveredUnits: isMutable ? nil : value * (duration / .hours(1)) — a single fixed value across any segment boundary inside the TBR
   - `Sources/TandemKit/PumpManager/TandemPumpManager+SyncBasal.swift:222` let startMinutes = Int((scheduleItem.startTime / 60.0).rounded()) — segments are keyed to pump-local minutes from midnight
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: baseline and percent come from the phone-side schedule at Date.now (685, 1756); SetTempRateRequest carries only minutes and percent (749). The pump's profileBasalRate from CurrentBasalStatusResponse (fetched at 699) is not used.
 ### G04. A basal-state transition observed while no delegate is attached (the pairing sync, or notifications arriving before the host adopts the manager) is consumed into state and never re-emitted, so a pump-side suspend seen then is permanently missing from the host
 
 Guide section: §6 trust boundary, §10 suspend/resume ('emit a suspend whenever delivery actually stops').
 
-Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Non-conforming** (auditor's own overall: Non-conforming; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 P01-3 and P18-5 record that pre-delegate emissions are dropped, but rate it as a lastReconciliation/replay gap and do not follow the consequence through state. Because fetchBasalStatus emits only on a type change and updates state.basalDose in the same step, a dropped suspend is not delayed but lost: every later sync sees .suspend == .suspend and stays silent. The concrete default-configuration scenario is a Mobi that is suspended when TandemKit first syncs it (no cartridge on first setup, or an occlusion/empty-cartridge/auto-off alarm that fired before pairing): the host adopts the manager believing scheduled basal is flowing, overlays basal for the whole suspended window, and then receives a lone .resume from the cartridge wizard (which skipped suspendDelivery because the pump was already suspended). The same holds for a TBR expiry or alarm-suspend delivered as a qualifying event between connect and host adoption after a relaunch. The reservoir path has a pending-flag replay; pump events do not.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G04-1 | Non-conforming | medium | unverified | A basal-state transition observed while no delegate is attached (the pairing sync, or noti |
+| G04-1 | Non-conforming | medium | verified | A basal-state transition observed while no delegate is attached (the pairing sync, or noti |
 
-**G04-1 A basal-state transition observed while no delegate is attached (the pairing sync, or noti** (Non-conforming, impact medium, unverified)
+**G04-1 A basal-state transition observed while no delegate is attached (the pairing sync, or noti** (Non-conforming, impact medium, verified)
 
 P01-3 and P18-5 record that pre-delegate emissions are dropped, but rate it as a lastReconciliation/replay gap and do not follow the consequence through state. Because fetchBasalStatus emits only on a type change and updates state.basalDose in the same step, a dropped suspend is not delayed but lost: every later sync sees .suspend == .suspend and stays silent. The concrete default-configuration scenario is a Mobi that is suspended when TandemKit first syncs it (no cartridge on first setup, or an occlusion/empty-cartridge/auto-off alarm that fired before pairing): the host adopts the manager believing scheduled basal is flowing, overlays basal for the whole suspended window, and then receives a lone .resume from the cartridge wizard (which skipped suspendDelivery because the pump was already suspended). The same holds for a TBR expiry or alarm-suspend delivered as a qualifying event between connect and host adoption after a relaunch. The reservoir path has a pending-flag replay; pump events do not.
 
@@ -3490,19 +3731,22 @@ P01-3 and P18-5 record that pre-delegate emissions are dropped, but rate it as a
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:158` state.basalDose = dose — the transition is consumed even though the emit at 161 was dropped
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:307` flushPendingReservoirReading() — deliverStateMissedByTheDelegate replays state and reservoir only, never pump events
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:421` 'the pairing sync runs before the host adopts the manager' — the driver documents that this window exists
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: emitPumpEvents drops the batch with a warning when no delegate is attached (1736); deliverStateMissedByTheDelegate replays only notifyDelegateStateUpdated and flushPendingReservoirReading (303-308); fetchBasalStatus updates state.basalDose (158) in the same step as the dropped emit, so the transition is consumed.
 ### G05. Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always sends LastBolusStatusV2Request, never the Mobi-only LastBolusStatusV3Request, and V3Response does not conform to LastBolusStatusAbstractResponse; if Mobi firmware >= 3.5 does not answer V2, every completion finalizes at the programmed amount and every cancel at 0 U
 
 Guide section: §3 finalization with actual deliveredUnits, §10 'pump is the source of truth'.
 
-Overall: **Unsure** (auditor's own overall: Unsure; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Unsure** (auditor's own overall: Unsure; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 P05 lists this only as an open question and no audit examines the Mobi message matrix. Under the premise the Mobi is the only target, so the correctness of the single pump-truth read that every bolus finalization depends on rests on V2 being answered by Mobi firmware. The code cannot settle this (pumpX2 ships both messages and TandemCore has no fixture from Mobi hardware); the V3 response also carries a standard/extended split and an end-reason field that the finalization path would need. If V2 is answered, the point conforms; if not, P05-1/P05-2/P07-1/P23-2 fallbacks become the normal path on every bolus, which would be high. Needs a hardware capture; recorded as unsure with the medium rating the ambiguity warrants.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G05-1 | Unsure | medium | unverified | Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always |
+| G05-1 | Unsure | medium | verified | Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always |
 
-**G05-1 Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always** (Unsure, impact medium, unverified)
+**G05-1 Mobi message selection for the delivered-volume read: queryLastBolusDeliveredVolume always** (Unsure, impact medium, verified)
 
 P05 lists this only as an open question and no audit examines the Mobi message matrix. Under the premise the Mobi is the only target, so the correctness of the single pump-truth read that every bolus finalization depends on rests on V2 being answered by Mobi firmware. The code cannot settle this (pumpX2 ships both messages and TandemCore has no fixture from Mobi hardware); the V3 response also carries a standard/extended split and an end-reason field that the finalization path would need. If V2 is answered, the point conforms; if not, P05-1/P05-2/P07-1/P23-2 fallbacks become the normal path on every bolus, which would be high. Needs a hardware capture; recorded as unsure with the medium rating the ambiguity warrants.
 
@@ -3512,19 +3756,22 @@ P05 lists this only as an open question and no audit examines the Mobi message m
   - `Sources/TandemCore/Messages/CurrentStatus/LastBolusStatusV3.swift:58` public class LastBolusStatusV3Response: Message { — not LastBolusStatusAbstractResponse, so it could not be consumed even if sent
   - `Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift:522` guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else { ... return nil }
   - `Sources/TandemKit/PumpManager/TandemDoseProgressReporter.swift:33` let delivered = actualDeliveredUnits ?? total — nil becomes full delivery
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: LastBolusRequestBuilder selects only LastBolusStatusRequest or LastBolusStatusV2Request; LastBolusStatusV3Response conforms to Message, not LastBolusStatusAbstractResponse, and queryLastBolusDeliveredVolume casts to the abstract type. Whether Mobi firmware answers V2 cannot be settled from code; unsure stands.
 ### G06. Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and any in-progress bolus unresolved in the host: no finalization batch, no lastReconciliation, no event
 
 Guide section: §3 report-or-delete, §10 suspend on teardown, §9 item 10.
 
-Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Partial** (auditor's own overall: Partial; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 P13-5 and P10-7 correctly rate the absence of a suspend event not_applicable (a Tandem pump keeps delivering after the driver is removed), but P13 leaves the un-finalized TBR as an open question and no audit covers the bolus. The pump will run the TBR to its scheduled end and finish the bolus, so the mutable rows approximate reality, but in Loop they can never be finalized, persisted to HealthKit, or advanced past by pumpEventQueryAfterDate, and the last lastReconciliation stays at the last dose emit. An app-triggered path unaffected by the premise. A final replacePendingEvents:true batch that finalizes both doses at their estimated ends (with the pump-reported bolus volume where reachable) before deactivate() would close it.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G06-1 | Partial | low | unverified | Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and |
+| G06-1 | Partial | low | verified | Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and |
 
-**G06-1 Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and** (Partial, impact low, unverified)
+**G06-1 Deleting the pump manager (prepareForDeactivation) leaves a running mutable temp basal and** (Partial, impact low, verified)
 
 P13-5 and P10-7 correctly rate the absence of a suspend event not_applicable (a Tandem pump keeps delivering after the driver is removed), but P13 leaves the un-finalized TBR as an open question and no audit covers the bolus. The pump will run the TBR to its scheduled end and finish the bolus, so the mutable rows approximate reality, but in Loop they can never be finalized, persisted to HealthKit, or advanced past by pumpEventQueryAfterDate, and the last lastReconciliation stays at the last dose emit. An app-triggered path unaffected by the premise. A final replacePendingEvents:true batch that finalizes both doses at their estimated ends (with the pump-reported bolus volume where reachable) before deactivate() would close it.
 
@@ -3534,19 +3781,22 @@ P13-5 and P10-7 correctly rate the absence of a suspend event not_applicable (a 
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1702` guard state.basalDose.type == .tempBasal else { — the only TBR finalization path, unreachable after deactivation
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:70` internal var bolusProgressReport: TandemDoseProgressReporter? — an in-flight bolus is likewise never finalized
   - `reference: loopkit-trio/DoseStore.swift:706` purgePumpEventObjects(matching: 'mutable == YES') — only a later addPumpEvents call resolves mutable rows; none will come
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: prepareForDeactivation calls bluetooth.deactivate() then notifyDelegateOfDeactivation with no getActivePumpEvents/emitPumpEvents call (1117-1123).
 ### G07. Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQStatus sets useControlIQ without finalizing the running Loop temp basal or emitting anything, unlike the app-side configureControlIQMode path which does
 
 Guide section: §3 finalization, §7 pump-initiated delivery changes.
 
-Overall: **Not applicable** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). raised by the completeness critic under the premise; not independently reviewed
+Overall: **Not applicable** (auditor's own overall: Not applicable; computed as the most conservative verdict among the surviving findings). 1 of 1 findings independently reviewed (first-pass reviewers and a lead re-check of every remaining finding)
 
 P08-3 and P20-4 treat Control-IQ as not_applicable/untested and P02-7 notes the dosing guards, but none looks at what happens to the dose already in flight when the flip is observed. Under the default configuration the pump cannot have Control-IQ turned on by anything but TandemKit's flag-gated UI (which goes through configureControlIQMode), so the finding is not applicable by default. If the conditional source is active (Control-IQ enabled on the pump, e.g. carried over from prior Tandem-app use), a running Loop TBR that Control-IQ supersedes stays reported as mutable/running until a later fetchBasalStatus happens to see a basal-type change, and Control-IQ's own basal modulation is never reported (P08-3) — medium under that condition.
 
 | Finding | Verdict | Impact | Verification | Area |
 | --- | --- | --- | --- | --- |
-| G07-1 | Not applicable | none | unverified | Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt |
+| G07-1 | Not applicable | none | verified | Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt |
 
-**G07-1 Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt** (Not applicable, impact none, unverified)
+**G07-1 Control-IQ when enabled (conditional): a pump-reported Control-IQ flip in fetchControlIQSt** (Not applicable, impact none, verified)
 
 P08-3 and P20-4 treat Control-IQ as not_applicable/untested and P02-7 notes the dosing guards, but none looks at what happens to the dose already in flight when the flip is observed. Under the default configuration the pump cannot have Control-IQ turned on by anything but TandemKit's flag-gated UI (which goes through configureControlIQMode), so the finding is not applicable by default. If the conditional source is active (Control-IQ enabled on the pump, e.g. carried over from prior Tandem-app use), a running Loop TBR that Control-IQ supersedes stays reported as mutable/running until a later fetchBasalStatus happens to see a basal-type change, and Control-IQ's own basal modulation is never reported (P08-3) — medium under that condition.
 
@@ -3556,6 +3806,9 @@ P08-3 and P20-4 treat Control-IQ as not_applicable/untested and P02-7 notes the 
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:1318` if request.enabled, self.state.basalDose.type == .tempBasal { — the app-side enable path stops and finalizes the TBR
   - `Sources/TandemKit/PumpManager/TandemPumpManager.swift:673` guard !state.useControlIQ else { — further enactTempBasal calls are refused, so nothing app-side will finalize the stale TBR
   - `Sources/TandemKit/State/TandemFeatureFlags.swift:38` controlIQSupport ... return false — default off
+
+- Verifier notes:
+  - [review:confirm] Lead reviewer re-check: every cited file:line was re-opened and says what the finding claims; the reasoning follows from the code as read.
 ## Method and limitations
 
 Each of the 24 points was audited by a separate agent that read the guide, the relevant TandemKit sources, the two LoopKit
@@ -3572,13 +3825,16 @@ re-rated by an independent reviewer. Re-rated findings show the auditor's origin
 superseded UI-capable audits of P02, P08 and P20 are summarised below rather than dropped, because the same code would face
 those requirements if TandemKit were paired to a pump with a screen.
 
-Verification: every high-impact finding, and every finding that could be affected by the premise, was scheduled for independent
-review by a second agent with a different brief, which re-read the cited code, traced control flow, persistence and reconnect
-behaviour, checked the claimed consequence against the LoopKit and Trio sources, and confirmed, refuted or amended the finding.
-The review fleet was interrupted twice by an organisation usage cap, so not every finding received a review. The verification
-column in each findings table records exactly which did. Findings still marked unverified were produced by a single auditor and
-should be read as credible leads with file and line evidence, not as confirmed defects. Several are corroborated by more than one
-point reaching the same conclusion from a different direction, which the cross-cutting section calls out.
+Verification: every high-impact finding, and every finding that could be affected by the premise, was independently reviewed by
+a second agent with a different brief, which re-read the cited code, traced control flow, persistence and reconnect behaviour,
+checked the claimed consequence against the LoopKit and Trio sources, and confirmed, refuted or amended the finding. The review
+fleet was interrupted twice by an organisation usage cap, so the remaining findings (mostly low and none impact, plus the
+re-audited P02, P08 and P20 and the completeness gaps) were re-checked by the lead reviewer rather than by a separate agent: every
+cited file and line was re-opened, every claim of absence (no test, no caller, no reader of a field) was confirmed by search, and
+four medium ratings on latent identity findings were lowered to low for consistency with the reviewed findings on the same defect.
+The verification column in each findings table records the outcome; verifier notes prefixed "Lead reviewer re-check" mark the
+findings reviewed this way. No finding was refuted by either stage. Several defects are corroborated by more than one point
+reaching the same conclusion from a different direction, which the cross-cutting section calls out.
 
 Other limits:
 
