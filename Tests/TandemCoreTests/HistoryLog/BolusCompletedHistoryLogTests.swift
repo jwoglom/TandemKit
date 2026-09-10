@@ -44,4 +44,36 @@ final class BolusCompletedHistoryLogTests: XCTestCase {
             ISO8601DateFormatter().date(from: "2022-02-19T12:07:28Z")
         )
     }
+
+    // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE capture.
+    // Remote (BLE) bolus id 2903 of 0.15 u that ran to completion; the header high nibble is 1 on
+    // this pump. Across the capture's 156 BolusCompleted records, bolusId at bytes 12-13 matched the
+    // BolusActivated/BolusDelivery id for the same bolus in 156/156 and completionStatus at bytes
+    // 10-11 was 3 (complete) in every record, confirming the Java field order over the byte-reversed
+    // cloud-export mirror. insulinDelivered equalled insulinRequested bit-for-bit in all 156.
+    func testBolusCompletedHistoryLog_mobiRemoteBolus() {
+        let expected = BolusCompletedHistoryLog(
+            pumpTimeSec: 589526849,
+            sequenceNum: 640762,
+            completionStatusId: 3,
+            bolusId: 2903,
+            iob: Float(bitPattern: 0x3fb21f75), // ~1.3916
+            insulinDelivered: Float(bitPattern: 0x3e19999a), // 0.15
+            insulinRequested: Float(bitPattern: 0x3e19999a) // 0.15
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "141041772323fac609000300570b751fb23f9a99193e9a99193e",
+            expected
+        )
+
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.completionStatus, .complete)
+        XCTAssertEqual(parsed.bolusId, 2903)
+        XCTAssertEqual(parsed.insulinDelivered.bitPattern, parsed.insulinRequested.bitPattern)
+        XCTAssertEqual(
+            Dates.fromJan12008EpochSecondsToDate(TimeInterval(parsed.pumpTimeSec)),
+            ISO8601DateFormatter().date(from: "2026-09-06T05:27:29Z")
+        )
+    }
 }
