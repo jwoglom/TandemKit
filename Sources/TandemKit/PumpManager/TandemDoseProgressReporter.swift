@@ -8,10 +8,6 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     private var observers = WeakSet<DoseProgressObserver>()
 
-    // larger total deliveries are faster -- a 10.05u bolus is almost twice as fast as a 9.95u one
-    public static let BOLUS_SPEED_UNDER_10U = 1 / 28.745858684009523
-    public static let BOLUS_SPEED_OVER_10U = 1 / 11.200233479381131
-
     private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
@@ -27,10 +23,29 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     }
 
     /// Creates a finalized pump event for this bolus.
-    /// - Parameter actualDeliveredUnits: The pump-reported delivered volume. When nil,
-    ///   falls back to the programmed total (assumes full delivery).
-    func getPumpEvent(actualDeliveredUnits: Double? = nil) -> NewPumpEvent {
+    /// - Parameters:
+    ///   - actualDeliveredUnits: The pump-reported delivered volume. When nil,
+    ///     falls back to the programmed total (assumes full delivery).
+    ///   - pumpTimestamp: The pump's timestamp on the `LastBolusStatus` record for this bolus,
+    ///     when one was read.
+    ///   - deliveryStartDate: When the pump said delivery began, when that was seen.
+    ///   - detectedAt: When the driver noticed the bolus had finished. A parameter so the
+    ///     resolved window can be tested.
+    func getPumpEvent(
+        actualDeliveredUnits: Double? = nil,
+        pumpTimestamp: Date? = nil,
+        deliveryStartDate: Date? = nil,
+        detectedAt: Date = .now
+    ) -> NewPumpEvent {
         let delivered = actualDeliveredUnits ?? total
+        // The pump's window, not ours: neither end of it is the moment we noticed (#339).
+        let endDate = BolusEndDate.resolve(
+            startDate: dose.startDate,
+            deliveryStartDate: deliveryStartDate,
+            deliveredUnits: delivered,
+            pumpTimestamp: pumpTimestamp,
+            detectedAt: detectedAt
+        )
         return NewPumpEvent.bolus(
             dose: DoseEntry.bolus(
                 units: total,
@@ -38,10 +53,12 @@ class TandemDoseProgressReporter: DoseProgressReporter {
                 duration: 0, // Ignored if endDate is available
                 activationType: activationType,
                 insulinType: dose.insulinType,
-                startDate: dose.startDate,
-                endDate: Date.now
+                startDate: deliveryStartDate ?? dose.startDate,
+                endDate: endDate
             ),
             units: delivered,
+            // The event date stays the moment the bolus was programmed even when the dose starts
+            // later: hosts key pump events on it, and moving it would report a second bolus.
             date: dose.startDate
         )
     }
@@ -69,9 +86,9 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         let runningFor = TimeInterval(seconds: Date.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
 
         let unitsDeliveredPerSec = if total < 10 {
-            TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
+            TandemPumpCapabilities.bolusSpeedUnder10U
         } else {
-            TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
+            TandemPumpCapabilities.bolusSpeedOver10U
         }
 
         deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: min(runningFor * unitsDeliveredPerSec, total))

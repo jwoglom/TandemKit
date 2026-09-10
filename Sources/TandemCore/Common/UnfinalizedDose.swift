@@ -8,7 +8,11 @@ public class UnfinalizedDose {
 
     public var bolusId: Int?
     public let type: DoseType
+    /// When the driver programmed the dose. This is the dose's identity — the date every
+    /// `NewPumpEvent` for it carries, which hosts dedupe on — so it never moves.
     public let startDate: Date
+    /// When the pump reported delivery actually began, for a bolus. See `recordDeliveryStart`.
+    public var deliveryStartDate: Date?
     public var estimatedEndDate: Date
     public let value: Double
     public var deliveredUnits: Double = 0
@@ -70,6 +74,20 @@ public class UnfinalizedDose {
         automatic = false // OSAID does not use resume function
     }
 
+    /// The start of insulin delivery: the pump's own if we saw it, else when we programmed the
+    /// dose. This is what the reported `DoseEntry` starts at, unlike `startDate`.
+    public var doseStartDate: Date {
+        deliveryStartDate ?? startDate
+    }
+
+    /// Records when the pump said delivery began (`CurrentBolusStatus` in the delivering state).
+    ///
+    /// Clamped into `startDate...now`: the two clocks differ by a few seconds, and delivery
+    /// neither began before we programmed the bolus nor in the future.
+    public func recordDeliveryStart(_ date: Date, now: Date = Date.now) {
+        deliveryStartDate = min(max(date, startDate), max(now, startDate))
+    }
+
     public init?(rawValue: RawValue) {
         if let rawType = rawValue["type"] as? DoseType.RawValue, let type = DoseType(rawValue: rawType) {
             self.type = type
@@ -121,6 +139,8 @@ public class UnfinalizedDose {
             return nil
         }
 
+        deliveryStartDate = rawValue["deliveryStartDate"] as? Date
+
         if let bolusIdRaw = rawValue["bolusId"] as? Int {
             bolusId = bolusIdRaw
         } else {
@@ -134,6 +154,7 @@ public class UnfinalizedDose {
         raw["type"] = type.rawValue
         raw["value"] = value
         raw["startDate"] = startDate
+        raw["deliveryStartDate"] = deliveryStartDate
         raw["estimatedEndDate"] = estimatedEndDate
         raw["deliveredUnits"] = deliveredUnits
         raw["insulinType"] = insulinType?.rawValue
@@ -154,7 +175,7 @@ public class UnfinalizedDose {
 
             return DoseEntry(
                 type: .bolus,
-                startDate: startDate,
+                startDate: doseStartDate,
                 endDate: endDate,
                 value: value,
                 unit: .units,
@@ -224,18 +245,4 @@ public class UnfinalizedDose {
             startDate: Date.now
         )
     }
-}
-
-/// Fixed hardware capabilities of the supported Tandem pumps, kept in
-/// TandemCore so both the pump manager and dose bookkeeping share one
-/// definition on every platform.
-public enum TandemPumpCapabilities {
-    /// Tandem Mobi and t:slim X2: 0.0u, then 0.1 - 15.00u/hr in 0.01u chunks
-    public static let supportedBasalRates: [Double] = {
-        let multiplier = 1000.0
-        let start = Int(round(0.1 * multiplier))
-        let end = Int(round(15.0 * multiplier))
-        let step = Int(round(0.01 * multiplier))
-        return [0.0] + stride(from: start, through: end, by: step).map { Double($0) / multiplier }
-    }()
 }

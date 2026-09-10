@@ -28,13 +28,15 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
         standardBolusId: Int,
         standardDelivered: UInt32,
         extendedBolusId: Int,
-        extendedDelivered: UInt32
+        extendedDelivered: UInt32,
+        standardTimestamp: UInt32 = 500_000_000,
+        extendedTimestamp: UInt32 = 500_000_000
     ) -> LastBolusStatusV3Response {
         LastBolusStatusV3Response(
             lastBolusTypeBitmask: lastBolusTypeBitmask,
             standardBolusStatusId: 0,
             standardBolusId: standardBolusId,
-            standardBolusTimestamp: 500_000_000,
+            standardBolusTimestamp: standardTimestamp,
             standardBolusDeliveredVolume: standardDelivered,
             standardBolusEndReasonId: LastBolusStatusAbstractResponseBolusStatus.stoppedWireless.rawValue,
             standardBolusSourceId: 0,
@@ -43,7 +45,7 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
             standardBolusSecondsSincePumpReset: 1000,
             extendedBolusStatusId: 0,
             extendedBolusId: extendedBolusId,
-            extendedBolusTimestamp: 500_000_000,
+            extendedBolusTimestamp: extendedTimestamp,
             extendedBolusDeliveredVolume: extendedDelivered,
             extendedBolusEndReasonId: LastBolusStatusAbstractResponseBolusStatus.stoppedWireless.rawValue,
             extendedBolusSourceId: 0,
@@ -128,6 +130,65 @@ final class LastBolusDeliveredVolumeTests: XCTestCase {
         ))
 
         XCTAssertNil(manager.queryLastBolusDeliveredVolume(bolusId: 2004))
+    }
+
+    // MARK: - Pump timestamp
+
+    /// The timestamp dates the end of the bolus (#339), so a bolus present in both records ends
+    /// when its *last* portion did, not when its first one did.
+    func testV3ReportsTheLatestTimestampAcrossBothRecordsOfOneBolus() throws {
+        let manager = makeManager()
+        bluetooth.stub(LastBolusStatusV3Request.self, with: v3Response(
+            lastBolusTypeBitmask: 0x03,
+            standardBolusId: 2004,
+            standardDelivered: 2000,
+            extendedBolusId: 2004,
+            extendedDelivered: 1000,
+            standardTimestamp: 500_000_000,
+            extendedTimestamp: 500_001_800
+        ))
+
+        let report = try XCTUnwrap(manager.queryLastBolusReport(bolusId: 2004))
+
+        XCTAssertEqual(report.pumpTimestamp, Dates.fromJan12008EpochSecondsToDate(500_001_800))
+    }
+
+    /// An extended-only bolus is dated from the extended record, which the single-record
+    /// abstract view reads only because no standard record is present.
+    func testV3ReportsTheExtendedOnlyRecordsTimestamp() throws {
+        let manager = makeManager()
+        bluetooth.stub(LastBolusStatusV3Request.self, with: v3Response(
+            lastBolusTypeBitmask: 0x02,
+            standardBolusId: 0,
+            standardDelivered: 0,
+            extendedBolusId: 2004,
+            extendedDelivered: 1250,
+            standardTimestamp: 500_009_999,
+            extendedTimestamp: 500_000_500
+        ))
+
+        let report = try XCTUnwrap(manager.queryLastBolusReport(bolusId: 2004))
+
+        XCTAssertEqual(report.pumpTimestamp, Dates.fromJan12008EpochSecondsToDate(500_000_500))
+    }
+
+    func testV2ReportsItsSingleTimestamp() throws {
+        let manager = makeManager(apiVersion: .apiV3_4)
+        bluetooth.stub(LastBolusStatusV2Request.self, with: LastBolusStatusV2Response(
+            status: 0,
+            bolusId: 2004,
+            timestamp: 500_000_123,
+            deliveredVolume: 2450,
+            bolusStatusId: LastBolusStatusAbstractResponseBolusStatus.stoppedWireless.rawValue,
+            bolusSourceId: 0,
+            bolusTypeBitmask: 1,
+            extendedBolusDuration: 0,
+            requestedVolume: 5000
+        ))
+
+        let report = try XCTUnwrap(manager.queryLastBolusReport(bolusId: 2004))
+
+        XCTAssertEqual(report.pumpTimestamp, Dates.fromJan12008EpochSecondsToDate(500_000_123))
     }
 
     func testUnansweredRequestReportsNil() {

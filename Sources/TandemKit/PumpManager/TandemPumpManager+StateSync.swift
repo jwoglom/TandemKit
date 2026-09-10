@@ -229,6 +229,10 @@ extension TandemPumpManager {
 
         if response.status == .delivering {
             if let dose = state.bolusDose {
+                // The pump's own start of delivery, which runs ~15s behind when we programmed the
+                // bolus, is what the reported dose starts at (#339).
+                dose.recordDeliveryStart(response.timestampDate)
+
                 // Recalculate endDate of the bolus
                 dose.estimatedEndDate = Date.now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
 
@@ -250,14 +254,19 @@ extension TandemPumpManager {
             // Bolus is finished
             telemetryScheduler.cancelAll()
 
-            // Query the pump for actual delivered volume rather than assuming full delivery
-            var actualDelivered: Double?
+            // Query the pump for actual delivered volume rather than assuming full delivery,
+            // and for its own timestamp rather than dating the bolus at this detection (#339).
+            var lastBolus: LastBolusReport?
             if let bolusId = state.bolusDose?.bolusId {
-                actualDelivered = queryLastBolusDeliveredVolume(bolusId: bolusId)
+                lastBolus = queryLastBolusReport(bolusId: bolusId)
             }
 
             var events = getActivePumpEvents()
-            events.append(progressReport.getPumpEvent(actualDeliveredUnits: actualDelivered))
+            events.append(progressReport.getPumpEvent(
+                actualDeliveredUnits: lastBolus?.deliveredUnits,
+                pumpTimestamp: lastBolus?.pumpTimestamp,
+                deliveryStartDate: state.bolusDose?.deliveryStartDate
+            ))
 
             bolusProgressReport = nil
             state.bolusDose = nil
@@ -513,11 +522,20 @@ extension TandemPumpManager {
         }
     }
 
-    /// Queries the pump for the actual delivered volume of the last bolus.
-    /// Used after both cancellation and natural completion to get the real delivered amount.
-    /// Returns the delivered volume in units at the pump's native milliunit resolution, or nil if
-    /// the query fails or the bolus ID doesn't match.
-    func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
+    /// What the pump reports about a bolus it has finished with.
+    struct LastBolusReport {
+        /// Delivered volume in units, at the pump's native milliunit resolution.
+        let deliveredUnits: Double
+        /// The pump's own timestamp on the record. Used to date the end of delivery instead of
+        /// the moment the driver noticed it (see `BolusEndDate`).
+        let pumpTimestamp: Date
+    }
+
+    /// Queries the pump for what it recorded about the last bolus.
+    /// Used after both cancellation and natural completion to get the real delivered amount and
+    /// the pump's own timestamp for it. Returns nil if the query fails or the bolus ID doesn't
+    /// match.
+    func queryLastBolusReport(bolusId: Int) -> LastBolusReport? {
         let request = LastBolusRequestBuilder.create(
             apiVersion: state.pumpState.apiVersion,
             pumpModel: state.pumpState.pumpModel
@@ -532,10 +550,32 @@ extension TandemPumpManager {
             return nil
         }
 
-        // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
-        // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
-        // partial delivery by up to an increment — the direction that lets the loop over-deliver.
-        return HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0)
+        return LastBolusReport(
+            // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
+            // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating
+            // a partial delivery by up to an increment — the direction that lets the loop
+            // over-deliver.
+            deliveredUnits: HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0),
+            pumpTimestamp: pumpTimestamp(from: response, bolusId: bolusId)
+        )
+    }
+
+    /// Convenience for callers that only need the volume.
+    func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
+        queryLastBolusReport(bolusId: bolusId)?.deliveredUnits
+    }
+
+    /// The pump's timestamp for `bolusId`. On a V3 response the two records can carry different
+    /// timestamps, so the latest of the matching ones is used: delivery is over only once every
+    /// portion of the bolus is.
+    private func pumpTimestamp(from response: LastBolusStatusAbstractResponse, bolusId: Int) -> Date {
+        if let v3 = response as? LastBolusStatusV3Response {
+            let matching = v3.sections.filter { $0.bolusId == bolusId }
+            if let latest = matching.map(\.timestampDate).max() {
+                return latest
+            }
+        }
+        return response.timestampDate
     }
 
     /// Delivered volume in milliunits that `response` reports for `bolusId`, or nil when it

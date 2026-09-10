@@ -503,11 +503,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        if units < 10 {
-            units / TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
-        } else {
-            units / TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
-        }
+        TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)
     }
 
     /// Returns the reason `units` is not a deliverable bolus, or nil when it is.
@@ -599,8 +595,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let dose = UnfinalizedDose(
                 units: units,
-                // 5s needed before bolus enacting is started
-                duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                // The pump spends ~15s accepting the request before insulin moves.
+                duration: self.estimatedDuration(toBolus: units) + TandemPumpCapabilities.bolusInitiationDelay,
                 activationType: activationType,
                 insulinType: self.state.insulinType,
                 bolusId: permissionResponse.bolusId
@@ -657,10 +653,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Allow the Mobi to store the bolus in storage
             Thread.sleep(forTimeInterval: .seconds(2))
 
-            // Query the pump for the actual delivered volume before clearing state
-            bolusDose.deliveredUnits = self.queryLastBolusDeliveredVolume(bolusId: bolusId) ?? 0
+            // Query the pump for the actual delivered volume and its own timestamp before
+            // clearing state
+            let lastBolus = self.queryLastBolusReport(bolusId: bolusId)
+            bolusDose.deliveredUnits = lastBolus?.deliveredUnits ?? 0
 
-            let canceledDose = bolusDose.toDoseEntry(endDate: Date.now)
+            // Not now: a cancel is only noticed here, while the insulin stopped going in when the
+            // pump says it did (#339).
+            let canceledDose = bolusDose.toDoseEntry(endDate: BolusEndDate.resolve(
+                startDate: bolusDose.startDate,
+                deliveryStartDate: bolusDose.deliveryStartDate,
+                deliveredUnits: bolusDose.deliveredUnits,
+                pumpTimestamp: lastBolus?.pumpTimestamp
+            ))
 
             // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
             self.telemetryScheduler.cancelAll()
@@ -671,7 +676,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             events
                 .append(
                     NewPumpEvent
-                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
+                        // bolusDose.startDate, not the dose's: the event keeps the date it was
+                        // first reported under even when delivery started later.
+                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: bolusDose.startDate)
                 )
 
             self.state.lastReconciliation = Date.now
