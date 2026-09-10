@@ -42,4 +42,64 @@ final class ControlIQPcmChangeHistoryLogTests: XCTestCase {
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
+
+    // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE capture.
+    // Eight records, one pair per suspend/resume. With Control-IQ off the PCM only toggles between
+    // NO_CONTROL (0, while suspended) and OPEN_LOOP (1, while delivering); cgmAvailable and
+    // closedLoopPreferred stay 0 throughout and every boolean field is strictly 0/1.
+    func testControlIQPcmChangeHistoryLogMobiSuspend() {
+        let expected = ControlIQPcmChangeHistoryLog(
+            pumpTimeSec: 589553316,
+            sequenceNum: 641937,
+            currentPcm: 0,
+            previousPcm: 1,
+            pumpSuspended: 1,
+            calculationAvailable: 1,
+            cgmAvailable: 0,
+            closedLoopPreferred: 0,
+            sufficientClosedLoopParams: 1
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "e610a4de232391cb090000010101000001000000000000000000",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+
+        XCTAssertEqual(parsed.currentPcmEnum, .noControl)
+        XCTAssertEqual(parsed.previousPcmEnum, .openLoop)
+        XCTAssertTrue(parsed.isPumpSuspended)
+        XCTAssertTrue(parsed.isCalculationAvailable)
+        XCTAssertFalse(parsed.isCgmAvailable)
+        XCTAssertFalse(parsed.isClosedLoopPreferred)
+        XCTAssertTrue(parsed.isSufficientClosedLoopParams)
+    }
+
+    func testControlIQPcmChangeHistoryLogMobiResume() {
+        let expected = ControlIQPcmChangeHistoryLog(
+            pumpTimeSec: 589555699,
+            sequenceNum: 642015,
+            currentPcm: 1,
+            previousPcm: 0,
+            pumpSuspended: 0,
+            calculationAvailable: 1,
+            cgmAvailable: 0,
+            closedLoopPreferred: 0,
+            sufficientClosedLoopParams: 1
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "e610f3e72323dfcb090001000001000001000000000000000000",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+
+        XCTAssertEqual(parsed.currentPcmEnum, .openLoop)
+        XCTAssertEqual(parsed.previousPcmEnum, .noControl)
+        XCTAssertFalse(parsed.isPumpSuspended)
+        XCTAssertTrue(parsed.isCalculationAvailable)
+        XCTAssertFalse(parsed.isCgmAvailable)
+        XCTAssertFalse(parsed.isClosedLoopPreferred)
+        XCTAssertTrue(parsed.isSufficientClosedLoopParams)
+    }
 }
