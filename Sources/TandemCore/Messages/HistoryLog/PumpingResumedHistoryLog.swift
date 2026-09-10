@@ -12,7 +12,17 @@ import Foundation
 public class PumpingResumedHistoryLog: HistoryLog {
     public static let typeId = 12
 
+    /// Pump state before the resume. Observed as 100 in every record captured so far, on both
+    /// t:slim X2 and Mobi; no other value has been seen (pumpX2 issue 40).
     public let preResumeState: UInt32
+
+    /// Insulin remaining in the reservoir at the instant of the resume, in whole units, exactly as
+    /// the pump reports it: byte-identical to `InsulinStatusResponse.currentInsulinAmount` polled
+    /// within two seconds in 4/4 resumes (and 4/4 suspends) of a Mobi capture. It is the remaining
+    /// amount, not a fill level and not insulin on board. After a tubing fill on the same cartridge
+    /// it read 90 where the paired suspend read 110; after a cartridge change it read 185 (equal to
+    /// `CartridgeFilledHistoryLog.insulinDisplay` in the same second) where the paired suspend read
+    /// 8. Resolves the field's open question in pumpX2 issue 40.
     public let insulinAmount: Int
 
     public required init(cargo: Data) {
