@@ -52,4 +52,30 @@ final class BolusRequestedMsg2HistoryLogTests: XCTestCase {
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
+
+    /// Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE
+    /// capture. A bolus initiated over BLE via `InitiateBolusRequest` (bolusSource 8 in the paired
+    /// BolusDeliveryHistoryLog): options=4 (`bleStandard`) with standardPercent=100, duration=0,
+    /// isf/targetBG=0, userOverride=true. 156/156 BLE-initiated boluses in the capture matched.
+    /// The header high nibble is 1 in this capture, as in the BasalDelivery fixtures.
+    /// See pumpX2 issue #51.
+    func testBolusRequestedMsg2HistoryLog_bleStandardMobi() {
+        // 41102e772323ebc60900570b0464000000000000000001000000
+        let expected = BolusRequestedMsg2HistoryLog(
+            pumpTimeSec: 589526830, sequenceNum: 640747, bolusId: 2903, options: 4, standardPercent: 100,
+            duration: 0, spare1: 0, isf: 0, targetBG: 0, userOverride: true, declinedCorrection: false,
+            selectedIOB: 0, spare2: 0
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "41102e772323ebc60900570b0464000000000000000001000000",
+            expected
+        )
+        XCTAssertEqual(parsed.bolusOption, .bleStandard)
+        XCTAssertEqual(parsed.standardPercent, 100)
+        XCTAssertTrue(parsed.userOverride)
+        XCTAssertFalse(parsed.declinedCorrection)
+        XCTAssertEqual(parsed.selectedIOB, 0)
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+    }
 }
