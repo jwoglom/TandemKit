@@ -88,14 +88,33 @@ final class BolusEndDateTests: XCTestCase {
         XCTAssertLessThan(end, detectedAt)
     }
 
-    /// Whether the pump's field is the bolus's start or its completion is not established by any
-    /// capture. Under the start reading it lands on `startDate`, and the rate estimate — never
-    /// discarded, only maxed against — still dates the end.
-    func testAStartLikeTimestampFallsBackToTheRateEstimate() {
+    /// The shape the hardware logs actually show: the pump accepts the request, starts delivering
+    /// 15 s later, and stamps the end at start-of-delivery + volume / rate. The pump's stamp is
+    /// therefore *later* than the rate estimate taken from `startDate`, and has to win — it is the
+    /// measurement, and the estimate only ever misses the 15 s of lead-in.
+    func testPumpTimestampWinsOverAnEstimateThatOmitsTheDeliveryLeadIn() {
+        let deliveryStartedAt = start.addingTimeInterval(15)
+        let pumpEnd = deliveryStartedAt.addingTimeInterval(BolusEndDate.estimatedDuration(toBolus: 2.0))
+
         let end = BolusEndDate.resolve(
             startDate: start,
             deliveredUnits: 2.0,
-            pumpTimestamp: start,
+            pumpTimestamp: pumpEnd,
+            detectedAt: start.addingTimeInterval(300)
+        )
+
+        XCTAssertEqual(end, pumpEnd)
+    }
+
+    /// The pump's timestamp is the end of delivery (verified on hardware, see `BolusEndDate`),
+    /// so a record that predates what the delivered volume alone must have taken is not one that
+    /// can describe this bolus — a stale record, or a pump clock behind the phone's. The rate
+    /// estimate is the floor under it rather than being discarded for it.
+    func testATimestampEarlierThanTheDeliveryTookIsFlooredByTheRateEstimate() {
+        let end = BolusEndDate.resolve(
+            startDate: start,
+            deliveredUnits: 2.0,
+            pumpTimestamp: start.addingTimeInterval(5),
             detectedAt: start.addingTimeInterval(600)
         )
 
