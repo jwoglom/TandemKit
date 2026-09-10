@@ -331,4 +331,90 @@ final class DailyBasalHistoryLogTests: XCTestCase {
         )
         XCTAssertEqual(255, parsed.batteryChargeRaw)
     }
+
+    // MARK: - Mobi fixtures
+    //
+    // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE capture.
+    // These records carry header high nibble 1. Float fields are built from the exact bit pattern
+    // read out of the payload so the round trip is byte-exact.
+
+    func testMobiFinalEventForDay_2358_05() {
+        // 23:58:05 pump-local. finalEventForDay is set, yet another record 43 s later on the same
+        // evening (below) carries it too, before a single NewDay at 00:00:00: the flag marks every
+        // Daily Basal written in the last minutes before rollover, not one closing record.
+        // dailyTotalBasal=0x411c0e5b (~9.7535), lastBasalRate=2.5, iob=0x40fa6e81 (~7.826),
+        // batteryChargeRaw=92, lipoMv=4104, pumpTimeSec=589593485, sequenceNum=644069
+        let expected = DailyBasalHistoryLog(
+            pumpTimeSec: 589_593_485,
+            sequenceNum: 644_069,
+            dailyTotalBasal: Float(bitPattern: 0x411C_0E5B),
+            lastBasalRate: 2.5,
+            iob: Float(bitPattern: 0x40FA_6E81),
+            finalEventForDay: true,
+            batteryChargeRaw: 92,
+            lipoMv: 4104
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "51108d7b2423e5d309005b0e1c4100002040816efa40015c0810",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertTrue(parsed.finalEventForDay)
+        XCTAssertEqual(92, parsed.batteryChargeRaw)
+        XCTAssertEqual(4104, parsed.lipoMv)
+    }
+
+    func testMobiFinalEventForDay_2358_48() {
+        // 43 seconds later, same evening as the record above; finalEventForDay is still set.
+        // dailyTotalBasal=0x411c0e5b (~9.7535, unchanged), lastBasalRate=2.5,
+        // iob=0x40f8a6ef (~7.770), batteryChargeRaw=92, lipoMv=4104,
+        // pumpTimeSec=589593528, sequenceNum=644076
+        let expected = DailyBasalHistoryLog(
+            pumpTimeSec: 589_593_528,
+            sequenceNum: 644_076,
+            dailyTotalBasal: Float(bitPattern: 0x411C_0E5B),
+            lastBasalRate: 2.5,
+            iob: Float(bitPattern: 0x40F8_A6EF),
+            finalEventForDay: true,
+            batteryChargeRaw: 92,
+            lipoMv: 4104
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "5110b87b2423ecd309005b0e1c4100002040efa6f840015c0810",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertTrue(parsed.finalEventForDay)
+        XCTAssertEqual(92, parsed.batteryChargeRaw)
+        XCTAssertEqual(4104, parsed.lipoMv)
+    }
+
+    func testMobiMidDayRecord_0527() {
+        // 05:27:29 pump-local, a regular mid-day record with finalEventForDay clear. The battery
+        // byte sat 2-4 points below the live CurrentBatteryV2Response value across the capture.
+        // dailyTotalBasal=0x40224b16 (~2.5358), lastBasalRate=0x3f0ccccd (0.55),
+        // iob=0x3fb21f75 (~1.3916), batteryChargeRaw=88, lipoMv=4061,
+        // pumpTimeSec=589526849, sequenceNum=640759
+        let expected = DailyBasalHistoryLog(
+            pumpTimeSec: 589_526_849,
+            sequenceNum: 640_759,
+            dailyTotalBasal: Float(bitPattern: 0x4022_4B16),
+            lastBasalRate: Float(bitPattern: 0x3F0C_CCCD),
+            iob: Float(bitPattern: 0x3FB2_1F75),
+            finalEventForDay: false,
+            batteryChargeRaw: 88,
+            lipoMv: 4061
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "511041772323f7c60900164b2240cdcc0c3f751fb23f0058dd0f",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertFalse(parsed.finalEventForDay)
+        XCTAssertEqual(88, parsed.batteryChargeRaw)
+        XCTAssertEqual(4061, parsed.lipoMv)
+    }
 }
