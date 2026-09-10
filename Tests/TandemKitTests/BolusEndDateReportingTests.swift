@@ -179,7 +179,7 @@ import XCTest
         let dose = try XCTUnwrap(lastFinalizedBolus())
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0),
+            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
             accuracy: 1e-6
         )
     }
@@ -197,7 +197,7 @@ import XCTest
         XCTAssertEqual(dose.deliveredUnits, 2.0)
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0),
+            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
             accuracy: 1e-6
         )
     }
@@ -267,12 +267,12 @@ import XCTest
         let dose = try XCTUnwrap(lastFinalizedBolus())
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 1.041),
+            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 1.041),
             accuracy: 1e-6
         )
         XCTAssertLessThan(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0)
+            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0)
         )
     }
 }

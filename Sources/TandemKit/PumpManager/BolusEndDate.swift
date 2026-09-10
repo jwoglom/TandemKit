@@ -11,35 +11,20 @@ import Foundation
 /// The pump's own timestamps are used instead, with the delivery-rate model as a fallback:
 ///
 /// - `CurrentBolusStatus.timestamp` in the delivering state is when delivery began — exactly
-///   `bolusInitiationDelay` after the pump accepts the request. `UnfinalizedDose` records it.
+///   `TandemPumpCapabilities.bolusInitiationDelay` after the pump accepts the request.
+///   `UnfinalizedDose` records it.
 /// - `LastBolusStatus.timestamp` is when delivery ended. Verified against 114 boluses in three
 ///   days of Mobi logs: that timestamp minus the delivery-start one equalled delivered volume over
 ///   the rate below to within -1.6…+1.1 s, across 3 s to 178 s of delivery. Both fields stamp the
 ///   pump event, not the reply — repeat reads of one unchanged state come back identical.
 /// - The rate estimate, `deliveryStart + delivered / bolusSpeed`, is the fallback when there is no
 ///   usable pump timestamp, and the floor under one that is older than the delivery can have been.
+///   Both the rate and the lead-in are `TandemPumpCapabilities` constants.
 ///
 /// The result is clamped to `detectedAt` and floored at the dose's start. The clamp matters: in
 /// those logs the pump clock ran ~7-8 s ahead of the phone's (-3…+10 s), so without it a promptly
 /// detected bolus would be dated into the future. Seconds of clock skew replace minutes of error.
 enum BolusEndDate {
-    // larger total deliveries are faster -- a 10.05u bolus is almost twice as fast as a 9.95u one
-    static let bolusSpeedUnder10U = 1 / 28.745858684009523
-    static let bolusSpeedOver10U = 1 / 11.200233479381131
-
-    /// How long the pump spends accepting a bolus request before insulin starts moving. Exactly
-    /// 15 s in every bolus across three days of pump logs.
-    static let bolusInitiationDelay: TimeInterval = 15
-
-    /// How long the pump takes to deliver `units`, at its nominal delivery rate.
-    static func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        if units < 10 {
-            units / bolusSpeedUnder10U
-        } else {
-            units / bolusSpeedOver10U
-        }
-    }
-
     /// - Parameters:
     ///   - startDate: When the driver programmed the bolus.
     ///   - deliveryStartDate: When the pump said delivery began, when that was seen. Without it,
@@ -55,11 +40,13 @@ enum BolusEndDate {
         pumpTimestamp: Date?,
         detectedAt: Date = .now
     ) -> Date {
-        let deliveryStart = deliveryStartDate ?? startDate.addingTimeInterval(bolusInitiationDelay)
+        let deliveryStart = deliveryStartDate
+            ?? startDate.addingTimeInterval(TandemPumpCapabilities.bolusInitiationDelay)
         var candidate = deliveryStart
 
         if let deliveredUnits, deliveredUnits > 0 {
-            candidate = deliveryStart.addingTimeInterval(estimatedDuration(toBolus: deliveredUnits))
+            candidate = deliveryStart
+                .addingTimeInterval(TandemPumpCapabilities.estimatedBolusDuration(toDeliver: deliveredUnits))
         }
 
         if let pumpTimestamp, pumpTimestamp > candidate {

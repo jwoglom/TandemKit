@@ -8,10 +8,6 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     private var observers = WeakSet<DoseProgressObserver>()
 
-    // larger total deliveries are faster -- a 10.05u bolus is almost twice as fast as a 9.95u one
-    public static let BOLUS_SPEED_UNDER_10U = BolusEndDate.bolusSpeedUnder10U
-    public static let BOLUS_SPEED_OVER_10U = BolusEndDate.bolusSpeedOver10U
-
     private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
@@ -90,9 +86,9 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         let runningFor = TimeInterval(seconds: Date.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
 
         let unitsDeliveredPerSec = if total < 10 {
-            TandemDoseProgressReporter.BOLUS_SPEED_UNDER_10U
+            TandemPumpCapabilities.bolusSpeedUnder10U
         } else {
-            TandemDoseProgressReporter.BOLUS_SPEED_OVER_10U
+            TandemPumpCapabilities.bolusSpeedOver10U
         }
 
         deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: min(runningFor * unitsDeliveredPerSec, total))

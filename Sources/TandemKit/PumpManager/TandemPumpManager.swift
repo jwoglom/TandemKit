@@ -503,7 +503,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
-        BolusEndDate.estimatedDuration(toBolus: units)
+        TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)
     }
 
     /// Returns the reason `units` is not a deliverable bolus, or nil when it is.
@@ -596,7 +596,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let dose = UnfinalizedDose(
                 units: units,
                 // The pump spends ~15s accepting the request before insulin moves.
-                duration: self.estimatedDuration(toBolus: units) + BolusEndDate.bolusInitiationDelay,
+                duration: self.estimatedDuration(toBolus: units) + TandemPumpCapabilities.bolusInitiationDelay,
                 activationType: activationType,
                 insulinType: self.state.insulinType,
                 bolusId: permissionResponse.bolusId

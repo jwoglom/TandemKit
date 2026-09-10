@@ -24,7 +24,7 @@ final class BolusEndDateTests: XCTestCase {
 
         XCTAssertEqual(
             end.timeIntervalSince(start),
-            15 + BolusEndDate.estimatedDuration(toBolus: 2.0),
+            15 + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
             // Date arithmetic near the 2023 epoch has ~1e-7 s of float resolution.
             accuracy: 1e-6
         )
@@ -60,7 +60,7 @@ final class BolusEndDateTests: XCTestCase {
 
         XCTAssertEqual(
             end.timeIntervalSince(start),
-            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0),
+            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
             accuracy: 1e-6
         )
     }
@@ -115,8 +115,8 @@ final class BolusEndDateTests: XCTestCase {
     /// therefore *later* than the rate estimate taken from `startDate`, and has to win — it is the
     /// measurement, and the estimate only ever misses the 15 s of lead-in.
     func testPumpTimestampWinsOverAnEstimateThatOmitsTheDeliveryLeadIn() {
-        let deliveryStartedAt = start.addingTimeInterval(BolusEndDate.bolusInitiationDelay)
-        let pumpEnd = deliveryStartedAt.addingTimeInterval(BolusEndDate.estimatedDuration(toBolus: 2.0) + 4)
+        let deliveryStartedAt = start.addingTimeInterval(TandemPumpCapabilities.bolusInitiationDelay)
+        let pumpEnd = deliveryStartedAt.addingTimeInterval(TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0) + 4)
 
         let end = BolusEndDate.resolve(
             startDate: start,
@@ -143,7 +143,7 @@ final class BolusEndDateTests: XCTestCase {
 
         XCTAssertEqual(
             end.timeIntervalSince(start),
-            15 + BolusEndDate.estimatedDuration(toBolus: 2.0),
+            15 + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
             // Date arithmetic near the 2023 epoch has ~1e-7 s of float resolution.
             accuracy: 1e-6
         )
@@ -205,18 +205,6 @@ final class BolusEndDateTests: XCTestCase {
         XCTAssertEqual(end, start)
     }
 
-    // MARK: - Delivery rate
-
-    /// Deliveries of 10 U and over run at the faster rate, so the threshold has to be pinned:
-    /// a 10 U bolus must not be dated with the slow rate's ~5-minute window.
-    func testDeliveryRateSwitchesAtTenUnits() {
-        XCTAssertEqual(BolusEndDate.estimatedDuration(toBolus: 1.0), 28.745858684009523, accuracy: 1e-9)
-        XCTAssertEqual(BolusEndDate.estimatedDuration(toBolus: 10.0), 112.00233479381131, accuracy: 1e-9)
-        XCTAssertLessThan(
-            BolusEndDate.estimatedDuration(toBolus: 10.0),
-            BolusEndDate.estimatedDuration(toBolus: 9.99)
-        )
-    }
 }
 
 /// `UnfinalizedDose` carries the pump's start of delivery, which is what the reported dose starts
@@ -225,7 +213,7 @@ final class UnfinalizedDoseDeliveryStartTests: XCTestCase {
     private func bolus(units: Double = 2.0) -> UnfinalizedDose {
         UnfinalizedDose(
             units: units,
-            duration: BolusEndDate.estimatedDuration(toBolus: units),
+            duration: TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units),
             activationType: .manualNoRecommendation,
             insulinType: nil,
             bolusId: 42
