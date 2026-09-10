@@ -17,10 +17,19 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         let date: Date
     }
 
+    /// One `hasNewPumpEvents` call. Recorded whole because the boundary the host would store, and
+    /// whether its pending doses were replaced, matter as much as the events themselves.
+    struct PumpEventBatch {
+        let events: [NewPumpEvent]
+        let lastReconciliation: Date?
+        let replacePendingEvents: Bool
+    }
+
     private let lock = NSLock()
 
     private var _statusUpdates: [StatusUpdate] = []
     private var _pumpEvents: [NewPumpEvent] = []
+    private var _pumpEventBatches: [PumpEventBatch] = []
     private var _reservoirReadings: [ReservoirReading] = []
     private var _errors: [PumpManagerError] = []
     private var _didUpdateStateCount = 0
@@ -34,6 +43,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     var statusUpdates: [StatusUpdate] { synchronized { _statusUpdates } }
     var pumpEvents: [NewPumpEvent] { synchronized { _pumpEvents } }
+    var pumpEventBatches: [PumpEventBatch] { synchronized { _pumpEventBatches } }
     var reservoirReadings: [ReservoirReading] { synchronized { _reservoirReadings } }
     var errors: [PumpManagerError] { synchronized { _errors } }
     var didUpdateStateCount: Int { synchronized { _didUpdateStateCount } }
@@ -126,11 +136,18 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     func pumpManager(
         _: PumpManager,
         hasNewPumpEvents events: [NewPumpEvent],
-        lastReconciliation _: Date?,
-        replacePendingEvents _: Bool,
+        lastReconciliation: Date?,
+        replacePendingEvents: Bool,
         completion: @escaping (Error?) -> Void
     ) {
-        synchronized { _pumpEvents += events }
+        synchronized {
+            _pumpEvents += events
+            _pumpEventBatches.append(PumpEventBatch(
+                events: events,
+                lastReconciliation: lastReconciliation,
+                replacePendingEvents: replacePendingEvents
+            ))
+        }
         didReceivePumpEventsExpectation?.fulfill()
         completion(nil)
     }

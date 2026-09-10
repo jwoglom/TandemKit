@@ -423,6 +423,11 @@ extension TandemPumpManager {
 
         reportReservoirReading(reservoirValue)
 
+        // Reachable outside a sync (the cartridge screen, a `.remainingInsulin` event), and a host
+        // left holding a reservoir value newer than its event boundary arbitrates back to
+        // whole-unit reservoir doses.
+        reportReconciliationBoundary()
+
         return units
     }
 
