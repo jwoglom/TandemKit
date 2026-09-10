@@ -515,7 +515,8 @@ extension TandemPumpManager {
 
     /// Queries the pump for the actual delivered volume of the last bolus.
     /// Used after both cancellation and natural completion to get the real delivered amount.
-    /// Returns the delivered volume in units, or nil if the query fails or the bolus ID doesn't match.
+    /// Returns the delivered volume in units at the pump's native milliunit resolution, or nil if
+    /// the query fails or the bolus ID doesn't match.
     func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
         let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
 
@@ -529,7 +530,10 @@ extension TandemPumpManager {
             return nil
         }
 
-        return roundToSupportedBolusVolume(units: Double(response.deliveredVolume) / 1000.0)
+        // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
+        // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
+        // partial delivery by up to an increment — the direction that lets the loop over-deliver.
+        return HistoryToDoseMapper.roundToReportingResolution(Double(response.deliveredVolume) / 1000.0)
     }
 
     func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {
