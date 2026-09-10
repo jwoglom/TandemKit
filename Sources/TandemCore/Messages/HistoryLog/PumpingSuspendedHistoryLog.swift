@@ -12,9 +12,21 @@ import Foundation
 public class PumpingSuspendedHistoryLog: HistoryLog {
     public static let typeId = 11
 
+    /// Pump state before the suspend. 106 in every record observed so far, across t:slim X2 and
+    /// Mobi captures and both user-initiated and alarm-triggered suspends, so no variation has
+    /// been seen yet.
     public let preSuspendState: UInt32
+    /// Insulin remaining in the reservoir as the pump reports it at the instant of the suspend,
+    /// in whole units. Byte-identical to `InsulinStatusResponse.currentInsulinAmount` polled
+    /// within two seconds in 4/4 suspends (and 4/4 paired resumes) of a Mobi capture
+    /// (pumpX2 issue #39). It is not the cartridge fill level (it dropped 110 to 90 across a
+    /// tubing fill on the same cartridge) and it is not insulin on board.
     public let insulinAmount: Int
+    /// Raw suspend reason; see `SuspendReason` / `reason` for the decoded value.
     public let reasonId: Int
+    /// Resume-pump alert timeout in minutes. 15 on every observed suspend; suspensions lasting
+    /// longer than 15 minutes raised RESUME_PUMP_ALARM (18) and RESUME_PUMP_ALARM2 (23) at
+    /// 15 min 1 s after the suspend.
     public let rpaTimeout: Int
 
     public required init(cargo: Data) {
