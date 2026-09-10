@@ -518,22 +518,46 @@ extension TandemPumpManager {
     /// Returns the delivered volume in units at the pump's native milliunit resolution, or nil if
     /// the query fails or the bolus ID doesn't match.
     func queryLastBolusDeliveredVolume(bolusId: Int) -> Double? {
-        let request = LastBolusRequestBuilder.create(apiVersion: state.pumpState.apiVersion)
+        let request = LastBolusRequestBuilder.create(
+            apiVersion: state.pumpState.apiVersion,
+            pumpModel: state.pumpState.pumpModel
+        )
 
         guard let response = bluetooth.write(request) as? LastBolusStatusAbstractResponse else {
             logger.error("Failed to get lastBolusStatus: \(type(of: request))")
             return nil
         }
 
-        guard response.bolusId == bolusId else {
-            logger.warning("LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
+        guard let milliunits = deliveredMilliunits(from: response, bolusId: bolusId) else {
             return nil
         }
 
         // Round to nearest milliunit, matching `HistoryToDoseMapper`. Not
         // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating a
         // partial delivery by up to an increment — the direction that lets the loop over-deliver.
-        return HistoryToDoseMapper.roundToReportingResolution(Double(response.deliveredVolume) / 1000.0)
+        return HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0)
+    }
+
+    /// Delivered volume in milliunits that `response` reports for `bolusId`, or nil when it
+    /// describes some other bolus.
+    private func deliveredMilliunits(from response: LastBolusStatusAbstractResponse, bolusId: Int) -> UInt32? {
+        // A V3 response reports the immediate and extended records separately. The driver only
+        // ever programs immediate boluses, so our id should only ever appear in the immediate
+        // record; summing guards the case where the pump reports both against one id, which no
+        // capture covers. Over-reporting delivered insulin is the safer way to be wrong here.
+        if let v3 = response as? LastBolusStatusV3Response {
+            guard let matched = v3.deliveredVolume(forBolusId: bolusId) else {
+                logger.warning("LastBolusStatusV3 has no record for bolusId \(bolusId): \(v3)")
+                return nil
+            }
+            return matched
+        }
+
+        guard response.bolusId == bolusId else {
+            logger.warning("LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
+            return nil
+        }
+        return response.deliveredVolume
     }
 
     func autoAcknowledgeBasalAlertsIfNeeded(alertResponse: AlertStatusResponse) {

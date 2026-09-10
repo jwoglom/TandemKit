@@ -179,8 +179,16 @@ final class QualifyingEventTests: XCTestCase {
                 .contains("LastBolusStatusRequest")
         )
         XCTAssertTrue(
-            requestTypeNames(QualifyingEvent.bolusChange.suggestedHandlers(context: modern))
-                .contains("LastBolusStatusV2Request")
+            requestTypeNames(QualifyingEvent.bolusChange.suggestedHandlers(
+                context: QualifyingEventContext(apiVersion: KnownApiVersion.apiV3_4.value, pumpModel: .TSLIM_X2)
+            ))
+            .contains("LastBolusStatusV2Request")
+        )
+        XCTAssertTrue(
+            requestTypeNames(QualifyingEvent.bolusChange.suggestedHandlers(
+                context: QualifyingEventContext(apiVersion: KnownApiVersion.mobiApiV3_5.value, pumpModel: .MOBI)
+            ))
+            .contains("LastBolusStatusV3Request")
         )
     }
 

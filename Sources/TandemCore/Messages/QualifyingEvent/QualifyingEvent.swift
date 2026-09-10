@@ -92,6 +92,10 @@ public struct QualifyingEventContext {
     /// filtered.
     public var apiVersion: ApiVersion?
 
+    /// The pump model reported during sync. Selects between messages that are model-specific,
+    /// such as the Mobi-only last-bolus V3 read.
+    public var pumpModel: PumpModel?
+
     /// Whether the pump supports Control-IQ, which selects the insulin-on-board opcode.
     public var controlIQSupported: Bool
 
@@ -101,10 +105,12 @@ public struct QualifyingEventContext {
 
     public init(
         apiVersion: ApiVersion? = nil,
+        pumpModel: PumpModel? = nil,
         controlIQSupported: Bool = false,
         inProgressBolusId: Int? = nil
     ) {
         self.apiVersion = apiVersion
+        self.pumpModel = pumpModel
         self.controlIQSupported = controlIQSupported
         self.inProgressBolusId = inProgressBolusId
     }
@@ -263,7 +269,7 @@ private extension QualifyingEventContext {
     }
 
     var lastBolusStatusRequest: any PumpRequest {
-        LastBolusRequestBuilder.create(apiVersion: apiVersion)
+        LastBolusRequestBuilder.create(apiVersion: apiVersion, pumpModel: pumpModel)
     }
 
     var currentBatteryRequest: any PumpRequest {
