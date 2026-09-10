@@ -29,4 +29,28 @@ final class BolusRequestedMsg3HistoryLogTests: XCTestCase {
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
+
+    // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE capture.
+    // Third record of a remote (BLE) bolus request, id 2903, for 0.15 U with no correction.
+    // Header high nibble is 1 on this pump; the float fields are built from their exact bit
+    // patterns so the round trip below is byte-exact.
+    func testBolusRequestedMsg3HistoryLogMobiRemoteBolus() {
+        let food = Float(bitPattern: 0x3e19999a) // 0.15
+        let expected = BolusRequestedMsg3HistoryLog(
+            pumpTimeSec: 589526830, sequenceNum: 640748, bolusId: 2903, spare: 0,
+            foodBolusSize: food, correctionBolusSize: 0.0, totalBolusSize: food
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "42102e772323ecc60900570b00009a99193e000000009a99193e",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+
+        XCTAssertEqual(parsed.bolusId, 2903)
+        XCTAssertEqual(parsed.spare, 0)
+        XCTAssertEqual(parsed.foodBolusSize.bitPattern, 0x3e19999a)
+        XCTAssertEqual(parsed.correctionBolusSize, 0.0)
+        XCTAssertEqual(parsed.totalBolusSize, parsed.foodBolusSize)
+    }
 }
