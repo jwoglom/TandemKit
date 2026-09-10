@@ -17,7 +17,11 @@ public class BolusDeliveryHistoryLog: HistoryLog {
     public let bolusDeliveryStatus: Int
     public let bolusTypeBitmask: Int
     public let bolusSource: Int
-    public let reserved: Int
+    /// Byte 15. Named `remoteId` in Tandem's data export. In every record observed so far
+    /// (312/312 in a Mobi capture and all earlier t:slim X2 fixtures) it equals
+    /// `bolusID & 0xFF`, i.e. the low byte of the bolus id echoed back. Previously exposed as
+    /// `reserved`. See pumpX2 issue #78.
+    public let remoteId: Int
     public let requestedNow: Int
     public let requestedLater: Int
     public let correction: Int
@@ -30,7 +34,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         bolusDeliveryStatus = Int(raw[12])
         bolusTypeBitmask = Int(raw[13])
         bolusSource = Int(raw[14])
-        reserved = Int(raw[15])
+        remoteId = Int(raw[15])
         requestedNow = Bytes.readShort(raw, 16)
         requestedLater = Bytes.readShort(raw, 18)
         correction = Bytes.readShort(raw, 20)
@@ -46,7 +50,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         bolusDeliveryStatus: Int,
         bolusTypeBitmask: Int,
         bolusSource: Int,
-        reserved: Int,
+        remoteId: Int,
         requestedNow: Int,
         requestedLater: Int,
         correction: Int,
@@ -60,7 +64,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
             bolusDeliveryStatus: bolusDeliveryStatus,
             bolusTypeBitmask: bolusTypeBitmask,
             bolusSource: bolusSource,
-            reserved: reserved,
+            remoteId: remoteId,
             requestedNow: requestedNow,
             requestedLater: requestedLater,
             correction: correction,
@@ -71,13 +75,45 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         self.bolusDeliveryStatus = bolusDeliveryStatus
         self.bolusTypeBitmask = bolusTypeBitmask
         self.bolusSource = bolusSource
-        self.reserved = reserved
+        self.remoteId = remoteId
         self.requestedNow = requestedNow
         self.requestedLater = requestedLater
         self.correction = correction
         self.extendedDurationRequested = extendedDurationRequested
         self.deliveredTotal = deliveredTotal
         super.init(cargo: payload)
+    }
+
+    /// Source-compatibility overload for callers still using the `reserved:` label.
+    @available(*, deprecated, renamed: "init(pumpTimeSec:sequenceNum:bolusID:bolusDeliveryStatus:bolusTypeBitmask:bolusSource:remoteId:requestedNow:requestedLater:correction:extendedDurationRequested:deliveredTotal:)")
+    public convenience init(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusID: Int,
+        bolusDeliveryStatus: Int,
+        bolusTypeBitmask: Int,
+        bolusSource: Int,
+        reserved: Int,
+        requestedNow: Int,
+        requestedLater: Int,
+        correction: Int,
+        extendedDurationRequested: Int,
+        deliveredTotal: Int
+    ) {
+        self.init(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusID: bolusID,
+            bolusDeliveryStatus: bolusDeliveryStatus,
+            bolusTypeBitmask: bolusTypeBitmask,
+            bolusSource: bolusSource,
+            remoteId: reserved,
+            requestedNow: requestedNow,
+            requestedLater: requestedLater,
+            correction: correction,
+            extendedDurationRequested: extendedDurationRequested,
+            deliveredTotal: deliveredTotal
+        )
     }
 
     public static func buildCargo(
@@ -87,7 +123,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         bolusDeliveryStatus: Int,
         bolusTypeBitmask: Int,
         bolusSource: Int,
-        reserved: Int,
+        remoteId: Int,
         requestedNow: Int,
         requestedLater: Int,
         correction: Int,
@@ -103,7 +139,7 @@ public class BolusDeliveryHistoryLog: HistoryLog {
                 Data([UInt8(bolusDeliveryStatus & 0xFF)]),
                 Data([UInt8(bolusTypeBitmask & 0xFF)]),
                 Data([UInt8(bolusSource & 0xFF)]),
-                Data([UInt8(reserved & 0xFF)]),
+                Data([UInt8(remoteId & 0xFF)]),
                 Bytes.firstTwoBytesLittleEndian(requestedNow),
                 Bytes.firstTwoBytesLittleEndian(requestedLater),
                 Bytes.firstTwoBytesLittleEndian(correction),
@@ -112,6 +148,42 @@ public class BolusDeliveryHistoryLog: HistoryLog {
             )
         )
     }
+
+    /// Source-compatibility overload for callers still using the `reserved:` label.
+    @available(*, deprecated, renamed: "buildCargo(pumpTimeSec:sequenceNum:bolusID:bolusDeliveryStatus:bolusTypeBitmask:bolusSource:remoteId:requestedNow:requestedLater:correction:extendedDurationRequested:deliveredTotal:)")
+    public static func buildCargo(
+        pumpTimeSec: UInt32,
+        sequenceNum: UInt32,
+        bolusID: Int,
+        bolusDeliveryStatus: Int,
+        bolusTypeBitmask: Int,
+        bolusSource: Int,
+        reserved: Int,
+        requestedNow: Int,
+        requestedLater: Int,
+        correction: Int,
+        extendedDurationRequested: Int,
+        deliveredTotal: Int
+    ) -> Data {
+        buildCargo(
+            pumpTimeSec: pumpTimeSec,
+            sequenceNum: sequenceNum,
+            bolusID: bolusID,
+            bolusDeliveryStatus: bolusDeliveryStatus,
+            bolusTypeBitmask: bolusTypeBitmask,
+            bolusSource: bolusSource,
+            remoteId: reserved,
+            requestedNow: requestedNow,
+            requestedLater: requestedLater,
+            correction: correction,
+            extendedDurationRequested: extendedDurationRequested,
+            deliveredTotal: deliveredTotal
+        )
+    }
+
+    /// Former name of `remoteId`; byte 15 is not actually reserved.
+    @available(*, deprecated, renamed: "remoteId")
+    public var reserved: Int { remoteId }
 
     /// Set of bolus types associated with this record.
     public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
@@ -153,6 +225,6 @@ public class BolusDeliveryHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(String(describing: bolusSourceEnum)), bolusSource=\(bolusSource), reserved=\(reserved), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
+        "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(String(describing: bolusSourceEnum)), bolusSource=\(bolusSource), remoteId=\(remoteId), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
     }
 }
