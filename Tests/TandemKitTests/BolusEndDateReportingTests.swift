@@ -74,6 +74,18 @@ import XCTest
         ))
     }
 
+    /// The pump reports it has started delivering, stamped with its own start of delivery.
+    private func stubDelivering(at deliveryStart: Date) {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: 1,
+            bolusId: Self.bolusId,
+            timestamp: UInt32(Dates.fromInstantToJan12008EpochSeconds(deliveryStart)),
+            requestedVolume: 2000,
+            bolusSourceId: 0,
+            bolusTypeBitmask: 0
+        ))
+    }
+
     /// The pump reports the bolus is over: no delivery in progress, and no bolus id.
     private func stubBolusFinished() {
         bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
@@ -86,28 +98,73 @@ import XCTest
         ))
     }
 
-    private func lastFinalizedBolus() -> DoseEntry? {
+    private func lastFinalizedBolusEvent() -> NewPumpEvent? {
         delegateQueue.sync {}
-        return delegate.pumpEvents
-            .compactMap(\.dose)
-            .last { $0.type == .bolus && !$0.isMutable }
+        return delegate.pumpEvents.last { $0.dose?.type == .bolus && $0.dose?.isMutable == false }
+    }
+
+    private func lastFinalizedBolus() -> DoseEntry? {
+        lastFinalizedBolusEvent()?.dose
     }
 
     // MARK: - Natural completion
 
-    func testCompletionIsDatedByThePumpNotByTheDetection() throws {
+    /// The whole window comes from the pump: it starts when the pump says delivery started, and
+    /// ends when the pump says it ended — five minutes before the driver noticed either.
+    func testTheWindowIsThePumpsNotTheDriversDetection() throws {
         let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
-        let pumpEnd = startDate.addingTimeInterval(58)
+        let deliveryStart = startDate.addingTimeInterval(15)
+        let pumpEnd = deliveryStart.addingTimeInterval(58)
+
+        stubDelivering(at: deliveryStart)
+        manager.fetchBolusStatus(fromSync: false)
+
         stubLastBolus(deliveredVolume: 2000, timestamp: pumpEnd)
         stubBolusFinished()
-
-        manager.fetchBolusStatus(fromSync: true)
+        // The completion poll, not a sync: seeing delivery start pushes the estimated end out,
+        // and a sync defers until past that.
+        manager.fetchBolusStatus(fromSync: false)
 
         let dose = try XCTUnwrap(lastFinalizedBolus())
-        XCTAssertEqual(dose.startDate, startDate)
-        // The pump's second-resolution timestamp round-trips through its epoch conversion.
+        // The pump's second-resolution timestamps round-trip through its epoch conversion.
+        XCTAssertEqual(dose.startDate.timeIntervalSince(deliveryStart), 0, accuracy: 1.0)
         XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
         XCTAssertLessThan(dose.endDate, Date.now.addingTimeInterval(-200))
+    }
+
+    /// The dose may start later than the bolus was programmed, but the *event* must keep the date
+    /// it was first reported under: hosts key pump events on it, and a moved date reads as a
+    /// second bolus rather than as this one finishing.
+    func testTheEventDateStaysTheMomentTheBolusWasProgrammed() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let deliveryStart = startDate.addingTimeInterval(15)
+
+        stubDelivering(at: deliveryStart)
+        manager.fetchBolusStatus(fromSync: false)
+
+        stubLastBolus(deliveredVolume: 2000, timestamp: deliveryStart.addingTimeInterval(58))
+        stubBolusFinished()
+        manager.fetchBolusStatus(fromSync: false)
+
+        let event = try XCTUnwrap(lastFinalizedBolusEvent())
+        XCTAssertEqual(event.date, startDate)
+        XCTAssertGreaterThan(try XCTUnwrap(event.dose).startDate, startDate)
+    }
+
+    /// A pump clock ahead of the phone's must not start the dose in the future either.
+    func testDeliveryStartIsClampedToNow() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+
+        stubDelivering(at: Date.now.addingTimeInterval(3600))
+        manager.fetchBolusStatus(fromSync: false)
+
+        stubLastBolus(deliveredVolume: 2000, timestamp: nil)
+        stubBolusFinished()
+        manager.fetchBolusStatus(fromSync: false)
+
+        let dose = try XCTUnwrap(lastFinalizedBolus())
+        XCTAssertLessThanOrEqual(dose.startDate, Date.now)
+        XCTAssertGreaterThan(dose.startDate, startDate)
     }
 
     /// Without a usable pump timestamp the window still has to come from the delivery, not from
@@ -122,7 +179,7 @@ import XCTest
         let dose = try XCTUnwrap(lastFinalizedBolus())
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.estimatedDuration(toBolus: 2.0),
+            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0),
             accuracy: 1e-6
         )
     }
@@ -140,7 +197,7 @@ import XCTest
         XCTAssertEqual(dose.deliveredUnits, 2.0)
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.estimatedDuration(toBolus: 2.0),
+            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0),
             accuracy: 1e-6
         )
     }
@@ -161,7 +218,10 @@ import XCTest
 
     func testCancelledBolusIsDatedByThePumpNotByTheCancelRoundTrip() throws {
         let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
-        let pumpEnd = startDate.addingTimeInterval(31)
+        let deliveryStart = startDate.addingTimeInterval(15)
+        stubDelivering(at: deliveryStart)
+        manager.fetchBolusStatus(fromSync: false)
+        let pumpEnd = deliveryStart.addingTimeInterval(31)
         stubLastBolus(deliveredVolume: 1041, timestamp: pumpEnd)
         bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
             statusId: 0,
@@ -179,10 +239,14 @@ import XCTest
         // The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
         wait(for: [cancelled], timeout: 15.0)
 
-        let dose = try XCTUnwrap(lastFinalizedBolus())
+        let event = try XCTUnwrap(lastFinalizedBolusEvent())
+        let dose = try XCTUnwrap(event.dose)
         XCTAssertEqual(dose.deliveredUnits, 1.041)
+        XCTAssertEqual(dose.startDate.timeIntervalSince(deliveryStart), 0, accuracy: 1.0)
         XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
         XCTAssertLessThan(dose.endDate, Date.now.addingTimeInterval(-200))
+        // Same identity rule as the completion path.
+        XCTAssertEqual(event.date, startDate)
     }
 
     /// Cancelled after 1.041 U of a 2 U bolus: the window is the one that volume took, not the
@@ -203,12 +267,12 @@ import XCTest
         let dose = try XCTUnwrap(lastFinalizedBolus())
         XCTAssertEqual(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.estimatedDuration(toBolus: 1.041),
+            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 1.041),
             accuracy: 1e-6
         )
         XCTAssertLessThan(
             dose.endDate.timeIntervalSince(startDate),
-            BolusEndDate.estimatedDuration(toBolus: 2.0)
+            BolusEndDate.bolusInitiationDelay + BolusEndDate.estimatedDuration(toBolus: 2.0)
         )
     }
 }

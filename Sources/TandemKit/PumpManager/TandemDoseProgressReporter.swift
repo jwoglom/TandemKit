@@ -31,18 +31,21 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     ///   - actualDeliveredUnits: The pump-reported delivered volume. When nil,
     ///     falls back to the programmed total (assumes full delivery).
     ///   - pumpTimestamp: The pump's timestamp on the `LastBolusStatus` record for this bolus,
-    ///     when one was read. See `BolusEndDate` for how it is used.
-    ///   - detectedAt: When the driver noticed the bolus had finished. Defaults to now; a
-    ///     parameter so the resolved window can be tested.
+    ///     when one was read.
+    ///   - deliveryStartDate: When the pump said delivery began, when that was seen.
+    ///   - detectedAt: When the driver noticed the bolus had finished. A parameter so the
+    ///     resolved window can be tested.
     func getPumpEvent(
         actualDeliveredUnits: Double? = nil,
         pumpTimestamp: Date? = nil,
+        deliveryStartDate: Date? = nil,
         detectedAt: Date = .now
     ) -> NewPumpEvent {
         let delivered = actualDeliveredUnits ?? total
-        // Not `detectedAt`: that is when we noticed, not when the pump stopped delivering (#339).
+        // The pump's window, not ours: neither end of it is the moment we noticed (#339).
         let endDate = BolusEndDate.resolve(
             startDate: dose.startDate,
+            deliveryStartDate: deliveryStartDate,
             deliveredUnits: delivered,
             pumpTimestamp: pumpTimestamp,
             detectedAt: detectedAt
@@ -54,10 +57,12 @@ class TandemDoseProgressReporter: DoseProgressReporter {
                 duration: 0, // Ignored if endDate is available
                 activationType: activationType,
                 insulinType: dose.insulinType,
-                startDate: dose.startDate,
+                startDate: deliveryStartDate ?? dose.startDate,
                 endDate: endDate
             ),
             units: delivered,
+            // The event date stays the moment the bolus was programmed even when the dose starts
+            // later: hosts key pump events on it, and moving it would report a second bolus.
             date: dose.startDate
         )
     }

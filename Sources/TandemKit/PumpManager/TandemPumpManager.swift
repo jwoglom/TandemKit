@@ -595,8 +595,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let dose = UnfinalizedDose(
                 units: units,
-                // 5s needed before bolus enacting is started
-                duration: self.estimatedDuration(toBolus: units) + .seconds(5),
+                // The pump spends ~15s accepting the request before insulin moves.
+                duration: self.estimatedDuration(toBolus: units) + BolusEndDate.bolusInitiationDelay,
                 activationType: activationType,
                 insulinType: self.state.insulinType,
                 bolusId: permissionResponse.bolusId
@@ -662,6 +662,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // pump says it did (#339).
             let canceledDose = bolusDose.toDoseEntry(endDate: BolusEndDate.resolve(
                 startDate: bolusDose.startDate,
+                deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
                 pumpTimestamp: lastBolus?.pumpTimestamp
             ))
@@ -675,7 +676,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             events
                 .append(
                     NewPumpEvent
-                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: canceledDose.startDate)
+                        // bolusDose.startDate, not the dose's: the event keeps the date it was
+                        // first reported under even when delivery started later.
+                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: bolusDose.startDate)
                 )
 
             self.state.lastReconciliation = Date.now
