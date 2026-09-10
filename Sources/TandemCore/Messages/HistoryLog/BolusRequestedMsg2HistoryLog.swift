@@ -24,11 +24,21 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
     public let selectedIOB: Int
     public let spare2: Int
 
+    /// Bolus request option, from the `options` byte at cargo offset 12.
+    ///
+    /// The case names come from tconnectsync's cloud mirror of this record and are otherwise
+    /// unverified against the wire, with one exception: `bleStandard` (4) is confirmed on the
+    /// wire. In a real-pump capture, 156/156 boluses initiated over BLE by a remote app
+    /// (`InitiateBolusRequest`; `bolusSource` 8 in the paired `BolusDeliveryHistoryLog`) carried
+    /// `options = 4` with `standardPercent` 100, `duration` 0, `userOverride` true, and
+    /// `isf`/`targetBG` 0. The remaining cases were not exercised in that capture and remain
+    /// unverified. See pumpX2 issue #51.
     public enum BolusOption: Int {
         case standard = 0
         case extended = 1
         case quick = 2
         case automatic = 3
+        /// Standard (non-extended) bolus initiated over BLE by a remote app; verified on the wire.
         case bleStandard = 4
         case bleExtended = 5
         case eatingSoonAutomatic = 6
