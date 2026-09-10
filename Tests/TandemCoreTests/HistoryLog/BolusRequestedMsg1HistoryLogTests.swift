@@ -41,4 +41,24 @@ final class BolusRequestedMsg1HistoryLogTests: XCTestCase {
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
+
+    // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE
+    // capture. A remote (BLE) bolus without any calculator inputs: bolusTypeId=3 (REMOTE) with
+    // correctionBolusIncluded/carbAmount/bg/iob/carbRatio all zero. Header high nibble is 1
+    // (`40 10`), so the expected record is rebuilt with `.withHeaderHighNibble(1)`.
+    func testBolusRequestedMsg1HistoryLogMobiRemoteBolus() {
+        let expected = BolusRequestedMsg1HistoryLog(
+            pumpTimeSec: 589526830, sequenceNum: 640746, bolusId: 2903, bolusTypeId: 3,
+            correctionBolusIncluded: false, carbAmount: 0, bg: 0, iob: 0.0, carbRatio: 0
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "40102e772323eac60900570b0300000000000000000000000000",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(BolusRequestedMsg1HistoryLog.BolusType.REMOTE, parsed.bolusType)
+        XCTAssertEqual(2903, parsed.bolusId)
+        XCTAssertFalse(parsed.correctionBolusIncluded)
+    }
 }
