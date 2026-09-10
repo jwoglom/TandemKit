@@ -23,15 +23,28 @@ final class LastBolusRequestBuilderTests: XCTestCase {
         ) is LastBolusStatusV2Request)
 
         XCTAssertTrue(LastBolusRequestBuilder.create(
-            apiVersion: KnownApiVersion.apiV2_5.value
+            apiVersion: KnownApiVersion.apiV2_5.value,
+            pumpModel: .TSLIM_X2
         ) is LastBolusStatusV2Request)
     }
 
-    func testSelectsLegacyAtOrBelowApiV2_1() {
+    func testSelectsLegacyBelowApiV2_5() {
         XCTAssertTrue(LastBolusRequestBuilder.create(
-            apiVersion: KnownApiVersion.apiV2_1.value
+            apiVersion: KnownApiVersion.apiV2_1.value,
+            pumpModel: .TSLIM_X2
+        ) is LastBolusStatusRequest)
+    }
+
+    /// A pump that has not been identified yet gets the request every pump answers.
+    func testSelectsLegacyWhenPumpIsUnidentified() {
+        XCTAssertTrue(LastBolusRequestBuilder.create(
+            apiVersion: KnownApiVersion.mobiApiV3_5.value,
+            pumpModel: nil
         ) is LastBolusStatusRequest)
 
-        XCTAssertTrue(LastBolusRequestBuilder.create(apiVersion: nil) is LastBolusStatusRequest)
+        XCTAssertTrue(LastBolusRequestBuilder.create(
+            apiVersion: nil,
+            pumpModel: .MOBI
+        ) is LastBolusStatusRequest)
     }
 }

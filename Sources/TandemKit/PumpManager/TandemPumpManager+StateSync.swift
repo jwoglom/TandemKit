@@ -541,9 +541,10 @@ extension TandemPumpManager {
     /// Delivered volume in milliunits that `response` reports for `bolusId`, or nil when it
     /// describes some other bolus.
     private func deliveredMilliunits(from response: LastBolusStatusAbstractResponse, bolusId: Int) -> UInt32? {
-        // The V3 response carries two records, so a bolus with an extended portion is only
-        // fully accounted for by summing both; the single-record abstract view sees the
-        // immediate portion alone.
+        // A V3 response reports the immediate and extended records separately. The driver only
+        // ever programs immediate boluses, so our id should only ever appear in the immediate
+        // record; summing guards the case where the pump reports both against one id, which no
+        // capture covers. Over-reporting delivered insulin is the safer way to be wrong here.
         if let v3 = response as? LastBolusStatusV3Response {
             guard let matched = v3.deliveredVolume(forBolusId: bolusId) else {
                 logger.warning("LastBolusStatusV3 has no record for bolusId \(bolusId): \(v3)")

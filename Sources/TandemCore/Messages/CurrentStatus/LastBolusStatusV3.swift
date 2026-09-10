@@ -314,9 +314,14 @@ public extension LastBolusStatusV3Response {
         standardSection ?? extendedSection
     }
 
-    /// Total delivered volume in milliunits across every present record carrying `bolusId`,
-    /// or nil when no record matches. A bolus split into an immediate and an extended portion
-    /// under one id is only fully accounted for by summing both.
+    /// Total delivered volume in milliunits across every present record carrying `bolusId`, or
+    /// nil when no record matches.
+    ///
+    /// Whether one bolus can appear in both records is not established by any capture -- the one
+    /// we have has no extended record. Summing is the fail-safe reading of that case: it counts
+    /// an extended portion that shares the id, and cannot double-count records the pump gave
+    /// different ids. Note that it flattens the two records' timing, so it says nothing about
+    /// *when* the insulin was delivered.
     func deliveredVolume(forBolusId bolusId: Int) -> UInt32? {
         let matching = sections.filter { $0.bolusId == bolusId }
         guard !matching.isEmpty else { return nil }

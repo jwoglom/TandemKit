@@ -1690,6 +1690,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var qualifyingEventContext: QualifyingEventContext {
         QualifyingEventContext(
             apiVersion: state.pumpState.apiVersion,
+            pumpModel: state.pumpState.pumpModel,
             controlIQSupported: state.controlIQEnabled ?? false,
             inProgressBolusId: state.bolusDose?.bolusId
         )
