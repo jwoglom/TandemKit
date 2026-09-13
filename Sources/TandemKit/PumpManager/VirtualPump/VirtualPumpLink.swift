@@ -49,6 +49,8 @@ enum SocketPumpError: Error, Equatable {
 
 /// The `hello` frame the peripheral sends on every connection.
 struct VirtualPumpHello {
+    static let notDiscoverablePairingState = "NotDiscoverable"
+
     let peripheralId: UUID
     let name: String
     let manufacturerData: Data?
