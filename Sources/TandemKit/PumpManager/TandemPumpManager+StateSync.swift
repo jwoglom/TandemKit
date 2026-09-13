@@ -260,7 +260,7 @@ extension TandemPumpManager {
                 lastBolus = queryLastBolusReport(bolusId: bolusId)
             }
 
-            let estimatedDelivered = min(max(progressReport.progress.deliveredUnits, 0), progressReport.total)
+            let estimatedDelivered = max(progressReport.progress.deliveredUnits, 0)
 
             var events = getActivePumpEvents()
             if let lastBolus {

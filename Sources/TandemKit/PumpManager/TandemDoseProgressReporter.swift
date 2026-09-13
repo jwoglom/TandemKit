@@ -11,7 +11,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
-    let total: Double
+    private let total: Double
     public private(set) var bolusStatedOn: Date?
     private var deliveredUnits: Double = 0
 
@@ -22,8 +22,6 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         total = dose.programmedUnits
     }
 
-    /// `actualDeliveredUnits` is required: defaulting it to the programmed total is how a partial
-    /// bolus got recorded as a whole one (#328).
     func getPumpEvent(
         actualDeliveredUnits delivered: Double,
         pumpTimestamp: Date? = nil,
