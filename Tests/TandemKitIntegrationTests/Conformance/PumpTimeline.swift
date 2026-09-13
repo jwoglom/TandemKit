@@ -3,30 +3,47 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The pump's own record of what it delivered, rebuilt from the emulator's history log (the tail in
-/// `GET /api/state` `history`), the live `bolus` / `basal` / `last_bolus` snapshot fields and the
-/// connection entries of `GET /api/log`. This is the side of the ledger a driver's reports are
-/// diffed against (guide §11 "diff your reported timeline"; plan "PumpTimeline").
+/// The pump's own record of what it delivered, rebuilt from the emulator's history feed
+/// (`GET /api/history`), the live `bolus` / `basal` / `last_bolus` / `alarms_history` snapshot
+/// fields and the connection entries of `GET /api/log`. This is the side of the ledger a driver's
+/// reports are diffed against (guide §11 "diff your reported timeline"; plan "PumpTimeline").
 ///
-/// Times are the pump's: history `time` is the record's instant on the pump clock (with any
-/// `pump_offset_seconds` skew applied, as on the wire); `pumpSeconds` is the same instant in
-/// seconds since the Tandem epoch.
+/// **Times.** Every instant here is a *true* instant on the pump's Clock, reconstructed from the
+/// record's `pump_seconds` — what actually went on the wire — with both of the emulator's offsets
+/// removed:
+///
+///     unix = pump_seconds + 1_199_145_600 - pump_timezone_offset_seconds - pump_offset_seconds
+///
+/// The zone offset is the pump's local-time convention (a Tandem pump keeps its clock in local time
+/// with no zone attached, and `Dates.fromJan12008ToUnixEpochSeconds` decodes on that assumption);
+/// the skew is `pump_offset_seconds`, the lie the pump tells about the time. The snapshot's
+/// formatted `time` strings carry the same instants, but the wire seconds are what a driver
+/// actually sees, so they stay the source.
 struct PumpTimeline {
-    /// 2008-01-01T00:00:00Z, the Tandem pump epoch (`pkg/state/pumptime.go` `tandemEpochUnix`).
-    static let tandemEpochUnix: TimeInterval = 1_199_145_600
-
     // MARK: - Records
 
+    /// pumpX2 `LastBolusStatusAbstractResponse.BolusStatus`, which is also what a
+    /// `BolusCompleted` record's `completionStatusId` decodes as.
     enum BolusEndReason: Int {
-        case unknown = 0
-        case stopped = 1
-        case completed = 3
-        case other = -1
+        case stoppedUserTerminated = 0
+        case stoppedAlarm = 1
+        case stoppedMalfunction = 2
+        case complete = 3
+        case stoppedWireless = 4
+        case rejectedWireless = 5
+        case terminatedPLGS = 6
+        /// The record carried no completion status at all.
+        case unknown = -1
+        /// A value outside the enum.
+        case other = -2
 
         init(id: Int?) {
             guard let id else { self = .unknown; return }
             self = BolusEndReason(rawValue: id) ?? .other
         }
+
+        /// True for every status that is the pump finishing what it was asked to deliver.
+        var isCompletion: Bool { self == .complete }
     }
 
     struct Bolus: Equatable {
@@ -40,7 +57,8 @@ struct PumpTimeline {
         let endPumpSeconds: Int?
         let deliveredUnits: Double?
         let endReason: BolusEndReason?
-        /// pumpX2 `BolusDeliveryHistoryLog` source id: 8 is an app-commanded bolus.
+        /// pumpX2 `BolusDeliveryHistoryLog` source id: 8 is an app-commanded bolus. Not a field of
+        /// `BolusActivated` on the wire, so the emulator reports it as `extra.bolusSourceId`.
         let sourceId: Int?
         var isFinished: Bool { end != nil }
     }
@@ -54,9 +72,12 @@ struct PumpTimeline {
         let startPumpSeconds: Int
         /// `start + duration` as programmed; nil when the record carried no duration.
         let scheduledEnd: Date?
-        /// When it actually ended (expiry, stop, or suspend); nil while running.
+        /// When it actually ended (expiry, stop, replacement, or suspend); nil while running.
         let end: Date?
         let endPumpSeconds: Int?
+        /// How much of the programmed duration was still to run when it ended, in seconds: zero for
+        /// one that expired on its own, positive for one cut short (`TempRateCompleted.timeLeft`).
+        let timeLeft: Int?
         var isFinished: Bool { end != nil }
         /// rate × actual (or scheduled) duration, what a finalized `deliveredUnits` should read.
         var deliveredUnits: Double? {
@@ -66,7 +87,11 @@ struct PumpTimeline {
     }
 
     struct Suspend: Equatable {
+        /// The emulator's own word for it ("user", "occlusion", "alarm"), from `extra.reason`;
+        /// falls back to the name of the wire's `reasonId` when the context is absent.
         let reason: String?
+        /// pumpX2 `PumpingSuspendedHistoryLog.SuspendReason`: 0 user, 1 alarm, 2 malfunction.
+        let reasonId: Int?
         let start: Date
         let startPumpSeconds: Int
         let resumed: Date?
@@ -75,10 +100,17 @@ struct PumpTimeline {
 
     struct Alarm: Equatable {
         let alarmId: Int?
+        /// The emulator's alert classification (`extra.alertTypeName`), e.g. "Occlusion".
+        let alertType: String?
+        /// Why the pump raised it (`extra.reason`), e.g. "occlusion".
         let reason: String?
         let message: String?
         let at: Date
         let pumpSeconds: Int
+        /// When it stopped standing, from the matching `AlarmCleared` record or `alarms_history`.
+        let cleared: Date?
+        let clearedPumpSeconds: Int?
+        var isCleared: Bool { cleared != nil }
     }
 
     struct Connection: Equatable {
@@ -105,26 +137,27 @@ struct PumpTimeline {
 
     // MARK: - Building
 
-    /// Builds from a snapshot's history tail and, optionally, the request log's connection entries.
-    /// Records with a sequence at or below `afterSequence` are ignored, so a test can start from the
+    /// Builds from the history feed and, optionally, the request log's connection entries. Records
+    /// with a sequence at or below `afterSequence` are ignored, so a test can start from the
     /// history the emulator had before it began.
+    ///
+    /// `history` is `GET /api/history` rather than the snapshot's 50-record tail: a scenario that
+    /// runs for a while loses records off the front of the tail without being told.
     static func build(
         snapshot: FaketandemSnapshot,
+        history: [FaketandemHistoryEntry],
         log: [FaketandemLogEntry] = [],
         afterSequence: Int = 0
     ) -> PumpTimeline {
-        let entries = snapshot.history.entries.filter { $0.sequence > afterSequence }.sorted { $0.sequence < $1.sequence }
+        let entries = history.filter { $0.sequence > afterSequence }.sorted { $0.sequence < $1.sequence }
 
-        // Every instant is taken from pump-epoch seconds with the configured wire offset removed,
-        // never from the snapshot's formatted `time` strings: under `pump_offset_seconds` the
-        // emulator's harness/simulator paths (`AddHistoryLogEntryAt`) bake the offset into a
-        // record's `time` while the protocol path (`AppendHistory` with PumpTime 0) does not, and
-        // `last_bolus.end_time` / `bolus.start_time` are true instants while their `_pump_seconds`
-        // twins carry the offset. Pump seconds are consistent everywhere, so they are the source.
-        let offset = snapshot.clock.pumpOffsetSeconds
-        func instant(_ pumpSeconds: Int) -> Date {
-            Date(timeIntervalSince1970: Self.tandemEpochUnix + Double(pumpSeconds) - offset)
-        }
+        // Instants come from the wire seconds with both offsets removed, never from the formatted
+        // `time` strings: the wire seconds are what a driver decodes, so reconstructing from them
+        // is the same arithmetic the driver does and any disagreement is the emulator's, not a
+        // rendering difference. The zone offset is read at `pump_now`, which is exact for every
+        // scenario that does not step across a DST transition.
+        let clock = snapshot.clock
+        func instant(_ pumpSeconds: Int) -> Date { clock.instant(fromPumpSeconds: pumpSeconds) }
 
         var boluses: [Int: Bolus] = [:]
         var bolusOrder: [Int] = []
@@ -135,10 +168,11 @@ struct PumpTimeline {
 
         for entry in entries {
             let data = entry.data ?? [:]
+            let extra = entry.extra ?? [:]
             switch entry.type {
             case "BolusActivated", "BolusRequestedMsg1":
-                // Protocol path writes bolusId/bolusSize (pkg/handler/router.go), harness path
-                // bolusId/units/bolusSourceId (pkg/harness/actions.go actionBolusStart).
+                // Wire fields: bolusId, selectedIob, iob, bolusSize. The source rides on
+                // BolusDeliveryHistoryLog, so the emulator reports it as context.
                 guard let id = data["bolusId"]?.intValue else {
                     unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no bolusId"))
                     continue
@@ -147,109 +181,169 @@ struct PumpTimeline {
                 bolusOrder.append(id)
                 boluses[id] = Bolus(
                     bolusId: id,
-                    programmedUnits: data["bolusSize"]?.doubleValue ?? data["units"]?.doubleValue,
-                    start: instant(entry.pumpTime),
-                    startPumpSeconds: entry.pumpTime,
+                    programmedUnits: data["bolusSize"]?.doubleValue,
+                    start: instant(entry.pumpSeconds),
+                    startPumpSeconds: entry.pumpSeconds,
                     end: nil,
                     endPumpSeconds: nil,
                     deliveredUnits: nil,
                     endReason: nil,
-                    sourceId: data["bolusSourceId"]?.intValue
+                    sourceId: extra["bolusSourceId"]?.intValue
                 )
 
             case "BolusCompleted":
+                // Wire fields: completionStatusId, bolusId, iob, insulinDelivered,
+                // insulinRequested. completionStatusId IS the end reason — it decodes as the same
+                // BolusStatus enum LastBolusStatus reports — and every path sets it.
                 guard let id = data["bolusId"]?.intValue else {
                     unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no bolusId"))
                     continue
                 }
                 let existing = boluses[id]
                 if existing == nil { bolusOrder.append(id) }
-                // The simulator's completion record carries no endReasonId; the harness's does.
-                let reason = data["endReasonId"]?.intValue.map { BolusEndReason(id: $0) }
                 boluses[id] = Bolus(
                     bolusId: id,
-                    programmedUnits: existing?.programmedUnits ?? data["unitsTotal"]?.doubleValue,
+                    programmedUnits: existing?.programmedUnits ?? data["insulinRequested"]?.doubleValue,
                     start: existing?.start,
                     startPumpSeconds: existing?.startPumpSeconds,
-                    end: instant(entry.pumpTime),
-                    endPumpSeconds: entry.pumpTime,
-                    deliveredUnits: data["unitsDelivered"]?.doubleValue,
-                    endReason: reason,
+                    end: instant(entry.pumpSeconds),
+                    endPumpSeconds: entry.pumpSeconds,
+                    deliveredUnits: data["insulinDelivered"]?.doubleValue,
+                    endReason: BolusEndReason(id: data["completionStatusId"]?.intValue),
                     sourceId: existing?.sourceId
                 )
 
             case "TempRateActivated":
-                // Protocol path: percent, durationMilliseconds, tempRateId. Harness path: tempRate,
-                // normalRate, percent, minutes, tempRateId.
-                let minutes = data["minutes"]?.doubleValue
-                    ?? data["durationMilliseconds"]?.doubleValue.map { $0 / 60_000 }
-                let profile = data["normalRate"]?.doubleValue ?? snapshot.basal.profileRate
+                // Wire fields: percent, durationMilliseconds, tempRateId. The absolute rates are
+                // context: the record carries a percentage, and what it resolves to depends on the
+                // profile the pump was running.
+                let durationSeconds = extra["durationSeconds"]?.doubleValue
+                    ?? data["durationMilliseconds"]?.doubleValue.map { $0 / 1000 }
+                let profile = extra["normalRate"]?.doubleValue ?? snapshot.basal.profileRate
                 let percent = data["percent"]?.intValue
-                let rate = data["tempRate"]?.doubleValue ?? percent.map { profile * Double($0) / 100 }
+                let rate = extra["tempRate"]?.doubleValue ?? percent.map { profile * Double($0) / 100 }
+                let start = instant(entry.pumpSeconds)
+                let scheduledEnd = extra["scheduledEndPumpSeconds"]?.intValue.map(instant)
+                    ?? durationSeconds.map { start.addingTimeInterval($0) }
                 tempRates.append(TempRate(
                     tempRateId: data["tempRateId"]?.intValue,
                     rate: rate,
                     percent: percent,
                     profileRate: profile,
-                    start: instant(entry.pumpTime),
-                    startPumpSeconds: entry.pumpTime,
-                    scheduledEnd: minutes.map { instant(entry.pumpTime).addingTimeInterval($0 * 60) },
+                    start: start,
+                    startPumpSeconds: entry.pumpSeconds,
+                    scheduledEnd: scheduledEnd,
                     end: nil,
-                    endPumpSeconds: nil
+                    endPumpSeconds: nil,
+                    timeLeft: nil
                 ))
 
             case "TempRateCompleted":
-                // Carries only tempRate/normalRate: no id, no start. It can only close the most
-                // recent open temp rate (see the emulator gaps in the report).
-                guard let index = tempRates.lastIndex(where: { !$0.isFinished }) else {
+                // Wire fields: tempRateId and timeLeft, and nothing else — so the id is what closes
+                // the right temp rate, and the rate, start and delivered volume are context.
+                let id = data["tempRateId"]?.intValue
+                let byId = tempRates.lastIndex(where: { !$0.isFinished && (id == nil || $0.tempRateId == nil || $0.tempRateId == id) })
+                guard let index = byId ?? tempRates.lastIndex(where: { !$0.isFinished }) else {
                     unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no open temp rate to close"))
                     continue
                 }
                 let open = tempRates[index]
                 tempRates[index] = TempRate(
-                    tempRateId: open.tempRateId,
-                    rate: open.rate ?? data["tempRate"]?.doubleValue,
-                    percent: open.percent,
-                    profileRate: open.profileRate ?? data["normalRate"]?.doubleValue,
+                    tempRateId: open.tempRateId ?? id,
+                    rate: open.rate ?? extra["tempRate"]?.doubleValue,
+                    percent: open.percent ?? extra["percent"]?.intValue,
+                    profileRate: open.profileRate ?? extra["normalRate"]?.doubleValue,
                     start: open.start,
                     startPumpSeconds: open.startPumpSeconds,
                     scheduledEnd: open.scheduledEnd,
-                    end: instant(entry.pumpTime),
-                    endPumpSeconds: entry.pumpTime
+                    end: instant(entry.pumpSeconds),
+                    endPumpSeconds: entry.pumpSeconds,
+                    timeLeft: data["timeLeft"]?.intValue
                 )
 
             case "PumpingSuspended":
-                // Harness path writes `reason` (user/occlusion/alarm); protocol path `reasonId`.
-                let reason = data["reason"]?.stringValue
-                    ?? data["reasonId"]?.intValue.map { "reasonId \($0)" }
-                suspends.append(Suspend(reason: reason, start: instant(entry.pumpTime), startPumpSeconds: entry.pumpTime, resumed: nil, resumedPumpSeconds: nil))
+                // Wire fields: preSuspendState, insulinAmount, reasonId, rpaTimeout. The string the
+                // emulator suspended for is context.
+                let reasonId = data["reasonId"]?.intValue
+                suspends.append(Suspend(
+                    reason: extra["reason"]?.stringValue ?? reasonId.map(Self.suspendReasonName),
+                    reasonId: reasonId,
+                    start: instant(entry.pumpSeconds),
+                    startPumpSeconds: entry.pumpSeconds,
+                    resumed: nil,
+                    resumedPumpSeconds: nil
+                ))
 
             case "PumpingResumed":
                 if let index = suspends.lastIndex(where: { $0.resumed == nil }) {
                     let open = suspends[index]
                     suspends[index] = Suspend(
                         reason: open.reason,
+                        reasonId: open.reasonId,
                         start: open.start,
                         startPumpSeconds: open.startPumpSeconds,
-                        resumed: instant(entry.pumpTime),
-                        resumedPumpSeconds: entry.pumpTime
+                        resumed: instant(entry.pumpSeconds),
+                        resumedPumpSeconds: entry.pumpSeconds
                     )
                 } else {
                     unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "resume without a suspend"))
                 }
 
             case "AlarmActivated":
+                // Wire fields: alarmId, faultLocatorData, param1, param2. The alert type, priority,
+                // reason and message behind it are the emulator's own classification, so context.
                 alarms.append(Alarm(
                     alarmId: data["alarmId"]?.intValue,
-                    reason: data["reason"]?.stringValue,
-                    message: data["message"]?.stringValue,
-                    at: instant(entry.pumpTime),
-                    pumpSeconds: entry.pumpTime
+                    alertType: extra["alertTypeName"]?.stringValue,
+                    reason: extra["reason"]?.stringValue,
+                    message: extra["message"]?.stringValue,
+                    at: instant(entry.pumpSeconds),
+                    pumpSeconds: entry.pumpSeconds,
+                    cleared: nil,
+                    clearedPumpSeconds: nil
                 ))
+
+            case "AlarmCleared":
+                // One record per alarm, carrying the alarmId of the AlarmActivated it closes.
+                let id = data["alarmId"]?.intValue
+                guard let index = alarms.lastIndex(where: { !$0.isCleared && (id == nil || $0.alarmId == id) }) else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "clear without a standing alarm"))
+                    continue
+                }
+                let open = alarms[index]
+                alarms[index] = Alarm(
+                    alarmId: open.alarmId ?? id,
+                    alertType: open.alertType ?? extra["alertTypeName"]?.stringValue,
+                    reason: open.reason,
+                    message: open.message ?? extra["message"]?.stringValue,
+                    at: open.at,
+                    pumpSeconds: open.pumpSeconds,
+                    cleared: instant(entry.pumpSeconds),
+                    clearedPumpSeconds: entry.pumpSeconds
+                )
 
             default:
                 unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "not a delivery record"))
             }
+        }
+
+        // `alarms_history` is the snapshot's record of every alarm that has been raised *and*
+        // cleared, with both ends of the interval. It is the authority on the clearing instant —
+        // the history log only has it if the AlarmCleared record fell inside this test's window —
+        // so it fills in what the records above could not.
+        for cleared in snapshot.alarmsHistory {
+            guard let index = alarms.lastIndex(where: { $0.alarmId == cleared.id }) else { continue }
+            let open = alarms[index]
+            alarms[index] = Alarm(
+                alarmId: open.alarmId,
+                alertType: open.alertType ?? cleared.typeName,
+                reason: open.reason,
+                message: open.message ?? cleared.message,
+                at: open.at,
+                pumpSeconds: open.pumpSeconds,
+                cleared: open.cleared ?? instant(cleared.clearedPumpSeconds),
+                clearedPumpSeconds: open.clearedPumpSeconds ?? cleared.clearedPumpSeconds
+            )
         }
 
         // The live snapshot enriches what history cannot: a running bolus's pump-side start and the
@@ -278,7 +372,7 @@ struct PumpTimeline {
                 end: existing.end ?? instant(last.endPumpSeconds),
                 endPumpSeconds: existing.endPumpSeconds ?? last.endPumpSeconds,
                 deliveredUnits: last.deliveredUnits,
-                endReason: BolusEndReason(id: last.endReasonId),
+                endReason: existing.endReason ?? BolusEndReason(id: last.endReasonId),
                 sourceId: existing.sourceId ?? last.sourceId
             )
         }
@@ -295,7 +389,8 @@ struct PumpTimeline {
                 startPumpSeconds: open.startPumpSeconds,
                 scheduledEnd: open.scheduledEnd ?? snapshot.basal.tempEnd?.date,
                 end: nil,
-                endPumpSeconds: nil
+                endPumpSeconds: nil,
+                timeLeft: nil
             )
         }
 
@@ -314,6 +409,17 @@ struct PumpTimeline {
             unplaced: unplaced,
             historyRange: sequences.min().flatMap { min in sequences.max().map { min ... $0 } }
         )
+    }
+
+    /// pumpX2 `PumpingSuspendedHistoryLog.SuspendReason`, for a record whose context is missing.
+    private static func suspendReasonName(_ reasonId: Int) -> String {
+        switch reasonId {
+        case 0: return "user"
+        case 1: return "alarm"
+        case 2: return "malfunction"
+        case 6: return "plgs"
+        default: return "reasonId \(reasonId)"
+        }
     }
 
     // MARK: - Diff against a Loop oracle
