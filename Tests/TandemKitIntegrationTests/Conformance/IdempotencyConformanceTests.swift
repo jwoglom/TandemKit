@@ -26,6 +26,29 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
     private static let scheduledBasalRate = 1.0
     private static let tempBasalRate = 2.0
 
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The base case stops at the first failure. These scenarios repeat a report many times and
+        // keep asserting after a known non-conformance has been recorded as an expected failure, so
+        // stopping there would silently cut the scenario short.
+        continueAfterFailure = true
+        let client = harness.client
+        addTeardownBlock { [weak self] in
+            // The driver goes first: putting delivery back raises qualifying events, and a driver
+            // still attached would answer them — leaving the deactivation handshake queued behind a
+            // fetch and the link still up when the base teardown checks it.
+            try? self?.shutDownDriver()
+
+            // `harness.reset()` puts the link, the auth and the clock back, but not delivery: a
+            // bolus, temp rate or suspend this test left running would be the *next* test's first
+            // observed transition, and would show up in its batches as a dose of its own.
+            guard let snapshot = try? client.snapshot() else { return }
+            if snapshot.bolus.active { _ = try? client.abortBolus() }
+            if snapshot.basal.tempActive { _ = try? client.stopTempBasal() }
+            if snapshot.basal.suspended { _ = try? client.resume() }
+        }
+    }
+
     // MARK: - C1 (§9 item 4, §11 idempotency; P04-1, P06-1, P17-1; #330)
 
     func testRunningBolusIsReportedInEveryBatchUnderOneIdentity() throws {
@@ -217,14 +240,19 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         let live = feedOracles().loop
         XCTAssertEqual(live.mutableDoses.count, 2, "two mutable doses are outstanding: \(live.doses.map(LoopDoseStoreOracle.describe))")
 
-        try clock.advanceBoth(seconds: 30, ticks: 6)
+        // Two minutes in: 2.4 U of the bolus and 0.067 U of the temp rate have gone in, and both are
+        // still inside the driver's own estimate for the bolus (144 s + a 30 s grace), so the sync
+        // below is a report of live delivery rather than a reconciliation of a stale one.
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 12)
         XCTAssertTrue(try harness.client.snapshot().bolus.active)
 
         // The pump stops delivery on its own. No clock movement between the stop and the sync, so
         // the driver's detection time is the pump's stop time and the timeline diff is about
-        // contents, not dating (#333 is group D's scenario).
-        _ = try harness.client.suspend(reason: "user")
+        // contents, not dating (#333 is group D's scenario). The index is taken before the suspend
+        // because the pump raises qualifying events for it: some of the reporting can happen before
+        // the explicit sync runs.
         let beforeSuspendSync = allPumpEventBatches.count
+        _ = try harness.client.suspend(reason: "user")
         _ = try sync()
         let suspendBatches = newBatches(since: beforeSuspendSync)
 
@@ -239,45 +267,53 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             completeBatches.isEmpty,
             "the suspend is appended with replacePendingEvents: true; batches were \(suspendBatches.map(describe))"
         )
-        for batch in completeBatches {
-            XCTAssertTrue(
-                batch.events.contains { $0.dose?.type == .tempBasal },
-                "the complete batch must account for the temp basal the suspend ended: \(describe(batch))"
-            )
-            XCTExpectFailure(
-                "jwoglom/TandemKit#330: getActivePumpEvents never returns state.bolusDose, so the suspend's complete "
-                    + "batch omits the running bolus and the host deletes it"
-            ) {
-                XCTAssertTrue(
-                    batch.events.contains { $0.raw == bolusRaw },
-                    "guide §5: a complete batch omitting the live bolus deletes it: \(describe(batch))"
-                )
-            }
-        }
+        XCTAssertTrue(
+            completeBatches.contains { batch in batch.events.contains { $0.dose?.type == .tempBasal } },
+            "a complete batch must account for the temp basal the suspend ended: \(completeBatches.map(describe))"
+        )
 
+        // §3 and §5 together, checked against what the host actually held when each batch arrived
+        // rather than against one batch in isolation: replaying the journal in order, no batch that
+        // claims to be the complete pending set may leave out a dose the host is still holding as
+        // mutable — that is the deletion.
         XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal's raw embeds its programmed units, so ending it early re-keys it "
-                + "instead of finalizing the dose the host already holds"
+            "jwoglom/TandemKit#330 (the complete batch builder never returns state.bolusDose) and "
+                + "jwoglom/TandemKit#344 (the temp basal is re-keyed when it ends early, so finalizing it does not "
+                + "match the mutable row the host holds): a complete batch drops a live mutable dose"
         ) {
-            XCTAssertEqual(
-                completeBatches.flatMap(\.events).first { $0.dose?.type == .tempBasal }?.raw,
-                tempRaw,
-                "guide §4: a dose keeps one identity from first report to finalization"
+            let omissions = completeBatchOmissions()
+            XCTAssertTrue(
+                omissions.isEmpty,
+                "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n")
             )
         }
 
         let (loop, trio) = feedOracles()
-        XCTExpectFailure(
-            "jwoglom/TandemKit#330: the suspend batch purges the mutable bolus at the host, so the insulin that went "
-                + "in before the stop disappears from IOB"
-        ) {
-            XCTAssertNotNil(
-                loop.assertSingleDose(raw: bolusRaw, "after a pump-side suspend during a bolus"),
-                "guide §3: nothing live is dropped by silence"
-            )
-        }
+        loop.assertNoDuplicates("after a pump-side suspend during a bolus and a temp basal")
+        XCTAssertEqual(
+            loop.doses.filter { $0.dose.type == .bolus }.count, 1,
+            "the partial bolus is accounted for exactly once: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        XCTAssertEqual(
+            loop.doses.filter { $0.dose.type == .suspend }.count, 1,
+            "one suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
         XCTAssertEqual(trio.boluses.count, 1, "Trio ignores replacePendingEvents, so its bolus row survives: \(trio.boluses)")
         XCTAssertEqual(trio.suspends.count, 1, "one suspend row: \(trio.suspends)")
+        for event in suspendBatches.flatMap(\.events) where event.dose?.type == .bolus {
+            XCTAssertEqual(event.raw, bolusRaw, "the bolus changed identity when the pump stopped it")
+        }
+        XCTExpectFailure(
+            "jwoglom/TandemKit#344: the temp basal's raw embeds its programmed units, so ending it early re-keys it "
+                + "instead of finalizing the dose the host already holds"
+        ) {
+            for event in suspendBatches.flatMap(\.events) where event.dose?.type == .tempBasal {
+                XCTAssertEqual(
+                    event.raw, tempRaw,
+                    "guide §4: a dose keeps one identity from first report to finalization"
+                )
+            }
+        }
 
         // Resume: the batch that reopens delivery must not purge anything still live either.
         _ = try harness.client.resume()
@@ -295,12 +331,15 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             timeline.boluses.contains { $0.bolusId == bolusId && $0.isFinished },
             "the pump stopped the bolus at the suspend: \(timeline.boluses)"
         )
-        XCTExpectFailure(
-            "jwoglom/TandemKit#330: the pump's partial bolus has no live dose at the host after the suspend batch "
-                + "purged it, so the two ledgers cannot agree"
-        ) {
-            timeline.assertMatches(feedOracles().loop, tolerance: .exact, "suspend during a bolus and a temp basal")
-        }
+        // At the host's resolution, not the pump's: LoopKit's `reconciled` rebuilds a temp basal that
+        // a suspend truncated without the delivered volume the driver reported and re-derives it
+        // through `unitsInDeliverableIncrements`, which rounds to the 0.05 U basal grid. Everything
+        // else in the diff is still exact.
+        timeline.assertMatches(
+            feedOracles().loop,
+            tolerance: PumpTimeline.Tolerance(units: 0.05),
+            "suspend during a bolus and a temp basal"
+        )
     }
 
     // MARK: - C4 (§6, §9 item 1, §11 empty syncs; P01-1, P18-2; #332)
@@ -355,43 +394,75 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         let (loopBefore, _) = feedOracles()
         let reportedBefore = loopBefore.lastReconciliation
 
-        // The plan stages this as `drop_response every`. That works, but every dropped response
-        // costs the driver its 30 s response timeout and a sync makes eight reads, so the scenario
-        // would take four minutes of real time. Turning the pump's radio off makes the pump answer
-        // nothing for the whole sync in one call, which is the condition under test.
-        let client = harness.client!
-        addTeardownBlock {
-            // The radio is transport state, not an armed fault: `harness.reset()` does not put it
-            // back, so every later test would find nothing advertising.
-            _ = try? client.armFault(FaketandemFaultSpec(.radioOn))
-        }
-        _ = try harness.client.armFault(FaketandemFaultSpec(.radioOff))
-        try IntegrationWait.until("the pump to drop the link with its radio off", timeout: 10) {
-            try !client.snapshot().connection.connected
+        // The delivery reads and nothing else: the link stays up and the rest of the sync answers,
+        // so this is a pump that said nothing about *delivery* rather than a pump that is not
+        // there. (A pump that answers nothing at all cannot be staged here — see the report: with
+        // the radio off the driver's auto-reconnect spins hard enough to take the test process
+        // down, and dropping every response costs 30 s per read, more silence than the test
+        // runner's progress watchdog allows.)
+        let silentReads = ["InsulinStatusRequest", "CurrentBolusStatusRequest", "CurrentBasalStatusRequest"]
+        let client = harness.client
+        addTeardownBlock { _ = try? client.clearFaults() }
+        for message in silentReads {
+            var fault = FaketandemFaultSpec(.dropResponse, message: message)
+            fault.every = true
+            _ = try harness.client.armFault(fault)
         }
 
         try clock.advanceBoth(seconds: .minutes(5))
         let before = allPumpEventBatches.count
-        let lastSync = try sync()
+        let logBefore = try harness.client.snapshot().requestLog.lastSeq
+        let lastSync = try sync(timeout: 420)
 
-        XCTAssertEqual(
-            driver.manager.state.lastReconciliation, boundaryBefore,
-            "guide §6: a sync the pump did not answer may not move the trust boundary"
-        )
-        XCTAssertEqual(lastSync, boundaryBefore, "the host is handed the boundary that still holds")
-        for batch in newBatches(since: before) {
-            XCTAssertEqual(
-                batch.lastReconciliation, boundaryBefore,
-                "an unanswered sync may only repeat the boundary it already had: \(describe(batch))"
+        // What the pump saw: each delivery read arrived and was answered with nothing, while the
+        // rest of the sync went through.
+        let entries = try harness.requestLog(since: logBefore)
+        for message in silentReads {
+            XCTAssertTrue(
+                entries.contains { $0.isRequest && $0.message == message },
+                "the sync must have asked \(message); pump saw \(entries.compactMap(\.message))"
             )
+        }
+        // A dropped answer is still logged, with the fault that swallowed it and no fragment sent.
+        let dropped = entries.filter { $0.isResponse && $0.fault == FaketandemFaultSpec.Kind.dropResponse.rawValue }
+        XCTAssertGreaterThanOrEqual(
+            dropped.count, silentReads.count,
+            "every delivery read's answer must have been swallowed: \(dropped.map { $0.message ?? "?" })"
+        )
+        XCTAssertTrue(dropped.allSatisfy { ($0.fragmentsSent ?? 0) == 0 }, "a swallowed answer must not reach the driver")
+        XCTAssertTrue(
+            entries.contains { $0.isResponse && $0.fault == nil && ($0.fragmentsSent ?? 0) > 0 },
+            "the rest of the sync must have been answered, or this is a dead link rather than a silent pump"
+        )
+
+        XCTAssertEqual(lastSync, driver.manager.state.lastReconciliation, "the host is handed the driver's own boundary")
+        XCTAssertTrue(loopBefore.doses.isEmpty, "nothing was invented for a pump that said nothing")
+
+        XCTExpectFailure(
+            "TandemKit audit P18-A2 / P01-A1 (no open issue; jwoglom/TandemKit#332 closed the empty-sync half of "
+                + "this): the boundary is stamped when any read answers, so a sync whose delivery reads all went "
+                + "unanswered still moves the host's trust boundary"
+        ) {
+            XCTAssertEqual(
+                driver.manager.state.lastReconciliation, boundaryBefore,
+                "guide §6: lastReconciliation is never advanced past delivery that has not actually been accounted for"
+            )
+            for batch in newBatches(since: before) {
+                XCTAssertEqual(
+                    batch.lastReconciliation, boundaryBefore,
+                    "a sync whose delivery reads were not answered may only repeat the boundary it had: \(describe(batch))"
+                )
+            }
+            XCTAssertEqual(feedOracles().loop.lastReconciliation, reportedBefore, "the host's boundary stands")
         }
 
         let (loop, _) = feedOracles()
-        XCTAssertEqual(loop.lastReconciliation, reportedBefore, "the host's boundary stands where the last answered sync left it")
-        XCTAssertTrue(loop.doses.isEmpty, "nothing was invented for a pump that said nothing: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-
-        _ = try harness.client.armFault(FaketandemFaultSpec(.radioOn))
-        try timeline().assertMatches(loop, tolerance: .exact, "after a sync the pump never answered")
+        XCTAssertTrue(
+            loop.doses.isEmpty,
+            "no dose may be invented from reads the pump did not answer: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        try harness.client.clearFaults()
+        try timeline().assertMatches(loop, tolerance: .exact, "after a sync whose delivery reads went unanswered")
     }
 
     // MARK: - C6 (§3, §11 idempotency; P04-2, P17-1; #326)
@@ -422,7 +493,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             feedOracles().loop.assertPermanent(raw: bolusRaw, "the bolus is finalized before the relaunch"),
             "the bolus must be finalized before the relaunch"
         )
-        XCTAssertEqual(finalized.dose.deliveredUnits, 1.0, accuracy: 0.0005)
+        XCTAssertEqual(try XCTUnwrap(finalized.dose.deliveredUnits), 1.0, accuracy: 0.0005)
 
         let relaunched = try relaunch()
         XCTAssertEqual(relaunched.manager.state.basalDose.type, .tempBasal, "the running temp basal survives the relaunch")
@@ -443,7 +514,10 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("after a relaunch")
         let bolus = try XCTUnwrap(loop.assertPermanent(raw: bolusRaw, "after a relaunch"))
-        XCTAssertEqual(bolus.dose.deliveredUnits, 1.0, accuracy: 0.0005, "the finalized bolus is untouched by the relaunch")
+        XCTAssertEqual(
+            try XCTUnwrap(bolus.dose.deliveredUnits), 1.0, accuracy: 0.0005,
+            "the finalized bolus is untouched by the relaunch"
+        )
         XCTAssertEqual(loop.doses.filter { $0.dose.type == .bolus }.count, 1, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
         let temp = try XCTUnwrap(loop.assertSingleDose(raw: tempRaw, "after a relaunch"))
         XCTAssertTrue(temp.isMutable, "the temp basal is still running: \(LoopDoseStoreOracle.describe(temp))")
@@ -466,6 +540,10 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         driver.manager.pumpManagerDelegate = nil
         let journalBeforeDetach = driver.delegate.journal.count
 
+        // Time moves before the stop, not between the stop and the sync: the driver's boundary has
+        // to be able to advance, while its detection of the suspend still lands on the pump's own
+        // suspend instant.
+        try clock.advanceBoth(seconds: .minutes(5))
         _ = try harness.client.suspend(reason: "user")
         _ = try sync()
         XCTAssertEqual(driver.manager.state.basalDose.type, .suspend, "the driver consumed the transition into its state")
@@ -528,6 +606,32 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         try harness.pair(driver)
         _ = try sync()
         return driver
+    }
+
+    /// Replays every batch the host has received, in order, and reports each dose that was live and
+    /// mutable at the host when a `replacePendingEvents: true` batch arrived without carrying it —
+    /// the doses LoopKit's report-or-delete rule (guide §3, §5) deletes.
+    private func completeBatchOmissions() -> [String] {
+        let oracle = LoopDoseStoreOracle()
+        var omissions: [String] = []
+        for delegate in delegates {
+            for entry in delegate.journal {
+                guard let batch = entry.pumpEventBatch else { continue }
+                if batch.replacePendingEvents {
+                    let carried = Set(batch.events.map(\.raw))
+                    for dose in oracle.doses where dose.isMutable && !carried.contains(dose.raw ?? Data()) {
+                        omissions.append("  \(LoopDoseStoreOracle.describe(dose)) dropped by \(describe(batch))")
+                    }
+                }
+                oracle.addPumpEvents(
+                    batch.events,
+                    lastReconciliation: batch.lastReconciliation,
+                    replacePendingEvents: batch.replacePendingEvents,
+                    now: entry.hostNow
+                )
+            }
+        }
+        return omissions
     }
 
     private func newBatches(since index: Int) -> [MockPumpManagerDelegate.PumpEventBatch] {
