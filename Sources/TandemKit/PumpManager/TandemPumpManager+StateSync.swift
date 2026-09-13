@@ -423,6 +423,10 @@ extension TandemPumpManager {
 
         reportReservoirReading(reservoirValue)
 
+        // Also runs outside a sync, and a reservoir value newer than the host's event boundary
+        // arbitrates back to whole-unit reservoir doses.
+        reportReconciliationBoundary()
+
         return units
     }
 
