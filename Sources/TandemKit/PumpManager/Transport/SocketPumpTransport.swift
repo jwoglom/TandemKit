@@ -142,6 +142,12 @@ final class SocketPumpCentral: PumpCentral {
                 let link = try SocketLink(connectTo: self.endpoint)
                 defer { link.close() }
                 let hello = try Self.readHello(from: link)
+                // The pump answers hello in every state so a probe can tell why it is refused, but
+                // a real pump that is not discoverable is not advertising, so there is nothing to
+                // report.
+                guard hello.pairingState != VirtualPumpHello.notDiscoverablePairingState else {
+                    return
+                }
                 let peripheral = self.peripheral(for: hello)
                 guard self.isScanning(generation: generation) else {
                     return
@@ -599,6 +605,8 @@ final class SocketPumpPeripheral: PumpPeripheral {
 
 /// The `hello` frame the peripheral sends on every connection.
 struct VirtualPumpHello {
+    static let notDiscoverablePairingState = "NotDiscoverable"
+
     let peripheralId: UUID
     let name: String
     let manufacturerData: Data?

@@ -19,7 +19,7 @@ class TandemPeripheralManager {
     // reference itself — blocking waits on the referenced group happen outside the lock.
     private let queueLock = NSLock()
     private var _readQueue: (TandemDispatchGroup, CBUUID)?
-    private var _writeQueue: (TandemDispatchGroup, UInt8)?
+    private var _writeQueue: PendingWrite?
     private var _commandLock: TandemDispatchGroup?
 
     private var readQueue: (TandemDispatchGroup, CBUUID)? {
@@ -31,7 +31,54 @@ class TandemPeripheralManager {
             queueLock.unlock() }
     }
 
-    private var writeQueue: (TandemDispatchGroup, UInt8)? {
+    /// The write whose response is awaited, reassembled here on the notification path. Only the
+    /// first packet of a response carries the opcode; continuation packets carry cargo from byte 2
+    /// and can land before the writing thread has even woken for the first one, so they are claimed
+    /// by characteristic alone (as pumpX2 does) and the writer is released once, when the message
+    /// is complete.
+    private final class PendingWrite {
+        let group: TandemDispatchGroup
+        let opCode: UInt8
+        let characteristic: CBUUID
+        private let lock = NSLock()
+        private var response = ResponseMessage()
+        private var packetsReceived = 0
+
+        init(group: TandemDispatchGroup, opCode: UInt8, characteristic: CBUUID) {
+            self.group = group
+            self.opCode = opCode
+            self.characteristic = characteristic
+        }
+
+        var message: Message? {
+            lock.lock()
+            defer { lock.unlock() }
+            return response.message
+        }
+
+        func accepts(_ data: Data, on characteristic: CBUUID) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if packetsReceived > 0 {
+                return characteristic == self.characteristic && response.needsMorePacket
+            }
+            return data.count > 2 && data[2] == opCode
+        }
+
+        /// Returns whether the response still needs packets.
+        func append(_ data: Data) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            packetsReceived += 1
+            BTResponseParser.parse(data: data, characteristic: characteristic, authKey: nil, response: &response)
+            if !response.needsMorePacket {
+                group.leave(Data())
+            }
+            return response.needsMorePacket
+        }
+    }
+
+    private var writeQueue: PendingWrite? {
         get { queueLock.lock()
             defer { queueLock.unlock() }
             return _writeQueue }
@@ -158,15 +205,15 @@ class TandemPeripheralManager {
             return nil
         }
 
-        var writeQ = TandemDispatchGroup()
+        let writeQ = TandemDispatchGroup()
         writeQ.enter()
-        writeQueue = (writeQ, expecting.props.opCode)
+        let pending = PendingWrite(group: writeQ, opCode: expecting.props.opCode, characteristic: characteristic)
+        writeQueue = pending
 
         defer {
             writeQueue = nil
         }
 
-        var response = ResponseMessage()
         var authKey = Data()
         if requestProps.signed {
             authKey = pumpManager.state.pumpState.getAuthKey()
@@ -188,37 +235,21 @@ class TandemPeripheralManager {
         }
 
         currentTxId = currentTxId &+ 1
-        while response.needsMorePacket {
-            // Wait for result from pump
-            let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout)
-            guard case let .completed(result) = outcome else {
-                if outcome == .cancelled {
-                    // Torn down by cancelPendingOperations, not the pump going quiet.
-                    logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
-                } else {
-                    logger.error("Timeout hit, no response from pump...")
-                }
-                return nil
+        // Released by PendingWrite.append once the last packet has been reassembled.
+        let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout)
+        guard case .completed = outcome else {
+            if outcome == .cancelled {
+                // Torn down by cancelPendingOperations, not the pump going quiet.
+                logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
+            } else {
+                logger.error("Timeout hit, no response from pump...")
             }
-
-            BTResponseParser.parse(
-                data: result,
-                characteristic: characteristic,
-                authKey: authKey,
-                response: &response
-            )
-
-            if response.needsMorePacket {
-                writeQ = TandemDispatchGroup()
-                writeQ.enter()
-                writeQueue = (writeQ, expecting.props.opCode)
-
-                logger.info("Waiting for more data...")
-            }
+            return nil
         }
 
-        logger.info("Received message: \(response.message?.description ?? "nil")")
-        return response.message
+        let message = pending.message
+        logger.info("Received message: \(message?.description ?? "nil")")
+        return message
     }
 
     /// Cancels any in-flight read/write/notify command waits so a thread blocked
@@ -231,7 +262,7 @@ class TandemPeripheralManager {
     func cancelPendingOperations() {
         logger.info("Cancelling pending operations")
         commandLock?.cancel()
-        writeQueue?.0.cancel()
+        writeQueue?.group.cancel()
         readQueue?.0.cancel()
         // A partially assembled stream message can never complete once the connection drops.
         historyLogStreamAccumulator = nil
@@ -327,8 +358,10 @@ extension TandemPeripheralManager: PumpPeripheralDelegate {
             return
         }
 
-        if let (writeQueue, writeOpCode) = writeQueue, data[2] == writeOpCode {
-            writeQueue.leave(Data(data))
+        if let pending = writeQueue, pending.accepts(data, on: characteristic) {
+            if pending.append(Data(data)) {
+                logger.info("Waiting for more data...")
+            }
             return
         }
 
