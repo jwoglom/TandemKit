@@ -20,7 +20,7 @@ class TandemKitScanViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitScanViewModel")
     private var pumpManager: TandemPumpManager?
     private var nextStep: () -> Void
-    private var selectedPeripheral: CBPeripheral?
+    private var selectedPeripheral: (any PumpPeripheral)?
 
     init(_ pumpManager: TandemPumpManager? = nil, nextStep: @escaping () -> Void) {
         self.pumpManager = pumpManager

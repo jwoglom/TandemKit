@@ -1176,7 +1176,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func pairPump(code: String, peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
+    func pairPump(code: String, peripheral: PumpPeripheral, completion: @escaping (Error?) -> Void) {
         state.pumpState.pincode = code
         bluetooth.connect(peripheral, completion: completion)
     }

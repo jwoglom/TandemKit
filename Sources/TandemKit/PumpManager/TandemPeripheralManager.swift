@@ -1,10 +1,10 @@
 import CoreBluetooth
 
-class TandemPeripheralManager: NSObject {
+class TandemPeripheralManager {
     private let logger = TandemLogger(category: "TandemPeripheralManager")
     private let fallbackPairingCode = "000000"
 
-    private var peripheral: CBPeripheral
+    private let peripheral: PumpPeripheral
     private let pumpManager: TandemPumpManager
     private let bluetoothManager: TandemBluetoothManager
     // Claimed exactly once by finishSetup, which may be called from the CB delegate queue (a
@@ -68,7 +68,7 @@ class TandemPeripheralManager: NSObject {
 
     init(
         _ bluetoothManager: TandemBluetoothManager,
-        _ peripheral: CBPeripheral,
+        _ peripheral: PumpPeripheral,
         _ pumpManager: TandemPumpManager,
         _ connectCompletion: @escaping (Error?) -> Void
     ) {
@@ -78,7 +78,6 @@ class TandemPeripheralManager: NSObject {
         _connectCompletion = connectCompletion
 
         authBuilder = JpakeAuthBuilder.initializeWithPairingCode(pumpManager.state.pumpState.pincode ?? fallbackPairingCode)
-        super.init()
 
         peripheral.delegate = self
     }
@@ -107,18 +106,11 @@ class TandemPeripheralManager: NSObject {
     }
 
     func read(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> Data? {
-        guard let characteristic = getCharacteristic(
-            serviceUUID: serviceUUID,
-            characteristicUUID: characteristicUUID
-        ) else {
-            logger
-                .error(
-                    "Could not find characteristic - Service: \(serviceUUID), Characteristic: \(characteristicUUID)"
-                )
+        guard hasCharacteristic(characteristicUUID, in: serviceUUID) else {
             return nil
         }
 
-        logger.info("Reading characteristic: \(characteristic.uuid)")
+        logger.info("Reading characteristic: \(characteristicUUID)")
 
         let readQ = TandemDispatchGroup()
         readQ.enter()
@@ -130,7 +122,7 @@ class TandemPeripheralManager: NSObject {
 
         commandLock = TandemDispatchGroup()
         commandLock?.enter()
-        peripheral.readValue(for: characteristic)
+        peripheral.readValue(for: characteristicUUID, in: serviceUUID)
 
         return readQ.wait(timeout: .now() + .seconds(10))
     }
@@ -161,14 +153,8 @@ class TandemPeripheralManager: NSObject {
         defer { writeSemaphore.signal() }
 
         let requestProps = type(of: message).props
-        guard let characteristic = getCharacteristic(
-            serviceUUID: ServiceUUID.PUMP_SERVICE,
-            characteristicUUID: requestProps.characteristic
-        ) else {
-            logger
-                .error(
-                    "Could not find characteristic - Service: \(ServiceUUID.PUMP_SERVICE), Characteristic: \(requestProps.characteristic)"
-                )
+        let characteristic = requestProps.characteristic
+        guard hasCharacteristic(characteristic, in: ServiceUUID.PUMP_SERVICE) else {
             return nil
         }
 
@@ -197,7 +183,7 @@ class TandemPeripheralManager: NSObject {
             commandLock = TandemDispatchGroup()
             commandLock?.enter()
 
-            peripheral.writeValue(item.build(), for: characteristic, type: .withResponse)
+            peripheral.writeValue(item.build(), for: characteristic, in: ServiceUUID.PUMP_SERVICE)
             commandLock?.wait(timeout: .now() + .seconds(2))
         }
 
@@ -217,7 +203,7 @@ class TandemPeripheralManager: NSObject {
 
             BTResponseParser.parse(
                 data: result,
-                characteristic: characteristic.uuid,
+                characteristic: characteristic,
                 authKey: authKey,
                 response: &response
             )
@@ -252,51 +238,44 @@ class TandemPeripheralManager: NSObject {
     }
 
     func startNotify(service serviceUUID: CBUUID, characteristic characteristicUUID: CBUUID) {
-        guard let characteristic = getCharacteristic(serviceUUID: serviceUUID, characteristicUUID: characteristicUUID) else {
+        guard hasCharacteristic(characteristicUUID, in: serviceUUID) else {
             return
         }
 
         commandLock = TandemDispatchGroup()
         commandLock?.enter()
 
-        peripheral.setNotifyValue(true, for: characteristic)
+        peripheral.setNotifyValue(true, for: characteristicUUID, in: serviceUUID)
         commandLock?.wait(timeout: .now() + .seconds(2))
     }
 
-    private func getCharacteristic(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> CBCharacteristic? {
-        guard let service = peripheral.services?.first(where: { $0.uuid == serviceUUID }) else {
-            logger.error("Failed to find service: \(serviceUUID.uuidString)")
-            return nil
+    private func hasCharacteristic(_ characteristicUUID: CBUUID, in serviceUUID: CBUUID) -> Bool {
+        guard peripheral.hasCharacteristic(characteristicUUID, in: serviceUUID) else {
+            logger
+                .error("Could not find characteristic - Service: \(serviceUUID), Characteristic: \(characteristicUUID)")
+            return false
         }
-
-        guard let characteristic = service.characteristics?.first(where: { $0.uuid == characteristicUUID }) else {
-            logger.error("Failed to find characteristic: \(characteristicUUID.uuidString)")
-            return nil
-        }
-
-        return characteristic
+        return true
     }
 }
 
-extension TandemPeripheralManager: CBPeripheralDelegate {
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: (any Error)?) {
+extension TandemPeripheralManager: PumpPeripheralDelegate {
+    func peripheral(_ peripheral: PumpPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
             logger.error("Failed to discoverServices: \(error.localizedDescription)")
             finishSetup(PumpCommError.errorResponse(context: "Failed to discoverServices: \(error.localizedDescription)"))
             return
         }
 
-        self.peripheral = peripheral
-
-        guard let pumpService = peripheral.services?.first(where: { $0.uuid == ServiceUUID.PUMP_SERVICE }) else {
+        guard peripheral.discoveredServices.contains(ServiceUUID.PUMP_SERVICE) else {
             logger.error("No pump service found...")
             finishSetup(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.PUMP_SERVICE)"))
             return
         }
-        peripheral.discoverCharacteristics(CharacteristicUUID.allPumpCharacteristics, for: pumpService)
+        peripheral.discoverCharacteristics(CharacteristicUUID.allPumpCharacteristics, for: ServiceUUID.PUMP_SERVICE)
     }
 
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: (any Error)?) {
+    func peripheral(_ peripheral: PumpPeripheral, didDiscoverCharacteristicsFor service: CBUUID, error: Error?) {
         if let error = error {
             let message = "Failed to didDiscoverCharacteristics: \(error.localizedDescription)"
             logger.error(message)
@@ -304,37 +283,36 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        self.peripheral = peripheral
-
-        if service.uuid == ServiceUUID.PUMP_SERVICE {
-            guard let deviceInfoService = peripheral.services?.first(where: { $0.uuid == ServiceUUID.DIS_SERVICE }) else {
+        if service == ServiceUUID.PUMP_SERVICE {
+            guard peripheral.discoveredServices.contains(ServiceUUID.DIS_SERVICE) else {
                 logger.error("No device info service found...")
                 finishSetup(PumpCommError.errorResponse(context: "No service: \(ServiceUUID.DIS_SERVICE)"))
                 return
             }
-            peripheral.discoverCharacteristics(CharacteristicUUID.allDeviceInfoCharacteristics, for: deviceInfoService)
+            peripheral.discoverCharacteristics(
+                CharacteristicUUID.allDeviceInfoCharacteristics,
+                for: ServiceUUID.DIS_SERVICE
+            )
             return
         }
 
-        logger.info("Discovery completed! Services: \(peripheral.services?.map(\.uuid.uuidString) ?? [])")
+        logger.info("Discovery completed! Services: \(peripheral.discoveredServices.map(\.uuidString))")
         performInitialSetup()
     }
 
-    func peripheral(_: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: (any Error)?) {
+    func peripheral(_: PumpPeripheral, didUpdateValueFor characteristic: CBUUID, value: Data?, error: Error?) {
         if let error {
             logger.error("Received error in didUpdateValueFor: \(error.localizedDescription)")
             return
         }
 
-        guard let data = characteristic.value else {
-            let char = characteristic.uuid.uuidString
-            let service = characteristic.service?.uuid.uuidString ?? "No service"
-            logger.warning("Empty data -> char: \(char), service: \(service)")
+        guard let data = value else {
+            logger.warning("Empty data -> char: \(characteristic.uuidString)")
             return
         }
 
         if let (readQueue, readCharacteristic) = readQueue,
-           readCharacteristic == characteristic.uuid
+           readCharacteristic == characteristic
         {
             readQueue.leave(Data(data))
             return
@@ -344,7 +322,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         // notifications, so route it before the write-queue check: continuation packets of a
         // multi-packet stream message carry cargo at data[2] that could otherwise alias a
         // pending write's expected opcode.
-        if characteristic.uuid == CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS {
+        if characteristic == CharacteristicUUID.HISTORY_LOG_CHARACTERISTICS {
             handleHistoryLogStreamPacket(data)
             return
         }
@@ -354,7 +332,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
+        if characteristic == CharacteristicUUID.QUALIFYING_EVENTS_CHARACTERISTICS {
             let events = QualifyingEvent.fromRawBytes(data)
             guard !events.isEmpty else {
                 logger.info("Received empty qualifying events")
@@ -363,12 +341,12 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 
             pumpManager.handleQualifyingEvents(events: events) {
                 // Acknowledge qualifying events
-                self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse)
+                self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, in: ServiceUUID.PUMP_SERVICE)
             }
             return
         }
 
-        if characteristic.uuid == FillTubingStateStreamResponse.props.characteristic,
+        if characteristic == FillTubingStateStreamResponse.props.characteristic,
            data[2] == FillTubingStateStreamResponse.props.opCode
         {
             let response = FillTubingStateStreamResponse(cargo: Data(data.dropFirst(5)))
@@ -377,7 +355,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == FillCannulaStateStreamResponse.props.characteristic,
+        if characteristic == FillCannulaStateStreamResponse.props.characteristic,
            data[2] == FillCannulaStateStreamResponse.props.opCode
         {
             let response = FillCannulaStateStreamResponse(cargo: Data(data.dropFirst(5)))
@@ -386,7 +364,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == EnterChangeCartridgeModeStateStreamResponse.props.characteristic,
+        if characteristic == EnterChangeCartridgeModeStateStreamResponse.props.characteristic,
            data[2] == EnterChangeCartridgeModeStateStreamResponse.props.opCode
         {
             let response = EnterChangeCartridgeModeStateStreamResponse(cargo: Data(data.dropFirst(5)))
@@ -397,7 +375,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 
         // DetectingCartridgeStateStreamResponse and LoadCartridgeStateStreamResponse share opcode
         // -29 and are told apart by total packet length, the same split ControlStreamMessages makes.
-        if characteristic.uuid == DetectingCartridgeStateStreamResponse.props.characteristic,
+        if characteristic == DetectingCartridgeStateStreamResponse.props.characteristic,
            data[2] == DetectingCartridgeStateStreamResponse.props.opCode
         {
             if data.count >= 26 {
@@ -414,7 +392,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         // ExitFillTubingModeStateStreamResponse and PumpingStateStreamResponse are the same wire
         // message under opcode -23, told apart only by payload size. The packet header carries it
         // at data[4] as the cargo size plus the 24-byte trailer every signed message has.
-        if characteristic.uuid == ExitFillTubingModeStateStreamResponse.props.characteristic,
+        if characteristic == ExitFillTubingModeStateStreamResponse.props.characteristic,
            data[2] == ExitFillTubingModeStateStreamResponse.props.opCode,
            data.count > 5
         {
@@ -431,7 +409,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        if characteristic.uuid == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+        if characteristic == CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
            data[2] == ErrorResponse.props.opCode
         {
             let response = ErrorResponse(cargo: Data(data.dropFirst(5)))
@@ -439,7 +417,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
             return
         }
 
-        logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic.uuid)")
+        logger.warning("Not handler for message - data: \(data.hexadecimalString) characteristic: \(characteristic)")
     }
 
     /// Accumulates history log stream packets until a full message is assembled, then
@@ -467,7 +445,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         pumpManager.historyLogStream.send(message)
     }
 
-    func peripheral(_: CBPeripheral, didWriteValueFor _: CBCharacteristic, error: (any Error)?) {
+    func peripheral(_: PumpPeripheral, didWriteValueFor _: CBUUID, error: Error?) {
         if let error {
             logger.error("Received error after write characteristic: \(error.localizedDescription)")
         }
@@ -475,7 +453,7 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         commandLock?.leave(Data())
     }
 
-    func peripheral(_: CBPeripheral, didUpdateNotificationStateFor _: CBCharacteristic, error: (any Error)?) {
+    func peripheral(_: PumpPeripheral, didUpdateNotificationStateFor _: CBUUID, error: Error?) {
         if let error {
             logger.error("Received error after didUpdateNotificationStateFor: \(error.localizedDescription)")
         }
@@ -499,18 +477,9 @@ extension TandemPeripheralManager {
             }
 
             // Step 1: Requesting high priority. Optimisation only.
-            #if canImport(ObjectiveC)
-            if let central = pumpManager.bluetooth.manager {
-                let selector = NSSelectorFromString("setDesiredConnectionLatency:forPeripheral:")
-                if central.responds(to: selector) {
-                    let latencyValue = NSNumber(value: 0) // CBPeripheralConnectionLatency.low
-                    central.perform(selector, with: latencyValue, with: peripheral)
-                    logger.info("connection priority set -> CBPeripheralConnectionLatency.low")
-                } else {
-                    logger.warning("central manager does not support connection latency adjustment")
-                }
+            if let central = pumpManager.bluetooth.central as? PumpCentralLatencyControl {
+                central.requestLowLatency(for: peripheral)
             }
-            #endif
 
             // Step 2: Read model & manufacturer
             guard let _ = read(

@@ -18,7 +18,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     var onWrite: ((Message) -> Void)?
 
     weak var pumpManager: TandemPumpManager?
-    var manager: CBCentralManager? { nil }
+    var central: PumpCentral? { nil }
     /// Defaults to a working radio, so a test that says nothing about Bluetooth exercises the link.
     var bluetoothState: CBManagerState = .poweredOn
 
@@ -90,7 +90,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     func stopScan() {}
 
-    func connect(_: CBPeripheral, completion: @escaping (Error?) -> Void) {
+    func connect(_: PumpPeripheral, completion: @escaping (Error?) -> Void) {
         completion(connectError)
     }
 

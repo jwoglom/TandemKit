@@ -11,11 +11,11 @@ protocol PumpBluetoothConnection: AnyObject {
     /// when reconnecting. Set by `TandemPumpManager` at init.
     var pumpManager: TandemPumpManager? { get set }
 
-    /// The underlying central, when there is one. Only the real BLE path needs this (to request a
-    /// low connection latency during pairing); a stub returns nil.
-    var manager: CBCentralManager? { get }
+    /// The underlying central, when there is one: for the connection-latency request during
+    /// pairing and for the troubleshooter's "does iOS still know this pump" check. A stub returns nil.
+    var central: PumpCentral? { get }
 
-    /// State of the phone's Bluetooth radio. Separate from `manager` so it can be driven in tests,
+    /// State of the phone's Bluetooth radio. Separate from `central` so it can be driven in tests,
     /// where `CBCentralManager.state` is read-only.
     var bluetoothState: CBManagerState { get }
 
@@ -26,7 +26,7 @@ protocol PumpBluetoothConnection: AnyObject {
     func stopScan()
 
     /// Connects to a specific peripheral, e.g. the one the user picked during pairing.
-    func connect(_ peripheral: CBPeripheral, completion: @escaping (Error?) -> Void)
+    func connect(_ peripheral: PumpPeripheral, completion: @escaping (Error?) -> Void)
 
     /// Runs `completion` as a serialized command job: the pump is connected first if necessary, and
     /// `completion` then runs on the command queue so its (blocking) writes are serialized against

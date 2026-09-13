@@ -64,7 +64,7 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
             }
             savedPumpText = parts.joined(separator: " · ")
 
-            if let central = pumpManager.bluetooth.manager,
+            if let central = pumpManager.bluetooth.central,
                isBluetoothPoweredOn,
                let identifier = UUID(uuidString: peripheralUuid)
             {
