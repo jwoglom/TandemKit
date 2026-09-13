@@ -59,6 +59,10 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
     public var pendingBolusFinalization: UnfinalizedDose?
+    /// How often the pump has contradicted the driver, and the most recent case. See
+    /// `PumpDiscrepancy`.
+    public var pumpDiscrepancyCount: Int = 0
+    public var lastPumpDiscrepancy: PumpDiscrepancy?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     /// Basal min/max alerts are auto-acknowledged unconditionally: oref routinely sets a zero
@@ -252,6 +256,13 @@ public struct TandemPumpManagerState: RawRepresentable {
             pendingBolusFinalization = UnfinalizedDose(rawValue: pendingRaw)
         } else {
             pendingBolusFinalization = nil
+        }
+
+        pumpDiscrepancyCount = rawValue["pumpDiscrepancyCount"] as? Int ?? 0
+        if let discrepancyRaw = rawValue["lastPumpDiscrepancy"] as? PumpDiscrepancy.RawValue {
+            lastPumpDiscrepancy = PumpDiscrepancy(rawValue: discrepancyRaw)
+        } else {
+            lastPumpDiscrepancy = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -455,6 +466,11 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["pendingBolusFinalization"] = pendingBolusFinalization.rawValue
         }
 
+        raw["pumpDiscrepancyCount"] = pumpDiscrepancyCount
+        if let lastPumpDiscrepancy {
+            raw["lastPumpDiscrepancy"] = lastPumpDiscrepancy.rawValue
+        }
+
         return raw
     }
 
@@ -482,6 +498,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusState: \(bolusState)",
+            "* pumpDiscrepancyCount: \(pumpDiscrepancyCount)",
+            "* lastPumpDiscrepancy: \(String(describing: lastPumpDiscrepancy))",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",
             "* useSilentTones: \(useSilentTones)",

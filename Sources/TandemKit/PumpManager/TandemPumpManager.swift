@@ -201,6 +201,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
         "TandemPumpManager(state: \(state))"
     }
 
+    /// Notes that the pump contradicted the driver. The pump's account is still the one reported;
+    /// this only makes the disagreement visible (see `PumpDiscrepancy`).
+    func recordDiscrepancy(_ kind: PumpDiscrepancy.Kind, _ detail: String, now: Date = .now) {
+        // One condition, one count: a mismatch the driver cannot resolve is re-read on every sync
+        // until it clears, and counting each read would make one disagreement look like a dozen.
+        if let last = state.lastPumpDiscrepancy,
+           last.kind == kind,
+           last.detail == detail,
+           now.timeIntervalSince(last.date) < Self.discrepancyRepeatWindow
+        {
+            return
+        }
+
+        let discrepancy = PumpDiscrepancy(kind: kind, date: now, detail: detail)
+        logger.error("[discrepancy] \(discrepancy.description)")
+        state.pumpDiscrepancyCount += 1
+        state.lastPumpDiscrepancy = discrepancy
+    }
+
+    static let discrepancyRepeatWindow: TimeInterval = .minutes(15)
+
     public var isOnboarded: Bool {
         state.pumpState.derivedSecret != nil
     }
@@ -689,6 +710,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
                 )
                 bolusDose.deliveredUnits = estimatedDelivered
+                bolusDose.wasCancelled = true
                 self.holdForFinalization(bolusDose)
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
@@ -704,6 +726,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             bolusDose.deliveredUnits = lastBolus.deliveredUnits
+            self.noteBolusOutcome(lastBolus, programmedUnits: bolusDose.value, afterCancel: true)
 
             // Not now: a cancel is only noticed here, while the insulin stopped going in when the
             // pump says it did (#339).

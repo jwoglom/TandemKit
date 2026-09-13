@@ -138,6 +138,8 @@ extension TandemPumpManager {
         }
 
         let activeBasalType = response.basalType
+        noteBasalOutcome(response, at: Date.now)
+
         if activeBasalType != state.basalDose.type {
             if activeBasalType == .basal, state.basalDose.type == .resume {
                 // This is also the same
@@ -184,6 +186,35 @@ extension TandemPumpManager {
                 notifyDelegateStateUpdated()
                 return
             }
+        }
+    }
+
+    /// A temp basal within this of its scheduled end has ended on time, not early.
+    static let tempBasalEndGrace: TimeInterval = .seconds(60)
+
+    /// Records the pump not running the temp basal the driver believes it is (#328). The rate
+    /// tolerance is one percent of the profile rate: a temp rate goes to the pump as a whole
+    /// percent of it and comes back absolute.
+    func noteBasalOutcome(_ response: CurrentBasalStatusResponse, at now: Date) {
+        let dose = state.basalDose
+        guard dose.type == .tempBasal, now < dose.estimatedEndDate - Self.tempBasalEndGrace else {
+            return
+        }
+
+        guard response.basalType == .tempBasal else {
+            recordDiscrepancy(
+                .basalMismatch,
+                "temp basal ended early: pump is running \(response.basalType) with \(dose.estimatedEndDate.timeIntervalSince(now))s left"
+            )
+            return
+        }
+
+        let tolerance = response.profileBasalRate / 100.0 + 0.001
+        if abs(response.currentBasalRate - dose.value) > tolerance {
+            recordDiscrepancy(
+                .basalMismatch,
+                "pump is delivering \(response.currentBasalRate)U/hr, not the \(dose.value)U/hr temp basal"
+            )
         }
     }
 
@@ -264,6 +295,9 @@ extension TandemPumpManager {
 
             var events = getActivePumpEvents()
             if let lastBolus {
+                if let dose = state.bolusDose {
+                    noteBolusOutcome(lastBolus, programmedUnits: dose.value, afterCancel: dose.wasCancelled)
+                }
                 events.append(progressReport.getPumpEvent(
                     actualDeliveredUnits: lastBolus.deliveredUnits,
                     pumpTimestamp: lastBolus.pumpTimestamp,
@@ -571,12 +605,14 @@ extension TandemPumpManager {
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
         if let lastBolus {
             pending.deliveredUnits = lastBolus.deliveredUnits
+            noteBolusOutcome(lastBolus, programmedUnits: pending.value, afterCancel: pending.wasCancelled)
         } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.bolusFinalizationWindow {
             logger.warning("Pump still has no delivered volume for bolus \(bolusId); leaving it mutable")
             return
         } else {
-            logger.error(
-                "Giving up on the pump's delivered volume for bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
+            recordDiscrepancy(
+                .bolusVolumeUnknown,
+                "no delivered volume for bolus \(bolusId) within \(Self.bolusFinalizationWindow)s; finalized at the estimated \(pending.deliveredUnits)U"
             )
         }
 
@@ -609,6 +645,38 @@ extension TandemPumpManager {
         /// The pump's own timestamp on the record. Used to date the end of delivery instead of
         /// the moment the driver noticed it (see `BolusEndDate`).
         let pumpTimestamp: Date
+        /// Why the pump says delivery ended. nil when it reports a value we have no case for.
+        let endReason: LastBolusStatusAbstractResponse.BolusStatus?
+    }
+
+    /// Below this a shortfall is rounding: the pump reports milliunits, commands use the 0.05 U grid.
+    static let deliveryShortfallTolerance = 0.001
+
+    /// Records the pump's account of a finished bolus differing from what was asked for (#328).
+    /// A cancel comes back stopped and short by definition, so only an unasked-for stop counts there.
+    func noteBolusOutcome(_ report: LastBolusReport, programmedUnits: Double, afterCancel: Bool) {
+        let delivered = "\(report.deliveredUnits)U of \(programmedUnits)U"
+
+        switch report.endReason {
+        case .complete:
+            if !afterCancel, report.deliveredUnits < programmedUnits - Self.deliveryShortfallTolerance {
+                recordDiscrepancy(.bolusDeliveryIncomplete, "pump reports complete at \(delivered)")
+            }
+        case .stoppedAlarm, .stoppedMalfunction, .terminatedPLGS:
+            recordDiscrepancy(
+                .bolusDeliveryIncomplete,
+                "pump stopped the bolus (\(report.endReason!)) at \(delivered)"
+            )
+        case .stopped, .stoppedWireless, .rejectedWireless:
+            if !afterCancel {
+                recordDiscrepancy(
+                    .bolusDeliveryIncomplete,
+                    "bolus ended early (\(report.endReason!)) at \(delivered)"
+                )
+            }
+        case nil:
+            recordDiscrepancy(.bolusDeliveryIncomplete, "pump reported no end reason at \(delivered)")
+        }
     }
 
     /// Queries the pump for what it recorded about the last bolus.
@@ -636,7 +704,8 @@ extension TandemPumpManager {
             // a partial delivery by up to an increment — the direction that lets the loop
             // over-deliver.
             deliveredUnits: HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0),
-            pumpTimestamp: pumpTimestamp(from: response, bolusId: bolusId)
+            pumpTimestamp: pumpTimestamp(from: response, bolusId: bolusId),
+            endReason: endReason(from: response, bolusId: bolusId)
         )
     }
 
@@ -658,6 +727,20 @@ extension TandemPumpManager {
         return response.timestampDate
     }
 
+    /// Why the pump says `bolusId` ended. On a V3 response the matching records are read rather
+    /// than the primary one, and a stop on either portion wins over a completion on the other.
+    private func endReason(
+        from response: LastBolusStatusAbstractResponse,
+        bolusId: Int
+    ) -> LastBolusStatusAbstractResponse.BolusStatus? {
+        guard let v3 = response as? LastBolusStatusV3Response else {
+            return response.bolusStatus
+        }
+
+        let reasons = v3.sections.filter { $0.bolusId == bolusId }.map(\.endReason)
+        return reasons.first(where: { $0 != .complete }) ?? reasons.first ?? nil
+    }
+
     /// Delivered volume in milliunits that `response` reports for `bolusId`, or nil when it
     /// describes some other bolus.
     private func deliveredMilliunits(from response: LastBolusStatusAbstractResponse, bolusId: Int) -> UInt32? {
@@ -667,14 +750,14 @@ extension TandemPumpManager {
         // capture covers. Over-reporting delivered insulin is the safer way to be wrong here.
         if let v3 = response as? LastBolusStatusV3Response {
             guard let matched = v3.deliveredVolume(forBolusId: bolusId) else {
-                logger.warning("LastBolusStatusV3 has no record for bolusId \(bolusId): \(v3)")
+                recordDiscrepancy(.bolusIdMismatch, "LastBolusStatusV3 has no record for bolus \(bolusId)")
                 return nil
             }
             return matched
         }
 
         guard response.bolusId == bolusId else {
-            logger.warning("LastBolusStatus bolusId \(response.bolusId) != expected \(bolusId)")
+            recordDiscrepancy(.bolusIdMismatch, "LastBolusStatus answered for bolus \(response.bolusId), not \(bolusId)")
             return nil
         }
         return response.deliveredVolume
