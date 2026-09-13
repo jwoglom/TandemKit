@@ -1,0 +1,474 @@
+import Foundation
+
+// The faketandem control API (README.md "Integration harness API" and pkg/api). Everything here is
+// synchronous: the tests drive the pump from the test thread and poll for the driver's reaction.
+
+enum FaketandemClientError: Error, CustomStringConvertible {
+    case http(status: Int, path: String, body: String)
+    case transport(String)
+    case decoding(String)
+
+    var description: String {
+        switch self {
+        case let .http(status, path, body):
+            return "HTTP \(status) from \(path): \(body)"
+        case let .transport(message):
+            return "transport error: \(message)"
+        case let .decoding(message):
+            return "decoding error: \(message)"
+        }
+    }
+}
+
+enum FaketandemPairingState: String, Codable {
+    case notDiscoverable = "NotDiscoverable"
+    case discoverableOnly = "DiscoverableOnly"
+    case pairStep1 = "PairStep1"
+    case pairStep2 = "PairStep2"
+
+    /// The last manufacturer-data byte the pump advertises in this state.
+    var manufacturerByte: UInt8 {
+        switch self {
+        case .notDiscoverable, .discoverableOnly: return 0x10
+        case .pairStep1: return 0x11
+        case .pairStep2: return 0x12
+        }
+    }
+}
+
+/// `GET /api/state`, the parts the tests read. Unknown keys are ignored so the emulator can grow.
+struct FaketandemSnapshot: Decodable {
+    struct Identity: Decodable {
+        let serialNumber: String
+        let model: String
+        let apiVersionMajor: Int
+        let apiVersionMinor: Int
+    }
+
+    struct Clock: Decodable {
+        let mode: String
+        let now: Date
+        let pumpOffsetSeconds: Double
+        let frozen: Bool
+        let pumpNow: Date
+        let pumpTimeSeconds: Int
+        let timeSinceReset: Int
+    }
+
+    struct Auth: Decodable {
+        let authenticated: Bool
+        let pairingCode: String
+        let longTermKeyPresent: Bool
+        let pairingState: FaketandemPairingState
+    }
+
+    struct Connection: Decodable {
+        let connected: Bool
+        let radioEnabled: Bool
+    }
+
+    struct Basal: Decodable {
+        let profileRate: Double
+        let currentRate: Double
+        let suspended: Bool
+        let suspendReason: String?
+        let tempActive: Bool
+        let tempRate: Double
+        let tempPercent: Int
+    }
+
+    struct Bolus: Decodable {
+        let active: Bool
+        let stalled: Bool
+        let bolusId: Int
+        let unitsTotal: Double
+        let unitsDelivered: Double
+        let sourceId: Int
+        let typeBitmask: Int
+        let rateUnitsPerSecond: Double
+    }
+
+    struct LastBolus: Decodable {
+        let bolusId: Int
+        let requestedUnits: Double
+        let deliveredUnits: Double
+        let sourceId: Int
+        let typeBitmask: Int
+        let endReasonId: Int
+        let endTime: Date
+        let endPumpSeconds: Int
+    }
+
+    struct Insulin: Decodable {
+        let reservoirUnits: Double
+        let iob: Double
+    }
+
+    struct Battery: Decodable {
+        let percentage: Int
+        let charging: Bool
+    }
+
+    struct RequestLog: Decodable {
+        let entries: Int
+        let lastSeq: Int
+    }
+
+    let identity: Identity
+    let clock: Clock
+    let auth: Auth
+    let connection: Connection
+    let basal: Basal
+    let bolus: Bolus
+    let lastBolus: LastBolus?
+    let insulin: Insulin
+    let battery: Battery
+    let requestLog: RequestLog
+}
+
+/// One `GET /api/log` entry. `kind` is request | response | notification | connection | fault.
+struct FaketandemLogEntry: Decodable {
+    let seq: Int
+    let time: Date
+    let kind: String
+    let characteristic: String?
+    let message: String?
+    let opcode: Int?
+    let txId: Int?
+    let fragments: [String]?
+    let fragmentsSent: Int?
+    let note: String?
+    let connected: Bool?
+    let fault: String?
+
+    var isRequest: Bool { kind == "request" }
+    var isResponse: Bool { kind == "response" }
+}
+
+struct FaketandemLog: Decodable {
+    let entries: [FaketandemLogEntry]
+    let oldestSeq: Int
+    let lastSeq: Int
+}
+
+struct FaketandemClock: Decodable {
+    let mode: String
+    let now: Date
+    let pumpOffsetSeconds: Double
+    let frozen: Bool
+    let pumpNow: Date
+    let pumpTimeSeconds: Int
+    let timeSinceReset: Int
+}
+
+struct FaketandemFault: Decodable {
+    let id: Int
+    let kind: String
+    let message: String?
+    let count: Int?
+    let fired: Int?
+}
+
+/// A `POST /api/faults` body. Leave `message`/`opcode`/`characteristic` nil to hit the next message
+/// of any kind.
+struct FaketandemFaultSpec {
+    enum Kind: String {
+        case dropResponse = "drop_response"
+        case delayResponse = "delay_response"
+        case errorResponse = "error_response"
+        case disconnect
+        case rejectQuickPair = "reject_quick_pair"
+        case radioOff = "radio_off"
+        case radioOn = "radio_on"
+    }
+
+    var kind: Kind
+    var message: String?
+    var opcode: Int?
+    var characteristic: String?
+    var count: Int?
+    var every: Bool?
+    var delayMilliseconds: Int?
+    var errorCode: Int?
+    /// `request` or `partial_response`, for `.disconnect`.
+    var after: String?
+    var fragmentsSent: Int?
+
+    init(_ kind: Kind, message: String? = nil) {
+        self.kind = kind
+        self.message = message
+    }
+
+    var body: [String: Any] {
+        var body: [String: Any] = ["kind": kind.rawValue]
+        if let message { body["message"] = message }
+        if let opcode { body["opcode"] = opcode }
+        if let characteristic { body["characteristic"] = characteristic }
+        if let count { body["count"] = count }
+        if let every { body["every"] = every }
+        if let delayMilliseconds { body["delay_ms"] = delayMilliseconds }
+        if let errorCode { body["error_code"] = errorCode }
+        if let after { body["after"] = after }
+        if let fragmentsSent { body["fragments_sent"] = fragmentsSent }
+        return body
+    }
+}
+
+final class FaketandemClient {
+    let apiBaseURL: URL
+    private let session: URLSession
+    private let requestTimeout: TimeInterval
+    private let decoder: JSONDecoder
+
+    init(apiBaseURL: URL, requestTimeout: TimeInterval = 10) {
+        self.apiBaseURL = apiBaseURL
+        self.requestTimeout = requestTimeout
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = requestTimeout
+        session = URLSession(configuration: configuration)
+        decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let string = try decoder.singleValueContainer().decode(String.self)
+            if let date = Self.parseDate(string) {
+                return date
+            }
+            throw FaketandemClientError.decoding("unparseable date \(string)")
+        }
+    }
+
+    /// Go's RFC 3339 output has variable fractional-second precision and may carry a zone offset.
+    private static let fractionalFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let wholeSecondFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    static func parseDate(_ string: String) -> Date? {
+        fractionalFormatter.date(from: string) ?? wholeSecondFormatter.date(from: string)
+    }
+
+    // MARK: - Pairing state (advertisement)
+
+    func pairingState() throws -> FaketandemPairingState {
+        struct Body: Decodable { let pairingState: FaketandemPairingState }
+        return try get("/api/bluetooth/pairingstate", as: Body.self).pairingState
+    }
+
+    func setPairingState(_ state: FaketandemPairingState) throws {
+        _ = try send("POST", "/api/bluetooth/pairingstate", json: ["pairingState": state.rawValue])
+    }
+
+    // MARK: - Snapshot and direct writes
+
+    func snapshot() throws -> FaketandemSnapshot {
+        try get("/api/state", as: FaketandemSnapshot.self)
+    }
+
+    /// `PUT /api/state`: sets the named fields and nothing else (no qualifying events, no history).
+    @discardableResult
+    func setState(_ fields: [String: Any]) throws -> FaketandemSnapshot {
+        try decode(send("PUT", "/api/state", json: fields), as: FaketandemSnapshot.self)
+    }
+
+    // MARK: - Clock
+
+    func clock() throws -> FaketandemClock {
+        try get("/api/clock", as: FaketandemClock.self)
+    }
+
+    /// `mode` is `manual` or `real`.
+    @discardableResult
+    func setClock(
+        mode: String,
+        now: Date? = nil,
+        frozen: Bool? = nil,
+        pumpOffsetSeconds: Double? = nil
+    ) throws -> FaketandemClock {
+        var body: [String: Any] = ["mode": mode]
+        if let now { body["now"] = Self.fractionalFormatter.string(from: now) }
+        if let frozen { body["frozen"] = frozen }
+        if let pumpOffsetSeconds { body["pump_offset_seconds"] = pumpOffsetSeconds }
+        return try decode(send("PUT", "/api/clock", json: body), as: FaketandemClock.self)
+    }
+
+    /// Manual mode only (409 otherwise). `ticks` splits the step so mid-step expiries happen in order.
+    @discardableResult
+    func advanceClock(seconds: Double, ticks: Int? = nil) throws -> FaketandemClock {
+        var body: [String: Any] = ["seconds": seconds]
+        if let ticks { body["ticks"] = ticks }
+        return try decode(send("POST", "/api/clock/advance", json: body), as: FaketandemClock.self)
+    }
+
+    // MARK: - Pump-initiated actions (each returns the resulting snapshot)
+
+    /// `source` is `pump` (default, source id 0) or `remote` (the app, source id 8).
+    @discardableResult
+    func startBolus(
+        units: Double,
+        durationSeconds: Double? = nil,
+        rate: Double? = nil,
+        bolusId: Int? = nil,
+        source: String? = nil
+    ) throws -> FaketandemSnapshot {
+        var body: [String: Any] = ["units": units]
+        if let durationSeconds { body["duration_seconds"] = durationSeconds }
+        if let rate { body["rate"] = rate }
+        if let bolusId { body["bolus_id"] = bolusId }
+        if let source { body["source"] = source }
+        return try action("/api/state/bolus/start", body)
+    }
+
+    @discardableResult
+    func stallBolus() throws -> FaketandemSnapshot { try action("/api/state/bolus/stall") }
+
+    @discardableResult
+    func resumeBolus() throws -> FaketandemSnapshot { try action("/api/state/bolus/resume") }
+
+    @discardableResult
+    func abortBolus(deliveredUnits: Double? = nil) throws -> FaketandemSnapshot {
+        try action("/api/state/bolus/abort", deliveredUnits.map { ["delivered_units": $0] } ?? [:])
+    }
+
+    @discardableResult
+    func completeBolus() throws -> FaketandemSnapshot { try action("/api/state/bolus/complete") }
+
+    @discardableResult
+    func startTempBasal(percent: Int? = nil, rate: Double? = nil, durationMinutes: Int) throws -> FaketandemSnapshot {
+        var body: [String: Any] = ["duration_minutes": durationMinutes]
+        if let percent { body["percent"] = percent }
+        if let rate { body["rate"] = rate }
+        return try action("/api/state/tempbasal/start", body)
+    }
+
+    @discardableResult
+    func stopTempBasal() throws -> FaketandemSnapshot { try action("/api/state/tempbasal/stop") }
+
+    /// `reason` is `user`, `occlusion` or `alarm`.
+    @discardableResult
+    func suspend(reason: String = "user") throws -> FaketandemSnapshot {
+        try action("/api/state/suspend", ["reason": reason])
+    }
+
+    @discardableResult
+    func resume(clearAlarms: Bool? = nil) throws -> FaketandemSnapshot {
+        try action("/api/state/resume", clearAlarms.map { ["clear_alarms": $0] } ?? [:])
+    }
+
+    @discardableResult
+    func appendHistory(type: String, secondsAgo: Double, data: [String: Any]) throws -> FaketandemSnapshot {
+        try action("/api/state/history/append", ["type": type, "seconds_ago": secondsAgo, "data": data])
+    }
+
+    @discardableResult
+    func raiseQualifyingEvent(bitmask: UInt32) throws -> FaketandemSnapshot {
+        try action("/api/state/qualifyingevent", ["bitmask": Int(bitmask)])
+    }
+
+    // MARK: - Request log
+
+    func requestLog(since: Int? = nil) throws -> FaketandemLog {
+        try get(since.map { "/api/log?since=\($0)" } ?? "/api/log", as: FaketandemLog.self)
+    }
+
+    func clearRequestLog() throws {
+        _ = try send("DELETE", "/api/log")
+    }
+
+    // MARK: - Faults
+
+    func faults() throws -> [FaketandemFault] {
+        struct Body: Decodable { let faults: [FaketandemFault] }
+        return try get("/api/faults", as: Body.self).faults
+    }
+
+    @discardableResult
+    func armFault(_ spec: FaketandemFaultSpec) throws -> FaketandemFault? {
+        struct Body: Decodable { let fault: FaketandemFault? }
+        return try decode(send("POST", "/api/faults", json: spec.body), as: Body.self).fault
+    }
+
+    func clearFault(id: Int) throws {
+        _ = try send("DELETE", "/api/faults/\(id)")
+    }
+
+    func clearFaults() throws {
+        _ = try send("DELETE", "/api/faults")
+    }
+
+    // MARK: - Settings table (the pre-harness constant-response configuration)
+
+    /// `GET /api/settings/{messageType}`; the `value` map is what a constant-mode response carries.
+    func settingsValue(for messageType: String) throws -> [String: Any] {
+        let data = try send("GET", "/api/settings/\(messageType)")
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw FaketandemClientError.decoding("settings for \(messageType) is not an object")
+        }
+        return object["value"] as? [String: Any] ?? [:]
+    }
+
+    // MARK: - Plumbing
+
+    private func action(_ path: String, _ body: [String: Any] = [:]) throws -> FaketandemSnapshot {
+        try decode(send("POST", path, json: body), as: FaketandemSnapshot.self)
+    }
+
+    private func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {
+        try decode(send("GET", path), as: type)
+    }
+
+    private func decode<T: Decodable>(_ data: Data, as type: T.Type) throws -> T {
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw FaketandemClientError.decoding("\(error): \(String(decoding: data, as: UTF8.self))")
+        }
+    }
+
+    @discardableResult
+    func send(_ method: String, _ path: String, json: [String: Any]? = nil) throws -> Data {
+        guard let url = URL(string: path, relativeTo: apiBaseURL) else {
+            throw FaketandemClientError.transport("bad path \(path)")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        if let json {
+            request.httpBody = try JSONSerialization.data(withJSONObject: json)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+
+        let box = ResultBox<Result<(Data, HTTPURLResponse), Error>>()
+        session.dataTask(with: request) { data, response, error in
+            if let error {
+                box.set(.failure(error))
+            } else if let response = response as? HTTPURLResponse {
+                box.set(.success((data ?? Data(), response)))
+            } else {
+                box.set(.failure(FaketandemClientError.transport("no HTTP response")))
+            }
+        }.resume()
+
+        let (data, response): (Data, HTTPURLResponse)
+        do {
+            (data, response) = try box.wait("\(method) \(path)", timeout: requestTimeout + 5).get()
+        } catch let error as FaketandemClientError {
+            throw error
+        } catch {
+            throw FaketandemClientError.transport("\(method) \(path): \(error)")
+        }
+        guard (200 ..< 300).contains(response.statusCode) else {
+            throw FaketandemClientError.http(
+                status: response.statusCode,
+                path: path,
+                body: String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+        return data
+    }
+}
