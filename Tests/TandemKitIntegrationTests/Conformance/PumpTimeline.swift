@@ -12,6 +12,9 @@ import XCTest
 /// `pump_offset_seconds` skew applied, as on the wire); `pumpSeconds` is the same instant in
 /// seconds since the Tandem epoch.
 struct PumpTimeline {
+    /// 2008-01-01T00:00:00Z, the Tandem pump epoch (`pkg/state/pumptime.go` `tandemEpochUnix`).
+    static let tandemEpochUnix: TimeInterval = 1_199_145_600
+
     // MARK: - Records
 
     enum BolusEndReason: Int {
@@ -112,6 +115,17 @@ struct PumpTimeline {
     ) -> PumpTimeline {
         let entries = snapshot.history.entries.filter { $0.sequence > afterSequence }.sorted { $0.sequence < $1.sequence }
 
+        // Every instant is taken from pump-epoch seconds with the configured wire offset removed,
+        // never from the snapshot's formatted `time` strings: under `pump_offset_seconds` the
+        // emulator's harness/simulator paths (`AddHistoryLogEntryAt`) bake the offset into a
+        // record's `time` while the protocol path (`AppendHistory` with PumpTime 0) does not, and
+        // `last_bolus.end_time` / `bolus.start_time` are true instants while their `_pump_seconds`
+        // twins carry the offset. Pump seconds are consistent everywhere, so they are the source.
+        let offset = snapshot.clock.pumpOffsetSeconds
+        func instant(_ pumpSeconds: Int) -> Date {
+            Date(timeIntervalSince1970: Self.tandemEpochUnix + Double(pumpSeconds) - offset)
+        }
+
         var boluses: [Int: Bolus] = [:]
         var bolusOrder: [Int] = []
         var tempRates: [TempRate] = []
@@ -134,7 +148,7 @@ struct PumpTimeline {
                 boluses[id] = Bolus(
                     bolusId: id,
                     programmedUnits: data["bolusSize"]?.doubleValue ?? data["units"]?.doubleValue,
-                    start: entry.time,
+                    start: instant(entry.pumpTime),
                     startPumpSeconds: entry.pumpTime,
                     end: nil,
                     endPumpSeconds: nil,
@@ -157,7 +171,7 @@ struct PumpTimeline {
                     programmedUnits: existing?.programmedUnits ?? data["unitsTotal"]?.doubleValue,
                     start: existing?.start,
                     startPumpSeconds: existing?.startPumpSeconds,
-                    end: entry.time,
+                    end: instant(entry.pumpTime),
                     endPumpSeconds: entry.pumpTime,
                     deliveredUnits: data["unitsDelivered"]?.doubleValue,
                     endReason: reason,
@@ -177,9 +191,9 @@ struct PumpTimeline {
                     rate: rate,
                     percent: percent,
                     profileRate: profile,
-                    start: entry.time,
+                    start: instant(entry.pumpTime),
                     startPumpSeconds: entry.pumpTime,
-                    scheduledEnd: minutes.map { entry.time.addingTimeInterval($0 * 60) },
+                    scheduledEnd: minutes.map { instant(entry.pumpTime).addingTimeInterval($0 * 60) },
                     end: nil,
                     endPumpSeconds: nil
                 ))
@@ -200,7 +214,7 @@ struct PumpTimeline {
                     start: open.start,
                     startPumpSeconds: open.startPumpSeconds,
                     scheduledEnd: open.scheduledEnd,
-                    end: entry.time,
+                    end: instant(entry.pumpTime),
                     endPumpSeconds: entry.pumpTime
                 )
 
@@ -208,7 +222,7 @@ struct PumpTimeline {
                 // Harness path writes `reason` (user/occlusion/alarm); protocol path `reasonId`.
                 let reason = data["reason"]?.stringValue
                     ?? data["reasonId"]?.intValue.map { "reasonId \($0)" }
-                suspends.append(Suspend(reason: reason, start: entry.time, startPumpSeconds: entry.pumpTime, resumed: nil, resumedPumpSeconds: nil))
+                suspends.append(Suspend(reason: reason, start: instant(entry.pumpTime), startPumpSeconds: entry.pumpTime, resumed: nil, resumedPumpSeconds: nil))
 
             case "PumpingResumed":
                 if let index = suspends.lastIndex(where: { $0.resumed == nil }) {
@@ -217,7 +231,7 @@ struct PumpTimeline {
                         reason: open.reason,
                         start: open.start,
                         startPumpSeconds: open.startPumpSeconds,
-                        resumed: entry.time,
+                        resumed: instant(entry.pumpTime),
                         resumedPumpSeconds: entry.pumpTime
                     )
                 } else {
@@ -229,7 +243,7 @@ struct PumpTimeline {
                     alarmId: data["alarmId"]?.intValue,
                     reason: data["reason"]?.stringValue,
                     message: data["message"]?.stringValue,
-                    at: entry.time,
+                    at: instant(entry.pumpTime),
                     pumpSeconds: entry.pumpTime
                 ))
 
@@ -238,67 +252,51 @@ struct PumpTimeline {
             }
         }
 
-        // The live snapshot fills in what history cannot: a running bolus's start (the
-        // protocol-path BolusActivated has it too, but only while the record is inside the tail),
-        // and the last bolus's pump-side end and delivered volume.
-        if snapshot.bolus.active, let start = snapshot.bolus.startTime?.date {
-            let id = snapshot.bolus.bolusId
-            if boluses[id] == nil {
-                bolusOrder.append(id)
-                boluses[id] = Bolus(
-                    bolusId: id,
-                    programmedUnits: snapshot.bolus.unitsTotal,
-                    start: start,
-                    startPumpSeconds: snapshot.bolus.startPumpSeconds,
-                    end: nil,
-                    endPumpSeconds: nil,
-                    deliveredUnits: nil,
-                    endReason: nil,
-                    sourceId: snapshot.bolus.sourceId
-                )
-            }
+        // The live snapshot enriches what history cannot: a running bolus's pump-side start and the
+        // last bolus's end and delivered volume. It never adds a bolus on its own — both the
+        // protocol and the harness paths write BolusActivated, and `last_bolus` may well be a bolus
+        // from before `afterSequence`.
+        if snapshot.bolus.active, let startSeconds = snapshot.bolus.startPumpSeconds, let existing = boluses[snapshot.bolus.bolusId] {
+            boluses[snapshot.bolus.bolusId] = Bolus(
+                bolusId: existing.bolusId,
+                programmedUnits: existing.programmedUnits ?? snapshot.bolus.unitsTotal,
+                start: existing.start ?? instant(startSeconds),
+                startPumpSeconds: existing.startPumpSeconds ?? snapshot.bolus.startPumpSeconds,
+                end: nil,
+                endPumpSeconds: nil,
+                deliveredUnits: nil,
+                endReason: nil,
+                sourceId: existing.sourceId ?? snapshot.bolus.sourceId
+            )
         }
-        if let last = snapshot.lastBolus, var bolus = boluses[last.bolusId] ?? Optional(Bolus(
-            bolusId: last.bolusId,
-            programmedUnits: last.requestedUnits,
-            start: nil,
-            startPumpSeconds: nil,
-            end: last.endTime,
-            endPumpSeconds: last.endPumpSeconds,
-            deliveredUnits: last.deliveredUnits,
-            endReason: BolusEndReason(id: last.endReasonId),
-            sourceId: last.sourceId
-        )) {
-            if boluses[last.bolusId] == nil { bolusOrder.append(last.bolusId) }
-            if bolus.end != nil || boluses[last.bolusId] == nil {
-                bolus = Bolus(
-                    bolusId: bolus.bolusId,
-                    programmedUnits: bolus.programmedUnits ?? last.requestedUnits,
-                    start: bolus.start,
-                    startPumpSeconds: bolus.startPumpSeconds,
-                    end: bolus.end ?? last.endTime,
-                    endPumpSeconds: bolus.endPumpSeconds ?? last.endPumpSeconds,
-                    deliveredUnits: last.deliveredUnits,
-                    endReason: BolusEndReason(id: last.endReasonId),
-                    sourceId: bolus.sourceId ?? last.sourceId
-                )
-            }
-            boluses[last.bolusId] = bolus
+        if let last = snapshot.lastBolus, let existing = boluses[last.bolusId], existing.isFinished || !snapshot.bolus.active || snapshot.bolus.bolusId != last.bolusId {
+            boluses[last.bolusId] = Bolus(
+                bolusId: existing.bolusId,
+                programmedUnits: existing.programmedUnits ?? last.requestedUnits,
+                start: existing.start,
+                startPumpSeconds: existing.startPumpSeconds,
+                end: existing.end ?? instant(last.endPumpSeconds),
+                endPumpSeconds: existing.endPumpSeconds ?? last.endPumpSeconds,
+                deliveredUnits: last.deliveredUnits,
+                endReason: BolusEndReason(id: last.endReasonId),
+                sourceId: existing.sourceId ?? last.sourceId
+            )
         }
-        if snapshot.basal.tempActive, let start = snapshot.basal.tempStart?.date,
-           !tempRates.contains(where: { $0.start == start && !$0.isFinished })
+        if snapshot.basal.tempActive, let startSeconds = snapshot.basal.tempStartPumpSeconds,
+           let index = tempRates.lastIndex(where: { !$0.isFinished && abs($0.start.timeIntervalSince(instant(startSeconds))) < 1 })
         {
-            tempRates.append(TempRate(
-                tempRateId: snapshot.basal.tempRateId,
-                rate: snapshot.basal.tempRate,
-                percent: snapshot.basal.tempPercent,
-                profileRate: snapshot.basal.profileRate,
-                start: start,
-                startPumpSeconds: snapshot.basal.tempStartPumpSeconds ?? 0,
-                scheduledEnd: snapshot.basal.tempEnd?.date,
+            let open = tempRates[index]
+            tempRates[index] = TempRate(
+                tempRateId: open.tempRateId ?? snapshot.basal.tempRateId,
+                rate: open.rate ?? snapshot.basal.tempRate,
+                percent: open.percent ?? snapshot.basal.tempPercent,
+                profileRate: open.profileRate ?? snapshot.basal.profileRate,
+                start: open.start,
+                startPumpSeconds: open.startPumpSeconds,
+                scheduledEnd: open.scheduledEnd ?? snapshot.basal.tempEnd?.date,
                 end: nil,
                 endPumpSeconds: nil
-            ))
+            )
         }
 
         let connections = log.filter { $0.kind == "connection" }.compactMap { entry -> Connection? in

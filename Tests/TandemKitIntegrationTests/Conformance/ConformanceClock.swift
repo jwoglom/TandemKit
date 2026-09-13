@@ -9,9 +9,20 @@ import XCTest
 /// `TandemClock`. Keeping the two in lock-step is what makes a dose's start or end second exact
 /// instead of "within a tolerance", and lets a 30 minute temp basal expire in one call.
 ///
-/// `pumpOffsetSeconds` is the one deliberate difference: it skews every timestamp the pump puts on
-/// the wire (README "Clock") without moving delivery, for the clock-skew scenarios (plan D5).
+/// `pumpOffsetSeconds` skews every timestamp the pump puts on the wire (README "Clock") without
+/// moving delivery. Its default is not zero: a Tandem pump keeps its clock in **local time**, and
+/// TandemKit decodes every pump-epoch timestamp on that assumption
+/// (`Dates.fromJan12008ToUnixEpochSeconds` subtracts `TimeZone.current.secondsFromGMT()`), while
+/// faketandem stamps pump-epoch seconds from UTC. Left at zero, every wire timestamp the driver
+/// reads lands `secondsFromGMT` away from the pump's own record (four hours in EDT) — the same
+/// mismatch behind the timezone-dependent HistoryLog unit tests. `localTimeOffset` reproduces the
+/// real pump's convention; add a genuine skew on top of it for the clock-skew scenarios (plan D5).
 final class ConformanceClock {
+    /// The wire-time offset that makes the emulator report local time the way a real pump does.
+    static func localTimeOffset(at instant: Date = Date()) -> Double {
+        Double(TimeZone.current.secondsFromGMT(for: instant))
+    }
+
     let driver: ManualClock
     let client: FaketandemClient
     private(set) var pumpOffsetSeconds: Double = 0
@@ -26,12 +37,13 @@ final class ConformanceClock {
     var now: Date { driver.now }
 
     /// Puts the emulator in manual mode, frozen at `at`, and sets the driver to the same instant.
+    /// `skewSeconds` is added to the local-time offset: 0 is a pump whose clock is right.
     @discardableResult
-    func start(at instant: Date = Date(), frozen: Bool = true, pumpOffsetSeconds: Double = 0) throws -> Date {
+    func start(at instant: Date = Date(), frozen: Bool = true, skewSeconds: Double = 0) throws -> Date {
         // Whole seconds: the pump keeps time in seconds since its epoch, so a fractional instant
         // would make every "same second" comparison flaky.
         let aligned = Date(timeIntervalSinceReferenceDate: instant.timeIntervalSinceReferenceDate.rounded(.down))
-        self.pumpOffsetSeconds = pumpOffsetSeconds
+        pumpOffsetSeconds = Self.localTimeOffset(at: aligned) + skewSeconds
         self.frozen = frozen
         try client.setClock(mode: "manual", now: aligned, frozen: frozen, pumpOffsetSeconds: pumpOffsetSeconds)
         driver.set(aligned)
@@ -72,10 +84,10 @@ final class ConformanceClock {
         }
     }
 
-    /// Changes the pump's wire-time skew without moving either clock.
-    func setPumpOffset(seconds: Double) throws {
-        pumpOffsetSeconds = seconds
-        try client.setClock(mode: "manual", frozen: frozen, pumpOffsetSeconds: seconds)
+    /// Changes the pump's clock skew (on top of the local-time convention) without moving either clock.
+    func setSkew(seconds: Double) throws {
+        pumpOffsetSeconds = Self.localTimeOffset(at: driver.now) + seconds
+        try client.setClock(mode: "manual", frozen: frozen, pumpOffsetSeconds: pumpOffsetSeconds)
     }
 
     func pumpNow() throws -> Date {

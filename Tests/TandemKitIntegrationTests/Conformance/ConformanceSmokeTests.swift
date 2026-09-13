@@ -8,9 +8,12 @@ import XCTest
 /// middle.
 final class ConformanceSmokeTests: ConformanceTestCase {
     private static let units = 1.0
-    /// 0.1 U/s: a 1 U bolus takes 10 s of pump time, so it is still running at the first sync and
-    /// finished after one clock step.
-    private static let deliveryRate = 0.1
+    /// The pump delivers at the rate the driver's estimate assumes
+    /// (`TandemPumpCapabilities.estimatedBolusDuration`), so the driver's finalized `endDate` and
+    /// the pump's completion coincide: this test checks the rig, not end-date fidelity. Whether the
+    /// driver takes the end from the pump's record rather than its own estimate is a scenario
+    /// (plan A1, E), and it does not — at any other rate the timeline diff reports the end mismatch.
+    private static let deliveryRate = units / TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)
 
     func testBolusReportedWhileRunningAndFinalizedIsOneDoseInBothHosts() throws {
         let driver = try startPairedDriver()
