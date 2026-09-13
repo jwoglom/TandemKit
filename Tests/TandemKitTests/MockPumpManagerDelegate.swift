@@ -6,6 +6,10 @@ import XCTest
 /// Records the `PumpManagerDelegate` traffic the driver produces so tests can assert on what Loop
 /// would have been told. Every callback is recorded under `lock`, because the driver fires them
 /// from its own queues.
+///
+/// Two views of the same traffic: the per-kind arrays (`pumpEvents`, `statusUpdates`, ...) the unit
+/// tests read, and `journal`, an ordered record of every call with its position, wall time and the
+/// injected clock's time, which the conformance tests replay into a `DoseOracle` with `feed(_:)`.
 final class MockPumpManagerDelegate: PumpManagerDelegate {
     struct StatusUpdate {
         let newStatus: PumpManagerStatus
@@ -25,6 +29,42 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         let replacePendingEvents: Bool
     }
 
+    /// One delegate call in the order it arrived.
+    struct JournalEntry {
+        enum Kind {
+            case pumpEvents(PumpEventBatch)
+            case statusUpdate(StatusUpdate)
+            case didError(PumpManagerError)
+            case willDeactivate
+            case pumpWasReplaced
+            case issueAlert(Alert)
+            case retractAlert(Alert.Identifier)
+            case didAdjustPumpClock(by: TimeInterval)
+            case reservoirReading(ReservoirReading)
+            case didUpdateState
+            case didUpdatePumpRecordsBasalProfileStartEvents(Bool)
+            case didRequestBasalRateScheduleChange(BasalRateSchedule)
+            case bleHeartbeatDidFire
+        }
+
+        /// 0-based position in the journal.
+        let index: Int
+        /// `Date()` when the call was recorded.
+        let wallTime: Date
+        /// `journalClock.now` when the call was recorded, if a clock was injected. This is the
+        /// driver's idea of "now" — the instant its doses are dated against.
+        let clockTime: Date?
+        let kind: Kind
+
+        /// The time a host would have read as "now": the injected clock's, else the wall clock's.
+        var hostNow: Date { clockTime ?? wallTime }
+
+        var pumpEventBatch: PumpEventBatch? {
+            if case let .pumpEvents(batch) = kind { return batch }
+            return nil
+        }
+    }
+
     private let lock = NSLock()
 
     private var _statusUpdates: [StatusUpdate] = []
@@ -34,6 +74,11 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     private var _errors: [PumpManagerError] = []
     private var _didUpdateStateCount = 0
     private var _issuedAlerts: [Alert] = []
+    private var _retractedAlerts: [Alert.Identifier] = []
+    private var _willDeactivateCount = 0
+    private var _pumpWasReplacedCount = 0
+    private var _clockAdjustments: [TimeInterval] = []
+    private var _journal: [JournalEntry] = []
 
     private func synchronized<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -48,6 +93,19 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     var errors: [PumpManagerError] { synchronized { _errors } }
     var didUpdateStateCount: Int { synchronized { _didUpdateStateCount } }
     var issuedAlerts: [Alert] { synchronized { _issuedAlerts } }
+    var retractedAlerts: [Alert.Identifier] { synchronized { _retractedAlerts } }
+    var willDeactivateCount: Int { synchronized { _willDeactivateCount } }
+    var pumpWasReplacedCount: Int { synchronized { _pumpWasReplacedCount } }
+    var clockAdjustments: [TimeInterval] { synchronized { _clockAdjustments } }
+    var journal: [JournalEntry] { synchronized { _journal } }
+
+    /// When set, every journal entry also carries this clock's `now`. Give it the driver's clock.
+    var journalClock: TandemClock? {
+        get { synchronized { _journalClock } }
+        set { synchronized { _journalClock = newValue } }
+    }
+
+    private var _journalClock: TandemClock?
 
     /// Fulfilled on every `pumpManagerDidUpdateState`, when set.
     var didUpdateStateExpectation: XCTestExpectation?
@@ -69,6 +127,42 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         set { synchronized { _startDateToFilterNewPumpEvents = newValue } }
     }
 
+    // MARK: - Journal
+
+    /// Must be called with `lock` held.
+    private func record(_ kind: JournalEntry.Kind) {
+        _journal.append(JournalEntry(
+            index: _journal.count,
+            wallTime: Date(),
+            clockTime: _journalClock?.now,
+            kind: kind
+        ))
+    }
+
+    /// Journal entries that are `hasNewPumpEvents` calls, in order.
+    var pumpEventJournal: [JournalEntry] {
+        journal.filter { $0.pumpEventBatch != nil }
+    }
+
+    /// Replays every `hasNewPumpEvents` batch recorded so far into `oracle`, in order, dating each
+    /// with the driver clock's time at the call (or the wall time without a clock). Returns the
+    /// number of batches fed. Pass `after` to continue from a previous feed's last journal index.
+    @discardableResult
+    func feed(_ oracle: DoseOracle, after lastIndex: Int? = nil) -> Int {
+        var fed = 0
+        for entry in journal where entry.index > (lastIndex ?? -1) {
+            guard let batch = entry.pumpEventBatch else { continue }
+            oracle.addPumpEvents(
+                batch.events,
+                lastReconciliation: batch.lastReconciliation,
+                replacePendingEvents: batch.replacePendingEvents,
+                now: entry.hostNow
+            )
+            fed += 1
+        }
+        return fed
+    }
+
     // MARK: - DeviceManagerDelegate
 
     func deviceManager(
@@ -84,10 +178,18 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - AlertIssuer
 
     func issueAlert(_ alert: Alert) {
-        synchronized { _issuedAlerts.append(alert) }
+        synchronized {
+            _issuedAlerts.append(alert)
+            record(.issueAlert(alert))
+        }
     }
 
-    func retractAlert(identifier _: Alert.Identifier) {}
+    func retractAlert(identifier: Alert.Identifier) {
+        synchronized {
+            _retractedAlerts.append(identifier)
+            record(.retractAlert(identifier))
+        }
+    }
 
     // MARK: - PersistedAlertStore
 
@@ -114,23 +216,44 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - PumpManagerStatusObserver
 
     func pumpManager(_: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
-        synchronized { _statusUpdates.append(StatusUpdate(newStatus: status, oldStatus: oldStatus)) }
+        synchronized {
+            let update = StatusUpdate(newStatus: status, oldStatus: oldStatus)
+            _statusUpdates.append(update)
+            record(.statusUpdate(update))
+        }
     }
 
     // MARK: - PumpManagerDelegate
 
-    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {}
+    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {
+        synchronized { record(.bleHeartbeatDidFire) }
+    }
 
     func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool { false }
 
-    func pumpManagerWillDeactivate(_: PumpManager) {}
+    func pumpManagerWillDeactivate(_: PumpManager) {
+        synchronized {
+            _willDeactivateCount += 1
+            record(.willDeactivate)
+        }
+    }
 
-    func pumpManagerPumpWasReplaced(_: PumpManager) {}
+    func pumpManagerPumpWasReplaced(_: PumpManager) {
+        synchronized {
+            _pumpWasReplacedCount += 1
+            record(.pumpWasReplaced)
+        }
+    }
 
-    func pumpManager(_: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents _: Bool) {}
+    func pumpManager(_: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents value: Bool) {
+        synchronized { record(.didUpdatePumpRecordsBasalProfileStartEvents(value)) }
+    }
 
     func pumpManager(_: PumpManager, didError error: PumpManagerError) {
-        synchronized { _errors.append(error) }
+        synchronized {
+            _errors.append(error)
+            record(.didError(error))
+        }
     }
 
     func pumpManager(
@@ -141,12 +264,14 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         completion: @escaping (Error?) -> Void
     ) {
         synchronized {
-            _pumpEvents += events
-            _pumpEventBatches.append(PumpEventBatch(
+            let batch = PumpEventBatch(
                 events: events,
                 lastReconciliation: lastReconciliation,
                 replacePendingEvents: replacePendingEvents
-            ))
+            )
+            _pumpEvents += events
+            _pumpEventBatches.append(batch)
+            record(.pumpEvents(batch))
         }
         didReceivePumpEventsExpectation?.fulfill()
         completion(nil)
@@ -161,23 +286,36 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
             Error
         >) -> Void
     ) {
-        synchronized { _reservoirReadings.append(ReservoirReading(units: units, date: date)) }
+        synchronized {
+            let reading = ReservoirReading(units: units, date: date)
+            _reservoirReadings.append(reading)
+            record(.reservoirReading(reading))
+        }
         didReadReservoirExpectation?.fulfill()
         completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
     }
 
-    func pumpManager(_: PumpManager, didAdjustPumpClockBy _: TimeInterval) {}
+    func pumpManager(_: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) {
+        synchronized {
+            _clockAdjustments.append(adjustment)
+            record(.didAdjustPumpClock(by: adjustment))
+        }
+    }
 
     func pumpManagerDidUpdateState(_: PumpManager) {
-        synchronized { _didUpdateStateCount += 1 }
+        synchronized {
+            _didUpdateStateCount += 1
+            record(.didUpdateState)
+        }
         didUpdateStateExpectation?.fulfill()
     }
 
     func pumpManager(
         _: PumpManager,
-        didRequestBasalRateScheduleChange _: BasalRateSchedule,
+        didRequestBasalRateScheduleChange schedule: BasalRateSchedule,
         completion: @escaping (Error?) -> Void
     ) {
+        synchronized { record(.didRequestBasalRateScheduleChange(schedule)) }
         completion(nil)
     }
 
