@@ -68,8 +68,9 @@ API_URL="http://$FAKETANDEM_HOST:$API_PORT"
 
 # shellcheck disable=SC2206
 EXTRA_ARGS=(${FAKETANDEM_ARGS:-})
+# ${arr[@]+"${arr[@]}"}: an empty array is "unbound" under set -u in macOS's bash 3.2.
 "$LOG_DIR/faketandem" -transport virtual -virtual-addr "$GATT_ADDR" -api-addr "$FAKETANDEM_HOST:$API_PORT" \
-  -pumpx2-jar-path "$FAKETANDEM_JAR" "${EXTRA_ARGS[@]}" > "$LOG_DIR/faketandem.log" 2>&1 &
+  -pumpx2-jar-path "$FAKETANDEM_JAR" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} > "$LOG_DIR/faketandem.log" 2>&1 &
 FAKETANDEM_PID=$!
 
 cleanup() {
@@ -104,10 +105,19 @@ export TEST_RUNNER_FAKETANDEM_GATT="$GATT_ADDR"
 export TEST_RUNNER_FAKETANDEM_API_URL="$API_URL"
 
 RESULT_BUNDLE="$LOG_DIR/TandemKitIntegrationTests.xcresult"
-rm -rf "$RESULT_BUNDLE"
+rm -rf "$RESULT_BUNDLE" "$LOG_DIR/xcodebuild.log"
 
 set +e
-"$ROOT/scripts/test-local.sh" "$mode" -resultBundlePath "$RESULT_BUNDLE" "$@" 2>&1 | tee "$LOG_DIR/xcodebuild.log"
+if [[ "$mode" == "all" ]]; then
+  # Two xcodebuild runs cannot share one result bundle, so build without it.
+  "$ROOT/scripts/test-local.sh" build "$@" 2>&1 | tee "$LOG_DIR/xcodebuild.log"
+  status=${PIPESTATUS[0]}
+  if [[ $status -ne 0 ]]; then
+    exit "$status"
+  fi
+  mode=test
+fi
+"$ROOT/scripts/test-local.sh" "$mode" -resultBundlePath "$RESULT_BUNDLE" "$@" 2>&1 | tee -a "$LOG_DIR/xcodebuild.log"
 status=${PIPESTATUS[0]}
 set -e
 echo "result bundle: $RESULT_BUNDLE"

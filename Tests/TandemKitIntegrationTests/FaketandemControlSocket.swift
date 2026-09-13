@@ -5,10 +5,25 @@ import Foundation
 /// pump-side disconnect. Also records every event the emulator pushes, which is its BLE traffic and
 /// connection changes as seen from the pump.
 ///
-/// One socket is held open for the life of the harness: the server keeps a single client
-/// reference and clears it whenever any socket closes, so opening one per command would race the
-/// replies.
+/// One socket is held open for the life of the test process: the server keeps a single client
+/// reference and clears it whenever *any* socket closes, so a socket opened per test races the
+/// previous test's close and the replies go nowhere.
 final class FaketandemControlSocket {
+    private static let sharedLock = NSLock()
+    private static var shared: [URL: FaketandemControlSocket] = [:]
+
+    static func shared(apiBaseURL: URL) throws -> FaketandemControlSocket {
+        sharedLock.lock()
+        defer { sharedLock.unlock() }
+        if let existing = shared[apiBaseURL] {
+            return existing
+        }
+        let created = FaketandemControlSocket(apiBaseURL: apiBaseURL)
+        try created.open()
+        shared[apiBaseURL] = created
+        return created
+    }
+
     struct Event {
         let raw: [String: Any]
         var type: String? { raw["type"] as? String }
