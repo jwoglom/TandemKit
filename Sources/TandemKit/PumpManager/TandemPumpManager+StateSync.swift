@@ -277,7 +277,6 @@ extension TandemPumpManager {
                 holdForFinalization(dose)
                 events.append(NewPumpEvent.bolus(
                     dose: dose.toDoseEntry(isMutable: true),
-                    units: dose.value,
                     date: dose.startDate
                 ))
             } else {
@@ -596,11 +595,7 @@ extension TandemPumpManager {
         state.pendingBolusFinalization = nil
 
         var events = getActivePumpEvents()
-        events.append(NewPumpEvent.bolus(
-            dose: finalizedDose,
-            units: finalizedDose.deliveredUnits ?? 0,
-            date: pending.startDate
-        ))
+        events.append(NewPumpEvent.bolus(dose: finalizedDose, date: pending.startDate))
 
         state.lastReconciliation = now
         notifyDelegateStateUpdated()

@@ -46,7 +46,6 @@ class TandemDoseProgressReporter: DoseProgressReporter {
                 startDate: deliveryStartDate ?? dose.startDate,
                 endDate: endDate
             ),
-            units: delivered,
             // The event date stays the moment the bolus was programmed even when the dose starts
             // later: hosts key pump events on it, and moving it would report a second bolus.
             date: dose.startDate
