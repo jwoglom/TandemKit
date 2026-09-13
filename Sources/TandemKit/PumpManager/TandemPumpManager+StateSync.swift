@@ -254,19 +254,36 @@ extension TandemPumpManager {
             // Bolus is finished
             telemetryScheduler.cancelAll()
 
-            // Query the pump for actual delivered volume rather than assuming full delivery,
-            // and for its own timestamp rather than dating the bolus at this detection (#339).
+            // The pump's own timestamp dates the end of delivery, not this detection (#339).
             var lastBolus: LastBolusReport?
             if let bolusId = state.bolusDose?.bolusId {
                 lastBolus = queryLastBolusReport(bolusId: bolusId)
             }
 
+            let estimatedDelivered = min(max(progressReport.progress.deliveredUnits, 0), progressReport.total)
+
             var events = getActivePumpEvents()
-            events.append(progressReport.getPumpEvent(
-                actualDeliveredUnits: lastBolus?.deliveredUnits,
-                pumpTimestamp: lastBolus?.pumpTimestamp,
-                deliveryStartDate: state.bolusDose?.deliveryStartDate
-            ))
+            if let lastBolus {
+                events.append(progressReport.getPumpEvent(
+                    actualDeliveredUnits: lastBolus.deliveredUnits,
+                    pumpTimestamp: lastBolus.pumpTimestamp,
+                    deliveryStartDate: state.bolusDose?.deliveryStartDate
+                ))
+            } else if let dose = state.bolusDose {
+                // Unknown, not the programmed total: a bolus the pump stopped early would be
+                // recorded as fully delivered, and a finalized dose is never revised (#328).
+                logger.error("No delivered volume for finished bolus \(dose.bolusId ?? -1); keeping it mutable")
+                dose.deliveredUnits = estimatedDelivered
+                holdForFinalization(dose)
+                events.append(NewPumpEvent.bolus(
+                    dose: dose.toDoseEntry(isMutable: true),
+                    units: dose.value,
+                    date: dose.startDate
+                ))
+            } else {
+                // No dose to hold: the observed estimate is the only number there is.
+                events.append(progressReport.getPumpEvent(actualDeliveredUnits: estimatedDelivered))
+            }
 
             bolusProgressReport = nil
             state.bolusDose = nil
@@ -526,12 +543,27 @@ extension TandemPumpManager {
         }
     }
 
-    static let cancelledBolusFinalizationWindow: TimeInterval = .minutes(15)
+    static let bolusFinalizationWindow: TimeInterval = .minutes(15)
 
-    /// Closes out a bolus `cancelBolus` left mutable, with the pump's number or, past the window,
-    /// the estimate taken at the cancel — never a placeholder (#328).
-    func finalizePendingCancelledBolus(now: Date = .now) {
-        guard let pending = state.pendingCancelledBolus, let bolusId = pending.bolusId else {
+    /// Holds `dose` mutable, with `deliveredUnits` carrying the estimate to fall back on, until
+    /// the pump reports what it delivered (#328).
+    func holdForFinalization(_ dose: UnfinalizedDose, now: Date = .now) {
+        if let stale = state.pendingBolusFinalization, stale.bolusId != dose.bolusId {
+            // Only one is held at a time, so the older settles for its estimate now rather than
+            // staying mutable forever.
+            finalize(stale, pumpTimestamp: nil, now: now)
+        }
+
+        // Delivery has stopped; also the start of the retry window.
+        dose.estimatedEndDate = now
+        state.pendingBolusFinalization = dose
+    }
+
+    /// Closes out a bolus left mutable because its delivered volume was unknown, with the pump's
+    /// number or, past the window, the estimate taken when delivery ended — never a placeholder
+    /// (#328).
+    func finalizePendingBolus(now: Date = .now) {
+        guard let pending = state.pendingBolusFinalization, let bolusId = pending.bolusId else {
             return
         }
 
@@ -540,24 +572,28 @@ extension TandemPumpManager {
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
         if let lastBolus {
             pending.deliveredUnits = lastBolus.deliveredUnits
-        } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.cancelledBolusFinalizationWindow {
-            logger.warning("Pump still has no delivered volume for cancelled bolus \(bolusId); leaving it mutable")
+        } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.bolusFinalizationWindow {
+            logger.warning("Pump still has no delivered volume for bolus \(bolusId); leaving it mutable")
             return
         } else {
             logger.error(
-                "Giving up on the pump's delivered volume for cancelled bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
+                "Giving up on the pump's delivered volume for bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
             )
         }
 
+        finalize(pending, pumpTimestamp: lastBolus?.pumpTimestamp, now: now)
+    }
+
+    private func finalize(_ pending: UnfinalizedDose, pumpTimestamp: Date?, now: Date) {
         let finalizedDose = pending.toDoseEntry(endDate: BolusEndDate.resolve(
             startDate: pending.startDate,
             deliveryStartDate: pending.deliveryStartDate,
             deliveredUnits: pending.deliveredUnits,
-            pumpTimestamp: lastBolus?.pumpTimestamp,
+            pumpTimestamp: pumpTimestamp,
             detectedAt: now
         ))
 
-        state.pendingCancelledBolus = nil
+        state.pendingBolusFinalization = nil
 
         var events = getActivePumpEvents()
         events.append(NewPumpEvent.bolus(
