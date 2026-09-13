@@ -31,6 +31,7 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
 
     override func setUpWithError() throws {
         try super.setUpWithError()
+        try clearLeftoverDelivery()
         manualClock = ManualClock(Date())
         clock = ConformanceClock(driver: manualClock, client: harness.client)
         try clock.start()
@@ -47,6 +48,38 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         delegates = []
         clock = nil
         manualClock = nil
+    }
+
+    /// The emulator's reset leaves delivery alone, so a scenario that failed mid-dose would hand
+    /// its running bolus or temp rate to the next one — and, back on the real clock, that bolus
+    /// would finish inside the next scenario's history window. Done before the history and log
+    /// marks are taken, so what it writes stays out of this test's timeline.
+    ///
+    /// Raw `send` rather than the typed actions: the action endpoints answer `{"state": …}`, which
+    /// `FaketandemClient.action` decodes as a bare snapshot and rejects.
+    private func clearLeftoverDelivery() throws {
+        let snapshot = try harness.client.snapshot()
+        if snapshot.bolus.active {
+            try clearing("POST", "/api/state/bolus/abort")
+        }
+        if snapshot.basal.tempActive {
+            try clearing("POST", "/api/state/tempbasal/stop")
+        }
+        if snapshot.basal.suspended {
+            try clearing("POST", "/api/state/resume")
+        }
+    }
+
+    /// One clearing call, treating HTTP 409 as success. The emulator is back on its real clock by
+    /// the time this runs, so a leftover bolus can finish, or a temp rate expire, in the moment
+    /// between the snapshot that saw it and this request; the action endpoints answer 409 ("no
+    /// bolus is in progress") for exactly that, which is the state this wants anyway.
+    private func clearing(_ method: String, _ path: String) throws {
+        do {
+            try harness.client.send(method, path)
+        } catch let FaketandemClientError.http(status, _, _) where status == 409 {
+            return
+        }
     }
 
     // MARK: - Driver lifecycle
