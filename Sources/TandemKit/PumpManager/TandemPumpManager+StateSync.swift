@@ -526,6 +526,51 @@ extension TandemPumpManager {
         }
     }
 
+    static let cancelledBolusFinalizationWindow: TimeInterval = .minutes(15)
+
+    /// Closes out a bolus `cancelBolus` left mutable, with the pump's number or, past the window,
+    /// the estimate taken at the cancel — never a placeholder (#328).
+    func finalizePendingCancelledBolus(now: Date = .now) {
+        guard let pending = state.pendingCancelledBolus, let bolusId = pending.bolusId else {
+            return
+        }
+
+        // `LastBolusStatus` reports whatever the pump stored last, which mid-bolus may be a later
+        // bolus carrying the same id.
+        let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
+        if let lastBolus {
+            pending.deliveredUnits = lastBolus.deliveredUnits
+        } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.cancelledBolusFinalizationWindow {
+            logger.warning("Pump still has no delivered volume for cancelled bolus \(bolusId); leaving it mutable")
+            return
+        } else {
+            logger.error(
+                "Giving up on the pump's delivered volume for cancelled bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
+            )
+        }
+
+        let finalizedDose = pending.toDoseEntry(endDate: BolusEndDate.resolve(
+            startDate: pending.startDate,
+            deliveryStartDate: pending.deliveryStartDate,
+            deliveredUnits: pending.deliveredUnits,
+            pumpTimestamp: lastBolus?.pumpTimestamp,
+            detectedAt: now
+        ))
+
+        state.pendingCancelledBolus = nil
+
+        var events = getActivePumpEvents()
+        events.append(NewPumpEvent.bolus(
+            dose: finalizedDose,
+            units: finalizedDose.deliveredUnits ?? 0,
+            date: pending.startDate
+        ))
+
+        state.lastReconciliation = now
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
     /// What the pump reports about a bolus it has finished with.
     struct LastBolusReport {
         /// Delivered volume in units, at the pump's native milliunit resolution.

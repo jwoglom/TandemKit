@@ -1,6 +1,31 @@
 ## Reference material
 - See [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) and [KEY_FILES_REFERENCE.md](KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 
+## Comments
+**Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
+code in front of them still gets wrong without it. If there is no such thing, delete it.
+
+Never:
+- Narrate the code (`// Query the pump`, `// Clean up state`, `// Loop over the entries`).
+- Restate a signature, a type, or a name in prose. A doc comment that adds nothing to the name is
+  worse than none — it has to be maintained.
+- Explain the obvious half of a line to get to the useful half. Write only the useful half.
+- Pad. One line unless the reason genuinely needs two; never three.
+- Repeat in a comment what an adjacent log message, test name, or assertion message already says.
+
+Comment-worthy, in one line where possible:
+- A pump quirk, firmware race, or host behaviour being worked around.
+- The safety direction of a fallback — which way it biases IOB, and why that way.
+- Units, resolution, and whose clock a timestamp is on.
+- A non-obvious ordering or a rejected alternative that looks better than it is.
+- An issue number, when the motivation lives there. Often the issue number alone is the comment.
+
+Tests: the test name carries the behaviour. Comment only a setup line whose purpose is opaque
+(why *this* stub value, why state is poked directly).
+
+When editing existing code, delete comments that the edit made redundant. Leaving them is how they
+rot into lies.
+
 ## Message types by category
 
 ### Authentication

@@ -472,6 +472,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus(fromSync: true)
+            self.finalizePendingCancelledBolus()
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
@@ -672,10 +673,44 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Allow the Mobi to store the bolus in storage
             Thread.sleep(forTimeInterval: .seconds(2))
 
-            // Query the pump for the actual delivered volume and its own timestamp before
-            // clearing state
-            let lastBolus = self.queryLastBolusReport(bolusId: bolusId)
-            bolusDose.deliveredUnits = lastBolus?.deliveredUnits ?? 0
+            let estimatedDelivered = min(
+                max(self.bolusProgressReport?.progress.deliveredUnits ?? 0, 0),
+                bolusDose.value
+            )
+
+            self.telemetryScheduler.cancelAll()
+            self.bolusProgressReport = nil
+            self.state.bolusDose = nil
+
+            guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
+                // Unknown, not zero: finalizing at 0 would permanently erase the insulin that
+                // went in before the cancel (#328).
+                self.logger.error(
+                    "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
+                )
+                bolusDose.deliveredUnits = estimatedDelivered
+                // Also the start of the retry window.
+                bolusDose.estimatedEndDate = Date.now
+                self.state.pendingCancelledBolus = bolusDose
+
+                let mutableDose = bolusDose.toDoseEntry(isMutable: true)
+                var events = self.getActivePumpEvents()
+                events.append(NewPumpEvent.bolus(
+                    dose: mutableDose,
+                    // Same raw as the enact event, so this replaces that row rather than adding one.
+                    units: bolusDose.value,
+                    date: bolusDose.startDate
+                ))
+
+                self.state.lastReconciliation = Date.now
+                self.notifyDelegateStateUpdated()
+                self.emitPumpEvents(events)
+
+                completion(.success(mutableDose))
+                return
+            }
+
+            bolusDose.deliveredUnits = lastBolus.deliveredUnits
 
             // Not now: a cancel is only noticed here, while the insulin stopped going in when the
             // pump says it did (#339).
@@ -683,13 +718,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: lastBolus?.pumpTimestamp
+                pumpTimestamp: lastBolus.pumpTimestamp
             ))
-
-            // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
-            self.telemetryScheduler.cancelAll()
-            self.bolusProgressReport = nil
-            self.state.bolusDose = nil
 
             var events = self.getActivePumpEvents()
             events
@@ -704,7 +734,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(events)
 
-            completion(.success(nil))
+            completion(.success(canceledDose))
         }
     }
 
