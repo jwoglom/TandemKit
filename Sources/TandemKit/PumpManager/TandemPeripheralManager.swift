@@ -66,11 +66,11 @@ class TandemPeripheralManager {
         }
 
         /// Returns whether the response still needs packets.
-        func append(_ data: Data, authKey: Data) -> Bool {
+        func append(_ data: Data) -> Bool {
             lock.lock()
             defer { lock.unlock() }
             packetsReceived += 1
-            BTResponseParser.parse(data: data, characteristic: characteristic, authKey: authKey, response: &response)
+            BTResponseParser.parse(data: data, characteristic: characteristic, authKey: nil, response: &response)
             if !response.needsMorePacket {
                 group.leave(Data())
             }
@@ -98,8 +98,6 @@ class TandemPeripheralManager {
 
     private let writeSemaphore = DispatchSemaphore(value: 1)
     private var currentTxId: UInt8 = 0
-    // The key the in-flight write was signed with; only written under writeSemaphore.
-    private var responseAuthKey = Data()
 
     // Sized for the slowest command, not the typical one: EnterChangeCartridgeMode doesn't respond
     // until the cartridge is safe to remove, which takes 5-20s. Timing out early reports a failure
@@ -220,7 +218,6 @@ class TandemPeripheralManager {
         if requestProps.signed {
             authKey = pumpManager.state.pumpState.getAuthKey()
         }
-        responseAuthKey = authKey
 
         logger.info("Writing message: \(message.description)")
         for item in Packetize.parse(
@@ -362,7 +359,7 @@ extension TandemPeripheralManager: PumpPeripheralDelegate {
         }
 
         if let pending = writeQueue, pending.accepts(data, on: characteristic) {
-            if pending.append(Data(data), authKey: responseAuthKey) {
+            if pending.append(Data(data)) {
                 logger.info("Waiting for more data...")
             }
             return
