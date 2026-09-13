@@ -2,9 +2,8 @@ import Foundation
 import LoopKit
 
 public extension NewPumpEvent {
-    /// `raw` is keyed on the *programmed* amount, never the delivered one: it is the dose's
-    /// identity, and a finalized bolus that changed it would reach the host as a second dose
-    /// rather than as the one it already has (#328).
+    /// Keyed on the programmed amount: `raw` is the dose's identity, so finalizing must not
+    /// change it (#328).
     static func bolus(dose: DoseEntry, date: Date = Date.now) -> NewPumpEvent {
         let dateFormatter = ISO8601DateFormatter()
         return NewPumpEvent(

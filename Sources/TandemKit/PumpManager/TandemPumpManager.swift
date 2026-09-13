@@ -715,11 +715,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             ))
 
             var events = self.getActivePumpEvents()
-            // A zero delivery is reported, not retracted: Trio never purges mutable rows and only
-            // shrinks a stored bolus when a smaller amount arrives, so dropping the event leaves
-            // it holding the programmed amount forever (PumpHistoryStorage).
-            // bolusDose.startDate, not the dose's: the event keeps the date it was first reported
-            // under even when delivery started later.
+            // A zero delivery is reported, not retracted: Trio only shrinks a stored bolus when a
+            // smaller one arrives, so dropping the event leaves it at the programmed amount.
+            // bolusDose.startDate, not the dose's: the date it was first reported under.
             events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
 
             self.state.lastReconciliation = Date.now
