@@ -460,8 +460,8 @@ final class InterruptConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
         let timeline = try timeline()
-        // The protocol-path StopTempRate writes no TempRateCompleted record (emulator gap), so
-        // the first temp rate's true end is the second one's start, which the pump does record.
+        // The replacement closes the first temp rate at the instant it took over, so the pump's
+        // record has both: the first ended, the second running from that same second.
         let pumpSecond = timeline.tempRates.first { abs($0.start.timeIntervalSince(pumpSecondStart)) <= 2 }
         XCTAssertNotNil(pumpSecond, "the pump recorded the second temp rate's activation: \(timeline)")
 
