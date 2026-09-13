@@ -151,7 +151,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public convenience init(state: TandemPumpManagerState) {
-        self.init(state: state, bluetooth: TandemBluetoothManager())
+        self.init(state: state, bluetooth: TandemBluetoothManager(central: PumpCentralFactory.makeDefault()))
     }
 
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
