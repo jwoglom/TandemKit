@@ -158,7 +158,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public convenience init(state: TandemPumpManagerState) {
-        self.init(state: state, bluetooth: TandemBluetoothManager())
+        self.init(state: state, bluetooth: TandemBluetoothManager(central: PumpCentralFactory.makeDefault()))
     }
 
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
@@ -1188,7 +1188,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    func pairPump(code: String, peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
+    func pairPump(code: String, peripheral: PumpPeripheral, completion: @escaping (Error?) -> Void) {
         state.pumpState.pincode = code
         bluetooth.connect(peripheral, completion: completion)
     }
