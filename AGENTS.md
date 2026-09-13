@@ -1,6 +1,27 @@
 ## Reference material
 - See [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) and [KEY_FILES_REFERENCE.md](KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
 
+## Comments
+Comment only what the code cannot say for itself. A comment that restates the statement under it is
+noise: it costs a reader time, and it rots into a lie the first time the code changes without it.
+
+Do not write:
+- A comment that narrates the next line (`// Query the pump for the delivered volume` above
+  `queryLastBolusReport(...)`, `// Clean up state` above the assignments that clear it).
+- A doc comment that repeats the signature in prose.
+- Section banners over self-evident blocks.
+- Three lines where one carries the point. Say it once and stop.
+
+Do write, briefly:
+- Why, when the reason is not visible locally: a pump quirk, a host behaviour being worked around, a
+  deliberate ordering, a rejected alternative, a safety direction (which way an error biases IOB).
+- An issue reference for a fix whose motivation lives in that issue.
+- Units, resolutions, and clock ownership (pump time vs. driver time) where getting it wrong is
+  silent.
+
+This applies to tests too: name the behaviour in the test name, and use a comment only for why the
+scenario matters.
+
 ## Message types by category
 
 ### Authentication

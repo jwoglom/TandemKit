@@ -673,9 +673,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Allow the Mobi to store the bolus in storage
             Thread.sleep(forTimeInterval: .seconds(2))
 
-            // What the progress reporter had counted out by the time we cancelled. Only used if
-            // the pump never tells us what it actually delivered (see below); it is a rate-based
-            // estimate, not a measurement.
+            // A rate-based estimate, not a measurement: used only if the pump never reports what
+            // it actually delivered.
             let estimatedDelivered = min(
                 max(self.bolusProgressReport?.progress.deliveredUnits ?? 0, 0),
                 bolusDose.value
@@ -686,20 +685,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.bolusProgressReport = nil
             self.state.bolusDose = nil
 
-            // Query the pump for the actual delivered volume and its own timestamp.
             guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
-                // The read failed or answered for a different bolus, so how much of this bolus
-                // went in is unknown. Finalizing at 0 would be a guess in the unsafe direction:
-                // insulin the pump did push before the cancel would vanish from IOB, permanently,
-                // because a finalized dose is never revised (#328). Keep the dose mutable under
-                // the raw it was first reported with — the host keeps counting the programmed
-                // amount, the safe direction — and retry the read on the next sync.
+                // Unknown, not zero. Finalizing at 0 would permanently erase the insulin the pump
+                // pushed before the cancel, since a finalized dose is never revised (#328).
+                // Mutable keeps the host counting the programmed amount until the read succeeds.
                 self.logger.error(
                     "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
                 )
                 bolusDose.deliveredUnits = estimatedDelivered
-                // Delivery has stopped, so the dose no longer runs to its original estimated end.
-                // Doubles as the start of the retry window.
+                // Delivery has stopped; also the start of the retry window.
                 bolusDose.estimatedEndDate = Date.now
                 self.state.pendingCancelledBolus = bolusDose
 
@@ -707,8 +701,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 var events = self.getActivePumpEvents()
                 events.append(NewPumpEvent.bolus(
                     dose: mutableDose,
-                    // The programmed amount, as at enact: same raw, so this replaces the row the
-                    // host already has rather than inserting a second one.
+                    // Same raw as the enact event, so this replaces that row rather than adding one.
                     units: bolusDose.value,
                     date: bolusDose.startDate
                 ))

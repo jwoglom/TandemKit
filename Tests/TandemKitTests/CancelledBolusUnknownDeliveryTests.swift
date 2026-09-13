@@ -2,13 +2,9 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// A cancel whose delivered-volume read fails must not be finalized at 0 U (#328, P05-2).
-///
-/// Coercing an unknown delivery to zero is a guess in the unsafe direction: a bolus that had
-/// already pushed several units is recorded as having delivered nothing, and because the row is
-/// immutable nothing ever corrects it — the host's IOB drops by the amount that really went in.
-/// The dose is instead kept mutable under the raw it was first reported with and the read retried
-/// on later syncs.
+/// A cancel whose delivered-volume read fails must not be finalized at 0 U (#328, P05-2): a bolus
+/// that had already pushed several units would be recorded as having delivered nothing, and an
+/// immutable row is never corrected. It stays mutable and the read is retried on later syncs.
 @available(macOS 13.0, iOS 14.0, *) final class CancelledBolusUnknownDeliveryTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -74,8 +70,7 @@ import XCTest
         XCTAssertEqual(manager.state.bolusDose?.bolusId, Self.bolusId)
     }
 
-    /// Cancels, asserting only that the pump accepted it. The cancel path sleeps ~2s to let the
-    /// pump store the bolus before reading it back.
+    /// The cancel path sleeps ~2s to let the pump store the bolus before reading it back.
     @discardableResult
     private func cancelBolus() -> DoseEntry? {
         bluetooth.stub(CancelBolusRequest.self, with: CancelBolusResponse(
@@ -168,7 +163,7 @@ import XCTest
         XCTAssertEqual(manager.state.pendingCancelledBolus?.value, Self.programmedUnits)
     }
 
-    /// A held dose survives a relaunch, or the retry would be lost and the row left mutable forever.
+    /// A held dose survives a relaunch, or the row is left mutable forever.
     func testPendingCancelledBolusRoundTripsThroughRawState() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
@@ -210,9 +205,8 @@ import XCTest
         XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
     }
 
-    /// The dose cannot stay mutable forever. Once the retry window is out the driver settles for
-    /// the estimate it recorded at the cancel — which is still a number derived from delivery, not
-    /// a placeholder zero.
+    /// Once the retry window is out the driver settles for the estimate recorded at the cancel —
+    /// a number derived from delivery, not a placeholder zero.
     func testRetryGivesUpWithTheEstimateAfterTheWindow() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }

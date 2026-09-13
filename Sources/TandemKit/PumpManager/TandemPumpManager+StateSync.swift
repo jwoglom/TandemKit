@@ -527,26 +527,21 @@ extension TandemPumpManager {
     }
 
     /// How long the pump is given to report the delivered volume of a cancelled bolus before the
-    /// driver settles for its own estimate. Several sync cycles: the read normally succeeds on the
-    /// first retry, and every cycle the dose stays mutable is a cycle the host counts the full
-    /// programmed amount.
+    /// driver settles for its own estimate. Every cycle the dose stays mutable is a cycle the host
+    /// counts the full programmed amount.
     static let cancelledBolusFinalizationWindow: TimeInterval = .minutes(15)
 
-    /// Retries the delivered-volume read for a bolus that was cancelled while the pump was
-    /// unreachable, and finalizes the dose once it answers.
-    ///
-    /// `cancelBolus` leaves the dose mutable rather than finalizing it at a guessed 0 U (#328).
-    /// This is what eventually closes it out: the pump's own number when it arrives, and after
-    /// `cancelledBolusFinalizationWindow` the progress reporter's estimate from the moment of the
-    /// cancel — never a value the driver knows to be a placeholder.
+    /// Closes out a bolus `cancelBolus` left mutable because the pump never reported what it
+    /// delivered (#328): with the pump's own number when the retry succeeds, and after
+    /// `cancelledBolusFinalizationWindow` with the estimate recorded at the cancel — never with a
+    /// value the driver knows to be a placeholder.
     func finalizePendingCancelledBolus(now: Date = .now) {
         guard let pending = state.pendingCancelledBolus, let bolusId = pending.bolusId else {
             return
         }
 
-        // Not while another bolus is being tracked: `LastBolusStatus` reports whatever the pump
-        // stored last, and reading it mid-bolus risks matching a later bolus that happens to carry
-        // the same id. The window below still closes the dose out.
+        // `LastBolusStatus` reports whatever the pump stored last, so reading it mid-bolus risks
+        // matching a later bolus carrying the same id. The window below still closes the dose out.
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
         if let lastBolus {
             pending.deliveredUnits = lastBolus.deliveredUnits
@@ -554,8 +549,6 @@ extension TandemPumpManager {
             logger.warning("Pump still has no delivered volume for cancelled bolus \(bolusId); leaving it mutable")
             return
         } else {
-            // Out of retries. `deliveredUnits` still holds the estimate recorded at the cancel,
-            // which is what the dose is finalized with.
             logger.error(
                 "Giving up on the pump's delivered volume for cancelled bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
             )
