@@ -634,7 +634,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(
-                [NewPumpEvent.bolus(dose: doseEntry, units: units, date: dose.startDate)],
+                [NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)],
                 replacePendingEvents: false
             )
 
@@ -693,12 +693,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
                 var events = self.getActivePumpEvents()
-                events.append(NewPumpEvent.bolus(
-                    dose: mutableDose,
-                    // Same raw as the enact event, so this replaces that row rather than adding one.
-                    units: bolusDose.value,
-                    date: bolusDose.startDate
-                ))
+                events.append(NewPumpEvent.bolus(dose: mutableDose, date: bolusDose.startDate))
 
                 self.state.lastReconciliation = Date.now
                 self.notifyDelegateStateUpdated()
@@ -720,13 +715,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             ))
 
             var events = self.getActivePumpEvents()
-            events
-                .append(
-                    NewPumpEvent
-                        // bolusDose.startDate, not the dose's: the event keeps the date it was
-                        // first reported under even when delivery started later.
-                        .bolus(dose: canceledDose, units: canceledDose.deliveredUnits ?? 0, date: bolusDose.startDate)
-                )
+            // A zero delivery is reported, not retracted: Trio never purges mutable rows and only
+            // shrinks a stored bolus when a smaller amount arrives, so dropping the event leaves
+            // it holding the programmed amount forever (PumpHistoryStorage).
+            // bolusDose.startDate, not the dose's: the event keeps the date it was first reported
+            // under even when delivery started later.
+            events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
 
             self.state.lastReconciliation = Date.now
             self.notifyDelegateStateUpdated()
