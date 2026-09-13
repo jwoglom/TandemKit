@@ -9,7 +9,8 @@ public extension DoseEntry {
         activationType: BolusActivationType,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
-        endDate: Date? = nil
+        endDate: Date? = nil,
+        now: Date = Date.now
     ) -> DoseEntry {
         if let endDate = endDate {
             return DoseEntry(
@@ -29,7 +30,7 @@ public extension DoseEntry {
         return DoseEntry(
             type: .bolus,
             startDate: startDate,
-            endDate: Date.now.addingTimeInterval(duration),
+            endDate: now.addingTimeInterval(duration),
             value: units,
             unit: .units,
             deliveredUnits: deliveredUnits,

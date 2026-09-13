@@ -354,7 +354,7 @@ public final class HistoryLogFetcher {
     }
 
     private func handleStreamResponse(_ response: HistoryLogStreamResponse) {
-        let receivedAt = Date()
+        let receivedAt = pumpManager?.now ?? Date()
 
         lock.lock()
         guard fetchActive else {

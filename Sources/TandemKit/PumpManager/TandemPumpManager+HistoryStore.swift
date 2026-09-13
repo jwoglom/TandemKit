@@ -16,7 +16,8 @@ extension TandemPumpManager {
 
     /// Inserts streamed logs into the session store (idempotently — re-streamed chunks are
     /// ignored by contract) and opportunistically applies retention.
-    func storeHistoryLogs(_ logs: [HistoryLog], now: Date = Date()) {
+    func storeHistoryLogs(_ logs: [HistoryLog], now: Date? = nil) {
+        let now = now ?? self.now
         guard !logs.isEmpty, let serial = historyLogStoreSerial else {
             return
         }
@@ -33,7 +34,8 @@ extension TandemPumpManager {
     /// Applies the retention policy at most once per `historyLogPruneInterval`. Piggybacked on
     /// the insert path rather than a timer: a store that nothing feeds can't grow, so there is
     /// nothing to prune between inserts.
-    func pruneHistoryLogStoreIfNeeded(now: Date = Date()) {
+    func pruneHistoryLogStoreIfNeeded(now: Date? = nil) {
+        let now = now ?? self.now
         guard let serial = historyLogStoreSerial else {
             return
         }

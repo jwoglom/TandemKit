@@ -55,7 +55,8 @@ final class HistoryBackfillCoordinator {
     /// - Parameter completion: Called once the tick finishes, or with nil if it did no work
     ///   (no serial yet, no status, or another reader holds the history stream). Fires on an
     ///   unspecified queue.
-    func runTick(now: Date = Date(), completion: ((TickOutcome?) -> Void)? = nil) {
+    func runTick(now: Date? = nil, completion: ((TickOutcome?) -> Void)? = nil) {
+        let now = now ?? pumpManager?.now ?? Date()
         guard pumpManager?.state.featureFlags.historyBackfill == true else {
             // Off means off: no status read, no walk, no bookkeeping. Nothing here is a dry run
             // — a watermark written for entries that were never read would mark them read and
