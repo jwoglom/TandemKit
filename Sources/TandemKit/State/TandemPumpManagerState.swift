@@ -58,6 +58,12 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
+    /// A bolus the driver cancelled but could not get a delivered volume for, held until the pump
+    /// answers. `deliveredUnits` carries the progress reporter's time-based estimate at the moment
+    /// of the cancel, and `estimatedEndDate` the moment of the cancel itself, which bounds how long
+    /// the read is retried. Persisted so a relaunch during the retry window still finalizes the
+    /// dose rather than leaving a mutable row behind.
+    public var pendingCancelledBolus: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     /// Basal min/max alerts are auto-acknowledged unconditionally: oref routinely sets a zero
@@ -245,6 +251,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             bolusDose = UnfinalizedDose(rawValue: bolusDoseRaw)
         } else {
             bolusDose = nil
+        }
+
+        if let pendingCancelledBolusRaw = rawValue["pendingCancelledBolus"] as? UnfinalizedDose.RawValue {
+            pendingCancelledBolus = UnfinalizedDose(rawValue: pendingCancelledBolusRaw)
+        } else {
+            pendingCancelledBolus = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -442,6 +454,10 @@ public struct TandemPumpManagerState: RawRepresentable {
 
         if let bolusDose {
             raw["bolusDose"] = bolusDose.rawValue
+        }
+
+        if let pendingCancelledBolus {
+            raw["pendingCancelledBolus"] = pendingCancelledBolus.rawValue
         }
 
         return raw
