@@ -10,7 +10,7 @@ extension TandemPumpManager {
 
         let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
-        let checkedAt = Date.now
+        let checkedAt = now
 
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
@@ -52,7 +52,7 @@ extension TandemPumpManager {
 
         let reportedTotalDailyInsulin = response.getTotalDailyInsulin()
         state.controlIQTotalDailyInsulin = reportedTotalDailyInsulin == 0 ? nil : reportedTotalDailyInsulin
-        state.lastControlIQUpdate = Date.now
+        state.lastControlIQUpdate = now
 
         notifyDelegateStateUpdated()
     }
@@ -82,7 +82,7 @@ extension TandemPumpManager {
     /// Stores the session state from a CGM status response, whatever triggered the read.
     func updateCGMSessionState(from response: CGMStatusV2Response) {
         state.cgmSessionState = response.sessionState
-        state.lastCGMStatusUpdate = Date.now
+        state.lastCGMStatusUpdate = now
 
         notifyDelegateStateUpdated()
     }
@@ -145,7 +145,7 @@ extension TandemPumpManager {
             }
 
             logger.debug("Updating new basal dose: \(activeBasalType)")
-            let now = Date.now
+            let now = self.now
             var events = getActivePumpEvents(endDate: now)
 
             if activeBasalType == .suspend {
@@ -156,7 +156,7 @@ extension TandemPumpManager {
                 ))
 
                 state.basalDose = dose
-                state.lastReconciliation = Date.now
+                state.lastReconciliation = now
 
                 emitPumpEvents(events)
                 notifyDelegateStateUpdated()
@@ -178,7 +178,7 @@ extension TandemPumpManager {
                     state.basalDose = dose
                 }
 
-                state.lastReconciliation = Date.now
+                state.lastReconciliation = now
 
                 emitPumpEvents(events)
                 notifyDelegateStateUpdated()
@@ -191,7 +191,8 @@ extension TandemPumpManager {
 
     /// Defer to event-driven bolus tracking only while the bolus should still be delivering —
     /// a bolusChange event lost to a disconnect is never replayed, so sync must reconcile if past the grace time.
-    func shouldDeferBolusSync(at date: Date = .now) -> Bool {
+    func shouldDeferBolusSync(at date: Date? = nil) -> Bool {
+        let date = date ?? now
         guard let bolusDose = state.bolusDose else {
             return false
         }
@@ -234,7 +235,7 @@ extension TandemPumpManager {
                 dose.recordDeliveryStart(response.timestampDate)
 
                 // Recalculate endDate of the bolus
-                dose.estimatedEndDate = Date.now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
+                dose.estimatedEndDate = now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
 
                 state.bolusDose = dose
                 state.bolusState = .inProgress(dose.toDoseEntry(isMutable: true))
@@ -287,7 +288,7 @@ extension TandemPumpManager {
             bolusProgressReport = nil
             state.bolusDose = nil
             state.bolusState = .noBolus
-            state.lastReconciliation = Date.now
+            state.lastReconciliation = now
             notifyDelegateStateUpdated()
 
             emitPumpEvents(events)
@@ -337,7 +338,7 @@ extension TandemPumpManager {
         }
 
         state.notificationCount = notificationBundle.getNotificationCount()
-        state.lastNotificationUpdate = Date.now
+        state.lastNotificationUpdate = now
         notifyDelegateStateUpdated()
 
         reconcileLoopKitAlerts()
@@ -426,7 +427,7 @@ extension TandemPumpManager {
             return nil
         }
 
-        let timestamp = Date.now
+        let timestamp = now
         let units = Double(response.currentInsulinAmount)
         let reservoirValue = SimpleReservoirValue(startDate: timestamp, unitVolume: units)
 
@@ -492,7 +493,7 @@ extension TandemPumpManager {
         logger.debug("Battery updated: \(response.batteryPercent)% remaining, charging=\(response.isCharging)")
 
         state.lastBatteryReading = TandemPumpManagerState.BatteryReading(
-            date: Date.now,
+            date: now,
             chargeRemaining: Double(response.batteryPercent) / 100.0,
             isCharging: response.isCharging
         )
@@ -506,7 +507,7 @@ extension TandemPumpManager {
 
         let basalType = basalIcon.type
         if basalType != state.basalDose.type {
-            let now = Date.now
+            let now = self.now
             var events = getActivePumpEvents(endDate: now)
             var dose: UnfinalizedDose
 
@@ -546,7 +547,8 @@ extension TandemPumpManager {
 
     /// Holds `dose` mutable, with `deliveredUnits` carrying the estimate to fall back on, until
     /// the pump reports what it delivered (#328).
-    func holdForFinalization(_ dose: UnfinalizedDose, now: Date = .now) {
+    func holdForFinalization(_ dose: UnfinalizedDose, now: Date? = nil) {
+        let now = now ?? self.now
         if let stale = state.pendingBolusFinalization, stale.bolusId != dose.bolusId {
             // Only one is held at a time, so the older settles for its estimate now rather than
             // staying mutable forever.
@@ -561,7 +563,8 @@ extension TandemPumpManager {
     /// Closes out a bolus left mutable because its delivered volume was unknown, with the pump's
     /// number or, past the window, the estimate taken when delivery ended — never a placeholder
     /// (#328).
-    func finalizePendingBolus(now: Date = .now) {
+    func finalizePendingBolus(now: Date? = nil) {
+        let now = now ?? self.now
         guard let pending = state.pendingBolusFinalization, let bolusId = pending.bolusId else {
             return
         }
@@ -584,13 +587,16 @@ extension TandemPumpManager {
     }
 
     private func finalize(_ pending: UnfinalizedDose, pumpTimestamp: Date?, now: Date) {
-        let finalizedDose = pending.toDoseEntry(endDate: BolusEndDate.resolve(
-            startDate: pending.startDate,
-            deliveryStartDate: pending.deliveryStartDate,
-            deliveredUnits: pending.deliveredUnits,
-            pumpTimestamp: pumpTimestamp,
-            detectedAt: now
-        ))
+        let finalizedDose = pending.toDoseEntry(
+            endDate: BolusEndDate.resolve(
+                startDate: pending.startDate,
+                deliveryStartDate: pending.deliveryStartDate,
+                deliveredUnits: pending.deliveredUnits,
+                pumpTimestamp: pumpTimestamp,
+                detectedAt: now
+            ),
+            now: now
+        )
 
         state.pendingBolusFinalization = nil
 

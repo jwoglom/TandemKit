@@ -24,15 +24,13 @@ public class UnfinalizedDose {
         duration: TimeInterval,
         activationType: BolusActivationType,
         insulinType: InsulinType?,
-        bolusId: Int
+        bolusId: Int,
+        now: Date = Date.now
     ) {
-        var estimatedEndDate = Date.now
-        estimatedEndDate.addTimeInterval(duration)
-
         type = .bolus
         value = units
-        startDate = Date.now
-        self.estimatedEndDate = estimatedEndDate
+        startDate = now
+        estimatedEndDate = now.addingTimeInterval(duration)
         self.insulinType = insulinType
         automatic = activationType.isAutomatic
         self.bolusId = bolusId
@@ -47,10 +45,16 @@ public class UnfinalizedDose {
         automatic = false
     }
 
-    public init(tempRate: Double, duration: TimeInterval, automatic: Bool, insulinType: InsulinType?) {
+    public init(
+        tempRate: Double,
+        duration: TimeInterval,
+        automatic: Bool,
+        insulinType: InsulinType?,
+        startDate: Date = Date.now
+    ) {
         type = .tempBasal
         value = tempRate
-        startDate = Date.now
+        self.startDate = startDate
         self.insulinType = insulinType
         estimatedEndDate = startDate.addingTimeInterval(duration)
         self.automatic = automatic
@@ -164,13 +168,19 @@ public class UnfinalizedDose {
         return raw
     }
 
-    public func toDoseEntry(isMutable: Bool = false, useEstimatedEndDate: Bool = false, endDate: Date = Date.now) -> DoseEntry {
+    public func toDoseEntry(
+        isMutable: Bool = false,
+        useEstimatedEndDate: Bool = false,
+        endDate: Date? = nil,
+        now: Date = Date.now
+    ) -> DoseEntry {
+        let endDate = endDate ?? now
         switch type {
         case .bolus:
             var endDate = isMutable || useEstimatedEndDate ? estimatedEndDate : endDate
-            if useEstimatedEndDate, endDate > Date.now {
+            if useEstimatedEndDate, endDate > now {
                 // The endDate of a bolus cannot be in the future...
-                endDate = Date.now
+                endDate = now
             }
 
             return DoseEntry(
@@ -233,8 +243,11 @@ public class UnfinalizedDose {
         TandemPumpCapabilities.supportedBasalRates.last(where: { $0 <= rate }) ?? 0
     }
 
-    public static func defaultBasalDose(basalSchedule: BasalRateSchedule, insulineType: InsulinType?) -> UnfinalizedDose {
-        let now = Date()
+    public static func defaultBasalDose(
+        basalSchedule: BasalRateSchedule,
+        insulineType: InsulinType?,
+        now: Date = Date()
+    ) -> UnfinalizedDose {
         let startOfDay = Calendar.current.startOfDay(for: now)
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
@@ -242,7 +255,7 @@ public class UnfinalizedDose {
         return UnfinalizedDose(
             basalRate: currentRate,
             insulinType: insulineType,
-            startDate: Date.now
+            startDate: now
         )
     }
 }

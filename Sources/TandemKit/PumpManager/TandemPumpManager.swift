@@ -17,6 +17,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     let bluetooth: PumpBluetoothConnection
 
+    /// Every time-dependent decision below reads `now` rather than the wall clock, so tests can
+    /// drive the finalization window, the sync throttle and dose dates without waiting.
+    /// Set it before any dose work; nothing re-reads a date it has already stamped.
+    var clock: TandemClock
+
+    var now: Date { clock.now }
+
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
@@ -156,10 +163,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
     /// without CoreBluetooth; production goes through `init(state:)`.
-    init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection) {
+    init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection, clock: TandemClock = SystemClock()) {
         self.state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
+        self.clock = clock
         bluetooth.pumpManager = self
 
         // Every history log that streams in — telemetry, viewer fetches, probes — lands in the
@@ -395,8 +403,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         logger.info("Sync pump data...")
 
-        if let lastSync = state.lastReconciliation, Date.now.timeIntervalSince(lastSync) < .minutes(4.5) {
-            logger.warning("State already in sync: \(Date.now.timeIntervalSince(lastSync)) sec")
+        if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5) {
+            logger.warning("State already in sync: \(now.timeIntervalSince(lastSync)) sec")
             completion?(lastSync)
             return
         }
@@ -451,7 +459,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let responsesBefore = self.bluetooth.responseCount
 
             let lastSettingsCheckedAt = self.state.lastSettingsCheckedAt
-            if lastSettingsCheckedAt == nil || Date.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
+            if lastSettingsCheckedAt == nil || self.now.timeIntervalSince(lastSettingsCheckedAt!) > .hours(24) {
                 self.fetchControlIQStatus()
                 self.fetchDeliveryLimits()
                 self.fetchGlobalPumpSettings()
@@ -460,7 +468,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 // Same reason as lastSync below: stamping this after a pump that answered nothing
                 // would suppress the next attempt for 24 hours.
                 if self.bluetooth.responseCount > responsesBefore {
-                    self.state.lastSettingsCheckedAt = Date.now
+                    self.state.lastSettingsCheckedAt = self.now
                 }
             } else if !self.state.featureFlags.quickBolusButtonSupport {
                 // The quick bolus button is confirmed off every cycle, which needs a fresh read.
@@ -481,7 +489,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // A connected link is not a working one: a session can stay up while every read times
             // out, and advancing lastSync then promises Loop a reconciliation that never happened.
             if self.bluetooth.responseCount > responsesBefore {
-                self.state.lastReconciliation = Date.now
+                self.state.lastReconciliation = self.now
 
                 // Nothing above emits on a steady-state cycle.
                 self.reportReconciliationBoundary()
@@ -619,7 +627,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 duration: self.estimatedDuration(toBolus: units) + TandemPumpCapabilities.bolusInitiationDelay,
                 activationType: activationType,
                 insulinType: self.state.insulinType,
-                bolusId: permissionResponse.bolusId
+                bolusId: permissionResponse.bolusId,
+                now: self.now
             )
 
             let doseEntry = dose.toDoseEntry(isMutable: true)
@@ -631,7 +640,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.state.bolusDose = dose
             self.state.bolusState = .initiating
-            self.state.lastReconciliation = Date.now
+            self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(
                 [NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)],
@@ -695,7 +704,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 var events = self.getActivePumpEvents()
                 events.append(NewPumpEvent.bolus(dose: mutableDose, date: bolusDose.startDate))
 
-                self.state.lastReconciliation = Date.now
+                self.state.lastReconciliation = self.now
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
 
@@ -720,7 +729,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // bolusDose.startDate, not the dose's: the date it was first reported under.
             events.append(NewPumpEvent.bolus(dose: canceledDose, date: bolusDose.startDate))
 
-            self.state.lastReconciliation = Date.now
+            self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(events)
 
@@ -797,14 +806,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
-                    startDate: Date.now
+                    startDate: self.now
                 )
-                
+
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
                 self.state.basalDose = dose
-                self.state.lastReconciliation = Date.now
+                self.state.lastReconciliation = self.now
                 
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
@@ -834,6 +843,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 duration: duration,
                 automatic: true,
                 insulinType: self.state.insulinType,
+                startDate: self.now
             )
             var events = self.getActivePumpEvents(endDate: dose.startDate)
             events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
@@ -884,12 +894,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let suspendDose = UnfinalizedDose(suspendStartTime: Date.now)
+            let suspendDose = UnfinalizedDose(suspendStartTime: self.now)
             var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
             events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
             self.state.basalDose = suspendDose
-            self.state.lastReconciliation = Date.now
+            self.state.lastReconciliation = self.now
 
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(events)
@@ -965,13 +975,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
 
         let dose = UnfinalizedDose(
-            resumeStartTime: Date.now,
+            resumeStartTime: now,
             insulinType: state.insulinType
         )
         let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
 
         state.basalDose = dose
-        state.lastReconciliation = Date.now
+        state.lastReconciliation = now
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
@@ -1119,7 +1129,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Tracks the date in state and reports a site-change pump event to the host app via the delegate.
     /// `primeAmount`, when given, is the prime volume in units that was just delivered; it is
     /// remembered so the fill cannula wizard can pre-fill it next time.
-    func recordSiteChange(at date: Date = Date.now, primeAmount: Double? = nil) {
+    func recordSiteChange(at date: Date? = nil, primeAmount: Double? = nil) {
+        let date = date ?? now
         logger.info("Recording site change (cannula fill) at \(date)")
         state.lastSiteChangeDate = date
         if let primeAmount {
@@ -1131,7 +1142,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// Records a cartridge / reservoir change. Call after the user successfully changes the cartridge.
     /// Tracks the date in state and reports the change as a pump event to the host app via the delegate.
-    func recordCartridgeChange(at date: Date = Date.now) {
+    func recordCartridgeChange(at date: Date? = nil) {
+        let date = date ?? now
         logger.info("Recording cartridge change at \(date)")
         state.lastCartridgeChangeDate = date
         notifyDelegateStateUpdated()
@@ -1148,7 +1160,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let epoch = Dates.fromInstantToJan12008EpochSeconds(Date.now)
+            let epoch = Dates.fromInstantToJan12008EpochSeconds(self.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
             guard let response = self.bluetooth.write(request) else {
@@ -1386,13 +1398,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 let dose = UnfinalizedDose(
                     basalRate: self.getScheduledBasalRate(),
                     insulinType: self.state.insulinType,
-                    startDate: Date.now
+                    startDate: self.now
                 )
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
 
                 self.state.basalDose = dose
-                self.state.lastReconciliation = Date.now
+                self.state.lastReconciliation = self.now
                 self.notifyDelegateStateUpdated()
                 self.emitPumpEvents(events)
             }
@@ -1775,7 +1787,7 @@ extension TandemPumpManager {
             return []
         }
 
-        let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? Date.now)
+        let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? now, now: now)
         var events = [
             NewPumpEvent.tempBasal(
                 dose: basalEntry,
@@ -1900,7 +1912,7 @@ extension TandemPumpManager {
             return 0
         }
 
-        let now = Date.now
+        let now = self.now
         let startOfDay = Calendar.current.startOfDay(for: now)
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 

@@ -26,8 +26,9 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         actualDeliveredUnits delivered: Double,
         pumpTimestamp: Date? = nil,
         deliveryStartDate: Date? = nil,
-        detectedAt: Date = .now
+        detectedAt: Date? = nil
     ) -> NewPumpEvent {
+        let detectedAt = detectedAt ?? pumpManager.now
         // The pump's window, not ours: neither end of it is the moment we noticed (#339).
         let endDate = BolusEndDate.resolve(
             startDate: dose.startDate,
@@ -68,11 +69,11 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         guard let bolusStatedOn else {
             // First time pump switched to delivering state
             // Just record the timestamp for now
-            bolusStatedOn = Date.now
+            bolusStatedOn = pumpManager.now
             return
         }
 
-        let runningFor = TimeInterval(seconds: Date.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
+        let runningFor = TimeInterval(seconds: pumpManager.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
 
         let unitsDeliveredPerSec = if total < 10 {
             TandemPumpCapabilities.bolusSpeedUnder10U
