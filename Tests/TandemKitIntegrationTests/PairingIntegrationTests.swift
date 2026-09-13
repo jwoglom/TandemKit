@@ -2,13 +2,6 @@
 import XCTest
 
 final class PairingIntegrationTests: FaketandemIntegrationTestCase {
-    /// faketandem spawns pumpX2's jpake-server through goexpect, whose goterm `OpenPTY` issues the
-    /// Linux-only `TIOCSPTLCK` ioctl; on macOS `/dev/ptmx` answers ENOTTY ("inappropriate ioctl for
-    /// device"), the handler fails and `Jpake1aRequest` is never answered. Strict: once the
-    /// emulator is fixed this reports "expected failure did not occur" and the wrapper goes.
-    private static let freshPairingGap =
-        "faketandem: pumpX2 jpake-server cannot be spawned on macOS (goterm OpenPTY TIOCSPTLCK); Jpake1aRequest goes unanswered"
-
     private var authRequests: [(opcode: Int, message: String, characteristic: String)] {
         get throws {
             try harness.requestsSeen().filter { $0.characteristic == "Authorization" }
@@ -21,17 +14,14 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
 
         let error = try harness.pair(driver, with: scan)
 
-        XCTExpectFailure(Self.freshPairingGap) {
-            XCTAssertNil(error, "pairPump failed: \(String(describing: error))")
-        }
-        guard error == nil else {
-            // The exchange as the pump saw it: round 1a arrived and nothing went back.
+        if let error {
+            // The exchange as the pump saw it, so "the pump never answered" and "the driver
+            // ignored the answer" stay distinguishable.
             let seen = try authRequests
-            XCTAssertEqual(seen.map(\.message), ["Jpake1aRequest"], "\(seen)")
-            let responses = try harness.requestLog().filter { $0.isResponse && $0.characteristic == "Authorization" }
-            XCTAssertTrue(responses.isEmpty, "the pump answered after all: \(responses)")
-            XCTAssertFalse(try harness.client.snapshot().auth.authenticated)
-            return
+            let answered = try harness.requestLog().filter { $0.isResponse && $0.characteristic == "Authorization" }
+            return XCTFail(
+                "pairPump failed: \(error); pump saw \(seen.map(\.message)) and answered \(answered.map { $0.message ?? "?" })"
+            )
         }
 
         let pumpState = driver.manager.state.pumpState
@@ -75,13 +65,11 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
         let snapshot = try harness.client.snapshot()
         XCTAssertFalse(snapshot.auth.authenticated)
         XCTAssertFalse(snapshot.auth.longTermKeyPresent, "a failed pairing must not cache a key")
-        XCTExpectFailure(Self.freshPairingGap) {
-            let responses = try? harness.requestLog().filter { $0.isResponse && $0.characteristic == "Authorization" }
-            XCTAssertFalse(
-                responses?.isEmpty ?? true,
-                "the refusal must come from the pump having run JPAKE, not from silence"
-            )
-        }
+        let responses = try harness.requestLog().filter { $0.isResponse && $0.characteristic == "Authorization" }
+        XCTAssertFalse(
+            responses.isEmpty,
+            "the refusal must come from the pump having run JPAKE, not from silence"
+        )
     }
 
     /// The post-pairing state staged directly (the same key on both sides), then a connect that
