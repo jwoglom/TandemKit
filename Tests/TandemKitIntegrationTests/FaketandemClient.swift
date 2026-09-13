@@ -569,8 +569,15 @@ final class FaketandemClient {
 
     // MARK: - Plumbing
 
+    /// Every pump-initiated action answers `{"state": <snapshot>}` (`pkg/harness/actions.go`
+    /// `writeJSON(w, http.StatusOK, map[string]interface{}{"state": h.Snapshot()})`), so the
+    /// snapshot is unwrapped rather than decoded from the body directly.
+    private struct ActionEnvelope: Decodable {
+        let state: FaketandemSnapshot
+    }
+
     private func action(_ path: String, _ body: [String: Any] = [:]) throws -> FaketandemSnapshot {
-        try decode(send("POST", path, json: body), as: FaketandemSnapshot.self)
+        try decode(send("POST", path, json: body), as: ActionEnvelope.self).state
     }
 
     private func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {
