@@ -41,7 +41,7 @@ public extension TandemPumpManager {
         }
 
         if let lastSync = state.lastReconciliation,
-           Date.now.timeIntervalSince(lastSync) > Self.connectionStaleThreshold
+           now.timeIntervalSince(lastSync) > Self.connectionStaleThreshold
         {
             return .noRecentSync
         }
@@ -63,7 +63,7 @@ public extension TandemPumpManager {
             return issue
         case .pumpUnreachable:
             guard let lastSync = state.lastReconciliation,
-                  Date.now.timeIntervalSince(lastSync) > Self.connectionStaleThreshold
+                  now.timeIntervalSince(lastSync) > Self.connectionStaleThreshold
             else {
                 return nil
             }
