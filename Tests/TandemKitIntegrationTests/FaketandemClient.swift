@@ -569,8 +569,14 @@ final class FaketandemClient {
 
     // MARK: - Plumbing
 
+    /// Every pump-initiated action answers `{"state": <snapshot>, ...}` (pkg/harness/actions.go);
+    /// the few that carry no snapshot (`history/append`, `qualifyingevent`) are followed by a read.
     private func action(_ path: String, _ body: [String: Any] = [:]) throws -> FaketandemSnapshot {
-        try decode(send("POST", path, json: body), as: FaketandemSnapshot.self)
+        struct Body: Decodable { let state: FaketandemSnapshot? }
+        if let state = try decode(send("POST", path, json: body), as: Body.self).state {
+            return state
+        }
+        return try snapshot()
     }
 
     private func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {

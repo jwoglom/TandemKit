@@ -19,13 +19,78 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// Delivery at the rate the driver's estimate assumes, as in the smoke test, so end-date fidelity
     /// is not what these scenarios trip on.
     private static let deliveryRate = bolusUnits / TandemPumpCapabilities.estimatedBolusDuration(toDeliver: bolusUnits)
+    /// The emulator's default bolus delivery rate (`bolus_rate_units_per_second`).
+    private static let defaultDeliveryRate = 0.05
+
+    /// #328 in its surviving form: the driver holds a bolus of unknown volume mutable, but once the
+    /// retry window is over it closes the dose with `TandemDoseProgressReporter`'s running estimate.
+    /// That estimate is 0 U whenever the driver never sampled a `delivering` status — the pump
+    /// finished between two polls — so a bolus the pump delivered in full is reported as 0 U
+    /// (`TandemPumpManager+StateSync.finalizePendingBolus`, "finalizing with the estimate 0.0U").
+    private static let zeroEstimateDefect = """
+        jwoglom/TandemKit#328: a bolus whose delivered volume the pump never confirms is finalized \
+        with the progress-reporter estimate, which is 0 U when no delivering status was sampled, \
+        so a fully delivered bolus reaches the host as 0 U
+        """
+
+    /// Section E's `manuallyEntered == false`, which every manually activated bolus trips.
+    private static let manuallyEnteredDefect = """
+        jwoglom/TandemKit#337: manuallyEntered is set for a normal pump-delivered bolus \
+        (DoseEntry.bolus maps manualNoRecommendation to manuallyEntered)
+        """
+
+    /// `harness.reset()` restores pairing, clock, faults and the link, not delivery: a suspend, a
+    /// running bolus or temp rate and a changed profile rate would carry into the next scenario
+    /// (the emulator answers 409 to a second suspend). Put the pump back before the base teardown,
+    /// so the records this writes land before the next test's history start.
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The base case stops a test at its first failure. XCTest applies that to an *expected*
+        // failure too, which would end every scenario at its first wrapped defect and report it
+        // passed; these scenarios must run to their timeline diff.
+        continueAfterFailure = true
+
+        // A scenario killed part-way (the simulator is shared with other runs) leaves the pump
+        // stopped or a dose running, and the emulator answers 409 to a second suspend. Only then is
+        // there anything to undo, so in the normal case this writes nothing to the pump's ledger
+        // after the history start this test's timeline is taken from.
+        let snapshot = try harness.client.snapshot()
+        if snapshot.bolus.active || snapshot.basal.tempActive || snapshot.basal.suspended {
+            try restorePumpDelivery(harness.client)
+        }
+    }
+
+    override func tearDownWithError() throws {
+        if let harness {
+            do {
+                try restorePumpDelivery(harness.client)
+            } catch {
+                XCTFail("restoring the pump's delivery state failed: \(error)")
+            }
+        }
+        try super.tearDownWithError()
+    }
+
+    private func restorePumpDelivery(_ client: FaketandemClient) throws {
+        let snapshot = try client.snapshot()
+        if snapshot.bolus.active {
+            try client.abortBolus()
+        }
+        if snapshot.basal.tempActive {
+            try client.stopTempBasal()
+        }
+        if snapshot.basal.suspended {
+            try client.resume(clearAlarms: true)
+        }
+        try client.setState(["basal_rate": Self.profileRate, "bolus_rate_units_per_second": Self.defaultDeliveryRate])
+    }
 
     // MARK: - D1
 
     /// A suspend and resume the pump did on its own: the suspend is dated at the pump's stop and
     /// paired by a `.resume` so the host closes it after 10 minutes.
     func testD1PumpInitiatedSuspendAndResumeArePairedAndDatedAtThePump() throws {
-        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        try startPairedDriver(scheduledRate: Self.profileRate)
         let batchesBefore = allPumpEventBatches.count
 
         // The pump stops on its own (a qualifying pumpSuspend event fires); then a sync.
@@ -263,9 +328,10 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
         _ = try sync()
 
+        let requestsSeen = try harness.requestsSeen().map(\.message)
         XCTAssertTrue(
-            try harness.requestsSeen().contains { $0.message.hasPrefix("LastBolusStatus") },
-            "the driver asked for the delivered volume: \(try harness.requestsSeen().map(\.message))"
+            requestsSeen.contains { $0.hasPrefix("LastBolusStatus") },
+            "the driver asked for the delivered volume: \(requestsSeen)"
         )
         XCTAssertNotNil(driver.manager.state.pendingBolusFinalization, "the bolus is held for finalization")
         assertNoFinalizedGuess(raw: raw, since: batchesBefore)
@@ -303,10 +369,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             self.eventsSince(batchesBefore).first { $0.raw == raw && $0.dose?.isMutable == false }
         }
         let delivered = try XCTUnwrap(finalized.dose?.deliveredUnits)
-        XCTAssertGreaterThan(delivered, 0, "never finalized at 0 U")
         XCTAssertLessThanOrEqual(delivered, Self.bolusUnits + 0.0005)
-        XCTAssertEqual(delivered, lastBolus.deliveredUnits, accuracy: 0.05, "the estimate is close to what the pump delivered")
         assertFieldSemantics(finalized, programmed: Self.bolusUnits, automatic: false)
+        try expectDefect(Self.zeroEstimateDefect) {
+            XCTAssertGreaterThan(delivered, 0, "never finalized at 0 U")
+            XCTAssertEqual(delivered, lastBolus.deliveredUnits, accuracy: 0.05, "the estimate is close to what the pump delivered")
+        }
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
@@ -314,14 +382,16 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let stored = try XCTUnwrap(loop.assertPermanent(raw: raw))
         XCTAssertEqual(stored.dose.deliveredUnits, delivered)
         XCTAssertEqual(loop.doses.filter { $0.dose.type == .bolus }.count, 1)
-        trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits, accuracy: 0.1)
 
         // Pump side: the app's bolus agrees with Loop; the only record Loop lacks is the pump-side
         // 0.05 U bolus staged to make last_bolus stale.
         let timeline = try timeline()
         let diff = timeline.diff(against: loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.05, rate: 0.005))
-        XCTAssertTrue(diff.duplicated.isEmpty && diff.mismatched.isEmpty && diff.extra.isEmpty, "\(diff)")
         XCTAssertEqual(diff.missing, ["bolus \(staleId) (0.05 U)"], "\(diff)")
+        try expectDefect(Self.zeroEstimateDefect) {
+            trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits, accuracy: 0.1)
+            XCTAssertTrue(diff.duplicated.isEmpty && diff.mismatched.isEmpty && diff.extra.isEmpty, "\(diff)")
+        }
     }
 
     // MARK: - D5
@@ -370,17 +440,28 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             self.eventsSince(batchesBefore).first { $0.raw == bolusRaw && $0.dose?.isMutable == false }
         }
         XCTAssertEqual(finalizedBolus.dose?.deliveredUnits, Self.bolusUnits)
-        assertFieldSemantics(finalizedBolus, programmed: Self.bolusUnits, automatic: false)
+        assertFieldSemantics(
+            finalizedBolus,
+            programmed: Self.bolusUnits,
+            automatic: false,
+            manuallyEnteredDefect: Self.manuallyEnteredDefect
+        )
 
         let bolusTimeline = try timeline()
         let pumpBolus = try XCTUnwrap(bolusTimeline.boluses.first { $0.bolusId == bolusId }, "timeline: \(bolusTimeline)")
         let pumpEnd = try XCTUnwrap(pumpBolus.end)
         XCTAssertGreaterThan(pumpEnd, programmedAt)
-        XCTAssertEqual(
-            finalizedBolus.dose?.startDate.timeIntervalSince(pumpBolus.start ?? .distantPast) ?? .infinity, 0, accuracy: 2,
-            "the dose starts when the pump began, in phone time"
-        )
-        try expectDefect("jwoglom/TandemKit (unfiled): with the pump clock ahead, BolusEndDate takes LastBolusStatus.timestamp raw and clamps it to detection time instead of subtracting the offset the driver has just measured, so the bolus end is dated at the poll that noticed it (Sources/TandemKit/PumpManager/BolusEndDate.swift)") {
+        // Both ends of the dose are dated from raw pump-clock timestamps that are never corrected by
+        // the offset the driver measured on the same session, and both are then clamped to the
+        // moment the driver noticed — so with the pump ahead the whole window collapses onto
+        // detection time, which is the error #339 set out to remove.
+        try expectDefect("jwoglom/TandemKit#339 (unfixed under clock skew): CurrentBolusStatus.timestamp is stored raw by UnfinalizedDose.recordDeliveryStart and clamped into startDate...Date.now, so with the pump clock ahead the dose starts at the poll that saw delivery, not when the pump began (Sources/TandemCore/Common/UnfinalizedDose.swift, Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift)") {
+            XCTAssertEqual(
+                finalizedBolus.dose?.startDate.timeIntervalSince(pumpBolus.start ?? .distantPast) ?? .infinity, 0, accuracy: 2,
+                "the dose starts when the pump began, in phone time"
+            )
+        }
+        try expectDefect("jwoglom/TandemKit#339 (unfixed under clock skew): BolusEndDate takes LastBolusStatus.timestamp raw and clamps it to detection time instead of subtracting the offset the driver has just measured, so the bolus end is dated at the poll that noticed it (Sources/TandemKit/PumpManager/BolusEndDate.swift)") {
             XCTAssertEqual(
                 finalizedBolus.dose?.endDate.timeIntervalSince(pumpEnd) ?? .infinity, 0, accuracy: 2,
                 "the dose ends when the pump's record says, in phone time"
@@ -444,15 +525,19 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let reconciliationBefore = try XCTUnwrap(driver.manager.state.lastReconciliation)
         let logStart = try harness.client.snapshot().requestLog.lastSeq
 
-        try disconnectFromPump()
-        XCTAssertFalse(try harness.client.snapshot().connection.connected)
+        // The pump drops the link. The driver reconnects faster than a snapshot poll can catch the
+        // link down, so the pump's request log is the record of the drop.
+        try harness.control.disconnectPump()
 
         // Real time: the auto-reconnect is the driver's own timer, not the modelled clock.
+        let connections = try IntegrationWait.value("the pump to log the drop and a new connection", timeout: 60) {
+            let entries = try harness.requestLog(since: logStart).filter { $0.kind == "connection" }.compactMap(\.connected)
+            return entries == [false, true] ? entries : nil
+        }
+        XCTAssertEqual(connections, [false, true], "one drop, one reconnect")
         try IntegrationWait.until("the driver to reconnect and re-authenticate", timeout: 60) {
             try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
         }
-        let connections = try harness.requestLog(since: logStart).filter { $0.kind == "connection" }.compactMap(\.connected)
-        XCTAssertEqual(connections, [false, true], "one drop, one reconnect")
 
         // A bounded real-time window for the driver to sync on its own after reconnecting.
         let reportedOnReconnect = (try? IntegrationWait.until("a hasNewPumpEvents after the reconnect", timeout: 15) {
@@ -584,8 +669,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         _ = try sync()
 
         // The host learns the new level.
+        // `InsulinStatusResponse.currentInsulinAmount` is whole units on the wire, so a 300 U fill
+        // that has already drained a few milliunits of basal is reported as 299: one unit is the
+        // resolution the reading can follow the refill to, on a real pump as much as on this one.
         let reading = try XCTUnwrap(driver.delegate.reservoirReadings.last)
-        XCTAssertEqual(reading.units, newLevel, accuracy: 0.5, "the reservoir reading follows the refill")
+        XCTAssertEqual(reading.units, newLevel, accuracy: 1, "the reservoir reading follows the refill")
+        XCTAssertNotEqual(reading.units, before, "and is not still the pre-fill level")
 
         let (loop, trio) = feedOracles()
         let timeline = try timeline()
@@ -661,6 +750,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         _ event: NewPumpEvent,
         programmed: Double?,
         automatic: Bool?,
+        manuallyEnteredDefect: String? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -677,7 +767,13 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         } else {
             XCTFail("a finalized dose carries deliveredUnits: \(event)", file: file, line: line)
         }
-        XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
+        if let manuallyEnteredDefect {
+            expectDefect(manuallyEnteredDefect) {
+                XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
+            }
+        } else {
+            XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
+        }
         if let automatic {
             XCTAssertEqual(dose.automatic, automatic, "automatic reflects the activation type", file: file, line: line)
         }
