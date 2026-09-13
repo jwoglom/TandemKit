@@ -23,6 +23,10 @@ final class DoseOracleTests: XCTestCase {
         return NewPumpEvent.bolus(dose: dose, date: start)
     }
 
+    /// Keyed on rate and start, so the identity survives an early end. (TandemKit's own
+    /// `NewPumpEvent.tempBasal(dose:date:)` keys on `programmedUnits`, which for a temp basal is
+    /// rate × duration and therefore changes when the dose is finalized short — the emulator
+    /// scenarios cover that; these tests are about the oracle.)
     private func tempBasal(rate: Double, start: Date, duration: TimeInterval, mutable: Bool, end: Date? = nil) -> NewPumpEvent {
         let actualEnd = end ?? start.addingTimeInterval(duration)
         let dose = DoseEntry(
@@ -36,7 +40,12 @@ final class DoseOracleTests: XCTestCase {
             automatic: true,
             isMutable: mutable
         )
-        return NewPumpEvent.tempBasal(dose: dose, date: start)
+        return NewPumpEvent(
+            date: start,
+            dose: dose,
+            raw: Data("tempBasal \(rate) \(start.timeIntervalSinceReferenceDate)".utf8),
+            title: "Temp Basal"
+        )
     }
 
     // MARK: - Loop: the three transitions
@@ -82,7 +91,11 @@ final class DoseOracleTests: XCTestCase {
         oracle.addPumpEvents([final], lastReconciliation: evenLater, replacePendingEvents: true, now: evenLater)
         XCTAssertEqual(oracle.doses.count, 1)
         XCTAssertEqual(oracle.pumpEvents.count, 1)
-        XCTAssertEqual(oracle.assertPermanent(raw: first.raw)?.updateCount, 0)
+        XCTAssertEqual(
+            oracle.assertPermanent(raw: first.raw)?.updateCount,
+            1,
+            "one update (the finalization); the re-send matched no mutable object and its insert was dropped"
+        )
     }
 
     func testOmittedMutableDoseIsDeleted() {
@@ -198,9 +211,18 @@ final class DoseOracleTests: XCTestCase {
         let final = bolus(units: 2, start: t0, delivered: 2, end: now.addingTimeInterval(30), mutable: false)
         oracle.addPumpEvents([final], lastReconciliation: now, replacePendingEvents: true, now: now)
 
+        // The PumpEvent row is final, but DS:1140 filters the dose out of the delivery-store save
+        // (it has not ended by the host's now), DS:935 then skips addDoseEntries entirely, and the
+        // stale mutable object stays live at the IDS tier: the dose is in limbo, still mutable.
         XCTAssertEqual(oracle.pumpEventRow(raw: first.raw)?.mutable, false)
-        oracle.assertDeleted(raw: first.raw)
-        XCTAssertTrue(oracle.doses.isEmpty, "DS:1140 filters doses that have not ended; the mutable object was already marked deleted")
+        let limbo = oracle.assertSingleDose(raw: first.raw)
+        XCTAssertEqual(limbo?.isMutable, true, "the delivery store never saw the finalization")
+        XCTAssertEqual(limbo?.savedToHealthKit, false)
+
+        // Once the host's clock passes the end, any non-empty save resolves it.
+        let afterEnd = now.addingTimeInterval(60)
+        oracle.addPumpEvents([final], lastReconciliation: afterEnd, replacePendingEvents: true, now: afterEnd)
+        XCTAssertNotNil(oracle.assertPermanent(raw: first.raw))
     }
 
     func testTempBasalReplacementTrimsThePredecessor() {
@@ -220,19 +242,22 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertEqual(oracle.assertSingleDose(raw: b.raw)?.isMutable, true)
     }
 
-    func testIOBIsMonotoneAcrossIdenticalReReports() {
+    func testIOBDoesNotDriftAcrossIdenticalReReports() {
         let oracle = LoopDoseStoreOracle()
         let first = bolus(units: 5, start: t0, mutable: true)
-        var previous = Double.infinity
+        // Read IOB at one fixed instant after delivery, so the only thing that could move it between
+        // reports is a duplicate dose.
+        let probe = t0.addingTimeInterval(.hours(1))
+        let expected = LoopDoseStoreOracle.linearIOB(of: first.dose!, at: probe, duration: .hours(5))
+        XCTAssertGreaterThan(expected, 0)
         for step in 0 ..< 8 {
             let now = t0.addingTimeInterval(Double(step) * 30)
             oracle.addPumpEvents([bolus(units: 5, start: t0, mutable: true)], lastReconciliation: now, replacePendingEvents: true, now: now)
-            let iob = oracle.iob(at: now.addingTimeInterval(1))
-            XCTAssertLessThanOrEqual(iob, previous + 0.0001, "IOB stepped up at report \(step): duplicate insertion")
-            XCTAssertLessThanOrEqual(iob, 5.0001)
-            previous = iob
+            XCTAssertEqual(oracle.iob(at: probe), expected, accuracy: 1e-9, "IOB drifted at report \(step): duplicate insertion")
         }
         XCTAssertNotNil(oracle.assertSingleDose(raw: first.raw))
+        XCTAssertEqual(oracle.iob(at: t0), 0, "nothing on board before delivery starts")
+        XCTAssertEqual(oracle.iob(at: t0.addingTimeInterval(.hours(6))), 0, accuracy: 1e-9, "fully decayed after the action duration")
     }
 
     // MARK: - Trio

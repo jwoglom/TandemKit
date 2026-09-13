@@ -241,7 +241,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                                 type: last.type,
                                 startDate: dose.endDate,
                                 endDate: last.endDate,
-                                value: last.value,
+                                value: Self.programmedValue(last),
                                 unit: last.unit,
                                 description: last.description,
                                 syncIdentifier: dose.syncIdentifier,
@@ -261,7 +261,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                         type: last.type,
                         startDate: last.startDate,
                         endDate: min(last.endDate, dose.startDate),
-                        value: last.value,
+                        value: Self.programmedValue(last),
                         unit: last.unit,
                         description: last.description,
                         syncIdentifier: last.syncIdentifier,
@@ -283,7 +283,7 @@ final class LoopDoseStoreOracle: DoseOracle {
                 type: suspend.type,
                 startDate: suspend.startDate,
                 endDate: nil,
-                value: suspend.value,
+                value: Self.programmedValue(suspend),
                 unit: suspend.unit,
                 description: suspend.description,
                 syncIdentifier: suspend.syncIdentifier,
@@ -299,13 +299,22 @@ final class LoopDoseStoreOracle: DoseOracle {
         return reconciled.map(Self.resolvingDelivery)
     }
 
+    /// `DoseEntry.value` is internal in the fork; this is it, read back through the public accessors
+    /// (`programmedUnits` returns `value` for `.units`, `unitsPerHour` returns it for `.unitsPerHour`).
+    static func programmedValue(_ dose: DoseEntry) -> Double {
+        switch dose.unit {
+        case .units: return dose.programmedUnits
+        case .unitsPerHour: return dose.unitsPerHour
+        }
+    }
+
     /// IM:417-429 / IM:437-449: the suspend dose closed at `end`.
     private static func closing(_ suspend: DoseEntry, at end: Date) -> DoseEntry {
         DoseEntry(
             type: suspend.type,
             startDate: suspend.startDate,
             endDate: end,
-            value: suspend.value,
+            value: Self.programmedValue(suspend),
             unit: suspend.unit,
             description: suspend.description,
             syncIdentifier: suspend.syncIdentifier,
@@ -321,7 +330,7 @@ final class LoopDoseStoreOracle: DoseOracle {
         guard !dose.isMutable, dose.deliveredUnits == nil else { return dose }
         let resolvedUnits: Double
         if case .units = dose.unit {
-            resolvedUnits = dose.value
+            resolvedUnits = Self.programmedValue(dose)
         } else {
             switch dose.type {
             case .tempBasal: resolvedUnits = dose.unitsInDeliverableIncrements
@@ -333,7 +342,7 @@ final class LoopDoseStoreOracle: DoseOracle {
             type: dose.type,
             startDate: dose.startDate,
             endDate: dose.endDate,
-            value: dose.value,
+            value: Self.programmedValue(dose),
             unit: dose.unit,
             deliveredUnits: resolvedUnits,
             description: dose.description,
