@@ -55,10 +55,13 @@ final class FaketandemHarness {
     // MARK: - Emulator state
 
     /// Back to a pump that has never met this driver: nobody attached, no session key, no cached
-    /// long-term key, the known pairing code, advertising PairStep2, on the real clock with no
-    /// faults armed and an empty request log.
+    /// long-term key, the known pairing code, advertising PairStep2, on the real clock at the
+    /// default ATT MTU with no faults armed and an empty request log.
     func reset() throws {
         try client.clearFaults()
+        if try client.transport().mtuConfigurable {
+            try client.setATTMTU(FaketandemClient.defaultATTMTU)
+        }
         if try client.snapshot().connection.connected {
             try control.disconnectPump()
             try IntegrationWait.until("emulator to drop the previous central", timeout: 10) {
@@ -203,8 +206,7 @@ final class FaketandemHarness {
         /// The state after a completed pairing, staged directly: the same random long-term key is
         /// given to the pump (`setLongTermKey`) and to the driver (`pumpState.derivedSecret`), so the
         /// connect authenticates through the quick-reconnect rounds 3/4 alone. This is the emulator's
-        /// pure-Go path, and the only one that works on macOS today: see docs/integration-harness.md,
-        /// "Known emulator gaps" (pumpX2 jpake-server cannot be spawned on macOS).
+        /// pure-Go path: no jpake-server subprocess, so it is also the fast one.
         case seededLongTermKey
     }
 

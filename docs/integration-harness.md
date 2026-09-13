@@ -87,10 +87,12 @@ it simply reports skips.
   waiting; the emulator stays on its own clock unless a test drives `/api/clock`.
 - `FaketandemClient` is the HTTP surface: pairing state, `/api/state` snapshot and direct
   writes, `/api/clock`, pump-initiated actions (bolus, temp basal, suspend/resume,
-  history, qualifying events), the request log, faults, and the legacy settings table.
+  history, qualifying events), the request log, faults, the link's ATT MTU
+  (`transport()` / `setATTMTU(_:)`), and the legacy settings table.
 - `FaketandemControlSocket` is the websocket surface for what only exists as websocket
   commands: pairing code, long-term key, pump-side disconnect, and the pairing status with
-  the key bytes. One socket is shared for the whole test process (see gaps).
+  the key bytes. One socket is shared for the whole test process; the emulator accepts
+  several, but one is all the tests need.
 - `IntegrationWait` polls a condition while pumping the run loop; `ResultBox` carries a
   completion result to a polling wait. Neither blocks the main thread outright, because
   parts of the driver complete on the main queue.
@@ -109,10 +111,11 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | File | Covers |
 | --- | --- |
 | `ScanIntegrationTests` | Scan discovers the virtual pump with the identifier and name from `hello`; the manufacturer byte tracks `PairStep1/2/DiscoverableOnly`; a `NotDiscoverable` pump is not advertised. |
-| `PairingIntegrationTests` | Fresh JPAKE pairing (expected failure, see gaps); wrong code refused; seeded long-term key authenticates through rounds 3/4 only. |
+| `PairingIntegrationTests` | Fresh JPAKE pairing through every round; wrong code refused; seeded long-term key authenticates through rounds 3/4 only. |
 | `SyncIntegrationTests` | `syncPumpData` reports a status update, one reservoir reading, the reconciliation boundary as an empty non-replacing batch; a second sync is quiet and advances the boundary. |
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
+| `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
 
@@ -122,7 +125,9 @@ generates a random 32-byte key, hands it to the pump (`setLongTermKey`) and to t
 `Jpake3SessionKeyRequest`/`Jpake4KeyConfirmationRequest` alone — the state a driver is in
 after any completed pairing. Both sides derive the session key as
 `HKDF(serverNonce, longTermKey)`, so this is a real authentication, not a bypass. Use
-`.fresh` for the onboarding flow; it cannot pass on macOS today (below).
+`.fresh` for the onboarding flow: faketandem drives pumpX2's `jpake-server` over pipes, so
+it runs on macOS too, and `PairingIntegrationTests` covers it — it just costs a subprocess
+and a few seconds per pairing.
 
 ## Adding a test
 
@@ -138,8 +143,9 @@ after any completed pairing. Both sides derive the session key as
 4. Assert on `driver.delegate` / `driver.manager.state` and on
    `harness.client.snapshot()` / `harness.requestsSeen()`.
 5. If the assertion fails because of the emulator, do not bend the driver: wrap the
-   assertion in a strict `XCTExpectFailure` whose message names the emulator gap, add the
-   gap below, and keep the pump-side evidence in the test.
+   assertion in a strict `XCTExpectFailure` whose message names the emulator gap, list the
+   gap under "Known emulator gaps", and keep the pump-side evidence in the test. There are
+   no such wrappers today.
 
 New files under `Tests/TandemKitIntegrationTests/` must be members of the
 `TandemKitIntegrationTests` target; `ruby scripts/check_xcodeproj_source_membership.rb
@@ -164,33 +170,28 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-Each is asserted by a strict `XCTExpectFailure` where it blocks a test, so fixing the
-emulator makes the test report "expected failure did not occur" and the wrapper can go.
+None open. Every gap the harness found has been fixed in faketandem, so no test carries an
+`XCTExpectFailure`; a new one should be added the way "Adding a test" describes. What was
+fixed, because the shape of it explains what the harness is for:
 
-1. **Fresh JPAKE pairing cannot run on macOS.** faketandem spawns pumpX2's `jpake-server`
-   through `goexpect.SpawnWithArgs`, whose `goterm` `OpenPTY` issues the Linux-only
-   `TIOCSPTLCK` ioctl on `/dev/ptmx`; macOS answers `ENOTTY` ("inappropriate ioctl for
-   device"), the handler fails, and `Jpake1aRequest` is never answered (the driver times
-   out after 30 s). Reproduce with
-   `FAKETANDEM_TEST_CLIPARSER_JAR=… go test ./pkg/handler -run FullFlowViaJar` in the
-   faketandem checkout. Affects `testFreshJpakePairingAuthenticatesBothSides` and
-   `testPairingWithTheWrongCodeIsRefused`; every other flow uses the seeded key.
-2. **`InsulinStatusResponse.currentInsulinAmount` is scaled ×100.**
-   `pkg/handler/dynamic_status.go` sends `Reservoir.CurrentUnits * 100` (and the settings
-   default is `20000` for 200 U), but real pumps report whole units — TandemKit's Sept 2026
-   Mobi captures show 150/105/90, and faketandem's own `router.go` history code says the
-   same. The driver reports a 137 U cartridge as 13699 U. Affects the reservoir
-   assertions in `SyncIntegrationTests`.
-3. **The websocket handler clears the shared client on any close.** `pkg/api/server.go`
-   keeps one `conn` and its reader's `defer` sets it to nil unconditionally, so closing an
-   older socket silences a newer one. The harness therefore keeps one socket for the
-   whole process (`FaketandemControlSocket.shared`).
-4. **`PUT /api/state {"pairing_code": …}` does not reach the pumpX2 bridge**, only the
-   websocket `setPairingCode` does; the harness uses the websocket.
-5. **Every response is fragmented into 20-byte notifications.** Faithful to a 23-byte
-   MTU and to cliparser's output, and what exposed the two driver bugs above — but a real
-   Mobi negotiates a larger MTU, so a `-virtual-max-att` style option would let tests
-   choose either behaviour.
+- **Fresh JPAKE pairing could not run on macOS.** faketandem spawned pumpX2's
+  `jpake-server` through `goexpect`, whose `goterm` `OpenPTY` issues the Linux-only
+  `TIOCSPTLCK` ioctl; macOS answered `ENOTTY` and `Jpake1aRequest` went unanswered. It is
+  driven over plain pipes now, and `testFreshJpakePairingAuthenticatesBothSides` runs all
+  five rounds.
+- **`InsulinStatusResponse.currentInsulinAmount` was scaled ×100.** The field is whole
+  units on a real pump, so the driver reported a 137 U cartridge as 13699 U.
+  `SyncIntegrationTests` asserts 137 directly.
+- **The websocket handler kept one shared client** and cleared it on any close, so an older
+  socket closing silenced a newer one. Concurrent clients are supported; the harness still
+  keeps one socket per process (`FaketandemControlSocket.shared`) because one is enough.
+- **`PUT /api/state {"pairing_code": …}` did not reach the pumpX2 bridge.** Every pairing
+  code change goes through one update path now; the harness still uses the websocket
+  `setPairingCode`, which returns the resulting pairing status in the same round trip.
+- **Every response was fragmented into 20-byte notifications.** The ATT MTU is settable
+  (`-virtual-mtu`, `GET`/`PUT /api/transport`, and announced as `att_mtu` in `hello`), so
+  the unfragmented framing a real Mobi produces is exercised too — `MTUIntegrationTests`,
+  and `FaketandemHarness.reset()` puts the MTU back to the 23-byte default before each test.
 
 Not gaps, but worth knowing when reading timings: an unauthenticated
 `DisconnectPumpRequest` is not answered (the handler requires auth, as on a real pump), so

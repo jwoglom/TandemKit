@@ -3,17 +3,13 @@ import LoopKit
 import XCTest
 
 final class SyncIntegrationTests: FaketandemIntegrationTestCase {
-    /// faketandem's InsulinStatusResponse handler (pkg/handler/dynamic_status.go) sends
-    /// `Reservoir.CurrentUnits * 100`, but the field is whole units on a real pump (TandemKit's
-    /// Sept 2026 Mobi captures in PumpingSuspendedHistoryLogTests: 150, 105, 90), so the driver
-    /// reports a 137 U cartridge as 13699 U. Strict: once the emulator is fixed this flags.
-    private static let reservoirScaleGap =
-        "faketandem: InsulinStatusResponse.currentInsulinAmount is scaled x100 (centi-units); real pumps report whole units"
-
     func testSyncPumpDataReportsStatusReservoirAndTheReconciliationBoundary() throws {
         let driver = makeDriver()
         try harness.pair(driver)
-        try harness.client.setState(["reservoir_units": 137.0, "battery_percent": 64])
+        // 137.5, not 137: the pump reports whole units (the emulator truncates, as a real one does)
+        // and its simulator is draining basal in real time, so a whole starting value reads back one
+        // unit lower the moment any insulin has gone out.
+        try harness.client.setState(["reservoir_units": 137.5, "battery_percent": 64])
         let statusUpdatesBefore = driver.delegate.statusUpdates.count
         let batchesBefore = driver.delegate.pumpEventBatches.count
 
@@ -26,10 +22,8 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
 
         XCTAssertEqual(driver.delegate.reservoirReadings.count, 1, "one reservoir report per sync")
         XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
-        XCTExpectFailure(Self.reservoirScaleGap) {
-            XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
-            XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
-        }
+        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports, in units")
+        XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
         XCTAssertEqual(driver.manager.state.lastBatteryReading?.chargeRemaining, 0.64)
 
         let batches = Array(driver.delegate.pumpEventBatches.dropFirst(batchesBefore))
