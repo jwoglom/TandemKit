@@ -159,7 +159,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let dropEntry = try IntegrationWait.value("pump to drop the link on CurrentBolusStatus", timeout: 30) {
             try harness.requestLog(since: logStart).first { $0.isResponse && $0.message == "CurrentBolusStatusResponse" && $0.fault == "disconnect" }
         }
-        XCTAssertEqual(dropEntry.fragmentsSent, 0, "the status answer never went out")
+        XCTAssertEqual(dropEntry.fragmentsSent ?? 0, 0, "the status answer never went out")
         XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump keeps delivering through the drop")
         try waitForLinkDown(since: logStart)
 
@@ -226,7 +226,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let bolusId = pumpBolus.bolusId
         let suppressed = try harness.requestLog(since: logStart).first { $0.isResponse && $0.message == "InitiateBolusResponse" }
         XCTAssertEqual(suppressed?.fault, "drop_response", "the pump encoded the ack and suppressed it: \(String(describing: suppressed))")
-        XCTAssertEqual(suppressed?.fragmentsSent, 0)
+        XCTAssertEqual(suppressed?.fragmentsSent ?? 0, 0, "no fragment of the ack went out")
 
         // Guide §10: register the dose up front, and say delivery is uncertain until the pump confirms.
         let enactBatches = Array(allPumpEventBatches.dropFirst(batchesBefore))
@@ -361,7 +361,9 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(pumpBasal.tempRate, rate, accuracy: 0.0001)
 
         // The link drops with the temp rate running; ten minutes pass before the driver is back.
-        try disconnectFromPump()
+        // (The pump's log, not `disconnectFromPump()`'s poll of the live flag: the driver's
+        // auto-reconnect can bring the link back between two polls.)
+        try harness.control.disconnectPump()
         try waitForLinkDown(since: logStart)
         try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
         try waitForReconnect()
@@ -438,7 +440,8 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(requests.filter { $0 == "StopTempRateRequest" }.count, 1, "the running rate was stopped first: \(requests)")
         let stopResponse = log.first { $0.isResponse && $0.message == "StopTempRateResponse" }
         XCTAssertNil(stopResponse?.fault, "the stop was acknowledged")
-        let setResponse = log.first { $0.isResponse && $0.message == "SetTempRateResponse" }
+        // The last SetTempRate answer is the replacement's; the first was the initial temp rate's.
+        let setResponse = log.last { $0.isResponse && $0.message == "SetTempRateResponse" }
         XCTAssertEqual(setResponse?.fault, "drop_response", "the set was applied and its answer suppressed: \(String(describing: setResponse))")
 
         // Pump side: the second temp rate is running; the first ended when it was stopped.
