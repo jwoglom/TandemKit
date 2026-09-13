@@ -133,7 +133,7 @@ import XCTest
 
         let lastDose = try XCTUnwrap(reportedBolusDoses.last)
         XCTAssertTrue(lastDose.isMutable)
-        XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
     func testMutableReReportKeepsTheRawItWasFirstReportedUnder() {
@@ -154,8 +154,8 @@ import XCTest
         cancelBolus()
 
         XCTAssertNil(manager.state.bolusDose, "Delivery is over; only the finalization is pending")
-        XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
-        XCTAssertEqual(manager.state.pendingCancelledBolus?.value, Self.programmedUnits)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.value, Self.programmedUnits)
     }
 
     func testPendingCancelledBolusRoundTripsThroughRawState() throws {
@@ -165,8 +165,8 @@ import XCTest
 
         let restored = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.state.rawValue))
 
-        XCTAssertEqual(restored.pendingCancelledBolus?.bolusId, Self.bolusId)
-        XCTAssertEqual(restored.pendingCancelledBolus?.value, Self.programmedUnits)
+        XCTAssertEqual(restored.pendingBolusFinalization?.bolusId, Self.bolusId)
+        XCTAssertEqual(restored.pendingBolusFinalization?.value, Self.programmedUnits)
     }
 
     // MARK: - Retry
@@ -177,14 +177,14 @@ import XCTest
         cancelBolus()
 
         stubLastBolus(deliveredVolume: 1041)
-        manager.finalizePendingCancelledBolus()
+        manager.finalizePendingBolus()
         delegateQueue.sync {}
 
         let lastDose = try XCTUnwrap(reportedBolusDoses.last)
         XCTAssertFalse(lastDose.isMutable)
         XCTAssertEqual(try XCTUnwrap(lastDose.deliveredUnits), 1.041, accuracy: 1e-9)
         XCTAssertEqual(lastDose.programmedUnits, Self.programmedUnits)
-        XCTAssertNil(manager.state.pendingCancelledBolus)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
     }
 
     func testRetryKeepsWaitingWhileThePumpStaysSilent() {
@@ -192,11 +192,11 @@ import XCTest
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
         cancelBolus()
 
-        manager.finalizePendingCancelledBolus()
+        manager.finalizePendingBolus()
         delegateQueue.sync {}
 
         XCTAssertFalse(reportedBolusDoses.contains { !$0.isMutable })
-        XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
     func testRetryGivesUpWithTheEstimateAfterTheWindow() throws {
@@ -205,17 +205,17 @@ import XCTest
         cancelBolus()
 
         // Stands in for a progress reporter that had counted 0.7U out before the cancel.
-        manager.state.pendingCancelledBolus?.deliveredUnits = 0.7
+        manager.state.pendingBolusFinalization?.deliveredUnits = 0.7
 
         let afterWindow = Date.now
-            .addingTimeInterval(TandemPumpManager.cancelledBolusFinalizationWindow + .minutes(1))
-        manager.finalizePendingCancelledBolus(now: afterWindow)
+            .addingTimeInterval(TandemPumpManager.bolusFinalizationWindow + .minutes(1))
+        manager.finalizePendingBolus(now: afterWindow)
         delegateQueue.sync {}
 
         let lastDose = try XCTUnwrap(reportedBolusDoses.last)
         XCTAssertFalse(lastDose.isMutable)
         XCTAssertEqual(try XCTUnwrap(lastDose.deliveredUnits), 0.7, accuracy: 1e-9)
-        XCTAssertNil(manager.state.pendingCancelledBolus)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
     }
 
     /// A newer bolus's delivery would otherwise be attributed to the held one.
@@ -228,11 +228,11 @@ import XCTest
         stubLastBolus(deliveredVolume: 1041)
         bluetooth.resetRecordedTraffic()
 
-        manager.finalizePendingCancelledBolus()
+        manager.finalizePendingBolus()
         delegateQueue.sync {}
 
         XCTAssertFalse(bluetooth.didSend(LastBolusStatusRequest.self))
-        XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
     func testRetryIsANoOpWithNothingPending() {
@@ -241,7 +241,7 @@ import XCTest
         cancelBolus()
         let before = reportedBolusDoses.count
 
-        manager.finalizePendingCancelledBolus()
+        manager.finalizePendingBolus()
         delegateQueue.sync {}
 
         XCTAssertEqual(reportedBolusDoses.count, before)
@@ -257,7 +257,7 @@ import XCTest
 
         XCTAssertFalse(returned.isMutable)
         XCTAssertEqual(try XCTUnwrap(returned.deliveredUnits), 1.041, accuracy: 1e-9)
-        XCTAssertNil(manager.state.pendingCancelledBolus)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
         XCTAssertNil(manager.state.bolusDose)
     }
 }

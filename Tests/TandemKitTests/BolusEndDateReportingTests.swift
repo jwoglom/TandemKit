@@ -184,22 +184,15 @@ import XCTest
         )
     }
 
-    /// The pump never answered the last-bolus read: full delivery is assumed for the volume, and
-    /// the window has to follow from that same assumption rather than from the detection.
-    func testCompletionWithNoLastBolusAnswerUsesTheProgrammedVolume() throws {
-        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+    func testCompletionWithNoLastBolusAnswerDoesNotFinalize() {
+        trackBolusStarted(secondsAgo: 300, units: 2.0)
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
         stubBolusFinished()
 
         manager.fetchBolusStatus(fromSync: true)
 
-        let dose = try XCTUnwrap(lastFinalizedBolus())
-        XCTAssertEqual(dose.deliveredUnits, 2.0)
-        XCTAssertEqual(
-            dose.endDate.timeIntervalSince(startDate),
-            TandemPumpCapabilities.bolusInitiationDelay + TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 2.0),
-            accuracy: 1e-6
-        )
+        XCTAssertNil(lastFinalizedBolus(), "An unknown delivered volume must not be finalized (#328)")
+        XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
     /// A pump clock ahead of the phone's must not date delivery into the future.

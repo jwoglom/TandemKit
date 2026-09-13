@@ -22,22 +22,12 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         total = dose.programmedUnits
     }
 
-    /// Creates a finalized pump event for this bolus.
-    /// - Parameters:
-    ///   - actualDeliveredUnits: The pump-reported delivered volume. When nil,
-    ///     falls back to the programmed total (assumes full delivery).
-    ///   - pumpTimestamp: The pump's timestamp on the `LastBolusStatus` record for this bolus,
-    ///     when one was read.
-    ///   - deliveryStartDate: When the pump said delivery began, when that was seen.
-    ///   - detectedAt: When the driver noticed the bolus had finished. A parameter so the
-    ///     resolved window can be tested.
     func getPumpEvent(
-        actualDeliveredUnits: Double? = nil,
+        actualDeliveredUnits delivered: Double,
         pumpTimestamp: Date? = nil,
         deliveryStartDate: Date? = nil,
         detectedAt: Date = .now
     ) -> NewPumpEvent {
-        let delivered = actualDeliveredUnits ?? total
         // The pump's window, not ours: neither end of it is the moment we noticed (#339).
         let endDate = BolusEndDate.resolve(
             startDate: dose.startDate,
@@ -91,7 +81,9 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             TandemPumpCapabilities.bolusSpeedOver10U
         }
 
-        deliveredUnits = pumpManager.roundToSupportedBolusVolume(units: min(runningFor * unitsDeliveredPerSec, total))
+        // Nearest milliunit, not the 0.05 U command grid: this estimate can end up as a dose's
+        // delivered amount, and flooring it understates IOB.
+        deliveredUnits = HistoryToDoseMapper.roundToReportingResolution(min(runningFor * unitsDeliveredPerSec, total))
 
         DispatchQueue.main.async {
             for observer in self.observers {

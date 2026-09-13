@@ -58,7 +58,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
-    public var pendingCancelledBolus: UnfinalizedDose?
+    public var pendingBolusFinalization: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
     /// Basal min/max alerts are auto-acknowledged unconditionally: oref routinely sets a zero
@@ -248,10 +248,10 @@ public struct TandemPumpManagerState: RawRepresentable {
             bolusDose = nil
         }
 
-        if let pendingCancelledBolusRaw = rawValue["pendingCancelledBolus"] as? UnfinalizedDose.RawValue {
-            pendingCancelledBolus = UnfinalizedDose(rawValue: pendingCancelledBolusRaw)
+        if let pendingRaw = rawValue["pendingBolusFinalization"] as? UnfinalizedDose.RawValue {
+            pendingBolusFinalization = UnfinalizedDose(rawValue: pendingRaw)
         } else {
-            pendingCancelledBolus = nil
+            pendingBolusFinalization = nil
         }
 
         if let bolusRaw = rawValue["bolusState"] as? [String: Any],
@@ -451,8 +451,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["bolusDose"] = bolusDose.rawValue
         }
 
-        if let pendingCancelledBolus {
-            raw["pendingCancelledBolus"] = pendingCancelledBolus.rawValue
+        if let pendingBolusFinalization {
+            raw["pendingBolusFinalization"] = pendingBolusFinalization.rawValue
         }
 
         return raw

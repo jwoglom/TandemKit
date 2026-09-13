@@ -472,7 +472,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus(fromSync: true)
-            self.finalizePendingCancelledBolus()
+            self.finalizePendingBolus()
             self.fetchBasalStatus()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
@@ -689,9 +689,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
                 )
                 bolusDose.deliveredUnits = estimatedDelivered
-                // Also the start of the retry window.
-                bolusDose.estimatedEndDate = Date.now
-                self.state.pendingCancelledBolus = bolusDose
+                self.holdForFinalization(bolusDose)
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
                 var events = self.getActivePumpEvents()
