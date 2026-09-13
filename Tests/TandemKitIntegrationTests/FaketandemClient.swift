@@ -498,14 +498,18 @@ final class FaketandemClient {
         try action("/api/state/resume", clearAlarms.map { ["clear_alarms": $0] } ?? [:])
     }
 
+    /// Answers with the history tail, not a snapshot, so the snapshot is read back separately.
     @discardableResult
     func appendHistory(type: String, secondsAgo: Double, data: [String: Any]) throws -> FaketandemSnapshot {
-        try action("/api/state/history/append", ["type": type, "seconds_ago": secondsAgo, "data": data])
+        _ = try send("POST", "/api/state/history/append", json: ["type": type, "seconds_ago": secondsAgo, "data": data])
+        return try snapshot()
     }
 
+    /// Answers with the bitmask it raised, not a snapshot.
     @discardableResult
     func raiseQualifyingEvent(bitmask: UInt32) throws -> FaketandemSnapshot {
-        try action("/api/state/qualifyingevent", ["bitmask": Int(bitmask)])
+        _ = try send("POST", "/api/state/qualifyingevent", json: ["bitmask": Int(bitmask)])
+        return try snapshot()
     }
 
     // MARK: - Link parameters (ATT MTU)

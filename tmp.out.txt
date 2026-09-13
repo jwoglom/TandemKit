@@ -1,0 +1,19 @@
+[0/1] Planning build
+Building for debugging...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/13] Compiling TandemKit TandemPump.swift
+[4/13] Emitting module TandemKit
+[5/14] Compiling TandemKit TandemPumpManager.swift
+[6/14] Compiling TandemCoreTests BolusPermissionReleaseResponseTests.swift
+[7/14] Emitting module TandemCoreTests
+[8/14] Compiling TandemCoreTests ApiVersionRequestTests.swift
+[9/14] Compiling TandemCoreTests BolusPermissionReleaseRequestTests.swift
+[10/14] Compiling TandemCoreTests JpakeAuthBuilderTests.swift
+[11/14] Compiling TandemCoreTests Jpake1aRequestTests.swift
+[12/14] Compiling TandemCoreTests MessageTester.swift
+[13/16] Compiling TandemKitPackageTests runner.swift
+[14/16] Emitting module TandemKitPackageTests
+[14/16] Write Objects.LinkFileList
+[15/16] Linking TandemKitPackageTests
+Build complete! (8.82s)
