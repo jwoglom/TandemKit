@@ -192,7 +192,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalMismatch)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalTypeMismatch)
     }
 
     func testATempBasalRunningAtAnotherRateIsRecorded() {
@@ -202,7 +202,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalMismatch)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalRateMismatch)
     }
 
     func testTheRateThePumpAgreesWithRecordsNothing() {
@@ -238,26 +238,92 @@ import XCTest
         XCTAssertEqual(manager.state.pumpDiscrepancies.count, 1)
     }
 
+    /// The structured payload is the point: a reader gets the numbers, not a sentence.
+    func testTheRecordedDiscrepancyCarriesTheBolusAndTheTwoAmounts() {
+        startBolus()
+        stubLastBolus(deliveredVolume: 1500)
+
+        reportBolusFinished()
+
+        XCTAssertEqual(
+            manager.state.pumpDiscrepancies.last?.detail,
+            .bolusDeliveryIncomplete(
+                bolusId: Self.bolusId,
+                programmedUnits: Self.programmedUnits,
+                deliveredUnits: 1.5,
+                endReason: .complete
+            )
+        )
+    }
+
+    func testAMismatchCarriesBothBolusIds() {
+        startBolus()
+        stubLastBolus(deliveredVolume: 2000, bolusId: Self.bolusId - 1)
+
+        reportBolusFinished()
+
+        XCTAssertEqual(
+            manager.state.pumpDiscrepancies.first?.detail,
+            .bolusIdMismatch(bolusId: Self.bolusId, reported: Self.bolusId - 1)
+        )
+    }
+
+    func testARateMismatchCarriesBothRates() {
+        trackTempBasal(rate: 1.5, endingIn: .minutes(30))
+        stubBasal(currentRate: 500, bitmask: 0x02)
+
+        manager.fetchBasalStatus()
+        delegateQueue.sync {}
+
+        XCTAssertEqual(
+            manager.state.pumpDiscrepancies.last?.detail,
+            .basalRateMismatch(expectedUnitsPerHour: 1.5, reportedUnitsPerHour: 0.5)
+        )
+    }
+
+    /// One command-grid step above the reported rate is the pump's own value, not a mismatch.
+    func testARateOneGridStepAboveTheReportedOneIsNotAMismatch() {
+        trackTempBasal(rate: 1.5, endingIn: .minutes(30))
+        stubBasal(currentRate: 1510, bitmask: 0x02)
+
+        manager.fetchBasalStatus()
+        delegateQueue.sync {}
+
+        XCTAssertTrue(manager.state.pumpDiscrepancies.isEmpty)
+    }
+
+    func testARateBelowTheReportedOneIsAMismatch() {
+        trackTempBasal(rate: 1.5, endingIn: .minutes(30))
+        stubBasal(currentRate: 1499, bitmask: 0x02)
+
+        manager.fetchBasalStatus()
+        delegateQueue.sync {}
+
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalRateMismatch)
+    }
+
     // MARK: - Persistence
 
     func testOnlyTheMostRecentDiscrepanciesAreKept() {
         for index in 0 ..< TandemPumpManager.keptDiscrepancies + 5 {
-            manager.recordDiscrepancy(.basalMismatch, "detail \(index)")
+            manager.recordDiscrepancy(.bolusVolumeUnknown(bolusId: index, estimatedUnits: 1.0))
         }
 
         XCTAssertEqual(manager.state.pumpDiscrepancies.count, TandemPumpManager.keptDiscrepancies)
-        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.detail, "detail 24")
-        XCTAssertEqual(manager.state.pumpDiscrepancies.first?.detail, "detail 5")
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.detail, .bolusVolumeUnknown(bolusId: 24, estimatedUnits: 1.0))
+        XCTAssertEqual(manager.state.pumpDiscrepancies.first?.detail, .bolusVolumeUnknown(bolusId: 5, estimatedUnits: 1.0))
     }
 
     func testDiscrepanciesSurviveARelaunchAndShowInDebugDescription() throws {
-        manager.recordDiscrepancy(.basalMismatch, "detail")
+        manager.recordDiscrepancy(.basalRateMismatch(expectedUnitsPerHour: 1.5, reportedUnitsPerHour: 0.5))
 
         let restored = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.state.rawValue))
 
         XCTAssertEqual(restored.pumpDiscrepancies.count, 1)
-        XCTAssertEqual(restored.pumpDiscrepancies.last?.kind, .basalMismatch)
-        XCTAssertEqual(restored.pumpDiscrepancies.last?.detail, "detail")
-        XCTAssertTrue(restored.debugDescription.contains("basalMismatch"))
+        XCTAssertEqual(
+            restored.pumpDiscrepancies.last?.detail,
+            .basalRateMismatch(expectedUnitsPerHour: 1.5, reportedUnitsPerHour: 0.5)
+        )
+        XCTAssertTrue(restored.debugDescription.contains("basalRateMismatch"))
     }
 }

@@ -202,17 +202,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     /// The pump's account is still the one reported; this only makes the disagreement visible.
-    func recordDiscrepancy(_ kind: PumpDiscrepancy.Kind, _ detail: String, now: Date = .now) {
+    func recordDiscrepancy(_ detail: PumpDiscrepancy.Detail, now: Date = .now) {
         // A mismatch the driver cannot resolve is re-read every sync until it clears.
         if let last = state.pumpDiscrepancies.last,
-           last.kind == kind,
            last.detail == detail,
            now.timeIntervalSince(last.date) < Self.discrepancyRepeatWindow
         {
             return
         }
 
-        let discrepancy = PumpDiscrepancy(kind: kind, date: now, detail: detail)
+        let discrepancy = PumpDiscrepancy(date: now, detail: detail)
         logger.error("[discrepancy] \(discrepancy.description)")
         state.pumpDiscrepancies.append(discrepancy)
         state.pumpDiscrepancies = state.pumpDiscrepancies.suffix(Self.keptDiscrepancies)
@@ -725,7 +724,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             bolusDose.deliveredUnits = lastBolus.deliveredUnits
-            self.noteBolusOutcome(lastBolus, programmedUnits: bolusDose.value, afterCancel: true)
+            self.noteBolusOutcome(
+                lastBolus,
+                bolusId: bolusId,
+                programmedUnits: bolusDose.value,
+                afterCancel: true
+            )
 
             // Not now: a cancel is only noticed here, while the insulin stopped going in when the
             // pump says it did (#339).

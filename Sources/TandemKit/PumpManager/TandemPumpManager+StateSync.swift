@@ -198,22 +198,28 @@ extension TandemPumpManager {
         }
 
         guard response.basalType == .tempBasal else {
-            recordDiscrepancy(
-                .basalMismatch,
-                "temp basal ended early: pump is running \(response.basalType) with \(dose.estimatedEndDate.timeIntervalSince(now))s left"
-            )
+            recordDiscrepancy(.basalTypeMismatch(
+                expected: dose.type,
+                reported: response.basalType,
+                secondsRemaining: dose.estimatedEndDate.timeIntervalSince(now)
+            ))
             return
         }
 
-        // A temp rate is sent as a whole percent of the profile rate, and comes back absolute.
-        let tolerance = response.profileBasalRate / 100.0 + 0.001
-        if abs(response.currentBasalRate - dose.value) > tolerance {
-            recordDiscrepancy(
-                .basalMismatch,
-                "pump is delivering \(response.currentBasalRate)U/hr, not the \(dose.value)U/hr temp basal"
-            )
+        // In milliunits, which is the resolution both sides are exact in. `dose.value` is the
+        // pump's own rate floored to the 0.01 U/hr command grid (`tempBasalPercentAndRate`), so
+        // the pump may read up to one grid step above it, and never below.
+        let reported = Int((response.currentBasalRate * 1000).rounded())
+        let expected = Int((dose.value * 1000).rounded())
+        if reported < expected || reported > expected + Self.basalGridStepMilliunits {
+            recordDiscrepancy(.basalRateMismatch(
+                expectedUnitsPerHour: dose.value,
+                reportedUnitsPerHour: response.currentBasalRate
+            ))
         }
     }
+
+    static let basalGridStepMilliunits = 10
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)
 
@@ -293,7 +299,12 @@ extension TandemPumpManager {
             var events = getActivePumpEvents()
             if let lastBolus {
                 if let dose = state.bolusDose {
-                    noteBolusOutcome(lastBolus, programmedUnits: dose.value, afterCancel: dose.wasCancelled)
+                    noteBolusOutcome(
+                        lastBolus,
+                        bolusId: dose.bolusId,
+                        programmedUnits: dose.value,
+                        afterCancel: dose.wasCancelled
+                    )
                 }
                 events.append(progressReport.getPumpEvent(
                     actualDeliveredUnits: lastBolus.deliveredUnits,
@@ -602,15 +613,17 @@ extension TandemPumpManager {
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
         if let lastBolus {
             pending.deliveredUnits = lastBolus.deliveredUnits
-            noteBolusOutcome(lastBolus, programmedUnits: pending.value, afterCancel: pending.wasCancelled)
+            noteBolusOutcome(
+                lastBolus,
+                bolusId: bolusId,
+                programmedUnits: pending.value,
+                afterCancel: pending.wasCancelled
+            )
         } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.bolusFinalizationWindow {
             logger.warning("Pump still has no delivered volume for bolus \(bolusId); leaving it mutable")
             return
         } else {
-            recordDiscrepancy(
-                .bolusVolumeUnknown,
-                "no delivered volume for bolus \(bolusId) within \(Self.bolusFinalizationWindow)s; finalized at the estimated \(pending.deliveredUnits)U"
-            )
+            recordDiscrepancy(.bolusVolumeUnknown(bolusId: bolusId, estimatedUnits: pending.deliveredUnits))
         }
 
         finalize(pending, pumpTimestamp: lastBolus?.pumpTimestamp, now: now)
@@ -648,28 +661,25 @@ extension TandemPumpManager {
     /// Below this a shortfall is rounding: the pump reports milliunits, commands use the 0.05 U grid.
     static let deliveryShortfallTolerance = 0.001
 
-    func noteBolusOutcome(_ report: LastBolusReport, programmedUnits: Double, afterCancel: Bool) {
-        let delivered = "\(report.deliveredUnits)U of \(programmedUnits)U"
+    func noteBolusOutcome(_ report: LastBolusReport, bolusId: Int?, programmedUnits: Double, afterCancel: Bool) {
+        let incomplete = PumpDiscrepancy.Detail.bolusDeliveryIncomplete(
+            bolusId: bolusId,
+            programmedUnits: programmedUnits,
+            deliveredUnits: report.deliveredUnits,
+            endReason: report.endReason
+        )
 
         switch report.endReason {
         case .complete:
             if !afterCancel, report.deliveredUnits < programmedUnits - Self.deliveryShortfallTolerance {
-                recordDiscrepancy(.bolusDeliveryIncomplete, "pump reports complete at \(delivered)")
+                recordDiscrepancy(incomplete)
             }
-        case .stoppedAlarm, .stoppedMalfunction, .terminatedPLGS:
-            recordDiscrepancy(
-                .bolusDeliveryIncomplete,
-                "pump stopped the bolus (\(report.endReason!)) at \(delivered)"
-            )
+        case .stoppedAlarm, .stoppedMalfunction, .terminatedPLGS, nil:
+            recordDiscrepancy(incomplete)
         case .stopped, .stoppedWireless, .rejectedWireless:
             if !afterCancel {
-                recordDiscrepancy(
-                    .bolusDeliveryIncomplete,
-                    "bolus ended early (\(report.endReason!)) at \(delivered)"
-                )
+                recordDiscrepancy(incomplete)
             }
-        case nil:
-            recordDiscrepancy(.bolusDeliveryIncomplete, "pump reported no end reason at \(delivered)")
         }
     }
 
@@ -742,14 +752,14 @@ extension TandemPumpManager {
         // capture covers. Over-reporting delivered insulin is the safer way to be wrong here.
         if let v3 = response as? LastBolusStatusV3Response {
             guard let matched = v3.deliveredVolume(forBolusId: bolusId) else {
-                recordDiscrepancy(.bolusIdMismatch, "LastBolusStatusV3 has no record for bolus \(bolusId)")
+                recordDiscrepancy(.bolusIdMismatch(bolusId: bolusId, reported: nil))
                 return nil
             }
             return matched
         }
 
         guard response.bolusId == bolusId else {
-            recordDiscrepancy(.bolusIdMismatch, "LastBolusStatus answered for bolus \(response.bolusId), not \(bolusId)")
+            recordDiscrepancy(.bolusIdMismatch(bolusId: bolusId, reported: response.bolusId))
             return nil
         }
         return response.deliveredVolume
