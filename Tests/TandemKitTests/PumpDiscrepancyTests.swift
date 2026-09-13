@@ -113,8 +113,8 @@ import XCTest
 
         reportBolusFinished()
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 1)
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .bolusDeliveryIncomplete)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 1)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .bolusDeliveryIncomplete)
     }
 
     /// The pump claiming a complete delivery while reporting less than was asked for.
@@ -124,8 +124,8 @@ import XCTest
 
         reportBolusFinished()
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 1)
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .bolusDeliveryIncomplete)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 1)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .bolusDeliveryIncomplete)
     }
 
     func testAFullDeliveryRecordsNothing() {
@@ -134,8 +134,7 @@ import XCTest
 
         reportBolusFinished()
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 0)
-        XCTAssertNil(manager.state.lastPumpDiscrepancy)
+        XCTAssertTrue(manager.state.pumpDiscrepancies.isEmpty)
     }
 
     /// A cancel is asked for, so the short delivery it produces is not the pump disagreeing.
@@ -156,7 +155,7 @@ import XCTest
         wait(for: [cancelled], timeout: 15.0)
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 0)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 0)
     }
 
     func testAnAnswerForAnotherBolusIsRecorded() {
@@ -165,7 +164,7 @@ import XCTest
 
         reportBolusFinished()
 
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .bolusIdMismatch)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .bolusIdMismatch)
     }
 
     func testFinalizingFromTheEstimateIsRecorded() {
@@ -181,7 +180,7 @@ import XCTest
         manager.finalizePendingBolus(now: Date.now.addingTimeInterval(.hours(1)))
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .bolusVolumeUnknown)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .bolusVolumeUnknown)
     }
 
     // MARK: - Basal
@@ -193,7 +192,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .basalMismatch)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalMismatch)
     }
 
     func testATempBasalRunningAtAnotherRateIsRecorded() {
@@ -203,7 +202,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.lastPumpDiscrepancy?.kind, .basalMismatch)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.kind, .basalMismatch)
     }
 
     func testTheRateThePumpAgreesWithRecordsNothing() {
@@ -213,7 +212,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 0)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 0)
     }
 
     /// A temp basal that simply ran out has not been contradicted.
@@ -224,7 +223,7 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 0)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 0)
     }
 
     func testTheSameMismatchIsCountedOncePerSync() {
@@ -236,19 +235,29 @@ import XCTest
         manager.fetchBasalStatus()
         delegateQueue.sync {}
 
-        XCTAssertEqual(manager.state.pumpDiscrepancyCount, 1)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, 1)
     }
 
     // MARK: - Persistence
+
+    func testOnlyTheMostRecentDiscrepanciesAreKept() {
+        for index in 0 ..< TandemPumpManager.keptDiscrepancies + 5 {
+            manager.recordDiscrepancy(.basalMismatch, "detail \(index)")
+        }
+
+        XCTAssertEqual(manager.state.pumpDiscrepancies.count, TandemPumpManager.keptDiscrepancies)
+        XCTAssertEqual(manager.state.pumpDiscrepancies.last?.detail, "detail 24")
+        XCTAssertEqual(manager.state.pumpDiscrepancies.first?.detail, "detail 5")
+    }
 
     func testDiscrepanciesSurviveARelaunchAndShowInDebugDescription() throws {
         manager.recordDiscrepancy(.basalMismatch, "detail")
 
         let restored = try XCTUnwrap(TandemPumpManagerState(rawValue: manager.state.rawValue))
 
-        XCTAssertEqual(restored.pumpDiscrepancyCount, 1)
-        XCTAssertEqual(restored.lastPumpDiscrepancy?.kind, .basalMismatch)
-        XCTAssertEqual(restored.lastPumpDiscrepancy?.detail, "detail")
-        XCTAssertTrue(restored.debugDescription.contains("pumpDiscrepancyCount: 1"))
+        XCTAssertEqual(restored.pumpDiscrepancies.count, 1)
+        XCTAssertEqual(restored.pumpDiscrepancies.last?.kind, .basalMismatch)
+        XCTAssertEqual(restored.pumpDiscrepancies.last?.detail, "detail")
+        XCTAssertTrue(restored.debugDescription.contains("basalMismatch"))
     }
 }

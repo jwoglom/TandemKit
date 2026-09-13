@@ -1,8 +1,5 @@
 import Foundation
 
-/// A case of the pump's account of a dose differing from the driver's. Not actionable — the pump's
-/// number is still the one reported — but kept so the disagreement reaches `debugDescription`
-/// rather than only a log line (#328).
 public struct PumpDiscrepancy: Equatable {
     public enum Kind: String {
         /// `LastBolusStatus` answered for a bolus other than the one asked about.

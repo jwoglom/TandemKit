@@ -16,7 +16,6 @@ public class UnfinalizedDose {
     public var estimatedEndDate: Date
     public let value: Double
     public var deliveredUnits: Double = 0
-    /// Set when the driver cancelled this bolus, which makes a short delivery expected.
     public var wasCancelled: Bool = false
     public let insulinType: InsulinType?
     public let automatic: Bool

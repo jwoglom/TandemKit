@@ -189,12 +189,8 @@ extension TandemPumpManager {
         }
     }
 
-    /// A temp basal within this of its scheduled end has ended on time, not early.
     static let tempBasalEndGrace: TimeInterval = .seconds(60)
 
-    /// Records the pump not running the temp basal the driver believes it is (#328). The rate
-    /// tolerance is one percent of the profile rate: a temp rate goes to the pump as a whole
-    /// percent of it and comes back absolute.
     func noteBasalOutcome(_ response: CurrentBasalStatusResponse, at now: Date) {
         let dose = state.basalDose
         guard dose.type == .tempBasal, now < dose.estimatedEndDate - Self.tempBasalEndGrace else {
@@ -209,6 +205,7 @@ extension TandemPumpManager {
             return
         }
 
+        // A temp rate is sent as a whole percent of the profile rate, and comes back absolute.
         let tolerance = response.profileBasalRate / 100.0 + 0.001
         if abs(response.currentBasalRate - dose.value) > tolerance {
             recordDiscrepancy(
@@ -645,15 +642,12 @@ extension TandemPumpManager {
         /// The pump's own timestamp on the record. Used to date the end of delivery instead of
         /// the moment the driver noticed it (see `BolusEndDate`).
         let pumpTimestamp: Date
-        /// Why the pump says delivery ended. nil when it reports a value we have no case for.
         let endReason: LastBolusStatusAbstractResponse.BolusStatus?
     }
 
     /// Below this a shortfall is rounding: the pump reports milliunits, commands use the 0.05 U grid.
     static let deliveryShortfallTolerance = 0.001
 
-    /// Records the pump's account of a finished bolus differing from what was asked for (#328).
-    /// A cancel comes back stopped and short by definition, so only an unasked-for stop counts there.
     func noteBolusOutcome(_ report: LastBolusReport, programmedUnits: Double, afterCancel: Bool) {
         let delivered = "\(report.deliveredUnits)U of \(programmedUnits)U"
 
@@ -727,8 +721,6 @@ extension TandemPumpManager {
         return response.timestampDate
     }
 
-    /// Why the pump says `bolusId` ended. On a V3 response the matching records are read rather
-    /// than the primary one, and a stop on either portion wins over a completion on the other.
     private func endReason(
         from response: LastBolusStatusAbstractResponse,
         bolusId: Int

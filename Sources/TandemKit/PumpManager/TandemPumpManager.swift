@@ -201,12 +201,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         "TandemPumpManager(state: \(state))"
     }
 
-    /// Notes that the pump contradicted the driver. The pump's account is still the one reported;
-    /// this only makes the disagreement visible (see `PumpDiscrepancy`).
+    /// The pump's account is still the one reported; this only makes the disagreement visible.
     func recordDiscrepancy(_ kind: PumpDiscrepancy.Kind, _ detail: String, now: Date = .now) {
-        // One condition, one count: a mismatch the driver cannot resolve is re-read on every sync
-        // until it clears, and counting each read would make one disagreement look like a dozen.
-        if let last = state.lastPumpDiscrepancy,
+        // A mismatch the driver cannot resolve is re-read every sync until it clears.
+        if let last = state.pumpDiscrepancies.last,
            last.kind == kind,
            last.detail == detail,
            now.timeIntervalSince(last.date) < Self.discrepancyRepeatWindow
@@ -216,11 +214,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         let discrepancy = PumpDiscrepancy(kind: kind, date: now, detail: detail)
         logger.error("[discrepancy] \(discrepancy.description)")
-        state.pumpDiscrepancyCount += 1
-        state.lastPumpDiscrepancy = discrepancy
+        state.pumpDiscrepancies.append(discrepancy)
+        state.pumpDiscrepancies = state.pumpDiscrepancies.suffix(Self.keptDiscrepancies)
     }
 
     static let discrepancyRepeatWindow: TimeInterval = .minutes(15)
+    static let keptDiscrepancies = 20
 
     public var isOnboarded: Bool {
         state.pumpState.derivedSecret != nil
