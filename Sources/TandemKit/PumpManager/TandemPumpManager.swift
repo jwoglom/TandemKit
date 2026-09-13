@@ -40,9 +40,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let replacePendingEvents: Bool
     }
 
-    /// Batches emitted before a delegate attached. Not held inside `pumpDelegate.notify` the way
-    /// the reservoir flag is: `notify` hops onto a queue that is `.main` until the host sets one,
-    /// so the decision to hold has to be made synchronously.
+    /// `pumpDelegate.notify` hops onto a queue that is `.main` until the host sets one, so the
+    /// decision to hold rather than send has to be made synchronously.
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
 
@@ -483,8 +482,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if self.bluetooth.responseCount > responsesBefore {
                 self.state.lastReconciliation = Date.now
 
-                // Nothing above emits on a steady-state cycle, and this is the only way the
-                // new boundary reaches the host.
+                // Nothing above emits on a steady-state cycle.
                 self.reportReconciliationBoundary()
             } else {
                 self.logger.error("Sync got no response from the pump; leaving lastSync where it was")
@@ -1709,8 +1707,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.runFetch(fetch)
             }
 
-            // These fetches move the boundary and arm the 4.5-minute short-circuit, so the host
-            // hears about it even when none of them found a dose.
+            // The fetches move the boundary even when none of them found a dose.
             self.reportReconciliationBoundary()
 
             completion()
@@ -1792,11 +1789,7 @@ extension TandemPumpManager {
         ))
     }
 
-    /// Reports the boundary on its own, with no delivery to go with it. Loop's boundary otherwise
-    /// lags at the last dose transition, which cuts its save range and lets whole-unit reservoir
-    /// doses replace the pump events behind it.
-    ///
-    /// Empty and non-replacing: the active event set is only the temp basal, so replacing with it
+    /// Empty and non-replacing: the active event set is only the temp basal, so a replacing batch
     /// would purge a running bolus the host holds as a mutable dose.
     func reportReconciliationBoundary() {
         emitPumpEvents([], replacePendingEvents: false)
@@ -1804,19 +1797,14 @@ extension TandemPumpManager {
 
     private func emitPumpEvents(_ batch: PendingPumpEventBatch) {
         guard canNotifyDelegate else {
-            // Pairing ends in a full sync that runs before the host adopts the manager. Dropping
-            // here loses the first boundary, and any dose reported in that window, for good.
             logger.warning("No pump delegate; holding \(batch.events.count) pump event(s) until one attaches")
             holdPumpEventBatches([batch])
             return
         }
 
-        // Held batches first, both to keep the emission order and to catch one held in the
-        // instant before a delegate attached.
         deliverPumpEventBatches(takePendingPumpEventBatches() + [batch])
     }
 
-    /// Replays what `emitPumpEvents` had nowhere to send. A no-op in the normal case.
     func flushPendingPumpEvents() {
         guard canNotifyDelegate else { return }
 
@@ -1827,8 +1815,8 @@ extension TandemPumpManager {
         deliverPumpEventBatches(batches)
     }
 
-    /// The host asserts its delegate methods run on the queue it set, so one without the other is
-    /// not somewhere events can be sent.
+    /// The host asserts its delegate methods run on the queue it set, so a delegate without a
+    /// queue is not somewhere events can be sent.
     private var canNotifyDelegate: Bool {
         pumpDelegate.delegate != nil && hasDelegateQueue
     }
@@ -1836,7 +1824,7 @@ extension TandemPumpManager {
     private func deliverPumpEventBatches(_ batches: [PendingPumpEventBatch]) {
         pumpDelegate.notify { delegate in
             guard let delegate = delegate else {
-                // Gone between the check above and this hop. Front, to keep the emission order.
+                // Front, to keep the emission order.
                 self.holdPumpEventBatches(batches, atFront: true)
                 return
             }
@@ -1862,7 +1850,7 @@ extension TandemPumpManager {
             pendingPumpEventBatches += batches
         }
 
-        // Oldest first: a later batch is the more current picture of delivery.
+        // Drop the oldest: a later batch is the more current picture of delivery.
         let overflow = pendingPumpEventBatches.count - TandemPumpManager.maximumHeldPumpEventBatches
         if overflow > 0 {
             logger.error("Held pump event batches overflowed; dropping the \(overflow) oldest")

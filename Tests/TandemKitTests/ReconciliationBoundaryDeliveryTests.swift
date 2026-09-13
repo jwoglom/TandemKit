@@ -3,8 +3,7 @@ import LoopKit
 import XCTest
 
 /// `lastReconciliation` reaches the host only as an argument of `hasNewPumpEvents`, and every
-/// other emitter fires on a dose transition. These pin the boundary reaching the host on a sync
-/// that found nothing new, and reports emitted before the host adopts the manager being replayed.
+/// other emitter fires on a dose transition.
 @available(macOS 13.0, iOS 14.0, *) final class ReconciliationBoundaryDeliveryTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -95,7 +94,6 @@ import XCTest
         }
     }
 
-    /// A link that answers nothing is not a reconciliation: no new boundary to report.
     func testSyncThePumpAnswersNothingToReportsNoBoundary() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
@@ -106,7 +104,6 @@ import XCTest
         XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "An unanswered sync must not report a boundary")
     }
 
-    /// The reservoir read stamps the boundary itself and runs outside a sync too.
     func testStandaloneReservoirReadReportsItsOwnStamp() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
@@ -122,7 +119,6 @@ import XCTest
         )
     }
 
-    /// A pump-initiated event runs the same fetches and arms the same short-circuit.
     func testQualifyingEventFetchReportsTheBoundary() {
         let delegate = MockPumpManagerDelegate()
         let queue = attachDelegate(delegate)
@@ -179,7 +175,6 @@ import XCTest
         queue.sync {}
     }
 
-    /// Doses, not just the boundary, have to survive the pairing window.
     func testDoseEventsEmittedWithoutADelegateAreReplayedInOrder() {
         let suspendDate = Date().addingTimeInterval(-120)
         let resumeDate = Date().addingTimeInterval(-60)
@@ -213,15 +208,13 @@ import XCTest
         let queue = attachDelegate(delegate)
         let afterAttach = delegate.pumpEventBatches.count
 
-        // deliverStateMissedByTheDelegate runs from both setters, so a second pass must find
-        // nothing left to send.
+        // deliverStateMissedByTheDelegate runs from both setters.
         manager.pumpManagerDelegate = delegate
         queue.sync {}
 
         XCTAssertEqual(delegate.pumpEventBatches.count, afterAttach)
     }
 
-    /// A later sync must not be stranded behind the held ones: it flushes them and lands after.
     func testASyncAfterAttachSendsHeldReportsFirst() throws {
         stubQuietSyncResponses()
         runSync(on: nil)
@@ -231,8 +224,7 @@ import XCTest
         let queue = attachDelegate(delegate)
         runSync(on: queue)
 
-        // The pairing sync reports twice (the reservoir read stamps, then the sync does), so look
-        // for the held boundary rather than the first element.
+        // The pairing sync reports twice (the reservoir read stamps, then the sync does).
         let boundaries = delegate.pumpEventBatches.compactMap(\.lastReconciliation)
         XCTAssertTrue(
             boundaries.contains(try XCTUnwrap(pairingBoundary)),

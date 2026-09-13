@@ -17,8 +17,8 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         let date: Date
     }
 
-    /// One `hasNewPumpEvents` call. Recorded whole because the boundary the host would store, and
-    /// whether its pending doses were replaced, matter as much as the events themselves.
+    /// One `hasNewPumpEvents` call, recorded whole: the boundary and the replace flag matter as
+    /// much as the events.
     struct PumpEventBatch {
         let events: [NewPumpEvent]
         let lastReconciliation: Date?
