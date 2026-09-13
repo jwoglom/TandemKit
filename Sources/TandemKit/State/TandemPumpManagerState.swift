@@ -58,9 +58,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
-    /// A cancelled bolus the pump has not yet reported a delivered volume for, held mutable until
-    /// it does (see `finalizePendingCancelledBolus`). `deliveredUnits` carries the estimate taken
-    /// at the cancel and `estimatedEndDate` the moment of the cancel, which bounds the retries.
     public var pendingCancelledBolus: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule

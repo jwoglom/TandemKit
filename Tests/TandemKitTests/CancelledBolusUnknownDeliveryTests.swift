@@ -2,9 +2,7 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// A cancel whose delivered-volume read fails must not be finalized at 0 U (#328, P05-2): a bolus
-/// that had already pushed several units would be recorded as having delivered nothing, and an
-/// immutable row is never corrected. It stays mutable and the read is retried on later syncs.
+/// Cancel with an unknown delivered volume (#328, P05-2).
 @available(macOS 13.0, iOS 14.0, *) final class CancelledBolusUnknownDeliveryTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -129,8 +127,6 @@ import XCTest
 
     func testCancelWithMismatchedBolusIdKeepsTheDoseMutable() throws {
         startBolus()
-        // The pump's last stored bolus is still the previous one: the 2s sleep only guesses at the
-        // Mobi's storage lag.
         stubLastBolus(deliveredVolume: 900, bolusId: Self.bolusId - 1)
 
         cancelBolus()
@@ -140,7 +136,6 @@ import XCTest
         XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
     }
 
-    /// The re-report has to land on the row the host already has, not insert a second bolus.
     func testMutableReReportKeepsTheRawItWasFirstReportedUnder() {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
@@ -163,7 +158,6 @@ import XCTest
         XCTAssertEqual(manager.state.pendingCancelledBolus?.value, Self.programmedUnits)
     }
 
-    /// A held dose survives a relaunch, or the row is left mutable forever.
     func testPendingCancelledBolusRoundTripsThroughRawState() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
@@ -205,14 +199,12 @@ import XCTest
         XCTAssertEqual(manager.state.pendingCancelledBolus?.bolusId, Self.bolusId)
     }
 
-    /// Once the retry window is out the driver settles for the estimate recorded at the cancel —
-    /// a number derived from delivery, not a placeholder zero.
     func testRetryGivesUpWithTheEstimateAfterTheWindow() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
         cancelBolus()
 
-        // Stand in for a progress reporter that had counted 0.7U out before the cancel.
+        // Stands in for a progress reporter that had counted 0.7U out before the cancel.
         manager.state.pendingCancelledBolus?.deliveredUnits = 0.7
 
         let afterWindow = Date.now
@@ -226,8 +218,7 @@ import XCTest
         XCTAssertNil(manager.state.pendingCancelledBolus)
     }
 
-    /// `LastBolusStatus` reports whatever the pump stored last, so reading it while a newer bolus
-    /// is running could attribute that bolus's delivery to the held one.
+    /// A newer bolus's delivery would otherwise be attributed to the held one.
     func testRetryDoesNotReadThePumpWhileAnotherBolusIsTracked() {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }

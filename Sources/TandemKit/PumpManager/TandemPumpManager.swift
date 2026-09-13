@@ -673,27 +673,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Allow the Mobi to store the bolus in storage
             Thread.sleep(forTimeInterval: .seconds(2))
 
-            // A rate-based estimate, not a measurement: used only if the pump never reports what
-            // it actually delivered.
             let estimatedDelivered = min(
                 max(self.bolusProgressReport?.progress.deliveredUnits ?? 0, 0),
                 bolusDose.value
             )
 
-            // Clean up bolus tracking state (mirrors handleBolusResponse completion path)
             self.telemetryScheduler.cancelAll()
             self.bolusProgressReport = nil
             self.state.bolusDose = nil
 
             guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
-                // Unknown, not zero. Finalizing at 0 would permanently erase the insulin the pump
-                // pushed before the cancel, since a finalized dose is never revised (#328).
-                // Mutable keeps the host counting the programmed amount until the read succeeds.
+                // Unknown, not zero: finalizing at 0 would permanently erase the insulin that
+                // went in before the cancel (#328).
                 self.logger.error(
                     "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
                 )
                 bolusDose.deliveredUnits = estimatedDelivered
-                // Delivery has stopped; also the start of the retry window.
+                // Also the start of the retry window.
                 bolusDose.estimatedEndDate = Date.now
                 self.state.pendingCancelledBolus = bolusDose
 
