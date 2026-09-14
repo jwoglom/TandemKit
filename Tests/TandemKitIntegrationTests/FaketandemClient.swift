@@ -36,6 +36,52 @@ enum FaketandemPairingState: String, Codable {
     }
 }
 
+/// One history-log record as the harness API reports it (`pkg/harness/history.go`
+/// `historyEntrySnapshot`).
+///
+/// The two timestamps are not two renderings of one number:
+///
+/// - `time` is the record's **true instant** on the pump's Clock, with neither the pump's clock
+///   skew nor its time zone folded in;
+/// - `pumpSeconds` is the same instant **as it went on the wire**: pump-epoch seconds with both
+///   the skew (`pump_offset_seconds`) and the pump's zone (`pump_timezone_offset_seconds`)
+///   applied. `pumpTime` is that same value under the name the state snapshot has always used.
+///
+/// Either is derivable from the other with the two offsets `/api/clock` reports:
+///
+///     unix(time) = pumpSeconds + 1_199_145_600 - pumpTimezoneOffsetSeconds - pumpOffsetSeconds
+///
+/// `data` holds the record's own **wire fields**, named exactly as pumpX2 and TandemKit name them,
+/// and nothing else. `extra` holds the pump-side context a 26-byte record has no room for — a temp
+/// rate's delivered volume, the reason string behind a suspend, the alert type behind an alarm —
+/// which never reaches the wire and is kept separate so it cannot be mistaken for a record field.
+struct FaketandemHistoryEntry: Decodable {
+    let sequence: Int
+    let typeId: Int
+    let type: String
+    let time: Date
+    let pumpSeconds: Int
+    let pumpTime: Int
+    let data: [String: FaketandemJSONValue]?
+    let extra: [String: FaketandemJSONValue]?
+    /// The high nibble of the record's type-id word (1 on Mobi captures, 0 on older ones).
+    let sourceNibble: Int?
+}
+
+/// `GET /api/history?since=&limit=`, the full history feed. `since` is exclusive — the last
+/// sequence the caller already has — so a poller hands back the previous page's `nextSince`
+/// unchanged, and `truncated` says the limit cut the page short.
+struct FaketandemHistoryPage: Decodable {
+    let count: Int
+    let firstSequence: Int
+    let lastSequence: Int
+    let since: Int
+    let limit: Int
+    let nextSince: Int
+    let truncated: Bool
+    let entries: [FaketandemHistoryEntry]
+}
+
 /// `GET /api/state`, the parts the tests read. Unknown keys are ignored so the emulator can grow.
 struct FaketandemSnapshot: Decodable {
     struct Identity: Decodable {
@@ -45,15 +91,7 @@ struct FaketandemSnapshot: Decodable {
         let apiVersionMinor: Int
     }
 
-    struct Clock: Decodable {
-        let mode: String
-        let now: Date
-        let pumpOffsetSeconds: Double
-        let frozen: Bool
-        let pumpNow: Date
-        let pumpTimeSeconds: Int
-        let timeSinceReset: Int
-    }
+    typealias Clock = FaketandemClock
 
     struct Auth: Decodable {
         let authenticated: Bool
@@ -122,30 +160,39 @@ struct FaketandemSnapshot: Decodable {
         let lastSeq: Int
     }
 
+    /// A standing alert. `time` is the true instant it was raised on the pump's Clock;
+    /// `pumpSeconds` is the same instant as the wire carries it.
     struct Alert: Decodable {
         let id: Int
         let type: Int
+        let typeName: String
         let priority: Int
         let message: String
         let time: Date
+        let pumpSeconds: Int
         let acknowledged: Bool
     }
 
-    /// One history-log record as the pump stores it (`pkg/state` `HistoryLogEntry`): `time` is the
-    /// record's wall-clock instant on the pump's clock (including any `pump_offset_seconds` skew),
-    /// `pumpTime` the same instant in seconds since the Tandem epoch, and `data` the event's fields
-    /// under the names the emulator wrote them with, which differ between the protocol-driven and
-    /// the harness-driven paths (see `PumpTimeline`).
-    struct HistoryEntry: Decodable {
-        let sequence: Int
-        let typeId: Int
-        let type: String
+    /// One entry of `alarms_history`: an alarm that was raised and has since been cleared, with
+    /// both ends of the interval. `alerts` only ever reports what stands now, so this is the only
+    /// place a timeline can read the clearing from.
+    struct ClearedAlarm: Decodable {
+        let id: Int
+        let type: Int
+        let typeName: String
+        let priority: Int
+        let message: String
         let time: Date
-        let pumpTime: Int
-        let data: [String: FaketandemJSONValue]?
+        let pumpSeconds: Int
+        let clearedTime: Date
+        let clearedPumpSeconds: Int
     }
 
-    /// The tail of the history log (the emulator's `historySnapshotLimit`, 50 records).
+    typealias HistoryEntry = FaketandemHistoryEntry
+
+    /// The tail of the history log (the emulator's `historySnapshotLimit`, 50 records). A scenario
+    /// that runs for a while loses records off the front of it without being told, so the timeline
+    /// is built from `GET /api/history` instead; this stays for the sequence marks.
     struct History: Decodable {
         let count: Int
         let firstSequence: Int
@@ -163,6 +210,8 @@ struct FaketandemSnapshot: Decodable {
     let insulin: Insulin
     let battery: Battery
     let alerts: [Alert]
+    /// Every alarm that has been raised *and* cleared, with both ends (`alarms_history`).
+    let alarmsHistory: [ClearedAlarm]
     let history: History
     let requestLog: RequestLog
 }
@@ -279,14 +328,40 @@ struct FaketandemTransport: Decodable {
     let mtuConfigurable: Bool
 }
 
+/// `GET|PUT /api/clock`. Two separate offsets sit between the emulator's clock and the wire, and
+/// they mean different things (README "Clock"):
+///
+/// - `pumpTimezone` / `pumpTimezoneOffsetSeconds` is the pump's **local-time convention**, not a
+///   lie. A Tandem pump keeps its clock in local time with no zone attached, and every consumer
+///   decodes on that assumption (TandemKit's `Dates.fromJan12008ToUnixEpochSeconds` subtracts
+///   `TimeZone.current.secondsFromGMT()`), so the emulator encodes with the zone's offset added.
+///   The offset is read-only: the zone's offset in force at `pumpNow`, so a caller never has to
+///   work out which side of a DST transition the pump is on.
+/// - `pumpOffsetSeconds` is a **skew**: a lie the pump tells about the time, stacked on top of the
+///   zone, which moves every wire timestamp without touching delivery arithmetic.
 struct FaketandemClock: Decodable {
     let mode: String
     let now: Date
     let pumpOffsetSeconds: Double
+    /// The IANA zone the pump keeps its clock in ("America/New_York"); "UTC" turns the convention off.
+    let pumpTimezone: String
+    /// That zone's UTC offset in force at `pumpNow`, read-only.
+    let pumpTimezoneOffsetSeconds: Int
     let frozen: Bool
     let pumpNow: Date
     let pumpTimeSeconds: Int
     let timeSinceReset: Int
+
+    /// The true instant a wire timestamp of `pumpSeconds` meant, with both offsets removed.
+    func instant(fromPumpSeconds pumpSeconds: Int) -> Date {
+        Date(
+            timeIntervalSince1970: FaketandemClock.tandemEpochUnix + Double(pumpSeconds)
+                - Double(pumpTimezoneOffsetSeconds) - pumpOffsetSeconds
+        )
+    }
+
+    /// 2008-01-01T00:00:00Z, the Tandem pump epoch (`pkg/state/pumptime.go` `tandemEpochUnix`).
+    static let tandemEpochUnix: TimeInterval = 1_199_145_600
 }
 
 struct FaketandemFault: Decodable {
@@ -426,12 +501,14 @@ final class FaketandemClient {
         mode: String,
         now: Date? = nil,
         frozen: Bool? = nil,
-        pumpOffsetSeconds: Double? = nil
+        pumpOffsetSeconds: Double? = nil,
+        pumpTimezone: String? = nil
     ) throws -> FaketandemClock {
         var body: [String: Any] = ["mode": mode]
         if let now { body["now"] = Self.fractionalFormatter.string(from: now) }
         if let frozen { body["frozen"] = frozen }
         if let pumpOffsetSeconds { body["pump_offset_seconds"] = pumpOffsetSeconds }
+        if let pumpTimezone { body["pump_timezone"] = pumpTimezone }
         return try decode(send("PUT", "/api/clock", json: body), as: FaketandemClock.self)
     }
 
@@ -527,6 +604,34 @@ final class FaketandemClient {
     @discardableResult
     func setATTMTU(_ mtu: Int) throws -> FaketandemTransport {
         try decode(send("PUT", "/api/transport", json: ["att_mtu": mtu]), as: FaketandemTransport.self)
+    }
+
+    // MARK: - History log
+
+    /// One page of `GET /api/history`. `since` is exclusive.
+    func historyPage(since: Int? = nil, limit: Int? = nil) throws -> FaketandemHistoryPage {
+        var query: [String] = []
+        if let since { query.append("since=\(since)") }
+        if let limit { query.append("limit=\(limit)") }
+        let path = query.isEmpty ? "/api/history" : "/api/history?" + query.joined(separator: "&")
+        return try get(path, as: FaketandemHistoryPage.self)
+    }
+
+    /// Every history record after `since`, following `next_since` until the feed stops truncating.
+    /// This is what a timeline is built from: the 50-record tail in `GET /api/state` silently drops
+    /// records off its front once a scenario has run for a while.
+    func history(since: Int = 0, pageLimit: Int? = nil) throws -> [FaketandemHistoryEntry] {
+        var entries: [FaketandemHistoryEntry] = []
+        var cursor = since
+        // Bounded: each page either advances the cursor or ends the loop, and the emulator caps a
+        // page at 5000 records, so this cannot spin on a stuck feed.
+        for _ in 0 ..< 64 {
+            let page = try historyPage(since: cursor, limit: pageLimit)
+            entries.append(contentsOf: page.entries)
+            guard page.truncated, page.nextSince > cursor else { break }
+            cursor = page.nextSince
+        }
+        return entries
     }
 
     // MARK: - Request log

@@ -7,9 +7,12 @@ guide rule it exercises (§n), the audit point it closes (`docs/dose-reporting-c
 P01–P24 / G01–G07) and the GitHub issue it reproduces where one exists.
 
 The tests live in `Tests/TandemKitIntegrationTests/Conformance/` and run against a real
-`TandemPumpManager` over the virtual GATT link. Scenarios whose driver behaviour is a known open
+`TandemPumpManager` over the virtual GATT link, driving the emulator at its current `main`
+(`FAKETANDEM_DIR=…`) — there is nothing to pin. Scenarios whose driver behaviour is a known open
 issue are written with a **strict `XCTExpectFailure`** naming the issue, so the fix flips them to
-"unexpected pass" and the marker is removed with the fix.
+"unexpected pass" and the marker is removed with the fix. Emulator gaps are wrapped the same way
+and listed in `docs/integration-harness.md`; the temp-rate-completion gap that once kept B3, B4 and
+B5 from closing their diffs is fixed, and those diffs now stand unwrapped.
 
 ## Oracles
 
@@ -35,12 +38,24 @@ finished, never happened).
 - `DoseJournal` on `MockPumpManagerDelegate`: ordered record of every delegate call with a
   monotonic index and the driver clock's `now`, including `hasNewPumpEvents(events,
   lastReconciliation, replacePendingEvents)`, status updates, `didError`, `willDeactivate`.
-- `PumpTimeline` from faketandem's `/api/log` and `/api/state` snapshot: the pump's own record of
-  bolus start/stop, delivered units, temp-rate activation and completion, suspend and resume, with
-  pump-epoch timestamps. Every scenario ends by diffing the oracle's doses against the timeline
-  (guide §11 "diff your reported timeline"; audit P21).
-- Time: driver on `ManualClock`, pump on `/api/clock` manual mode. `advanceBoth(seconds)` moves
-  both and ticks the simulator so delivery arithmetic and driver windows stay in lock-step.
+- `PumpTimeline` from faketandem's history feed (`GET /api/history`, paged to the end rather than
+  the 50-record tail in `/api/state`), the live snapshot and `/api/log`: the pump's own record of
+  bolus start/stop and delivered units, temp-rate activation and completion, suspend and resume,
+  and alarms with both ends (`alarms_history`). Every scenario ends by diffing the oracle's doses
+  against the timeline (guide §11 "diff your reported timeline"; audit P21).
+
+  Every instant in it is reconstructed from the record's wire seconds, which is the arithmetic a
+  driver does: `unix = pump_seconds + 1_199_145_600 - pump_timezone_offset_seconds -
+  pump_offset_seconds`. Record fields are read under their wire names (`bolusSize`,
+  `insulinDelivered`/`insulinRequested`/`completionStatusId`, `durationMilliseconds`,
+  `tempRateId`/`timeLeft`, `reasonId`, `alarmId`) and descriptive values — the bolus source, a temp
+  rate's absolute rate, a suspend's reason string, an alarm's alert type — from the record's
+  `extra`. `completionStatusId` is pumpX2's `BolusStatus`: 3 is the only completion.
+- Time: driver on `ManualClock`, pump on `/api/clock` manual mode, in the test process's own time
+  zone (`pump_timezone`), because a Tandem pump keeps local time and TandemKit decodes on that
+  assumption. `pump_offset_seconds` is left at 0 and means a genuine clock skew when a scenario
+  asks for one. `advanceBoth(seconds)` moves both clocks and ticks the simulator so delivery
+  arithmetic and driver windows stay in lock-step.
 - Delivery: `bolus_rate_units_per_second` set high enough that a 1 U bolus completes in a few
   simulator ticks; `stall`/`resume`/`abort` stage pump-side interruptions.
 

@@ -207,10 +207,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return delegates.flatMap { $0.pumpEventJournal.compactMap(\.pumpEventBatch) }
     }
 
-    /// The pump's record since this test began.
+    /// The pump's record since this test began, built from the full history feed
+    /// (`GET /api/history`) rather than the 50-record tail in the snapshot, which a scenario
+    /// running for a while silently outgrows.
     func timeline() throws -> PumpTimeline {
         PumpTimeline.build(
             snapshot: try harness.client.snapshot(),
+            history: try harness.client.history(since: historyStartSequence),
             log: try harness.requestLog(since: logStartSequence),
             afterSequence: historyStartSequence
         )
