@@ -207,8 +207,12 @@ final class CancelConformanceTests: ConformanceTestCase {
         XCTAssertTrue(running.bolus.active, "\(what): the pump should still be delivering", file: file, line: line)
         XCTAssertEqual(running.bolus.unitsDelivered, deliverUnits, accuracy: 0.02, "\(what): pump-side delivered", file: file, line: line)
 
-        // Cancel.
+        // Cancel. The phone's wall clock at the moment the driver resolves the end is captured
+        // because `BolusEndDate.resolve` clamps to `Date.now` rather than to the injected clock;
+        // whether that clamp actually moves the answer depends on where the pump's frozen clock
+        // stands relative to it (see the expected failure below).
         let result = try cancelBolus()
+        let wallClockAtFinalization = Date()
         switch result {
         case let .failure(error):
             XCTFail("\(what): cancelBolus failed: \(error)", file: file, line: line)
@@ -276,7 +280,15 @@ final class CancelConformanceTests: ConformanceTestCase {
             )
             timeline.assertMatches(loop, tolerance: tolerance, what, file: file, line: line)
         }
-        if deliverUnits > 0 {
+        // The defect is only observable when the clamp actually bites: `resolve` returns
+        // `min(candidate, detectedAt)`, so a pump stop that already lies behind the phone's wall
+        // clock survives the clamp unchanged and the reported end is right by luck. This scenario
+        // freezes the pump and steps it, so which side of the wall clock the pump's stop lands on
+        // is decided by how much pump time the step bought against how much real time the BLE
+        // exchange cost — and the wrapper has to follow it, or it is strict about a defect that
+        // did not show.
+        let clampBites = pumpEnd.timeIntervalSince(wallClockAtFinalization) > tolerance.time
+        if deliverUnits > 0, clampBites {
             XCTExpectFailure(
                 "jwoglom/TandemKit: unfiled — TandemPumpManager.cancelBolus builds the finalized endDate with "
                     + "BolusEndDate.resolve(...) without passing detectedAt, so the clamp uses Date.now instead of the "
@@ -284,6 +296,8 @@ final class CancelConformanceTests: ConformanceTestCase {
                     + "pump's stop (the emulator's missing bolusInitiationDelay lead-in moves it too, but the other way)",
                 strict: true
             ) { endAndTimeline() }
+        } else if deliverUnits > 0 {
+            endAndTimeline()
         } else {
             // Nothing was delivered, so `BolusEndDate` has only the start and the 15 s initiation
             // lead-in to work with; the ledgers can differ by no more than that window.
