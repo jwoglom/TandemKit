@@ -45,7 +45,7 @@ public class Jpake1bRequest: PumpRequest {
 }
 
 /// Response providing a hash of the second half of the first round.
-public class Jpake1bResponse: Message {
+public class Jpake1bResponse: Message, JpakeChallengeResponse {
     public static let props = MessageProps(
         opCode: 35,
         size: 167,
@@ -61,7 +61,7 @@ public class Jpake1bResponse: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         appInstanceId = Bytes.readShort(cargo, 0)
-        centralChallengeHash = cargo.subdata(in: 2 ..< 167)
+        centralChallengeHash = JpakeCargo.challengePayload(cargo, declaredSize: 167)
     }
 
     public init(appInstanceId: Int, centralChallengeHash: Data) {

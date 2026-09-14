@@ -44,8 +44,8 @@ public class Jpake2Request: PumpRequest {
     }
 }
 
-/// Response to `Jpake2Request` with 168-byte hash.
-public class Jpake2Response: Message {
+/// Response to `Jpake2Request` carrying the pump's round-2 payload.
+public class Jpake2Response: Message, JpakeChallengeResponse {
     public static let props = MessageProps(
         opCode: 37,
         size: 170,
@@ -61,7 +61,7 @@ public class Jpake2Response: Message {
     public required init(cargo: Data) {
         self.cargo = cargo
         appInstanceId = Bytes.readShort(cargo, 0)
-        centralChallengeHash = cargo.subdata(in: 2 ..< 170)
+        centralChallengeHash = JpakeCargo.challengePayload(cargo, declaredSize: 170)
     }
 
     public init(appInstanceId: Int, centralChallengeHash: Data) {
