@@ -52,8 +52,8 @@ public class Jpake1aRequest: AbstractCentralChallengeRequest, PumpRequest {
     }
 }
 
-/// Response to `Jpake1aRequest` providing a 165-byte hash of the challenge.
-public class Jpake1aResponse: AbstractCentralChallengeResponse {
+/// Response to `Jpake1aRequest` carrying the pump's first round-1 frame.
+public class Jpake1aResponse: AbstractCentralChallengeResponse, JpakeChallengeResponse {
     public static let props = MessageProps(
         opCode: 33,
         size: 167,
@@ -68,8 +68,8 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse {
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        appInstanceId = Bytes.readShort(cargo, 0)
-        centralChallengeHash = cargo.subdata(in: 2 ..< 167)
+        appInstanceId = JpakeCargo.appInstanceId(cargo)
+        centralChallengeHash = JpakeCargo.challengePayload(cargo, declaredSize: 167)
     }
 
     public init(appInstanceId: Int, centralChallengeHash: Data) {

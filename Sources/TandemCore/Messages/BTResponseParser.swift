@@ -38,6 +38,23 @@ enum BTResponseParser {
                 return
             }
 
+            // Message parsers slice their cargo at fixed offsets, which traps rather than throws
+            // when the cargo is short. Assembled cargo carries the packet's 2-byte CRC on the end,
+            // so a well-formed message clears its declared size; anything below the minimum is a
+            // truncated or corrupt notification and is dropped.
+            let props = matchingResponseType.props
+            if !props.variableSize, !props.stream {
+                let minimum = matchingResponseType is any JpakeChallengeResponse.Type
+                    ? Int(props.size) - JpakeCargo.maxScalarShortfall
+                    : Int(props.size)
+                guard response.fullCargo.count >= minimum else {
+                    logger.error(
+                        "Cargo too short for opCode \(response.opCode): \(response.fullCargo.count) < \(minimum)"
+                    )
+                    return
+                }
+            }
+
             let message = matchingResponseType.self.init(cargo: response.fullCargo)
             response.message = message
         }
