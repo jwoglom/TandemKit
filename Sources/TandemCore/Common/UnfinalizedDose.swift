@@ -201,14 +201,17 @@ public class UnfinalizedDose {
                 actualEndDate = estimatedEndDate
             }
 
-            let duration = actualEndDate.timeIntervalSince(startDate)
+            let duration = max(0, actualEndDate.timeIntervalSince(startDate))
             return DoseEntry(
                 type: .tempBasal,
                 startDate: startDate,
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
-                deliveredUnits: isMutable ? nil : value * (duration / .hours(1)),
+                // Computed, not measured: the pump reports no delivered volume for a temp rate, so
+                // this is the programmed rate over the time it ran, at the pump's own 0.001 U
+                // resolution.
+                deliveredUnits: isMutable ? nil : roundDeliveredUnits(value * (duration / .hours(1))),
                 insulinType: insulinType,
                 automatic: automatic,
                 isMutable: isMutable
@@ -227,6 +230,11 @@ public class UnfinalizedDose {
                 automatic: automatic
             )
         }
+    }
+
+    /// The finest volume the pump itself accounts in.
+    private func roundDeliveredUnits(_ units: Double) -> Double {
+        (units * 1000).rounded() / 1000
     }
 
     private func roundBasalRate(_ rate: Double) -> Double {
