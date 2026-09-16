@@ -31,6 +31,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Tandem Mobi and t:slim X2: a temp rate is a whole percent of the profile basal, 0 - 250%
     internal static let maximumTempBasalPercent: Int = 250
 
+    /// Refused rather than stretched: 5 minutes rounded up to 15 runs three times the insulin
+    /// change that was asked for.
+    internal static let minimumTempBasalDuration: TimeInterval = .minutes(15)
+    internal static let maximumTempBasalDuration: TimeInterval = .hours(72)
+
     internal let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
 
     struct PendingPumpEventBatch {
@@ -756,6 +761,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        // Before any traffic: rejecting after the stop below would leave a running temp rate
+        // cancelled and nothing put in its place (#335).
+        let minutes = Int(min(duration, TandemPumpManager.maximumTempBasalDuration).minutes.rounded())
+        let programmedDuration = TimeInterval.minutes(minutes)
+        if duration >= .ulpOfOne, programmedDuration < TandemPumpManager.minimumTempBasalDuration {
+            logger.warning("[enactTempBasal] Blocked: \(duration.minutes)min is below the pump minimum")
+            completion(.deviceState(TandemPumpManagerValidationError.tempBasalDurationTooShort(
+                requested: duration,
+                minimum: TandemPumpManager.minimumTempBasalDuration
+            )))
+            return
+        }
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
@@ -822,7 +840,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
+            let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
                 completion(.communication(PumpCommError.noResponse))
@@ -840,7 +858,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             let dose = UnfinalizedDose(
                 tempRate: absoluteRate,
-                duration: duration,
+                duration: programmedDuration,
                 automatic: true,
                 insulinType: self.state.insulinType,
             )

@@ -62,6 +62,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case maximumBolusExceeded(requested: Double, maximum: Double)
     case controlIQModeActive
     case bolusIsRunning
+    case tempBasalDurationTooShort(requested: TimeInterval, minimum: TimeInterval)
 
     public var errorDescription: String? {
         switch self {
@@ -92,6 +93,15 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 localized: "A bolus is still being delivered",
                 comment: "Error when a command is blocked because a bolus is in progress"
             )
+        case let .tempBasalDurationTooShort(requested, minimum):
+            return String(
+                format: String(
+                    localized: "A temp basal of %.0f minutes is shorter than the pump minimum of %.0f minutes",
+                    comment: "Error when a temp basal is shorter than the pump will accept"
+                ),
+                requested / 60,
+                minimum / 60
+            )
         }
     }
 
@@ -112,6 +122,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "Wait for the bolus to finish, then try again.",
                 comment: "Recovery suggestion when a bolus is in progress"
+            )
+        case .tempBasalDurationTooShort:
+            return String(
+                localized: "Ask for a longer temp basal.",
+                comment: "Recovery suggestion when a temp basal is too short for the pump"
             )
         }
     }
