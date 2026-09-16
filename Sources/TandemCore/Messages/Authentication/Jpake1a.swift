@@ -68,7 +68,7 @@ public class Jpake1aResponse: AbstractCentralChallengeResponse, JpakeChallengeRe
 
     public required init(cargo: Data) {
         self.cargo = cargo
-        appInstanceId = Bytes.readShort(cargo, 0)
+        appInstanceId = JpakeCargo.appInstanceId(cargo)
         centralChallengeHash = JpakeCargo.challengePayload(cargo, declaredSize: 167)
     }
 

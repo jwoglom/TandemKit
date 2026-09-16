@@ -13,6 +13,14 @@ enum JpakeCargo {
     /// scalar it ends with can encode to as little as one byte.
     static let maxScalarShortfall = 32
 
+    /// The app instance id in the first two bytes, or 0 when the cargo is too short to hold one.
+    /// `Bytes.readShort` traps on a short buffer, and these responses are built from whatever the
+    /// pump sent.
+    static func appInstanceId(_ cargo: Data) -> Int {
+        guard cargo.count >= 2 else { return 0 }
+        return Bytes.readShort(cargo, 0)
+    }
+
     static func challengePayload(_ cargo: Data, declaredSize: Int) -> Data {
         let start = cargo.startIndex
         let end = Swift.min(start + declaredSize, cargo.endIndex)

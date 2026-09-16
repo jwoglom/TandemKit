@@ -10,7 +10,7 @@ import XCTest
 final class JpakeShortScalarReceiveTests: XCTestCase {
     private static let pointLength = 65
     /// The parser leaves the packet CRC on the assembled cargo; its value is never checked.
-    private static let crc = Data([0x9b, 0xe8])
+    private static let crc = Data([0x9B, 0xE8])
 
     /// `[1][65-byte X][1][65-byte V][1][scalar]`, the layout `EcJpake.writeZkp` emits.
     private func group(scalarLength: Int, seed: UInt8 = 0x10) -> Data {
