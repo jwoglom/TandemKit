@@ -821,12 +821,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
 
+                let startDate = Date.now
                 let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
+                    basalRate: self.getScheduledBasalRate(at: startDate),
                     insulinType: self.state.insulinType,
-                    startDate: Date.now
+                    startDate: startDate
                 )
-                
+
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
 
@@ -1410,10 +1411,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if request.enabled, self.state.basalDose.type == .tempBasal {
                 _ = self.bluetooth.write(StopTempRateRequest())
 
+                let startDate = Date.now
                 let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
+                    basalRate: self.getScheduledBasalRate(at: startDate),
                     insulinType: self.state.insulinType,
-                    startDate: Date.now
+                    startDate: startDate
                 )
                 var events = self.getActivePumpEvents(endDate: dose.startDate)
                 events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(), date: dose.startDate))
@@ -1812,7 +1814,7 @@ extension TandemPumpManager {
 
         if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
             let dose = UnfinalizedDose(
-                basalRate: getScheduledBasalRate(),
+                basalRate: getScheduledBasalRate(at: basalEntry.endDate),
                 insulinType: state.insulinType,
                 startDate: basalEntry.endDate
             )
@@ -1921,17 +1923,20 @@ extension TandemPumpManager {
         return pendingPumpEventBatches.count
     }
 
-    func getScheduledBasalRate() -> Double {
+    /// The host schedule's rate for a given moment. A dose has to be priced at its own start, not
+    /// at whenever the report is being built — a temp basal that expires across a segment boundary
+    /// is re-emitted after the boundary has passed (#335).
+    func getScheduledBasalRate(at date: Date = Date.now) -> Double {
         let schedule = state.basalRateSchedule
         guard !schedule.items.isEmpty else {
             return 0
         }
 
-        let now = Date.now
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let nowTimeInterval = now.timeIntervalSince(startOfDay)
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let timeOfDay = date.timeIntervalSince(startOfDay)
 
-        return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+        // Inclusive: a segment owns the instant it starts at.
+        return schedule.items.last(where: { $0.startTime <= timeOfDay })?.value ?? schedule.items[0].value
     }
 }
 

@@ -171,7 +171,7 @@ extension TandemPumpManager {
             if activeBasalType == .basal {
                 if !events.contains(where: { $0.type == .basal }) {
                     let dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
+                        basalRate: getScheduledBasalRate(at: now),
                         insulinType: state.insulinType,
                         startDate: now
                     )
@@ -570,7 +570,7 @@ extension TandemPumpManager {
                     )
                 } else {
                     dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
+                        basalRate: getScheduledBasalRate(at: now),
                         insulinType: state.insulinType,
                         startDate: now
                     )

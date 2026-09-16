@@ -237,8 +237,13 @@ public class UnfinalizedDose {
         (units * 1000).rounded() / 1000
     }
 
+    /// Nearest, not floored: this reports a rate the pump is already running rather than
+    /// programming one, and flooring drops anything under 0.1 U/hr to "no basal at all".
     private func roundBasalRate(_ rate: Double) -> Double {
-        TandemPumpCapabilities.supportedBasalRates.last(where: { $0 <= rate }) ?? 0
+        let rates = TandemPumpCapabilities.supportedBasalRates
+        let below = rates.last(where: { $0 <= rate }) ?? rates[0]
+        guard let above = rates.first(where: { $0 >= rate }) else { return below }
+        return (rate - below) < (above - rate) ? below : above
     }
 
     public static func defaultBasalDose(basalSchedule: BasalRateSchedule, insulineType: InsulinType?) -> UnfinalizedDose {
@@ -246,7 +251,7 @@ public class UnfinalizedDose {
         let startOfDay = Calendar.current.startOfDay(for: now)
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
-        let currentRate = basalSchedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? 0
+        let currentRate = basalSchedule.items.last(where: { $0.startTime <= nowTimeInterval })?.value ?? 0
         return UnfinalizedDose(
             basalRate: currentRate,
             insulinType: insulineType,
