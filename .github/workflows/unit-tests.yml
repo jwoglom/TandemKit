@@ -7,6 +7,9 @@ concurrency:
 on:
   push:
     branches: [ main, dev ]
+  # No base-branch filter: a stacked PR targets the branch below it, not dev,
+  # and it needs a check just the same. Pushes are still only built on main
+  # and dev, so a PR against any other branch runs exactly once.
   pull_request:
   workflow_dispatch:
 
