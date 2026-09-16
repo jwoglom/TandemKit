@@ -138,6 +138,11 @@ extension TandemPumpManager {
         }
 
         let activeBasalType = response.basalType
+        if activeBasalType == .tempBasal, state.basalDose.type == .tempBasal {
+            reconcileRunningTempBasalRate(with: response)
+            return
+        }
+
         if activeBasalType != state.basalDose.type {
             if activeBasalType == .basal, state.basalDose.type == .resume {
                 // This is also the same
@@ -185,6 +190,46 @@ extension TandemPumpManager {
                 return
             }
         }
+    }
+
+    /// One rate grid step: the reported value is floored onto that grid while the pump reports at
+    /// 0.001 U/h, so anything smaller is quantisation, not a profile change.
+    static let tempBasalRateDriftTolerance = 0.01
+
+    /// Splits the running temp basal when a profile segment change has moved the rate underneath
+    /// its percent (#335).
+    private func reconcileRunningTempBasalRate(with response: CurrentBasalStatusResponse) {
+        // A pump that reports no profile rate reports no running rate either; splitting to 0 there
+        // would erase a temp basal that is delivering perfectly well.
+        guard response.profileBasalRate > 0 else { return }
+
+        let running = state.basalDose
+        let pumpRate = response.currentBasalRate
+        guard abs(pumpRate - running.value) > Self.tempBasalRateDriftTolerance else { return }
+
+        let now = Date.now
+        let remaining = running.estimatedEndDate.timeIntervalSince(now)
+        guard remaining > 0, now > running.startDate else { return }
+
+        logger.info(
+            "Temp basal rate drifted: reported \(running.value)U/hr, pump running \(pumpRate)U/hr; splitting"
+        )
+
+        var events = getActivePumpEvents(endDate: now)
+
+        let corrected = UnfinalizedDose(
+            tempRate: roundToSupportedBasalRate(unitsPerHour: pumpRate),
+            duration: remaining,
+            automatic: running.automatic,
+            insulinType: state.insulinType
+        )
+        events.append(NewPumpEvent.tempBasal(dose: corrected.toDoseEntry(isMutable: true), date: corrected.startDate))
+
+        state.basalDose = corrected
+        state.lastReconciliation = now
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
     }
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)

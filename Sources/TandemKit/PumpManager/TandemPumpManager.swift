@@ -304,6 +304,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// deliver up to `baseline * 0.5%` more than was asked for. Trio drops any temp-basal record
     /// whose `unitsPerHour` exceeds its `maxBasal` and oref routinely requests exactly `maxBasal`,
     /// so the percent is stepped down until the rate no longer exceeds the request.
+    /// The profile rate a temp-basal percent will be applied to: the pump's own, falling back to
+    /// the host's schedule only when the pump reports no profile rate at all.
+    internal func tempBasalBaseline(from response: CurrentBasalStatusResponse) -> Double {
+        response.profileBasalRate > 0 ? response.profileBasalRate : getScheduledBasalRate()
+    }
+
     internal func tempBasalPercentAndRate(requestedRate: Double, baseline: Double) -> (percent: Int, rate: Double) {
         guard baseline > 0, requestedRate > 0 else { return (0, 0) }
 
@@ -750,13 +756,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        let baselineRate = getScheduledBasalRate()
-        guard baselineRate > 0 else {
-            logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
-            completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
-            return
-        }
-
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
@@ -767,6 +766,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard let currentBasal = self.bluetooth.write(CurrentBasalStatusRequest()) else {
                 self.logger.error("Failed to fetch current temp rate")
                 completion(.communication(PumpCommError.noResponse))
+                return
+            }
+
+            // The pump multiplies the percent by its own profile segment, so that is the baseline
+            // the reported rate has to be built from; the host's schedule is only a stand-in for a
+            // pump that did not report one (#335).
+            let baselineRate = self.tempBasalBaseline(from: currentBasal)
+            guard baselineRate > 0 else {
+                self.logger.error("No profile basal rate present or is 0, cannot enact temp basal")
+                completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
                 return
             }
 

@@ -534,6 +534,7 @@
 		A4E45BAD1263B645B53BDCD2 /* TandemDispatchGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3AF070F04041DDB52B47C20 /* TandemDispatchGroupTests.swift */; };
 		A5F67C20D8C9446E958F2AA3 /* TandemKitFillCannulaViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */; };
 		A648665FA09AD669D686216F /* BolusCalcDataSnapshotResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30E906D9CBE5C882126694D /* BolusCalcDataSnapshotResponseTests.swift */; };
+		A68C690A83EB103DEDDDC9CA /* TempBasalPumpBaselineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F373F395CA0247D8EBA8F038 /* TempBasalPumpBaselineTests.swift */; };
 		A7595B929BB611B6019A22F7 /* TandemKitQuickBolusSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17801A764D0B2552972EDA26 /* TandemKitQuickBolusSettingsView.swift */; };
 		A99C2CDE63E12827429FAA2E /* CharacteristicUUIDShorthand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9961D5E08AA882DFE058FA65 /* CharacteristicUUIDShorthand.swift */; };
 		A9F62B740679E18335C5D4E6 /* BGHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D4FF94281DAB620C380C19F /* BGHistoryLogTests.swift */; };
@@ -1274,6 +1275,7 @@
 		F1DBD2E32A7159083403A052 /* InMemoryHistoryLogStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InMemoryHistoryLogStore.swift; sourceTree = "<group>"; };
 		F20457FF198FBDB2FF5F2340 /* CancelBolusRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CancelBolusRequestTests.swift; sourceTree = "<group>"; };
 		F30E906D9CBE5C882126694D /* BolusCalcDataSnapshotResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusCalcDataSnapshotResponseTests.swift; sourceTree = "<group>"; };
+		F373F395CA0247D8EBA8F038 /* TempBasalPumpBaselineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempBasalPumpBaselineTests.swift; sourceTree = "<group>"; };
 		F3AF070F04041DDB52B47C20 /* TandemDispatchGroupTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemDispatchGroupTests.swift; sourceTree = "<group>"; };
 		F4107717674FD288CE480768 /* DisconnectPumpRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DisconnectPumpRequestTests.swift; sourceTree = "<group>"; };
 		F4156A050FF7AD6315BFC5D4 /* TandemKitChangeCartridgeViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeViewModelTests.swift; sourceTree = "<group>"; };
@@ -2244,6 +2246,7 @@
 				2179DC911A58E699B2584905 /* CancelledBolusUnknownDeliveryTests.swift */,
 				80CA2B34DD9EA1206A713AB8 /* BolusCompletionUnknownDeliveryTests.swift */,
 				C8D0785A145F03A106165991 /* BolusEventIdentityTests.swift */,
+				F373F395CA0247D8EBA8F038 /* TempBasalPumpBaselineTests.swift */,
 			);
 			name = TandemKitTests;
 			path = Tests/TandemKitTests;
@@ -3135,6 +3138,7 @@
 				70E0A644976622F7FC74E39E /* CancelledBolusUnknownDeliveryTests.swift in Sources */,
 				5BF2EDF0820D42D836952FB6 /* BolusCompletionUnknownDeliveryTests.swift in Sources */,
 				741E2FA0B07EFD1C7CAF9CF3 /* BolusEventIdentityTests.swift in Sources */,
+				A68C690A83EB103DEDDDC9CA /* TempBasalPumpBaselineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
