@@ -55,20 +55,20 @@ import XCTest
 
     // MARK: - Ready-to-change estimate
 
-    func testAFullCartridgeStillWaitsTheMinimum() {
+    func testAFullCartridgeWaitsOnlyTheFixedOverhead() {
         XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 200, capacity: 200), 5)
     }
 
-    func testAnEmptyCartridgeWaitsTheFullTraversal() {
+    func testAnEmptyCartridgeWaitsTheOverheadPlusTheFullTraversal() {
         XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 0, capacity: 200), 15)
     }
 
     func testTheWaitScalesWithInsulinAlreadyDelivered() {
-        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 50, capacity: 200), 11.25)
-    }
+        let viewModel = makeViewModel()
 
-    func testAShortTraversalIsRaisedToTheMinimum() {
-        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 150, capacity: 200), 5)
+        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: 150, capacity: 200), 7.5)
+        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: 100, capacity: 200), 10)
+        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: 50, capacity: 200), 12.5)
     }
 
     func testAnUnknownVolumeAssumesTheWorstCase() {
@@ -97,7 +97,7 @@ import XCTest
         viewModel.enterChangeCartridgeMode()
         drainMainQueue()
 
-        // 120 U of 200 leaves a 6s estimate, so the wizard is still holding when the queue drains.
+        // 120 U of 200 leaves a 9s estimate, so the wizard is still holding when the queue drains.
         XCTAssertEqual(viewModel.currentStep, .waitingForReady)
         XCTAssertNil(viewModel.changeCartridgeState)
         XCTAssertTrue(viewModel.isProcessing)

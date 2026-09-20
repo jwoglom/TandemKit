@@ -29,10 +29,9 @@ enum CartridgeChangeStep: Int {
 }
 
 class TandemKitChangeCartridgeViewModel: ObservableObject {
-    /// Measured on hardware: a fully delivered 200 U cartridge takes 15 s to retract.
-    static let cartridgeRetractionUnitsPerSecond: Double = 200.0 / 15.0
-    /// The pump is never ready immediately, even with nothing to retract.
-    static let minimumReadyToChangeDelay: TimeInterval = 5
+    static let cartridgeRetractionUnitsPerSecond: Double = 20
+    /// Pump-side setup before retraction starts, so it is paid even with nothing to retract.
+    static let readyToChangeFixedOverhead: TimeInterval = 5
     /// Used when no pump manager is attached (previews).
     static let defaultCartridgeCapacity: Double = 200
 
@@ -259,13 +258,14 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     }
 
     /// The pump retracts a drive mechanism that has advanced in proportion to the insulin already
-    /// delivered, so the wait scales with `capacity - unitsRemaining`, floored at
-    /// `minimumReadyToChangeDelay`. With no reading, assumes an empty cartridge: waiting too long
-    /// is an inconvenience, prompting early is not.
+    /// delivered, so the wait is `readyToChangeFixedOverhead` plus a traversal scaling with
+    /// `capacity - unitsRemaining`: 5 s for a full 200 U cartridge, 15 s for an emptied one. With
+    /// no reading, assumes an empty cartridge: waiting too long is an inconvenience, prompting
+    /// early is not.
     func readyToChangeDelay(unitsRemaining: Double?, capacity: Double) -> TimeInterval {
         let remaining = min(max(unitsRemaining ?? 0, 0), capacity)
         let retraction = (capacity - remaining) / Self.cartridgeRetractionUnitsPerSecond
-        return max(Self.minimumReadyToChangeDelay, retraction)
+        return Self.readyToChangeFixedOverhead + retraction
     }
 
     func cartridgeInserted() {
