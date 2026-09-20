@@ -6,7 +6,7 @@ import XCTest
 /// Covers the cartridge change wizard's handling of the enter-change-mode request.
 ///
 /// The pump does not answer `EnterChangeCartridgeMode` until the cartridge is mechanically safe to
-/// remove, which takes 5-20 seconds. So a missing answer does not mean the pump refused, and the
+/// remove, which takes 5-15 seconds. So a missing answer does not mean the pump refused, and the
 /// wizard must not re-offer a blind retry of a signed insulin-affecting request on the strength of
 /// one. The moment the cartridge can be removed is estimated from the cartridge volume for as long
 /// as the pump's change-cartridge stream stays dark.
@@ -55,16 +55,20 @@ import XCTest
 
     // MARK: - Ready-to-change estimate
 
-    func testAFullCartridgeNeedsNoWait() {
-        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 200, capacity: 200), 0)
+    func testAFullCartridgeStillWaitsTheMinimum() {
+        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 200, capacity: 200), 5)
     }
 
     func testAnEmptyCartridgeWaitsTheFullTraversal() {
-        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 0, capacity: 200), 10)
+        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 0, capacity: 200), 15)
     }
 
     func testTheWaitScalesWithInsulinAlreadyDelivered() {
-        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 100, capacity: 200), 5)
+        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 50, capacity: 200), 11.25)
+    }
+
+    func testAShortTraversalIsRaisedToTheMinimum() {
+        XCTAssertEqual(makeViewModel().readyToChangeDelay(unitsRemaining: 150, capacity: 200), 5)
     }
 
     func testAnUnknownVolumeAssumesTheWorstCase() {
@@ -79,8 +83,8 @@ import XCTest
     func testOutOfRangeVolumesAreClamped() {
         let viewModel = makeViewModel()
 
-        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: 500, capacity: 200), 0)
-        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: -20, capacity: 200), 10)
+        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: 500, capacity: 200), 5)
+        XCTAssertEqual(viewModel.readyToChangeDelay(unitsRemaining: -20, capacity: 200), 15)
     }
 
     // MARK: - Enter change cartridge mode
@@ -93,7 +97,7 @@ import XCTest
         viewModel.enterChangeCartridgeMode()
         drainMainQueue()
 
-        // 120 U of 200 leaves a 4s estimate, so the wizard is still holding when the queue drains.
+        // 120 U of 200 leaves a 6s estimate, so the wizard is still holding when the queue drains.
         XCTAssertEqual(viewModel.currentStep, .waitingForReady)
         XCTAssertNil(viewModel.changeCartridgeState)
         XCTAssertTrue(viewModel.isProcessing)
@@ -167,7 +171,7 @@ import XCTest
     // MARK: - Ready-to-change stream
 
     func testThePumpsReadySignalAdvancesTheWizardWithoutWaitingOutTheEstimate() {
-        stubReservoir(units: 0) // Worst case: a 10s estimate the test must not wait out.
+        stubReservoir(units: 0) // Worst case: a 15s estimate the test must not wait out.
         bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 0))
 
         let viewModel = makeViewModel()
