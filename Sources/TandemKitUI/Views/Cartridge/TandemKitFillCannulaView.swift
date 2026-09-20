@@ -144,10 +144,10 @@ struct TandemKitFillCannulaView: View {
     private var enterAmountStepContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Step 2: Set Prime Amount", comment: "Step header")
+                Text("Set Prime Amount", comment: "Step header")
                     .font(.title2)
                     .fontWeight(.bold)
-                Text("Select how much insulin to prime the cannula", comment: "Step description")
+                Text("Tap to adjust the amount of insulin for priming the cannula.", comment: "Step description")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -269,7 +269,11 @@ struct TandemKitFillCannulaView: View {
                 .standard(Text("Yes, Resume Insulin", comment: "Confirm button")) {
                     viewModel.resumePumping()
                 },
-                .cancel(Text("Cancel", comment: "Cancel button"))
+                // Declining leaves delivery suspended: closing the wizard is the only exit, and
+                // silently resuming insulin the user just declined would be the unsafe direction.
+                .cancel(Text("Cancel", comment: "Cancel button")) {
+                    viewModel.done()
+                }
             ]
         )
     }

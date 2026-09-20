@@ -30,8 +30,8 @@ struct ConfirmationDialogContent {
 
         /// SwiftUI moves the cancel-role button to the bottom of the dialog regardless
         /// of where it appears in `actions`.
-        static func cancel(_ title: Text) -> Action {
-            Action(title: title, role: .cancel, action: {})
+        static func cancel(_ title: Text, action: @escaping () -> Void = {}) -> Action {
+            Action(title: title, role: .cancel, action: action)
         }
     }
 
