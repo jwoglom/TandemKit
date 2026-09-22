@@ -260,11 +260,10 @@ extension TandemPumpManager {
         guard segments.count == items.count,
               Self.pendingSegmentWrites(items: items, retainedSegments: segments).isEmpty
         else {
-            let held = segments.map { "\($0.profileStartTime)min=\($0.profileBasalRate)mU/hr" }
-            logger.error("Basal profile does not match after sync; pump holds \(held)")
-            return PumpCommError.requestConstructionFailed(
-                reason: "Basal profile does not match after sync; pump holds \(held)"
+            logger.error(
+                "Basal profile does not match after sync: \(PumpCommError.basalProfileDifference(pump: segments, app: items))"
             )
+            return PumpCommError.basalProfileSyncMismatch(pump: segments, app: items)
         }
 
         return nil

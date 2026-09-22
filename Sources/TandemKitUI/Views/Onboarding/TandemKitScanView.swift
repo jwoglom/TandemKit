@@ -69,6 +69,28 @@ struct TandemKitScanView: View {
             message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
+            String(localized: "Pump Settings Not Saved", comment: "Onboarding settings write failure"),
+            isPresented: $viewModel.isSettingsError,
+            presenting: $viewModel.settingsErrorMessage,
+            actions: { _ in
+                Button(String(localized: "Try Again", comment: "Retry button")) {
+                    viewModel.applyOnboardingSettings()
+                }
+                Button(String(localized: "Continue Anyway", comment: "Continue button"), role: .destructive) {
+                    viewModel.continueWithoutOnboardingSettings()
+                }
+            },
+            message: { detail in
+                VStack {
+                    Text(String(
+                        localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows.",
+                        comment: "Explanation shown when the app cannot write settings to the pump during setup"
+                    ))
+                    Text(detail.wrappedValue ?? "")
+                }
+            }
+        )
+        .alert(
             String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),
             isPresented: $viewModel.isPromptingPincode
         ) {

@@ -719,27 +719,42 @@ extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// Compares what the pump says it is delivering against what the app scheduled, costing no
-    /// extra traffic because `CurrentBasalStatusRequest` already runs on every sync.
-    ///
-    /// Only while the pump reports `.basal` are the two comparable: a temp basal or a suspend is
-    /// meant to differ, and Control-IQ moves delivery on its own. Detection only -- rewriting the
-    /// profile from a background poll would be an insulin-affecting action nobody asked for.
-    /// How long a delivered rate has to stay wrong before it counts, so one poll cannot raise it.
+    /// One Loop cycle plus slack. A wrong profile stays wrong, so waiting a cycle to raise it costs
+    /// nothing, while a critical highlight raised on a single reading costs trust the first time one
+    /// turns out to be transient.
     static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
 
+    /// Compares the pump's own basal rate against what the app scheduled, costing no extra traffic
+    /// because `CurrentBasalStatusRequest` already runs on every sync.
+    ///
+    /// A temp basal is checked too, against `profileBasalRate` -- the rate its percent is scaled
+    /// off. Loop keeps a temp basal running almost continuously, so checking only `.basal` would
+    /// leave the profile unverified for hours. A suspend delivers nothing and Control-IQ moves
+    /// delivery itself, so neither says anything about the profile.
+    ///
+    /// Detection only: rewriting the profile from a background poll would be an insulin-affecting
+    /// action nobody asked for.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
-        guard response.basalType == .basal, !state.useControlIQ else {
+        guard !state.useControlIQ else {
             return
         }
 
-        // Read at the pump's clock, so a pump running a few minutes off is not flagged every time
-        // a segment boundary falls between the two clocks.
-        let expected = getScheduledBasalRate(at: state.currentPumpTime)
-        let delivered = response.currentBasalRate
+        let pumpRate: Double
+        switch response.basalType {
+        case .basal:
+            pumpRate = response.currentBasalRate
+        case .tempBasal:
+            pumpRate = response.profileBasalRate
+        default:
+            return
+        }
 
-        // Compared in the milliunits the pump uses, the same rounding the writes go through.
-        guard Int((delivered * 1000).rounded()) != Int((expected * 1000).rounded()) else {
+        // On the pump's clock: `fetchTimeSinceReset` runs after this in the sync, so the offset it
+        // last measured is current while `state.currentPumpTime` is a sync behind.
+        let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+
+        // In the milliunits the pump uses, the same rounding the writes go through.
+        guard Int((pumpRate * 1000).rounded()) != Int((expected * 1000).rounded()) else {
             if state.basalRateMismatchSince != nil {
                 logger.info("Pump basal rate matches the schedule again")
                 state.basalRateMismatchSince = nil
@@ -748,7 +763,7 @@ extension TandemPumpManager {
             return
         }
 
-        logger.error("Pump is delivering \(delivered) U/hr where the schedule says \(expected) U/hr")
+        logger.error("Pump basal profile is \(pumpRate) U/hr where the schedule says \(expected) U/hr")
 
         guard state.basalRateMismatchSince == nil else {
             return

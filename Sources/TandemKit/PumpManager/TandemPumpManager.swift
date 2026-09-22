@@ -1180,7 +1180,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to change datetime")
-                completion(PumpManagerError.communication(PumpCommError.invalidPacket))
+                completion(PumpManagerError.communication(PumpCommError.noResponse))
                 return
             }
 

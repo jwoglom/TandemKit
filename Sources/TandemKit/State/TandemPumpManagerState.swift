@@ -474,13 +474,18 @@ public struct TandemPumpManagerState: RawRepresentable {
         return raw
     }
 
-    public var showPumpTimeSyncWarning: Bool {
+    /// How far the pump's clock sits from the phone's, as measured on the last `fetchTimeSinceReset`.
+    /// An offset rather than `currentPumpTime` itself, which is only as fresh as that read.
+    public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
-            return false
+            return 0
         }
+        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate)
+    }
 
+    public var showPumpTimeSyncWarning: Bool {
         // Allow 10s time drift
-        return abs(currentPumpTime.timeIntervalSince1970 - lastPumpTimeCheckDate.timeIntervalSince1970) > .seconds(10)
+        abs(pumpClockOffset) > .seconds(10)
     }
 
     public var debugDescription: String {

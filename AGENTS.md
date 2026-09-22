@@ -508,12 +508,17 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
      against a freshly read profile means the writes landed; it also keeps the comparison in the
      same integer milliunits the write path rounds to. `fetchBasalStatus` compares the delivered
      rate against the schedule on every sync at no extra traffic, and `.profileChange` /
-     `.activeProfileSegmentChange` now trigger that read too. It runs only while the pump reports
-     `.basal` with Control-IQ off (the other modes are meant to differ) and reads the schedule at
-     the pump's clock, so a pump running minutes off is not flagged at every segment boundary. A
-     mismatch must outlive `basalMismatchConfirmationInterval` to become a critical
-     `PumpStatusHighlight`. Nothing auto-corrects: that would be an insulin-affecting action nobody
-     asked for, and would fight a user who changed the profile on the pump deliberately.
+     `.activeProfileSegmentChange` now trigger that read too. A temp basal is checked against
+     `profileBasalRate`, the rate its percent is scaled off, because Loop keeps one running almost
+     continuously and checking only `.basal` would leave the profile unverified for hours; a
+     suspend and Control-IQ are skipped. It reads the schedule at the pump's clock via
+     `state.pumpClockOffset` rather than `currentPumpTime`, which is a sync behind because
+     `fetchTimeSinceReset` runs after `fetchBasalStatus`. A mismatch must outlive
+     `basalMismatchConfirmationInterval` to become a critical `PumpStatusHighlight`. Nothing
+     auto-corrects: that would be an insulin-affecting action nobody asked for, and would fight a
+     user who changed the profile on the pump deliberately. A failed write surfaces as
+     `PumpCommError.basalProfileSyncMismatch`, which carries both profiles and formats them through
+     `basalProfileDifference`.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.

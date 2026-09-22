@@ -14,6 +14,8 @@ class TandemKitScanViewModel: ObservableObject {
     @Published var isPromptingPincode = false
     @Published var pinCodePromptError: String?
     @Published var isConnectionError = false
+    @Published var isSettingsError = false
+    @Published var settingsErrorMessage: String?
     @Published var connectionErrorMessage: String?
     @Published var devicePinCode = ""
 
@@ -79,6 +81,12 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func onPairSuccess() {
+        applyOnboardingSettings()
+    }
+
+    /// Setup stops here when the pump will not take the app's settings. Advancing anyway would hand
+    /// the user a paired pump running a profile the app is not reporting, which is issue #206.
+    func applyOnboardingSettings() {
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {
                 self.log.error("No pumpManager")
@@ -89,9 +97,12 @@ class TandemKitScanViewModel: ObservableObject {
 
         pumpManager.applyOnboardingSettings { error in
             if let error {
-                // Pairing succeeded, so setup continues; the user can retry the failed write from
-                // therapy settings.
                 self.log.error("Failed to apply onboarding settings: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.settingsErrorMessage = error.localizedDescription
+                    self.isSettingsError = true
+                }
+                return
             }
 
             pumpManager.syncPumpData { _ in
@@ -101,6 +112,11 @@ class TandemKitScanViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func continueWithoutOnboardingSettings() {
+        log.error("Continuing setup with the pump holding settings the app could not write")
+        nextStep()
     }
 
     func onPairFailure(error: Error) {
