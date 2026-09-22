@@ -156,10 +156,23 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
 
-    public init(basalRateSchedule: BasalRateSchedule) {
+    /// Seeds a state from the settings the host app hands over in `PumpManagerSetupSettings`.
+    /// The limits land in `settings` rather than being dropped, so `enactBolus` has a ceiling to
+    /// validate against from the moment setup finishes, and `applyOnboardingSettings` has
+    /// something to push to the pump.
+    public init(
+        basalRateSchedule: BasalRateSchedule,
+        maxBasalRateUnitsPerHour: Double? = nil,
+        maxBolusUnits: Double? = nil
+    ) {
         self.basalRateSchedule = basalRateSchedule
         pumpState = PumpState()
         basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
+        settings = TandemPumpManagerSettings(
+            maxBolus: maxBolusUnits,
+            maxTempBasalRate: maxBasalRateUnitsPerHour,
+            maxBasalScheduleEntry: basalRateSchedule.items.map(\.value).max()
+        )
     }
 
     public init(rawValue: RawValue) {

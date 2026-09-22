@@ -79,7 +79,6 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func onPairSuccess() {
-        // TODO: Uncomment after syncBasal is fixed...
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {
                 self.log.error("No pumpManager")
@@ -88,38 +87,20 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
-        pumpManager.syncPumpData { _ in
-            DispatchQueue.main.async {
-                self.log.info("Pairing successful")
-                self.nextStep()
+        pumpManager.applyOnboardingSettings { error in
+            if let error {
+                // Pairing succeeded, so setup continues; the user can retry the failed write from
+                // therapy settings.
+                self.log.error("Failed to apply onboarding settings: \(error.localizedDescription)")
+            }
+
+            pumpManager.syncPumpData { _ in
+                DispatchQueue.main.async {
+                    self.log.info("Pairing successful")
+                    self.nextStep()
+                }
             }
         }
-
-//        let soundRequest = SetPumpSoundsRequest(
-//            quickBolusAnnunRaw: pumpManager.lockedState.value.quickBolusAnnun?.rawValue ?? 0,
-//            generalAnnunRaw: pumpManager.lockedState.value.generalAnnun?.rawValue ?? 0,
-//            reminderAnnunRaw: pumpManager.lockedState.value.reminderAnnun?.rawValue ?? 0,
-//            alertAnnunRaw: pumpManager.lockedState.value.alertAnnun?.rawValue ?? 0,
-//            alarmAnnunRaw: pumpManager.lockedState.value.alarmAnnun?.rawValue ?? 0,
-//            cgmAlertAnnun: 0x0000, // Vibrate
-//            changeBitmask: PumpSoundChangeBitmask.all()
-//        )
-//
-//        guard let basalSchedule = pumpManager.lockedState.value.basalRateSchedule else {
-//            log.error("No basal schedule")
-//            nextStep()
-//            return
-//        }
-//
-//        pumpManager.syncBasalRateSchedule(items: basalSchedule.items) { _ in
-//            pumpManager.setPumpSound(request: soundRequest)
-//            pumpManager.syncPumpTime { _ in
-//                DispatchQueue.main.async {
-//                    self.log.info("Pairing successful")
-//                    self.nextStep()
-//                }
-//            }
-//        }
     }
 
     func onPairFailure(error: Error) {

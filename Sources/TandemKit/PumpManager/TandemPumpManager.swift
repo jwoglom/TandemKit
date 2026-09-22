@@ -1151,12 +1151,27 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
+        writePumpTime { error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            self.syncPumpData { _ in
+                completion(.success(()))
+            }
+        }
+    }
+
+    /// Writes the phone's clock to the pump without the status poll `syncPumpTime` follows it
+    /// with, so a caller that is going to sync anyway does not poll the pump twice.
+    func writePumpTime(completion: @escaping (PumpManagerError?) -> Void) {
         logger.info("Syncing pump time")
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for change datetime: \(error.localizedDescription)")
-                completion(.failure(PumpManagerError.communication(PumpCommError.pumpNotConnected)))
+                completion(PumpManagerError.communication(PumpCommError.pumpNotConnected))
                 return
             }
 
@@ -1165,11 +1180,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to change datetime")
-                completion(.failure(PumpManagerError.communication(PumpCommError.invalidPacket)))
+                completion(PumpManagerError.communication(PumpCommError.invalidPacket))
                 return
             }
 
-            if !response.isStatusOK {
+            guard response.isStatusOK else {
                 let error = PumpCommError.errorResponse(
                     context: String(
                         localized: "Error syncing time with pump",
@@ -1178,13 +1193,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     request: request,
                     response: response
                 )
-                completion(.failure(PumpManagerError.communication(error)))
-
-            } else {
-                self.syncPumpData { _ in
-                    completion(.success(()))
-                }
+                completion(PumpManagerError.communication(error))
+                return
             }
+
+            completion(nil)
         }
     }
 

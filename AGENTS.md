@@ -492,6 +492,17 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
    * `TandemPump` initiates startup status polls and bridges notifications through `PumpNotificationRouter`, but auto-reconnect logic and configuration helpers still need work.
    * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`; history streaming now flows through `HistoryLogFetcher` with telemetry scheduling hooks, but device-model detection is still outstanding.
    * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
+   * `applyOnboardingSettings` (`TandemPumpManager+Onboarding.swift`) writes the host's setup
+     settings onto a freshly paired pump: delivery limits, then the basal schedule, then the pump
+     clock. Loop and Trio never do this themselves -- LoopKit's therapy settings editors save
+     locally in `.acceptanceFlow` mode and the app hands the values to the driver as
+     `PumpManagerSetupSettings` instead, the same contract OmnipodKit honours with
+     `programInitialBasalSchedule` during pod setup. Until it ran (issue #206) the pump kept
+     whatever profile it had while the driver reported the app-side schedule, and since a Tandem
+     temp basal is a percent of the pump's *profile* rate, a pump left at 0 U/hr delivered nothing
+     at any percent. Pump sounds are deliberately not written here: nothing in onboarding collects
+     a value for them, so the write would only zero out the user's pump-side settings.
+     `fetchGlobalPumpSettings` reads them in the other direction instead.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.
@@ -606,8 +617,9 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 
 18. **Implement therapy command validation** – ⚠️ *Partially completed*
     - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
-      (the limit the host app last synced). The pump enforces the same ceiling in firmware,
-      because `syncDeliveryLimits` pushes it down via `SetMaxBolusLimitRequest`.
+      (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
+      The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down
+      via `SetMaxBolusLimitRequest`.
     - `enactBolus`/`enactTempBasal` also block while Control-IQ is active or a bolus is running.
     - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
       `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
