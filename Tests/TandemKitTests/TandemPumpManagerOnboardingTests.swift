@@ -45,52 +45,17 @@ import XCTest
         )
     }
 
-    /// Stubs every write the onboarding sequence makes, with one profile in slot 0 holding
-    /// `segments`. Any of the stubs can be overridden afterwards to model a rejection.
-    private func stubPump(segments: [IDPSegmentResponse]) {
+    /// Stubs every write the onboarding sequence makes, against one active profile holding
+    /// `segments`. Any stub can be overridden afterwards to model a rejection.
+    @discardableResult
+    private func stubPump(segments: [StubIDPPump.Segment]) -> StubIDPPump {
         bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 0))
         bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 0))
         bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 0))
 
-        bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
-            numberOfProfiles: 1,
-            idpSlot0Id: idpId,
-            idpSlot1Id: 0,
-            idpSlot2Id: 0,
-            idpSlot3Id: 0,
-            idpSlot4Id: 0,
-            idpSlot5Id: 0,
-            activeSegmentIndex: 0
-        ))
-
-        bluetooth.stub(IDPSettingsRequest.self, with: IDPSettingsResponse(
-            idpId: idpId,
-            name: "Test",
-            numberOfProfileSegments: segments.count,
-            insulinDuration: 180,
-            maxBolus: 0,
-            carbEntry: true
-        ))
-
-        bluetooth.stub(IDPSegmentRequest.self) { request in
-            guard let request = request as? IDPSegmentRequest else { return nil }
-            return segments.first { $0.segmentIndex == request.segmentIndex }
-        }
-
-        bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 0, unknown: 0))
-    }
-
-    private func segment(index: Int, startTime: Int, basalMilliunits: Int) -> IDPSegmentResponse {
-        IDPSegmentResponse(
-            idpId: idpId,
-            segmentIndex: index,
-            profileStartTime: startTime,
-            profileBasalRate: basalMilliunits,
-            profileCarbRatio: 10000,
-            profileTargetBG: 110,
-            profileISF: 50,
-            idpStatusId: 31
-        )
+        let pump = StubIDPPump(segments, idpId: idpId)
+        pump.install(on: bluetooth)
+        return pump
     }
 
     private func applyOnboardingSettings(_ manager: TandemPumpManager) -> Error? {
@@ -131,7 +96,7 @@ import XCTest
     /// A pump paired straight out of the Tandem app sits on a profile the user never configured
     /// here -- 0 U/hr in the report on #206. Onboarding has to write the host's schedule onto it.
     func testWritesSetupBasalScheduleOntoAnUnconfiguredProfile() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         let manager = makeManager(schedule: schedule([(0, 0.65), (3600.0 * 6, 0.85)]))
 
         XCTAssertNil(applyOnboardingSettings(manager))
@@ -143,8 +108,8 @@ import XCTest
 
     func testWritesNoSegmentsWhenPumpAlreadyMatchesTheSchedule() {
         stubPump(segments: [
-            segment(index: 0, startTime: 0, basalMilliunits: 650),
-            segment(index: 1, startTime: 360, basalMilliunits: 850)
+            .init(startTime: 0, basalRate: 650),
+            .init(startTime: 360, basalRate: 850)
         ])
         let manager = makeManager(schedule: schedule([(0, 0.65), (3600.0 * 6, 0.85)]))
 
@@ -158,7 +123,7 @@ import XCTest
     /// Limits before segments: the schedule should be written against the limits the user
     /// configured, not whatever ceiling the pump was already holding.
     func testWritesDeliveryLimitsBeforeBasalSegments() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         let manager = makeManager(
             schedule: schedule([(0, 0.65)]),
             maxBasalRateUnitsPerHour: 4.2,
@@ -179,7 +144,7 @@ import XCTest
     }
 
     func testSyncsPumpTimeAfterTheOtherWrites() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
 
         XCTAssertNil(applyOnboardingSettings(manager))
@@ -191,7 +156,7 @@ import XCTest
     /// The pump's own limits stay in place when the host supplied none, rather than being
     /// overwritten with a zero.
     func testSkipsDeliveryLimitsWhenSetupSuppliedNone() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         let manager = makeManager(schedule: schedule([(0, 0.65)]))
 
         XCTAssertNil(applyOnboardingSettings(manager))
@@ -206,7 +171,7 @@ import XCTest
     /// A rejected segment write is the #206 state itself: the pump keeps a profile the app is not
     /// reporting. It has to come back as an error, not be swallowed.
     func testReportsErrorWhenPumpRejectsBasalSegment() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 3, unknown: 0))
         let manager = makeManager(schedule: schedule([(0, 0.65)]))
 
@@ -215,7 +180,7 @@ import XCTest
 
     /// The writes are independent, so a failed limit must not cost the user their basal schedule.
     func testStillWritesScheduleAndTimeWhenDeliveryLimitsAreRejected() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 1))
         let manager = makeManager(
             schedule: schedule([(0, 0.65)]),
@@ -232,7 +197,7 @@ import XCTest
     /// The first failure is the one reported, so the error the user sees names the limit write
     /// that actually broke rather than a later one.
     func testReportsTheFirstFailureWhenSeveralWritesFail() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 1))
         bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 1))
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBasalRateUnitsPerHour: 4.2)
@@ -246,7 +211,7 @@ import XCTest
     /// The placeholder a state falls back to without a host schedule is a single 0 U/hr entry.
     /// Writing that would set the pump profile to the 0 U/hr this whole path exists to prevent.
     func testNeverWritesAnAllZeroPlaceholderSchedule() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 800)])
         let manager = makeManager(schedule: schedule([(0, 0)]))
 
         XCTAssertNotNil(applyOnboardingSettings(manager))
@@ -257,7 +222,7 @@ import XCTest
 
     /// A zero segment inside an otherwise real schedule is the user's, not a placeholder.
     func testWritesScheduleContainingAZeroSegment() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 800)])
         let manager = makeManager(schedule: schedule([(0, 0.65), (3600.0 * 2, 0)]))
 
         XCTAssertNil(applyOnboardingSettings(manager))
@@ -266,7 +231,7 @@ import XCTest
     }
 
     func testReportsErrorWhenPumpIsUnreachable() {
-        stubPump(segments: [segment(index: 0, startTime: 0, basalMilliunits: 0)])
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.connectError = PumpCommError.pumpNotConnected
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
 

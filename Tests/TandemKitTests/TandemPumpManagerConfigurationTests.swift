@@ -27,51 +27,12 @@ import XCTest
 
     // MARK: - Helpers
 
-    /// Stubs the IDP discovery walk: one profile in slot 0 with `segments` already on the pump.
-    private func stubActiveProfile(segments: [IDPSegmentResponse]) {
-        bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
-            numberOfProfiles: 1,
-            idpSlot0Id: idpId,
-            idpSlot1Id: 0,
-            idpSlot2Id: 0,
-            idpSlot3Id: 0,
-            idpSlot4Id: 0,
-            idpSlot5Id: 0,
-            activeSegmentIndex: 0
-        ))
-
-        bluetooth.stub(IDPSettingsRequest.self, with: IDPSettingsResponse(
-            idpId: idpId,
-            name: "Test",
-            numberOfProfileSegments: segments.count,
-            insulinDuration: 180,
-            maxBolus: 0,
-            carbEntry: true
-        ))
-
-        bluetooth.stub(IDPSegmentRequest.self) { request in
-            guard let request = request as? IDPSegmentRequest else { return nil }
-            return segments.first { $0.segmentIndex == request.segmentIndex }
-        }
-
-        bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 0, unknown: 0))
-    }
-
-    private func segment(
-        index: Int,
-        startTime: Int,
-        basalMilliunits: Int
-    ) -> IDPSegmentResponse {
-        IDPSegmentResponse(
-            idpId: idpId,
-            segmentIndex: index,
-            profileStartTime: startTime,
-            profileBasalRate: basalMilliunits,
-            profileCarbRatio: 10000,
-            profileTargetBG: 110,
-            profileISF: 50,
-            idpStatusId: 31
-        )
+    /// Installs one active profile holding `segments`, as a pump that applies what it accepts.
+    @discardableResult
+    private func stubActiveProfile(segments: [StubIDPPump.Segment]) -> StubIDPPump {
+        let pump = StubIDPPump(segments, idpId: idpId)
+        pump.install(on: bluetooth)
+        return pump
     }
 
     private func syncBasal(_ items: [RepeatingScheduleValue<Double>]) -> Result<BasalRateSchedule, Error> {
@@ -90,8 +51,8 @@ import XCTest
     func testSyncBasalRateScheduleOnlyModifiesChangedSegments() throws {
         // Pump already has 00:00 -> 0.8 U/hr and 01:00 -> 1.2 U/hr; only the second one changes.
         stubActiveProfile(segments: [
-            segment(index: 0, startTime: 0, basalMilliunits: 800),
-            segment(index: 1, startTime: 60, basalMilliunits: 1200)
+            .init(startTime: 0, basalRate: 800),
+            .init(startTime: 60, basalRate: 1200)
         ])
 
         let result = syncBasal([
@@ -112,7 +73,7 @@ import XCTest
 
     func testSyncBasalRateScheduleCreatesSegmentsForNewEntries() throws {
         // Pump has one segment; the new schedule has three, so two must be created.
-        stubActiveProfile(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
+        stubActiveProfile(segments: [.init(startTime: 0, basalRate: 800)])
 
         let result = syncBasal([
             RepeatingScheduleValue(startTime: 0, value: 0.8),
@@ -131,7 +92,7 @@ import XCTest
     }
 
     func testSyncBasalRateScheduleStoresScheduleAndMaxEntry() throws {
-        stubActiveProfile(segments: [segment(index: 0, startTime: 0, basalMilliunits: 800)])
+        stubActiveProfile(segments: [.init(startTime: 0, basalRate: 800)])
 
         let items = [
             RepeatingScheduleValue(startTime: 0, value: 0.8),
@@ -156,8 +117,8 @@ import XCTest
     /// the host app believing a basal schedule is in effect that the pump never accepted.
     func testSyncBasalRateScheduleFailsWhenPumpRejectsSegment() {
         stubActiveProfile(segments: [
-            segment(index: 0, startTime: 0, basalMilliunits: 800),
-            segment(index: 1, startTime: 60, basalMilliunits: 1200)
+            .init(startTime: 0, basalRate: 800),
+            .init(startTime: 60, basalRate: 1200)
         ])
         bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 3, unknown: 0))
 

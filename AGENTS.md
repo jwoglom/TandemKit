@@ -503,6 +503,19 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
      at any percent. Pump sounds are deliberately not written here: nothing in onboarding collects
      a value for them, so the write would only zero out the user's pump-side settings.
      `fetchGlobalPumpSettings` reads them in the other direction instead.
+   * The pump profile is verified rather than assumed (`BasalScheduleVerification`). Every
+     `syncBasalRateSchedule` reads the active profile back and fails if it does not hold what was
+     written -- a status-0 `SetIDPSegmentResponse` means accepted, not applied. Every
+     `fetchBasalStatus` compares the rate the pump reports delivering against the schedule, which
+     costs no extra traffic because `CurrentBasalStatusRequest` already runs each sync; the
+     `.profileChange` / `.activeProfileSegmentChange` qualifying events now trigger that read too.
+     The comparison only runs while the pump reports `.basal` and Control-IQ is off, since a temp
+     basal, a suspend and Control-IQ are all supposed to deliver something else, and it reads the
+     schedule at the pump's clock so a pump running minutes off does not look wrong at every
+     segment boundary. A mismatch has to survive `BasalRateMismatch.confirmationInterval` before it
+     becomes a critical `PumpStatusHighlight`. Nothing auto-corrects: rewriting the pump's profile
+     from a background poll is an insulin-affecting action with no user intent behind it, and would
+     fight a user who changed the profile on the pump deliberately.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.

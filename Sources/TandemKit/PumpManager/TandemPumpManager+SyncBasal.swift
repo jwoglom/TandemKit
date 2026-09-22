@@ -23,25 +23,12 @@ public extension TandemPumpManager {
             }
 
             // Step 1: Fetch current profile data using IDPManager
-            let idpManager = IDPManager()
-
-            // Fetch all IDP data until complete
-            while !idpManager.isComplete {
-                let messages = idpManager.nextMessages()
-                if messages.isEmpty, !idpManager.isComplete {
-                    self.logger.error("Invalid IDPManager state in syncBasalRateSchedule")
-                    completion(.failure(PumpCommError.requestConstructionFailed(
-                        reason: "Invalid IDPManager state in syncBasalRateSchedule"
-                    )))
-                    return
-                }
-
-                for request in messages {
-                    let response = self.bluetooth.write(request)
-                    if let response {
-                        idpManager.processMessage(response)
-                    }
-                }
+            guard var idpManager = self.loadIDPProfiles() else {
+                self.logger.error("Invalid IDPManager state in syncBasalRateSchedule")
+                completion(.failure(PumpCommError.requestConstructionFailed(
+                    reason: "Invalid IDPManager state in syncBasalRateSchedule"
+                )))
+                return
             }
 
             if idpManager.getProfiles().isEmpty == true {
@@ -76,19 +63,14 @@ public extension TandemPumpManager {
                 self.logger
                     .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
 
-                // Return to step 1: Reset idpManager
-                idpManager.clear()
-
-                // Fetch all IDP data until complete
-                while !idpManager.isComplete {
-                    let messages = idpManager.nextMessages()
-                    for request in messages {
-                        let response = self.bluetooth.write(request)
-                        if let response {
-                            idpManager.processMessage(response)
-                        }
-                    }
+                guard let reloaded = self.loadIDPProfiles() else {
+                    self.logger.error("Invalid IDPManager state after creating initial profile")
+                    completion(.failure(PumpCommError.requestConstructionFailed(
+                        reason: "Invalid IDPManager state after creating initial profile"
+                    )))
+                    return
                 }
+                idpManager = reloaded
             }
 
             // Step 2: Get the active profile
@@ -192,6 +174,11 @@ public extension TandemPumpManager {
                 }
             }
 
+            if let error = self.verifyProfileMatches(items: sortedItems) {
+                completion(.failure(error))
+                return
+            }
+
             let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? self.state.basalRateSchedule
 
             self.state.basalRateSchedule = schedule
@@ -231,5 +218,57 @@ public extension TandemPumpManager {
             }
             return PendingSegmentWrite(startTime: startMinutes, basalRate: basalMilliunits, segment: segment)
         }
+    }
+}
+
+extension TandemPumpManager {
+    /// Walks the pump's whole IDP catalog. nil when the pump stopped answering or the walk stalled
+    /// -- `IDPManager.nextMessages()` reissues the same batch until its response arrives, so a
+    /// dropped one has to end the walk rather than spin.
+    func loadIDPProfiles() -> IDPManager? {
+        let idpManager = IDPManager()
+
+        while !idpManager.isComplete {
+            let messages = idpManager.nextMessages()
+            guard !messages.isEmpty else {
+                return nil
+            }
+
+            for request in messages {
+                guard let response = self.bluetooth.write(request) else {
+                    return nil
+                }
+                idpManager.processMessage(response)
+            }
+        }
+
+        return idpManager
+    }
+
+    /// Reads the active profile back and reports how it differs from `items`, or nil when it
+    /// matches. A status-0 `SetIDPSegmentResponse` says the pump accepted a write, not that the
+    /// profile now holds it, and the app's whole basal picture -- including the percent every temp
+    /// basal is scaled by -- is computed from the schedule rather than from the pump.
+    func verifyProfileMatches(items: [RepeatingScheduleValue<Double>]) -> Error? {
+        guard let idpManager = loadIDPProfiles(), let profile = idpManager.getActiveProfile() else {
+            logger.error("Could not read the basal profile back to verify it")
+            return PumpCommError.requestConstructionFailed(
+                reason: "Could not read the basal profile back to verify it"
+            )
+        }
+
+        let difference = BasalScheduleVerification.difference(
+            pump: BasalScheduleVerification.segments(for: profile.getSegments()),
+            expected: BasalScheduleVerification.segments(for: items)
+        )
+
+        guard let difference else {
+            return nil
+        }
+
+        logger.error("Basal profile does not match after sync: \(difference)")
+        return PumpCommError.requestConstructionFailed(
+            reason: "Basal profile does not match after sync: \(difference)"
+        )
     }
 }

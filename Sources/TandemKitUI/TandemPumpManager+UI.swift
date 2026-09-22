@@ -118,6 +118,19 @@ extension TandemPumpManager {
             )
         }
 
+        // Above suspend and the rest: those describe delivery the app knows about, while this one
+        // means the delivered rate is not the one the loop is dosing against at all.
+        if let mismatch = state.basalRateMismatch, mismatch.isConfirmed {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Basal Rate Mismatch",
+                    comment: "Status highlight that the pump is delivering a basal rate other than the scheduled one."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .critical
+            )
+        }
+
         if state.basalDose.type == .suspend {
             return PumpStatusHighlight(
                 localizedMessage: String(

@@ -1919,13 +1919,16 @@ extension TandemPumpManager {
         return pendingPumpEventBatches.count
     }
 
-    func getScheduledBasalRate() -> Double {
+    /// `date` is on the phone's clock unless a caller passes the pump's -- the verification path
+    /// does, so a pump running minutes off does not look like a basal mismatch at every segment
+    /// boundary.
+    func getScheduledBasalRate(at date: Date? = nil) -> Double {
         let schedule = state.basalRateSchedule
         guard !schedule.items.isEmpty else {
             return 0
         }
 
-        let now = self.now
+        let now = date ?? self.now
         let startOfDay = Calendar.current.startOfDay(for: now)
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
