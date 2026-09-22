@@ -719,52 +719,39 @@ extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// Checks what the pump says it is delivering against what the app scheduled.
+    /// Compares what the pump says it is delivering against what the app scheduled, costing no
+    /// extra traffic because `CurrentBasalStatusRequest` already runs on every sync.
     ///
-    /// Free of extra traffic: `CurrentBasalStatusRequest` already runs on every sync. Only while
-    /// the pump reports `.basal` are the two comparable -- a temp basal or a suspend is supposed
-    /// to differ, and Control-IQ moves delivery on its own, so a disagreement there says nothing.
-    ///
-    /// Detection only. Rewriting the pump's profile from a background poll would be an
-    /// insulin-affecting action with no user intent behind it, and would fight a user who changed
-    /// the profile on the pump deliberately.
+    /// Only while the pump reports `.basal` are the two comparable: a temp basal or a suspend is
+    /// meant to differ, and Control-IQ moves delivery on its own. Detection only -- rewriting the
+    /// profile from a background poll would be an insulin-affecting action nobody asked for.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
         guard response.basalType == .basal, !state.useControlIQ else {
             return
         }
 
-        // The pump's clock, when the sync has read it, so a pump running a few minutes off does
-        // not read as a mismatch every time a segment boundary falls between the two clocks.
+        // Read at the pump's clock, so a pump running a few minutes off is not flagged every time
+        // a segment boundary falls between the two clocks.
         let expected = getScheduledBasalRate(at: state.currentPumpTime)
         let delivered = response.currentBasalRate
 
         guard BasalScheduleVerification.milliunits(delivered) != BasalScheduleVerification.milliunits(expected)
         else {
-            if state.basalRateMismatch != nil {
+            if state.basalRateMismatchSince != nil {
                 logger.info("Pump basal rate matches the schedule again")
-                state.basalRateMismatch = nil
+                state.basalRateMismatchSince = nil
                 notifyDelegateStateUpdated()
             }
             return
         }
 
-        let mismatch = (state.basalRateMismatch ?? BasalRateMismatch(
-            expectedUnitsPerHour: expected,
-            pumpUnitsPerHour: delivered,
-            firstSeen: now,
-            lastSeen: now
-        ))
-        .observed(expectedUnitsPerHour: expected, pumpUnitsPerHour: delivered, at: now)
+        logger.error("Pump is delivering \(delivered) U/hr where the schedule says \(expected) U/hr")
 
-        if mismatch.isConfirmed {
-            logger.error(
-                "Pump is delivering \(delivered) U/hr where the schedule says \(expected) U/hr; temp basal percents are scaled off the pump's profile, so delivery does not match what the app reports"
-            )
-        } else {
-            logger.warning("Pump basal rate \(delivered) U/hr differs from the scheduled \(expected) U/hr")
+        guard state.basalRateMismatchSince == nil else {
+            return
         }
 
-        state.basalRateMismatch = mismatch
+        state.basalRateMismatchSince = now
         notifyDelegateStateUpdated()
     }
 }

@@ -1,12 +1,8 @@
 import Foundation
 @testable import TandemKit
 
-/// In-memory stand-in for the pump's insulin delivery profile.
-///
-/// Answers the IDP read walk from its current segments and applies segment writes the way the pump
-/// does, including rejecting one that would put two segments on the same start time. Tests that
-/// stubbed a fixed segment list instead used to pass a sync that the pump had not actually
-/// applied, which is exactly what the post-write read-back exists to catch.
+/// In-memory stand-in for the pump's insulin delivery profile: answers the IDP read walk and
+/// applies segment writes the way the pump does, rejecting one that would collide on a start time.
 final class StubIDPPump {
     struct Segment: Equatable, CustomStringConvertible {
         var startTime: Int
@@ -49,8 +45,7 @@ final class StubIDPPump {
     private(set) var segments: [Segment]
     let idpId: Int
 
-    /// When false the pump answers every write with status 0 but leaves the profile untouched --
-    /// an ACK is not proof the profile changed.
+    /// When false, writes are answered with status 0 but never applied.
     var appliesWrites = true
 
     init(_ segments: [Segment], idpId: Int = 10) {
@@ -58,7 +53,6 @@ final class StubIDPPump {
         self.idpId = idpId
     }
 
-    /// The status byte the pump would answer with.
     @discardableResult func apply(_ command: Command) -> Int {
         guard appliesWrites else {
             return 0
@@ -86,7 +80,6 @@ final class StubIDPPump {
         }
     }
 
-    /// Registers this profile as the pump's single, active one.
     func install(on bluetooth: StubPumpBluetooth) {
         bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
             numberOfProfiles: 1,

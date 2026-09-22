@@ -3,21 +3,15 @@ import HealthKit
 import LoopKit
 
 public extension TandemPumpManager {
-    /// Writes the settings the host app handed over in `PumpManagerSetupSettings` onto the pump.
+    /// Writes the settings the host handed over in `PumpManagerSetupSettings` onto the pump.
     ///
-    /// Loop and Trio only call `syncBasalRateSchedule` / `syncDeliveryLimits` from their therapy
-    /// settings editors. During onboarding LoopKit's editors save locally instead
-    /// (`SavingMechanism.synchronous` in `.acceptanceFlow` mode), and the app hands the schedule
-    /// and limits to the driver as setup settings, so writing them to the device is the driver's
-    /// job -- the same way OmnipodKit programs the initial basal schedule during pod setup.
-    ///
-    /// Until this ran, a freshly paired pump kept whatever profile it already had while the driver
-    /// reported the app-side schedule to the host. A Tandem temp basal is a percent of the pump's
-    /// *profile* rate, so a pump sitting at 0 U/hr delivered nothing at any percent.
+    /// Loop and Trio call `syncBasalRateSchedule` / `syncDeliveryLimits` only from their therapy
+    /// settings editors; during onboarding those editors save locally and the app passes the values
+    /// to the driver instead, so writing them to the device is the driver's job.
     /// https://github.com/jwoglom/TandemKit/issues/206
     ///
-    /// Reports the first error and keeps going: the three writes are independent, and pairing
-    /// itself has already succeeded by the time this runs.
+    /// Reports the first error and keeps going: the writes are independent, and pairing has already
+    /// succeeded by the time this runs.
     func applyOnboardingSettings(completion: @escaping (Error?) -> Void) {
         logger.info("Applying onboarding settings to pump")
 
@@ -25,13 +19,7 @@ public extension TandemPumpManager {
         // than whatever ceiling the pump was already holding.
         syncOnboardingDeliveryLimits { limitsError in
             self.syncOnboardingBasalSchedule { basalError in
-                self.writePumpTime { timeError in
-                    if let timeError {
-                        self.logger.error("Onboarding pump time sync failed: \(timeError.localizedDescription)")
-                    }
-
-                    completion(limitsError ?? basalError ?? timeError)
-                }
+                self.writePumpTime { completion(limitsError ?? basalError ?? $0) }
             }
         }
     }
@@ -39,29 +27,18 @@ public extension TandemPumpManager {
 
 private extension TandemPumpManager {
     func syncOnboardingBasalSchedule(completion: @escaping (Error?) -> Void) {
-        // A state built without a schedule falls back to a single 0 U/hr entry, and oref will not
-        // run an all-zero schedule anyway, so one that reaches here is a placeholder rather than
-        // the user's. Writing it would set the pump profile to the very 0 U/hr this exists to
-        // prevent, so leave the pump's own profile alone and report that nothing was applied.
+        // A state built without a host schedule falls back to a single 0 U/hr entry, and writing
+        // that would cause the very 0 U/hr profile this exists to prevent.
         guard state.basalRateSchedule.items.contains(where: { $0.value > 0 }) else {
             logger.error("No basal schedule from setup; not writing a zero profile to the pump")
             completion(PumpManagerError.configuration(nil))
             return
         }
 
-        syncBasalRateSchedule(items: state.basalRateSchedule.items) { result in
-            switch result {
-            case .success:
-                completion(nil)
-            case let .failure(error):
-                self.logger.error("Onboarding basal schedule sync failed: \(error.localizedDescription)")
-                completion(error)
-            }
-        }
+        syncBasalRateSchedule(items: state.basalRateSchedule.items) { completion($0.failure) }
     }
 
     func syncOnboardingDeliveryLimits(completion: @escaping (Error?) -> Void) {
-        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
         let maxBasalRate = state.settings.maxTempBasalRate
         let maxBolus = state.settings.maxBolus
 
@@ -71,19 +48,19 @@ private extension TandemPumpManager {
             return
         }
 
+        let unitsPerHour = HKUnit.internationalUnit().unitDivided(by: .hour())
         let limits = DeliveryLimits(
             maximumBasalRate: maxBasalRate.map { HKQuantity(unit: unitsPerHour, doubleValue: $0) },
             maximumBolus: maxBolus.map { HKQuantity(unit: .internationalUnit(), doubleValue: $0) }
         )
 
-        syncDeliveryLimits(limits: limits) { result in
-            switch result {
-            case .success:
-                completion(nil)
-            case let .failure(error):
-                self.logger.error("Onboarding delivery limit sync failed: \(error.localizedDescription)")
-                completion(error)
-            }
-        }
+        syncDeliveryLimits(limits: limits) { completion($0.failure) }
+    }
+}
+
+private extension Result {
+    var failure: Failure? {
+        guard case let .failure(error) = self else { return nil }
+        return error
     }
 }

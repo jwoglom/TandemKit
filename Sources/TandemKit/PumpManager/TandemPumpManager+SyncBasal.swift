@@ -22,7 +22,6 @@ public extension TandemPumpManager {
                 return
             }
 
-            // Step 1: Fetch current profile data using IDPManager
             guard var idpManager = self.loadIDPProfiles() else {
                 self.logger.error("Invalid IDPManager state in syncBasalRateSchedule")
                 completion(.failure(PumpCommError.requestConstructionFailed(
@@ -222,9 +221,8 @@ public extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// Walks the pump's whole IDP catalog. nil when the pump stopped answering or the walk stalled
-    /// -- `IDPManager.nextMessages()` reissues the same batch until its response arrives, so a
-    /// dropped one has to end the walk rather than spin.
+    /// nil when the pump stopped answering: `IDPManager.nextMessages()` reissues the same batch
+    /// until its response arrives, so a dropped one has to end the walk rather than spin.
     func loadIDPProfiles() -> IDPManager? {
         let idpManager = IDPManager()
 
@@ -245,10 +243,8 @@ extension TandemPumpManager {
         return idpManager
     }
 
-    /// Reads the active profile back and reports how it differs from `items`, or nil when it
-    /// matches. A status-0 `SetIDPSegmentResponse` says the pump accepted a write, not that the
-    /// profile now holds it, and the app's whole basal picture -- including the percent every temp
-    /// basal is scaled by -- is computed from the schedule rather than from the pump.
+    /// A status-0 `SetIDPSegmentResponse` says the pump accepted a write, not that the profile now
+    /// holds it, and every temp basal percent is scaled off that profile.
     func verifyProfileMatches(items: [RepeatingScheduleValue<Double>]) -> Error? {
         guard let idpManager = loadIDPProfiles(), let profile = idpManager.getActiveProfile() else {
             logger.error("Could not read the basal profile back to verify it")

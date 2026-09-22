@@ -494,28 +494,23 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
    * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
    * `applyOnboardingSettings` (`TandemPumpManager+Onboarding.swift`) writes the host's setup
      settings onto a freshly paired pump: delivery limits, then the basal schedule, then the pump
-     clock. Loop and Trio never do this themselves -- LoopKit's therapy settings editors save
-     locally in `.acceptanceFlow` mode and the app hands the values to the driver as
-     `PumpManagerSetupSettings` instead, the same contract OmnipodKit honours with
-     `programInitialBasalSchedule` during pod setup. Until it ran (issue #206) the pump kept
-     whatever profile it had while the driver reported the app-side schedule, and since a Tandem
-     temp basal is a percent of the pump's *profile* rate, a pump left at 0 U/hr delivered nothing
-     at any percent. Pump sounds are deliberately not written here: nothing in onboarding collects
-     a value for them, so the write would only zero out the user's pump-side settings.
-     `fetchGlobalPumpSettings` reads them in the other direction instead.
-   * The pump profile is verified rather than assumed (`BasalScheduleVerification`). Every
-     `syncBasalRateSchedule` reads the active profile back and fails if it does not hold what was
-     written -- a status-0 `SetIDPSegmentResponse` means accepted, not applied. Every
-     `fetchBasalStatus` compares the rate the pump reports delivering against the schedule, which
-     costs no extra traffic because `CurrentBasalStatusRequest` already runs each sync; the
-     `.profileChange` / `.activeProfileSegmentChange` qualifying events now trigger that read too.
-     The comparison only runs while the pump reports `.basal` and Control-IQ is off, since a temp
-     basal, a suspend and Control-IQ are all supposed to deliver something else, and it reads the
-     schedule at the pump's clock so a pump running minutes off does not look wrong at every
-     segment boundary. A mismatch has to survive `BasalRateMismatch.confirmationInterval` before it
-     becomes a critical `PumpStatusHighlight`. Nothing auto-corrects: rewriting the pump's profile
-     from a background poll is an insulin-affecting action with no user intent behind it, and would
-     fight a user who changed the profile on the pump deliberately.
+     clock. Loop and Trio never sync those during onboarding -- their therapy settings editors save
+     locally and the app hands the values to the driver as `PumpManagerSetupSettings`, the same
+     contract OmnipodKit honours with `programInitialBasalSchedule`. Until it ran (issue #206) the
+     pump kept whatever profile it had while the driver reported the app-side schedule, and since a
+     Tandem temp basal is a percent of the pump's *profile* rate, a pump left at 0 U/hr delivered
+     nothing at any percent. Pump sounds are deliberately not written: onboarding collects no value
+     for them, so the write would only zero out the user's; `fetchGlobalPumpSettings` reads instead.
+   * The pump profile is verified, not assumed (`BasalScheduleVerification`). `syncBasalRateSchedule`
+     reads the active profile back and fails unless it holds what was written -- a status-0
+     `SetIDPSegmentResponse` means accepted, not applied. `fetchBasalStatus` compares the delivered
+     rate against the schedule on every sync at no extra traffic, and `.profileChange` /
+     `.activeProfileSegmentChange` now trigger that read too. It runs only while the pump reports
+     `.basal` with Control-IQ off (the other modes are meant to differ) and reads the schedule at
+     the pump's clock, so a pump running minutes off is not flagged at every segment boundary. A
+     mismatch must outlive `mismatchConfirmationInterval` to become a critical
+     `PumpStatusHighlight`. Nothing auto-corrects: that would be an insulin-affecting action nobody
+     asked for, and would fight a user who changed the profile on the pump deliberately.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.

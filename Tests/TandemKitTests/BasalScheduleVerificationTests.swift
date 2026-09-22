@@ -2,9 +2,8 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// Covers the two checks that keep the pump's basal profile and the app's schedule from drifting
-/// apart unnoticed: the read-back after a write, and the comparison the sync poll makes against
-/// the rate the pump says it is delivering. https://github.com/jwoglom/TandemKit/issues/206
+/// The read-back after a write, and the comparison the sync poll makes against the rate the pump
+/// says it is delivering. https://github.com/jwoglom/TandemKit/issues/206
 @available(macOS 13.0, iOS 14.0, *) final class BasalScheduleVerificationTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -28,8 +27,7 @@ import XCTest
 
     // MARK: - Helpers
 
-    /// One active profile holding `segments`. `appliesWrites: false` models a pump that ACKs a
-    /// segment write and leaves the profile untouched.
+    /// `appliesWrites: false` models a pump that ACKs a write and leaves the profile untouched.
     @discardableResult
     private func stubProfile(_ segments: [StubIDPPump.Segment], appliesWrites: Bool = true) -> StubIDPPump {
         let pump = StubIDPPump(segments, idpId: idpId)
@@ -109,9 +107,6 @@ import XCTest
         XCTAssertEqual(manager.state.basalRateSchedule.items.map(\.value), [0.65])
     }
 
-    /// A status-0 response says the pump accepted the write, not that the profile holds it. If the
-    /// host persisted the schedule anyway it would scale every temp basal percent off a rate the
-    /// pump never adopted -- the failure in #206, just arrived at a different way.
     func testSyncFailsWhenThePumpAcceptsAWriteButDoesNotApplyIt() {
         stubProfile([.init(startTime: 0, basalRate: 0)], appliesWrites: false)
 
@@ -169,78 +164,35 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    func testFirstMismatchIsRecordedButNotYetConfirmed() {
+    func testMismatchIsRecordedFromWhenItWasFirstSeen() {
         setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.middayReference)
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.minutes(5)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        let mismatch = manager.state.basalRateMismatch
-        XCTAssertEqual(mismatch?.expectedUnitsPerHour, 0.65)
-        XCTAssertEqual(mismatch?.pumpUnitsPerHour, 0)
-        XCTAssertEqual(mismatch?.isConfirmed, false)
-    }
-
-    func testMismatchConfirmsOnceItOutlivesASinglePoll() {
-        setSchedule([(0, 0.65)])
-        let first = Date()
-
-        var mismatch = BasalRateMismatch(
-            expectedUnitsPerHour: 0.65,
-            pumpUnitsPerHour: 0,
-            firstSeen: first,
-            lastSeen: first
-        )
-        XCTAssertFalse(mismatch.isConfirmed)
-
-        mismatch = mismatch.observed(
-            expectedUnitsPerHour: 0.65,
-            pumpUnitsPerHour: 0,
-            at: first.addingTimeInterval(.minutes(5))
-        )
-        XCTAssertTrue(mismatch.isConfirmed)
-        XCTAssertEqual(mismatch.firstSeen, first)
-    }
-
-    /// A different pair of rates is a different fault, so the clock restarts rather than inheriting
-    /// the age of the one it replaced.
-    func testObservingDifferentRatesRestartsTheClock() {
-        let first = Date()
-        let mismatch = BasalRateMismatch(
-            expectedUnitsPerHour: 0.65,
-            pumpUnitsPerHour: 0,
-            firstSeen: first,
-            lastSeen: first
-        )
-        .observed(expectedUnitsPerHour: 0.65, pumpUnitsPerHour: 0.3, at: first.addingTimeInterval(.minutes(5)))
-
-        XCTAssertEqual(mismatch.firstSeen, first.addingTimeInterval(.minutes(5)))
-        XCTAssertFalse(mismatch.isConfirmed)
+        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.middayReference)
     }
 
     func testMismatchClearsWhenTheRatesAgreeAgain() {
         setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatch = BasalRateMismatch(
-            expectedUnitsPerHour: 0.65,
-            pumpUnitsPerHour: 0,
-            firstSeen: Date(timeIntervalSinceNow: -.hours(1)),
-            lastSeen: Date()
-        )
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    /// A temp basal is supposed to deliver something other than the scheduled rate.
     func testTempBasalIsNotAMismatch() {
         setSchedule([(0, 0.65)])
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 1.3, type: 0x02))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
     func testSuspendIsNotAMismatch() {
@@ -248,22 +200,19 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0x01))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    /// Control-IQ moves basal delivery on its own, so a disagreement says nothing about the profile.
     func testControlIQSuppressesTheCheck() {
         setSchedule([(0, 0.65)])
         manager.state.useControlIQ = true
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    /// Phone at 06:02 (schedule says 0.85), pump at 05:58 (schedule says 0.65), pump delivering
-    /// 0.65. A pump running a few minutes behind must not read as a mismatch every time a segment
-    /// boundary falls between the two clocks.
+    /// Phone at 06:02 (schedule says 0.85), pump at 05:58 (schedule says 0.65), delivering 0.65.
     func testExpectedRateIsEvaluatedOnThePumpsClock() {
         setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
         let startOfDay = Calendar.current.startOfDay(for: Self.middayReference)
@@ -272,11 +221,10 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatch)
+        XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    /// The same reading against the phone's clock, which is what the check falls back to before a
-    /// sync has read the pump's. Without it the test above would pass whatever clock was used.
+    /// Without this the test above would pass whatever clock the check used.
     func testPhoneClockIsUsedWhenThePumpTimeIsUnknown() {
         setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
         let startOfDay = Calendar.current.startOfDay(for: Self.middayReference)
@@ -285,8 +233,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertEqual(manager.state.basalRateMismatch?.expectedUnitsPerHour, 0.85)
-        XCTAssertEqual(manager.state.basalRateMismatch?.pumpUnitsPerHour, 0.65)
+        XCTAssertNotNil(manager.state.basalRateMismatchSince)
     }
 
     // MARK: - Event-driven trigger
