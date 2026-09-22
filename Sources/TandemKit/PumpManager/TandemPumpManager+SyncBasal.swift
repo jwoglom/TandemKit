@@ -245,26 +245,29 @@ extension TandemPumpManager {
 
     /// A status-0 `SetIDPSegmentResponse` says the pump accepted a write, not that the profile now
     /// holds it, and every temp basal percent is scaled off that profile.
+    ///
+    /// `pendingSegmentWrites` is the comparison: it returns the writes still needed to make the
+    /// pump match, so an empty result against a freshly read profile means the writes landed.
     func verifyProfileMatches(items: [RepeatingScheduleValue<Double>]) -> Error? {
-        guard let idpManager = loadIDPProfiles(), let profile = idpManager.getActiveProfile() else {
+        guard let profile = loadIDPProfiles()?.getActiveProfile() else {
             logger.error("Could not read the basal profile back to verify it")
             return PumpCommError.requestConstructionFailed(
                 reason: "Could not read the basal profile back to verify it"
             )
         }
 
-        let difference = BasalScheduleVerification.difference(
-            pump: BasalScheduleVerification.segments(for: profile.getSegments()),
-            expected: BasalScheduleVerification.segments(for: items)
-        )
-
-        guard let difference else {
-            return nil
+        let segments = profile.getSegments()
+        guard segments.count == items.count,
+              Self.pendingSegmentWrites(items: items, retainedSegments: segments).isEmpty
+        else {
+            let held = segments.map { "\($0.profileStartTime)min=\($0.profileBasalRate)mU/hr" }
+            logger.error("Basal profile does not match after sync; pump holds \(held)")
+            return PumpCommError.requestConstructionFailed(
+                reason: "Basal profile does not match after sync; pump holds \(held)"
+            )
         }
 
-        logger.error("Basal profile does not match after sync: \(difference)")
-        return PumpCommError.requestConstructionFailed(
-            reason: "Basal profile does not match after sync: \(difference)"
-        )
+        return nil
     }
+
 }

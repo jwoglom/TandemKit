@@ -725,6 +725,9 @@ extension TandemPumpManager {
     /// Only while the pump reports `.basal` are the two comparable: a temp basal or a suspend is
     /// meant to differ, and Control-IQ moves delivery on its own. Detection only -- rewriting the
     /// profile from a background poll would be an insulin-affecting action nobody asked for.
+    /// How long a delivered rate has to stay wrong before it counts, so one poll cannot raise it.
+    static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
+
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
         guard response.basalType == .basal, !state.useControlIQ else {
             return
@@ -735,8 +738,8 @@ extension TandemPumpManager {
         let expected = getScheduledBasalRate(at: state.currentPumpTime)
         let delivered = response.currentBasalRate
 
-        guard BasalScheduleVerification.milliunits(delivered) != BasalScheduleVerification.milliunits(expected)
-        else {
+        // Compared in the milliunits the pump uses, the same rounding the writes go through.
+        guard Int((delivered * 1000).rounded()) != Int((expected * 1000).rounded()) else {
             if state.basalRateMismatchSince != nil {
                 logger.info("Pump basal rate matches the schedule again")
                 state.basalRateMismatchSince = nil

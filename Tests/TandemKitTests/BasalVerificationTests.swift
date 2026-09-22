@@ -4,7 +4,7 @@ import XCTest
 
 /// The read-back after a write, and the comparison the sync poll makes against the rate the pump
 /// says it is delivering. https://github.com/jwoglom/TandemKit/issues/206
-@available(macOS 13.0, iOS 14.0, *) final class BasalScheduleVerificationTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class BasalVerificationTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
 
@@ -47,53 +47,6 @@ import XCTest
         return result
     }
 
-    private func response(index: Int, startTime: Int, basalMilliunits: Int) -> IDPSegmentResponse {
-        IDPSegmentResponse(
-            idpId: idpId,
-            segmentIndex: index,
-            profileStartTime: startTime,
-            profileBasalRate: basalMilliunits,
-            profileCarbRatio: 10000,
-            profileTargetBG: 110,
-            profileISF: 50,
-            idpStatusId: 31
-        )
-    }
-
-    // MARK: - Pure comparison
-
-    func testSegmentsCompareRegardlessOfIndexOrder() {
-        let pump = BasalScheduleVerification.segments(for: [
-            response(index: 0, startTime: 360, basalMilliunits: 850),
-            response(index: 1, startTime: 0, basalMilliunits: 650)
-        ])
-        let expected = BasalScheduleVerification.segments(for: [
-            RepeatingScheduleValue(startTime: 0, value: 0.65),
-            RepeatingScheduleValue(startTime: 3600.0 * 6, value: 0.85)
-        ])
-
-        XCTAssertNil(BasalScheduleVerification.difference(pump: pump, expected: expected))
-    }
-
-    func testDifferenceNamesBothSides() {
-        let pump = BasalScheduleVerification.segments(for: [response(index: 0, startTime: 0, basalMilliunits: 0)])
-        let expected = BasalScheduleVerification.segments(for: [RepeatingScheduleValue(startTime: 0, value: 0.65)])
-
-        let difference = BasalScheduleVerification.difference(pump: pump, expected: expected)
-
-        XCTAssertEqual(difference, "pump has [0min=0mU/hr], expected [0min=650mU/hr]")
-    }
-
-    func testMissingSegmentIsADifference() {
-        let pump = BasalScheduleVerification.segments(for: [response(index: 0, startTime: 0, basalMilliunits: 650)])
-        let expected = BasalScheduleVerification.segments(for: [
-            RepeatingScheduleValue(startTime: 0, value: 0.65),
-            RepeatingScheduleValue(startTime: 3600.0 * 6, value: 0.85)
-        ])
-
-        XCTAssertNotNil(BasalScheduleVerification.difference(pump: pump, expected: expected))
-    }
-
     // MARK: - Read-back after a write
 
     func testSyncReadsTheProfileBackAndSucceedsWhenItMatches() {
@@ -116,6 +69,19 @@ import XCTest
             return XCTFail("Expected the unapplied write to fail the sync")
         }
         XCTAssertNotEqual(manager.state.basalRateSchedule.items.map(\.value), [0.65])
+    }
+
+    func testSyncFailsWhenThePumpKeepsASegmentTheScheduleDropped() {
+        stubProfile([
+            .init(startTime: 0, basalRate: 650),
+            .init(startTime: 360, basalRate: 850)
+        ], appliesWrites: false)
+
+        let result = syncBasal([RepeatingScheduleValue(startTime: 0, value: 0.65)])
+
+        guard case .failure = result else {
+            return XCTFail("Expected the surplus segment to fail the sync")
+        }
     }
 
     func testSyncFailsWhenTheProfileCannotBeReadBack() {
@@ -146,9 +112,10 @@ import XCTest
     // MARK: - Delivered rate on every sync
 
     private func basalStatus(rate: Double, type: Int) -> CurrentBasalStatusResponse {
-        CurrentBasalStatusResponse(
-            profileBasalRate: UInt32(BasalScheduleVerification.milliunits(rate)),
-            currentBasalRate: UInt32(BasalScheduleVerification.milliunits(rate)),
+        let milliunits = UInt32((rate * 1000).rounded())
+        return CurrentBasalStatusResponse(
+            profileBasalRate: milliunits,
+            currentBasalRate: milliunits,
             basalModifiedBitmask: type
         )
     }

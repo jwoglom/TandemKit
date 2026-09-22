@@ -501,14 +501,17 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
      Tandem temp basal is a percent of the pump's *profile* rate, a pump left at 0 U/hr delivered
      nothing at any percent. Pump sounds are deliberately not written: onboarding collects no value
      for them, so the write would only zero out the user's; `fetchGlobalPumpSettings` reads instead.
-   * The pump profile is verified, not assumed (`BasalScheduleVerification`). `syncBasalRateSchedule`
-     reads the active profile back and fails unless it holds what was written -- a status-0
-     `SetIDPSegmentResponse` means accepted, not applied. `fetchBasalStatus` compares the delivered
+   * The pump profile is verified, not assumed. `syncBasalRateSchedule` reads the active profile
+     back through `verifyProfileMatches` and fails unless it holds what was written -- a status-0
+     `SetIDPSegmentResponse` means accepted, not applied. That check is `pendingSegmentWrites`
+     itself, which returns the writes still needed to make the pump match, so an empty result
+     against a freshly read profile means the writes landed; it also keeps the comparison in the
+     same integer milliunits the write path rounds to. `fetchBasalStatus` compares the delivered
      rate against the schedule on every sync at no extra traffic, and `.profileChange` /
      `.activeProfileSegmentChange` now trigger that read too. It runs only while the pump reports
      `.basal` with Control-IQ off (the other modes are meant to differ) and reads the schedule at
      the pump's clock, so a pump running minutes off is not flagged at every segment boundary. A
-     mismatch must outlive `mismatchConfirmationInterval` to become a critical
+     mismatch must outlive `basalMismatchConfirmationInterval` to become a critical
      `PumpStatusHighlight`. Nothing auto-corrects: that would be an insulin-affecting action nobody
      asked for, and would fight a user who changed the profile on the pump deliberately.
 
