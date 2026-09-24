@@ -20,15 +20,19 @@
 #   FAKETANDEM_HOST   Interface to bind (default 127.0.0.1; the simulator shares the host network).
 #   LOG_DIR           Where faketandem.log / xcodebuild.log / the .xcresult go
 #                     (default: $DERIVED_DATA/integration-logs).
-#   Everything scripts/test-local.sh reads (TRIO_PRODUCTS, DERIVED_DATA, SIMULATOR).
+#   Everything scripts/test-local.sh reads (TRIO_PRODUCTS, SIMULATOR, and DERIVED_DATA, which
+#                     defaults to .derived-data-virtual-pump here).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAKETANDEM_DIR="${FAKETANDEM_DIR:-$ROOT/../faketandem}"
 FAKETANDEM_HOST="${FAKETANDEM_HOST:-127.0.0.1}"
-DERIVED_DATA="${DERIVED_DATA:-$ROOT/.derived-data}"
+DERIVED_DATA="${DERIVED_DATA:-$ROOT/.derived-data-virtual-pump}"
 LOG_DIR="${LOG_DIR:-$DERIVED_DATA/integration-logs}"
 export DERIVED_DATA
+# The harness drives the stand-in CoreBluetooth (VirtualPump.xcconfig); its own derived data keeps
+# that build from invalidating the plain one in .derived-data.
+export VIRTUAL_PUMP=1
 export SCHEME=TandemKitIntegrationTests
 
 mode="${1:-all}"; shift || true

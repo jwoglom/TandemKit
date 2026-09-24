@@ -4,9 +4,13 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
+#if !TANDEMKIT_VIRTUAL_PUMP
+#error("TandemKitIntegrationTests needs the virtual pump build: scripts/integration-test.sh, or -xcconfig VirtualPump.xcconfig")
+#endif
+
 /// A running faketandem (`-transport virtual`) plus a real TandemKit driver stack on top of its
 /// socket link. Nothing here is stubbed: TandemPumpManager -> TandemBluetoothManager ->
-/// SocketPumpCentral -> TCP -> faketandem, with JPAKE and message signing running for real.
+/// the virtual CBCentralManager -> TCP -> faketandem, with JPAKE and message signing running for real.
 ///
 /// The emulator is reached through two environment variables. xcodebuild forwards variables named
 /// `TEST_RUNNER_<NAME>` to the test process as `<NAME>`, so pass them as
@@ -108,7 +112,7 @@ final class FaketandemHarness {
     /// One real driver stack. Everything a test needs to reach is exposed; the delegate is attached
     /// in Trio's order (delegate first, then queue) unless `attachDelegate` is false.
     struct Driver {
-        let central: SocketPumpCentral
+        let central: CBCentralManager
         let bluetooth: TandemBluetoothManager
         let manager: TandemPumpManager
         let delegate: MockPumpManagerDelegate
@@ -133,8 +137,10 @@ final class FaketandemHarness {
         clock: TandemClock = ManualClock(Date()),
         attachDelegate: Bool = true
     ) -> Driver {
-        let central = SocketPumpCentral(endpoint: endpoint, scanInterval: 0.5)
-        let bluetooth = TandemBluetoothManager(central: central)
+        VirtualPump.endpoint = endpoint
+        VirtualPump.scanInterval = 0.5
+        let bluetooth = TandemBluetoothManager()
+        let central = bluetooth.manager!
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         let delegate = MockPumpManagerDelegate()
         let queue = DispatchQueue(label: "com.jwoglom.TandemKitIntegrationTests.delegate")

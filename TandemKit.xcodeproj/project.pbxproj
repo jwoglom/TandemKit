@@ -483,6 +483,7 @@
 		6BBC502A68EC52F9B7556AD0 /* CommandWatchdogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C3067AB0B8A0494B861A05 /* CommandWatchdogTests.swift */; };
 		6C2E65A715FA5E69960999EA /* PairingIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BD6B7721114EC52F77F38F /* PairingIntegrationTests.swift */; };
 		6DC563EF1968EC339DD54400 /* TempBasalRateRoundingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A743B3203101D88FDCF0D05A /* TempBasalRateRoundingTests.swift */; };
+		6DFA5304D4FE382527689B0D /* VirtualCoreBluetoothNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6903B3405E80A880F50CCD70 /* VirtualCoreBluetoothNames.swift */; };
 		6E244BDCEFC307DC36017B84 /* BolusPermissionReleaseResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523F2E028828F80F74BDA73D /* BolusPermissionReleaseResponseTests.swift */; };
 		70E0A644976622F7FC74E39E /* CancelledBolusUnknownDeliveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2179DC911A58E699B2584905 /* CancelledBolusUnknownDeliveryTests.swift */; };
 		712A0E241816EEF859D1F7DF /* PlaySoundRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9EB4F4A560F4F7E6A6BB06 /* PlaySoundRequestTests.swift */; };
@@ -539,8 +540,8 @@
 		9B17323AB722F34B155E6F7D /* BolusActivatedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27EC2418600F730B25A7359 /* BolusActivatedHistoryLogTests.swift */; };
 		9B2D3A9F0EE5EB12357BE503 /* CgmDataFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63C11DDBB7EC1B5D41B6E465 /* CgmDataFsl2HistoryLogTests.swift */; };
 		9B595F2C5E9270C06A1E84B6 /* Jpake1aRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94967D1376FF1C521A47EEF5 /* Jpake1aRequestTests.swift */; };
-		9E65EDDD032E79DF2FF62A83 /* VirtualCoreBluetoothTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC211D7F096479502741EB8 /* VirtualCoreBluetoothTests.swift */; };
 		9DAD7C8FD4F7270E999611AC /* TandemKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1AAA186E2D2B1E060061C043 /* TandemKit.framework */; };
+		9E65EDDD032E79DF2FF62A83 /* VirtualCoreBluetoothTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC211D7F096479502741EB8 /* VirtualCoreBluetoothTests.swift */; };
 		9EC132CAF97D48693C506D8B /* HistoryBackfillPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD3FBCC49A39F474FC13C8C /* HistoryBackfillPlannerTests.swift */; };
 		9FEB1326AADC19FEFFEA7D83 /* AlertAckHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44D327EE965B58A6C953125 /* AlertAckHistoryLogTests.swift */; };
 		A043C3A220A1C9F67FE1DD9D /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = 4C2C6FA4D56B71100B10551F /* SwiftECC */; };
@@ -1099,6 +1100,7 @@
 		6585C8FC6C57879C0217AD1B /* CgmBleCalibrationEvtG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmBleCalibrationEvtG7HistoryLog.swift; sourceTree = "<group>"; };
 		67B9C65636CED76B228E895C /* CgmJoinSessionG7HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionG7HistoryLog.swift; sourceTree = "<group>"; };
 		67E4AD92CC7C48CFA579084C /* TandemKitChangeCartridgeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeViewModel.swift; sourceTree = "<group>"; };
+		6903B3405E80A880F50CCD70 /* VirtualCoreBluetoothNames.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VirtualCoreBluetoothNames.swift; sourceTree = "<group>"; };
 		69724567A52195362DDD9A9B /* TandemKitIntegrationTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TandemKitIntegrationTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AA4460654835A4AEBA7A81B /* HistoryLogStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryLogStoreTests.swift; sourceTree = "<group>"; };
 		6AD3A06914D4E97EF2D34795 /* TandemPumpManager+HistoryStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "TandemPumpManager+HistoryStore.swift"; sourceTree = "<group>"; };
@@ -2380,6 +2382,7 @@
 				073440A6C449ABDA75F9B14C /* ReconnectIntegrationTests.swift */,
 				23BE8319BF1F6557A5A1423C /* ScanIntegrationTests.swift */,
 				DA5DC61FBE7D2FB02E24CCF0 /* SyncIntegrationTests.swift */,
+				6903B3405E80A880F50CCD70 /* VirtualCoreBluetoothNames.swift */,
 			);
 			name = TandemKitIntegrationTests;
 			path = Tests/TandemKitIntegrationTests;
@@ -3305,6 +3308,7 @@
 				144324A84F2BDFDBE10AB9DE /* ReconnectIntegrationTests.swift in Sources */,
 				CEAF4217C5494CB36E974824 /* ScanIntegrationTests.swift in Sources */,
 				80E7ED4258FF94168FF44A61 /* SyncIntegrationTests.swift in Sources */,
+				6DFA5304D4FE382527689B0D /* VirtualCoreBluetoothNames.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

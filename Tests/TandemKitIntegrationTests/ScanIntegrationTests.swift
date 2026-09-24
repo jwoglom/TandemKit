@@ -23,7 +23,7 @@ final class ScanIntegrationTests: FaketandemIntegrationTestCase {
             "reset leaves the pump in PairStep2, which advertises 0x12"
         )
         XCTAssertEqual(hello.pairingState, FaketandemPairingState.pairStep2.rawValue)
-        XCTAssertFalse(scan.peripheral.isConnected, "a scan must not attach")
+        XCTAssertEqual(scan.peripheral.state, .disconnected, "a scan must not attach")
         XCTAssertFalse(try harness.client.snapshot().connection.connected)
     }
 
