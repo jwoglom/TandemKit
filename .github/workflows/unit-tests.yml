@@ -36,7 +36,7 @@ on:
 jobs:
   unit-tests:
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       DERIVED_DATA_PATH: DerivedData
       PRODUCTS_DIR: DerivedData/Build/Products/Debug-iphonesimulator
@@ -290,6 +290,30 @@ jobs:
           echo "Executed ${EXECUTED} tests."
           echo "TandemKitTests: ${EXECUTED} tests executed." >> "${GITHUB_STEP_SUMMARY}"
 
+      # TANDEMKIT_VIRTUAL_PUMP swaps CoreBluetooth for the faketandem socket (VirtualPump/), so its
+      # tests only exist in a build with the flag, which VirtualPump.xcconfig sets. This rebuild
+      # also fails if the driver starts using CoreBluetooth API the stand-in does not provide.
+      - name: Build and run the virtual CoreBluetooth tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "TandemKit/TandemKit.xcodeproj" \
+            -scheme "TandemKitTests" \
+            -configuration Debug \
+            -destination "${SIMULATOR_DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA_PATH}" \
+            -resultBundlePath "TandemKitTests-virtual-pump.xcresult" \
+            -only-testing:TandemKitTests/VirtualCoreBluetoothTests \
+            -xcconfig "TandemKit/VirtualPump.xcconfig" \
+            ${XCODEBUILD_COMMON_FLAGS} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "xcodebuild-test-virtual-pump.log"
+          # The whole test file is behind the flag, so a flag that did not take would pass empty.
+          if ! grep -qE 'Executed [1-9][0-9]* test' xcodebuild-test-virtual-pump.log; then
+            echo "No virtual CoreBluetooth tests ran; was TANDEMKIT_VIRTUAL_PUMP applied?"
+            exit 1
+          fi
+
       - name: Upload test logs/results (on failure)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -299,4 +323,6 @@ jobs:
             xcodebuild-loopkit.log
             xcodebuild-build-for-testing.log
             xcodebuild-test.log
+            xcodebuild-test-virtual-pump.log
             TandemKitTests.xcresult
+            TandemKitTests-virtual-pump.xcresult
