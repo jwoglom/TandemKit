@@ -120,9 +120,7 @@ extension TandemPumpManager {
 
         // Above suspend and the rest: those describe delivery the app knows about, while this one
         // means the delivered rate is not the one the loop is dosing against at all.
-        if let since = state.basalRateMismatchSince,
-           now.timeIntervalSince(since) >= TandemPumpManager.basalMismatchConfirmationInterval
-        {
+        if state.basalRateMismatchConfirmed {
             return PumpStatusHighlight(
                 localizedMessage: String(
                     localized: "Basal Rate Mismatch",

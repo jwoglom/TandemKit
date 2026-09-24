@@ -173,24 +173,69 @@ import XCTest
         XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    func testMismatchIsRecordedFromWhenItWasFirstSeen() {
+    func testFirstMismatchIsRecordedButNotConfirmed() {
         setSchedule([(0, 0.65)])
         manager.clock = ManualClock(Self.middayReference)
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.middayReference)
+        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
+    }
+
+    func testMismatchConfirmsOnAReadingAfterTheInterval() {
+        setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.middayReference)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
         manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.minutes(5)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
         XCTAssertEqual(manager.state.basalRateMismatchSince, Self.middayReference)
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+    }
+
+    /// A profile qualifying event can trigger a read seconds after a sync's.
+    func testSecondReadingInsideTheIntervalDoesNotConfirm() {
+        setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.middayReference)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.seconds(30)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
+    }
+
+    func testConfirmationNotifiesTheDelegate() {
+        let delegate = MockPumpManagerDelegate()
+        let delegateQueue = DispatchQueue(label: "basal-verification-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+
+        setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.middayReference)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        delegateQueue.sync {}
+        let updatesBefore = delegate.didUpdateStateCount
+
+        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.minutes(5)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore + 1)
     }
 
     func testMismatchClearsWhenTheRatesAgreeAgain() {
         setSchedule([(0, 0.65)])
         manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
         XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
     }
 
     /// Loop keeps a temp basal running almost continuously, so the profile rate it is scaled off is

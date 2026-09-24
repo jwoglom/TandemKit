@@ -51,9 +51,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
-    /// When the pump first reported delivering a basal rate other than the scheduled one. Not
-    /// persisted: the next sync re-establishes it, and a stale one would accuse a corrected pump.
+    /// Not persisted: the next sync re-establishes both, and a stale value would accuse a corrected pump.
     public var basalRateMismatchSince: Date?
+    public var basalRateMismatchConfirmed = false
     /// How far the driver has read this pump's history log, and the earliest date it may report
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.

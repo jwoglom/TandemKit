@@ -758,6 +758,7 @@ extension TandemPumpManager {
             if state.basalRateMismatchSince != nil {
                 logger.info("Pump basal rate matches the schedule again")
                 state.basalRateMismatchSince = nil
+                state.basalRateMismatchConfirmed = false
                 notifyDelegateStateUpdated()
             }
             return
@@ -765,11 +766,19 @@ extension TandemPumpManager {
 
         logger.error("Pump basal profile is \(pumpRate) U/hr where the schedule says \(expected) U/hr")
 
-        guard state.basalRateMismatchSince == nil else {
+        guard let since = state.basalRateMismatchSince else {
+            state.basalRateMismatchSince = now
+            notifyDelegateStateUpdated()
             return
         }
 
-        state.basalRateMismatchSince = now
+        guard !state.basalRateMismatchConfirmed,
+              now.timeIntervalSince(since) >= Self.basalMismatchConfirmationInterval
+        else {
+            return
+        }
+
+        state.basalRateMismatchConfirmed = true
         notifyDelegateStateUpdated()
     }
 }
