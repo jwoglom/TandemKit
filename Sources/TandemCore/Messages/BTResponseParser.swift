@@ -10,7 +10,10 @@ enum BTResponseParser {
         authKey _: Data?,
         response: inout ResponseMessage
     ) {
-        guard data.count > 3 else {
+        // A continuation packet is [packetsRemaining][txId] plus at least one payload byte, and a
+        // message whose length is 1 mod 18 ends in exactly that (Packetize chunks the same way).
+        let minimumLength = response.fullCargo.isEmpty ? 4 : 3
+        guard data.count >= minimumLength else {
             logger.error("Data is too short \(data.count)")
             return
         }
