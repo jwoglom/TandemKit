@@ -6,7 +6,8 @@ import XCTest
 /// The Java test also asserts `getPumpTimeSecInstant()`; there is no equivalent accessor on the
 /// Swift `HistoryLog` base class, so the instant is computed directly via
 /// `Dates.fromJan12008EpochSecondsToDate` (the same helper other Swift history-log-adjacent code
-/// already uses, e.g. `HistoryLogExport`).
+/// already uses, e.g. `HistoryLogExport`), and the Java test's `Instant` literal is translated
+/// from pump wall clock to an instant by `HistoryLogMessageTester.expectedDate(pumpWallClock:)`.
 final class BolusCompletedHistoryLogTests: XCTestCase {
     func testBolusCompletedHistoryLog() {
         let expected = BolusCompletedHistoryLog(
@@ -22,7 +23,7 @@ final class BolusCompletedHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertEqual(
             Dates.fromJan12008EpochSecondsToDate(TimeInterval(parsed.pumpTimeSec)),
-            ISO8601DateFormatter().date(from: "2022-02-19T20:59:10Z")
+            HistoryLogMessageTester.expectedDate(pumpWallClock: "2022-02-19T20:59:10Z")
         )
     }
 
@@ -41,7 +42,7 @@ final class BolusCompletedHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertEqual(
             Dates.fromJan12008EpochSecondsToDate(TimeInterval(parsed.pumpTimeSec)),
-            ISO8601DateFormatter().date(from: "2022-02-19T12:07:28Z")
+            HistoryLogMessageTester.expectedDate(pumpWallClock: "2022-02-19T12:07:28Z")
         )
     }
 
@@ -73,7 +74,7 @@ final class BolusCompletedHistoryLogTests: XCTestCase {
         XCTAssertEqual(parsed.insulinDelivered.bitPattern, parsed.insulinRequested.bitPattern)
         XCTAssertEqual(
             Dates.fromJan12008EpochSecondsToDate(TimeInterval(parsed.pumpTimeSec)),
-            ISO8601DateFormatter().date(from: "2026-09-06T05:27:29Z")
+            HistoryLogMessageTester.expectedDate(pumpWallClock: "2026-09-06T05:27:29Z")
         )
     }
 }

@@ -5,7 +5,8 @@ import XCTest
 ///
 /// The Java test also asserts `getPumpTimeSecInstant()`; there is no equivalent accessor on the
 /// Swift `HistoryLog` base class, so the instant is computed directly via
-/// `Dates.fromJan12008EpochSecondsToDate`.
+/// `Dates.fromJan12008EpochSecondsToDate`, and the Java test's `Instant` literal is translated
+/// from pump wall clock to an instant by `HistoryLogMessageTester.expectedDate(pumpWallClock:)`.
 final class BGHistoryLogTests: XCTestCase {
     func testBGHistoryLog() {
         let expected = BGHistoryLog(
@@ -21,7 +22,7 @@ final class BGHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertEqual(
             Dates.fromJan12008EpochSecondsToDate(TimeInterval(parsed.pumpTimeSec)),
-            ISO8601DateFormatter().date(from: "2022-02-18T17:51:04Z")
+            HistoryLogMessageTester.expectedDate(pumpWallClock: "2022-02-18T17:51:04Z")
         )
     }
 }
