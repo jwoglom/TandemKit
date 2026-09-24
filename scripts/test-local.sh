@@ -19,6 +19,8 @@
 #   DERIVED_DATA    Where to build (default: .derived-data in the repo root).
 #   SIMULATOR       Simulator name (default: first available iPhone).
 #   SCHEME          Scheme to test (default: TandemKitTests).
+#   VIRTUAL_PUMP    1 builds with VirtualPump.xcconfig: CoreBluetooth replaced by the faketandem
+#                   socket. Use a separate DERIVED_DATA, or every switch rebuilds TandemKit.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,10 +55,13 @@ done
 COMMON=(-project "$ROOT/TandemKit.xcodeproj" -scheme "$SCHEME" -configuration Debug
         -destination "platform=iOS Simulator,name=$SIMULATOR" -derivedDataPath "$DERIVED_DATA"
         -skipMacroValidation -skipPackagePluginValidation CODE_SIGNING_ALLOWED=NO)
+if [[ "${VIRTUAL_PUMP:-0}" == "1" ]]; then
+  COMMON+=(-xcconfig "$ROOT/VirtualPump.xcconfig")
+fi
 
 mode="${1:-all}"; shift || true
 echo "Staged LoopKit from: $TRIO_PRODUCTS"
-echo "Simulator: $SIMULATOR   Derived data: $DERIVED_DATA"
+echo "Simulator: $SIMULATOR   Derived data: $DERIVED_DATA   Virtual pump: ${VIRTUAL_PUMP:-0}"
 case "$mode" in
   build) xcodebuild build-for-testing "${COMMON[@]}" "$@" ;;
   test)  xcodebuild test-without-building "${COMMON[@]}" "$@" ;;
