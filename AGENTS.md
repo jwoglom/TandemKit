@@ -647,7 +647,9 @@ VirtualPump.xcconfig` sets it) compiles `Sources/TandemKit/PumpManager/VirtualPu
 the module and talk to faketandem over a socket at `VirtualPump.endpoint`
 (`TANDEMKIT_VIRTUAL_PUMP=host:port` in the app's environment). Without the flag that directory
 compiles to nothing and the driver runs on real CoreBluetooth, unchanged. On Linux:
-`swift build --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`.
+`swift test --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`. Test files import both, so
+`Tests/TandemKitTests/VirtualCoreBluetoothNames.swift` pins the names; `VirtualCoreBluetoothTests`
+exists only in a flagged build.
 
 Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
 policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/
