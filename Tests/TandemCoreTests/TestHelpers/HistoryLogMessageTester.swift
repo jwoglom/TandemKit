@@ -81,6 +81,29 @@ enum HistoryLogMessageTester {
         return cargo
     }
 
+    /// Converts a pumpX2 Java test's expected `Instant` literal into the `Date` the Swift decoder
+    /// is expected to produce for the same `pumpTimeSec`.
+    ///
+    /// pumpX2's `Dates.fromJan12008EpochSecondsToDate` treats the wire value as seconds since
+    /// 2008-01-01 **UTC**, so its tests assert literals like `Instant.parse("2022-02-18T17:51:04Z")`.
+    /// Swift's `Dates.fromJan12008ToUnixEpochSeconds` deliberately differs: the pump keeps its clock
+    /// in local time, so it subtracts `TimeZone.current.secondsFromGMT()` to turn that pump
+    /// wall-clock reading into an absolute instant. The ISO literal is therefore the pump's
+    /// *wall clock*, not the instant, and porting it verbatim only agreed with the decoder on a host
+    /// whose zone offset is zero. Applying the same offset here keeps the assertion — and the
+    /// pumpX2 fixture value it documents — correct in every host time zone.
+    static func expectedDate(
+        pumpWallClock iso: String,
+        file: StaticString = #file,
+        line: UInt = #line
+    ) -> Date? {
+        guard let wallClock = ISO8601DateFormatter().date(from: iso) else {
+            XCTFail("invalid ISO8601 pump wall clock: \(iso)", file: file, line: line)
+            return nil
+        }
+        return wallClock.addingTimeInterval(-TimeInterval(TimeZone.current.secondsFromGMT()))
+    }
+
     /// Field-by-field description across the class hierarchy, excluding raw `cargo` bytes,
     /// mirroring pumpX2's `verboseToString` (which excludes cargo from the comparison).
     /// When `ignoringBaseFields` is set, also excludes `pumpTimeSec`/`sequenceNum`.

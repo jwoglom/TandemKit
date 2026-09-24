@@ -2717,17 +2717,6 @@
         }
       }
     },
-    "Select how much insulin to prime the cannula" : {
-      "comment" : "Step description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select how much insulin to prime the cannula"
-          }
-        }
-      }
-    },
     "Select insulin type" : {
       "comment" : "Title for insulin type",
       "localizations" : {
@@ -2796,6 +2785,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Session Type"
+          }
+        }
+      }
+    },
+    "Set Prime Amount" : {
+      "comment" : "Step header",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Prime Amount"
           }
         }
       }
@@ -3036,17 +3036,6 @@
         }
       }
     },
-    "Step 2: Set Prime Amount" : {
-      "comment" : "Step header",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Step 2: Set Prime Amount"
-          }
-        }
-      }
-    },
     "Step 3: Fill Tubing" : {
       "comment" : "Step header",
       "localizations" : {
@@ -3228,6 +3217,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tandem pump model unknown or unsupported (received %@)"
+          }
+        }
+      }
+    },
+    "Tap to adjust the amount of insulin for priming the cannula." : {
+      "comment" : "Step description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap to adjust the amount of insulin for priming the cannula."
           }
         }
       }
