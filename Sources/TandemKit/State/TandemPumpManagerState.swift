@@ -51,7 +51,8 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
-    /// Not persisted: the next sync re-establishes both, and a stale value would accuse a corrected pump.
+    /// In memory only, not saved with the state. After a relaunch the next sync rechecks; a saved
+    /// value could show a mismatch warning for a pump that has since been fixed.
     public var basalRateMismatchSince: Date?
     public var basalRateMismatchConfirmed = false
     /// How far the driver has read this pump's history log, and the earliest date it may report
@@ -159,7 +160,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
 
-    /// The limits give `enactBolus` a ceiling from the end of setup, and onboarding values to push.
     public init(
         basalRateSchedule: BasalRateSchedule,
         maxBasalRateUnitsPerHour: Double? = nil,
@@ -471,7 +471,8 @@ public struct TandemPumpManagerState: RawRepresentable {
         return raw
     }
 
-    /// Stays valid after the read that measured it, unlike `currentPumpTime`.
+    /// Seconds the pump's clock is ahead of the phone's (negative if behind), as of the last
+    /// `fetchTimeSinceReset`.
     public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
             return 0

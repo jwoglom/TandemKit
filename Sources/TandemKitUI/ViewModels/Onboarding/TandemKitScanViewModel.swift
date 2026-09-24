@@ -84,7 +84,8 @@ class TandemKitScanViewModel: ObservableObject {
         applyOnboardingSettings()
     }
 
-    /// Setup stops here rather than leave the pump on a profile the app is not reporting (#206).
+    /// On failure, setup waits on the alert instead of advancing, because the pump would otherwise
+    /// be left running basal rates the app doesn't know about (#206).
     func applyOnboardingSettings() {
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {

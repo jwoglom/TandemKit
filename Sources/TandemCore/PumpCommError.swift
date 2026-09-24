@@ -226,7 +226,7 @@ extension PumpCommError: LocalizedError {
 }
 
 public extension PumpCommError {
-    /// Paired by segment index, as the sync writes them, in the pump's minutes and milliunits.
+    /// Pairs segments by index because that is how `pendingSegmentWrites` compared them.
     static func basalProfileDifference(
         pump: [IDPSegmentResponse],
         app: [RepeatingScheduleValue<Double>]

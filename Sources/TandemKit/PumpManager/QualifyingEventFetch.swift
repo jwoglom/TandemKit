@@ -81,8 +81,8 @@ enum QualifyingEventFetch: CaseIterable {
             needed.insert(.basalStatus)
         }
 
-        // Also beyond PumpX2's table: a profile edit changes the rate temp basal percents scale
-        // off, so check it now rather than at the next sync.
+        // Also not in PumpX2's table: after a profile change on the pump, read basal status now so
+        // `verifyDeliveredBasalRate` catches a mismatch without waiting for the next sync.
         if !events.isDisjoint(with: [.profileChange, .activeProfileSegmentChange]) {
             needed.insert(.basalStatus)
         }

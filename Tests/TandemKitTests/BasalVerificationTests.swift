@@ -9,8 +9,7 @@ import XCTest
 
     private let idpId = 10
 
-    /// Midday, so a test that walks a segment boundary stays inside one local day.
-    private static let middayReference = Date(timeIntervalSinceReferenceDate: 700_000_000)
+    private static let referenceDate = Date(timeIntervalSinceReferenceDate: 700_000_000)
 
     override func setUp() {
         super.setUp()
@@ -116,7 +115,7 @@ import XCTest
 
     func testSyncFailsWhenTheProfileCannotBeReadBack() {
         stubProfile([.init(startTime: 0, basalRate: 0)])
-        // Answer the discovery walk once, then go silent, so only the read-back is starved.
+        // Answer ProfileStatusRequest for the first walk only, so the read-back walk gets no reply.
         bluetooth.enqueue(ProfileStatusRequest.self, responses: [
             ProfileStatusResponse(
                 numberOfProfiles: 1,
@@ -149,7 +148,8 @@ import XCTest
         )
     }
 
-    /// Measured three hours ago, so only the offset can still be current.
+    /// Records the pump time three hours back, so a check reading `currentPumpTime` directly
+    /// instead of the offset would land on the wrong segment.
     private func setPumpClock(offsetFrom phoneNow: Date, by offset: TimeInterval) {
         manager.clock = ManualClock(phoneNow)
         manager.state.lastPumpTimeCheckDate = phoneNow.addingTimeInterval(-.hours(3))
@@ -172,32 +172,32 @@ import XCTest
 
     func testFirstMismatchIsRecordedButNotConfirmed() {
         setSchedule([(0, 0.65)])
-        manager.clock = ManualClock(Self.middayReference)
+        manager.clock = ManualClock(Self.referenceDate)
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.middayReference)
+        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.referenceDate)
         XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
     }
 
     func testMismatchConfirmsOnAReadingAfterTheInterval() {
         setSchedule([(0, 0.65)])
-        manager.clock = ManualClock(Self.middayReference)
+        manager.clock = ManualClock(Self.referenceDate)
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.minutes(5)))
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.middayReference)
+        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.referenceDate)
         XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
     }
 
     func testSecondReadingInsideTheIntervalDoesNotConfirm() {
         setSchedule([(0, 0.65)])
-        manager.clock = ManualClock(Self.middayReference)
+        manager.clock = ManualClock(Self.referenceDate)
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.seconds(30)))
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.seconds(30)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
         XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
@@ -211,12 +211,12 @@ import XCTest
         delegateQueue.sync {}
 
         setSchedule([(0, 0.65)])
-        manager.clock = ManualClock(Self.middayReference)
+        manager.clock = ManualClock(Self.referenceDate)
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
         delegateQueue.sync {}
         let updatesBefore = delegate.didUpdateStateCount
 
-        manager.clock = ManualClock(Self.middayReference.addingTimeInterval(.minutes(5)))
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
         delegateQueue.sync {}
 
@@ -270,7 +270,7 @@ import XCTest
     /// Phone at 06:02 (schedule says 0.85), pump four minutes behind at 05:58 (says 0.65).
     func testExpectedRateIsEvaluatedOnThePumpsClock() {
         setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
-        let startOfDay = Calendar.current.startOfDay(for: Self.middayReference)
+        let startOfDay = Calendar.current.startOfDay(for: Self.referenceDate)
         setPumpClock(offsetFrom: startOfDay.addingTimeInterval(3600.0 * 6 + 120), by: -.minutes(4))
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
@@ -280,7 +280,7 @@ import XCTest
 
     func testPhoneClockIsUsedWhenThePumpOffsetIsUnknown() {
         setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
-        let startOfDay = Calendar.current.startOfDay(for: Self.middayReference)
+        let startOfDay = Calendar.current.startOfDay(for: Self.referenceDate)
         manager.clock = ManualClock(startOfDay.addingTimeInterval(3600.0 * 6 + 120))
         manager.state.currentPumpTime = nil
 
