@@ -4,8 +4,12 @@
 `TandemBluetoothManager`, `TandemPeripheralManager`, JPAKE, message signing,
 packetization — against [faketandem](https://github.com/jwoglom/faketandem), the Go
 Tandem pump emulator, over its virtual GATT link. Nothing on the driver side is stubbed;
-the only substitution is `SocketPumpCentral` standing in for CoreBluetooth one layer
-below `TandemPeripheralManager`.
+the only substitution is CoreBluetooth itself. The target is built with
+`VirtualPump.xcconfig` (`TANDEMKIT_VIRTUAL_PUMP`), under which
+`Sources/TandemKit/PumpManager/VirtualPump/` supplies its own `CBCentralManager`,
+`CBPeripheral`, `CBService` and `CBCharacteristic`, carried over a socket. They shadow
+CoreBluetooth's inside the module, so the driver code is exactly what ships; without the
+flag none of it compiles, and the target refuses to build.
 
 The unit tests in `TandemKitTests` stay as they are: fast, hermetic, `StubPumpBluetooth`.
 This target is for the questions those cannot answer — does the driver actually
@@ -29,7 +33,7 @@ The script builds faketandem from `FAKETANDEM_DIR`, starts it with `-transport v
 on two free loopback ports, waits for its API, runs the `TandemKitIntegrationTests`
 scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 
-| File (under `LOG_DIR`, default `.derived-data/integration-logs/`) | Contents |
+| File (under `LOG_DIR`, default `.derived-data-virtual-pump/integration-logs/`) | Contents |
 | --- | --- |
 | `faketandem.log` | The emulator's log: every fragment received and sent, every handler decision. |
 | `xcodebuild.log` | The driver's `TandemLogger` output and the XCTest results. |
@@ -37,7 +41,10 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 
 Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`,
 `FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
-`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`).
+`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`). The script
+sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
+defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
+invalidate the plain one.
 
 ### How the tests find the emulator
 
@@ -71,7 +78,8 @@ it simply reports skips.
  │           ├ TandemPumpManager (ManualClock)│             │   JPAKE, signing, handlers,      │
  │           ├ TandemBluetoothManager         │             │   pkg/state simulator            │
  │           │   └ TandemPeripheralManager    │             │                                  │
- │           └ SocketPumpCentral/Peripheral ──┼── TCP ─────▶│  pkg/bluetooth VirtualTransport  │
+ │           └ virtual CBCentralManager/  ────┼── TCP ─────▶│  pkg/bluetooth VirtualTransport  │
+ │             CBPeripheral (VirtualPump/)    │             │                                  │
  │             (newline JSON, GATT semantics) │             │   hello/attach/write/notify      │
  └────────────────────────────────────────────┘             └──────────────────────────────────┘
 ```
@@ -80,7 +88,8 @@ it simply reports skips.
   before each test (`reset()`: drop any attached central, set the pairing code and clear
   the long-term key, real clock, no faults, `PairStep2`, empty request log), builds a
   `Driver`, and offers the flows the onboarding UI uses (`discover`, `pair`, `sync`).
-- `Driver` is one real stack: `SocketPumpCentral` → `TandemBluetoothManager(central:)` →
+- `Driver` is one real stack: `VirtualPump.endpoint` pointed at the emulator, then
+  `TandemBluetoothManager()` (which creates its `CBCentralManager` as in production) →
   `TandemPumpManager(state:bluetooth:clock:)` with a `MockPumpManagerDelegate` attached in
   Trio's order (delegate, then queue). The clock is a `ManualClock` started at "now", so a
   test can move the driver's idea of time (bolus estimated end, sync throttles) without
@@ -149,7 +158,7 @@ branch (JPAKE is a trapping stub there).
 ## What the harness found
 
 Two driver bugs, fixed in the same change that added the harness and covered by unit
-tests in `TandemKitTests` (`SocketPumpTransportTests`, `BTResponseParserTests`):
+tests in `TandemKitTests` (`VirtualCoreBluetoothTests`, `BTResponseParserTests`):
 
 - Continuation packets of a multi-packet response were dropped. `TandemPeripheralManager`
   only handed a notification to the pending write when byte 2 matched the expected opcode;
@@ -196,4 +205,4 @@ Not gaps, but worth knowing when reading timings: an unauthenticated
 `DisconnectPumpRequest` is not answered (the handler requires auth, as on a real pump), so
 a failed setup costs the driver its 30 s response timeout before the link drops; and
 pairing-state `NotDiscoverable` still answers `hello` (followed by `disconnect`), which
-`SocketPumpCentral` now treats as "not advertising".
+the virtual `CBCentralManager` treats as "not advertising".
