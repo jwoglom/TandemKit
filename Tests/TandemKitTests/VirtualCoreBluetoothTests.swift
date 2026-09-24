@@ -498,6 +498,57 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(server.latestAttachedConnection).droppedNotifies, [])
     }
 
+    /// A response longer than one 18-byte chunk arrives as several notifications, back to back;
+    /// only the first carries the opcode at byte 2, the rest carry cargo there, and the last one can
+    /// be as short as three bytes. The driver used to match every notification against the expected
+    /// opcode (dropping continuations as unhandled) and to reject three-byte packets, so the
+    /// write timed out. Jpake4KeyConfirmationResponse (50 cargo bytes -> 20+20+20+3) hits both.
+    func testPeripheralManagerReassemblesAMultiPacketResponse() throws {
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        let nonce = Data([0xE6, 0x8B, 0x38, 0xDA, 0x41, 0x3F, 0xC8, 0x68])
+        let digest = Data((0 ..< 32).map { UInt8($0) })
+
+        var fragments: [Data] = []
+        server.onWrite = { connection, characteristic, value in
+            // The 50-byte request is itself four writes; answer the last one.
+            guard value[0] == 0 else { return }
+            let response = Jpake4KeyConfirmationResponse(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            )
+            for packet in Packetize.parse(message: response, authenticationKey: nil, txId: value[1], timeSinceReset: nil) {
+                fragments.append(packet.build())
+                connection.notify(characteristic, packet.build())
+            }
+        }
+
+        let answered = expectation(description: "Jpake4KeyConfirmationResponse")
+        var received: Jpake4KeyConfirmationResponse?
+        DispatchQueue.global().async {
+            peripheralManager.startNotify(
+                service: ServiceUUID.PUMP_SERVICE,
+                characteristic: CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS
+            )
+            received = peripheralManager.write(Jpake4KeyConfirmationRequest(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            ))
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 10)
+
+        XCTAssertEqual(fragments.map(\.count), [20, 20, 20, 3], "the fixture must fragment the way the pump does")
+        XCTAssertEqual(fragments[0][2], Jpake4KeyConfirmationResponse.props.opCode)
+        XCTAssertNotEqual(fragments[1][2], Jpake4KeyConfirmationResponse.props.opCode, "a continuation packet carries cargo at byte 2")
+        XCTAssertEqual(received?.hashDigest, digest)
+    }
+
     /// Same round trip against a running faketandem (`go run . -transport virtual`), reached at
     /// TANDEMKIT_VIRTUAL_PUMP_SMOKE=host:port (pass it as TEST_RUNNER_TANDEMKIT_VIRTUAL_PUMP_SMOKE to
     /// xcodebuild). The pump must be in a connectable pairing state. Skipped otherwise.
