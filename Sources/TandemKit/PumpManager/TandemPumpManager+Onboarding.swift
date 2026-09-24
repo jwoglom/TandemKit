@@ -2,24 +2,33 @@ import Foundation
 import HealthKit
 import LoopKit
 
+/// Which setup settings the pump did not take. A failed clock write is not one: the pump time badge
+/// and the settings screen already cover it, and it leaves delivery as the app reports it.
+public struct OnboardingSettingsFailure: Error {
+    public let basalSchedule: Error?
+    public let deliveryLimits: Error?
+}
+
 public extension TandemPumpManager {
-    /// Writes the settings the host handed over in `PumpManagerSetupSettings` onto the pump.
-    ///
-    /// Loop and Trio call `syncBasalRateSchedule` / `syncDeliveryLimits` only from their therapy
-    /// settings editors; during onboarding those editors save locally and the app passes the values
-    /// to the driver instead, so writing them to the device is the driver's job.
-    /// https://github.com/jwoglom/TandemKit/issues/206
-    ///
-    /// Reports the first error and keeps going: the writes are independent, and pairing has already
-    /// succeeded by the time this runs.
-    func applyOnboardingSettings(completion: @escaping (Error?) -> Void) {
+    /// Loop and Trio sync basal rates and limits only from their therapy settings editors, so the
+    /// driver has to write the ones handed over in `PumpManagerSetupSettings`. Issue #206.
+    func applyOnboardingSettings(completion: @escaping (OnboardingSettingsFailure?) -> Void) {
         logger.info("Applying onboarding settings to pump")
 
-        // Limits first, so the schedule is written against the limits the user configured rather
-        // than whatever ceiling the pump was already holding.
+        // Limits first, so the schedule is written against the limits the user configured.
         syncOnboardingDeliveryLimits { limitsError in
             self.syncOnboardingBasalSchedule { basalError in
-                self.writePumpTime { completion(limitsError ?? basalError ?? $0) }
+                self.writePumpTime { timeError in
+                    if let timeError {
+                        self.logger.warning("Pump clock not set during setup: \(timeError.localizedDescription)")
+                    }
+
+                    guard basalError != nil || limitsError != nil else {
+                        completion(nil)
+                        return
+                    }
+                    completion(OnboardingSettingsFailure(basalSchedule: basalError, deliveryLimits: limitsError))
+                }
             }
         }
     }

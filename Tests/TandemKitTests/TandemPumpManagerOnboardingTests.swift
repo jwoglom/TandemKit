@@ -54,8 +54,8 @@ import XCTest
         return pump
     }
 
-    private func applyOnboardingSettings(_ manager: TandemPumpManager) -> Error? {
-        var result: Error?
+    private func applyOnboardingSettings(_ manager: TandemPumpManager) -> OnboardingSettingsFailure? {
+        var result: OnboardingSettingsFailure?
         let expectation = expectation(description: "applyOnboardingSettings")
         manager.applyOnboardingSettings {
             result = $0
@@ -164,7 +164,10 @@ import XCTest
         bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 3, unknown: 0))
         let manager = makeManager(schedule: schedule([(0, 0.65)]))
 
-        XCTAssertNotNil(applyOnboardingSettings(manager))
+        let failure = applyOnboardingSettings(manager)
+
+        XCTAssertNotNil(failure?.basalSchedule)
+        XCTAssertNil(failure?.deliveryLimits)
     }
 
     func testStillWritesScheduleAndTimeWhenDeliveryLimitsAreRejected() {
@@ -176,22 +179,32 @@ import XCTest
             maxBolusUnits: 9.5
         )
 
-        XCTAssertNotNil(applyOnboardingSettings(manager))
+        let failure = applyOnboardingSettings(manager)
 
+        XCTAssertNotNil(failure?.deliveryLimits)
+        XCTAssertNil(failure?.basalSchedule)
         XCTAssertEqual(bluetooth.sent(SetIDPSegmentRequest.self).first?.profileBasalRate, 650)
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
-    func testReportsTheFirstFailureWhenSeveralWritesFail() {
+    func testReportsBothWhenLimitsAndBasalFail() {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 1))
-        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 1))
+        bluetooth.stub(SetIDPSegmentRequest.self, with: SetIDPSegmentResponse(status: 3, unknown: 0))
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBasalRateUnitsPerHour: 4.2)
 
-        let error = applyOnboardingSettings(manager)
+        let failure = applyOnboardingSettings(manager)
 
-        // The limit write fails as a PumpCommError, the time write as a PumpManagerError.
-        XCTAssertTrue(error is PumpCommError, "Expected the limit failure, got \(String(describing: error))")
+        XCTAssertNotNil(failure?.basalSchedule)
+        XCTAssertNotNil(failure?.deliveryLimits)
+    }
+
+    func testClockFailureDoesNotFailSetup() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 1))
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
     }
 
     /// Writing it would set the pump profile to the 0 U/hr this whole path exists to prevent.
@@ -199,7 +212,7 @@ import XCTest
         stubPump(segments: [.init(startTime: 0, basalRate: 800)])
         let manager = makeManager(schedule: schedule([(0, 0)]))
 
-        XCTAssertNotNil(applyOnboardingSettings(manager))
+        XCTAssertNotNil(applyOnboardingSettings(manager)?.basalSchedule)
 
         XCTAssertTrue(bluetooth.sent(SetIDPSegmentRequest.self).isEmpty)
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self), "The time write is unaffected")
@@ -219,7 +232,10 @@ import XCTest
         bluetooth.connectError = PumpCommError.pumpNotConnected
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
 
-        XCTAssertNotNil(applyOnboardingSettings(manager))
+        let failure = applyOnboardingSettings(manager)
+
+        XCTAssertNotNil(failure?.basalSchedule)
+        XCTAssertNotNil(failure?.deliveryLimits)
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
     }
 }

@@ -80,15 +80,7 @@ struct TandemKitScanView: View {
                     viewModel.continueWithoutOnboardingSettings()
                 }
             },
-            message: { detail in
-                VStack {
-                    Text(String(
-                        localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows.",
-                        comment: "Explanation shown when the app cannot write settings to the pump during setup"
-                    ))
-                    Text(detail.wrappedValue ?? "")
-                }
-            }
+            message: { detail in Text(detail.wrappedValue ?? "") }
         )
         .alert(
             String(localized: "Enter Pairing code", comment: "Enter Pairing code instruction"),

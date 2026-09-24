@@ -84,8 +84,8 @@ class TandemKitScanViewModel: ObservableObject {
         applyOnboardingSettings()
     }
 
-    /// Setup stops here when the pump will not take the app's settings. Advancing anyway would hand
-    /// the user a paired pump running a profile the app is not reporting, which is issue #206.
+    /// Setup stops when the pump will not take the app's settings: advancing would leave a paired pump
+    /// running a profile the app is not reporting, which is issue #206.
     func applyOnboardingSettings() {
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {
@@ -95,28 +95,64 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
-        pumpManager.applyOnboardingSettings { error in
-            if let error {
-                self.log.error("Failed to apply onboarding settings: \(error.localizedDescription)")
-                DispatchQueue.main.async {
-                    self.settingsErrorMessage = error.localizedDescription
-                    self.isSettingsError = true
-                }
+        pumpManager.applyOnboardingSettings { failure in
+            guard let failure else {
+                self.finishSetup(pumpManager)
                 return
             }
 
-            pumpManager.syncPumpData { _ in
-                DispatchQueue.main.async {
-                    self.log.info("Pairing successful")
-                    self.nextStep()
-                }
+            self.log.error(
+                "Failed to apply onboarding settings: basal \(failure.basalSchedule?.localizedDescription ?? "ok"), limits \(failure.deliveryLimits?.localizedDescription ?? "ok")"
+            )
+            DispatchQueue.main.async {
+                self.settingsErrorMessage = Self.message(for: failure)
+                self.isSettingsError = true
             }
         }
     }
 
     func continueWithoutOnboardingSettings() {
         log.error("Continuing setup with the pump holding settings the app could not write")
-        nextStep()
+        guard let pumpManager else {
+            nextStep()
+            return
+        }
+        finishSetup(pumpManager)
+    }
+
+    private func finishSetup(_ pumpManager: TandemPumpManager) {
+        pumpManager.syncPumpData { _ in
+            DispatchQueue.main.async {
+                self.log.info("Pairing successful")
+                self.nextStep()
+            }
+        }
+    }
+
+    static func message(for failure: OnboardingSettingsFailure) -> String {
+        let summary: String
+        switch (failure.basalSchedule, failure.deliveryLimits) {
+        case (.some, .some):
+            summary = String(
+                localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows.",
+                comment: "Setup error when neither the basal schedule nor the delivery limits reached the pump"
+            )
+        case (.some, .none):
+            summary = String(
+                localized: "Your basal rates were not saved to the pump. The pump is still using its own basal rates, so it may not deliver what the app shows.",
+                comment: "Setup error when the basal schedule did not reach the pump"
+            )
+        default:
+            summary = String(
+                localized: "Your delivery limits were not saved to the pump. The pump is still using its own maximum basal and bolus limits.",
+                comment: "Setup error when the delivery limits did not reach the pump"
+            )
+        }
+
+        guard let detail = failure.basalSchedule ?? failure.deliveryLimits else {
+            return summary
+        }
+        return "\(summary)\n\n\(detail.localizedDescription)"
     }
 
     func onPairFailure(error: Error) {
