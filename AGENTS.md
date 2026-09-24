@@ -503,7 +503,8 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
      pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
      `profileBasalRate` during a temp basal and skipping suspend and Control-IQ. A mismatch that
      outlives `basalMismatchConfirmationInterval` shows a critical status highlight. Nothing
-     auto-corrects.
+     auto-corrects. A schedule change that alters the rate in force stops a running temp basal,
+     since the pump rescales it, and restarts the scheduled basal dose at the new rate.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.

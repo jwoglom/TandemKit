@@ -799,25 +799,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
 
             if duration < .ulpOfOne || percent == 100 {
-                // We only needed to cancel any current temp basal
-                // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
-
-                let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
-                    insulinType: self.state.insulinType,
-                    startDate: self.now
-                )
-
-                var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
-
-                self.state.basalDose = dose
-                self.state.lastReconciliation = self.now
-                
-                self.notifyDelegateStateUpdated()
-                self.emitPumpEvents(events)
-
+                self.startScheduledBasalDose()
                 completion(nil)
                 return
             }
@@ -1793,6 +1776,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 extension TandemPumpManager {
+    /// Closes out a running temp basal dose at `now` and records scheduled basal from `now`.
+    func startScheduledBasalDose() {
+        let dose = UnfinalizedDose(basalRate: getScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
+
+        var events = getActivePumpEvents(endDate: dose.startDate)
+        events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
+
+        state.basalDose = dose
+        state.lastReconciliation = now
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
     func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
         guard state.basalDose.type == .tempBasal else {
             return []
