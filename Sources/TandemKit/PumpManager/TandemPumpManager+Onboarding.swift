@@ -2,16 +2,14 @@ import Foundation
 import HealthKit
 import LoopKit
 
-/// Which setup settings the pump did not take. A failed clock write is not one: the pump time badge
-/// and the settings screen already cover it, and it leaves delivery as the app reports it.
+/// A failed clock write is not reported here; the pump time badge covers it.
 public struct OnboardingSettingsFailure: Error {
     public let basalSchedule: Error?
     public let deliveryLimits: Error?
 }
 
 public extension TandemPumpManager {
-    /// Loop and Trio sync basal rates and limits only from their therapy settings editors, so the
-    /// driver has to write the ones handed over in `PumpManagerSetupSettings`. Issue #206.
+    /// Loop and Trio never sync these during onboarding, so the driver writes them. Issue #206.
     func applyOnboardingSettings(completion: @escaping (OnboardingSettingsFailure?) -> Void) {
         logger.info("Applying onboarding settings to pump")
 
@@ -36,8 +34,7 @@ public extension TandemPumpManager {
 
 private extension TandemPumpManager {
     func syncOnboardingBasalSchedule(completion: @escaping (Error?) -> Void) {
-        // A state built without a host schedule falls back to a single 0 U/hr entry, and writing
-        // that would cause the very 0 U/hr profile this exists to prevent.
+        // A state built without a host schedule holds a 0 U/hr placeholder; writing it is #206.
         guard state.basalRateSchedule.items.contains(where: { $0.value > 0 }) else {
             logger.error("No basal schedule from setup; not writing a zero profile to the pump")
             completion(PumpManagerError.configuration(nil))

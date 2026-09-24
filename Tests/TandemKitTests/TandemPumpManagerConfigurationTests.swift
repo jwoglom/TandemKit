@@ -27,7 +27,6 @@ import XCTest
 
     // MARK: - Helpers
 
-    /// Installs one active profile holding `segments`, as a pump that applies what it accepts.
     @discardableResult
     private func stubActiveProfile(segments: [StubIDPPump.Segment]) -> StubIDPPump {
         let pump = StubIDPPump(segments, idpId: idpId)

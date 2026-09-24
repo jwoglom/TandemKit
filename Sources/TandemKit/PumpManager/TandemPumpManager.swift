@@ -1163,8 +1163,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// Writes the phone's clock to the pump without the status poll `syncPumpTime` follows it
-    /// with, so a caller that is going to sync anyway does not poll the pump twice.
+    /// `syncPumpTime` without the status poll, for callers that sync anyway.
     func writePumpTime(completion: @escaping (PumpManagerError?) -> Void) {
         logger.info("Syncing pump time")
 
@@ -1919,9 +1918,7 @@ extension TandemPumpManager {
         return pendingPumpEventBatches.count
     }
 
-    /// `date` is on the phone's clock unless a caller passes the pump's -- the verification path
-    /// does, so a pump running minutes off does not look like a basal mismatch at every segment
-    /// boundary.
+    /// `date` is on the phone's clock unless the caller passes the pump's.
     func getScheduledBasalRate(at date: Date? = nil) -> Double {
         let schedule = state.basalRateSchedule
         guard !schedule.items.isEmpty else {

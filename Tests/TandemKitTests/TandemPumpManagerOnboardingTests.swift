@@ -3,8 +3,6 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// `applyOnboardingSettings` is the only thing that writes the user's schedule to a freshly paired
-/// pump: Loop and Trio never sync it during onboarding.
 /// https://github.com/jwoglom/TandemKit/issues/206
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerOnboardingTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
@@ -42,7 +40,6 @@ import XCTest
         )
     }
 
-    /// Any stub can be overridden afterwards to model a rejection.
     @discardableResult
     private func stubPump(segments: [StubIDPPump.Segment]) -> StubIDPPump {
         bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 0))
@@ -207,7 +204,6 @@ import XCTest
         XCTAssertNil(applyOnboardingSettings(manager))
     }
 
-    /// Writing it would set the pump profile to the 0 U/hr this whole path exists to prevent.
     func testNeverWritesAnAllZeroPlaceholderSchedule() {
         stubPump(segments: [.init(startTime: 0, basalRate: 800)])
         let manager = makeManager(schedule: schedule([(0, 0)]))

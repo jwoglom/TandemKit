@@ -13,9 +13,7 @@ import Foundation
 /// A request that maps to no fetch is not sent. Nothing in the driver consumes IOB, CGM/EGV,
 /// home screen mirror, profile status, Basal-IQ, temp rate, localization, load status or bolus
 /// permission change reason today, and issuing those would spend a BLE round trip on a response
-/// that gets discarded. `ProfileStatusRequest` stays unmapped for that reason even though the
-/// profile events below do now trigger a fetch: it is the basal read, not the profile catalog,
-/// that the driver checks delivery against.
+/// that gets discarded.
 enum QualifyingEventFetch: CaseIterable {
     /// The whole alert/alarm/reminder/CGM-alert/malfunction bundle (`fetchNotifications`).
     case notifications
@@ -83,10 +81,8 @@ enum QualifyingEventFetch: CaseIterable {
             needed.insert(.basalStatus)
         }
 
-        // Also beyond PumpX2's table: a profile edited on the pump, or a switch to another
-        // profile, changes the rate every temp basal percent is scaled by. The basal read is what
-        // compares the pump against the app's schedule, so these events check it at once instead
-        // of leaving delivery unverified until the next ~5-minute sync.
+        // Also beyond PumpX2's table: a profile edit changes the rate temp basal percents scale
+        // off, so check it now rather than at the next sync.
         if !events.isDisjoint(with: [.profileChange, .activeProfileSegmentChange]) {
             needed.insert(.basalStatus)
         }

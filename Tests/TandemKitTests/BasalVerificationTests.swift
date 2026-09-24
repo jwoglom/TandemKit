@@ -2,8 +2,7 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// The read-back after a write, and the comparison the sync poll makes against the rate the pump
-/// says it is delivering. https://github.com/jwoglom/TandemKit/issues/206
+/// https://github.com/jwoglom/TandemKit/issues/206
 @available(macOS 13.0, iOS 14.0, *) final class BasalVerificationTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
@@ -27,7 +26,6 @@ import XCTest
 
     // MARK: - Helpers
 
-    /// `appliesWrites: false` models a pump that ACKs a write and leaves the profile untouched.
     @discardableResult
     private func stubProfile(_ segments: [StubIDPPump.Segment], appliesWrites: Bool = true) -> StubIDPPump {
         let pump = StubIDPPump(segments, idpId: idpId)
@@ -151,8 +149,7 @@ import XCTest
         )
     }
 
-    /// The pump clock is read from the offset the last sync measured, not `currentPumpTime`, which
-    /// is a sync behind by the time the basal check runs.
+    /// Measured three hours ago, so only the offset can still be current.
     private func setPumpClock(offsetFrom phoneNow: Date, by offset: TimeInterval) {
         manager.clock = ManualClock(phoneNow)
         manager.state.lastPumpTimeCheckDate = phoneNow.addingTimeInterval(-.hours(3))
@@ -195,7 +192,6 @@ import XCTest
         XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
     }
 
-    /// A profile qualifying event can trigger a read seconds after a sync's.
     func testSecondReadingInsideTheIntervalDoesNotConfirm() {
         setSchedule([(0, 0.65)])
         manager.clock = ManualClock(Self.middayReference)
@@ -238,8 +234,6 @@ import XCTest
         XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
     }
 
-    /// Loop keeps a temp basal running almost continuously, so the profile rate it is scaled off is
-    /// what has to be checked; the delivered rate is meant to differ.
     func testTempBasalIsCheckedAgainstTheProfileRate() {
         setSchedule([(0, 0.65)])
 
@@ -284,7 +278,6 @@ import XCTest
         XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    /// Without this the test above would pass whatever clock the check used.
     func testPhoneClockIsUsedWhenThePumpOffsetIsUnknown() {
         setSchedule([(0, 0.65), (3600.0 * 6, 0.85)])
         let startOfDay = Calendar.current.startOfDay(for: Self.middayReference)

@@ -221,8 +221,7 @@ public extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// nil when the pump stopped answering: `IDPManager.nextMessages()` reissues the same batch
-    /// until its response arrives, so a dropped one has to end the walk rather than spin.
+    /// nil if the pump stops answering: `nextMessages()` reissues an unanswered batch forever.
     func loadIDPProfiles() -> IDPManager? {
         let idpManager = IDPManager()
 
@@ -243,11 +242,8 @@ extension TandemPumpManager {
         return idpManager
     }
 
-    /// A status-0 `SetIDPSegmentResponse` says the pump accepted a write, not that the profile now
-    /// holds it, and every temp basal percent is scaled off that profile.
-    ///
-    /// `pendingSegmentWrites` is the comparison: it returns the writes still needed to make the
-    /// pump match, so an empty result against a freshly read profile means the writes landed.
+    /// A status-0 write response means accepted, not applied. No `pendingSegmentWrites` against a
+    /// fresh read means the writes landed.
     func verifyProfileMatches(items: [RepeatingScheduleValue<Double>]) -> Error? {
         guard let profile = loadIDPProfiles()?.getActiveProfile() else {
             logger.error("Could not read the basal profile back to verify it")

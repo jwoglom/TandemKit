@@ -403,10 +403,11 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
   acknowledges afterwards. A request that maps to no fetch is not sent: nothing in the driver
   consumes IOB, CGM/EGV, home screen mirror, profile status, Basal-IQ, temp rate, localization,
   load status or bolus permission change reason today, so `iobChange`, `bg`, `cgmChange`,
-  `profileChange`, `activeProfileSegmentChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`,
-  `extendedBolusChange`, `pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
-  One deliberate addition to pumpX2's table: `pumpSuspend`/`pumpResume` also refresh the basal
-  status, since that is what emits the suspend/resume dose to LoopKit.
+  `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBolusChange`, `pumpingStatus` and
+  `bolusPermissionRevoked` currently fetch nothing. Two deliberate additions to pumpX2's table:
+  `pumpSuspend`/`pumpResume` refresh the basal status, since that is what emits the
+  suspend/resume dose to LoopKit, and `profileChange`/`activeProfileSegmentChange` refresh it so
+  the basal rate check runs on a profile edit instead of at the next sync.
 
 ---
 
@@ -492,33 +493,17 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
    * `TandemPump` initiates startup status polls and bridges notifications through `PumpNotificationRouter`, but auto-reconnect logic and configuration helpers still need work.
    * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`; history streaming now flows through `HistoryLogFetcher` with telemetry scheduling hooks, but device-model detection is still outstanding.
    * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
-   * `applyOnboardingSettings` (`TandemPumpManager+Onboarding.swift`) writes the host's setup
-     settings onto a freshly paired pump: delivery limits, then the basal schedule, then the pump
-     clock. Loop and Trio never sync those during onboarding -- their therapy settings editors save
-     locally and the app hands the values to the driver as `PumpManagerSetupSettings`, the same
-     contract OmnipodKit honours with `programInitialBasalSchedule`. Until it ran (issue #206) the
-     pump kept whatever profile it had while the driver reported the app-side schedule, and since a
-     Tandem temp basal is a percent of the pump's *profile* rate, a pump left at 0 U/hr delivered
-     nothing at any percent. Pump sounds are deliberately not written: onboarding collects no value
-     for them, so the write would only zero out the user's; `fetchGlobalPumpSettings` reads instead.
-   * The pump profile is verified, not assumed. `syncBasalRateSchedule` reads the active profile
-     back through `verifyProfileMatches` and fails unless it holds what was written -- a status-0
-     `SetIDPSegmentResponse` means accepted, not applied. That check is `pendingSegmentWrites`
-     itself, which returns the writes still needed to make the pump match, so an empty result
-     against a freshly read profile means the writes landed; it also keeps the comparison in the
-     same integer milliunits the write path rounds to. `fetchBasalStatus` compares the delivered
-     rate against the schedule on every sync at no extra traffic, and `.profileChange` /
-     `.activeProfileSegmentChange` now trigger that read too. A temp basal is checked against
-     `profileBasalRate`, the rate its percent is scaled off, because Loop keeps one running almost
-     continuously and checking only `.basal` would leave the profile unverified for hours; a
-     suspend and Control-IQ are skipped. It reads the schedule at the pump's clock via
-     `state.pumpClockOffset` rather than `currentPumpTime`, which is a sync behind because
-     `fetchTimeSinceReset` runs after `fetchBasalStatus`. A mismatch must outlive
-     `basalMismatchConfirmationInterval` to become a critical `PumpStatusHighlight`. Nothing
-     auto-corrects: that would be an insulin-affecting action nobody asked for, and would fight a
-     user who changed the profile on the pump deliberately. A failed write surfaces as
-     `PumpCommError.basalProfileSyncMismatch`, which carries both profiles and formats them through
-     `basalProfileDifference`.
+   * `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
+     pump: delivery limits, basal schedule, pump clock. Loop and Trio never sync these during
+     onboarding, so without it the pump kept its own profile while the driver reported the app's
+     (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
+     Pump sounds are not written, since onboarding collects no value for them.
+   * `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
+     unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
+     pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
+     `profileBasalRate` during a temp basal and skipping suspend and Control-IQ. A mismatch that
+     outlives `basalMismatchConfirmationInterval` shows a critical status highlight. Nothing
+     auto-corrects.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.

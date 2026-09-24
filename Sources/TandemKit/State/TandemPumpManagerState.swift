@@ -159,10 +159,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
 
-    /// Seeds a state from the settings the host app hands over in `PumpManagerSetupSettings`.
-    /// The limits land in `settings` rather than being dropped, so `enactBolus` has a ceiling to
-    /// validate against from the moment setup finishes, and `applyOnboardingSettings` has
-    /// something to push to the pump.
+    /// The limits give `enactBolus` a ceiling from the end of setup, and onboarding values to push.
     public init(
         basalRateSchedule: BasalRateSchedule,
         maxBasalRateUnitsPerHour: Double? = nil,
@@ -474,8 +471,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         return raw
     }
 
-    /// How far the pump's clock sits from the phone's, as measured on the last `fetchTimeSinceReset`.
-    /// An offset rather than `currentPumpTime` itself, which is only as fresh as that read.
+    /// Stays valid after the read that measured it, unlike `currentPumpTime`.
     public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
             return 0

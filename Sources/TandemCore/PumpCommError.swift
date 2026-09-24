@@ -20,7 +20,6 @@ public enum PumpCommError: Error {
     case responseParsingFailed(underlying: Error)
     case transportError(underlying: Error)
     case invalidScheduledBasalRate
-    /// The pump's profile does not hold the schedule that was just written to it.
     case basalProfileSyncMismatch(pump: [IDPSegmentResponse], app: [RepeatingScheduleValue<Double>])
     case other
 }
@@ -227,8 +226,7 @@ extension PumpCommError: LocalizedError {
 }
 
 public extension PumpCommError {
-    /// Both profiles segment by segment, marking the ones that disagree. Paired by segment index,
-    /// the way the sync writes them, and in the pump's minutes and milliunits so nothing rounds.
+    /// Paired by segment index, as the sync writes them, in the pump's minutes and milliunits.
     static func basalProfileDifference(
         pump: [IDPSegmentResponse],
         app: [RepeatingScheduleValue<Double>]

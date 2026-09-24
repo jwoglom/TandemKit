@@ -719,21 +719,11 @@ extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// One Loop cycle plus slack. A wrong profile stays wrong, so waiting a cycle to raise it costs
-    /// nothing, while a critical highlight raised on a single reading costs trust the first time one
-    /// turns out to be transient.
+    /// A wrong profile stays wrong, so waiting a cycle costs nothing; a false alarm costs trust.
     static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
 
-    /// Compares the pump's own basal rate against what the app scheduled, costing no extra traffic
-    /// because `CurrentBasalStatusRequest` already runs on every sync.
-    ///
-    /// A temp basal is checked too, against `profileBasalRate` -- the rate its percent is scaled
-    /// off. Loop keeps a temp basal running almost continuously, so checking only `.basal` would
-    /// leave the profile unverified for hours. A suspend delivers nothing and Control-IQ moves
-    /// delivery itself, so neither says anything about the profile.
-    ///
-    /// Detection only: rewriting the profile from a background poll would be an insulin-affecting
-    /// action nobody asked for.
+    /// Temp basals are checked against `profileBasalRate`, which their percent scales off; Loop
+    /// runs one almost continuously. Detection only: a poll must not change insulin delivery.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
         guard !state.useControlIQ else {
             return
@@ -749,8 +739,7 @@ extension TandemPumpManager {
             return
         }
 
-        // On the pump's clock: `fetchTimeSinceReset` runs after this in the sync, so the offset it
-        // last measured is current while `state.currentPumpTime` is a sync behind.
+        // By offset: `fetchTimeSinceReset` runs after this, so `currentPumpTime` is a sync behind.
         let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
 
         // In the milliunits the pump uses, the same rounding the writes go through.

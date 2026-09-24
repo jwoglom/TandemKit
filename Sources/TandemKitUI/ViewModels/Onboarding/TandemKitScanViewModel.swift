@@ -84,8 +84,7 @@ class TandemKitScanViewModel: ObservableObject {
         applyOnboardingSettings()
     }
 
-    /// Setup stops when the pump will not take the app's settings: advancing would leave a paired pump
-    /// running a profile the app is not reporting, which is issue #206.
+    /// Setup stops here rather than leave the pump on a profile the app is not reporting (#206).
     func applyOnboardingSettings() {
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {
