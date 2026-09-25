@@ -76,7 +76,9 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
         } else {
             let state = TandemPumpManagerState(
                 basalRateSchedule: pumpManagerSettings?
-                    .basalSchedule ?? BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!
+                    .basalSchedule ?? BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0)])!,
+                maxBasalRateUnitsPerHour: pumpManagerSettings?.maxBasalRateUnitsPerHour,
+                maxBolusUnits: pumpManagerSettings?.maxBolusUnits
             )
             self.pumpManager = TandemPumpManager(state: state)
         }

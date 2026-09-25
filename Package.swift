@@ -89,7 +89,8 @@ let package = Package(
                 "TandemKitChangeCartridgeViewModelTests.swift",
                 "TandemKitFillCannulaViewModelTests.swift",
                 "TandemKitControlIQSettingsViewModelTests.swift",
-                "TandemKitNotificationsViewModelTests.swift"
+                "TandemKitNotificationsViewModelTests.swift",
+                "TandemKitScanViewModelTests.swift"
             ]
         )
         // Tests/TandemKitTests is not declared: it drives TandemPumpManager and

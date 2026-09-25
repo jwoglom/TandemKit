@@ -10,43 +10,8 @@ import XCTest
 /// against what the driver sent, and separately replayed through the pump model to confirm it
 /// reaches the stated end state without a rejection.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerSyncBasalTests: XCTestCase {
-    private struct Segment: Equatable, CustomStringConvertible {
-        var startTime: Int
-        var basalRate: Int
-
-        var description: String { "\(startTime)/\(basalRate)" }
-    }
-
-    private enum Command: Equatable, CustomStringConvertible {
-        case modify(segment: Int, startTime: Int, basalRate: Int)
-        case create(startTime: Int, basalRate: Int)
-        case delete(segment: Int)
-
-        init?(_ request: SetIDPSegmentRequest) {
-            switch request.operation {
-            case .modifySegmentId:
-                self = .modify(
-                    segment: request.segmentIndex,
-                    startTime: request.profileStartTime,
-                    basalRate: request.profileBasalRate
-                )
-            case .createSegment:
-                self = .create(startTime: request.profileStartTime, basalRate: request.profileBasalRate)
-            case .deleteSegmentId:
-                self = .delete(segment: request.segmentIndex)
-            case .none:
-                return nil
-            }
-        }
-
-        var description: String {
-            switch self {
-            case let .modify(segment, startTime, basalRate): "modify(\(segment) -> \(startTime)/\(basalRate))"
-            case let .create(startTime, basalRate): "create(\(startTime)/\(basalRate))"
-            case let .delete(segment): "delete(\(segment))"
-            }
-        }
-    }
+    private typealias Segment = StubIDPPump.Segment
+    private typealias Command = StubIDPPump.Command
 
     private struct Case {
         let name: String
@@ -77,39 +42,6 @@ import XCTest
             self.expected = expected
             self.file = file
             self.line = line
-        }
-    }
-
-    /// Minimal stand-in for a single insulin delivery profile on the pump.
-    private final class FakeProfile {
-        private(set) var segments: [Segment]
-
-        init(_ segments: [Segment]) {
-            self.segments = segments
-        }
-
-        /// Applies a command the way the pump does, returning the status byte it would answer with.
-        func apply(_ command: Command) -> Int {
-            switch command {
-            case let .modify(index, startTime, basalRate):
-                guard index < segments.count, !collides(startTime: startTime, excluding: index) else { return 1 }
-                segments[index] = Segment(startTime: startTime, basalRate: basalRate)
-                return 0
-            case let .create(startTime, basalRate):
-                guard !collides(startTime: startTime, excluding: nil) else { return 1 }
-                segments.append(Segment(startTime: startTime, basalRate: basalRate))
-                return 0
-            case let .delete(index):
-                guard index != 0, index < segments.count else { return 1 }
-                segments.remove(at: index)
-                return 0
-            }
-        }
-
-        private func collides(startTime: Int, excluding index: Int?) -> Bool {
-            segments.enumerated().contains { offset, segment in
-                offset != index && segment.startTime == startTime
-            }
         }
     }
 
@@ -269,7 +201,7 @@ import XCTest
     /// The driver sends exactly the stated commands, and the pump ends up in the stated state.
     func testSyncSendsExpectedCommands() {
         for testCase in cases {
-            let profile = FakeProfile(testCase.current)
+            let profile = StubIDPPump(testCase.current)
             let bluetooth = makeStub(profile: profile)
             let result = runSync(bluetooth: bluetooth, schedule: testCase.schedule)
 
@@ -288,7 +220,7 @@ import XCTest
     /// state with every command accepted, independently of what the driver actually produced.
     func testExpectedCommandsProduceExpectedProfile() {
         for testCase in cases {
-            let profile = FakeProfile(testCase.current)
+            let profile = StubIDPPump(testCase.current)
 
             for command in testCase.commands {
                 XCTAssertEqual(
@@ -305,7 +237,7 @@ import XCTest
     }
 
     func testEmptyScheduleIsRejectedWithoutTouchingThePump() {
-        let bluetooth = makeStub(profile: FakeProfile([.init(startTime: 0, basalRate: 1000)]))
+        let bluetooth = makeStub(profile: StubIDPPump([.init(startTime: 0, basalRate: 1000)]))
 
         XCTAssertThrowsError(try runSync(bluetooth: bluetooth, schedule: []).get())
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
@@ -331,45 +263,9 @@ import XCTest
         return result ?? .failure(PumpCommError.requestConstructionFailed(reason: "no completion"))
     }
 
-    private func makeStub(profile: FakeProfile) -> StubPumpBluetooth {
+    private func makeStub(profile: StubIDPPump) -> StubPumpBluetooth {
         let bluetooth = StubPumpBluetooth()
-
-        bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
-            cargo: Data([0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00])
-        ))
-        bluetooth.stub(IDPSettingsRequest.self) { _ in
-            var cargo = Data([0x00])
-            cargo.append(contentsOf: Array("Profile".utf8))
-            cargo.append(contentsOf: [UInt8](repeating: 0, count: 16 - 7))
-            cargo.append(UInt8(profile.segments.count))
-            cargo.append(contentsOf: [0x2C, 0x01]) // insulin duration 300
-            cargo.append(contentsOf: [0x80, 0x3E]) // max bolus 16000
-            cargo.append(0x01)
-            return IDPSettingsResponse(cargo: cargo)
-        }
-        bluetooth.stub(IDPSegmentRequest.self) { request in
-            guard let request = request as? IDPSegmentRequest,
-                  request.segmentIndex < profile.segments.count
-            else {
-                return nil
-            }
-            let segment = profile.segments[request.segmentIndex]
-            return IDPSegmentResponse(
-                idpId: 0,
-                segmentIndex: request.segmentIndex,
-                profileStartTime: segment.startTime,
-                profileBasalRate: segment.basalRate,
-                profileCarbRatio: 10000,
-                profileTargetBG: 110,
-                profileISF: 74,
-                idpStatusId: 15
-            )
-        }
-        bluetooth.stub(SetIDPSegmentRequest.self) { request in
-            guard let request = request as? SetIDPSegmentRequest, let command = Command(request) else { return nil }
-            return SetIDPSegmentResponse(status: profile.apply(command), unknown: 0)
-        }
-
+        profile.install(on: bluetooth)
         return bluetooth
     }
 }

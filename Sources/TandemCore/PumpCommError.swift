@@ -1,4 +1,5 @@
 import Foundation
+import LoopKit
 
 public enum PumpCommError: Error {
     case pumpNotConnected
@@ -19,6 +20,7 @@ public enum PumpCommError: Error {
     case responseParsingFailed(underlying: Error)
     case transportError(underlying: Error)
     case invalidScheduledBasalRate
+    case basalProfileSyncMismatch(pump: [IDPSegmentResponse], app: [RepeatingScheduleValue<Double>])
     case other
 }
 
@@ -79,6 +81,14 @@ extension PumpCommError: LocalizedError {
             return String(
                 localized: "Secure pairing unavailable",
                 comment: "Error shown when the JPake pairing flow is not available"
+            )
+        case let .basalProfileSyncMismatch(pump, app):
+            return String(
+                format: String(
+                    localized: "Pump basal profile does not match the schedule: %@",
+                    comment: "Error when the pump's profile does not hold the schedule that was written"
+                ),
+                PumpCommError.basalProfileDifference(pump: pump, app: app)
             )
         case let .requestConstructionFailed(reason):
             return String(
@@ -212,5 +222,34 @@ extension PumpCommError: LocalizedError {
         default:
             return nil
         }
+    }
+}
+
+public extension PumpCommError {
+    /// Pairs segments by index because that is how `pendingSegmentWrites` compared them.
+    static func basalProfileDifference(
+        pump: [IDPSegmentResponse],
+        app: [RepeatingScheduleValue<Double>]
+    ) -> String {
+        func describe(startMinutes: Int, milliunits: Int) -> String {
+            "\(startMinutes)min=\(milliunits)mU/hr"
+        }
+
+        return (0 ..< max(pump.count, app.count)).map { index in
+            let pumpSide = index < pump.count
+                ? describe(startMinutes: pump[index].profileStartTime, milliunits: pump[index].profileBasalRate)
+                : "absent"
+            let appSide = index < app.count
+                ? describe(
+                    startMinutes: Int((app[index].startTime / 60.0).rounded()),
+                    milliunits: Int((app[index].value * 1000.0).rounded())
+                )
+                : "absent"
+
+            return pumpSide == appSide
+                ? "segment \(index) \(pumpSide)"
+                : "segment \(index) pump \(pumpSide) vs app \(appSide)"
+        }
+        .joined(separator: ", ")
     }
 }

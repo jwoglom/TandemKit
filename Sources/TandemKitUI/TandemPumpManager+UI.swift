@@ -118,6 +118,19 @@ extension TandemPumpManager {
             )
         }
 
+        // Before the suspend, reservoir and Control-IQ highlights, because it means the basal rates
+        // the app shows are not what the pump is running.
+        if state.basalRateMismatchConfirmed {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Basal Rate Mismatch",
+                    comment: "Status highlight that the pump is delivering a basal rate other than the scheduled one."
+                ),
+                imageName: "exclamationmark.circle.fill",
+                state: .critical
+            )
+        }
+
         if state.basalDose.type == .suspend {
             return PumpStatusHighlight(
                 localizedMessage: String(

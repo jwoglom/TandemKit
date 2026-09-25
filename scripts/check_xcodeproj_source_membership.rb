@@ -231,6 +231,15 @@ def orphan_broken_duplicate_swift_file_refs(project)
     end
 end
 
+# References to Swift files under the source root that are no longer on disk. Xcode fails the build
+# on a missing input, and nothing else here would notice a deleted or renamed file.
+def dangling_swift_file_refs(project, source_root_abs)
+  project.files.select do |file_ref|
+    abs = file_ref_abs_path(file_ref)
+    abs && abs.end_with?(".swift") && within_root?(abs, source_root_abs) && !File.file?(abs)
+  end
+end
+
 def misplaced_group_file_refs(project, source_root_abs)
   misplaced = []
 
@@ -380,6 +389,15 @@ def print_orphan_broken_file_refs(entries)
   end
 end
 
+def print_dangling(entries)
+  return if entries.empty?
+
+  puts "  References to files missing from disk: #{entries.length}"
+  entries.each do |file_ref|
+    puts "    - #{relpath_from_repo(file_ref_abs_path(file_ref))}"
+  end
+end
+
 def print_missing(header, paths)
   return if paths.empty?
 
@@ -424,15 +442,22 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
   stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
   orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
   misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
+  dangling_refs = dangling_swift_file_refs(project, source_root.to_s)
 
   puts "Target: #{target_name}  Source root: #{source_root_rel}  Swift files: #{disk_files.length}"
 
   has_issues = !missing_project_refs.empty? || !missing_target_membership.empty? ||
                !stale_broken_duplicates.empty? || !orphan_broken_file_refs.empty? ||
-               !misplaced_refs.empty?
+               !misplaced_refs.empty? || !dangling_refs.empty?
 
   if mode == :fix && has_issues
     changed = false
+
+    # Removing a file reference also removes the build files that point at it.
+    dangling_refs.each do |file_ref|
+      file_ref.remove_from_project
+      changed = true
+    end
 
     missing_target_membership.each do |abs|
       file_ref = ensure_file_ref!(project, abs)
@@ -471,13 +496,14 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
       stale_broken_duplicates = stale_broken_duplicate_swift_source_entries(target)
       orphan_broken_file_refs = orphan_broken_duplicate_swift_file_refs(project)
       misplaced_refs = misplaced_group_file_refs(project, source_root.to_s)
+      dangling_refs = dangling_swift_file_refs(project, source_root.to_s)
       puts "  Applied fixes"
     end
   end
 
   ok = missing_project_refs.empty? && missing_target_membership.empty? &&
        stale_broken_duplicates.empty? && orphan_broken_file_refs.empty? &&
-       misplaced_refs.empty?
+       misplaced_refs.empty? && dangling_refs.empty?
 
   if ok
     puts "  Status: OK"
@@ -488,6 +514,7 @@ def check_or_fix_pair(project, project_path, root, target_name, source_root_rel,
     print_stale_broken_duplicates(target_name, stale_broken_duplicates)
     print_orphan_broken_file_refs(orphan_broken_file_refs)
     print_misplaced_groups(misplaced_refs)
+    print_dangling(dangling_refs)
   end
 
   { ok: ok, project: project }

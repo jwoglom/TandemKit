@@ -137,6 +137,8 @@ extension TandemPumpManager {
             return
         }
 
+        verifyDeliveredBasalRate(response)
+
         let activeBasalType = response.basalType
         if activeBasalType != state.basalDose.type {
             if activeBasalType == .basal, state.basalDose.type == .resume {
@@ -713,5 +715,63 @@ extension TandemPumpManager {
                 logger.warning("[auto-ack] Failed to acknowledge \(alert): status=\(response.status)")
             }
         }
+    }
+}
+
+extension TandemPumpManager {
+    /// Just under Loop's 5-minute sync interval, so a mismatch must show up on two separate
+    /// syncs. A second read seconds later, triggered by a qualifying event, doesn't count.
+    static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
+
+    /// Reports only. It never rewrites the pump's profile, which the user may have changed on the
+    /// pump on purpose.
+    func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
+        // Control-IQ changes the delivered rate itself, so it won't match the schedule.
+        guard !state.useControlIQ else {
+            return
+        }
+
+        let pumpRate: Double
+        switch response.basalType {
+        case .basal:
+            pumpRate = response.currentBasalRate
+        case .tempBasal:
+            // `currentBasalRate` is the temp rate here; `profileBasalRate` is the scheduled rate.
+            pumpRate = response.profileBasalRate
+        default:
+            return
+        }
+
+        // Look the schedule up at the pump's time of day. Use the offset, not `currentPumpTime`:
+        // that was read at the previous sync, because `fetchTimeSinceReset` runs after this.
+        let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+
+        // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
+        guard Int((pumpRate * 1000).rounded()) != Int((expected * 1000).rounded()) else {
+            if state.basalRateMismatchSince != nil {
+                logger.info("Pump basal rate matches the schedule again")
+                state.basalRateMismatchSince = nil
+                state.basalRateMismatchConfirmed = false
+                notifyDelegateStateUpdated()
+            }
+            return
+        }
+
+        logger.error("Pump basal profile is \(pumpRate) U/hr where the schedule says \(expected) U/hr")
+
+        guard let since = state.basalRateMismatchSince else {
+            state.basalRateMismatchSince = now
+            notifyDelegateStateUpdated()
+            return
+        }
+
+        guard !state.basalRateMismatchConfirmed,
+              now.timeIntervalSince(since) >= Self.basalMismatchConfirmationInterval
+        else {
+            return
+        }
+
+        state.basalRateMismatchConfirmed = true
+        notifyDelegateStateUpdated()
     }
 }

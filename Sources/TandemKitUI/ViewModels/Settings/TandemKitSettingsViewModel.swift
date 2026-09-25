@@ -40,8 +40,6 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var pumpState: PumpState? = nil
     @Published var controlIQEnabled: Bool = false
     @Published var isClosedLoopEnabled: Bool = false
-    @Published var currentProfileBaseBasalRate: Double? = nil
-    @Published var currentBasalRateForDisplay: String = ""
     @Published var batteryPercentage: String? = nil
     /// Remaining charge as a 0...1 fraction, used to draw the battery indicator.
     @Published var batteryChargeRemaining: Double? = nil
@@ -449,7 +447,6 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.controlIQEnabled = pumpManager.state.controlIQEnabled ?? false
             self.isClosedLoopEnabled = pumpManager.pumpManagerDelegate?.automaticDosingEnabled ?? false
             self.controlIQUserMode = pumpManager.state.controlIQUserMode
-            self.currentProfileBaseBasalRate = pumpManager.getScheduledBasalRate()
             self.notificationCount = pumpManager.state.notificationCount ?? 0
             self.quickBolusEnabled = pumpManager.state.quickBolusEnabled
             self.algorithmModeText = self.useControlIQ ? "CIQ" : self.algorithmName
@@ -490,10 +487,6 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
                 self.insulinAge = formatDurationToDaysHours(since: lastCartridgeChangeDate)
             } else {
                 self.insulinAge = nil
-            }
-
-            if let rate = self.currentProfileBaseBasalRate {
-                self.currentBasalRateForDisplay = String(format: "%.2f", rate)
             }
 
             if self.controlIQUserMode?.rawValue == 2 {

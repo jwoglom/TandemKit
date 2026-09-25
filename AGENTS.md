@@ -403,10 +403,11 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
   acknowledges afterwards. A request that maps to no fetch is not sent: nothing in the driver
   consumes IOB, CGM/EGV, home screen mirror, profile status, Basal-IQ, temp rate, localization,
   load status or bolus permission change reason today, so `iobChange`, `bg`, `cgmChange`,
-  `profileChange`, `activeProfileSegmentChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`,
-  `extendedBolusChange`, `pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
-  One deliberate addition to pumpX2's table: `pumpSuspend`/`pumpResume` also refresh the basal
-  status, since that is what emits the suspend/resume dose to LoopKit.
+  `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBolusChange`, `pumpingStatus` and
+  `bolusPermissionRevoked` currently fetch nothing. Two deliberate additions to pumpX2's table:
+  `pumpSuspend`/`pumpResume` refresh the basal status, since that is what emits the
+  suspend/resume dose to LoopKit, and `profileChange`/`activeProfileSegmentChange` refresh it so
+  the basal rate check runs on a profile edit instead of at the next sync.
 
 ---
 
@@ -492,6 +493,18 @@ Callbacks (`QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers`):
    * `TandemPump` initiates startup status polls and bridges notifications through `PumpNotificationRouter`, but auto-reconnect logic and configuration helpers still need work.
    * Basal/bolus/temp basal/suspend flows are dispatched via `TandemPumpManager`; history streaming now flows through `HistoryLogFetcher` with telemetry scheduling hooks, but device-model detection is still outstanding.
    * Add support for identifying pump models (t:slim X2, Mobi, Trio) via BLE advertisement or version responses and update `SupportedDevices`/`MessageProps` accordingly (still missing).
+   * `applyOnboardingSettings` writes the host's `PumpManagerSetupSettings` to a freshly paired
+     pump: delivery limits, basal schedule, pump clock. Loop and Trio never sync these during
+     onboarding, so without it the pump kept its own profile while the driver reported the app's
+     (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
+     Pump sounds are not written, since onboarding collects no value for them.
+   * `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
+     unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
+     pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
+     `profileBasalRate` during a temp basal and skipping suspend and Control-IQ. A mismatch that
+     outlives `basalMismatchConfirmationInterval` shows a critical status highlight. Nothing
+     auto-corrects. A schedule change that alters the rate in force stops a running temp basal,
+     since the pump rescales it, and restarts the scheduled basal dose at the new rate.
 
 5. **Phase 4 – LoopKit/Trio integration** – ⚠️ *Partially completed*
    * Apple platforms import the real LoopKit framework, but Linux builds still rely on the stub found in `Sources/LoopKit/LoopKit.swift`.
@@ -606,8 +619,9 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
 
 18. **Implement therapy command validation** – ⚠️ *Partially completed*
     - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
-      (the limit the host app last synced). The pump enforces the same ceiling in firmware,
-      because `syncDeliveryLimits` pushes it down via `SetMaxBolusLimitRequest`.
+      (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
+      The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down
+      via `SetMaxBolusLimitRequest`.
     - `enactBolus`/`enactTempBasal` also block while Control-IQ is active or a bolus is running.
     - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
       `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up

@@ -14,6 +14,8 @@ class TandemKitScanViewModel: ObservableObject {
     @Published var isPromptingPincode = false
     @Published var pinCodePromptError: String?
     @Published var isConnectionError = false
+    @Published var isSettingsError = false
+    @Published var settingsErrorMessage: String?
     @Published var connectionErrorMessage: String?
     @Published var devicePinCode = ""
 
@@ -79,7 +81,12 @@ class TandemKitScanViewModel: ObservableObject {
     }
 
     func onPairSuccess() {
-        // TODO: Uncomment after syncBasal is fixed...
+        applyOnboardingSettings()
+    }
+
+    /// On failure, setup waits on the alert instead of advancing, because the pump would otherwise
+    /// be left running basal rates the app doesn't know about (#206).
+    func applyOnboardingSettings() {
         guard let pumpManager = self.pumpManager else {
             DispatchQueue.main.async {
                 self.log.error("No pumpManager")
@@ -88,38 +95,64 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
+        pumpManager.applyOnboardingSettings { failure in
+            guard let failure else {
+                self.finishSetup(pumpManager)
+                return
+            }
+
+            self.log.error(
+                "Failed to apply onboarding settings: basal \(failure.basalSchedule?.localizedDescription ?? "ok"), limits \(failure.deliveryLimits?.localizedDescription ?? "ok")"
+            )
+            DispatchQueue.main.async {
+                self.settingsErrorMessage = Self.message(for: failure)
+                self.isSettingsError = true
+            }
+        }
+    }
+
+    func continueWithoutOnboardingSettings() {
+        log.error("Continuing setup with the pump holding settings the app could not write")
+        guard let pumpManager else {
+            nextStep()
+            return
+        }
+        finishSetup(pumpManager)
+    }
+
+    private func finishSetup(_ pumpManager: TandemPumpManager) {
         pumpManager.syncPumpData { _ in
             DispatchQueue.main.async {
                 self.log.info("Pairing successful")
                 self.nextStep()
             }
         }
+    }
 
-//        let soundRequest = SetPumpSoundsRequest(
-//            quickBolusAnnunRaw: pumpManager.lockedState.value.quickBolusAnnun?.rawValue ?? 0,
-//            generalAnnunRaw: pumpManager.lockedState.value.generalAnnun?.rawValue ?? 0,
-//            reminderAnnunRaw: pumpManager.lockedState.value.reminderAnnun?.rawValue ?? 0,
-//            alertAnnunRaw: pumpManager.lockedState.value.alertAnnun?.rawValue ?? 0,
-//            alarmAnnunRaw: pumpManager.lockedState.value.alarmAnnun?.rawValue ?? 0,
-//            cgmAlertAnnun: 0x0000, // Vibrate
-//            changeBitmask: PumpSoundChangeBitmask.all()
-//        )
-//
-//        guard let basalSchedule = pumpManager.lockedState.value.basalRateSchedule else {
-//            log.error("No basal schedule")
-//            nextStep()
-//            return
-//        }
-//
-//        pumpManager.syncBasalRateSchedule(items: basalSchedule.items) { _ in
-//            pumpManager.setPumpSound(request: soundRequest)
-//            pumpManager.syncPumpTime { _ in
-//                DispatchQueue.main.async {
-//                    self.log.info("Pairing successful")
-//                    self.nextStep()
-//                }
-//            }
-//        }
+    static func message(for failure: OnboardingSettingsFailure) -> String {
+        let summary: String
+        switch (failure.basalSchedule, failure.deliveryLimits) {
+        case (.some, .some):
+            summary = String(
+                localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows.",
+                comment: "Setup error when neither the basal schedule nor the delivery limits reached the pump"
+            )
+        case (.some, .none):
+            summary = String(
+                localized: "Your basal rates were not saved to the pump. The pump is still using its own basal rates, so it may not deliver what the app shows.",
+                comment: "Setup error when the basal schedule did not reach the pump"
+            )
+        default:
+            summary = String(
+                localized: "Your delivery limits were not saved to the pump. The pump is still using its own maximum basal and bolus limits.",
+                comment: "Setup error when the delivery limits did not reach the pump"
+            )
+        }
+
+        guard let detail = failure.basalSchedule ?? failure.deliveryLimits else {
+            return summary
+        }
+        return "\(summary)\n\n\(detail.localizedDescription)"
     }
 
     func onPairFailure(error: Error) {

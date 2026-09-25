@@ -799,25 +799,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
 
             if duration < .ulpOfOne || percent == 100 {
-                // We only needed to cancel any current temp basal
-                // Qualifying events will handle state update
                 self.logger.info("Enact completed! (no basal rate change)")
-
-                let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
-                    insulinType: self.state.insulinType,
-                    startDate: self.now
-                )
-
-                var events = self.getActivePumpEvents(endDate: dose.startDate)
-                events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
-
-                self.state.basalDose = dose
-                self.state.lastReconciliation = self.now
-                
-                self.notifyDelegateStateUpdated()
-                self.emitPumpEvents(events)
-
+                self.startScheduledBasalDose()
                 completion(nil)
                 return
             }
@@ -1151,12 +1134,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func syncPumpTime(completion: @escaping (Result<Void, PumpManagerError>) -> Void) {
+        writePumpTime { error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            self.syncPumpData { _ in
+                completion(.success(()))
+            }
+        }
+    }
+
+    func writePumpTime(completion: @escaping (PumpManagerError?) -> Void) {
         logger.info("Syncing pump time")
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for change datetime: \(error.localizedDescription)")
-                completion(.failure(PumpManagerError.communication(PumpCommError.pumpNotConnected)))
+                completion(PumpManagerError.communication(PumpCommError.pumpNotConnected))
                 return
             }
 
@@ -1165,11 +1161,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to change datetime")
-                completion(.failure(PumpManagerError.communication(PumpCommError.invalidPacket)))
+                completion(PumpManagerError.communication(PumpCommError.noResponse))
                 return
             }
 
-            if !response.isStatusOK {
+            guard response.isStatusOK else {
                 let error = PumpCommError.errorResponse(
                     context: String(
                         localized: "Error syncing time with pump",
@@ -1178,13 +1174,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                     request: request,
                     response: response
                 )
-                completion(.failure(PumpManagerError.communication(error)))
-
-            } else {
-                self.syncPumpData { _ in
-                    completion(.success(()))
-                }
+                completion(PumpManagerError.communication(error))
+                return
             }
+
+            completion(nil)
         }
     }
 
@@ -1782,6 +1776,20 @@ public class TandemPumpManager: PumpManager, Pluggable {
 }
 
 extension TandemPumpManager {
+    /// Closes out a running temp basal dose at `now` and records scheduled basal from `now`.
+    func startScheduledBasalDose() {
+        let dose = UnfinalizedDose(basalRate: getScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
+
+        var events = getActivePumpEvents(endDate: dose.startDate)
+        events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
+
+        state.basalDose = dose
+        state.lastReconciliation = now
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
     func getActivePumpEvents(endDate: Date? = nil) -> [NewPumpEvent] {
         guard state.basalDose.type == .tempBasal else {
             return []
@@ -1906,13 +1914,13 @@ extension TandemPumpManager {
         return pendingPumpEventBatches.count
     }
 
-    func getScheduledBasalRate() -> Double {
+    func getScheduledBasalRate(at date: Date? = nil) -> Double {
         let schedule = state.basalRateSchedule
         guard !schedule.items.isEmpty else {
             return 0
         }
 
-        let now = self.now
+        let now = date ?? self.now
         let startOfDay = Calendar.current.startOfDay(for: now)
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 

@@ -51,6 +51,10 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
+    /// In memory only, not saved with the state. After a relaunch the next sync rechecks; a saved
+    /// value could show a mismatch warning for a pump that has since been fixed.
+    public var basalRateMismatchSince: Date?
+    public var basalRateMismatchConfirmed = false
     /// How far the driver has read this pump's history log, and the earliest date it may report
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.
@@ -156,10 +160,19 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
 
-    public init(basalRateSchedule: BasalRateSchedule) {
+    public init(
+        basalRateSchedule: BasalRateSchedule,
+        maxBasalRateUnitsPerHour: Double? = nil,
+        maxBolusUnits: Double? = nil
+    ) {
         self.basalRateSchedule = basalRateSchedule
         pumpState = PumpState()
         basalDose = .defaultBasalDose(basalSchedule: basalRateSchedule, insulineType: nil)
+        settings = TandemPumpManagerSettings(
+            maxBolus: maxBolusUnits,
+            maxTempBasalRate: maxBasalRateUnitsPerHour,
+            maxBasalScheduleEntry: basalRateSchedule.items.map(\.value).max()
+        )
     }
 
     public init(rawValue: RawValue) {
@@ -458,13 +471,18 @@ public struct TandemPumpManagerState: RawRepresentable {
         return raw
     }
 
-    public var showPumpTimeSyncWarning: Bool {
+    /// Seconds the pump's clock is ahead of the phone's (negative if behind), as of the last
+    /// `fetchTimeSinceReset`.
+    public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
-            return false
+            return 0
         }
+        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate)
+    }
 
+    public var showPumpTimeSyncWarning: Bool {
         // Allow 10s time drift
-        return abs(currentPumpTime.timeIntervalSince1970 - lastPumpTimeCheckDate.timeIntervalSince1970) > .seconds(10)
+        abs(pumpClockOffset) > .seconds(10)
     }
 
     public var debugDescription: String {

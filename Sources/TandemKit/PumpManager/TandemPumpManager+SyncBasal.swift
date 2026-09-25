@@ -22,26 +22,12 @@ public extension TandemPumpManager {
                 return
             }
 
-            // Step 1: Fetch current profile data using IDPManager
-            let idpManager = IDPManager()
-
-            // Fetch all IDP data until complete
-            while !idpManager.isComplete {
-                let messages = idpManager.nextMessages()
-                if messages.isEmpty, !idpManager.isComplete {
-                    self.logger.error("Invalid IDPManager state in syncBasalRateSchedule")
-                    completion(.failure(PumpCommError.requestConstructionFailed(
-                        reason: "Invalid IDPManager state in syncBasalRateSchedule"
-                    )))
-                    return
-                }
-
-                for request in messages {
-                    let response = self.bluetooth.write(request)
-                    if let response {
-                        idpManager.processMessage(response)
-                    }
-                }
+            guard var idpManager = self.loadIDPProfiles() else {
+                self.logger.error("Invalid IDPManager state in syncBasalRateSchedule")
+                completion(.failure(PumpCommError.requestConstructionFailed(
+                    reason: "Invalid IDPManager state in syncBasalRateSchedule"
+                )))
+                return
             }
 
             if idpManager.getProfiles().isEmpty == true {
@@ -76,19 +62,14 @@ public extension TandemPumpManager {
                 self.logger
                     .info("Created initial IDP profile with ID \(String(describing: newlyCreatedProfile.newIdpId))")
 
-                // Return to step 1: Reset idpManager
-                idpManager.clear()
-
-                // Fetch all IDP data until complete
-                while !idpManager.isComplete {
-                    let messages = idpManager.nextMessages()
-                    for request in messages {
-                        let response = self.bluetooth.write(request)
-                        if let response {
-                            idpManager.processMessage(response)
-                        }
-                    }
+                guard let reloaded = self.loadIDPProfiles() else {
+                    self.logger.error("Invalid IDPManager state after creating initial profile")
+                    completion(.failure(PumpCommError.requestConstructionFailed(
+                        reason: "Invalid IDPManager state after creating initial profile"
+                    )))
+                    return
                 }
+                idpManager = reloaded
             }
 
             // Step 2: Get the active profile
@@ -192,11 +173,19 @@ public extension TandemPumpManager {
                 }
             }
 
+            if let error = self.verifyProfileMatches(items: sortedItems) {
+                completion(.failure(error))
+                return
+            }
+
             let schedule = BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? self.state.basalRateSchedule
+            let previousRate = self.getScheduledBasalRate(at: self.now.addingTimeInterval(self.state.pumpClockOffset))
 
             self.state.basalRateSchedule = schedule
             self.state.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
             self.notifyDelegateStateUpdated()
+
+            self.restartBasalDoseAfterScheduleChange(previousRate: previousRate)
 
             completion(.success(
                 BasalRateSchedule(dailyItems: sortedItems, timeZone: TimeZone.current) ?? self.state
@@ -232,4 +221,84 @@ public extension TandemPumpManager {
             return PendingSegmentWrite(startTime: startMinutes, basalRate: basalMilliunits, segment: segment)
         }
     }
+}
+
+extension TandemPumpManager {
+    /// A temp basal is a percent of the profile rate, so a profile change rescales it (on hardware
+    /// a 184% temp fell from 1.38 to 0.92 U/hr). Stopped, as OmnipodKit cancels delivery first.
+    func restartBasalDoseAfterScheduleChange(previousRate: Double) {
+        let newRate = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+        guard !state.useControlIQ, Int((newRate * 1000).rounded()) != Int((previousRate * 1000).rounded()) else {
+            return
+        }
+
+        // Read the pump rather than `state.basalDose`: after re-pairing the driver can miss a temp
+        // basal the previous manager set.
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.error("No basal status after a basal schedule change; recorded dose left as it was")
+            return
+        }
+
+        switch status.basalType {
+        case .suspend:
+            return
+        case .tempBasal:
+            guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
+                logger.error("Could not stop the temp basal after a basal schedule change; it is running rescaled")
+                return
+            }
+            logger.info("Stopped the temp basal after a basal schedule change")
+        default:
+            break
+        }
+
+        // Even with no temp to stop: `basalDose` is what the Profile Basal row shows.
+        startScheduledBasalDose()
+    }
+
+    /// Returns nil on a missing response. `IDPManager.nextMessages()` keeps returning the same
+    /// requests until they are answered, so carrying on after a dropped response loops forever.
+    func loadIDPProfiles() -> IDPManager? {
+        let idpManager = IDPManager()
+
+        while !idpManager.isComplete {
+            let messages = idpManager.nextMessages()
+            guard !messages.isEmpty else {
+                return nil
+            }
+
+            for request in messages {
+                guard let response = self.bluetooth.write(request) else {
+                    return nil
+                }
+                idpManager.processMessage(response)
+            }
+        }
+
+        return idpManager
+    }
+
+    /// A successful `SetIDPSegmentResponse` isn't taken as proof the profile changed, so this
+    /// reads it back. `pendingSegmentWrites` lists the writes still needed; none means a match.
+    func verifyProfileMatches(items: [RepeatingScheduleValue<Double>]) -> Error? {
+        guard let profile = loadIDPProfiles()?.getActiveProfile() else {
+            logger.error("Could not read the basal profile back to verify it")
+            return PumpCommError.requestConstructionFailed(
+                reason: "Could not read the basal profile back to verify it"
+            )
+        }
+
+        let segments = profile.getSegments()
+        guard segments.count == items.count,
+              Self.pendingSegmentWrites(items: items, retainedSegments: segments).isEmpty
+        else {
+            logger.error(
+                "Basal profile does not match after sync: \(PumpCommError.basalProfileDifference(pump: segments, app: items))"
+            )
+            return PumpCommError.basalProfileSyncMismatch(pump: segments, app: items)
+        }
+
+        return nil
+    }
+
 }

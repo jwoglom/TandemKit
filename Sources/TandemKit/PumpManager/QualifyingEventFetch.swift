@@ -81,6 +81,12 @@ enum QualifyingEventFetch: CaseIterable {
             needed.insert(.basalStatus)
         }
 
+        // Also not in PumpX2's table: after a profile change on the pump, read basal status now so
+        // `verifyDeliveredBasalRate` catches a mismatch without waiting for the next sync.
+        if !events.isDisjoint(with: [.profileChange, .activeProfileSegmentChange]) {
+            needed.insert(.basalStatus)
+        }
+
         return allCases.filter { needed.contains($0) }
     }
 }
