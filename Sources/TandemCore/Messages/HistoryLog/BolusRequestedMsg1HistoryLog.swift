@@ -18,6 +18,7 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
     public let carbAmount: Int
     public let bg: Int
     public let iob: Float
+    /// Thousandths of a gram per unit; 0 unless `bolusType` is `.CARB`. See `carbRatioGramsPerUnit`.
     public let carbRatio: UInt32
 
     public required init(cargo: Data) {
@@ -89,6 +90,8 @@ public class BolusRequestedMsg1HistoryLog: HistoryLog {
             )
         )
     }
+
+    public var carbRatioGramsPerUnit: Double { Double(carbRatio) / 1000.0 }
 
     /// How the bolus was requested, or `nil` if the raw value is not recognized.
     ///

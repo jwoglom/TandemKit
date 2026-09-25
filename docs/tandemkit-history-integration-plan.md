@@ -13,7 +13,7 @@ This document provides a detailed, actionable plan for integrating pump-owned hi
   - `TempRateActivatedHistoryLog`, `TempRateCompletedHistoryLog`
   - `BasalRateChangeHistoryLog`, `BasalDeliveryHistoryLog`
   - `PumpingSuspendedHistoryLog`, `PumpingResumedHistoryLog`
-- CGM and physiological data: `CGMHistoryLog`, `BGHistoryLog`, `CarbEnteredHistoryLog`
+- CGM and physiological data: `DexcomG6CGMHistoryLog`, `BGHistoryLog`, `CarbEnteredHistoryLog`
 - Alerts and system events: `AlarmActivatedHistoryLog`, `AlertActivatedHistoryLog`
 - Time reconciliation events: `DateChangeHistoryLog`, `TimeChangedHistoryLog`
 - Cartridge management: `CartridgeFilledHistoryLog`, `CannulaFilledHistoryLog`, `TubingFilledHistoryLog`
@@ -780,7 +780,7 @@ Tests/TandemKitTests/
 
 4. **Control-IQ Event Interpretation**: `ControlIQPcmChangeHistoryLog` and related events may affect dosing interpretation but are not yet mapped to LoopKit events.
 
-5. **CGM Data**: `CGMHistoryLog` and `CgmDataSampleHistoryLog` exist but are not mapped to LoopKit's CGM surfaces (out of scope for pump history).
+5. **CGM Data**: `DexcomG6CGMHistoryLog` and `CgmDataSampleHistoryLog` exist but are not mapped to LoopKit's CGM surfaces (out of scope for pump history).
 
 6. **Performance**: Fetching 500 events every 5 minutes may be excessive; adaptive fetch intervals based on pump activity should be considered.
 
