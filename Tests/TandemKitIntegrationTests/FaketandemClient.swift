@@ -151,6 +151,21 @@ struct FaketandemLog: Decodable {
     let lastSeq: Int
 }
 
+/// `GET|PUT /api/transport`: the link parameters that are not pump state. The ATT MTU decides how
+/// responses are framed — at the 23-byte default every notification carries 20 bytes (18 of
+/// message), the framing pumpX2's `Packetize` and the cliparser jar produce; a real Mobi over iOS
+/// negotiates a much larger one, so most responses arrive as a single notification.
+struct FaketandemTransport: Decodable {
+    let attMtu: Int
+    /// Bytes one notification can carry at that MTU (MTU minus the 3-byte ATT header).
+    let maxNotificationBytes: Int
+    /// Message bytes that leaves after the 2-byte `[remaining][txId]` framing. A response whose
+    /// body fits in this many bytes goes out in one notification.
+    let maxMessageBytesPerNotification: Int
+    /// False on the Linux GATT transport, which lets gatt negotiate the MTU and never reports it.
+    let mtuConfigurable: Bool
+}
+
 struct FaketandemClock: Decodable {
     let mode: String
     let now: Date
@@ -378,6 +393,23 @@ final class FaketandemClient {
     @discardableResult
     func raiseQualifyingEvent(bitmask: UInt32) throws -> FaketandemSnapshot {
         try action("/api/state/qualifyingevent", ["bitmask": Int(bitmask)])
+    }
+
+    // MARK: - Link parameters (ATT MTU)
+
+    /// The emulator's default (`-virtual-mtu`): the Bluetooth spec minimum, 20-byte notifications.
+    static let defaultATTMTU = 23
+    /// The order of MTU a real Mobi paired with the official iOS app negotiates.
+    static let largeATTMTU = 247
+
+    func transport() throws -> FaketandemTransport {
+        try get("/api/transport", as: FaketandemTransport.self)
+    }
+
+    /// `PUT /api/transport`; 501 on a transport that does not expose its MTU.
+    @discardableResult
+    func setATTMTU(_ mtu: Int) throws -> FaketandemTransport {
+        try decode(send("PUT", "/api/transport", json: ["att_mtu": mtu]), as: FaketandemTransport.self)
     }
 
     // MARK: - Request log

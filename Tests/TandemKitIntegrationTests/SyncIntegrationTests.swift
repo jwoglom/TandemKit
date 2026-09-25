@@ -6,7 +6,10 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
     func testSyncPumpDataReportsStatusReservoirAndTheReconciliationBoundary() throws {
         let driver = makeDriver()
         try harness.pair(driver)
-        try harness.client.setState(["reservoir_units": 137.0, "battery_percent": 64])
+        // 137.5, not 137: the pump reports whole units (the emulator truncates, as a real one does)
+        // and its simulator is draining basal in real time, so a whole starting value reads back one
+        // unit lower the moment any insulin has gone out.
+        try harness.client.setState(["reservoir_units": 137.5, "battery_percent": 64])
         let statusUpdatesBefore = driver.delegate.statusUpdates.count
         let batchesBefore = driver.delegate.pumpEventBatches.count
 
@@ -19,7 +22,7 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
 
         XCTAssertEqual(driver.delegate.reservoirReadings.count, 1, "one reservoir report per sync")
         XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
-        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
+        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports, in units")
         XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
         XCTAssertEqual(driver.manager.state.lastBatteryReading?.chargeRemaining, 0.64)
 
