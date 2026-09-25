@@ -149,6 +149,12 @@ public enum HistoryLogParser {
             return TempRateActivatedHistoryLog(cargo: raw)
         case TempRateCompletedHistoryLog.typeId:
             return TempRateCompletedHistoryLog(cargo: raw)
+        case ControlRequestHistoryLog.typeId:
+            return ControlRequestHistoryLog(cargo: raw)
+        case ControlResponseHistoryLog.typeId:
+            return ControlResponseHistoryLog(cargo: raw)
+        case SetTempRateResponseHistoryLog.typeId:
+            return SetTempRateResponseHistoryLog(cargo: raw)
         case TimeChangedHistoryLog.typeId:
             return TimeChangedHistoryLog(cargo: raw)
         case TubingFilledHistoryLog.typeId:
