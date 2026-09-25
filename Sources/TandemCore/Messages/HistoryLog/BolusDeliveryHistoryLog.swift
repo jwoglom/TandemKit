@@ -191,6 +191,15 @@ public class BolusDeliveryHistoryLog: HistoryLog {
     /// Source that initiated the bolus.
     public var bolusSourceEnum: BolusSource? { BolusSource(rawValue: bolusSource) }
 
+    public var bolusDeliveryStatusEnum: BolusDeliveryStatus? { BolusDeliveryStatus(rawValue: bolusDeliveryStatus) }
+
+    /// `started` at activation (deliveredTotal 0) and `completed` at the end; extended boluses also repeat
+    /// `started` about every 5 minutes with the running deliveredTotal, so a bolus can have many.
+    public enum BolusDeliveryStatus: Int {
+        case completed = 0
+        case started = 1
+    }
+
     public enum BolusSource: Int {
         case quickBolus = 0
         case gui = 1
@@ -225,6 +234,6 @@ public class BolusDeliveryHistoryLog: HistoryLog {
     }
 
     public var description: String {
-        "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(String(describing: bolusSourceEnum)), bolusSource=\(bolusSource), remoteId=\(remoteId), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
+        "BolusDeliveryHistoryLog(cargo=\(cargo.hexadecimalString), bolusID=\(bolusID), bolusDeliveryStatus=\(bolusDeliveryStatus), bolusDeliveryStatusEnum=\(String(describing: bolusDeliveryStatusEnum)), bolusTypeBitmask=\(bolusTypeBitmask), bolusSourceEnum=\(String(describing: bolusSourceEnum)), bolusSource=\(bolusSource), remoteId=\(remoteId), requestedNow=\(requestedNow), requestedLater=\(requestedLater), correction=\(correction), extendedDurationRequested=\(extendedDurationRequested), deliveredTotal=\(deliveredTotal))"
     }
 }
