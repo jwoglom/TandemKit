@@ -163,11 +163,13 @@ final class SocketLink {
         }
         var one: Int32 = 1
         setsockopt(connected, Int32(IPPROTO_TCP), TCP_NODELAY, &one, socklen_t(MemoryLayout<Int32>.size))
+        Glue.suppressSigpipe(connected)
         fd = connected
     }
 
     /// Wraps an already-connected descriptor (the server side of a loopback test).
     init(fd: Int32) {
+        Glue.suppressSigpipe(fd)
         self.fd = fd
     }
 
@@ -269,9 +271,17 @@ private enum Glue {
         #endif
     }
 
+    /// Writing to a closed peer must fail with EPIPE, not SIGPIPE-kill the process (tests run both ends in one).
+    static func suppressSigpipe(_ fd: Int32) {
+        #if !canImport(Glibc)
+        var one: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
+        #endif
+    }
+
     static func write(_ fd: Int32, _ buf: UnsafeRawPointer, _ count: Int) -> Int {
         #if canImport(Glibc)
-        Glibc.write(fd, buf, count)
+        Glibc.send(fd, buf, count, Int32(MSG_NOSIGNAL))
         #else
         Darwin.write(fd, buf, count)
         #endif
