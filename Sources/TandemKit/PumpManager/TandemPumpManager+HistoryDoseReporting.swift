@@ -1,12 +1,7 @@
 import Foundation
 import LoopKit
 
-/// Reports boluses found in the pump's history log that the live path did not report, or could not
-/// finish reporting: pump-UI and Control-IQ boluses, and app boluses whose completion the driver
-/// lost track of (a relaunch mid-bolus, an unknown delivered volume).
-///
-/// Boluses only. Temp basals and suspends stay with the live path: LoopKit's DoseStore would not
-/// count backfilled ones toward IOB, and reporting both would double them (#354).
+/// Reports history boluses the live path didn't report or couldn't finish. Boluses only (#354).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
         guard state.featureFlags.historyDoseReporting,
@@ -49,8 +44,7 @@ extension TandemPumpManager {
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
-        // Fresh each pass: the whole span is re-mapped every time, and a shared reconciler would
-        // apply each clock change once per pass.
+        // Fresh each pass: a shared one would apply each clock change once per pass.
         let events = HistoryToDoseMapper().mapToEvents(
             logs,
             reconciler: HistoryTimestampReconciler(),
@@ -82,7 +76,6 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    /// Everything the mapper needs to build bolus events, and nothing it would turn into others.
     private static func isReportedBolusInput(_ log: HistoryLog) -> Bool {
         switch log {
         case is BolusActivatedHistoryLog, is BolusCompletedHistoryLog, is BolusDeliveryHistoryLog,
@@ -94,8 +87,6 @@ extension TandemPumpManager {
         }
     }
 
-    /// What to send the host for one bolus in history, or nil when it already knows everything
-    /// history can tell it.
     private func historyBolusReport(
         _ event: NewPumpEvent,
         dose: DoseEntry,
@@ -133,8 +124,6 @@ extension TandemPumpManager {
         bolusProgressReport != nil && state.bolusDose?.bolusId == bolusId
     }
 
-    /// The live path's leftovers for a bolus history has now settled: a dose held for a delivered
-    /// volume the pump never gave (#328), or one orphaned by a relaunch mid-bolus.
     private func releaseLiveBolusState(_ bolusId: Int) {
         if state.pendingBolusFinalization?.bolusId == bolusId {
             state.pendingBolusFinalization = nil
@@ -145,8 +134,7 @@ extension TandemPumpManager {
         }
     }
 
-    /// `dose` under the identity and event date the host already holds for this bolus, so it
-    /// updates that row instead of adding one.
+    /// Under the host's existing identity and date, so it updates that row instead of adding one.
     private static func reported(_ dose: DoseEntry, as entry: BolusReportLedger.Entry) -> NewPumpEvent {
         let rekeyed = DoseEntry(
             type: .bolus,

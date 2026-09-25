@@ -32,8 +32,7 @@ final class HistoryBackfillCoordinator {
     /// while the previous one is still walking a slice on the fetcher's queue.
     private let lock = NSLock()
     private var isRunning = false
-    /// A `.bolusChange` arrives at both activation and completion, often inside one tick; dropping
-    /// the second would leave the completion unreported until the next sync.
+    /// The pump sends `.bolusChange` at activation and completion, often within one tick.
     private var rerunRequested = false
 
     /// The span this *session* has read into the store, as distinct from the persisted

@@ -83,17 +83,8 @@ enum HistoryBackfillPlanner {
         return max(lookbackTarget, firstSeenFloor)
     }
 
-    /// The earliest date a dose may be *reported* for.
-    ///
-    /// `firstSeenFloor` keeps a replacement pump's pre-service history out; `trackingSince` keeps
-    /// out boluses from before the driver recorded which ones it commanded (see
-    /// `BolusReportLedger`); the retention window bounds the rest. The host's
-    /// `startDateToFilterNewPumpEvents` is deliberately not a term (#345): Trio returns
-    /// `lastEventDate - 15min` and drops nothing itself, so flooring on it would lose a pump-UI
-    /// bolus found one sync late, and under-reported IOB is the over-delivery direction.
-    ///
-    /// Derived per tick, never written back: persisting it would ratchet `firstSeenFloor`
-    /// forward and starve the walk.
+    /// Earliest date a dose may be reported for. Not floored on the host's
+    /// `startDateToFilterNewPumpEvents`, which would drop a bolus found one sync late (#345).
     static func emitFloor(bookkeeping: HistoryBackfillState?, trackingSince: Date, now: Date) -> Date {
         max(
             bookkeeping?.firstSeenFloor ?? .distantPast,

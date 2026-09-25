@@ -59,8 +59,6 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
-    /// Seeded on first decode, so an install upgrading to this build starts tracking now rather
-    /// than claiming to know which of its earlier boluses were reported live.
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?

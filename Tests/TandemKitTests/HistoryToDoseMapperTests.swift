@@ -52,7 +52,7 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertEqual(dose.type, .bolus)
         XCTAssertEqual(dose.startDate, pumpDate(1000))
         XCTAssertEqual(dose.endDate, pumpDate(1300))
-        XCTAssertEqual(event.date, pumpDate(1000), "Dated like the in-flight report it finalizes")
+        XCTAssertEqual(event.date, pumpDate(1000), "Dated at activation, not completion")
         XCTAssertEqual(dose.programmedUnits, 2.5)
         XCTAssertEqual(dose.deliveredUnits, 2.5)
         XCTAssertFalse(dose.isMutable)
