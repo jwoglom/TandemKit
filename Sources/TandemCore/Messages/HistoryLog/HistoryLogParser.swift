@@ -275,6 +275,20 @@ public enum HistoryLogParser {
             return BolusRequestedMsg2HistoryLog(cargo: raw)
         case BolusRequestedMsg3HistoryLog.typeId:
             return BolusRequestedMsg3HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg1HistoryLog.typeId:
+            return InitiateBolusRequestMsg1HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg2HistoryLog.typeId:
+            return InitiateBolusRequestMsg2HistoryLog(cargo: raw)
+        case BolusPermissionChangeHistoryLog.typeId:
+            return BolusPermissionChangeHistoryLog(cargo: raw)
+        case BolusPermissionResponseHistoryLog.typeId:
+            return BolusPermissionResponseHistoryLog(cargo: raw)
+        case InitiateBolusResponseHistoryLog.typeId:
+            return InitiateBolusResponseHistoryLog(cargo: raw)
+        case BolusPermissionRequestHistoryLog.typeId:
+            return BolusPermissionRequestHistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg3HistoryLog.typeId:
+            return InitiateBolusRequestMsg3HistoryLog(cargo: raw)
         case UsbEnumeratedHistoryLog.typeId:
             return UsbEnumeratedHistoryLog(cargo: raw)
         case ControlIQUserModeChangeHistoryLog.typeId:
