@@ -274,7 +274,16 @@ final class FaketandemClient {
     /// `PUT /api/state`: sets the named fields and nothing else (no qualifying events, no history).
     @discardableResult
     func setState(_ fields: [String: Any]) throws -> FaketandemSnapshot {
-        try decode(send("PUT", "/api/state", json: fields), as: FaketandemSnapshot.self)
+        struct Body: Decodable {
+            let applied: [String]
+            let state: FaketandemSnapshot
+        }
+        let body = try decode(send("PUT", "/api/state", json: fields), as: Body.self)
+        let missing = Set(fields.keys).subtracting(body.applied)
+        guard missing.isEmpty else {
+            throw FaketandemClientError.http(status: 200, path: "/api/state", body: "fields not applied: \(missing.sorted())")
+        }
+        return body.state
     }
 
     // MARK: - Clock

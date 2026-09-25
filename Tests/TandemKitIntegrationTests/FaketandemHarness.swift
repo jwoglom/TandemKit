@@ -36,8 +36,7 @@ final class FaketandemHarness {
     init(endpoint: SocketPumpEndpoint, apiBaseURL: URL) throws {
         self.endpoint = endpoint
         client = FaketandemClient(apiBaseURL: apiBaseURL)
-        control = FaketandemControlSocket(apiBaseURL: apiBaseURL)
-        try control.open()
+        control = try FaketandemControlSocket.shared(apiBaseURL: apiBaseURL)
     }
 
     static func fromEnvironment(_ environment: [String: String] = ProcessInfo.processInfo.environment) throws
@@ -55,10 +54,6 @@ final class FaketandemHarness {
             throw XCTSkip("\(apiEnvironmentVariable)=\(api) is not a URL")
         }
         return try FaketandemHarness(endpoint: endpoint, apiBaseURL: url)
-    }
-
-    func close() {
-        control.close()
     }
 
     // MARK: - Emulator state
@@ -90,10 +85,11 @@ final class FaketandemHarness {
         try client.requestLog(since: since ?? resetLogSequence).entries
     }
 
-    /// Inbound messages the pump parsed, in order: (opcode, name, characteristic).
+    /// Inbound messages the pump parsed, in order: (opcode, name, characteristic). The log carries
+    /// opcodes as signed bytes (Control opcodes are >= 0x80); they are normalised to 0...255 here.
     func requestsSeen(since: Int? = nil) throws -> [(opcode: Int, message: String, characteristic: String)] {
         try requestLog(since: since).filter(\.isRequest).map {
-            (opcode: $0.opcode ?? -1, message: $0.message ?? "", characteristic: $0.characteristic ?? "")
+            (opcode: ($0.opcode ?? -1) & 0xFF, message: $0.message ?? "", characteristic: $0.characteristic ?? "")
         }
     }
 
@@ -205,10 +201,51 @@ final class FaketandemHarness {
         return try box.wait("pairPump completion", timeout: timeout)
     }
 
-    /// Discover + pair with the known code; throws if pairing fails.
+    /// How a driver gets its first authenticated session.
+    enum PairingMethod {
+        /// The onboarding flow: pairing code in, full JPAKE rounds 1a/1b/2/3/4 through pumpX2's
+        /// jpake-server on the emulator side.
+        case fresh
+        /// The state after a completed pairing, staged directly: the same random long-term key is
+        /// given to the pump (`setLongTermKey`) and to the driver (`pumpState.derivedSecret`), so the
+        /// connect authenticates through the quick-reconnect rounds 3/4 alone. This is the emulator's
+        /// pure-Go path, and the only one that works on macOS today: see docs/integration-harness.md,
+        /// "Known emulator gaps" (pumpX2 jpake-server cannot be spawned on macOS).
+        case seededLongTermKey
+    }
+
+    /// The method the flow tests use when pairing is a precondition rather than the subject.
+    static let defaultPairingMethod: PairingMethod = .seededLongTermKey
+
+    /// Stages a completed pairing on both sides without talking to the pump. The driver still has to
+    /// connect and run rounds 3/4 to get a session.
+    func seedLongTermKey(_ driver: Driver, peripheralId: UUID) throws -> Data {
+        var key = Data(count: 32)
+        key.withUnsafeMutableBytes { buffer in
+            guard let base = buffer.baseAddress else { return }
+            for offset in 0 ..< buffer.count {
+                base.storeBytes(of: UInt8.random(in: .min ... .max), toByteOffset: offset, as: UInt8.self)
+            }
+        }
+        let status = try control.setLongTermKey(key)
+        precondition(status.longTermKey == key, "emulator did not take the seeded key: \(status)")
+        driver.manager.state.pumpState.derivedSecret = key
+        driver.manager.state.pumpState.pincode = Self.pairingCode
+        driver.manager.state.pumpState.peripheralUuid = peripheralId.uuidString
+        return key
+    }
+
+    /// Discover + pair; throws if pairing fails.
     @discardableResult
-    func pair(_ driver: Driver, timeout: TimeInterval = 90) throws -> TandemPumpScan {
+    func pair(
+        _ driver: Driver,
+        method: PairingMethod = FaketandemHarness.defaultPairingMethod,
+        timeout: TimeInterval = 90
+    ) throws -> TandemPumpScan {
         let scan = try discover(driver)
+        if method == .seededLongTermKey {
+            _ = try seedLongTermKey(driver, peripheralId: scan.peripheral.identifier)
+        }
         if let error = try pair(driver, with: scan, timeout: timeout) {
             throw error
         }

@@ -17,9 +17,10 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertGreaterThan(driver.bluetooth.responseCount, 0)
         XCTAssertGreaterThan(driver.delegate.statusUpdates.count, statusUpdatesBefore, "the host must see a status update")
 
+        XCTAssertEqual(driver.delegate.reservoirReadings.count, 1, "one reservoir report per sync")
+        XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
         XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
         XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
-        XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
         XCTAssertEqual(driver.manager.state.lastBatteryReading?.chargeRemaining, 0.64)
 
         let batches = Array(driver.delegate.pumpEventBatches.dropFirst(batchesBefore))

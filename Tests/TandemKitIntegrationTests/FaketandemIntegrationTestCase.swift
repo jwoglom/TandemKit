@@ -25,7 +25,6 @@ class FaketandemIntegrationTestCase: XCTestCase {
                     XCTFail("driver shutdown failed: \(error)")
                 }
             }
-            harness.close()
         }
         driver = nil
         harness = nil
@@ -64,7 +63,7 @@ class FaketandemIntegrationTestCase: XCTestCase {
         }
         let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
         attachment.name = "faketandem-request-log.txt"
-        attachment.lifetime = .deleteOnSuccess
+        attachment.lifetime = .keepAlways
         add(attachment)
     }
 }
