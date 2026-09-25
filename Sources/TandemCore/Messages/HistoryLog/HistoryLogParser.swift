@@ -317,6 +317,8 @@ public enum HistoryLogParser {
             return ControlIQPcmChangeHistoryLog(cargo: raw)
         case BatteryHourlyHistoryLog.typeId:
             return BatteryHourlyHistoryLog(cargo: raw)
+        case MaxBasalLimitSetHistoryLog.typeId:
+            return MaxBasalLimitSetHistoryLog(cargo: raw)
         case BasalDeliveryHistoryLog.typeId:
             return BasalDeliveryHistoryLog(cargo: raw)
         case BolusDeliverySummaryHistoryLog.typeId:
@@ -327,6 +329,10 @@ public enum HistoryLogParser {
             return BolusDeliveryHistoryLog(cargo: raw)
         case BatteryEstimateUpdateHistoryLog.typeId:
             return BatteryEstimateUpdateHistoryLog(cargo: raw)
+        case MaxBolusLimitSetHistoryLog.typeId:
+            return MaxBolusLimitSetHistoryLog(cargo: raw)
+        case BleLinkStatsHistoryLog.typeId:
+            return BleLinkStatsHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
