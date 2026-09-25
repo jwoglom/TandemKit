@@ -275,6 +275,10 @@ public enum HistoryLogParser {
             return CartridgeFillResponseHistoryLog(cargo: raw)
         case PumpButtonHistoryLog.typeId:
             return PumpButtonHistoryLog(cargo: raw)
+        case ChargingStartedHistoryLog.typeId:
+            return ChargingStartedHistoryLog(cargo: raw)
+        case ChargingStoppedHistoryLog.typeId:
+            return ChargingStoppedHistoryLog(cargo: raw)
         case UsbConnectedHistoryLog.typeId:
             return UsbConnectedHistoryLog(cargo: raw)
         case UsbDisconnectedHistoryLog.typeId:
@@ -311,6 +315,8 @@ public enum HistoryLogParser {
             return ControlIQUserModeChangeHistoryLog(cargo: raw)
         case ControlIQPcmChangeHistoryLog.typeId:
             return ControlIQPcmChangeHistoryLog(cargo: raw)
+        case BatteryHourlyHistoryLog.typeId:
+            return BatteryHourlyHistoryLog(cargo: raw)
         case BasalDeliveryHistoryLog.typeId:
             return BasalDeliveryHistoryLog(cargo: raw)
         case BolusDeliverySummaryHistoryLog.typeId:
@@ -319,6 +325,8 @@ public enum HistoryLogParser {
             return PumpDriveEventHistoryLog(cargo: raw)
         case BolusDeliveryHistoryLog.typeId:
             return BolusDeliveryHistoryLog(cargo: raw)
+        case BatteryEstimateUpdateHistoryLog.typeId:
+            return BatteryEstimateUpdateHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
