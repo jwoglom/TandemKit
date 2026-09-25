@@ -18,6 +18,7 @@ final class CgmAlertActivatedDexHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(parsedRes.sensorTypeEnum, .dexcomG7)
     }
 
     func testCgmAlertActivatedDexHistoryLog2() {
@@ -36,5 +37,6 @@ final class CgmAlertActivatedDexHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(parsedRes.sensorTypeEnum, .dexcomG7)
     }
 }
