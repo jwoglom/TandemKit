@@ -5,12 +5,16 @@ public class CgmAlertClearedDexHistoryLog: HistoryLog {
 
     public let alertId: Int
 
-    /// The type of glucose sensor which raised the alert. Constant (3) in every captured record;
-    /// the meaning of other values is unconfirmed.
+    /// CGMSensorType ordinal; Tandem's export schema lists 0 Invalid, 1 Dexcom G6, 3 Dexcom G7.
+    /// Every captured record has 3, all from Dexcom G7 sessions.
     public let sensorType: Int
 
     public var alert: CGMAlertStatusResponse.CGMAlert? {
         CGMAlertStatusResponse.CGMAlert(rawValue: alertId)
+    }
+
+    public var sensorTypeEnum: CGMStatusV2Response.CGMSensorType {
+        CGMStatusV2Response.CGMSensorType(rawValue: sensorType) ?? .unknown
     }
 
     public required init(cargo: Data) {
