@@ -55,7 +55,11 @@ public class BolusActivatedHistoryLog: HistoryLog {
         )
     }
 
+    public var selectedIobType: BolusRequestedMsg2HistoryLog.SelectedIOBType? {
+        BolusRequestedMsg2HistoryLog.SelectedIOBType(rawValue: selectedIob)
+    }
+
     public var description: String {
-        "BolusActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), selectedIob=\(selectedIob), iob=\(iob), bolusSize=\(bolusSize))"
+        "BolusActivatedHistoryLog(cargo=\(cargo.hexadecimalString), bolusId=\(bolusId), selectedIob=\(selectedIob), selectedIobType=\(String(describing: selectedIobType)), iob=\(iob), bolusSize=\(bolusSize))"
     }
 }
