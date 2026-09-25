@@ -16,8 +16,8 @@ public class CgmJoinSessionHistoryLog: HistoryLog {
     public required init(cargo: Data) {
         currentTransmitterTime = Bytes.readUint32(cargo, 10)
         sessionStartTime = Bytes.readUint32(cargo, 14)
-        sessionJoinReasonRaw = Int(cargo[24])
-        sessionDuration = Int(cargo[25])
+        sessionJoinReasonRaw = Int(cargo[23])
+        sessionDuration = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
@@ -70,9 +70,9 @@ public class CgmJoinSessionHistoryLog: HistoryLog {
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(currentTransmitterTime),
                 Bytes.toUint32(sessionStartTime),
-                Data([0, 0, 0, 0, 0, 0]),
-                Data([UInt8(sessionJoinReasonRaw & 0xFF)]),
-                Data([UInt8(sessionDuration & 0xFF)])
+                Data([0, 0, 0, 0]),
+                Data([UInt8(sessionDuration & 0xFF)]),
+                Data([UInt8(sessionJoinReasonRaw & 0xFF)])
             )
         )
     }

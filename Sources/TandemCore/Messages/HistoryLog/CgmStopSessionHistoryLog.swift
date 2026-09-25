@@ -19,8 +19,8 @@ public class CgmStopSessionHistoryLog: HistoryLog {
         currentTransmitterTime = Bytes.readUint32(cargo, 10)
         sessionStartTime = Bytes.readUint32(cargo, 14)
         sessionStopTime = Bytes.readUint32(cargo, 18)
-        sessionStopReasonRaw = Int(cargo[24])
-        sessionDuration = Int(cargo[25])
+        sessionStopReasonRaw = Int(cargo[23])
+        sessionDuration = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
@@ -85,9 +85,8 @@ public class CgmStopSessionHistoryLog: HistoryLog {
                 Bytes.toUint32(currentTransmitterTime),
                 Bytes.toUint32(sessionStartTime),
                 Bytes.toUint32(sessionStopTime),
-                Data([0, 0]),
-                Data([UInt8(sessionStopReasonRaw & 0xFF)]),
-                Data([UInt8(sessionDuration & 0xFF)])
+                Data([UInt8(sessionDuration & 0xFF)]),
+                Data([UInt8(sessionStopReasonRaw & 0xFF)])
             )
         )
     }

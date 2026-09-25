@@ -19,6 +19,10 @@ public enum HistoryLogParser {
             return ReminderActivatedHistoryLog(cargo: raw)
         case AlertAckHistoryLog.typeId:
             return AlertAckHistoryLog(cargo: raw)
+        case DismissNotificationResponseHistoryLog.typeId:
+            return DismissNotificationResponseHistoryLog(cargo: raw)
+        case AamAnnunciationHistoryLog.typeId:
+            return AamAnnunciationHistoryLog(cargo: raw)
         case AlertClearedHistoryLog.typeId:
             return AlertClearedHistoryLog(cargo: raw)
         case ReminderDismissedHistoryLog.typeId:
@@ -155,6 +159,12 @@ public enum HistoryLogParser {
             return TempRateActivatedHistoryLog(cargo: raw)
         case TempRateCompletedHistoryLog.typeId:
             return TempRateCompletedHistoryLog(cargo: raw)
+        case ControlRequestHistoryLog.typeId:
+            return ControlRequestHistoryLog(cargo: raw)
+        case ControlResponseHistoryLog.typeId:
+            return ControlResponseHistoryLog(cargo: raw)
+        case SetTempRateResponseHistoryLog.typeId:
+            return SetTempRateResponseHistoryLog(cargo: raw)
         case TimeChangedHistoryLog.typeId:
             return TimeChangedHistoryLog(cargo: raw)
         case TubingFilledHistoryLog.typeId:
@@ -249,6 +259,12 @@ public enum HistoryLogParser {
             return BolexCompletedHistoryLog(cargo: raw)
         case CartridgeFilledHistoryLog.typeId:
             return CartridgeFilledHistoryLog(cargo: raw)
+        case ReservoirEstimateHistoryLog.typeId:
+            return ReservoirEstimateHistoryLog(cargo: raw)
+        case CartridgeFillResponseHistoryLog.typeId:
+            return CartridgeFillResponseHistoryLog(cargo: raw)
+        case PumpButtonHistoryLog.typeId:
+            return PumpButtonHistoryLog(cargo: raw)
         case UsbConnectedHistoryLog.typeId:
             return UsbConnectedHistoryLog(cargo: raw)
         case UsbDisconnectedHistoryLog.typeId:
@@ -265,6 +281,20 @@ public enum HistoryLogParser {
             return BolusRequestedMsg2HistoryLog(cargo: raw)
         case BolusRequestedMsg3HistoryLog.typeId:
             return BolusRequestedMsg3HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg1HistoryLog.typeId:
+            return InitiateBolusRequestMsg1HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg2HistoryLog.typeId:
+            return InitiateBolusRequestMsg2HistoryLog(cargo: raw)
+        case BolusPermissionChangeHistoryLog.typeId:
+            return BolusPermissionChangeHistoryLog(cargo: raw)
+        case BolusPermissionResponseHistoryLog.typeId:
+            return BolusPermissionResponseHistoryLog(cargo: raw)
+        case InitiateBolusResponseHistoryLog.typeId:
+            return InitiateBolusResponseHistoryLog(cargo: raw)
+        case BolusPermissionRequestHistoryLog.typeId:
+            return BolusPermissionRequestHistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg3HistoryLog.typeId:
+            return InitiateBolusRequestMsg3HistoryLog(cargo: raw)
         case UsbEnumeratedHistoryLog.typeId:
             return UsbEnumeratedHistoryLog(cargo: raw)
         case ControlIQUserModeChangeHistoryLog.typeId:
