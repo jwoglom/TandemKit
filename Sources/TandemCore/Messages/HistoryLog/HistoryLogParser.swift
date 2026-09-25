@@ -19,6 +19,10 @@ public enum HistoryLogParser {
             return ReminderActivatedHistoryLog(cargo: raw)
         case AlertAckHistoryLog.typeId:
             return AlertAckHistoryLog(cargo: raw)
+        case DismissNotificationResponseHistoryLog.typeId:
+            return DismissNotificationResponseHistoryLog(cargo: raw)
+        case AamAnnunciationHistoryLog.typeId:
+            return AamAnnunciationHistoryLog(cargo: raw)
         case AlertClearedHistoryLog.typeId:
             return AlertClearedHistoryLog(cargo: raw)
         case ReminderDismissedHistoryLog.typeId:
@@ -149,6 +153,12 @@ public enum HistoryLogParser {
             return TempRateActivatedHistoryLog(cargo: raw)
         case TempRateCompletedHistoryLog.typeId:
             return TempRateCompletedHistoryLog(cargo: raw)
+        case ControlRequestHistoryLog.typeId:
+            return ControlRequestHistoryLog(cargo: raw)
+        case ControlResponseHistoryLog.typeId:
+            return ControlResponseHistoryLog(cargo: raw)
+        case SetTempRateResponseHistoryLog.typeId:
+            return SetTempRateResponseHistoryLog(cargo: raw)
         case TimeChangedHistoryLog.typeId:
             return TimeChangedHistoryLog(cargo: raw)
         case TubingFilledHistoryLog.typeId:
@@ -243,6 +253,12 @@ public enum HistoryLogParser {
             return BolexCompletedHistoryLog(cargo: raw)
         case CartridgeFilledHistoryLog.typeId:
             return CartridgeFilledHistoryLog(cargo: raw)
+        case ReservoirEstimateHistoryLog.typeId:
+            return ReservoirEstimateHistoryLog(cargo: raw)
+        case CartridgeFillResponseHistoryLog.typeId:
+            return CartridgeFillResponseHistoryLog(cargo: raw)
+        case PumpButtonHistoryLog.typeId:
+            return PumpButtonHistoryLog(cargo: raw)
         case UsbConnectedHistoryLog.typeId:
             return UsbConnectedHistoryLog(cargo: raw)
         case UsbDisconnectedHistoryLog.typeId:
