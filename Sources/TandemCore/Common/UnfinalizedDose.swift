@@ -7,6 +7,8 @@ public class UnfinalizedDose {
     private let logger = TandemLogger(category: "UnfinalizedDose")
 
     public var bolusId: Int?
+    /// The pump's id for a temp rate the app set, from `SetTempRateResponse`.
+    public var tempRateId: Int?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every
     /// `NewPumpEvent` for it carries, which hosts dedupe on — so it never moves.
@@ -50,7 +52,8 @@ public class UnfinalizedDose {
         duration: TimeInterval,
         automatic: Bool,
         insulinType: InsulinType?,
-        startDate: Date = Date.now
+        startDate: Date = Date.now,
+        tempRateId: Int? = nil
     ) {
         type = .tempBasal
         value = tempRate
@@ -58,6 +61,7 @@ public class UnfinalizedDose {
         self.insulinType = insulinType
         estimatedEndDate = startDate.addingTimeInterval(duration)
         self.automatic = automatic
+        self.tempRateId = tempRateId
     }
 
     public init(suspendStartTime: Date) {
@@ -150,6 +154,8 @@ public class UnfinalizedDose {
         } else {
             bolusId = nil
         }
+
+        tempRateId = rawValue["tempRateId"] as? Int
     }
 
     public var rawValue: RawValue {
@@ -164,6 +170,7 @@ public class UnfinalizedDose {
         raw["insulinType"] = insulinType?.rawValue
         raw["automatic"] = automatic
         raw["bolusId"] = bolusId
+        raw["tempRateId"] = tempRateId
 
         return raw
     }

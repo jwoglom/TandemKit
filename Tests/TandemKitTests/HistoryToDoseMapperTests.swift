@@ -52,13 +52,36 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertEqual(dose.type, .bolus)
         XCTAssertEqual(dose.startDate, pumpDate(1000))
         XCTAssertEqual(dose.endDate, pumpDate(1300))
-        XCTAssertEqual(event.date, pumpDate(1300))
+        XCTAssertEqual(event.date, pumpDate(1000), "Dated like the in-flight report it finalizes")
         XCTAssertEqual(dose.programmedUnits, 2.5)
         XCTAssertEqual(dose.deliveredUnits, 2.5)
         XCTAssertFalse(dose.isMutable)
         XCTAssertEqual(dose.syncIdentifier, event.raw.hexadecimalString)
         // isCommandedBolus returned false, so this is a pump-UI (quick / Control-IQ) bolus.
         XCTAssertTrue(dose.wasProgrammedByPumpUI)
+        XCTAssertEqual(dose.automatic, false, "Trio reads a nil automatic as an SMB")
+    }
+
+    func testControlIQBolusIsAutomatic() throws {
+        let events = map([
+            BolusActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 1, bolusId: 7, selectedIob: 0, iob: 0, bolusSize: 0.4),
+            BolusDeliveryHistoryLog(
+                pumpTimeSec: 1000,
+                sequenceNum: 2,
+                bolusID: 7,
+                bolusDeliveryStatus: 1,
+                bolusTypeBitmask: 8,
+                bolusSource: BolusDeliveryHistoryLog.BolusSource.controlIQAutoBolus.rawValue,
+                remoteId: 0,
+                requestedNow: 400,
+                requestedLater: 0,
+                correction: 400,
+                extendedDurationRequested: 0,
+                deliveredTotal: 0
+            )
+        ])
+
+        XCTAssertEqual(try XCTUnwrap(events.first?.dose).automatic, true)
     }
 
     func testCommandedBolusIsNotMarkedAsPumpUI() throws {

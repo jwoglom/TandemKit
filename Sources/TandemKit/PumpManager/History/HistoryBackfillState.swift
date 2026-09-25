@@ -21,8 +21,8 @@ public struct HistoryBackfillState: Equatable {
     /// Earliest date this driver will consider for this pump, and the deepest the backfill
     /// reads. Set at first sight and never moved: the host app's filter date marches forward to
     /// ≈now as this driver reports events (Trio returns `lastEventDate - 15min`), so tracking it
-    /// would leave the walk with a target minutes old and IOB short. Emission combines the two —
-    /// see `HistoryBackfillPlanner.emitFloor`.
+    /// would leave the walk with a target minutes old and IOB short. Reporting has its own floor
+    /// on top of this one — see `HistoryBackfillPlanner.emitFloor`.
     public var firstSeenFloor: Date?
 
     public init(pumpSerial: UInt32, watermark: UInt32? = nil, firstSeenFloor: Date? = nil) {

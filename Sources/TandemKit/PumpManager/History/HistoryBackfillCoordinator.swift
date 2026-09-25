@@ -6,12 +6,9 @@ import Foundation
 /// Driven from `syncPumpData`, on LoopKit's own sync cadence. Each tick asks
 /// `HistoryBackfillPlanner` what to read, runs those ranges through `HistoryLogFetcher` (which
 /// files what streams in into the store and serves what the store already holds), and advances
-/// the persisted watermark. Nothing is mapped to doses or emitted here — that is the emission
-/// layer's job; this type's outputs are a fuller store and up-to-date bookkeeping.
+/// the persisted watermark. Each tick that read something hands its outcome to
+/// `TandemPumpManager.reportHistoryDoses`, which decides what reaches the host.
 final class HistoryBackfillCoordinator {
-    /// What one tick did. Returned to the caller and to tests; the emission layer will read
-    /// `sessionCovered` and `isDeepBackfillComplete` to decide how much of its window it can
-    /// account for.
     struct TickOutcome: Equatable {
         /// Bookkeeping as persisted at the end of the tick.
         var bookkeeping: HistoryBackfillState
@@ -21,8 +18,8 @@ final class HistoryBackfillCoordinator {
         var sessionCovered: ClosedRange<UInt32>?
         /// Whether the walk backward has nothing left to reach.
         var isDeepBackfillComplete: Bool
-        /// Earliest date the emission layer may report events for, as of this tick.
-        var emitFloor: Date?
+        /// Earliest date a dose may be reported for, as of this tick.
+        var emitFloor: Date
     }
 
     private let logger = TandemLogger(category: "HistoryBackfill")
@@ -31,10 +28,13 @@ final class HistoryBackfillCoordinator {
     private weak var pumpManager: TandemPumpManager?
     private let fetcher: HistoryLogFetcher
 
-    /// Guards `isRunning` and `sessionCoveredRange`. A tick can be triggered while the previous
-    /// one is still walking a slice on the fetcher's queue.
+    /// Guards `isRunning`, `rerunRequested` and `sessionCoveredRange`. A tick can be triggered
+    /// while the previous one is still walking a slice on the fetcher's queue.
     private let lock = NSLock()
     private var isRunning = false
+    /// A `.bolusChange` arrives at both activation and completion, often inside one tick; dropping
+    /// the second would leave the completion unreported until the next sync.
+    private var rerunRequested = false
 
     /// The span this *session* has read into the store, as distinct from the persisted
     /// watermark.
@@ -73,16 +73,18 @@ final class HistoryBackfillCoordinator {
             return
         }
 
-        guard !pumpManager.historyFetchGate.isBusy else {
-            logger.info("Skipping backfill tick: another history reader is active")
+        lock.lock()
+        // Checked before the gate, which a running tick holds for most of its length.
+        if isRunning {
+            rerunRequested = true
+            lock.unlock()
+            logger.info("Backfill tick already running; another will follow it")
             completion?(nil)
             return
         }
-
-        lock.lock()
-        if isRunning {
+        guard !pumpManager.historyFetchGate.isBusy else {
             lock.unlock()
-            logger.info("Skipping backfill tick: previous tick still running")
+            logger.info("Skipping backfill tick: another history reader is active")
             completion?(nil)
             return
         }
@@ -90,10 +92,24 @@ final class HistoryBackfillCoordinator {
         lock.unlock()
 
         let finish: (TickOutcome?) -> Void = { [weak self] outcome in
-            self?.lock.lock()
-            self?.isRunning = false
-            self?.lock.unlock()
+            guard let self else {
+                completion?(outcome)
+                return
+            }
+            if let outcome {
+                self.pumpManager?.reportHistoryDoses(after: outcome, now: now)
+            }
+
+            self.lock.lock()
+            self.isRunning = false
+            let rerun = self.rerunRequested
+            self.rerunRequested = false
+            self.lock.unlock()
+
             completion?(outcome)
+            if rerun {
+                self.runTick()
+            }
         }
 
         // Reconcile the persisted bookkeeping against the pump actually connected before
@@ -128,8 +144,9 @@ final class HistoryBackfillCoordinator {
             }
 
             let emitFloor = HistoryBackfillPlanner.emitFloor(
-                hostFloor: self.pumpManager?.hostEventFloor,
-                bookkeeping: bookkeeping
+                bookkeeping: bookkeeping,
+                trackingSince: pumpManager.state.bolusReportLedger.trackingSince,
+                now: now
             )
 
             let plan = HistoryBackfillPlanner.plan(

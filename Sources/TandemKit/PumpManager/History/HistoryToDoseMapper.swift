@@ -9,12 +9,11 @@ import LoopKit
 /// optimistic doses, or persisted — those are the caller's job.
 ///
 /// Every event's `raw` is a `HistoryLogSyncIdentifier`, so a dose derived from history carries
-/// the same identity no matter when, or how often, the window containing it is fetched — and a
-/// bolus or temp rate carries the identity an optimistic report can mint from the pump-assigned
-/// id at command time, letting the history confirmation finalize that report in place instead of
-/// duplicating it. `DoseEntry.syncIdentifier` is the hex encoding of the same bytes, which is
-/// exactly what LoopKit derives from `raw` when the field is left nil — setting it explicitly
-/// just keeps the two spellings of the identity visibly equal.
+/// the same identity no matter when, or how often, the window containing it is fetched. The live
+/// path does not use these identities; `BolusReportLedger` is what maps a history bolus onto the
+/// live report of the same one (#344). `DoseEntry.syncIdentifier` is the hex encoding of the same
+/// bytes, which is exactly what LoopKit derives from `raw` when the field is left nil — setting it
+/// explicitly just keeps the two spellings of the identity visibly equal.
 final class HistoryToDoseMapper {
     /// Maps one fetched window of history logs to pump events, in ascending date order.
     ///
@@ -44,6 +43,7 @@ final class HistoryToDoseMapper {
         let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
         reconciler.recordClockChanges(in: sortedLogs)
 
+        let automaticBolusIds = Self.automaticBolusIds(in: sortedLogs)
         var bolusActivations: [Int: BolusActivatedHistoryLog] = [:]
         var tempBasalActivations: [Int: TempRateActivatedHistoryLog] = [:]
         var events: [NewPumpEvent] = []
@@ -59,6 +59,7 @@ final class HistoryToDoseMapper {
                     reconciler: reconciler,
                     pumpSerial: pumpSerial,
                     insulinType: insulinType,
+                    isAutomatic: automaticBolusIds.contains(completion.bolusId),
                     isCommandedBolus: isCommandedBolus
                 ))
             case let activation as TempRateActivatedHistoryLog:
@@ -131,6 +132,7 @@ final class HistoryToDoseMapper {
                 reconciler: reconciler,
                 pumpSerial: pumpSerial,
                 insulinType: insulinType,
+                isAutomatic: automaticBolusIds.contains(activation.bolusId),
                 isCommandedBolus: isCommandedBolus
             ))
         }
@@ -162,6 +164,24 @@ final class HistoryToDoseMapper {
         (units * 1000).rounded() / 1000
     }
 
+    /// Boluses the pump itself decided on. Explicit because Trio reads a nil `automatic` as an
+    /// SMB.
+    private static func automaticBolusIds(in logs: [HistoryLog]) -> Set<Int> {
+        var ids = Set<Int>()
+        for log in logs {
+            switch log {
+            case let delivery as BolusDeliveryHistoryLog where delivery.bolusSourceEnum == .controlIQAutoBolus:
+                ids.insert(delivery.bolusID)
+            case let request as BolusRequestedMsg2HistoryLog
+                where request.bolusOption == .automatic || request.bolusOption == .eatingSoonAutomatic:
+                ids.insert(request.bolusId)
+            default:
+                continue
+            }
+        }
+        return ids
+    }
+
     // MARK: - Event builders
 
     private func completedBolusEvent(
@@ -170,6 +190,7 @@ final class HistoryToDoseMapper {
         reconciler: HistoryTimestampReconciler,
         pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
         insulinType: InsulinType?,
+        isAutomatic: Bool,
         isCommandedBolus: (Int) -> Bool
     ) -> NewPumpEvent {
         let endDate = reconciler.utcDate(pumpTimeSec: completion.pumpTimeSec, sequenceNum: completion.sequenceNum)
@@ -191,9 +212,11 @@ final class HistoryToDoseMapper {
             description: "Bolus #\(completion.bolusId)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: insulinType,
+            automatic: isAutomatic,
             wasProgrammedByPumpUI: !isCommandedBolus(completion.bolusId)
         )
-        return NewPumpEvent(date: dose.endDate, dose: dose, raw: raw, title: "Bolus", type: .bolus)
+        // Dated at activation, like the in-flight report it finalizes.
+        return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Bolus", type: .bolus)
     }
 
     private func inFlightBolusEvent(
@@ -201,6 +224,7 @@ final class HistoryToDoseMapper {
         reconciler: HistoryTimestampReconciler,
         pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
         insulinType: InsulinType?,
+        isAutomatic: Bool,
         isCommandedBolus: (Int) -> Bool
     ) -> NewPumpEvent {
         let startDate = reconciler.utcDate(pumpTimeSec: activation.pumpTimeSec, sequenceNum: activation.sequenceNum)
@@ -213,6 +237,7 @@ final class HistoryToDoseMapper {
             description: "Bolus #\(activation.bolusId)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: insulinType,
+            automatic: isAutomatic,
             isMutable: true,
             wasProgrammedByPumpUI: !isCommandedBolus(activation.bolusId)
         )

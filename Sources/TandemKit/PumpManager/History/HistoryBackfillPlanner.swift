@@ -83,29 +83,23 @@ enum HistoryBackfillPlanner {
         return max(lookbackTarget, firstSeenFloor)
     }
 
-    /// The earliest date events may be *reported* for: the later of what the host app will
-    /// accept and what this pump's bookkeeping allows.
+    /// The earliest date a dose may be *reported* for.
     ///
-    /// The host's floor (`PumpManagerDelegate.startDateToFilterNewPumpEvents`) moves forward as
-    /// its own store ages out; events below it are discarded on arrival, so emitting them is
-    /// wasted work. The bookkeeping's floor is set when a pump is first seen and never moves,
-    /// which is what separates a *re-paired* pump (same serial, original floor kept, so the gap
-    /// while the app was away is still reportable) from a *replacement* pump (new serial, a fresh
-    /// floor one lookback back, so nothing but its still-acting insulin reaches the loop).
+    /// `firstSeenFloor` keeps a replacement pump's pre-service history out; `trackingSince` keeps
+    /// out boluses from before the driver recorded which ones it commanded (see
+    /// `BolusReportLedger`); the retention window bounds the rest. The host's
+    /// `startDateToFilterNewPumpEvents` is deliberately not a term (#345): Trio returns
+    /// `lastEventDate - 15min` and drops nothing itself, so flooring on it would lose a pump-UI
+    /// bolus found one sync late, and under-reported IOB is the over-delivery direction.
     ///
     /// Derived per tick, never written back: persisting it would ratchet `firstSeenFloor`
     /// forward and starve the walk.
-    static func emitFloor(hostFloor: Date?, bookkeeping: HistoryBackfillState?) -> Date? {
-        switch (hostFloor, bookkeeping?.firstSeenFloor) {
-        case let (hostFloor?, pumpFloor?):
-            return max(hostFloor, pumpFloor)
-        case let (hostFloor?, nil):
-            return hostFloor
-        case let (nil, pumpFloor?):
-            return pumpFloor
-        case (nil, nil):
-            return nil
-        }
+    static func emitFloor(bookkeeping: HistoryBackfillState?, trackingSince: Date, now: Date) -> Date {
+        max(
+            bookkeeping?.firstSeenFloor ?? .distantPast,
+            trackingSince,
+            now.addingTimeInterval(-BolusReportLedger.retention)
+        )
     }
 
     /// Build a tick's plan.

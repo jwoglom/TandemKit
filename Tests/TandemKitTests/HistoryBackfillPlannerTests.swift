@@ -203,38 +203,31 @@ final class HistoryBackfillPlannerTests: XCTestCase {
 
     // MARK: - Emit floor
 
-    func testEmitFloorTakesTheLaterOfHostAndPumpFloors() {
-        let older = Date(timeIntervalSinceReferenceDate: 1000)
-        let newer = Date(timeIntervalSinceReferenceDate: 2000)
+    func testEmitFloorTakesTheLatestOfPumpFloorTrackingStartAndRetention() {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let recent = now.addingTimeInterval(-.hours(2))
+        let older = now.addingTimeInterval(-.hours(5))
 
         XCTAssertEqual(
             HistoryBackfillPlanner.emitFloor(
-                hostFloor: older,
-                bookkeeping: bookkeeping(watermark: 2, firstSeenFloor: newer)
+                bookkeeping: bookkeeping(watermark: 2, firstSeenFloor: recent),
+                trackingSince: older,
+                now: now
             ),
-            newer
+            recent
         )
         XCTAssertEqual(
             HistoryBackfillPlanner.emitFloor(
-                hostFloor: newer,
-                bookkeeping: bookkeeping(watermark: 2, firstSeenFloor: older)
+                bookkeeping: bookkeeping(watermark: 2, firstSeenFloor: older),
+                trackingSince: recent,
+                now: now
             ),
-            newer
+            recent
         )
-    }
-
-    func testEmitFloorFallsBackToWhicheverSideIsKnown() {
-        let date = Date(timeIntervalSinceReferenceDate: 1000)
-
-        XCTAssertEqual(HistoryBackfillPlanner.emitFloor(hostFloor: date, bookkeeping: nil), date)
         XCTAssertEqual(
-            HistoryBackfillPlanner.emitFloor(
-                hostFloor: nil,
-                bookkeeping: bookkeeping(watermark: 2, firstSeenFloor: date)
-            ),
-            date
+            HistoryBackfillPlanner.emitFloor(bookkeeping: nil, trackingSince: .distantPast, now: now),
+            now.addingTimeInterval(-BolusReportLedger.retention)
         )
-        XCTAssertNil(HistoryBackfillPlanner.emitFloor(hostFloor: nil, bookkeeping: nil))
     }
 
     // MARK: - Bookkeeping identity
