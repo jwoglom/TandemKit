@@ -19,6 +19,10 @@ public enum HistoryLogParser {
             return ReminderActivatedHistoryLog(cargo: raw)
         case AlertAckHistoryLog.typeId:
             return AlertAckHistoryLog(cargo: raw)
+        case DismissNotificationResponseHistoryLog.typeId:
+            return DismissNotificationResponseHistoryLog(cargo: raw)
+        case AamAnnunciationHistoryLog.typeId:
+            return AamAnnunciationHistoryLog(cargo: raw)
         case AlertClearedHistoryLog.typeId:
             return AlertClearedHistoryLog(cargo: raw)
         case ReminderDismissedHistoryLog.typeId:
