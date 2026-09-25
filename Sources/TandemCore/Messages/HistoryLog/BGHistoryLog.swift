@@ -14,6 +14,7 @@ public class BGHistoryLog: HistoryLog {
     public static let typeId = 16
 
     public let bg: Int
+    /// 1 if this BG was used to calibrate the CGM (logged beside a CGM calibration with the same BG).
     public let cgmCalibration: Int
     public let bgSourceId: Int
     public let iob: Float
@@ -111,7 +112,21 @@ public class BGHistoryLog: HistoryLog {
         LastBGResponse.BgSource(rawValue: bgSourceId)
     }
 
+    public var isUsedForCgmCalibration: Bool { cgmCalibration != 0 }
+
+    public var selectedIOBType: BolusRequestedMsg2HistoryLog.SelectedIOBType? {
+        BolusRequestedMsg2HistoryLog.SelectedIOBType(rawValue: selectedIOB)
+    }
+
+    public var bgSourceTypeEnum: BgSourceType? { BgSourceType(rawValue: bgSourceType) }
+
+    /// Names from Tandem's cloud schema; `remoteEntry` BGs are the ones that precede Bluetooth (app) boluses.
+    public enum BgSourceType: Int {
+        case localPumpEntry = 0
+        case remoteEntry = 1
+    }
+
     public var description: String {
-        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), selectedIOB=\(selectedIOB), bgSourceType=\(bgSourceType), spare=\(spare))"
+        "BGHistoryLog(cargo=\(cargo.hexadecimalString), bg=\(bg), cgmCalibration=\(cgmCalibration), bgSource=\(String(describing: bgSource)), bgSourceId=\(bgSourceId), iob=\(iob), targetBG=\(targetBG), isf=\(isf), selectedIOB=\(selectedIOB), selectedIOBType=\(String(describing: selectedIOBType)), bgSourceType=\(bgSourceType), bgSourceTypeEnum=\(String(describing: bgSourceTypeEnum)), spare=\(spare))"
     }
 }
