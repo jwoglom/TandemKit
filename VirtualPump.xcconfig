@@ -1,0 +1,8 @@
+// Builds TandemKit against the faketandem stand-in for CoreBluetooth
+// (Sources/TandemKit/PumpManager/VirtualPump). Debug builds only: VirtualCoreBluetooth.swift
+// refuses to compile without DEBUG, which $(inherited) keeps.
+//
+//   xcodebuild ... -xcconfig VirtualPump.xcconfig
+//
+// Applies to every target in the build; only TandemKit reads the condition.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) TANDEMKIT_VIRTUAL_PUMP

@@ -30,6 +30,7 @@ playground.xcworkspace
 # .swiftpm
 
 .build/
+.build-virtual/
 
 # CocoaPods
 #
@@ -75,3 +76,5 @@ build
 # disjoint dependencies per platform, so every Linux `swift build` rewrites the
 # root file with pins the Apple branch never uses -- and vice versa.
 /Package.resolved
+.derived-data/
+.derived-data-virtual-pump/

@@ -41,6 +41,13 @@ SOURCE_TARGET_PAIRS = [
 # target, so adding a new test directory cannot bypass the check.
 TEST_TARGET = "TandemKitTests"
 
+# Test directories that compile into their own bundle instead of TEST_TARGET.
+# The integration tests need a running faketandem (docs/integration-harness.md),
+# so they live in a separate target and scheme the unit-test CI never runs.
+TEST_TARGET_OVERRIDES = {
+  "Tests/TandemKitIntegrationTests" => "TandemKitIntegrationTests"
+}.freeze
+
 def repo_root
   Pathname.new(__dir__).join("..").realpath
 end
@@ -73,7 +80,7 @@ end
 # without anyone having to remember to register it here.
 def test_target_pairs(root)
   relative_dirs_under(root, "Tests").map do |rel|
-    { target: TEST_TARGET, source_root: rel }
+    { target: TEST_TARGET_OVERRIDES.fetch(rel, TEST_TARGET), source_root: rel }
   end
 end
 
