@@ -13,6 +13,8 @@ final class BolusActivatedHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.selectedIob, 1)
+        XCTAssertEqual(parsed.selectedIobType, .swanIOBMeal)
     }
 
     func testBolusActivatedHistoryLog2() {
@@ -49,6 +51,7 @@ final class BolusActivatedHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertEqual(parsed.bolusId, 2903)
         XCTAssertEqual(parsed.selectedIob, 0)
+        XCTAssertEqual(parsed.selectedIobType, .mudaliarIOB)
         XCTAssertEqual(parsed.iob.bitPattern, 0x3f9eec42)
         XCTAssertEqual(parsed.bolusSize.bitPattern, 0x3e19999a)
     }
