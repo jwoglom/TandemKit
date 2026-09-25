@@ -288,7 +288,7 @@ final class DailyBasalHistoryLogTests: XCTestCase {
             )
         )
         XCTAssertEqual(65, parsed.batteryChargeRaw)
-        XCTAssertEqual(65.0, Double(parsed.batteryChargeRaw), accuracy: 0.0)
+        XCTAssertEqual(65.0, parsed.batteryChargePercent, accuracy: 0.0)
     }
 
     func testLowBatteryChargeIsReportedAsLow() {
@@ -308,7 +308,7 @@ final class DailyBasalHistoryLogTests: XCTestCase {
             expected
         )
         XCTAssertEqual(20, parsed.batteryChargeRaw)
-        XCTAssertEqual(20.0, Double(parsed.batteryChargeRaw), accuracy: 0.0)
+        XCTAssertEqual(20.0, parsed.batteryChargePercent, accuracy: 0.0)
         XCTAssertEqual(3714, parsed.lipoMv)
     }
 
@@ -362,6 +362,7 @@ final class DailyBasalHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertTrue(parsed.finalEventForDay)
         XCTAssertEqual(92, parsed.batteryChargeRaw)
+        XCTAssertEqual(92.0, parsed.batteryChargePercent, accuracy: 0.0)
         XCTAssertEqual(4104, parsed.lipoMv)
     }
 
@@ -388,6 +389,7 @@ final class DailyBasalHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertTrue(parsed.finalEventForDay)
         XCTAssertEqual(92, parsed.batteryChargeRaw)
+        XCTAssertEqual(92.0, parsed.batteryChargePercent, accuracy: 0.0)
         XCTAssertEqual(4104, parsed.lipoMv)
     }
 
@@ -415,6 +417,30 @@ final class DailyBasalHistoryLogTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
         XCTAssertFalse(parsed.finalEventForDay)
         XCTAssertEqual(88, parsed.batteryChargeRaw)
+        XCTAssertEqual(88.0, parsed.batteryChargePercent, accuracy: 0.0)
         XCTAssertEqual(4061, parsed.lipoMv)
+    }
+
+    func testMobiFinalEventForDayBeforeDateChange() {
+        // 18:20:34 pump-local; the next record is a DateChange written in the same second.
+        let expected = DailyBasalHistoryLog(
+            pumpTimeSec: 585_166_834,
+            sequenceNum: 630_725,
+            dailyTotalBasal: Float(bitPattern: 0x4121_FC96),
+            lastBasalRate: 0.0,
+            iob: Float(bitPattern: 0x3F2D_08EA),
+            finalEventForDay: true,
+            batteryChargeRaw: 51,
+            lipoMv: 3819
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "5110f2efe022c59f090096fc214100000000ea082d3f0133eb0e",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertTrue(parsed.finalEventForDay)
+        XCTAssertEqual(51.0, parsed.batteryChargePercent, accuracy: 0.0)
+        XCTAssertEqual(3819, parsed.lipoMv)
     }
 }
