@@ -8,9 +8,6 @@ public class CgmStopSessionG7HistoryLog: HistoryLog {
     public let currentTransmitterTime: UInt32
     public let sessionStartTime: UInt32
     public let sessionStopTime: UInt32
-    // Java reads these three trailing bytes directly into `int` fields without masking to
-    // 0xFF (unlike the sibling GX classes below), so a byte >= 0x80 decodes as negative here,
-    // matching pumpX2 exactly.
     public let stopSessionCode: Int
     public let sessionStopReason: Int
     public let sessionDuration: Int
@@ -19,9 +16,9 @@ public class CgmStopSessionG7HistoryLog: HistoryLog {
         currentTransmitterTime = Bytes.readUint32(cargo, 10)
         sessionStartTime = Bytes.readUint32(cargo, 14)
         sessionStopTime = Bytes.readUint32(cargo, 18)
-        stopSessionCode = Int(Int8(bitPattern: cargo[23]))
-        sessionStopReason = Int(Int8(bitPattern: cargo[24]))
-        sessionDuration = Int(Int8(bitPattern: cargo[25]))
+        stopSessionCode = Int(cargo[24])
+        sessionStopReason = Int(cargo[23])
+        sessionDuration = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
@@ -92,10 +89,9 @@ public class CgmStopSessionG7HistoryLog: HistoryLog {
                 Bytes.toUint32(currentTransmitterTime),
                 Bytes.toUint32(sessionStartTime),
                 Bytes.toUint32(sessionStopTime),
-                Data([0]), // unused padding byte at offset 22
-                Data([UInt8(bitPattern: Int8(truncatingIfNeeded: stopSessionCode))]),
-                Data([UInt8(bitPattern: Int8(truncatingIfNeeded: sessionStopReason))]),
-                Data([UInt8(bitPattern: Int8(truncatingIfNeeded: sessionDuration))])
+                Data([UInt8(sessionDuration & 0xFF)]),
+                Data([UInt8(sessionStopReason & 0xFF)]),
+                Data([UInt8(stopSessionCode & 0xFF)])
             )
         )
     }
