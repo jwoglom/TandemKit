@@ -303,6 +303,10 @@ public enum HistoryLogParser {
             return ControlIQPcmChangeHistoryLog(cargo: raw)
         case BasalDeliveryHistoryLog.typeId:
             return BasalDeliveryHistoryLog(cargo: raw)
+        case BolusDeliverySummaryHistoryLog.typeId:
+            return BolusDeliverySummaryHistoryLog(cargo: raw)
+        case PumpDriveEventHistoryLog.typeId:
+            return PumpDriveEventHistoryLog(cargo: raw)
         case BolusDeliveryHistoryLog.typeId:
             return BolusDeliveryHistoryLog(cargo: raw)
         default:
