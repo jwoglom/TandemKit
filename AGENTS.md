@@ -342,7 +342,6 @@ Responses:
 - [x] BolusRequestedMsg1HistoryLog
 - [x] BolusRequestedMsg2HistoryLog
 - [x] BolusRequestedMsg3HistoryLog
-- [x] CGMHistoryLog
 - [x] CannulaFilledHistoryLog
 - [x] CarbEnteredHistoryLog
 - [x] CartridgeFilledHistoryLog
@@ -356,6 +355,7 @@ Responses:
 - [x] DailyBasalHistoryLog
 - [x] DataLogCorruptionHistoryLog
 - [x] DateChangeHistoryLog
+- [x] DexcomG6CGMHistoryLog
 - [x] FactoryResetHistoryLog
 - [x] HistoryLog
 - [x] HistoryLogParser
