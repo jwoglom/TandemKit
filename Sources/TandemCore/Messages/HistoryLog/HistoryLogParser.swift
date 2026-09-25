@@ -125,6 +125,10 @@ public enum HistoryLogParser {
             return HistoryRequestRangeHistoryLog(cargo: raw)
         case ControlRequestCountersHistoryLog.typeId:
             return ControlRequestCountersHistoryLog(cargo: raw)
+        case ControlStreamCountersHistoryLog.typeId:
+            return ControlStreamCountersHistoryLog(cargo: raw)
+        case AuthorizationCountersHistoryLog.typeId:
+            return AuthorizationCountersHistoryLog(cargo: raw)
         case CgmStopSessionG7HistoryLog.typeId:
             return CgmStopSessionG7HistoryLog(cargo: raw)
         case CorrectionDeclinedHistoryLog.typeId:
