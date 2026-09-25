@@ -243,6 +243,12 @@ public enum HistoryLogParser {
             return BolexCompletedHistoryLog(cargo: raw)
         case CartridgeFilledHistoryLog.typeId:
             return CartridgeFilledHistoryLog(cargo: raw)
+        case ReservoirEstimateHistoryLog.typeId:
+            return ReservoirEstimateHistoryLog(cargo: raw)
+        case CartridgeFillResponseHistoryLog.typeId:
+            return CartridgeFillResponseHistoryLog(cargo: raw)
+        case PumpButtonHistoryLog.typeId:
+            return PumpButtonHistoryLog(cargo: raw)
         case UsbConnectedHistoryLog.typeId:
             return UsbConnectedHistoryLog(cargo: raw)
         case UsbDisconnectedHistoryLog.typeId:
