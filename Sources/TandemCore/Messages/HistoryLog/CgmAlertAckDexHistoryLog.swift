@@ -5,17 +5,28 @@ public class CgmAlertAckDexHistoryLog: HistoryLog {
 
     public let alertId: Int
 
-    /// The type of glucose sensor which raised the alert. Constant (3) in every captured record;
-    /// the meaning of other values is unconfirmed.
+    /// CGMSensorType ordinal; Tandem's export schema lists 0 Invalid, 1 Dexcom G6, 3 Dexcom G7.
+    /// Every captured record has 3, all from Dexcom G7 sessions.
     public let sensorType: Int
 
-    /// Identifies what acknowledged the alert (e.g. pump GUI vs. a paired device). Field name is
-    /// taken from tconnectsync's cloud-export schema; only value 0 (unacknowledged/default) and 1
-    /// are present in the capture used to validate this field.
+    /// Raw `AckSource`: 0 acknowledged by the user, 1 by software (Tandem's export schema).
     public let ackSource: UInt32
 
     public var alert: CGMAlertStatusResponse.CGMAlert? {
         CGMAlertStatusResponse.CGMAlert(rawValue: alertId)
+    }
+
+    public var sensorTypeEnum: CGMStatusV2Response.CGMSensorType {
+        CGMStatusV2Response.CGMSensorType(rawValue: sensorType) ?? .unknown
+    }
+
+    public var ackSourceEnum: AckSource? {
+        AckSource(rawValue: ackSource)
+    }
+
+    public enum AckSource: UInt32 {
+        case user = 0
+        case software = 1
     }
 
     public required init(cargo: Data) {
