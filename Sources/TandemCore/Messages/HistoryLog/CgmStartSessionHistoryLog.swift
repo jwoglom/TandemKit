@@ -15,7 +15,7 @@ public class CgmStartSessionHistoryLog: HistoryLog {
     public required init(cargo: Data) {
         currentTransmitterTime = Bytes.readUint32(cargo, 10)
         sessionStartTime = Bytes.readUint32(cargo, 14)
-        sessionDuration = Int(cargo[25])
+        sessionDuration = Int(cargo[22])
         super.init(cargo: cargo)
     }
 
@@ -63,7 +63,7 @@ public class CgmStartSessionHistoryLog: HistoryLog {
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(currentTransmitterTime),
                 Bytes.toUint32(sessionStartTime),
-                Data([0, 0, 0, 0, 0, 0, 0]),
+                Data([0, 0, 0, 0]),
                 Data([UInt8(sessionDuration & 0xFF)])
             )
         )
