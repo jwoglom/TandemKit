@@ -40,6 +40,7 @@ final class BolusDeliveryHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.bolusDeliveryStatusEnum, .completed)
     }
 
     func testBolusDeliveryHistoryLog3() {
@@ -56,6 +57,8 @@ final class BolusDeliveryHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.bolusDeliveryStatusEnum, .started)
+        XCTAssertEqual(parsed.deliveredTotal, 0)
     }
 
     // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE
@@ -83,6 +86,7 @@ final class BolusDeliveryHistoryLogTests: XCTestCase {
         XCTAssertEqual(parsed.bolusTypeBitmask, 5)
         XCTAssertEqual(parsed.bolusTypes, [.now, .override])
         XCTAssertEqual(parsed.bolusDeliveryStatus, 1)
+        XCTAssertEqual(parsed.bolusDeliveryStatusEnum, .started)
         XCTAssertEqual(parsed.requestedNow, 150)
         XCTAssertEqual(parsed.deliveredTotal, 0)
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
@@ -108,8 +112,38 @@ final class BolusDeliveryHistoryLogTests: XCTestCase {
         XCTAssertEqual(parsed.bolusTypeBitmask, 5)
         XCTAssertEqual(parsed.bolusTypes, [.now, .override])
         XCTAssertEqual(parsed.bolusDeliveryStatus, 0)
+        XCTAssertEqual(parsed.bolusDeliveryStatusEnum, .completed)
         XCTAssertEqual(parsed.requestedNow, 150)
         XCTAssertEqual(parsed.deliveredTotal, 150)
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+    }
+
+    // Tandem Mobi, official Tandem app, March 2025 BLE capture: the `started` record of extended
+    // bolus 248 (2 U, all extended over 480 min, LATER|OVERRIDE), nothing delivered yet.
+    func testBolusDeliveryHistoryLogMobiExtendedBolusStarted() {
+        let expected = BolusDeliveryHistoryLog(
+            pumpTimeSec: 543715895, sequenceNum: 68928, bolusID: 248, bolusDeliveryStatus: 1,
+            bolusTypeBitmask: 6, // .later, .override
+            bolusSource: 8, // .bluetoothRemoteBolus
+            remoteId: 248, requestedNow: 0, requestedLater: 2000, correction: 0,
+            extendedDurationRequested: 480, deliveredTotal: 0
+        ).withHeaderHighNibble(1)
+
+        let parsed = HistoryLogMessageTester.testSingle(
+            "181137726820400d0100f800010608f80000d0070000e0010000",
+            expected
+        )
+        MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.bolusDeliveryStatusEnum, .started)
+        XCTAssertEqual(parsed.bolusTypes, [.later, .override])
+        XCTAssertEqual(parsed.requestedLater, 2000)
+        XCTAssertEqual(parsed.extendedDurationRequested, 480)
+        XCTAssertEqual(parsed.deliveredTotal, 0)
+    }
+
+    func testBolusDeliveryStatusRawValues() {
+        XCTAssertEqual(BolusDeliveryHistoryLog.BolusDeliveryStatus(rawValue: 0), .completed)
+        XCTAssertEqual(BolusDeliveryHistoryLog.BolusDeliveryStatus(rawValue: 1), .started)
+        XCTAssertNil(BolusDeliveryHistoryLog.BolusDeliveryStatus(rawValue: 2))
     }
 }
