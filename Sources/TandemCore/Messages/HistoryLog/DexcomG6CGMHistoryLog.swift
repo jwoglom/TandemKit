@@ -16,9 +16,9 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
     public required init(cargo: Data) {
         glucoseValueStatus = Bytes.readShort(cargo, 10)
         cgmDataType = Int(cargo[12])
-        rate = Int(cargo[13])
+        rate = Int(Int8(bitPattern: cargo[13]))
         algorithmState = Int(cargo[14])
-        rssi = Int(cargo[15])
+        rssi = Int(Int8(bitPattern: cargo[15]))
         currentGlucoseDisplayValue = Bytes.readShort(cargo, 16)
         timeStampSeconds = Bytes.readUint32(cargo, 18)
         egvInfoBitmask = Bytes.readShort(cargo, 22)
