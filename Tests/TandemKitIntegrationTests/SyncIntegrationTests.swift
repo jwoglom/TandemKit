@@ -3,13 +3,6 @@ import LoopKit
 import XCTest
 
 final class SyncIntegrationTests: FaketandemIntegrationTestCase {
-    /// faketandem's InsulinStatusResponse handler (pkg/handler/dynamic_status.go) sends
-    /// `Reservoir.CurrentUnits * 100`, but the field is whole units on a real pump (TandemKit's
-    /// Sept 2026 Mobi captures in PumpingSuspendedHistoryLogTests: 150, 105, 90), so the driver
-    /// reports a 137 U cartridge as 13699 U. Strict: once the emulator is fixed this flags.
-    private static let reservoirScaleGap =
-        "faketandem: InsulinStatusResponse.currentInsulinAmount is scaled x100 (centi-units); real pumps report whole units"
-
     func testSyncPumpDataReportsStatusReservoirAndTheReconciliationBoundary() throws {
         let driver = makeDriver()
         try harness.pair(driver)
@@ -26,10 +19,8 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
 
         XCTAssertEqual(driver.delegate.reservoirReadings.count, 1, "one reservoir report per sync")
         XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
-        XCTExpectFailure(Self.reservoirScaleGap) {
-            XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
-            XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
-        }
+        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
+        XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
         XCTAssertEqual(driver.manager.state.lastBatteryReading?.chargeRemaining, 0.64)
 
         let batches = Array(driver.delegate.pumpEventBatches.dropFirst(batchesBefore))
