@@ -23,8 +23,8 @@ import XCTest
         coordinator = HistoryBackfillCoordinator(pumpManager: manager)
     }
 
-    /// Fetching is gated behind the `historyBackfill` flag, which is off by default. Every test
-    /// below drives the read path, so they turn it on; the default has its own tests.
+    /// Fetching is gated behind the `historyBackfill` flag. It is on by default, but every test
+    /// below drives the read path, so they pin it on rather than depend on the default.
     private static func backfillEnabledState() -> TandemPumpManagerState {
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
@@ -467,14 +467,23 @@ import XCTest
 
     // MARK: - Feature flags
 
-    /// Off by default, and off means nothing at all — not even the status read a plan is
-    /// derived from.
-    func testNoHistoryIsReadWhileTheBackfillFlagIsOff() {
+    func testAFreshInstallReadsHistory() throws {
         bluetooth = StubPumpBluetooth()
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
         coordinator = HistoryBackfillCoordinator(pumpManager: manager)
         setPumpSerial()
-        XCTAssertFalse(manager.state.featureFlags.historyBackfill, "Off unless a user turns it on")
+        stubStatus(first: 1, last: 10)
+        stubHistoryStream()
+
+        let outcome = try XCTUnwrap(runTick())
+
+        XCTAssertEqual(outcome.rangesRead, [1 ... 10])
+    }
+
+    /// Off means nothing at all — not even the status read a plan is derived from.
+    func testNoHistoryIsReadWhileTheBackfillFlagIsOff() {
+        manager.state.featureFlags[.historyBackfill] = false
+        setPumpSerial()
         stubStatus(first: 1, last: 10)
         stubHistoryStream()
 
@@ -487,9 +496,7 @@ import XCTest
 
     /// Turning it on later must read everything, not resume from a watermark written while off.
     func testTurningTheFlagOnReadsTheHistoryItSkipped() throws {
-        bluetooth = StubPumpBluetooth()
-        manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
-        coordinator = HistoryBackfillCoordinator(pumpManager: manager)
+        manager.state.featureFlags[.historyBackfill] = false
         setPumpSerial()
         stubStatus(first: 1, last: 10)
         stubHistoryStream()
@@ -522,6 +529,7 @@ import XCTest
     /// Reporting means nothing without the read that produces something to report.
     func testDoseReportingStaysOffWithoutTheBackfill() {
         var flags = TandemFeatureFlags()
+        flags[.historyBackfill] = false
         flags[.historyDoseReporting] = true
 
         XCTAssertFalse(flags.historyDoseReporting, "Needs History Backfill on as well")

@@ -557,7 +557,9 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
      `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
      `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
      event kicks a tick as well.
-   - Two feature flags, both off by default. `historyBackfill` runs the whole thing: while off,
+   - Two feature flags: `historyBackfill` is on by default, `historyDoseReporting` is off. The
+     flags screen reveals itself when any flag is off its default, so a user who turned the backfill
+     off can still find it. `historyBackfill` runs the whole thing: while off,
      `runTick` returns immediately and the pump's history log is never read. `historyDoseReporting`
      decides whether doses found in that history reach the app's insulin history; it is `&&`-ed
      with `historyBackfill`, since there is nothing to report from a log never read. Neither is a
