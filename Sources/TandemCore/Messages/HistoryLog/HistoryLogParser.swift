@@ -37,6 +37,12 @@ public enum HistoryLogParser {
             return BolusActivatedHistoryLog(cargo: raw)
         case BolusCompletedHistoryLog.typeId:
             return BolusCompletedHistoryLog(cargo: raw)
+        case BolusIobEntryHistoryLog.typeId:
+            return BolusIobEntryHistoryLog(cargo: raw)
+        case IobSnapshotPreBolusHistoryLog.typeId:
+            return IobSnapshotPreBolusHistoryLog(cargo: raw)
+        case IobSnapshotPostBolusHistoryLog.typeId:
+            return IobSnapshotPostBolusHistoryLog(cargo: raw)
         case CgmAlertAckDexHistoryLog.typeId:
             return CgmAlertAckDexHistoryLog(cargo: raw)
         case CgmAlertActivatedDexHistoryLog.typeId:
