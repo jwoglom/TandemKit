@@ -40,6 +40,8 @@ final class BolusRequestedMsg1HistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.carbRatio, 6000)
+        XCTAssertEqual(parsed.carbRatioGramsPerUnit, 6.0)
     }
 
     // Observed on a Tandem Mobi driven by Trio (Control-IQ off, no CGM paired), Sept 2026 BLE
@@ -60,5 +62,6 @@ final class BolusRequestedMsg1HistoryLogTests: XCTestCase {
         XCTAssertEqual(BolusRequestedMsg1HistoryLog.BolusType.REMOTE, parsed.bolusType)
         XCTAssertEqual(2903, parsed.bolusId)
         XCTAssertFalse(parsed.correctionBolusIncluded)
+        XCTAssertEqual(parsed.carbRatioGramsPerUnit, 0.0)
     }
 }
