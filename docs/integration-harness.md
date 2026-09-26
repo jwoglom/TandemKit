@@ -95,9 +95,64 @@ it simply reports skips.
   test can move the driver's idea of time (bolus estimated end, sync throttles) without
   waiting; the emulator stays on its own clock unless a test drives `/api/clock`.
 - `FaketandemClient` is the HTTP surface: pairing state, `/api/state` snapshot and direct
-  writes, `/api/clock`, pump-initiated actions (bolus, temp basal, suspend/resume,
-  history, qualifying events), the request log, faults, the link's ATT MTU
-  (`transport()` / `setATTMTU(_:)`), and the legacy settings table.
+  writes, `/api/clock`, the history feed (`history(since:)`, paging `GET /api/history` to
+  the end), pump-initiated actions (bolus, temp basal, suspend/resume, history, qualifying
+  events), the request log, faults, the link's ATT MTU (`transport()` / `setATTMTU(_:)`),
+  and the legacy settings table.
+
+### Pump time is local time
+
+A Tandem pump keeps its clock in **local time with no zone attached**: its pump-epoch
+seconds count from 2008-01-01 00:00:00 as read on the pump's own clock, and every consumer
+decodes on that assumption — TandemKit's `Dates.fromJan12008ToUnixEpochSeconds` subtracts
+`TimeZone.current.secondsFromGMT()`. The emulator encodes the same way, so two separate
+offsets sit between its clock and the wire and they mean different things:
+
+| `/api/clock` field | Meaning |
+| --- | --- |
+| `pump_timezone` | The IANA zone the pump keeps its clock in; settable, which is how a test reproduces a traveling pump or a DST boundary. `UTC` turns the convention off. |
+| `pump_timezone_offset_seconds` | That zone's offset in force at `pump_now`. Read-only, and the quantity a decoder subtracts back out. |
+| `pump_offset_seconds` | A genuine **skew**: a lie the pump tells about the time, stacked on the zone, which moves every wire timestamp without touching delivery arithmetic. |
+
+One rule governs every time field the harness reports. Wall-clock fields (`time`,
+`start_time`, `end_time`, `temp_start`, `temp_end`, `cleared_time`) are **true instants**
+on the pump's Clock, RFC 3339 in UTC. `*_pump_seconds` / `pump_seconds` / `pump_time`
+fields are **what went on the wire**, with both offsets applied. Either is derivable from
+the other:
+
+```
+unix(time) = pump_seconds + 1_199_145_600 - pump_timezone_offset_seconds - pump_offset_seconds
+```
+
+`ConformanceClock` puts the emulator in the test process's own zone and leaves
+`pump_offset_seconds` at 0, so a dose's second on the driver side is the second the pump
+recorded; `setSkew(_:)` adds a real skew on top for the clock-skew scenarios.
+
+### History records
+
+`GET /api/history?since=&limit=` is the full feed (`since` exclusive, `next_since` to
+resume, `truncated` when the limit cut the page short). The 50-record tail in `GET
+/api/state` stays as a convenience, but a scenario that runs for a while loses records off
+its front without being told, so `PumpTimeline` is built from the feed.
+
+Each record separates what the wire carries from what it cannot. `data` holds the record's
+own wire fields, named exactly as pumpX2 and TandemKit name them and nothing else —
+`BolusActivated` `bolusSize`, `BolusCompleted` `insulinDelivered` / `insulinRequested` /
+`completionStatusId`, `TempRateActivated` `percent` / `durationMilliseconds` /
+`tempRateId`, `TempRateCompleted` `tempRateId` / `timeLeft`, `PumpingSuspended` `reasonId`,
+`AlarmActivated` and `AlarmCleared` `alarmId`. `extra` holds the pump-side context a
+26-byte record has no room for: a bolus's `bolusSourceId`, a temp rate's `tempRate` /
+`normalRate` / `deliveredUnits`, the string `reason` behind a suspend, the
+`alertTypeName` behind an alarm. `source_nibble` is the high nibble of the type-id word.
+
+`completionStatusId` is the end reason, and it decodes as pumpX2's
+`LastBolusStatusAbstractResponse.BolusStatus`: 0 `STOPPED_USER_TERMINATED`, 1
+`STOPPED_ALARM`, 2 `STOPPED_MALFUNCTION`, 3 `COMPLETE`, 4 `STOPPED_WIRELESS`, 5
+`REJECTED_WIRELESS`, 6 `TERMINATED_PLGS`.
+
+`GET /api/state` also carries `alarms_history`: every alarm that has been raised *and*
+cleared, with both ends of the interval. `alerts` only ever reports what stands now, so
+without it an alarm that came and went leaves nothing a timeline can close.
 - `FaketandemControlSocket` is the websocket surface for what only exists as websocket
   commands: pairing code, long-term key, pump-side disconnect, and the pairing status with
   the key bytes. One socket is shared for the whole test process; the emulator accepts
@@ -124,6 +179,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `SyncIntegrationTests` | `syncPumpData` reports a status update, one reservoir reading, the reconciliation boundary as an empty non-replacing batch; a second sync is quiet and advances the boundary. |
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
+| `Conformance/` | The dose-reporting conformance groups A–D (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency and pump-side failures, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -153,8 +209,9 @@ and a few seconds per pairing.
    `harness.client.snapshot()` / `harness.requestsSeen()`.
 5. If the assertion fails because of the emulator, do not bend the driver: wrap the
    assertion in a strict `XCTExpectFailure` whose message names the emulator gap, list the
-   gap under "Known emulator gaps", and keep the pump-side evidence in the test. There are
-   no such wrappers today.
+   gap under "Known emulator gaps", and keep the pump-side evidence in the test. Strict is
+   the point: when the emulator is fixed the wrapper becomes an unexpected pass and the
+   suite tells you to take it out.
 
 New files under `Tests/TandemKitIntegrationTests/` must be members of the
 `TandemKitIntegrationTests` target; `ruby scripts/check_xcodeproj_source_membership.rb
@@ -179,9 +236,33 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-None open. Every gap the harness found has been fixed in faketandem, so no test carries an
-`XCTExpectFailure`; a new one should be added the way "Adding a test" describes. What was
-fixed, because the shape of it explains what the harness is for:
+One open, in `PumpSideConformanceTests` (plan D3):
+
+- **An armed `error_response` is applied on the response path**
+  (`pkg/handler/router.go` `sendWithFaults`), after the handler has already run. A pump
+  answering `ErrorResponse` to `InitiateBolusRequest` did not start the bolus; the emulator
+  starts it and then replaces the answer, so the driver's error arrives over a pump that is
+  delivering.
+
+Everything else the harness found has been fixed in faketandem. What was fixed, because the
+shape of it explains what the harness is for:
+
+- **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler
+  applied a basal state with the temp rate cleared and recorded only activations, and a
+  suspend set a flag, so a temp rate a driver stopped — or replaced, or suspended away —
+  stayed open forever in a timeline built from the history log and no cancel-or-replace
+  scenario could close its diff. Every path that ends delivery now goes through one writer
+  (`pkg/state/delivery.go`), which records the ending exactly once at the true end instant.
+- **Wire timestamps were pump-epoch seconds counted from UTC.** A real pump counts from its
+  own local clock, so every timestamp the driver decoded landed one UTC offset away from
+  the pump's own record — four hours in EDT — which is invisible until something compares a
+  dose's second. The pump's zone is a first-class setting now, and separate from the skew.
+- **History records were assembled at each call site**, so the same event reached a driver
+  with different field names depending on which path produced it, and the simulator's
+  `BolusCompleted` carried no end reason at all — a completed bolus was indistinguishable
+  from a canceled one. One writer per type settles it.
+- **A canceled bolus was reported with end reason 2**, which is `STOPPED_MALFUNCTION`: every
+  cancel looked to a driver like a pump malfunction. It is 0, `STOPPED_USER_TERMINATED`.
 
 - **Fresh JPAKE pairing could not run on macOS.** faketandem spawned pumpX2's
   `jpake-server` through `goexpect`, whose `goterm` `OpenPTY` issues the Linux-only
