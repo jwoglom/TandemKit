@@ -46,13 +46,12 @@ sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcc
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
 
-In CI, `.github/workflows/tandemkit-tests.yml` runs this script on the self-hosted macOS runners for
-every push and pull request, in the same job as the unit tests and after them. It shares their
-DerivedData: the virtual CoreBluetooth tests already rebuild TandemKit with `VirtualPump.xcconfig`,
-so `integration-test.sh build` compiles only the integration target. faketandem is built from its
-default branch (`faketandem_ref` on a manual dispatch picks another) while the unit tests compile,
-and handed to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips,
-because a skip means the emulator's addresses never reached the test process.
+In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
+macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
+TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built from its default
+branch (`faketandem_ref` on a manual run picks another) and the cliparser jar fetched, then hands
+the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips, because
+a skip means the emulator's addresses never reached the test process.
 
 ### How the tests find the emulator
 

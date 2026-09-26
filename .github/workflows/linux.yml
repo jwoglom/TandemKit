@@ -1,0 +1,84 @@
+name: Linux
+
+# The Linux slice of the package: Sources/TandemCore and Sources/TandemKit compiled as one module
+# against LinuxShims/ (see Package.swift), which is the only build Claude Code web sessions have.
+# This catches a change that breaks the shims, and runs the tests Package.swift declares for Linux.
+# JPAKE is a trapping stub here, so its tests compile out, and TandemKitIntegrationTests is macOS-only.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: swift test
+    runs-on: ubuntu-latest
+    # The toolchain scripts/claude-web-setup.sh installs, so a session that passes `swift test`
+    # locally sees the same compiler here.
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Ruby and Python for the checks
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ruby python3 > /dev/null
+          gem install xcodeproj --no-document
+
+      - name: Validate Xcode source membership (all targets)
+        run: ruby scripts/check_xcodeproj_source_membership.rb --check
+
+      - name: Cache SwiftPM build artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build
+            .build-virtual
+            ~/.cache/org.swift.swiftpm
+          key: linux-swift-6.1.2-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            linux-swift-6.1.2-
+
+      - name: Build, including test targets
+        run: swift build --build-tests
+
+      - name: Run tests
+        run: |
+          set -o pipefail
+          swift test --skip-build 2>&1 | tee swift-test.log
+
+      - name: Check that tests actually ran
+        run: scripts/ci/check-test-count.py swift-test.log --label "Linux tests"
+
+      # VirtualPump/ compiles only with the flag, which changes every module's build, hence the
+      # separate build path.
+      - name: Build with the virtual pump
+        run: swift build --build-tests --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP
+
+      - name: Run the virtual CoreBluetooth tests
+        run: |
+          set -o pipefail
+          swift test --skip-build --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP \
+            --filter VirtualCoreBluetoothTests 2>&1 | tee swift-test-virtual-pump.log
+
+      - name: Check that the virtual CoreBluetooth tests actually ran
+        run: scripts/ci/check-test-count.py swift-test-virtual-pump.log --label "Linux VirtualCoreBluetoothTests"
+
+      - name: Upload test logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-test-logs
+          path: |
+            swift-test.log
+            swift-test-virtual-pump.log
