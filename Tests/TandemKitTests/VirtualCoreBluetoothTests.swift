@@ -258,6 +258,16 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         wait(for: [nothing], timeout: 0.6)
     }
 
+    func testSocketLinkWriteToAClosedPeerThrowsInsteadOfRaisingSigpipe() {
+        var fds: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
+        let link = SocketLink(fd: fds[0])
+        Darwin.close(fds[1])
+
+        XCTAssertThrowsError(try link.send(["type": "hello"]))
+        link.close()
+    }
+
     func testScannedPeripheralIsTheSameObjectAsRetrievedAndConnected() throws {
         let discovered = expectation(description: "didDiscover")
         discovered.assertForOverFulfill = false

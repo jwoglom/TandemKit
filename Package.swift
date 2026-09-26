@@ -93,9 +93,10 @@ let package = Package(
                 "TandemKitScanViewModelTests.swift"
             ]
         )
-        // Tests/TandemKitTests is not declared: it drives TandemPumpManager and
-        // the rest of the iOS-only layer. It is built and run on macOS by
-        // .github/workflows/unit-tests.yml.
+        // Tests/TandemKitIntegrationTests is deliberately not declared: it needs a
+        // running faketandem and real JPAKE, which is a trapping stub here. It is
+        // built and run on macOS by scripts/integration-test.sh
+        // (docs/integration-harness.md).
     ]
 )
 

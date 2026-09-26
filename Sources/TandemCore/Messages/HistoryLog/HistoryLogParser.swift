@@ -19,6 +19,10 @@ public enum HistoryLogParser {
             return ReminderActivatedHistoryLog(cargo: raw)
         case AlertAckHistoryLog.typeId:
             return AlertAckHistoryLog(cargo: raw)
+        case DismissNotificationResponseHistoryLog.typeId:
+            return DismissNotificationResponseHistoryLog(cargo: raw)
+        case AamAnnunciationHistoryLog.typeId:
+            return AamAnnunciationHistoryLog(cargo: raw)
         case AlertClearedHistoryLog.typeId:
             return AlertClearedHistoryLog(cargo: raw)
         case ReminderDismissedHistoryLog.typeId:
@@ -37,6 +41,12 @@ public enum HistoryLogParser {
             return BolusActivatedHistoryLog(cargo: raw)
         case BolusCompletedHistoryLog.typeId:
             return BolusCompletedHistoryLog(cargo: raw)
+        case BolusIobEntryHistoryLog.typeId:
+            return BolusIobEntryHistoryLog(cargo: raw)
+        case IobSnapshotPreBolusHistoryLog.typeId:
+            return IobSnapshotPreBolusHistoryLog(cargo: raw)
+        case IobSnapshotPostBolusHistoryLog.typeId:
+            return IobSnapshotPostBolusHistoryLog(cargo: raw)
         case CgmAlertAckDexHistoryLog.typeId:
             return CgmAlertAckDexHistoryLog(cargo: raw)
         case CgmAlertActivatedDexHistoryLog.typeId:
@@ -119,6 +129,16 @@ public enum HistoryLogParser {
             return CgmStopSessionFsl2HistoryLog(cargo: raw)
         case CgmStopSessionFsl3HistoryLog.typeId:
             return CgmStopSessionFsl3HistoryLog(cargo: raw)
+        case HistoryRequestCountersHistoryLog.typeId:
+            return HistoryRequestCountersHistoryLog(cargo: raw)
+        case HistoryRequestRangeHistoryLog.typeId:
+            return HistoryRequestRangeHistoryLog(cargo: raw)
+        case ControlRequestCountersHistoryLog.typeId:
+            return ControlRequestCountersHistoryLog(cargo: raw)
+        case ControlStreamCountersHistoryLog.typeId:
+            return ControlStreamCountersHistoryLog(cargo: raw)
+        case AuthorizationCountersHistoryLog.typeId:
+            return AuthorizationCountersHistoryLog(cargo: raw)
         case CgmStopSessionG7HistoryLog.typeId:
             return CgmStopSessionG7HistoryLog(cargo: raw)
         case CorrectionDeclinedHistoryLog.typeId:
@@ -149,6 +169,12 @@ public enum HistoryLogParser {
             return TempRateActivatedHistoryLog(cargo: raw)
         case TempRateCompletedHistoryLog.typeId:
             return TempRateCompletedHistoryLog(cargo: raw)
+        case ControlRequestHistoryLog.typeId:
+            return ControlRequestHistoryLog(cargo: raw)
+        case ControlResponseHistoryLog.typeId:
+            return ControlResponseHistoryLog(cargo: raw)
+        case SetTempRateResponseHistoryLog.typeId:
+            return SetTempRateResponseHistoryLog(cargo: raw)
         case TimeChangedHistoryLog.typeId:
             return TimeChangedHistoryLog(cargo: raw)
         case TubingFilledHistoryLog.typeId:
@@ -243,6 +269,16 @@ public enum HistoryLogParser {
             return BolexCompletedHistoryLog(cargo: raw)
         case CartridgeFilledHistoryLog.typeId:
             return CartridgeFilledHistoryLog(cargo: raw)
+        case ReservoirEstimateHistoryLog.typeId:
+            return ReservoirEstimateHistoryLog(cargo: raw)
+        case CartridgeFillResponseHistoryLog.typeId:
+            return CartridgeFillResponseHistoryLog(cargo: raw)
+        case PumpButtonHistoryLog.typeId:
+            return PumpButtonHistoryLog(cargo: raw)
+        case ChargingStartedHistoryLog.typeId:
+            return ChargingStartedHistoryLog(cargo: raw)
+        case ChargingStoppedHistoryLog.typeId:
+            return ChargingStoppedHistoryLog(cargo: raw)
         case UsbConnectedHistoryLog.typeId:
             return UsbConnectedHistoryLog(cargo: raw)
         case UsbDisconnectedHistoryLog.typeId:
@@ -259,16 +295,44 @@ public enum HistoryLogParser {
             return BolusRequestedMsg2HistoryLog(cargo: raw)
         case BolusRequestedMsg3HistoryLog.typeId:
             return BolusRequestedMsg3HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg1HistoryLog.typeId:
+            return InitiateBolusRequestMsg1HistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg2HistoryLog.typeId:
+            return InitiateBolusRequestMsg2HistoryLog(cargo: raw)
+        case BolusPermissionChangeHistoryLog.typeId:
+            return BolusPermissionChangeHistoryLog(cargo: raw)
+        case BolusPermissionResponseHistoryLog.typeId:
+            return BolusPermissionResponseHistoryLog(cargo: raw)
+        case InitiateBolusResponseHistoryLog.typeId:
+            return InitiateBolusResponseHistoryLog(cargo: raw)
+        case BolusPermissionRequestHistoryLog.typeId:
+            return BolusPermissionRequestHistoryLog(cargo: raw)
+        case InitiateBolusRequestMsg3HistoryLog.typeId:
+            return InitiateBolusRequestMsg3HistoryLog(cargo: raw)
         case UsbEnumeratedHistoryLog.typeId:
             return UsbEnumeratedHistoryLog(cargo: raw)
         case ControlIQUserModeChangeHistoryLog.typeId:
             return ControlIQUserModeChangeHistoryLog(cargo: raw)
         case ControlIQPcmChangeHistoryLog.typeId:
             return ControlIQPcmChangeHistoryLog(cargo: raw)
+        case BatteryHourlyHistoryLog.typeId:
+            return BatteryHourlyHistoryLog(cargo: raw)
+        case MaxBasalLimitSetHistoryLog.typeId:
+            return MaxBasalLimitSetHistoryLog(cargo: raw)
         case BasalDeliveryHistoryLog.typeId:
             return BasalDeliveryHistoryLog(cargo: raw)
+        case BolusDeliverySummaryHistoryLog.typeId:
+            return BolusDeliverySummaryHistoryLog(cargo: raw)
+        case PumpDriveEventHistoryLog.typeId:
+            return PumpDriveEventHistoryLog(cargo: raw)
         case BolusDeliveryHistoryLog.typeId:
             return BolusDeliveryHistoryLog(cargo: raw)
+        case BatteryEstimateUpdateHistoryLog.typeId:
+            return BatteryEstimateUpdateHistoryLog(cargo: raw)
+        case MaxBolusLimitSetHistoryLog.typeId:
+            return MaxBolusLimitSetHistoryLog(cargo: raw)
+        case BleLinkStatsHistoryLog.typeId:
+            return BleLinkStatsHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }

@@ -75,6 +75,11 @@ struct FaketandemSnapshot: Decodable {
         let tempActive: Bool
         let tempRate: Double
         let tempPercent: Int
+        /// Present only while a temp rate runs (the emulator omits zero times).
+        let tempStart: FaketandemOptionalTime?
+        let tempEnd: FaketandemOptionalTime?
+        let tempRateId: Int?
+        let tempStartPumpSeconds: Int?
     }
 
     struct Bolus: Decodable {
@@ -85,6 +90,9 @@ struct FaketandemSnapshot: Decodable {
         let unitsDelivered: Double
         let sourceId: Int
         let typeBitmask: Int
+        /// Present only while a bolus runs.
+        let startTime: FaketandemOptionalTime?
+        let startPumpSeconds: Int?
         let rateUnitsPerSecond: Double
     }
 
@@ -114,6 +122,37 @@ struct FaketandemSnapshot: Decodable {
         let lastSeq: Int
     }
 
+    struct Alert: Decodable {
+        let id: Int
+        let type: Int
+        let priority: Int
+        let message: String
+        let time: Date
+        let acknowledged: Bool
+    }
+
+    /// One history-log record as the pump stores it (`pkg/state` `HistoryLogEntry`): `time` is the
+    /// record's wall-clock instant on the pump's clock (including any `pump_offset_seconds` skew),
+    /// `pumpTime` the same instant in seconds since the Tandem epoch, and `data` the event's fields
+    /// under the names the emulator wrote them with, which differ between the protocol-driven and
+    /// the harness-driven paths (see `PumpTimeline`).
+    struct HistoryEntry: Decodable {
+        let sequence: Int
+        let typeId: Int
+        let type: String
+        let time: Date
+        let pumpTime: Int
+        let data: [String: FaketandemJSONValue]?
+    }
+
+    /// The tail of the history log (the emulator's `historySnapshotLimit`, 50 records).
+    struct History: Decodable {
+        let count: Int
+        let firstSequence: Int
+        let lastSequence: Int
+        let entries: [HistoryEntry]
+    }
+
     let identity: Identity
     let clock: Clock
     let auth: Auth
@@ -123,7 +162,81 @@ struct FaketandemSnapshot: Decodable {
     let lastBolus: LastBolus?
     let insulin: Insulin
     let battery: Battery
+    let alerts: [Alert]
+    let history: History
     let requestLog: RequestLog
+}
+
+/// An RFC 3339 time the emulator emits as an empty string (Go's `omitempty` on a formatted zero
+/// time) when unset. Decodes to `nil` in that case instead of failing the whole snapshot.
+struct FaketandemOptionalTime: Decodable {
+    let date: Date?
+
+    init(from decoder: Decoder) throws {
+        let string = try decoder.singleValueContainer().decode(String.self)
+        if string.isEmpty {
+            date = nil
+        } else if let parsed = FaketandemClient.parseDate(string) {
+            date = parsed
+        } else {
+            throw FaketandemClientError.decoding("unparseable time \(string)")
+        }
+    }
+}
+
+/// A JSON value of unknown shape, for the free-form `data` maps on history records.
+enum FaketandemJSONValue: Decodable, Equatable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+    case array([FaketandemJSONValue])
+    case object([String: FaketandemJSONValue])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let bool = try? container.decode(Bool.self) {
+            self = .bool(bool)
+        } else if let number = try? container.decode(Double.self) {
+            self = .number(number)
+        } else if let string = try? container.decode(String.self) {
+            self = .string(string)
+        } else if let array = try? container.decode([FaketandemJSONValue].self) {
+            self = .array(array)
+        } else if let object = try? container.decode([String: FaketandemJSONValue].self) {
+            self = .object(object)
+        } else {
+            throw FaketandemClientError.decoding("unsupported JSON value")
+        }
+    }
+
+    var doubleValue: Double? {
+        switch self {
+        case let .number(value): return value
+        case let .string(string): return Double(string)
+        case let .bool(bool): return bool ? 1 : 0
+        default: return nil
+        }
+    }
+
+    var intValue: Int? {
+        switch self {
+        case let .number(value): return Int(value)
+        case let .string(string): return Int(string)
+        default: return nil
+        }
+    }
+
+    var stringValue: String? {
+        switch self {
+        case let .string(string): return string
+        case let .number(value): return String(value)
+        case let .bool(bool): return String(bool)
+        default: return nil
+        }
+    }
 }
 
 /// One `GET /api/log` entry. `kind` is request | response | notification | connection | fault.
@@ -149,6 +262,21 @@ struct FaketandemLog: Decodable {
     let entries: [FaketandemLogEntry]
     let oldestSeq: Int
     let lastSeq: Int
+}
+
+/// `GET|PUT /api/transport`: the link parameters that are not pump state. The ATT MTU decides how
+/// responses are framed — at the 23-byte default every notification carries 20 bytes (18 of
+/// message), the framing pumpX2's `Packetize` and the cliparser jar produce; a real Mobi over iOS
+/// negotiates a much larger one, so most responses arrive as a single notification.
+struct FaketandemTransport: Decodable {
+    let attMtu: Int
+    /// Bytes one notification can carry at that MTU (MTU minus the 3-byte ATT header).
+    let maxNotificationBytes: Int
+    /// Message bytes that leaves after the 2-byte `[remaining][txId]` framing. A response whose
+    /// body fits in this many bytes goes out in one notification.
+    let maxMessageBytesPerNotification: Int
+    /// False on the Linux GATT transport, which lets gatt negotiate the MTU and never reports it.
+    let mtuConfigurable: Bool
 }
 
 struct FaketandemClock: Decodable {
@@ -274,7 +402,16 @@ final class FaketandemClient {
     /// `PUT /api/state`: sets the named fields and nothing else (no qualifying events, no history).
     @discardableResult
     func setState(_ fields: [String: Any]) throws -> FaketandemSnapshot {
-        try decode(send("PUT", "/api/state", json: fields), as: FaketandemSnapshot.self)
+        struct Body: Decodable {
+            let applied: [String]
+            let state: FaketandemSnapshot
+        }
+        let body = try decode(send("PUT", "/api/state", json: fields), as: Body.self)
+        let missing = Set(fields.keys).subtracting(body.applied)
+        guard missing.isEmpty else {
+            throw FaketandemClientError.http(status: 200, path: "/api/state", body: "fields not applied: \(missing.sorted())")
+        }
+        return body.state
     }
 
     // MARK: - Clock
@@ -371,6 +508,23 @@ final class FaketandemClient {
         try action("/api/state/qualifyingevent", ["bitmask": Int(bitmask)])
     }
 
+    // MARK: - Link parameters (ATT MTU)
+
+    /// The emulator's default (`-virtual-mtu`): the Bluetooth spec minimum, 20-byte notifications.
+    static let defaultATTMTU = 23
+    /// The order of MTU a real Mobi paired with the official iOS app negotiates.
+    static let largeATTMTU = 247
+
+    func transport() throws -> FaketandemTransport {
+        try get("/api/transport", as: FaketandemTransport.self)
+    }
+
+    /// `PUT /api/transport`; 501 on a transport that does not expose its MTU.
+    @discardableResult
+    func setATTMTU(_ mtu: Int) throws -> FaketandemTransport {
+        try decode(send("PUT", "/api/transport", json: ["att_mtu": mtu]), as: FaketandemTransport.self)
+    }
+
     // MARK: - Request log
 
     func requestLog(since: Int? = nil) throws -> FaketandemLog {
@@ -415,8 +569,15 @@ final class FaketandemClient {
 
     // MARK: - Plumbing
 
+    /// Every pump-initiated action answers `{"state": <snapshot>}` (`pkg/harness/actions.go`
+    /// `writeJSON(w, http.StatusOK, map[string]interface{}{"state": h.Snapshot()})`), so the
+    /// snapshot is unwrapped rather than decoded from the body directly.
+    private struct ActionEnvelope: Decodable {
+        let state: FaketandemSnapshot
+    }
+
     private func action(_ path: String, _ body: [String: Any] = [:]) throws -> FaketandemSnapshot {
-        try decode(send("POST", path, json: body), as: FaketandemSnapshot.self)
+        try decode(send("POST", path, json: body), as: ActionEnvelope.self).state
     }
 
     private func get<T: Decodable>(_ path: String, as type: T.Type) throws -> T {

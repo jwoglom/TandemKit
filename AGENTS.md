@@ -1,5 +1,6 @@
 ## Reference material
 - See [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) and [KEY_FILES_REFERENCE.md](KEY_FILES_REFERENCE.md) for deeper implementation notes and file-level pointers.
+- [docs/integration-harness.md](docs/integration-harness.md): the `TandemKitIntegrationTests` target, which runs the real driver against the faketandem emulator (`scripts/integration-test.sh`), and the emulator gaps it currently works around.
 
 ## Comments
 **Default to no comment.** Most code needs none. Before writing one, ask what a reader who has the
@@ -342,7 +343,6 @@ Responses:
 - [x] BolusRequestedMsg1HistoryLog
 - [x] BolusRequestedMsg2HistoryLog
 - [x] BolusRequestedMsg3HistoryLog
-- [x] CGMHistoryLog
 - [x] CannulaFilledHistoryLog
 - [x] CarbEnteredHistoryLog
 - [x] CartridgeFilledHistoryLog
@@ -356,6 +356,7 @@ Responses:
 - [x] DailyBasalHistoryLog
 - [x] DataLogCorruptionHistoryLog
 - [x] DateChangeHistoryLog
+- [x] DexcomG6CGMHistoryLog
 - [x] FactoryResetHistoryLog
 - [x] HistoryLog
 - [x] HistoryLogParser

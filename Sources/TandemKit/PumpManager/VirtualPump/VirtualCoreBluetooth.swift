@@ -242,6 +242,12 @@ public final class CBCentralManager: NSObject {
                 let link = try SocketLink(connectTo: endpoint)
                 defer { link.close() }
                 let hello = try Self.readHello(from: link)
+                // The pump answers hello in every state so a probe can tell why it is refused, but
+                // a real pump that is not discoverable is not advertising, so there is nothing to
+                // report.
+                guard hello.pairingState != VirtualPumpHello.notDiscoverablePairingState else {
+                    return
+                }
                 let peripheral = self.peripheral(for: hello.peripheralId)
                 peripheral.apply(hello)
                 guard self.claimAdvertisement(hello, generation: generation) else {
