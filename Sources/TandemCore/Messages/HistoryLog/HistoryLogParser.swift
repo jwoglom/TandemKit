@@ -315,6 +315,8 @@ public enum HistoryLogParser {
             return UsbEnumeratedHistoryLog(cargo: raw)
         case ControlIQUserModeChangeHistoryLog.typeId:
             return ControlIQUserModeChangeHistoryLog(cargo: raw)
+        case ControlIQCycleHistoryLog.typeId:
+            return ControlIQCycleHistoryLog(cargo: raw)
         case ControlIQPcmChangeHistoryLog.typeId:
             return ControlIQPcmChangeHistoryLog(cargo: raw)
         case BatteryHourlyHistoryLog.typeId:
