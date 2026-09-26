@@ -394,6 +394,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         let stored = try XCTUnwrap(loop.assertPermanent(raw: raw, "expired temp basal"))
         XCTAssertEqual(stored.dose.endDate, scheduledEnd)
+        a4debug("A4DEBUG final scheduledEnd=\(scheduledEnd.timeIntervalSinceReferenceDate) doses=\(loop.doses.map { "\($0.dose.type) \($0.dose.startDate.timeIntervalSinceReferenceDate)-\($0.dose.endDate.timeIntervalSinceReferenceDate) m=\($0.isMutable) sid=\($0.syncIdentifier.prefix(24))" }) rows=\(loop.pumpEvents.map { "\(String(describing: $0.type)) \($0.date.timeIntervalSinceReferenceDate) \(String(describing: $0.dose.map { "\($0.type) \($0.startDate.timeIntervalSinceReferenceDate)-\($0.endDate.timeIntervalSinceReferenceDate)" }))" })")
         XCTAssertTrue(
             loop.doses.contains { $0.dose.type == .basal && abs($0.dose.startDate.timeIntervalSince(scheduledEnd)) <= 2 },
             "the scheduled basal resumes at the temp basal's end: \(loop.doses.map(LoopDoseStoreOracle.describe))"
