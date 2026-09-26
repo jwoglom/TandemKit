@@ -114,7 +114,6 @@ final class LoopDoseStoreOracle: DoseOracle {
 
     func addPumpEvents(_ events: [NewPumpEvent], lastReconciliation: Date?, replacePendingEvents: Bool, now: Date) {
         callCount += 1
-        a4debug("A4DEBUG batch now=\(now.timeIntervalSinceReferenceDate) rec=\(String(describing: lastReconciliation?.timeIntervalSinceReferenceDate)) replace=\(replacePendingEvents) events=\(events.map { "\(String(describing: $0.type)) \(String(data: $0.raw, encoding: .utf8) ?? $0.raw.hexadecimalString) \(String(describing: $0.dose.map { "\($0.type) \($0.startDate.timeIntervalSinceReferenceDate)-\($0.endDate.timeIntervalSinceReferenceDate) m=\($0.isMutable)" }))" })")
 
         // DS:680 — set unconditionally, before the empty guard, on every call.
         self.lastReconciliation = lastReconciliation
@@ -197,7 +196,6 @@ final class LoopDoseStoreOracle: DoseOracle {
             .filter { $0.endDate <= now || $0.isMutable }
             .filter { $0.startDate >= start || $0.type == .bolus }
 
-        a4debug("A4DEBUG oracle now=\(now.timeIntervalSinceReferenceDate) start=\(start.timeIntervalSinceReferenceDate) end=\(endingAt.timeIntervalSinceReferenceDate) candidates=\(candidates.map { "\($0.type) \($0.startDate.timeIntervalSinceReferenceDate)-\($0.endDate.timeIntervalSinceReferenceDate) m=\($0.isMutable)" }) doses=\(doses.map { "\($0.type) \($0.startDate.timeIntervalSinceReferenceDate)-\($0.endDate.timeIntervalSinceReferenceDate)" })")
         // DS:935 — guard doses.count > 0.
         guard !doses.isEmpty else { return }
 
@@ -548,8 +546,4 @@ final class LoopDoseStoreOracle: DoseOracle {
         if stored.savedToHealthKit { flags.append("hk") }
         return "[\(raw) \(stored.dose.type) value=\(stored.value) \(stored.dose.startDate)…\(stored.dose.endDate) \(flags.joined(separator: ","))]"
     }
-}
-
-func a4debug(_ line: String) {
-    FileHandle.standardError.write(Data((line + "\n").utf8))
 }
