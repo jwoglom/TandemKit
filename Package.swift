@@ -20,12 +20,12 @@ import PackageDescription
 // The unit tests are deliberately not declared here for the same reason: they
 // `@testable import TandemKit` and expect that one module. They are built and
 // run by the TandemKitTests target in TandemKit.xcodeproj; see
-// .github/workflows/tandemkit-tests.yml.
+// .github/workflows/macos.yml.
 
 // On Linux there is no Xcode project to fall back on, and Claude Code web
 // sessions run in Linux containers (scripts/claude-web-setup.sh), so `swift
-// build` is the only way for them to compile anything, and how CI tests the
-// driver without a macOS runner.
+// build` is the only way for them to compile anything, and how
+// .github/workflows/linux.yml tests the driver without a macOS runner.
 //
 // Sources/TandemCore and Sources/TandemKit compile into one module named
 // TandemKit, matching TandemKit.xcodeproj and what the tests `@testable
@@ -82,16 +82,19 @@ let package = Package(
         .testTarget(
             name: "TandemKitTests",
             dependencies: ["TandemKit", "CoreBluetooth", "LoopKit", "HealthKit"],
-            path: "Tests/TandemKitTests",
+            // The dose oracles live with the conformance tests but are members of both Xcode test
+            // targets; DoseOracleTests and MockPumpManagerDelegate use them.
+            path: "Tests",
             exclude: [
-                "FillTubingNotificationRefreshTests.swift",
-                "TandemFeatureFlagsTests.swift",
-                "TandemKitChangeCartridgeViewModelTests.swift",
-                "TandemKitFillCannulaViewModelTests.swift",
-                "TandemKitControlIQSettingsViewModelTests.swift",
-                "TandemKitNotificationsViewModelTests.swift",
-                "TandemKitScanViewModelTests.swift"
-            ]
+                "TandemKitTests/FillTubingNotificationRefreshTests.swift",
+                "TandemKitTests/TandemFeatureFlagsTests.swift",
+                "TandemKitTests/TandemKitChangeCartridgeViewModelTests.swift",
+                "TandemKitTests/TandemKitFillCannulaViewModelTests.swift",
+                "TandemKitTests/TandemKitControlIQSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitNotificationsViewModelTests.swift",
+                "TandemKitTests/TandemKitScanViewModelTests.swift"
+            ],
+            sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )
         // Tests/TandemKitIntegrationTests is deliberately not declared: it needs a
         // running faketandem and real JPAKE, which is a trapping stub here. It is

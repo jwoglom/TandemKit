@@ -3,6 +3,9 @@ import CoreBluetooth
 import Foundation
 @testable import TandemKit
 import XCTest
+#if canImport(Glibc)
+import Glibc
+#endif
 
 private final class CentralRecorder: CBCentralManagerDelegate {
     var onStateUpdate: ((CBCentralManager) -> Void)?
@@ -260,9 +263,15 @@ final class VirtualCoreBluetoothTests: XCTestCase {
 
     func testSocketLinkWriteToAClosedPeerThrowsInsteadOfRaisingSigpipe() {
         var fds: [Int32] = [0, 0]
+        #if canImport(Glibc)
+        XCTAssertEqual(socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, &fds), 0)
+        let link = SocketLink(fd: fds[0])
+        Glibc.close(fds[1])
+        #else
         XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
         let link = SocketLink(fd: fds[0])
         Darwin.close(fds[1])
+        #endif
 
         XCTAssertThrowsError(try link.send(["type": "hello"]))
         link.close()
