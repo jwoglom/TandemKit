@@ -261,6 +261,8 @@ public enum HistoryLogParser {
             return CgmInactiveG7HistoryLog(cargo: raw)
         case CgmStopSessionReqG7HistoryLog.typeId:
             return CgmStopSessionReqG7HistoryLog(cargo: raw)
+        case BleSoftDeviceVersionHistoryLog.typeId:
+            return BleSoftDeviceVersionHistoryLog(cargo: raw)
         case LogErasedHistoryLog.typeId:
             return LogErasedHistoryLog(cargo: raw)
         case BGHistoryLog.typeId:
