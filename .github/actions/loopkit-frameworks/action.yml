@@ -43,7 +43,7 @@ inputs:
   loopkit-repository:
     default: loopandlearn/LoopKit
   loopkit-revision:
-    default: 0229bb18d30b095420aae1e8fa04c37794e0a378
+    default: d52c298e3e3fe640e2ae1c5cef885da5daaa58cb
 
 runs:
   using: composite
