@@ -52,7 +52,7 @@ runs:
     # deliberately narrow so it stays a hit across branches and the ~hundreds
     # of MB are re-uploaded only when the pin or the toolchain moves.
     - name: Cache prebuilt LoopKit frameworks
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ inputs.products-cache }}
         key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ inputs.xcode-version }}-loopkit-frameworks-${{ inputs.loopkit-revision }}
@@ -76,7 +76,7 @@ runs:
 
     - name: Checkout LoopKit at the pinned revision
       if: steps.loopkit.outputs.prebuilt != 'true'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         repository: ${{ inputs.loopkit-repository }}
         ref: ${{ inputs.loopkit-revision }}

@@ -1,0 +1,76 @@
+name: Check out Trio with TandemKit under test
+description: >-
+  Checks out the Trio app into trio/ without its TandemKit submodule, puts the TandemKit revision
+  under test at trio/TandemKit, and initializes Trio's other submodules.
+
+inputs:
+  repository:
+    description: Trio repository (must contain a TandemKit submodule at path TandemKit).
+    required: true
+  ref:
+    description: Branch, tag or SHA of the Trio repository; empty for its default branch.
+    default: ''
+  token:
+    description: Token that can read the Trio repository.
+    default: ''
+  tandemkit-ref:
+    description: TandemKit revision to test.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Ensure a token is available for the private Trio repo
+      if: inputs.repository == 'jwoglom/Trio-tandem' && inputs.token == ''
+      shell: bash
+      run: |
+        echo "Missing required secret TRIO_REPO_TOKEN."
+        echo "This is expected for forked PRs (secrets are not provided)."
+        echo "Fix: run CI from a branch in the main repo, or enable secrets for fork PRs in repo Settings -> Actions."
+        exit 1
+
+    - name: Checkout Trio app repository (no submodules)
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        path: trio
+        submodules: false
+        fetch-depth: 1
+        token: ${{ inputs.token || github.token }}
+
+    - name: Remove Trio TandemKit submodule working tree placeholder
+      shell: bash
+      run: rm -rf "trio/TandemKit"
+
+    - name: Checkout TandemKit under test into trio/TandemKit
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.tandemkit-ref }}
+        path: trio/TandemKit
+        fetch-depth: 1
+
+    - name: Initialize Trio submodules (excluding TandemKit)
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd trio
+
+        if [[ ! -f ".gitmodules" ]]; then
+          exit 0
+        fi
+
+        git submodule sync --recursive
+
+        submodule_paths=()
+        while IFS= read -r path; do
+          [[ -z "${path}" ]] && continue
+          [[ "${path}" == "TandemKit" ]] && continue
+          submodule_paths+=("${path}")
+        done < <(git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+
+        if [[ ${#submodule_paths[@]} -eq 0 ]]; then
+          exit 0
+        fi
+
+        git submodule update --init --recursive --depth 1 "${submodule_paths[@]}"
