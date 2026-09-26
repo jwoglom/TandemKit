@@ -240,6 +240,7 @@
 		3EB807B72FBCDCD70075D19E /* AlarmAckHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F99F75C38D87EE1CFEC452B1 /* AlarmAckHistoryLog.swift */; };
 		3EB807B82FBCDCD70075D19E /* SnoozeActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3418E5C59739C43AEEAE153F /* SnoozeActivatedHistoryLog.swift */; };
 		3EB807B92FBCDCD70075D19E /* AaTdiEstChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B28D518B85DD31510B4A5AE /* AaTdiEstChangeHistoryLog.swift */; };
+		8E1EDE4A1AC9FE2A9B613558 /* ControlIQFeaturesHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EADF9B0ABDEB6A4782CD7E5A /* ControlIQFeaturesHistoryLog.swift */; };
 		3EB807BA2FBCDCD70075D19E /* ParamChangePumpSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344F72EC91299008A07F6 /* ParamChangePumpSettingsHistoryLog.swift */; };
 		3EB807BB2FBCDCD70075D19E /* BolusActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344D52EC91299008A07F6 /* BolusActivatedHistoryLog.swift */; };
 		3EB807BC2FBCDCD70075D19E /* CgmStopSessionMsg2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BAE3A73C5864C7B4F33631A /* CgmStopSessionMsg2HistoryLog.swift */; };
@@ -691,6 +692,7 @@
 		DEB0DE00000000000000FB01 /* TandemKitTroubleshootConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000FB02 /* TandemKitTroubleshootConnectionView.swift */; };
 		DEB0DE00000000000000FB03 /* TandemKitTroubleshootConnectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0DE00000000000000FB04 /* TandemKitTroubleshootConnectionViewModel.swift */; };
 		DEB28B6D27663077F18D53FF /* DailyStatusHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F540659FBCEE9181FC99F7B9 /* DailyStatusHistoryLogTests.swift */; };
+		1EB3A17F8D2A9E22E48F5B13 /* ControlIQFeaturesHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEEDF35B1FC57A235801A094 /* ControlIQFeaturesHistoryLogTests.swift */; };
 		DF0AA721638E106F6AAACCF1 /* Jpake2ResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA6DA9CF4DC167FB023A240 /* Jpake2ResponseTests.swift */; };
 		DF3B300802DA6A772CFB918C /* RemoteBgEntryRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C775FFBEB5739FB6B1864096 /* RemoteBgEntryRequestTests.swift */; };
 		DF838A209352DF7679DA49D8 /* AlarmActivatedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AE56CF2EECB610781747474 /* AlarmActivatedHistoryLogTests.swift */; };
@@ -855,6 +857,7 @@
 		1AE56CF2EECB610781747474 /* AlarmActivatedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AlarmActivatedHistoryLogTests.swift; sourceTree = "<group>"; };
 		1AFBC4A45C3D16B73E3EE413 /* TandemKitFillCannulaViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitFillCannulaViewModelTests.swift; sourceTree = "<group>"; };
 		1B28D518B85DD31510B4A5AE /* AaTdiEstChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AaTdiEstChangeHistoryLog.swift; sourceTree = "<group>"; };
+		EADF9B0ABDEB6A4782CD7E5A /* ControlIQFeaturesHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlIQFeaturesHistoryLog.swift; sourceTree = "<group>"; };
 		1B29FEA003C073FB4288C525 /* BolusPermissionChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusPermissionChangeHistoryLog.swift; sourceTree = "<group>"; };
 		1BAB054EE5AA0BC8FC02F19D /* ChangeTimeDateRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ChangeTimeDateRequestTests.swift; sourceTree = "<group>"; };
 		1CD3FBCC49A39F474FC13C8C /* HistoryBackfillPlannerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryBackfillPlannerTests.swift; sourceTree = "<group>"; };
@@ -1520,6 +1523,7 @@
 		F42A4EB8067E987379B371BF /* CgmAlertAckHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmAlertAckHistoryLog.swift; sourceTree = "<group>"; };
 		F4B5A3E6F8D8BC160DEE18B9 /* TandemClock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemClock.swift; sourceTree = "<group>"; };
 		F540659FBCEE9181FC99F7B9 /* DailyStatusHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DailyStatusHistoryLogTests.swift; sourceTree = "<group>"; };
+		AEEDF35B1FC57A235801A094 /* ControlIQFeaturesHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlIQFeaturesHistoryLogTests.swift; sourceTree = "<group>"; };
 		F5A5CCEFA4181BCC6E2958E1 /* DeleteIDPRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeleteIDPRequestTests.swift; sourceTree = "<group>"; };
 		F6A476EFE5F5CCB8DDF07F5B /* ControlStreamCountersHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlStreamCountersHistoryLogTests.swift; sourceTree = "<group>"; };
 		F65506F9A0F916404C5F6C49 /* DexcomG6CGMHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DexcomG6CGMHistoryLogTests.swift; sourceTree = "<group>"; };
@@ -2192,6 +2196,7 @@
 				FFEFE2A3E6855F15FA4AECF1 /* AaEnableSettingChangeHistoryLog.swift */,
 				5CC4490958D80E881D569D3C /* AaSleepScheduleChangeHistoryLog.swift */,
 				1B28D518B85DD31510B4A5AE /* AaTdiEstChangeHistoryLog.swift */,
+				EADF9B0ABDEB6A4782CD7E5A /* ControlIQFeaturesHistoryLog.swift */,
 				3C490E05FF0876B00A2571E2 /* AaTdiSettingChangeHistoryLog.swift */,
 				9A390F070116FA01DED75C05 /* AaWeightSettingChangeHistoryLog.swift */,
 				F99F75C38D87EE1CFEC452B1 /* AlarmAckHistoryLog.swift */,
@@ -2685,6 +2690,7 @@
 				C353259164144782699A83D5 /* ControlIQUserModeChangeHistoryLogTests.swift */,
 				BCD4B2E13090DDA64993D245 /* DailyBasalHistoryLogTests.swift */,
 				F540659FBCEE9181FC99F7B9 /* DailyStatusHistoryLogTests.swift */,
+				AEEDF35B1FC57A235801A094 /* ControlIQFeaturesHistoryLogTests.swift */,
 				B596941DB54F2F4BB9D33B6E /* PumpingResumedHistoryLogTests.swift */,
 				DAEF503BF89901C215F15471 /* PumpingSuspendedHistoryLogTests.swift */,
 				56ED6852A2E3025769FB5226 /* TempRateActivatedHistoryLogTests.swift */,
@@ -3214,6 +3220,7 @@
 				3EB807B72FBCDCD70075D19E /* AlarmAckHistoryLog.swift in Sources */,
 				3EB807B82FBCDCD70075D19E /* SnoozeActivatedHistoryLog.swift in Sources */,
 				3EB807B92FBCDCD70075D19E /* AaTdiEstChangeHistoryLog.swift in Sources */,
+				8E1EDE4A1AC9FE2A9B613558 /* ControlIQFeaturesHistoryLog.swift in Sources */,
 				3EB807BA2FBCDCD70075D19E /* ParamChangePumpSettingsHistoryLog.swift in Sources */,
 				3EB807BB2FBCDCD70075D19E /* BolusActivatedHistoryLog.swift in Sources */,
 				3EB807BC2FBCDCD70075D19E /* CgmStopSessionMsg2HistoryLog.swift in Sources */,
@@ -3577,6 +3584,7 @@
 				3285EF34565DCD9329707440 /* ControlIQUserModeChangeHistoryLogTests.swift in Sources */,
 				E864DC47B92E01DF0BC19A6B /* DailyBasalHistoryLogTests.swift in Sources */,
 				DEB28B6D27663077F18D53FF /* DailyStatusHistoryLogTests.swift in Sources */,
+				1EB3A17F8D2A9E22E48F5B13 /* ControlIQFeaturesHistoryLogTests.swift in Sources */,
 				0AFB1499BA40839D4F6E6667 /* PumpingResumedHistoryLogTests.swift in Sources */,
 				984122457168B8FF10DA9D72 /* PumpingSuspendedHistoryLogTests.swift in Sources */,
 				377360F8976A314D6A87A8EA /* TempRateActivatedHistoryLogTests.swift in Sources */,
