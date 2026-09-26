@@ -682,7 +682,7 @@ the module and talk to faketandem over a socket at `VirtualPump.endpoint`
 compiles to nothing and the driver runs on real CoreBluetooth, unchanged. On Linux:
 `swift test --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP`. Test files import both, so
 `Tests/TandemKitTests/VirtualCoreBluetoothNames.swift` pins the names; `VirtualCoreBluetoothTests`
-exists only in a flagged build, which `unit-tests.yml` runs as a separate step.
+exists only in a flagged build, which the `tandemkit` job in `ci.yml` runs as a separate step.
 
 Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
 policy, the `TandemBLE` packet layer, `HistoryDeduplicator`/`HistoryReconciler`/

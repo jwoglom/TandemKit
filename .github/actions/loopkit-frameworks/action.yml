@@ -6,7 +6,7 @@ description: >-
 
 # The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
 # BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
-# other project has to produce them first. build.yml/test.yml get that from
+# other project has to produce them first. trio-tests.yml gets that from
 # Trio's workspace, which needs the private Trio repo and a secret.
 #
 # Instead, check out LoopKit (public, pinned below) next to this repo and build

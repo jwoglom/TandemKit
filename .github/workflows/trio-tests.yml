@@ -1,49 +1,43 @@
-name: Test Trio (with TandemKit under test)
+name: Trio tests
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
+# Trio's "Trio Tests" scheme, built from Trio's workspace with the TandemKit revision under test in
+# place of Trio's TandemKit submodule. Called by ci.yml (pushes, same-repo PRs, manual runs) and by
+# trio-fork-pr.yml (labeled fork PRs), which decide when it runs.
 on:
-  push:
-    branches: [ main, dev ]
-    paths:
-      - '.github/workflows/build.yml'
-      - '.github/workflows/test.yml'
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Package.swift'
-      - 'Package.resolved'
-      - '*.xcodeproj/**'
-      - '*.xcworkspace/**'
-  pull_request_target:
-    types: [ labeled ]
-    branches: [ main, dev ]
-  workflow_dispatch:
+  workflow_call:
     inputs:
       trio_repo:
-        description: "Repo to test (must contain TandemKit submodule at path TandemKit)"
-        required: false
-        default: "jwoglom/Trio-tandem"
+        description: Repo to test (must contain a TandemKit submodule at path TandemKit).
+        type: string
+        default: jwoglom/Trio-tandem
       trio_ref:
-        description: "Git ref (branch/tag/SHA) for trio_repo"
+        description: Git ref (branch/tag/SHA) for trio_repo; empty for its default branch.
+        type: string
+        default: ''
+      tandemkit_ref:
+        description: TandemKit revision to test.
+        type: string
+        required: true
+      environment:
+        description: Deployment environment to gate the job on; empty for none.
+        type: string
+        default: ''
+    secrets:
+      TRIO_REPO_TOKEN:
         required: false
-        default: ""
 
 jobs:
-  test-trio:
-    if: >
-      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request_target' && github.event.label.name == 'trigger-ci')
+  test:
+    name: build and test
     runs-on: [self-hosted, macOS]
     # A warm DerivedData cache builds Trio in ~9 minutes, but the first run
     # after the cache generation marker moves has to compile everything, which
     # does not fit in 25.
     timeout-minutes: 50
-    environment: ${{ github.event_name == 'pull_request_target' && 'pr-testing' || '' }}
+    environment: ${{ inputs.environment }}
     env:
-      TRIO_REPO: ${{ github.event.inputs.trio_repo || 'jwoglom/Trio-tandem' }}
-      TRIO_REF: ${{ github.event.inputs.trio_ref || '' }}
+      TRIO_REPO: ${{ inputs.trio_repo }}
+      TRIO_REF: ${{ inputs.trio_ref }}
       DERIVED_DATA_PATH: DerivedData
       SPM_CACHE_PATH: .spm
       TRIO_REPO_TOKEN: ${{ secrets.TRIO_REPO_TOKEN }}
@@ -74,7 +68,7 @@ jobs:
       - name: Checkout TandemKit CI actions
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ inputs.tandemkit_ref }}
           path: .tandemkit-ci
           sparse-checkout: .github/actions
           fetch-depth: 1
@@ -88,7 +82,7 @@ jobs:
           repository: ${{ env.TRIO_REPO }}
           ref: ${{ env.TRIO_REF }}
           token: ${{ env.TRIO_REPO_TOKEN }}
-          tandemkit-ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          tandemkit-ref: ${{ inputs.tandemkit_ref }}
 
       - name: Validate Xcode source membership (all targets)
         run: |

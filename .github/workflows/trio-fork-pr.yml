@@ -1,0 +1,27 @@
+name: Trio tests (fork PRs)
+
+# A pull_request run from a fork gets no secrets, so ci.yml cannot run the Trio tests for one. Here
+# pull_request_target supplies them, which is why the job waits for approval in the pr-testing
+# environment: the fork's TandemKit is built and run with TRIO_REPO_TOKEN in reach.
+on:
+  pull_request_target:
+    types: [ labeled ]
+    branches: [ main, dev ]
+
+concurrency:
+  # github.ref is the base branch under pull_request_target, so key on the PR.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  trio:
+    name: Trio (fork PR)
+    if: >-
+      github.event.label.name == 'trigger-ci' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    uses: ./.github/workflows/trio-tests.yml
+    with:
+      tandemkit_ref: ${{ github.event.pull_request.head.sha }}
+      environment: pr-testing
+    secrets:
+      TRIO_REPO_TOKEN: ${{ secrets.TRIO_REPO_TOKEN }}
