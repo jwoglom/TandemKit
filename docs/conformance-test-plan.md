@@ -134,10 +134,24 @@ Finalized doses in groups A, B and D are also checked for: `value` == programmed
 `automatic` reflecting the activation type, `insulinType` set, and `syncIdentifier` derived from
 `raw` (not set independently).
 
+## F. Outages (§7, §10 suspend/resume; P02-5, P11-4, P13-4; #331, #333, #338)
+
+The pump changes delivery while the phone is out of range: `radio_off`, the change, time passes,
+`radio_on`, sync. Every scenario runs with the History Backfill flag on, which is what reads the
+pump's history; the driver leaves a change it did not command to the next history pass, which
+reports it at the pump's time (`TandemPumpManager+DeliveryTransitions`). `OutageConformanceTests`.
+
+| ID | Scenario | Stage | Assert |
+|---|---|---|---|
+| F1 | Stop during an outage, still stopped at reconnect | `radio_off`; advance 5 min; `suspend {reason: occlusion}`; advance 20 min; `radio_on`; sync; then `resume` in range | one `.suspend` dated at the pump's stop, not the reconnect; `basalDose` suspended since the stop; the later `.resume` closes it in Loop; one PumpSuspend and one PumpResume in Trio |
+| F2 | Stop and resume both inside an outage | `radio_off`; `suspend`; advance 10 min; `resume`; advance 5 min; `radio_on`; sync | a `.suspend` and a `.resume` at the pump's times, although both status reads show basal running; Loop holds a closed 10 min suspend |
+| F3 | App suspend, pump resumed during the outage | `suspendDelivery`; `radio_off`; advance 10 min; `resume`; advance 10 min; `radio_on`; sync | a `.resume` at the pump's restart, never a `.basal` marker in its place (#331); the app's suspend is not reported again from history; Trio's suspend is closed |
+| F4 | Temp basal ended by an occlusion during an outage | enact 1.5 U/h for 60 min; advance 5 min; `radio_off`; advance 3 min; `suspend {reason: occlusion}`; advance 20 min; `radio_on`; sync | the temp basal is finalized at the occlusion with delivered units to it, in the same batch as the `.suspend`; one temp basal row in Trio |
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles
    and the journal replay have unit tests).
 2. Group C (idempotency) — cheapest to stage, establishes the batch-shape assertions.
-3. Group B (cancel), then A (interrupt), then D (pump-side).
+3. Group B (cancel), then A (interrupt), then D (pump-side), then F (outages).
 4. Timeline diff on every scenario once 1–3 are green in their expected-failure shape.

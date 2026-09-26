@@ -165,9 +165,33 @@ edit instead of at the next sync.
   `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
   the past and drop a pump-UI bolus found one sync late.
 - Reporting (`TandemPumpManager+HistoryDoseReporting.swift`) runs as a command job after every
-  tick that read something. Boluses only: temp basals and suspends stay with the live path,
-  since DoseStore would not count backfilled ones toward IOB and both would report them
-  (#354). Batches are `replacePendingEvents: false`, ascending, through `emitPumpEvents`.
+  tick. Boluses need `historyDoseReporting` as well; their batches are
+  `replacePendingEvents: false`, ascending, through `emitPumpEvents`. App-commanded temp
+  basals stay with the live path.
+- Suspends, resumes and temp basal ends the pump made on its own
+  (`TandemPumpManager+DeliveryTransitions.swift`, #333) need only `historyBackfill`. Neither
+  host revises a finished suspend, resume or temp basal, so `fetchBasalStatus` does not report
+  one it did not command: it records a `PendingTransition` in `DeliveryTransitionLedger`, puts
+  a placeholder in `basalDose` for status, and kicks a tick. The pass after a tick that read
+  the pump's log past the detection reports it at the pump's time and finishes the temp basal
+  the host holds open at `TempRateCompleted` (or the suspend). Suspend/resume pairs that fell
+  entirely inside an outage, which no status read can see, are reported from history too.
+  The ledger records every suspend and resume the driver reports with the span its pump
+  record can fall in, so history never reports one twice; with the flag off the live path
+  still reports at detection, and records the span back to the last reading.
+  - Never sent: a suspend whose resume has not been read while the pump delivers (Trio takes a
+    trailing suspend as lasting until now), a resume with no suspend before it in the host's
+    view (Trio takes the pump as suspended until it), a suspend and resume in one second
+    (Trio's IOB throws), and a second suspend in a row (Loop keeps only the later).
+  - History dates are moved onto the phone's clock with `pumpClockOffset`.
+  - A change history has not dated within `historyTransitionDeadline` (15 min) is reported at
+    detection, each end dated the way that counts more insulin: a stop at detection, a resume
+    at the last reading that saw the pump suspended, a temp basal below the schedule ended at
+    that reading and one above it at detection.
+  - Loop's DoseStore only counts non-bolus events newer than its last finished basal event
+    (#354), so a gap-contained pair it hears about after a later live basal event is stored
+    but not counted. Trio counts it either way.
+  - Scenarios: conformance group F, `OutageConformanceTests`.
 - The live path and history identify one bolus differently (#344), so `BolusReportLedger`
   (persisted, 24 h) records each app bolus's `bolusId`, live `raw` and event date at
   `InitiateBolus`, and `emitPumpEvents` marks it finalized when an immutable report with that
@@ -183,9 +207,10 @@ edit instead of at the next sync.
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
 - Still open: gap-aware `lastReconciliation` (#353), extended boluses (Bolex records are only
-  logged; #424), and a pump clock offset from the phone's (history dates use the phone's UTC
-  offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` is recorded from
-  `SetTempRateResponse` but not yet used; it is for re-keying live temp basals (#344).
+  logged; #424), and a pump clock offset from the phone's for boluses (bolus history dates use
+  the phone's UTC offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` matches a live
+  temp basal to its `TempRateCompleted`; re-keying live temp basals on it is still open (#344).
+  Temp rates the app did not set are still not reported.
 
 ### Therapy command validation
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`

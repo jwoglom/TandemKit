@@ -60,6 +60,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
+    public var deliveryTransitions = DeliveryTransitionLedger(trackingSince: Date())
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
@@ -266,6 +267,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             bolusReportLedger = ledger
         }
 
+        if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
+           let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
+        {
+            deliveryTransitions = ledger
+        }
+
         if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
             bolusDose = UnfinalizedDose(rawValue: bolusDoseRaw)
         } else {
@@ -469,6 +476,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         }
 
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
+        raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
             raw["bolusState"] = encodedBolusState
@@ -514,6 +522,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusReportLedger: \(bolusReportLedger)",
+            "* deliveryTransitions: \(deliveryTransitions)",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",

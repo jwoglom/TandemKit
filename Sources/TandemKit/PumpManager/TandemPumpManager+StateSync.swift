@@ -140,14 +140,20 @@ extension TandemPumpManager {
         verifyDeliveredBasalRate(response)
 
         let activeBasalType = response.basalType
-        if activeBasalType != state.basalDose.type {
-            if activeBasalType == .basal, state.basalDose.type == .resume {
-                // This is also the same
-                return
-            }
+        let now = self.now
+        if datesTransitionsFromHistory {
+            observeDeliveryState(activeBasalType, now: now)
+            return
+        }
+        if let pending = state.deliveryTransitions.pending {
+            reportTransitionAtDetection(pending)
+        }
 
+        if Self.isSameDelivery(activeBasalType, as: state.basalDose.type) {
+            state.deliveryTransitions.lastConfirmedObservation = now
+        } else {
             logger.debug("Updating new basal dose: \(activeBasalType)")
-            let now = self.now
+            let lastConfirmed = max(state.basalDose.startDate, state.deliveryTransitions.lastConfirmedObservation ?? .distantPast)
             var events = getActivePumpEvents(endDate: now)
 
             if activeBasalType == .suspend {
@@ -156,6 +162,11 @@ extension TandemPumpManager {
                     dose: dose.toDoseEntry(),
                     date: dose.startDate
                 ))
+                recordReportedTransition(
+                    .suspend,
+                    at: now,
+                    earliest: lastConfirmed.addingTimeInterval(-Self.transitionMatchTolerance)
+                )
 
                 state.basalDose = dose
                 state.lastReconciliation = now

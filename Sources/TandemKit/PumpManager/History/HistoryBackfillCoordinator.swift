@@ -6,8 +6,8 @@ import Foundation
 /// Driven from `syncPumpData`, on LoopKit's own sync cadence. Each tick asks
 /// `HistoryBackfillPlanner` what to read, runs those ranges through `HistoryLogFetcher` (which
 /// files what streams in into the store and serves what the store already holds), and advances
-/// the persisted watermark. Each tick that read something hands its outcome to
-/// `TandemPumpManager.reportHistoryDoses`, which decides what reaches the host.
+/// the persisted watermark. Each tick hands its outcome to `TandemPumpManager.reportHistoryDoses`,
+/// which decides what reaches the host.
 final class HistoryBackfillCoordinator {
     struct TickOutcome: Equatable {
         /// Bookkeeping as persisted at the end of the tick.
@@ -20,6 +20,20 @@ final class HistoryBackfillCoordinator {
         var isDeepBackfillComplete: Bool
         /// Earliest date a dose may be reported for, as of this tick.
         var emitFloor: Date
+        var startedAt: Date = .distantPast
+        /// The pump's first and last sequence numbers when the tick began.
+        var pumpSequenceRange: ClosedRange<UInt32>?
+
+        /// Whether the store holds the pump's log up to where it stood when the tick began.
+        var readsThroughPumpEnd: Bool {
+            guard let covered = sessionCovered, let range = pumpSequenceRange else { return false }
+            return covered.upperBound >= range.upperBound
+        }
+
+        var reachesPumpStart: Bool {
+            guard let covered = sessionCovered, let range = pumpSequenceRange else { return false }
+            return covered.lowerBound <= range.lowerBound
+        }
     }
 
     private let logger = TandemLogger(category: "HistoryBackfill")
@@ -164,7 +178,9 @@ final class HistoryBackfillCoordinator {
                     rangesRead: [],
                     sessionCovered: self.sessionCoverage,
                     isDeepBackfillComplete: plan.isDeepBackfillComplete,
-                    emitFloor: emitFloor
+                    emitFloor: emitFloor,
+                    startedAt: now,
+                    pumpSequenceRange: status.firstSequenceNum ... max(status.firstSequenceNum, status.lastSequenceNum)
                 ))
                 return
             }
@@ -182,7 +198,9 @@ final class HistoryBackfillCoordinator {
                     sessionCovered: self.sessionCoverage,
                     isDeepBackfillComplete: self.isDeepTargetCovered(bookkeeping: updated, now: now)
                         || (self.sessionCoverage.map { $0.lowerBound <= status.firstSequenceNum } ?? false),
-                    emitFloor: emitFloor
+                    emitFloor: emitFloor,
+                    startedAt: now,
+                    pumpSequenceRange: status.firstSequenceNum ... max(status.firstSequenceNum, status.lastSequenceNum)
                 ))
             }
         }

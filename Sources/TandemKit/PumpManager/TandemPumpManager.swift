@@ -918,6 +918,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.state.basalDose = suspendDose
             self.state.lastReconciliation = self.now
+            self.recordReportedTransition(.suspend, at: suspendDose.startDate)
 
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(events)
@@ -1002,6 +1003,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         state.basalDose = dose
         state.lastReconciliation = resumedAt
+        recordReportedTransition(.resume, at: dose.startDate)
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
