@@ -39,7 +39,9 @@ TandemKitIntegrationTests.BolusIntegrationTests`. Differences from macOS:
   and the JPAKE provider is a trapping stub; the rest pair with a seeded long-term key as on macOS.
 - swift-corelibs-xctest has no `XCTExpectFailure` or `XCTAttachment`.
   `LinuxExpectedFailure.swift` supplies a strict `XCTExpectFailure`, and each test's request log
-  is written to `LOG_DIR/request-logs/` instead of being attached.
+  is written to `LOG_DIR/request-logs/` instead of being attached. The stand-in carries on past an
+  expected failure where Apple's XCTest stops under `continueAfterFailure = false`, so a class with
+  expected failures sets it to `true`; otherwise macOS silently skips what follows them.
 - Foundation's `URLSessionWebSocketTask` needs a libcurl built with WebSocket support, which the
   toolchain's is not, so the control socket uses `LinuxWebSocket.swift`, a plain ws:// client.
 
