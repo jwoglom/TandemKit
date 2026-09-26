@@ -41,10 +41,16 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 
 Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`,
 `FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
-`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`). The script
+`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`, `DESTINATION`). The script
 sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
+
+In CI, the `integration-tests` job in `.github/workflows/unit-tests.yml` runs this script on
+the self-hosted macOS runners for every push and pull request. It uses faketandem's default
+branch (`faketandem_ref` on a manual dispatch picks another) and the LoopKit frameworks from
+`.github/actions/loopkit-frameworks`, the same ones the unit tests use. It fails if any test
+skips, because a skip means the emulator's addresses never reached the test process.
 
 ### How the tests find the emulator
 

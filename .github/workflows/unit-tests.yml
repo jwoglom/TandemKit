@@ -9,40 +9,21 @@ on:
     branches: [ main, dev ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      faketandem_ref:
+        description: "faketandem branch/tag/SHA for the integration tests (default: its default branch)"
+        required: false
+        default: ""
 
-# The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
-# BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
-# other project has to produce them first. build.yml/test.yml get that from
-# Trio's workspace, which needs the private Trio repo and a secret.
-#
-# Instead, check out LoopKit (public, pinned below) next to this repo and build
-# its two framework targets straight into the shared derived data. That keeps
-# this job free of Trio and of secrets, so it runs on every push and pull
-# request, forks included.
-#
-# Those frameworks only depend on the pinned LoopKit revision and the Xcode
-# version, so they are cached under exactly that key and rebuilt only when one
-# of the two moves. On a cache hit the LoopKit checkout is skipped entirely and
-# TandemKit is built with -project (no workspace), which keeps the LoopKit
-# targets out of the build graph so nothing can decide to recompile them.
-#
-# LOOPKIT_REPOSITORY/LOOPKIT_REVISION below mirror Trio's LoopKit submodule,
-# which is the real source of truth -- Trio pulls its dependencies in as git
-# submodules (see .gitmodules in nightscout/Trio), and TandemKit is one of
-# them. Upstream LoopKit/LoopKit is not interchangeable with Trio's
-# loopandlearn fork: upstream has no `Pluggable`, which TandemPumpManager
-# conforms to. When Trio bumps its LoopKit submodule, bump the revision here
-# to match.
+# LoopKit.framework/LoopKitUI.framework come from .github/actions/loopkit-frameworks, which
+# builds them from the loopandlearn/LoopKit revision Trio pins, without Trio or secrets, so these
+# jobs run on every push and pull request, forks included.
 jobs:
   unit-tests:
     runs-on: [self-hosted, macOS]
     timeout-minutes: 40
     env:
       DERIVED_DATA_PATH: DerivedData
-      PRODUCTS_DIR: DerivedData/Build/Products/Debug-iphonesimulator
-      LOOPKIT_PRODUCTS_CACHE: LoopKitProducts
-      LOOPKIT_REPOSITORY: loopandlearn/LoopKit
-      LOOPKIT_REVISION: 0229bb18d30b095420aae1e8fa04c37794e0a378
       XCODEBUILD_COMMON_FLAGS: >-
         -skipMacroValidation
         -skipPackagePluginValidation
@@ -124,39 +105,6 @@ jobs:
           ruby scripts/check_xcodeproj_source_membership.rb --check
         working-directory: TandemKit
 
-      # Keyed on the pinned LoopKit revision and the Xcode version, and nothing
-      # else -- those are the only two inputs to these frameworks. The key is
-      # deliberately narrow so it stays a hit across branches and the ~hundreds
-      # of MB are re-uploaded only when the pin or the toolchain moves.
-      - name: Cache prebuilt LoopKit frameworks
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.LOOPKIT_PRODUCTS_CACHE }}
-          key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ env.XCODE_VERSION }}-loopkit-frameworks-${{ env.LOOPKIT_REVISION }}
-
-      # Don't trust the restore blindly: a partial or truncated cache entry
-      # should fall back to a real build rather than fail the job at link time.
-      - name: Check for usable prebuilt LoopKit frameworks
-        id: loopkit
-        run: |
-          set -euo pipefail
-          if [[ -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKit.framework" && -d "${LOOPKIT_PRODUCTS_CACHE}/LoopKitUI.framework" ]]; then
-            echo "Using cached LoopKit frameworks."
-            echo "prebuilt=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "No usable cached LoopKit frameworks; they will be built from source."
-            echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Checkout LoopKit at the pinned revision
-        if: steps.loopkit.outputs.prebuilt != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.LOOPKIT_REPOSITORY }}
-          ref: ${{ env.LOOPKIT_REVISION }}
-          path: LoopKit
-          fetch-depth: 1
-
       - name: Cache SwiftPM artifacts
         uses: actions/cache@v4
         with:
@@ -167,65 +115,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
 
-      # LoopKit.xcodeproj shares schemes only for its example app and test
-      # bundles, and xcodebuild refuses -target together with -derivedDataPath,
-      # so generate a scheme per target and share it. Generated schemes land in
-      # xcuserdata, which xcodebuild resolves against $USER; move them to
-      # xcshareddata so the lookup does not depend on who the runner runs as.
-      - name: Generate LoopKit schemes
-        if: steps.loopkit.outputs.prebuilt != 'true'
-        run: |
-          set -euo pipefail
-          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
-          ruby -e '
-            require "xcodeproj"
-            Xcodeproj::Project.open("LoopKit/LoopKit.xcodeproj").recreate_user_schemes
-          '
-          mkdir -p "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes"
-          for scheme in LoopKit LoopKitUI; do
-            find "LoopKit/LoopKit.xcodeproj/xcuserdata" -name "${scheme}.xcscheme" -exec \
-              cp {} "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes/${scheme}.xcscheme" \;
-          done
-          xcodebuild -project "LoopKit/LoopKit.xcodeproj" -list
-
-      # LoopKitUI depends on LoopKit, but build both explicitly so a missing
-      # dependency edge upstream cannot leave us with half of what TandemKit
-      # links against.
-      - name: Build LoopKit frameworks
-        if: steps.loopkit.outputs.prebuilt != 'true'
-        run: |
-          set -o pipefail
-          for scheme in LoopKit LoopKitUI; do
-            xcodebuild build \
-              -project "LoopKit/LoopKit.xcodeproj" \
-              -scheme "${scheme}" \
-              -configuration Debug \
-              -destination "${SIMULATOR_DESTINATION}" \
-              -derivedDataPath "${DERIVED_DATA_PATH}" \
-              ${XCODEBUILD_COMMON_FLAGS} \
-              -quiet \
-              ONLY_ACTIVE_ARCH=YES \
-              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-              2>&1 | tee -a "xcodebuild-loopkit.log"
-          done
-          mkdir -p "${LOOPKIT_PRODUCTS_CACHE}"
-          rsync -a --delete "${PRODUCTS_DIR}/" "${LOOPKIT_PRODUCTS_CACHE}/"
-
-      # TandemKit.xcodeproj resolves LoopKit.framework/LoopKitUI.framework out of
-      # BUILT_PRODUCTS_DIR, so putting them there is all the wiring the build
-      # needs -- which is why the TandemKit build below can use -project and skip
-      # the LoopKit project entirely.
-      - name: Stage LoopKit frameworks into BUILT_PRODUCTS_DIR
-        run: |
-          set -euo pipefail
-          mkdir -p "${PRODUCTS_DIR}"
-          rsync -a "${LOOPKIT_PRODUCTS_CACHE}/" "${PRODUCTS_DIR}/"
-          for framework in LoopKit LoopKitUI; do
-            if [[ ! -d "${PRODUCTS_DIR}/${framework}.framework" ]]; then
-              echo "${framework}.framework is missing from ${PRODUCTS_DIR} after staging."
-              exit 1
-            fi
-          done
+      - name: Stage LoopKit frameworks
+        uses: ./TandemKit/.github/actions/loopkit-frameworks
+        with:
+          derived-data-path: ${{ env.DERIVED_DATA_PATH }}
+          destination: ${{ env.SIMULATOR_DESTINATION }}
+          xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Build TandemKitTests for execution
         run: |
@@ -326,3 +221,181 @@ jobs:
             xcodebuild-test-virtual-pump.log
             TandemKitTests.xcresult
             TandemKitTests-virtual-pump.xcresult
+
+  # TandemKitIntegrationTests: the real driver against the faketandem emulator over its virtual
+  # GATT link (docs/integration-harness.md). scripts/integration-test.sh does the orchestration,
+  # the same as a local run; this job only provides what it expects to find.
+  integration-tests:
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      DERIVED_DATA_PATH: DerivedData-virtual-pump
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+      # integration-test.sh builds faketandem from inside its checkout, so these must be absolute.
+      DERIVED_DATA: ${{ github.workspace }}/DerivedData-virtual-pump
+      FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
+      LOG_DIR: ${{ github.workspace }}/integration-logs
+      TRIO_PRODUCTS: ${{ github.workspace }}/LoopKitProducts
+    steps:
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Capture Xcode version for cache keys
+        run: |
+          set -euo pipefail
+          XCODE_VERSION="$(xcodebuild -version | awk 'NR==1{print $2}')"
+          echo "XCODE_VERSION=${XCODE_VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+
+          def runtime_sort_key(rt: str):
+            m = re.search(r"iOS-(\d+)-(\d+)", rt)
+            return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+
+          data = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"], text=True)
+          j = json.loads(data)
+
+          ios_runtimes = sorted([rt for rt in j.get("devices", {}).keys() if ".iOS-" in rt], key=runtime_sort_key, reverse=True)
+          if not ios_runtimes:
+            raise SystemExit("No iOS runtimes found on runner")
+
+          candidates = []
+          for rt in ios_runtimes:
+            for dev in j["devices"].get(rt, []):
+              if not dev.get("isAvailable"):
+                continue
+              name = dev.get("name", "")
+              if name.startswith("iPhone"):
+                candidates.append((name, dev.get("udid"), rt))
+            if candidates:
+              break
+
+          if not candidates:
+            raise SystemExit("No available iPhone simulators found on runner")
+
+          preferred = next((c for c in candidates if c[0] == "iPhone 16"), candidates[0])
+          name, udid, rt = preferred
+          print(f"Selected simulator: {name} ({udid}) [{rt}]")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
+            f.write(f"DESTINATION=platform=iOS Simulator,id={udid}\n")
+            f.write(f"SIMULATOR_UDID={udid}\n")
+          PY
+
+      # See unit-tests: the boot runs in the background while everything below builds.
+      - name: Start booting the simulator in the background
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "${SIMULATOR_UDID}" || true
+
+      - name: Checkout TandemKit
+        uses: actions/checkout@v4
+        with:
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Checkout faketandem
+        uses: actions/checkout@v4
+        with:
+          repository: jwoglom/faketandem
+          ref: ${{ env.FAKETANDEM_REF }}
+          path: faketandem
+          fetch-depth: 1
+
+      # faketandem vendors its modules, so there is nothing for setup-go to cache.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+
+      # faketandem runs pumpX2's jpake-server from the cliparser jar for fresh pairings.
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The Makefile pins the cliparser version, so it is the whole cache key.
+      - name: Cache the pumpX2 cliparser jar
+        uses: actions/cache@v4
+        with:
+          path: faketandem/third_party
+          key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
+
+      - name: Fetch the pumpX2 cliparser jar
+        working-directory: faketandem
+        run: |
+          set -euo pipefail
+          if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
+            make jar
+          fi
+          ls -l third_party
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-virtual-pump-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-virtual-pump-spm-
+
+      - name: Stage LoopKit frameworks
+        uses: ./TandemKit/.github/actions/loopkit-frameworks
+        with:
+          derived-data-path: ${{ env.DERIVED_DATA_PATH }}
+          destination: ${{ env.SIMULATOR_DESTINATION }}
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Build TandemKitIntegrationTests for execution
+        run: TandemKit/scripts/integration-test.sh build -quiet
+
+      - name: Wait for the simulator to finish booting
+        run: |
+          set -euo pipefail
+          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      - name: Run TandemKitIntegrationTests against faketandem
+        run: TandemKit/scripts/integration-test.sh test
+
+      # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
+      # a run that never talked to faketandem would still pass. Expected failures (the strict
+      # XCTExpectFailure wrappers) are counted as failures in this line but do not fail the run.
+      - name: Check that integration tests actually ran
+        run: |
+          set -euo pipefail
+          python3 - "${LOG_DIR}/xcodebuild.log" <<'PY'
+          import os, re, sys
+
+          summaries = re.findall(r"Executed (\d+) tests?, with (?:(\d+) tests? skipped and )?(\d+) failures?", open(sys.argv[1]).read())
+          if not summaries:
+            raise SystemExit("Could not find an 'Executed N tests' line in the xcodebuild output.")
+          executed, skipped, failures = max((int(e), int(s or 0), int(f)) for e, s, f in summaries)
+          if executed == 0:
+            raise SystemExit("The integration test bundle ran 0 tests.")
+          if skipped:
+            raise SystemExit(f"{skipped} of {executed} integration tests were skipped; only the missing-emulator check skips.")
+          print(f"Executed {executed} tests ({failures} expected failures).")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+            f.write(f"TandemKitIntegrationTests: {executed} tests executed against faketandem, {failures} expected failures.\n")
+          PY
+
+      - name: Upload integration logs/results (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tandemkit-integration-test-artifacts
+          path: |
+            xcodebuild-loopkit.log
+            ${{ env.LOG_DIR }}/faketandem.log
+            ${{ env.LOG_DIR }}/xcodebuild.log
+            ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult

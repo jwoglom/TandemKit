@@ -20,7 +20,7 @@
 #   FAKETANDEM_HOST   Interface to bind (default 127.0.0.1; the simulator shares the host network).
 #   LOG_DIR           Where faketandem.log / xcodebuild.log / the .xcresult go
 #                     (default: $DERIVED_DATA/integration-logs).
-#   Everything scripts/test-local.sh reads (TRIO_PRODUCTS, SIMULATOR, and DERIVED_DATA, which
+#   Everything scripts/test-local.sh reads (TRIO_PRODUCTS, SIMULATOR, DESTINATION, and DERIVED_DATA, which
 #                     defaults to .derived-data-virtual-pump here).
 set -euo pipefail
 
