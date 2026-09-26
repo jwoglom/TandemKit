@@ -596,6 +596,7 @@
         public let raw: Data
         public let title: String
         public let type: PumpEventType?
+        public let alarmType: PumpAlarmType?
 
         public init(
             date: Date,
@@ -603,7 +604,8 @@
             isMutable: Bool = false,
             raw: Data,
             title: String,
-            type: PumpEventType? = nil
+            type: PumpEventType? = nil,
+            alarmType: PumpAlarmType? = nil
         ) {
             self.date = date
             // As in LoopKit: the dose takes the event's raw as its identity, and lends its type.
@@ -614,7 +616,19 @@
             self.raw = raw
             self.title = title
             self.type = type ?? dose?.type.pumpEventType
+            self.alarmType = alarmType
         }
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) public enum PumpAlarmType: Equatable, Codable {
+        case autoOff
+        case lowInsulin
+        case lowPower
+        case noDelivery
+        case noInsulin
+        case noPower
+        case occlusion
+        case other(_ details: String)
     }
 
     // MARK: - Errors & Activation

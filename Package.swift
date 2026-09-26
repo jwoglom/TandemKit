@@ -37,6 +37,24 @@ import PackageDescription
 // stands in for CryptoKit hashing and the JPAKE provider becomes a trapping
 // stub (SwiftECCJpakeProvider.swift).
 #if os(Linux)
+import Foundation
+
+// Tests/TandemKitIntegrationTests needs a running faketandem and the TANDEMKIT_VIRTUAL_PUMP flag,
+// without which it refuses to compile, so it is declared only when scripts/integration-test.sh (or
+// CI's virtual pump build) asks for it with TANDEMKIT_INTEGRATION_TESTS=1. Fresh JPAKE pairing is
+// compiled out here (SwiftECC does not build); everything else runs as on macOS.
+let linuxIntegrationTests: [Target] = ProcessInfo.processInfo.environment["TANDEMKIT_INTEGRATION_TESTS"] == "1"
+    ? [
+        .testTarget(
+            name: "TandemKitIntegrationTests",
+            // TandemKitTests compiles the files the two Xcode test targets share; SwiftPM puts a
+            // file in one target only.
+            dependencies: ["TandemKit", "TandemKitTests", "CoreBluetooth", "LoopKit", "HealthKit"],
+            path: "Tests/TandemKitIntegrationTests",
+            exclude: ["Conformance/Oracles"]
+        )
+    ]
+    : []
 
 let package = Package(
     name: "TandemKit",
@@ -96,11 +114,7 @@ let package = Package(
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )
-        // Tests/TandemKitIntegrationTests is deliberately not declared: it needs a
-        // running faketandem and real JPAKE, which is a trapping stub here. It is
-        // built and run on macOS by scripts/integration-test.sh
-        // (docs/integration-harness.md).
-    ]
+    ] + linuxIntegrationTests
 )
 
 #else

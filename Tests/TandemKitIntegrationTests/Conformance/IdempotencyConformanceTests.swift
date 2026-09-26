@@ -1,6 +1,10 @@
 import Foundation
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 /// Group C of `docs/conformance-test-plan.md`: idempotency and complete batches.

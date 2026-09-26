@@ -29,6 +29,20 @@ FAKETANDEM_DIR=../faketandem scripts/integration-test.sh test \
 scripts/integration-test.sh build                                  # compile only, no emulator
 ```
 
+On Linux the same script runs the suite under `swift test` instead, built with
+`-DTANDEMKIT_VIRTUAL_PUMP` into `.build-virtual`; Package.swift declares the target only when
+`TANDEMKIT_INTEGRATION_TESTS=1`, which the script sets. It needs Go, Java and faketandem but no
+simulator. Filter with `--filter`, e.g. `scripts/integration-test.sh test --filter
+TandemKitIntegrationTests.BolusIntegrationTests`. Differences from macOS:
+
+- Fresh JPAKE pairing (`PairingIntegrationTests`) is compiled out, since SwiftECC does not build
+  and the JPAKE provider is a trapping stub; the rest pair with a seeded long-term key as on macOS.
+- swift-corelibs-xctest has no `XCTExpectFailure` or `XCTAttachment`.
+  `LinuxExpectedFailure.swift` supplies a strict `XCTExpectFailure`, and each test's request log
+  is written to `LOG_DIR/request-logs/` instead of being attached.
+- Foundation's `URLSessionWebSocketTask` needs a libcurl built with WebSocket support, which the
+  toolchain's is not, so the control socket uses `LinuxWebSocket.swift`, a plain ws:// client.
+
 The script builds faketandem from `FAKETANDEM_DIR`, starts it with `-transport virtual`
 on two free loopback ports, waits for its API, runs the `TandemKitIntegrationTests`
 scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
@@ -52,6 +66,9 @@ TandemKit with `VirtualPump.xcconfig` in the background while faketandem is buil
 branch (`faketandem_ref` on a manual run picks another) and the cliparser jar fetched, then hands
 the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips, because
 a skip means the emulator's addresses never reached the test process.
+
+`.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
+reusing the `virtual-pump` job's build from the Actions cache.
 
 ### How the tests find the emulator
 
@@ -222,8 +239,8 @@ and a few seconds per pairing.
 
 New files under `Tests/TandemKitIntegrationTests/` must be members of the
 `TandemKitIntegrationTests` target; `ruby scripts/check_xcodeproj_source_membership.rb
---fix` does it. The directory is deliberately not declared in `Package.swift`'s Linux
-branch (JPAKE is a trapping stub there).
+--fix` does it. On Linux SwiftPM picks them up from the directory, except `Conformance/Oracles`,
+which `TandemKitTests` compiles because both test targets use it.
 
 ## What the harness found
 

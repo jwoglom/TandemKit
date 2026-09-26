@@ -8,6 +8,8 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
         }
     }
 
+    // Rounds 1-2 are EC-JPAKE, which is a trapping stub where SwiftECC does not build (Linux).
+    #if canImport(SwiftECC)
     func testFreshJpakePairingAuthenticatesBothSides() throws {
         let driver = makeDriver()
         let scan = try harness.discover(driver)
@@ -71,6 +73,8 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
             "the refusal must come from the pump having run JPAKE, not from silence"
         )
     }
+
+    #endif
 
     /// The post-pairing state staged directly (the same key on both sides), then a connect that
     /// authenticates through rounds 3/4 only. Every other flow test starts this way.

@@ -547,6 +547,7 @@
 		7609714F61E8275A68D861A9 /* IobSnapshotPreBolusHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9DB29F50ED93FA91BDA9F28 /* IobSnapshotPreBolusHistoryLogTests.swift */; };
 		76BCC0DDD814BFB9049D9DE0 /* VersionsAHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F87E6C9EE1E54E3383D3C32 /* VersionsAHistoryLogTests.swift */; };
 		77E85FDF591A0F94A7408BFB /* ExitChangeCartridgeModeRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20A38CF8F5D56BC1BA34FBCC /* ExitChangeCartridgeModeRequestTests.swift */; };
+		7892A6300D7F3D6EFA5E6F17 /* LinuxWebSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 954EEDEA0C9D99A4E1EE063E /* LinuxWebSocket.swift */; };
 		79A4D7BA809EEF21C561EBB4 /* CGMGlucoseAlertSettingsRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9442D6F69EB42BDDD7A77F5D /* CGMGlucoseAlertSettingsRequestTests.swift */; };
 		79DA8A69F6B24B836C83CB27 /* HistoryDoseReportingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00E6BB2E2F11C61394D118AB /* HistoryDoseReportingTests.swift */; };
 		7A13B9CF099C60230F0494A2 /* CurrentBatteryV1RequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D5AF82736542CC77066E6F /* CurrentBatteryV1RequestTests.swift */; };
@@ -672,6 +673,7 @@
 		D36C4729F45700013C6305BC /* StoredHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA94676577AF272920ECF3B2 /* StoredHistoryLog.swift */; };
 		D398C6880200EABA077E6D10 /* ShelfModeHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC425634301FACA14B3DEA47 /* ShelfModeHistoryLogTests.swift */; };
 		D39C8B39A9B6FD227EA12ADA /* TandemKitNotificationsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C5563E7B3743FEE9BBBC86 /* TandemKitNotificationsViewModelTests.swift */; };
+		D4EF5A6940B201355978A89A /* LinuxExpectedFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92B319D5480B3192E101D6F /* LinuxExpectedFailure.swift */; };
 		D519C96FF94F85DBFD9695BF /* PumpTelemetrySchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCBB5BAD7304DF22149175A /* PumpTelemetrySchedulerTests.swift */; };
 		D522BEE7F5228B164F13B8EC /* PumpChallengeResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACC8524B3BD8531CA7B6AC5 /* PumpChallengeResponseTests.swift */; };
 		D5C99D17EC9228AF2D4AD2A3 /* Jpake1bResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 066526A14B1187B4A1074B07 /* Jpake1bResponseTests.swift */; };
@@ -1315,6 +1317,7 @@
 		94967D1376FF1C521A47EEF5 /* Jpake1aRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Jpake1aRequestTests.swift; sourceTree = "<group>"; };
 		94B32560ECA71E0442138C3E /* ConformanceSmokeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConformanceSmokeTests.swift; sourceTree = "<group>"; };
 		9500CD11C5B7880A0B49AC19 /* HistoryTimestampReconciler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryTimestampReconciler.swift; sourceTree = "<group>"; };
+		954EEDEA0C9D99A4E1EE063E /* LinuxWebSocket.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LinuxWebSocket.swift; sourceTree = "<group>"; };
 		956E0BA9CEF3B5A73D2DCEE4 /* WumpOcclusionDebugHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WumpOcclusionDebugHistoryLog.swift; sourceTree = "<group>"; };
 		97B6659EC42092BEEEC91D1A /* BasalIqSettingsChangeHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BasalIqSettingsChangeHistoryLog.swift; sourceTree = "<group>"; };
 		98B0ACE8793F498DBB65A647 /* TandemKitChangeCartridgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitChangeCartridgeView.swift; sourceTree = "<group>"; };
@@ -1501,6 +1504,7 @@
 		E37E2A577341B9469A704D90 /* QualifyingEventHandlingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QualifyingEventHandlingTests.swift; sourceTree = "<group>"; };
 		E5CBC5AFAABE18793EAADD82 /* CgmAlertAckDexHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmAlertAckDexHistoryLogTests.swift; sourceTree = "<group>"; };
 		E8B256CCD0D7244582B592C1 /* BolusPermissionResponseHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BolusPermissionResponseHistoryLog.swift; sourceTree = "<group>"; };
+		E92B319D5480B3192E101D6F /* LinuxExpectedFailure.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LinuxExpectedFailure.swift; sourceTree = "<group>"; };
 		E95488EFDECE4981A9B14993 /* QualifyingEventFetch.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QualifyingEventFetch.swift; sourceTree = "<group>"; };
 		E9AC5051D618C0A8197F5B84 /* PumpNotificationAlertTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PumpNotificationAlertTests.swift; sourceTree = "<group>"; };
 		EBD406F43412727EF07D3FE6 /* ExitFillTubingModeRequestTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ExitFillTubingModeRequestTests.swift; sourceTree = "<group>"; };
@@ -2647,6 +2651,8 @@
 				6903B3405E80A880F50CCD70 /* VirtualCoreBluetoothNames.swift */,
 				50175EC83B3B380FA4BB2FD2 /* MTUIntegrationTests.swift */,
 				B5F05763D0204215179CD41A /* Conformance */,
+				E92B319D5480B3192E101D6F /* LinuxExpectedFailure.swift */,
+				954EEDEA0C9D99A4E1EE063E /* LinuxWebSocket.swift */,
 			);
 			name = TandemKitIntegrationTests;
 			path = Tests/TandemKitIntegrationTests;
@@ -3709,6 +3715,8 @@
 				490914FD2C133082DAC09DBA /* CancelConformanceTests.swift in Sources */,
 				A28C47F5A71A398A2C6A1C70 /* IdempotencyConformanceTests.swift in Sources */,
 				990236E2137C087222B2C865 /* PumpSideConformanceTests.swift in Sources */,
+				D4EF5A6940B201355978A89A /* LinuxExpectedFailure.swift in Sources */,
+				7892A6300D7F3D6EFA5E6F17 /* LinuxWebSocket.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
