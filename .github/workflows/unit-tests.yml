@@ -309,11 +309,12 @@ jobs:
           path: faketandem
           fetch-depth: 1
 
-      # faketandem vendors its modules, so there is nothing for setup-go to cache.
+      # Before Go 1.24 the internal linker wrote no LC_UUID, and this macOS's dyld refuses such a
+      # binary at launch (golang/go#68678). faketandem vendors its modules: nothing to cache.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: stable
           cache: false
 
       # faketandem runs pumpX2's jpake-server from the cliparser jar for fresh pairings.
