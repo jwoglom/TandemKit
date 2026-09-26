@@ -1,4 +1,4 @@
-name: TandemKit unit tests
+name: TandemKit tests
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,17 +16,28 @@ on:
         default: ""
 
 # LoopKit.framework/LoopKitUI.framework come from .github/actions/loopkit-frameworks, which
-# builds them from the loopandlearn/LoopKit revision Trio pins, without Trio or secrets, so these
-# jobs run on every push and pull request, forks included.
+# builds them from the loopandlearn/LoopKit revision Trio pins, without Trio or secrets, so this
+# runs on every push and pull request, forks included.
+#
+# One job, one DerivedData: the unit tests build TandemKit plain, the virtual CoreBluetooth tests
+# rebuild it once with VirtualPump.xcconfig, and TandemKitIntegrationTests (the driver against
+# faketandem, docs/integration-harness.md) reuse that build. Every build goes through
+# scripts/test-local.sh so the flagged builds share one set of build settings; a setting that
+# differed would rebuild TandemKit again.
 jobs:
+  # The check keeps its old name so branch protection that requires it still matches.
   unit-tests:
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 40
+    timeout-minutes: 80
     env:
       DERIVED_DATA_PATH: DerivedData
-      XCODEBUILD_COMMON_FLAGS: >-
-        -skipMacroValidation
-        -skipPackagePluginValidation
+      # The scripts cd into other checkouts, so these must be absolute.
+      DERIVED_DATA: ${{ github.workspace }}/DerivedData
+      TRIO_PRODUCTS: ${{ github.workspace }}/LoopKitProducts
+      FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
+      FAKETANDEM_BIN: ${{ github.workspace }}/integration-logs/faketandem
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+      LOG_DIR: ${{ github.workspace }}/integration-logs
     steps:
       - name: Checkout TandemKit
         uses: actions/checkout@v6
@@ -36,12 +47,6 @@ jobs:
 
       - name: Set up Xcode and a simulator
         uses: ./TandemKit/.github/actions/setup-simulator
-
-      - name: Validate Xcode source membership (all targets)
-        run: |
-          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
-          ruby scripts/check_xcodeproj_source_membership.rb --check
-        working-directory: TandemKit
 
       - name: Cache SwiftPM artifacts
         uses: actions/cache@v6
@@ -60,105 +65,15 @@ jobs:
           destination: ${{ env.SIMULATOR_DESTINATION }}
           xcode-version: ${{ env.XCODE_VERSION }}
 
-      - name: Build TandemKitTests for execution
+      # Collected in "Finish building TandemKitTests"; everything until then does not need it.
+      - name: Start building TandemKitTests in the background
+        run: TandemKit/scripts/ci/background.sh start build-unit TandemKit/scripts/test-local.sh build -quiet
+
+      - name: Validate Xcode source membership (all targets)
         run: |
-          set -o pipefail
-          xcodebuild build-for-testing \
-            -project "TandemKit/TandemKit.xcodeproj" \
-            -scheme "TandemKitTests" \
-            -configuration Debug \
-            -destination "${SIMULATOR_DESTINATION}" \
-            -derivedDataPath "${DERIVED_DATA_PATH}" \
-            ${XCODEBUILD_COMMON_FLAGS} \
-            -quiet \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "xcodebuild-build-for-testing.log"
-
-      - name: Wait for the simulator to finish booting
-        run: |
-          set -euo pipefail
-          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
-
-      # -disableAutomaticPackageResolution is safe here and not on the build
-      # above: build-for-testing has already resolved the graph into
-      # DerivedData/SourcePackages, so re-resolving is pure network latency.
-      - name: Run TandemKitTests without rebuilding
-        run: |
-          set -o pipefail
-          xcodebuild test-without-building \
-            -project "TandemKit/TandemKit.xcodeproj" \
-            -scheme "TandemKitTests" \
-            -configuration Debug \
-            -destination "${SIMULATOR_DESTINATION}" \
-            -derivedDataPath "${DERIVED_DATA_PATH}" \
-            -resultBundlePath "TandemKitTests.xcresult" \
-            ${XCODEBUILD_COMMON_FLAGS} \
-            -disableAutomaticPackageResolution \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "xcodebuild-test.log"
-
-      - name: Check that tests actually ran
-        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test.log --label TandemKitTests
-
-      # TANDEMKIT_VIRTUAL_PUMP swaps CoreBluetooth for the faketandem socket (VirtualPump/), so its
-      # tests only exist in a build with the flag, which VirtualPump.xcconfig sets. This rebuild
-      # also fails if the driver starts using CoreBluetooth API the stand-in does not provide.
-      - name: Build and run the virtual CoreBluetooth tests
-        run: |
-          set -o pipefail
-          xcodebuild test \
-            -project "TandemKit/TandemKit.xcodeproj" \
-            -scheme "TandemKitTests" \
-            -configuration Debug \
-            -destination "${SIMULATOR_DESTINATION}" \
-            -derivedDataPath "${DERIVED_DATA_PATH}" \
-            -resultBundlePath "TandemKitTests-virtual-pump.xcresult" \
-            -only-testing:TandemKitTests/VirtualCoreBluetoothTests \
-            -xcconfig "TandemKit/VirtualPump.xcconfig" \
-            ${XCODEBUILD_COMMON_FLAGS} \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            2>&1 | tee "xcodebuild-test-virtual-pump.log"
-
-      # The whole test file is behind the flag, so a flag that did not take would pass empty.
-      - name: Check that the virtual CoreBluetooth tests actually ran
-        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test-virtual-pump.log --label VirtualCoreBluetoothTests
-
-      - name: Upload test logs/results (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: tandemkit-unit-test-artifacts
-          path: |
-            xcodebuild-loopkit.log
-            xcodebuild-build-for-testing.log
-            xcodebuild-test.log
-            xcodebuild-test-virtual-pump.log
-            TandemKitTests.xcresult
-            TandemKitTests-virtual-pump.xcresult
-
-  # TandemKitIntegrationTests: the real driver against the faketandem emulator over its virtual
-  # GATT link (docs/integration-harness.md). scripts/integration-test.sh does the orchestration,
-  # the same as a local run; this job only provides what it expects to find.
-  integration-tests:
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 60
-    env:
-      DERIVED_DATA_PATH: DerivedData-virtual-pump
-      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
-      # integration-test.sh builds faketandem from inside its checkout, so these must be absolute.
-      DERIVED_DATA: ${{ github.workspace }}/DerivedData-virtual-pump
-      FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
-      LOG_DIR: ${{ github.workspace }}/integration-logs
-      TRIO_PRODUCTS: ${{ github.workspace }}/LoopKitProducts
-    steps:
-      - name: Checkout TandemKit
-        uses: actions/checkout@v6
-        with:
-          path: TandemKit
-          fetch-depth: 1
-
-      - name: Set up Xcode and a simulator
-        uses: ./TandemKit/.github/actions/setup-simulator
+          ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+          ruby scripts/check_xcodeproj_source_membership.rb --check
+        working-directory: TandemKit
 
       - name: Checkout faketandem
         uses: actions/checkout@v6
@@ -190,7 +105,7 @@ jobs:
           path: faketandem/third_party
           key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
 
-      - name: Fetch the pumpX2 cliparser jar
+      - name: Build faketandem and fetch the pumpX2 cliparser jar
         working-directory: faketandem
         run: |
           set -euo pipefail
@@ -198,38 +113,57 @@ jobs:
             make jar
           fi
           ls -l third_party
+          mkdir -p "$(dirname "${FAKETANDEM_BIN}")"
+          go build -o "${FAKETANDEM_BIN}" .
 
-      - name: Cache SwiftPM artifacts
-        uses: actions/cache@v6
-        with:
-          path: |
-            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
-            ~/.swiftpm
-          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-virtual-pump-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-virtual-pump-spm-
-
-      - name: Stage LoopKit frameworks
-        uses: ./TandemKit/.github/actions/loopkit-frameworks
-        with:
-          derived-data-path: ${{ env.DERIVED_DATA_PATH }}
-          destination: ${{ env.SIMULATOR_DESTINATION }}
-          xcode-version: ${{ env.XCODE_VERSION }}
-
-      - name: Build TandemKitIntegrationTests for execution
-        run: TandemKit/scripts/integration-test.sh build -quiet
-        env:
-          DESTINATION: ${{ env.SIMULATOR_DESTINATION }}
+      - name: Finish building TandemKitTests
+        run: TandemKit/scripts/ci/background.sh wait build-unit
 
       - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      # -disableAutomaticPackageResolution is safe here and not on the build
+      # above: build-for-testing has already resolved the graph into
+      # DerivedData/SourcePackages, so re-resolving is pure network latency.
+      - name: Run TandemKitTests without rebuilding
         run: |
-          set -euo pipefail
-          xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+          set -o pipefail
+          TandemKit/scripts/test-local.sh test \
+            -resultBundlePath "TandemKitTests.xcresult" \
+            -disableAutomaticPackageResolution \
+            2>&1 | tee "xcodebuild-test.log"
+
+      - name: Check that tests actually ran
+        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test.log --label TandemKitTests
+
+      # TANDEMKIT_VIRTUAL_PUMP swaps CoreBluetooth for the faketandem socket (VirtualPump/), so this
+      # rebuilds TandemKit once. It also fails if the driver starts using CoreBluetooth API the
+      # stand-in does not provide. The integration target then compiles against that build.
+      - name: Build TandemKit with the virtual pump, and TandemKitIntegrationTests
+        env:
+          VIRTUAL_PUMP: '1'
+        run: |
+          set -o pipefail
+          TandemKit/scripts/test-local.sh build -quiet 2>&1 | tee "xcodebuild-build-virtual-pump.log"
+          TandemKit/scripts/integration-test.sh build -quiet 2>&1 | tee -a "xcodebuild-build-virtual-pump.log"
+
+      - name: Run the virtual CoreBluetooth tests
+        env:
+          VIRTUAL_PUMP: '1'
+        run: |
+          set -o pipefail
+          TandemKit/scripts/test-local.sh test \
+            -resultBundlePath "TandemKitTests-virtual-pump.xcresult" \
+            -only-testing:TandemKitTests/VirtualCoreBluetoothTests \
+            -disableAutomaticPackageResolution \
+            2>&1 | tee "xcodebuild-test-virtual-pump.log"
+
+      # The whole test file is behind the flag, so a flag that did not take would pass empty.
+      - name: Check that the virtual CoreBluetooth tests actually ran
+        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test-virtual-pump.log --label VirtualCoreBluetoothTests
 
       - name: Run TandemKitIntegrationTests against faketandem
-        run: TandemKit/scripts/integration-test.sh test
-        env:
-          DESTINATION: ${{ env.SIMULATOR_DESTINATION }}
+        run: TandemKit/scripts/integration-test.sh test -disableAutomaticPackageResolution
 
       # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
       # a run that never talked to faketandem would still pass. The failures it reports are the
@@ -237,13 +171,19 @@ jobs:
       - name: Check that integration tests actually ran
         run: TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label TandemKitIntegrationTests --no-skips
 
-      - name: Upload integration logs/results (on failure)
+      - name: Upload test logs/results (on failure)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: tandemkit-integration-test-artifacts
+          name: tandemkit-test-artifacts
           path: |
             xcodebuild-loopkit.log
+            ${{ runner.temp }}/background/build-unit.log
+            xcodebuild-test.log
+            xcodebuild-build-virtual-pump.log
+            xcodebuild-test-virtual-pump.log
+            TandemKitTests.xcresult
+            TandemKitTests-virtual-pump.xcresult
             ${{ env.LOG_DIR }}/faketandem.log
             ${{ env.LOG_DIR }}/xcodebuild.log
             ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult

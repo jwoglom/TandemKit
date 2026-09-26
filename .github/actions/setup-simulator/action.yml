@@ -1,7 +1,8 @@
 name: Set up Xcode and an iPhone simulator
 description: >-
   Selects the latest stable Xcode and an iPhone simulator on the newest iOS runtime, and exports
-  XCODE_VERSION, SIMULATOR_DESTINATION and SIMULATOR_UDID to the job environment.
+  XCODE_VERSION, SIMULATOR_DESTINATION and SIMULATOR_UDID to the job environment, plus the same
+  destination as DESTINATION, which is what scripts/test-local.sh reads.
 
 inputs:
   boot:
@@ -59,6 +60,7 @@ runs:
         with open(os.environ["GITHUB_ENV"], "a") as f:
           f.write(f"SIMULATOR_DESTINATION=platform=iOS Simulator,id={udid}\n")
           f.write(f"SIMULATOR_UDID={udid}\n")
+          f.write(f"DESTINATION=platform=iOS Simulator,id={udid}\n")
         PY
 
     # First boot of a simulator device on a fresh runner takes ~5-6 minutes,

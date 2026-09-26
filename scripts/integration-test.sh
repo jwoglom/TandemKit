@@ -16,6 +16,7 @@
 #   FAKETANDEM_DIR    faketandem checkout (default: ../faketandem next to this repo).
 #   FAKETANDEM_JAR    pumpX2 cliparser jar (default: newest
 #                     $FAKETANDEM_DIR/third_party/pumpx2-cliparser-*.jar; `make jar` there fetches it).
+#   FAKETANDEM_BIN    Prebuilt faketandem binary; skips the go build.
 #   FAKETANDEM_ARGS   Extra flags for the emulator (e.g. "-q" for info-level logging).
 #   FAKETANDEM_HOST   Interface to bind (default 127.0.0.1; the simulator shares the host network).
 #   LOG_DIR           Where faketandem.log / xcodebuild.log / the .xcresult go
@@ -62,8 +63,11 @@ free_port() {
   python3 -c 'import socket; s=socket.socket(); s.bind(("'"$FAKETANDEM_HOST"'",0)); print(s.getsockname()[1]); s.close()'
 }
 
-echo "Building faketandem from $FAKETANDEM_DIR"
-(cd "$FAKETANDEM_DIR" && go build -o "$LOG_DIR/faketandem" .)
+if [[ -z "${FAKETANDEM_BIN:-}" ]]; then
+  echo "Building faketandem from $FAKETANDEM_DIR"
+  FAKETANDEM_BIN="$LOG_DIR/faketandem"
+  (cd "$FAKETANDEM_DIR" && go build -o "$FAKETANDEM_BIN" .)
+fi
 
 GATT_PORT="$(free_port)"
 API_PORT="$(free_port)"
@@ -73,7 +77,7 @@ API_URL="http://$FAKETANDEM_HOST:$API_PORT"
 # shellcheck disable=SC2206
 EXTRA_ARGS=(${FAKETANDEM_ARGS:-})
 # ${arr[@]+"${arr[@]}"}: an empty array is "unbound" under set -u in macOS's bash 3.2.
-"$LOG_DIR/faketandem" -transport virtual -virtual-addr "$GATT_ADDR" -api-addr "$FAKETANDEM_HOST:$API_PORT" \
+"$FAKETANDEM_BIN" -transport virtual -virtual-addr "$GATT_ADDR" -api-addr "$FAKETANDEM_HOST:$API_PORT" \
   -pumpx2-jar-path "$FAKETANDEM_JAR" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} > "$LOG_DIR/faketandem.log" 2>&1 &
 FAKETANDEM_PID=$!
 

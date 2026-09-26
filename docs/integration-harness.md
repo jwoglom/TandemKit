@@ -39,18 +39,20 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 | `xcodebuild.log` | The driver's `TandemLogger` output and the XCTest results. |
 | `TandemKitIntegrationTests.xcresult` | The result bundle; each test attaches the pump's request log (`xcrun xcresulttool export attachments --path … --output-path …`). |
 
-Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`,
+Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`, `FAKETANDEM_BIN`,
 `FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
 `scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`, `DESTINATION`). The script
 sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
 
-In CI, the `integration-tests` job in `.github/workflows/unit-tests.yml` runs this script on
-the self-hosted macOS runners for every push and pull request. It uses faketandem's default
-branch (`faketandem_ref` on a manual dispatch picks another) and the LoopKit frameworks from
-`.github/actions/loopkit-frameworks`, the same ones the unit tests use. It fails if any test
-skips, because a skip means the emulator's addresses never reached the test process.
+In CI, `.github/workflows/unit-tests.yml` runs this script on the self-hosted macOS runners for
+every push and pull request, in the same job as the unit tests and after them. It shares their
+DerivedData: the virtual CoreBluetooth tests already rebuild TandemKit with `VirtualPump.xcconfig`,
+so `integration-test.sh build` compiles only the integration target. faketandem is built from its
+default branch (`faketandem_ref` on a manual dispatch picks another) while the unit tests compile,
+and handed to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips,
+because a skip means the emulator's addresses never reached the test process.
 
 ### How the tests find the emulator
 
