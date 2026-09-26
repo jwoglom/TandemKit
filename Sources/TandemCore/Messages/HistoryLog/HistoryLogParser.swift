@@ -123,6 +123,8 @@ public enum HistoryLogParser {
             return CgmStartSessionReqGxHistoryLog(cargo: raw)
         case CgmStopSessionReqGxHistoryLog.typeId:
             return CgmStopSessionReqGxHistoryLog(cargo: raw)
+        case CgmStateChangeGxHistoryLog.typeId:
+            return CgmStateChangeGxHistoryLog(cargo: raw)
         case CgmTransmitterVersionGxHistoryLog.typeId:
             return CgmTransmitterVersionGxHistoryLog(cargo: raw)
         case CgmStopSessionFsl2HistoryLog.typeId:
