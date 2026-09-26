@@ -215,6 +215,8 @@ public enum HistoryLogParser {
             return ParamChangeReminderHistoryLog(cargo: raw)
         case AaSleepScheduleChangeHistoryLog.typeId:
             return AaSleepScheduleChangeHistoryLog(cargo: raw)
+        case ControlIQAutomatedInsulinHistoryLog.typeId:
+            return ControlIQAutomatedInsulinHistoryLog(cargo: raw)
         case AaDeliveryStatusChangeHistoryLog.typeId:
             return AaDeliveryStatusChangeHistoryLog(cargo: raw)
         case AaEnableSettingChangeHistoryLog.typeId:
