@@ -337,6 +337,8 @@ public enum HistoryLogParser {
             return BatteryEstimateUpdateHistoryLog(cargo: raw)
         case MaxBolusLimitSetHistoryLog.typeId:
             return MaxBolusLimitSetHistoryLog(cargo: raw)
+        case ControlIQGlucoseModelHistoryLog.typeId:
+            return ControlIQGlucoseModelHistoryLog(cargo: raw)
         case BleLinkStatsHistoryLog.typeId:
             return BleLinkStatsHistoryLog(cargo: raw)
         default:
