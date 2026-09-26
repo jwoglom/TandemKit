@@ -1,13 +1,9 @@
 name: Set up Xcode and an iPhone simulator
 description: >-
-  Selects the latest stable Xcode and an iPhone simulator on the newest iOS runtime, and exports
+  Selects the latest stable Xcode and an iPhone simulator on the newest iOS runtime, starts it
+  booting in the background, and exports
   XCODE_VERSION, SIMULATOR_DESTINATION and SIMULATOR_UDID to the job environment, plus the same
   destination as DESTINATION, which is what scripts/test-local.sh reads.
-
-inputs:
-  boot:
-    description: Start booting the simulator in the background ('true' or 'false').
-    default: 'true'
 
 runs:
   using: composite
@@ -72,6 +68,5 @@ runs:
     # simulator: xcodebuild only needs the destination to *exist* to pick an
     # SDK and architecture.
     - name: Start booting the simulator in the background
-      if: inputs.boot == 'true'
       shell: bash
       run: xcrun simctl boot "${SIMULATOR_UDID}" || true

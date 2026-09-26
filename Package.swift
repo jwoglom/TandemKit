@@ -20,7 +20,7 @@ import PackageDescription
 // The unit tests are deliberately not declared here for the same reason: they
 // `@testable import TandemKit` and expect that one module. They are built and
 // run by the TandemKitTests target in TandemKit.xcodeproj; see
-// .github/workflows/ci.yml.
+// .github/workflows/tandemkit-tests.yml.
 
 // On Linux there is no Xcode project to fall back on, and Claude Code web
 // sessions run in Linux containers (scripts/claude-web-setup.sh), so `swift

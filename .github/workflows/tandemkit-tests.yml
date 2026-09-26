@@ -1,51 +1,34 @@
-name: CI
+name: TandemKit tests
 
-# tandemkit: TandemKit on its own, against the LoopKit frameworks from
-# .github/actions/loopkit-frameworks (the loopandlearn/LoopKit revision Trio pins), with no Trio and
-# no secrets, so it runs on every push and pull request, forks included.
+# TandemKit on its own, against the LoopKit frameworks from .github/actions/loopkit-frameworks, with
+# no Trio and no secrets, so it runs on every push and pull request, forks included.
 #
 # One job, one DerivedData: the unit tests build TandemKit plain, the virtual CoreBluetooth tests
 # rebuild it once with VirtualPump.xcconfig, and TandemKitIntegrationTests (the driver against
 # faketandem, docs/integration-harness.md) reuse that build. Every build goes through
 # scripts/test-local.sh so the flagged builds share one set of build settings; a setting that
 # differed would rebuild TandemKit again.
-#
-# trio: Trio's own tests with this TandemKit in place (trio-tests.yml), only once tandemkit has
-# passed. Pushes and manual runs always get it; a pull request gets it when it carries the
-# trigger-ci label and comes from a branch of this repo. Labeled fork PRs go through
-# trio-fork-pr.yml instead, since a pull_request run from a fork has no secrets.
 concurrency:
-  # Any label added starts a run; one for a label other than trigger-ci does nothing, and its own
-  # group keeps it from cancelling the run that is testing the PR.
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event.action == 'labeled' && github.event.label.name != 'trigger-ci' && format('-{0}', github.run_id) || '' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
     branches: [ main, dev ]
   pull_request:
-    types: [ opened, synchronize, reopened, labeled ]
   workflow_dispatch:
     inputs:
       faketandem_ref:
         description: "faketandem branch/tag/SHA for the integration tests (default: its default branch)"
         required: false
         default: ""
-      trio_repo:
-        description: "Trio repo for the Trio tests (must contain TandemKit submodule at path TandemKit)"
-        required: false
-        default: "jwoglom/Trio-tandem"
-      trio_ref:
-        description: "Git ref (branch/tag/SHA) for trio_repo (default: its default branch)"
-        required: false
-        default: ""
 
 jobs:
-  tandemkit:
-    name: TandemKit
-    if: github.event.action != 'labeled' || github.event.label.name == 'trigger-ci'
+  tests:
+    name: macOS simulator (unit + faketandem integration)
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 80
+    # A warm run takes ~20 minutes; the rest covers rebuilding LoopKit on a cache miss.
+    timeout-minutes: 35
     env:
       DERIVED_DATA_PATH: DerivedData
       # The scripts cd into other checkouts, so these must be absolute.
@@ -183,8 +166,7 @@ jobs:
         run: TandemKit/scripts/integration-test.sh test -disableAutomaticPackageResolution
 
       # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
-      # a run that never talked to faketandem would still pass. The failures it reports are the
-      # strict XCTExpectFailure wrappers; an unexpected one has already failed the run.
+      # a run that never talked to faketandem would still pass.
       - name: Check that integration tests actually ran
         run: TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label TandemKitIntegrationTests --no-skips
 
@@ -204,18 +186,3 @@ jobs:
             ${{ env.LOG_DIR }}/faketandem.log
             ${{ env.LOG_DIR }}/xcodebuild.log
             ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult
-
-  trio:
-    name: Trio
-    needs: tandemkit
-    if: >-
-      github.event_name != 'pull_request' || (
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        contains(github.event.pull_request.labels.*.name, 'trigger-ci'))
-    uses: ./.github/workflows/trio-tests.yml
-    with:
-      trio_repo: ${{ inputs.trio_repo || 'jwoglom/Trio-tandem' }}
-      trio_ref: ${{ inputs.trio_ref || '' }}
-      tandemkit_ref: ${{ github.sha }}
-    secrets:
-      TRIO_REPO_TOKEN: ${{ secrets.TRIO_REPO_TOKEN }}

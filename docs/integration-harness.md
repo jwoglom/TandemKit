@@ -46,7 +46,7 @@ sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcc
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
 
-In CI, the `tandemkit` job in `.github/workflows/ci.yml` runs this script on the self-hosted macOS runners for
+In CI, `.github/workflows/tandemkit-tests.yml` runs this script on the self-hosted macOS runners for
 every push and pull request, in the same job as the unit tests and after them. It shares their
 DerivedData: the virtual CoreBluetooth tests already rebuild TandemKit with `VirtualPump.xcconfig`,
 so `integration-test.sh build` compiles only the integration target. faketandem is built from its

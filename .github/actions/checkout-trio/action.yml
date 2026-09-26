@@ -1,17 +1,19 @@
 name: Check out Trio with TandemKit under test
 description: >-
   Checks out the Trio app into trio/ without its TandemKit submodule, puts the TandemKit revision
-  under test at trio/TandemKit, and initializes Trio's other submodules.
+  under test at trio/TandemKit, and initializes Trio's other submodules. For jobs that run the Trio
+  app in the simulator. The Trio checkout empties trio/, so a caller must fetch .github/actions
+  somewhere else first (a sparse checkout of this repo) to reach this action at all.
 
 inputs:
   repository:
     description: Trio repository (must contain a TandemKit submodule at path TandemKit).
-    required: true
+    default: nightscout/Trio
   ref:
-    description: Branch, tag or SHA of the Trio repository; empty for its default branch.
-    default: ''
+    description: Branch, tag or SHA of the Trio repository.
+    default: feat/tandem-closed-beta
   token:
-    description: Token that can read the Trio repository.
+    description: Token that can read the Trio repository, if it is private.
     default: ''
   tandemkit-ref:
     description: TandemKit revision to test.
@@ -20,15 +22,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Ensure a token is available for the private Trio repo
-      if: inputs.repository == 'jwoglom/Trio-tandem' && inputs.token == ''
-      shell: bash
-      run: |
-        echo "Missing required secret TRIO_REPO_TOKEN."
-        echo "This is expected for forked PRs (secrets are not provided)."
-        echo "Fix: run CI from a branch in the main repo, or enable secrets for fork PRs in repo Settings -> Actions."
-        exit 1
-
     - name: Checkout Trio app repository (no submodules)
       uses: actions/checkout@v6
       with:

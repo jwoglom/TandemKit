@@ -6,8 +6,8 @@ description: >-
 
 # The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
 # BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
-# other project has to produce them first. trio-tests.yml gets that from
-# Trio's workspace, which needs the private Trio repo and a secret.
+# other project has to produce them first. Trio's workspace would, at the cost
+# of checking out and building all of Trio.
 #
 # Instead, check out LoopKit (public, pinned below) next to this repo and build
 # its two framework targets straight into the shared derived data. That keeps
@@ -20,9 +20,10 @@ description: >-
 # TandemKit is built with -project (no workspace), which keeps the LoopKit
 # targets out of the build graph so nothing can decide to recompile them.
 #
-# The repository/revision defaults mirror Trio's LoopKit submodule, which is
-# the real source of truth -- Trio pulls its dependencies in as git submodules
-# (see .gitmodules in nightscout/Trio), and TandemKit is one of them. Upstream
+# The repository/revision defaults mirror the LoopKit submodule of the Trio that
+# ships TandemKit, nightscout/Trio feat/tandem-closed-beta, which is the real
+# source of truth -- Trio pulls its dependencies in as git submodules, and
+# TandemKit is one of them. Upstream
 # LoopKit/LoopKit is not interchangeable with Trio's loopandlearn fork:
 # upstream has no `Pluggable`, which TandemPumpManager conforms to. When Trio
 # bumps its LoopKit submodule, bump the revision here to match.
