@@ -557,27 +557,45 @@ This roadmap keeps the existing protocol/BLE groundwork intact while layering th
      persisted watermark (`TandemPumpManagerState.historyBackfill`), cross-tick gap healing via
      `HistoryLogStore.missingRanges`, and a sliced walk backward to the deep-fetch boundary.
      `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
-     event kicks a tick as well.
+     event kicks a tick as well; one requested while a tick runs (the pump sends `.bolusChange`
+     at both activation and completion) runs straight after it instead of being dropped.
    - Two feature flags, both off by default. `historyBackfill` runs the whole thing: while off,
      `runTick` returns immediately and the pump's history log is never read. `historyDoseReporting`
-     decides whether doses found in that history reach the app's insulin history; it is `&&`-ed
+     decides whether boluses found in that history reach the app's insulin history; it is `&&`-ed
      with `historyBackfill`, since there is nothing to report from a log never read. Neither is a
      dry run — a watermark written for entries that were never read would mark them read and
-     suppress them once the flag goes on. **`historyDoseReporting` has no consumer yet**: the
-     emission layer that must check it does not exist, so today it only fixes the contract that
-     layer will be built against.
+     suppress them once the flag goes on.
    - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
      but is not paced one slice per sync: a tick keeps stepping until it reaches
      `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.
    - Two distinct floors. `HistoryBackfillState.firstSeenFloor` is set at first sight, never
-     moves, and alone bounds how deep the walk reads. `HistoryBackfillPlanner.emitFloor` maxes it
-     with the host's `startDateToFilterNewPumpEvents` for the emission layer, and is never
-     persisted — the host's date marches to ≈now as the driver reports events (Trio returns
-     `lastEventDate - 15min`), so letting it bound the walk ends the backfill minutes into the
-     past.
-   - Still open: nothing consumes the store's contents. `HistoryToDoseMapper` is not wired to any
-     emission path, so mapped doses, in-place finalization of interrupted boluses, and
-     gap-aware `lastReconciliation` advancement all remain to be done.
+     moves, and alone bounds how deep the walk reads. `HistoryBackfillPlanner.emitFloor` bounds
+     reporting: the latest of `firstSeenFloor`, `BolusReportLedger.trackingSince` and 24 hours
+     ago. The host's `startDateToFilterNewPumpEvents` is in neither (#345): Trio returns
+     `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
+     the past and drop a pump-UI bolus found one sync late.
+   - Reporting (`TandemPumpManager+HistoryDoseReporting.swift`) runs as a command job after every
+     tick that read something. Boluses only: temp basals and suspends stay with the live path,
+     since DoseStore would not count backfilled ones toward IOB and both would report them
+     (#354). Batches are `replacePendingEvents: false`, ascending, through `emitPumpEvents`.
+   - The live path and history identify one bolus differently (#344), so `BolusReportLedger`
+     (persisted, 24 h) records each app bolus's `bolusId`, live `raw` and event date at
+     `InitiateBolus`, and `emitPumpEvents` marks it finalized when an immutable report with that
+     `raw` goes out. A history bolus the ledger:
+     - has finalized — is skipped;
+     - holds as an unfinalized app bolus — is finalized under the live `raw`/date once the live
+       path is no longer tracking it (relaunch mid-bolus, unknown delivered volume), releasing
+       `pendingBolusFinalization`/`bolusDose`;
+     - doesn't hold — is a pump-UI, Control-IQ or lost-acknowledgement bolus, reported under
+       `HistoryLogSyncIdentifier.bolus`, dated at activation, mutable while in flight, with
+       `automatic` from the bolus source and `wasProgrammedByPumpUI` set.
+     `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
+     is reported, because it cannot be told apart from an app bolus reported live without an
+     entry.
+   - Still open: gap-aware `lastReconciliation` (#353), extended boluses (Bolex records are only
+     logged), and a pump clock offset from the phone's (history dates use the phone's UTC
+     offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` is recorded from
+     `SetTempRateResponse` but not yet used; it is for re-keying live temp basals (#344).
 
 6. **Implement TandemPumpManagerState persistence** (`TandemPumpManagerState.swift`) ✅ *Done*
    - Raw state now stores derived secret + server nonce so pairing survives restarts.

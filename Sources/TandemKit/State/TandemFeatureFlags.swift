@@ -83,7 +83,7 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 )
             case .historyDoseReporting:
                 return String(
-                    localized: "Adds insulin found in the pump's history log to the app's insulin history, so doses delivered from the pump itself are counted. Needs History Backfill to be on. While off, pump history is read but never changes the app's insulin history.",
+                    localized: "Adds boluses found in the pump's history log to the app's insulin history, so boluses delivered from the pump itself are counted. Needs History Backfill to be on. While off, pump history is read but never changes the app's insulin history.",
                     comment: "Description of the history dose reporting feature flag"
                 )
             }

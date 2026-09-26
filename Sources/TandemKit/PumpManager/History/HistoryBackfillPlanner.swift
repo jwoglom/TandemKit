@@ -83,29 +83,14 @@ enum HistoryBackfillPlanner {
         return max(lookbackTarget, firstSeenFloor)
     }
 
-    /// The earliest date events may be *reported* for: the later of what the host app will
-    /// accept and what this pump's bookkeeping allows.
-    ///
-    /// The host's floor (`PumpManagerDelegate.startDateToFilterNewPumpEvents`) moves forward as
-    /// its own store ages out; events below it are discarded on arrival, so emitting them is
-    /// wasted work. The bookkeeping's floor is set when a pump is first seen and never moves,
-    /// which is what separates a *re-paired* pump (same serial, original floor kept, so the gap
-    /// while the app was away is still reportable) from a *replacement* pump (new serial, a fresh
-    /// floor one lookback back, so nothing but its still-acting insulin reaches the loop).
-    ///
-    /// Derived per tick, never written back: persisting it would ratchet `firstSeenFloor`
-    /// forward and starve the walk.
-    static func emitFloor(hostFloor: Date?, bookkeeping: HistoryBackfillState?) -> Date? {
-        switch (hostFloor, bookkeeping?.firstSeenFloor) {
-        case let (hostFloor?, pumpFloor?):
-            return max(hostFloor, pumpFloor)
-        case let (hostFloor?, nil):
-            return hostFloor
-        case let (nil, pumpFloor?):
-            return pumpFloor
-        case (nil, nil):
-            return nil
-        }
+    /// Earliest date a dose may be reported for. Not floored on the host's
+    /// `startDateToFilterNewPumpEvents`, which would drop a bolus found one sync late (#345).
+    static func emitFloor(bookkeeping: HistoryBackfillState?, trackingSince: Date, now: Date) -> Date {
+        max(
+            bookkeeping?.firstSeenFloor ?? .distantPast,
+            trackingSince,
+            now.addingTimeInterval(-BolusReportLedger.retention)
+        )
     }
 
     /// Build a tick's plan.

@@ -353,21 +353,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         flushPendingPumpEvents()
     }
 
-    /// The earliest date the host app will accept pump events for; nil when no delegate is
-    /// attached yet. Its own store ages out, so this moves forward over time and events below it
-    /// would be discarded on arrival — the backfill uses it to bound both what it reads and what
-    /// it will later report.
-    ///
-    /// Deliberately reads `pumpDelegate.delegate` (a plain lock-guarded read) and calls the
-    /// delegate directly, rather than going through `pumpDelegate.call`. `call` does a
-    /// `queue.sync` onto the delegate queue, which defaults to the main queue — so any caller
-    /// already on that queue deadlocks, whether or not a delegate is even attached. The backfill
-    /// reads this from whatever queue its tick happens to run on, so it cannot make that
-    /// promise. The delegate side is a cheap date read, not work that needs serializing.
-    var hostEventFloor: Date? {
-        pumpDelegate.delegate?.startDateToFilterNewPumpEvents(for: self)
-    }
-
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
     /// oref sets zero basal rates as a matter of course, and the pump would alert on each one.
     /// This remains only so tests can exercise the disabled path — do not expose it to the UI.
@@ -638,14 +623,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 activationType: activationType
             )
 
+            let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
+            self.state.bolusReportLedger.prune(now: self.now)
+            self.state.bolusReportLedger.record(BolusReportLedger.Entry(
+                bolusId: permissionResponse.bolusId,
+                pumpSerial: HistoryLogSyncIdentifier.PumpSerial(self.state.pumpState.pumpSerial)?.rawValue,
+                origin: .commanded,
+                raw: event.raw,
+                eventDate: event.date,
+                automatic: activationType.isAutomatic,
+                isFinalized: false
+            ))
+
             self.state.bolusDose = dose
             self.state.bolusState = .initiating
             self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(
-                [NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)],
-                replacePendingEvents: false
-            )
+            self.emitPumpEvents([event], replacePendingEvents: false)
 
             completion(nil)
         }
@@ -826,7 +820,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 duration: duration,
                 automatic: true,
                 insulinType: self.state.insulinType,
-                startDate: self.now
+                startDate: self.now,
+                tempRateId: response.tempRateId
             )
             var events = self.getActivePumpEvents(endDate: dose.startDate)
             events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
@@ -1705,8 +1700,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
         // suggested handlers on QualifyingEvent.
         if events.contains(.bolusChange) {
-            // When a bolus delivered from the pump's own UI is written to history. Read now
-            // rather than at the next sync, which is a loop cycle or more out of IOB.
+            // A pump-UI bolus reaches the host only through history, so read and report it now
+            // rather than at the next sync, a loop cycle or more out of IOB.
             historyBackfillCoordinator.runTick()
         }
 
@@ -1822,6 +1817,10 @@ extension TandemPumpManager {
     }
 
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+        for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false {
+            state.bolusReportLedger.markFinalized(raw: event.raw)
+        }
+
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
             lastReconciliation: state.lastReconciliation,
