@@ -398,8 +398,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         // so this is a pump that said nothing about *delivery* rather than a pump that is not
         // there. (A pump that answers nothing at all cannot be staged here — see the report: with
         // the radio off the driver's auto-reconnect spins hard enough to take the test process
-        // down, and dropping every response costs 30 s per read, more silence than the test
-        // runner's progress watchdog allows.)
+        // down, and dropping every response costs a response timeout per read, more silence than
+        // the test runner's progress watchdog allows.)
         let silentReads = ["InsulinStatusRequest", "CurrentBolusStatusRequest", "CurrentBasalStatusRequest"]
         let client = harness.client
         addTeardownBlock { _ = try? client.clearFaults() }

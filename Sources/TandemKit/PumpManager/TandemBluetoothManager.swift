@@ -51,7 +51,12 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // Upper bound on a single connect attempt. The wait that enforces this is intrinsic to a
     // DispatchSemaphore (see connectIfNeeded), so — unlike the previous asyncAfter-based
     // safety net that sat on the very queue it was meant to rescue — it can never be starved.
-    private let connectTimeout: DispatchTimeInterval = .seconds(30)
+    private var connectTimeout: DispatchTimeInterval {
+        #if TANDEMKIT_VIRTUAL_PUMP
+        if let override = VirtualPump.connectTimeout { return override }
+        #endif
+        return .seconds(30)
+    }
     // The in-flight connect attempt's wait group, so a disconnect / Bluetooth-off can cancel it and
     // release connectIfNeeded immediately rather than letting it block out the full connectTimeout.
     // Guarded by connectStateLock because it is set on commandQueue and cancelled on managerQueue.
@@ -366,7 +371,9 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     }
 
     func disconnect() {
-        if let peripheralManager {
+        // Signed: on a link that never authenticated the pump cannot answer it, and waiting for
+        // that cost every failed setup the full response timeout.
+        if let peripheralManager, peripheralManager.isSessionEstablished {
             _ = peripheralManager.write(DisconnectPumpRequest())
         }
 

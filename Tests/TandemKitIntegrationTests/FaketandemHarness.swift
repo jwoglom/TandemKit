@@ -138,6 +138,10 @@ final class FaketandemHarness {
     ) -> Driver {
         VirtualPump.endpoint = endpoint
         VirtualPump.scanInterval = 0.5
+        // A lost response and a failed connect are what several scenarios stage; at the production
+        // 30 s each they were most of the suite's run time. faketandem answers in well under a second.
+        VirtualPump.responseTimeout = .seconds(5)
+        VirtualPump.connectTimeout = .seconds(15)
         let bluetooth = TandemBluetoothManager()
         let central = bluetooth.manager!
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)

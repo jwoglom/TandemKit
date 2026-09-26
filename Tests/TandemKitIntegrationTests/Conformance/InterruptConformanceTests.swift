@@ -14,8 +14,8 @@ import XCTest
 /// in a strict `XCTExpectFailure` naming the issue, so a fix flips them to "unexpected pass".
 ///
 /// Timing: both clocks are frozen and moved together with `advanceBoth`. The only real-time waits
-/// are the driver's own — its 30 s response timeout when a response is lost (A2, A5) and the
-/// seconds an auto-reconnect takes.
+/// are the driver's own — its response timeout when a response is lost (A2, A5), shortened by the
+/// harness, and the seconds an auto-reconnect takes.
 final class InterruptConformanceTests: ConformanceTestCase {
     /// The pump's profile basal rate and the driver's scheduled rate, kept equal so a percent temp
     /// rate means the same U/h on both sides.
@@ -212,7 +212,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "InitiateBolusRequest"))
 
-        // The driver waits its 30 s response timeout (real time) before giving up.
+        // The driver waits out its response timeout (real time) before giving up.
         let error = try enactBolus(units: 1.0, timeout: 90)
         guard case .communication? = error else {
             return XCTFail("a lost acknowledgement is a communication error, got \(String(describing: error))")

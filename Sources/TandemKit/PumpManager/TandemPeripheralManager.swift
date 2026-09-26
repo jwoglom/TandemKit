@@ -21,6 +21,15 @@ class TandemPeripheralManager: NSObject {
     private var _readQueue: (TandemDispatchGroup, CBUUID)?
     private var _writeQueue: PendingWrite?
     private var _commandLock: TandemDispatchGroup?
+    private var _isSessionEstablished = false
+    private var _eventsBeforeSession: Set<QualifyingEvent> = []
+
+    /// True once setup has authenticated this connection and its first request was answered.
+    var isSessionEstablished: Bool {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        return _isSessionEstablished
+    }
 
     private var readQueue: (TandemDispatchGroup, CBUUID)? {
         get { queueLock.lock()
@@ -102,7 +111,12 @@ class TandemPeripheralManager: NSObject {
     // Sized for the slowest command, not the typical one: EnterChangeCartridgeMode doesn't respond
     // until the cartridge is safe to remove, which takes 5-20s. Timing out early reports a failure
     // for a command still in progress, inviting a re-send of an insulin-affecting request.
-    private static let responseTimeout: DispatchTimeInterval = .seconds(30)
+    private static var responseTimeout: DispatchTimeInterval {
+        #if TANDEMKIT_VIRTUAL_PUMP
+        if let override = VirtualPump.responseTimeout { return override }
+        #endif
+        return .seconds(30)
+    }
     // Above responseTimeout, so a caller queued behind one slow write waits it out.
     private static let writeLockTimeout: DispatchTimeInterval = .seconds(45)
 
@@ -148,9 +162,30 @@ class TandemPeripheralManager: NSObject {
         queueLock.lock()
         let completion = _connectCompletion
         _connectCompletion = nil
+        var deferredEvents: Set<QualifyingEvent> = []
+        if error == nil {
+            _isSessionEstablished = true
+            swap(&deferredEvents, &_eventsBeforeSession)
+        }
         queueLock.unlock()
 
         completion?(error)
+
+        if !deferredEvents.isEmpty {
+            logger.info("Handling qualifying events that arrived during setup: \(deferredEvents)")
+            pumpManager.handleQualifyingEvents(events: deferredEvents) {}
+        }
+    }
+
+    /// Holds qualifying events until setup finishes. Fetching on them mid-handshake sends a status
+    /// request the pump does not answer on an unauthenticated link, and that request holds the
+    /// write lane for the whole response timeout while JPAKE waits behind it.
+    private func deferUntilSessionEstablished(_ events: Set<QualifyingEvent>) -> Bool {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        guard !_isSessionEstablished else { return false }
+        _eventsBeforeSession.formUnion(events)
+        return true
     }
 
     func read(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> Data? {
@@ -394,10 +429,13 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
                 return
             }
 
-            pumpManager.handleQualifyingEvents(events: events) {
-                // Acknowledge qualifying events
-                self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse)
+            let acknowledge = { self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse) }
+            if deferUntilSessionEstablished(events) {
+                logger.info("Deferring qualifying events until setup finishes: \(events)")
+                acknowledge()
+                return
             }
+            pumpManager.handleQualifyingEvents(events: events, completion: acknowledge)
             return
         }
 
