@@ -22,6 +22,10 @@ jobs:
     # locally sees the same compiler here.
     container: swift:6.1.2-noble
     timeout-minutes: 20
+    # Steps in a container job default to sh, which has no pipefail.
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout TandemKit
         uses: actions/checkout@v6
