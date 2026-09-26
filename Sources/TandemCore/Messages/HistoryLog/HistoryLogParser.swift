@@ -241,6 +241,8 @@ public enum HistoryLogParser {
             return WumpCartridgeRemovedHistoryLog(cargo: raw)
         case AaTdiEstChangeHistoryLog.typeId:
             return AaTdiEstChangeHistoryLog(cargo: raw)
+        case ControlIQFeaturesHistoryLog.typeId:
+            return ControlIQFeaturesHistoryLog(cargo: raw)
         case AaExerciseTimeChangeHistoryLog.typeId:
             return AaExerciseTimeChangeHistoryLog(cargo: raw)
         case AaExerciseChoiceChangeHistoryLog.typeId:
