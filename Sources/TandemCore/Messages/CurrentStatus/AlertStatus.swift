@@ -103,7 +103,6 @@ public class AlertStatusResponse: Message, NotificationMessage {
         case CGM_UNAVAILABLE = 48
         case FILL_TUBING_STILL_IN_PROGRESS = 49
         case DEFAULT_ALERT_50 = 50
-        /// Control-IQ has reduced basal insulin delivery due to a low or predicted low glucose value.
         case CONTROL_IQ_LOW = 51
         case DEFAULT_ALERT_52 = 52
         case DEFAULT_ALERT_53 = 53
@@ -211,6 +210,8 @@ public class AlertStatusResponse: Message, NotificationMessage {
                 return "The CGM is unavailable due to a problem with the sensor."
             case .FILL_TUBING_STILL_IN_PROGRESS:
                 return "The fill tubing process is still in progress and was not completed."
+            case .CONTROL_IQ_LOW:
+                return "Control-IQ has reduced basal insulin delivery due to a low or predicted low glucose value."
             case .DEVICE_PAIRED:
                 return "The pump was paired successfully to a Bluetooth device."
             default:

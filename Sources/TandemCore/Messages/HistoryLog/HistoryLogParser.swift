@@ -123,6 +123,8 @@ public enum HistoryLogParser {
             return CgmStartSessionReqGxHistoryLog(cargo: raw)
         case CgmStopSessionReqGxHistoryLog.typeId:
             return CgmStopSessionReqGxHistoryLog(cargo: raw)
+        case CgmStateChangeGxHistoryLog.typeId:
+            return CgmStateChangeGxHistoryLog(cargo: raw)
         case CgmTransmitterVersionGxHistoryLog.typeId:
             return CgmTransmitterVersionGxHistoryLog(cargo: raw)
         case CgmStopSessionFsl2HistoryLog.typeId:
@@ -141,6 +143,8 @@ public enum HistoryLogParser {
             return AuthorizationCountersHistoryLog(cargo: raw)
         case CgmStopSessionG7HistoryLog.typeId:
             return CgmStopSessionG7HistoryLog(cargo: raw)
+        case SoftwareIdHistoryLog.typeId:
+            return SoftwareIdHistoryLog(cargo: raw)
         case CorrectionDeclinedHistoryLog.typeId:
             return CorrectionDeclinedHistoryLog(cargo: raw)
         case DailyStatusHistoryLog.typeId:
@@ -213,6 +217,8 @@ public enum HistoryLogParser {
             return ParamChangeReminderHistoryLog(cargo: raw)
         case AaSleepScheduleChangeHistoryLog.typeId:
             return AaSleepScheduleChangeHistoryLog(cargo: raw)
+        case ControlIQAutomatedInsulinHistoryLog.typeId:
+            return ControlIQAutomatedInsulinHistoryLog(cargo: raw)
         case AaDeliveryStatusChangeHistoryLog.typeId:
             return AaDeliveryStatusChangeHistoryLog(cargo: raw)
         case AaEnableSettingChangeHistoryLog.typeId:
@@ -237,6 +243,8 @@ public enum HistoryLogParser {
             return WumpCartridgeRemovedHistoryLog(cargo: raw)
         case AaTdiEstChangeHistoryLog.typeId:
             return AaTdiEstChangeHistoryLog(cargo: raw)
+        case ControlIQFeaturesHistoryLog.typeId:
+            return ControlIQFeaturesHistoryLog(cargo: raw)
         case AaExerciseTimeChangeHistoryLog.typeId:
             return AaExerciseTimeChangeHistoryLog(cargo: raw)
         case AaExerciseChoiceChangeHistoryLog.typeId:
@@ -261,6 +269,8 @@ public enum HistoryLogParser {
             return CgmInactiveG7HistoryLog(cargo: raw)
         case CgmStopSessionReqG7HistoryLog.typeId:
             return CgmStopSessionReqG7HistoryLog(cargo: raw)
+        case BleSoftDeviceVersionHistoryLog.typeId:
+            return BleSoftDeviceVersionHistoryLog(cargo: raw)
         case LogErasedHistoryLog.typeId:
             return LogErasedHistoryLog(cargo: raw)
         case BGHistoryLog.typeId:
@@ -313,6 +323,8 @@ public enum HistoryLogParser {
             return UsbEnumeratedHistoryLog(cargo: raw)
         case ControlIQUserModeChangeHistoryLog.typeId:
             return ControlIQUserModeChangeHistoryLog(cargo: raw)
+        case ControlIQCycleHistoryLog.typeId:
+            return ControlIQCycleHistoryLog(cargo: raw)
         case ControlIQPcmChangeHistoryLog.typeId:
             return ControlIQPcmChangeHistoryLog(cargo: raw)
         case BatteryHourlyHistoryLog.typeId:
@@ -331,8 +343,12 @@ public enum HistoryLogParser {
             return BatteryEstimateUpdateHistoryLog(cargo: raw)
         case MaxBolusLimitSetHistoryLog.typeId:
             return MaxBolusLimitSetHistoryLog(cargo: raw)
+        case ControlIQGlucoseModelHistoryLog.typeId:
+            return ControlIQGlucoseModelHistoryLog(cargo: raw)
         case BleLinkStatsHistoryLog.typeId:
             return BleLinkStatsHistoryLog(cargo: raw)
+        case BleDailyConnectionsHistoryLog.typeId:
+            return BleDailyConnectionsHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }

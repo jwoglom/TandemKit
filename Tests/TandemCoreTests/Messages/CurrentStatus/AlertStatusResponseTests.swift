@@ -75,6 +75,14 @@ final class AlertStatusResponseTests: XCTestCase {
         MessageTester.assertHexEquals(expected.cargo, parsed.cargo)
     }
 
+    func testAlertStatusWithControlIQLowIsANamedNotification() {
+        let parsed = AlertStatusResponse(intMap: bitmask(for: [.CONTROL_IQ_LOW, .DEVICE_PAIRED]))
+
+        XCTAssertEqual(parsed.alerts, [.CONTROL_IQ_LOW, .DEVICE_PAIRED])
+        XCTAssertEqual(parsed.notificationIds, [51, 54])
+        XCTAssertNotNil(AlertStatusResponse.AlertResponseType.CONTROL_IQ_LOW.notificationDescription)
+    }
+
     private func bitmask(for types: [AlertStatusResponse.AlertResponseType]) -> UInt64 {
         types.reduce(0) { partialResult, type in
             partialResult | (UInt64(1) << UInt64(type.rawValue))

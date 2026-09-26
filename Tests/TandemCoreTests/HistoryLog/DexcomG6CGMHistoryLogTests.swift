@@ -30,6 +30,8 @@ final class DexcomG6CGMHistoryLogTests: XCTestCase {
             parsedRes.egvInfo,
             [.FIVE_MINUTE_READING, .VALID_TIMESTAMP, .VALID_EGV_RANGE, .VALID_ALG_STATE, .EGV_PROCESSED]
         )
+        XCTAssertEqual(parsedRes.egvCount, 1)
+        XCTAssertEqual(parsedRes.egvSensorType, .notApplicable)
     }
 
     func testDexcomG6CGMHistoryLog2() {
@@ -130,9 +132,9 @@ final class DexcomG6CGMHistoryLogTests: XCTestCase {
             parsedRes.egvInfo,
             [.FIVE_MINUTE_READING, .VALID_TIMESTAMP, .VALID_EGV_RANGE, .VALID_ALG_STATE, .EGV_PROCESSED]
         )
+        XCTAssertEqual(parsedRes.egvSensorType, .dexcomG6)
     }
 
-    // Byte 25 is 0 here but buildCargo always writes 1, so the cargo cannot round-trip (pumpX2#76).
     func testDexcomG6CGMHistoryLogBackfill() {
         let expected = DexcomG6CGMHistoryLog(
             pumpTimeSec: 470_616_768,
@@ -145,16 +147,44 @@ final class DexcomG6CGMHistoryLogTests: XCTestCase {
             currentGlucoseDisplayValue: 167,
             timeStampSeconds: 470_616_468,
             egvInfoBitmask: 2530,
-            interval: 1
+            interval: 1,
+            egvCount: 0
         )
 
         let parsedRes = HistoryLogMessageTester.testSingle(
             "0001c00a0d1c959c0e000000020006bea70094090d1ce2090100",
             expected
         )
+        MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
         XCTAssertEqual(parsedRes.cgmDataTypes, [.BACKFILL])
         XCTAssertEqual(parsedRes.rssi, -66)
         XCTAssertEqual(parsedRes.interval, 1)
+        XCTAssertEqual(parsedRes.egvCount, 0)
+        XCTAssertEqual(parsedRes.egvSensorType, .dexcomG6)
+    }
+
+    func testDexcomG6CGMHistoryLogEgvCountRoundTrip() {
+        let log = DexcomG6CGMHistoryLog(
+            pumpTimeSec: 470_616_768,
+            sequenceNum: 957_590,
+            glucoseValueStatus: 0,
+            cgmDataType: 1,
+            rate: -3,
+            algorithmState: 6,
+            rssi: -70,
+            currentGlucoseDisplayValue: 120,
+            timeStampSeconds: 470_616_768,
+            egvInfoBitmask: 0x09E1,
+            interval: 0,
+            egvCount: 2
+        )
+
+        XCTAssertEqual(log.cargo.count, 26)
+        XCTAssertEqual(log.cargo[25], 2)
+        let parsed = DexcomG6CGMHistoryLog(cargo: log.cargo)
+        MessageTester.assertHexEquals(log.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.egvCount, 2)
+        XCTAssertEqual(parsed.egvSensorType, .dexcomG6)
     }
 
     func testDexcomG6CGMHistoryLogNegativeValuesRoundTrip() {
