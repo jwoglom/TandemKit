@@ -347,6 +347,8 @@ public enum HistoryLogParser {
             return ControlIQGlucoseModelHistoryLog(cargo: raw)
         case BleLinkStatsHistoryLog.typeId:
             return BleLinkStatsHistoryLog(cargo: raw)
+        case BleDailyConnectionsHistoryLog.typeId:
+            return BleDailyConnectionsHistoryLog(cargo: raw)
         default:
             return UnknownHistoryLog(cargo: raw)
         }
