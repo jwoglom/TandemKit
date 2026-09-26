@@ -141,6 +141,8 @@ public enum HistoryLogParser {
             return AuthorizationCountersHistoryLog(cargo: raw)
         case CgmStopSessionG7HistoryLog.typeId:
             return CgmStopSessionG7HistoryLog(cargo: raw)
+        case SoftwareIdHistoryLog.typeId:
+            return SoftwareIdHistoryLog(cargo: raw)
         case CorrectionDeclinedHistoryLog.typeId:
             return CorrectionDeclinedHistoryLog(cargo: raw)
         case DailyStatusHistoryLog.typeId:
