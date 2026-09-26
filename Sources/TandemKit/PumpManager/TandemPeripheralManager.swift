@@ -47,16 +47,35 @@ class TandemPeripheralManager: NSObject {
     /// is complete.
     private final class PendingWrite {
         let group: TandemDispatchGroup
+        let requestOpCode: UInt8
         let opCode: UInt8
         let characteristic: CBUUID
         private let lock = NSLock()
         private var response = ResponseMessage()
         private var packetsReceived = 0
+        private var _refusal: ErrorResponse?
 
-        init(group: TandemDispatchGroup, opCode: UInt8, characteristic: CBUUID) {
+        init(group: TandemDispatchGroup, requestOpCode: UInt8, opCode: UInt8, characteristic: CBUUID) {
             self.group = group
+            self.requestOpCode = requestOpCode
             self.opCode = opCode
             self.characteristic = characteristic
+        }
+
+        var refusal: ErrorResponse? {
+            lock.lock()
+            defer { lock.unlock() }
+            return _refusal
+        }
+
+        /// Ends the wait the way a timeout does, but at once: the pump said it will not answer.
+        /// Ignored once the response has started arriving, since the pump sends one or the other.
+        func refuse(_ error: ErrorResponse) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard _refusal == nil, packetsReceived == 0 else { return }
+            _refusal = error
+            group.leave(Data())
         }
 
         var message: Message? {
@@ -256,7 +275,12 @@ class TandemPeripheralManager: NSObject {
 
         let writeQ = TandemDispatchGroup()
         writeQ.enter()
-        let pending = PendingWrite(group: writeQ, opCode: expecting.props.opCode, characteristic: characteristic.uuid)
+        let pending = PendingWrite(
+            group: writeQ,
+            requestOpCode: requestProps.opCode,
+            opCode: expecting.props.opCode,
+            characteristic: characteristic.uuid
+        )
         writeQueue = pending
 
         defer {
@@ -293,6 +317,13 @@ class TandemPeripheralManager: NSObject {
             } else {
                 logger.error("Timeout hit, no response from pump...")
             }
+            return nil
+        }
+
+        if let refusal = pending.refusal {
+            // nil, as for a timeout: callers treat both as a failed command, and a refused
+            // insulin-affecting request is reported no less cautiously than a lost one.
+            logger.error("Pump refused \(message.description): \(refusal.description)")
             return nil
         }
 
@@ -507,6 +538,11 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         {
             let response = ErrorResponse(cargo: Data(data.dropFirst(5)))
             logger.error("Received error message: \(response.description)")
+            // The pump sends it in place of the response, naming the request it refused; left
+            // unmatched, the write waited out its whole response timeout.
+            if let pending = writeQueue, Int(pending.requestOpCode) == response.requestCodeId {
+                pending.refuse(response)
+            }
             return
         }
 

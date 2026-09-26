@@ -243,13 +243,17 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-One open, in `PumpSideConformanceTests` (plan D3):
+Two open, both in `PumpSideConformanceTests` (plan D3):
 
 - **An armed `error_response` is applied on the response path**
   (`pkg/handler/router.go` `sendWithFaults`), after the handler has already run. A pump
   answering `ErrorResponse` to `InitiateBolusRequest` did not start the bolus; the emulator
   starts it and then replaces the answer, so the driver's error arrives over a pump that is
   delivering.
+- **An armed `error_response` names the wrong request.** `sendErrorResponse` puts the opcode of
+  the response it replaces in `requestCodeId`, where a real pump names the request. The driver
+  matches an `ErrorResponse` to its pending write by that request opcode and fails the write at
+  once, so against the emulator it misses the match and waits out the response timeout.
 
 Everything else the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:

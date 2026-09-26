@@ -129,6 +129,10 @@ final class FaketandemHarness {
         }
     }
 
+    /// A lost response and a failed connect are what several scenarios stage; at the production
+    /// 30 s each they were most of the suite's run time. faketandem answers in well under a second.
+    static let responseTimeout: TimeInterval = 5
+
     /// `clock` defaults to a ManualClock starting now, so a test can jump the driver's idea of time
     /// (bolus estimated end, sync throttles) without waiting; the emulator stays on its own clock.
     func makeDriver(
@@ -138,9 +142,7 @@ final class FaketandemHarness {
     ) -> Driver {
         VirtualPump.endpoint = endpoint
         VirtualPump.scanInterval = 0.5
-        // A lost response and a failed connect are what several scenarios stage; at the production
-        // 30 s each they were most of the suite's run time. faketandem answers in well under a second.
-        VirtualPump.responseTimeout = .seconds(5)
+        VirtualPump.responseTimeout = .milliseconds(Int(Self.responseTimeout * 1000))
         VirtualPump.connectTimeout = .seconds(15)
         let bluetooth = TandemBluetoothManager()
         let central = bluetooth.manager!

@@ -266,8 +266,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "InitiateBolus reached the pump"
         )
 
-        try expectDefect("jwoglom/TandemKit (unfiled): TandemPeripheralManager logs an ErrorResponse on CurrentStatus and returns without resolving the pending Control write, so enactBolus fails only when the 30 s response timeout expires (TandemPeripheralManager.swift ErrorResponse branch)") {
-            XCTAssertLessThan(elapsed, 10, "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s")
+        try expectDefect("faketandem gap: an error_response fault's ErrorResponse names the replaced response's opcode as requestCodeId, not the request's (pkg/handler/router.go sendErrorResponse), so the driver cannot match it to the pending InitiateBolus and waits out the response timeout") {
+            XCTAssertLessThan(
+                elapsed,
+                FaketandemHarness.responseTimeout / 2,
+                "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
+            )
         }
 
         // The pump has no bolus. (A real pump that answers ErrorResponse did not act.)
