@@ -4,6 +4,11 @@ name: Linux
 # against LinuxShims/ (see Package.swift), which is the only build Claude Code web sessions have.
 # This catches a change that breaks the shims, and runs the tests Package.swift declares for Linux.
 # JPAKE is a trapping stub here, so its tests compile out, and TandemKitIntegrationTests is macOS-only.
+#
+# Two jobs, so the plain and virtual-pump builds run side by side: the flag changes every module's
+# compilation conditions, so they share nothing but the toolchain. Both use the toolchain
+# scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally sees the same
+# compiler here.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -15,11 +20,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  tests:
-    name: swift test
+  plain:
+    name: plain build + tests
     runs-on: ubuntu-latest
-    # The toolchain scripts/claude-web-setup.sh installs, so a session that passes `swift test`
-    # locally sees the same compiler here.
     container: swift:6.1.2-noble
     timeout-minutes: 20
     # Steps in a container job default to sh, which has no pipefail.
@@ -34,7 +37,6 @@ jobs:
 
       - name: Install Ruby and Python for the checks
         run: |
-          set -euo pipefail
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends ruby python3 > /dev/null
           gem install xcodeproj --no-document
@@ -42,36 +44,73 @@ jobs:
       - name: Validate Xcode source membership (all targets)
         run: ruby scripts/check_xcodeproj_source_membership.rb --check
 
-      - name: Cache SwiftPM build artifacts
+      # Keyed on the sources so a change saves a fresh entry; the fallback restores the nearest one
+      # and the build is incremental from it.
+      - name: Cache the build
         uses: actions/cache@v6
         with:
           path: |
             .build
-            .build-virtual
             ~/.cache/org.swift.swiftpm
-          key: linux-swift-6.1.2-${{ hashFiles('Package.swift') }}
+          key: linux-swift-6.1.2-plain-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**', 'LinuxShims/**') }}
           restore-keys: |
-            linux-swift-6.1.2-
+            linux-swift-6.1.2-plain-
 
       - name: Build, including test targets
         run: swift build --build-tests
 
+      # ubuntu-latest has 4 cores. A parallel run prints no "Executed N tests" line, so the count
+      # comes from the xunit report.
       - name: Run tests
-        run: |
-          set -o pipefail
-          swift test --skip-build 2>&1 | tee swift-test.log
+        run: swift test --skip-build --parallel --num-workers 4 --xunit-output swift-test.xml 2>&1 | tee swift-test.log
 
       - name: Check that tests actually ran
-        run: scripts/ci/check-test-count.py swift-test.log --label "Linux tests"
+        run: scripts/ci/check-test-count.py --xunit swift-test.xml --label "Linux tests"
 
-      # VirtualPump/ compiles only with the flag, which changes every module's build, hence the
-      # separate build path.
+      - name: Upload test logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-plain-test-logs
+          path: |
+            swift-test.log
+            swift-test.xml
+
+  virtual-pump:
+    name: virtual pump build + tests
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Python for the checks
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends python3 > /dev/null
+
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build-virtual
+            ~/.cache/org.swift.swiftpm
+          key: linux-swift-6.1.2-virtual-pump-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**', 'LinuxShims/**') }}
+          restore-keys: |
+            linux-swift-6.1.2-virtual-pump-
+
+      # VirtualPump/ compiles only with the flag.
       - name: Build with the virtual pump
         run: swift build --build-tests --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP
 
       - name: Run the virtual CoreBluetooth tests
         run: |
-          set -o pipefail
           swift test --skip-build --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP \
             --filter VirtualCoreBluetoothTests 2>&1 | tee swift-test-virtual-pump.log
 
@@ -82,7 +121,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: linux-test-logs
-          path: |
-            swift-test.log
-            swift-test-virtual-pump.log
+          name: linux-virtual-pump-test-logs
+          path: swift-test-virtual-pump.log
