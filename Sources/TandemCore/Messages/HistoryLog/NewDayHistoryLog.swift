@@ -13,7 +13,9 @@ public class NewDayHistoryLog: HistoryLog {
     public static let typeId = 90
 
     public let commandedBasalRate: Float
+    /// PumpFeaturesV2 index-0 (main) feature bitmask, the value PumpFeaturesV1 also returns. pumpX2#152.
     public let featuresBitmask: UInt32
+    /// Despite the name, a bitmask of the PumpFeaturesV2 indices the pump supports (bit n = index n). pumpX2#152.
     public let featureBitmaskIndex: UInt32
 
     public required init(cargo: Data) {
@@ -48,6 +50,15 @@ public class NewDayHistoryLog: HistoryLog {
                 Bytes.toUint32(featureBitmaskIndex)
             )
         )
+    }
+
+    public var primaryFeatures: Set<PumpFeaturesV1Response.PumpFeatureType> {
+        PumpFeaturesV1Response.PumpFeatureType.fromBitmask(UInt64(featuresBitmask))
+    }
+
+    public var supportedFeatureIndices: Set<PumpFeaturesV2Response.SupportedFeatureIndex> {
+        Set((0 ..< 32).filter { (featureBitmaskIndex >> $0) & 1 == 1 }
+            .compactMap { PumpFeaturesV2Response.SupportedFeatureIndex(rawValue: $0) })
     }
 
     public var description: String {
