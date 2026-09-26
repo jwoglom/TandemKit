@@ -198,6 +198,16 @@ import XCTest
         }
     }
 
+    /// The real central delivers its own state on managerQueue while a test drives this one, and two
+    /// overlapping `markLinkDown()`s used to reassign the pump state at once and crash xctest.
+    func testConcurrentRadioStateChangesDoNotRace() {
+        DispatchQueue.concurrentPerform(iterations: 200) { _ in
+            bluetooth.handleBluetoothStateChange(.poweredOff)
+        }
+
+        XCTAssertFalse(manager.state.isConnected)
+    }
+
     /// Nothing on screen reads `state` directly, so the change has to be published as well.
     func testLosingBluetoothPublishesAStatusUpdate() {
         let delegate = MockPumpManagerDelegate()

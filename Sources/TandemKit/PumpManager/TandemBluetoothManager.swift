@@ -395,12 +395,18 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
 extension TandemBluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        handleBluetoothStateChange(central.state)
+        applyBluetoothState(central.state)
     }
 
-    /// Split out of the delegate callback so it can be driven without a live `CBCentralManager`,
-    /// whose `state` cannot be set on Apple platforms.
+    /// Drives the delegate callback without a live `CBCentralManager`, whose `state` cannot be set on
+    /// Apple platforms. On managerQueue like the callback, so it cannot race the real central's own
+    /// state delivery: two `markLinkDown()`s at once reassign the pump state and crash.
     func handleBluetoothStateChange(_ state: CBManagerState) {
+        dispatchPrecondition(condition: .notOnQueue(managerQueue))
+        managerQueue.sync { applyBluetoothState(state) }
+    }
+
+    private func applyBluetoothState(_ state: CBManagerState) {
         logger.info("\(String(describing: state.rawValue))")
 
         guard state == .poweredOn else {

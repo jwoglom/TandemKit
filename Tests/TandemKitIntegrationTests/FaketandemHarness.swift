@@ -142,6 +142,9 @@ final class FaketandemHarness {
         let central = bluetooth.manager!
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         let delegate = MockPumpManagerDelegate()
+        // Before the delegate is attached: attaching fires the first callbacks synchronously, and
+        // every journal entry should carry the driver's clock.
+        delegate.journalClock = clock
         let queue = DispatchQueue(label: "com.jwoglom.TandemKitIntegrationTests.delegate")
         if attachDelegate {
             manager.pumpManagerDelegate = delegate
