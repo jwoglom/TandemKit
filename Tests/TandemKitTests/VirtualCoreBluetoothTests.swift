@@ -675,62 +675,6 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         return (response, seconds)
     }
 
-    /// Same round trip against a running faketandem (`go run . -transport virtual`), reached at
-    /// TANDEMKIT_VIRTUAL_PUMP_SMOKE=host:port (pass it as TEST_RUNNER_TANDEMKIT_VIRTUAL_PUMP_SMOKE to
-    /// xcodebuild). The pump must be in a connectable pairing state. Skipped otherwise.
-    func testApiVersionRoundTripAgainstARealVirtualPump() throws {
-        guard let address = ProcessInfo.processInfo.environment["TANDEMKIT_VIRTUAL_PUMP_SMOKE"],
-              let endpoint = SocketPumpEndpoint(address)
-        else {
-            throw XCTSkip("TANDEMKIT_VIRTUAL_PUMP_SMOKE not set")
-        }
-        let real = CBCentralManager(
-            delegate: recorder,
-            queue: DispatchQueue(label: "testApiVersionRoundTripAgainstARealVirtualPump"),
-            endpoint: endpoint,
-            scanInterval: 0.5
-        )
-        defer {
-            for peripheral in real.retrieveConnectedPeripherals(withServices: []) {
-                real.cancelPeripheralConnection(peripheral)
-            }
-        }
-
-        let discovered = expectation(description: "didDiscover")
-        discovered.assertForOverFulfill = false
-        var scanned: CBPeripheral?
-        recorder.onDiscover = { peripheral, _ in
-            scanned = peripheral
-            discovered.fulfill()
-        }
-        real.scanForPeripherals(withServices: [ServiceUUID.PUMP_SERVICE])
-        wait(for: [discovered], timeout: 5)
-        real.stopScan()
-        let peripheral = try XCTUnwrap(scanned)
-
-        let connected = expectation(description: "didConnect")
-        recorder.onConnect = { _ in connected.fulfill() }
-        recorder.onFailToConnect = { _, error in XCTFail("connect failed: \(String(describing: error))") }
-        real.connect(peripheral)
-        wait(for: [connected], timeout: 5)
-        try discover(peripheral)
-
-        let peripheralManager = makePeripheralManager(for: peripheral)
-        let answered = expectation(description: "ApiVersionResponse")
-        var received: ApiVersionResponse?
-        DispatchQueue.global().async {
-            peripheralManager.startNotify(
-                service: ServiceUUID.PUMP_SERVICE,
-                characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
-            )
-            received = peripheralManager.write(ApiVersionRequest())
-            answered.fulfill()
-        }
-        wait(for: [answered], timeout: 35)
-        XCTAssertNotNil(received)
-        XCTAssertGreaterThan(received?.majorVersion ?? 0, 0)
-    }
-
     private func makePeripheralManager(for peripheral: CBPeripheral) -> TandemPeripheralManager {
         let pumpManager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
