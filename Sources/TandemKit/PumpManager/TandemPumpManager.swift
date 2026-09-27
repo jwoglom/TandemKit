@@ -58,7 +58,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Status is published from the command, CoreBluetooth and delegate queues at once; two
     // unserialized swaps of oldState release the same snapshot twice.
     private let publishLock = NSLock()
-    public var state: TandemPumpManagerState
+
+    // Those queues all read and write state. It holds class references (UnfinalizedDose), so an
+    // unserialized write can over-release them; `_modify` keeps `state.x = y` one locked access.
+    private let stateLock = NSRecursiveLock()
+    private var _state: TandemPumpManagerState
+    public var state: TandemPumpManagerState {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _state
+        }
+        _modify {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            yield &_state
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _state = newValue
+        }
+    }
     internal let logger = TandemLogger(category: "TandemPumpManager")
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
@@ -167,7 +188,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
     /// without CoreBluetooth; production goes through `init(state:)`.
     init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection, clock: TandemClock = SystemClock()) {
-        self.state = state
+        _state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         self.clock = clock
