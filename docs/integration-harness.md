@@ -29,6 +29,22 @@ FAKETANDEM_DIR=../faketandem scripts/integration-test.sh test \
 scripts/integration-test.sh build                                  # compile only, no emulator
 ```
 
+On Linux the same script runs the suite under `swift test` instead, built with
+`-DTANDEMKIT_VIRTUAL_PUMP` into `.build-virtual`; Package.swift declares the target only when
+`TANDEMKIT_INTEGRATION_TESTS=1`, which the script sets. It needs Go, Java and faketandem but no
+simulator. Filter with `--filter`, e.g. `scripts/integration-test.sh test --filter
+TandemKitIntegrationTests.BolusIntegrationTests`. Differences from macOS:
+
+- Fresh JPAKE pairing (`PairingIntegrationTests`) is compiled out, since SwiftECC does not build
+  and the JPAKE provider is a trapping stub; the rest pair with a seeded long-term key as on macOS.
+- swift-corelibs-xctest has no `XCTExpectFailure` or `XCTAttachment`.
+  `LinuxExpectedFailure.swift` supplies a strict `XCTExpectFailure`, and each test's request log
+  is written to `LOG_DIR/request-logs/` instead of being attached. The stand-in carries on past an
+  expected failure where Apple's XCTest stops under `continueAfterFailure = false`, so a class with
+  expected failures sets it to `true`; otherwise macOS silently skips what follows them.
+- Foundation's `URLSessionWebSocketTask` needs a libcurl built with WebSocket support, which the
+  toolchain's is not, so the control socket uses `LinuxWebSocket.swift`, a plain ws:// client.
+
 The script builds faketandem from `FAKETANDEM_DIR`, starts it with `-transport virtual`
 on two free loopback ports, waits for its API, runs the `TandemKitIntegrationTests`
 scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
@@ -39,12 +55,23 @@ scheme through `scripts/test-local.sh`, and kills the emulator on exit. Logs:
 | `xcodebuild.log` | The driver's `TandemLogger` output and the XCTest results. |
 | `TandemKitIntegrationTests.xcresult` | The result bundle; each test attaches the pump's request log (`xcrun xcresulttool export attachments --path … --output-path …`). |
 
-Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`,
+Environment variables the script reads: `FAKETANDEM_DIR`, `FAKETANDEM_JAR`, `FAKETANDEM_BIN`,
 `FAKETANDEM_ARGS` (extra emulator flags), `FAKETANDEM_HOST`, `LOG_DIR`, plus everything
-`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`). The script
+`scripts/test-local.sh` reads (`TRIO_PRODUCTS`, `DERIVED_DATA`, `SIMULATOR`, `DESTINATION`). The script
 sets `VIRTUAL_PUMP=1` for `test-local.sh`, which adds `-xcconfig VirtualPump.xcconfig`, and
 defaults `DERIVED_DATA` to `.derived-data-virtual-pump` so the flagged build does not
 invalidate the plain one.
+
+In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
+macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
+TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built from its default
+branch (`faketandem_ref` on a manual run picks another) and the cliparser jar fetched, then hands
+the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips, because
+a skip means the emulator's addresses never reached the test process.
+
+`.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
+reusing the `virtual-pump` job's build from the Actions cache. That job runs on pushes to `main`
+and `dev` and on manual runs, not on pull requests.
 
 ### How the tests find the emulator
 
@@ -215,8 +242,8 @@ and a few seconds per pairing.
 
 New files under `Tests/TandemKitIntegrationTests/` must be members of the
 `TandemKitIntegrationTests` target; `ruby scripts/check_xcodeproj_source_membership.rb
---fix` does it. The directory is deliberately not declared in `Package.swift`'s Linux
-branch (JPAKE is a trapping stub there).
+--fix` does it. On Linux SwiftPM picks them up from the directory, except `Conformance/Oracles`,
+which `TandemKitTests` compiles because both test targets use it.
 
 ## What the harness found
 
@@ -282,9 +309,14 @@ shape of it explains what the harness is for:
   (`-virtual-mtu`, `GET`/`PUT /api/transport`, and announced as `att_mtu` in `hello`), so
   the unfragmented framing a real Mobi produces is exercised too — `MTUIntegrationTests`,
   and `FaketandemHarness.reset()` puts the MTU back to the 23-byte default before each test.
+- **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
+  a real pump names the refused request, so the driver could not match it to its pending write
+  and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
 
-Not gaps, but worth knowing when reading timings: an unauthenticated
-`DisconnectPumpRequest` is not answered (the handler requires auth, as on a real pump), so
-a failed setup costs the driver its 30 s response timeout before the link drops; and
-pairing-state `NotDiscoverable` still answers `hello` (followed by `disconnect`), which
-the virtual `CBCentralManager` treats as "not advertising".
+Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
+driver's response timeout to 5 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,
+`VirtualPump.connectTimeout`; production keeps 30 s for a real pump's slowest command), so a
+scenario that drops a response waits 5 s, not 30. An unauthenticated `DisconnectPumpRequest` is
+not answered (the handler requires auth, as on a real pump), so the driver sends it only on an
+authenticated session. And pairing-state `NotDiscoverable` still answers `hello` (followed by
+`disconnect`), which the virtual `CBCentralManager` treats as "not advertising".

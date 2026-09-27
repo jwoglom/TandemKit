@@ -1,6 +1,10 @@
 import Foundation
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 /// Group C of `docs/conformance-test-plan.md`: idempotency and complete batches.
@@ -316,10 +320,11 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         }
 
         // Resume: the batch that reopens delivery must not purge anything still live either.
+        // Counted before the resume: its qualifying event can report the resume ahead of the sync.
+        let beforeResume = allPumpEventBatches.count
         _ = try harness.client.resume()
-        let beforeResumeSync = allPumpEventBatches.count
         _ = try sync()
-        let resumeBatches = newBatches(since: beforeResumeSync)
+        let resumeBatches = newBatches(since: beforeResume)
         XCTAssertFalse(
             resumeBatches.flatMap(\.events).isEmpty,
             "the pump came off suspend; the host must be told: \(resumeBatches.map(describe))"
@@ -398,8 +403,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         // so this is a pump that said nothing about *delivery* rather than a pump that is not
         // there. (A pump that answers nothing at all cannot be staged here — see the report: with
         // the radio off the driver's auto-reconnect spins hard enough to take the test process
-        // down, and dropping every response costs 30 s per read, more silence than the test
-        // runner's progress watchdog allows.)
+        // down, and dropping every response costs a response timeout per read, more silence than
+        // the test runner's progress watchdog allows.)
         let silentReads = ["InsulinStatusRequest", "CurrentBolusStatusRequest", "CurrentBasalStatusRequest"]
         let client = harness.client
         addTeardownBlock { _ = try? client.clearFaults() }

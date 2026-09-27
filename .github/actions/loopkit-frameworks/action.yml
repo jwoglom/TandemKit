@@ -1,0 +1,156 @@
+name: Stage prebuilt LoopKit frameworks
+description: >-
+  Builds (or restores from cache) LoopKit.framework and LoopKitUI.framework at the pinned
+  revision and stages them into <derived-data-path>/Build/Products/Debug-iphonesimulator,
+  which is where TandemKit.xcodeproj links them from.
+
+# The TandemKit framework links LoopKit.framework and LoopKitUI.framework from
+# BUILT_PRODUCTS_DIR, so TandemKit.xcodeproj cannot be built on its own -- some
+# other project has to produce them first. Trio's workspace would, at the cost
+# of checking out and building all of Trio.
+#
+# Instead, check out LoopKit (public, pinned below) next to this repo and build
+# its two framework targets straight into the shared derived data. That keeps
+# the jobs using this free of Trio and of secrets, so they run on every push and
+# pull request, forks included.
+#
+# Those frameworks only depend on the pinned LoopKit revision and the Xcode
+# version, so they are cached under exactly that key and rebuilt only when one
+# of the two moves. On a cache hit the LoopKit checkout is skipped entirely and
+# TandemKit is built with -project (no workspace), which keeps the LoopKit
+# targets out of the build graph so nothing can decide to recompile them.
+#
+# The repository/revision defaults mirror the LoopKit submodule of the Trio that
+# ships TandemKit, nightscout/Trio feat/tandem-closed-beta, which is the real
+# source of truth -- Trio pulls its dependencies in as git submodules, and
+# TandemKit is one of them. Upstream
+# LoopKit/LoopKit is not interchangeable with Trio's loopandlearn fork:
+# upstream has no `Pluggable`, which TandemPumpManager conforms to. When Trio
+# bumps its LoopKit submodule, bump the revision here to match.
+inputs:
+  derived-data-path:
+    description: xcodebuild -derivedDataPath the frameworks are staged into.
+    required: true
+  destination:
+    description: xcodebuild -destination to build LoopKit for on a cache miss.
+    required: true
+  xcode-version:
+    description: Selected Xcode version; part of the cache key.
+    required: true
+  products-cache:
+    description: Workspace directory holding the cached frameworks.
+    default: LoopKitProducts
+  loopkit-repository:
+    default: loopandlearn/LoopKit
+  loopkit-revision:
+    default: d52c298e3e3fe640e2ae1c5cef885da5daaa58cb
+
+runs:
+  using: composite
+  steps:
+    # Keyed on the pinned LoopKit revision and the Xcode version, and nothing
+    # else -- those are the only two inputs to these frameworks. The key is
+    # deliberately narrow so it stays a hit across branches and the ~hundreds
+    # of MB are re-uploaded only when the pin or the toolchain moves.
+    - name: Cache prebuilt LoopKit frameworks
+      uses: actions/cache@v6
+      with:
+        path: ${{ inputs.products-cache }}
+        key: ${{ runner.os }}-${{ runner.arch }}-xcode-${{ inputs.xcode-version }}-loopkit-frameworks-${{ inputs.loopkit-revision }}
+
+    # Don't trust the restore blindly: a partial or truncated cache entry
+    # should fall back to a real build rather than fail the job at link time.
+    - name: Check for usable prebuilt LoopKit frameworks
+      id: loopkit
+      shell: bash
+      env:
+        PRODUCTS_CACHE: ${{ inputs.products-cache }}
+      run: |
+        set -euo pipefail
+        if [[ -d "${PRODUCTS_CACHE}/LoopKit.framework" && -d "${PRODUCTS_CACHE}/LoopKitUI.framework" ]]; then
+          echo "Using cached LoopKit frameworks."
+          echo "prebuilt=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "No usable cached LoopKit frameworks; they will be built from source."
+          echo "prebuilt=false" >> "${GITHUB_OUTPUT}"
+        fi
+
+    - name: Checkout LoopKit at the pinned revision
+      if: steps.loopkit.outputs.prebuilt != 'true'
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.loopkit-repository }}
+        ref: ${{ inputs.loopkit-revision }}
+        path: LoopKit
+        fetch-depth: 1
+
+    # LoopKit.xcodeproj shares schemes only for its example app and test
+    # bundles, and xcodebuild refuses -target together with -derivedDataPath,
+    # so generate a scheme per target and share it. Generated schemes land in
+    # xcuserdata, which xcodebuild resolves against $USER; move them to
+    # xcshareddata so the lookup does not depend on who the runner runs as.
+    - name: Generate LoopKit schemes
+      if: steps.loopkit.outputs.prebuilt != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        ruby -e 'begin; require "xcodeproj"; rescue LoadError; exit 1; end' || gem install xcodeproj --no-document
+        ruby -e '
+          require "xcodeproj"
+          Xcodeproj::Project.open("LoopKit/LoopKit.xcodeproj").recreate_user_schemes
+        '
+        mkdir -p "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes"
+        for scheme in LoopKit LoopKitUI; do
+          find "LoopKit/LoopKit.xcodeproj/xcuserdata" -name "${scheme}.xcscheme" -exec \
+            cp {} "LoopKit/LoopKit.xcodeproj/xcshareddata/xcschemes/${scheme}.xcscheme" \;
+        done
+        xcodebuild -project "LoopKit/LoopKit.xcodeproj" -list
+
+    # LoopKitUI depends on LoopKit, but build both explicitly so a missing
+    # dependency edge upstream cannot leave us with half of what TandemKit
+    # links against.
+    - name: Build LoopKit frameworks
+      if: steps.loopkit.outputs.prebuilt != 'true'
+      shell: bash
+      env:
+        DESTINATION: ${{ inputs.destination }}
+        DERIVED_DATA: ${{ inputs.derived-data-path }}
+        PRODUCTS_CACHE: ${{ inputs.products-cache }}
+      run: |
+        set -o pipefail
+        for scheme in LoopKit LoopKitUI; do
+          xcodebuild build \
+            -project "LoopKit/LoopKit.xcodeproj" \
+            -scheme "${scheme}" \
+            -configuration Debug \
+            -destination "${DESTINATION}" \
+            -derivedDataPath "${DERIVED_DATA}" \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            -quiet \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee -a "xcodebuild-loopkit.log"
+        done
+        mkdir -p "${PRODUCTS_CACHE}"
+        rsync -a --delete "${DERIVED_DATA}/Build/Products/Debug-iphonesimulator/" "${PRODUCTS_CACHE}/"
+
+    # TandemKit.xcodeproj resolves LoopKit.framework/LoopKitUI.framework out of
+    # BUILT_PRODUCTS_DIR, so putting them there is all the wiring the build
+    # needs -- which is why the TandemKit build can use -project and skip the
+    # LoopKit project entirely.
+    - name: Stage LoopKit frameworks into BUILT_PRODUCTS_DIR
+      shell: bash
+      env:
+        PRODUCTS_DIR: ${{ inputs.derived-data-path }}/Build/Products/Debug-iphonesimulator
+        PRODUCTS_CACHE: ${{ inputs.products-cache }}
+      run: |
+        set -euo pipefail
+        mkdir -p "${PRODUCTS_DIR}"
+        rsync -a "${PRODUCTS_CACHE}/" "${PRODUCTS_DIR}/"
+        for framework in LoopKit LoopKitUI; do
+          if [[ ! -d "${PRODUCTS_DIR}/${framework}.framework" ]]; then
+            echo "${framework}.framework is missing from ${PRODUCTS_DIR} after staging."
+            exit 1
+          fi
+        done

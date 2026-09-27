@@ -1,6 +1,10 @@
 import Foundation
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 /// Conformance group D (`docs/conformance-test-plan.md`): pump-side failures and events. The pump
@@ -266,9 +270,11 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "InitiateBolus reached the pump"
         )
 
-        try expectDefect("jwoglom/TandemKit (unfiled): TandemPeripheralManager logs an ErrorResponse on CurrentStatus and returns without resolving the pending Control write, so enactBolus fails only when the 30 s response timeout expires (TandemPeripheralManager.swift ErrorResponse branch)") {
-            XCTAssertLessThan(elapsed, 10, "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s")
-        }
+        XCTAssertLessThan(
+            elapsed,
+            FaketandemHarness.responseTimeout / 2,
+            "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
+        )
 
         // The pump has no bolus. (A real pump that answers ErrorResponse did not act.)
         let snapshot = try harness.client.snapshot()
@@ -401,7 +407,9 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// measured offset must reach the host through `didAdjustPumpClockBy`.
     func testD5PumpClockSkewIsMeasuredAndDosesFollowThePumpsLedger() throws {
         let skew: Double = 900
-        try clock.setSkew(seconds: skew)
+        // A minute behind the wall clock: #339's start-date clamp is to Date.now, so its error is
+        // this lag, and a fast emulator would otherwise shrink it inside the tolerance.
+        try clock.start(at: Date().addingTimeInterval(-60), skewSeconds: skew)
 
         // The phone's schedule: the current segment at 1.0 U/h, the next (in 5 minutes of phone
         // time) at 2.0 U/h. On its own clock the pump is already 15 minutes on, i.e. in that next

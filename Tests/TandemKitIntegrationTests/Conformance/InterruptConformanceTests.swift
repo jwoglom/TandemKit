@@ -1,6 +1,10 @@
 import Foundation
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 /// Conformance group A, "interrupt everything" (`docs/conformance-test-plan.md` §A; guide §10
@@ -14,8 +18,8 @@ import XCTest
 /// in a strict `XCTExpectFailure` naming the issue, so a fix flips them to "unexpected pass".
 ///
 /// Timing: both clocks are frozen and moved together with `advanceBoth`. The only real-time waits
-/// are the driver's own — its 30 s response timeout when a response is lost (A2, A5) and the
-/// seconds an auto-reconnect takes.
+/// are the driver's own — its response timeout when a response is lost (A2, A5), shortened by the
+/// harness, and the seconds an auto-reconnect takes.
 final class InterruptConformanceTests: ConformanceTestCase {
     /// The pump's profile basal rate and the driver's scheduled rate, kept equal so a percent temp
     /// rate means the same U/h on both sides.
@@ -31,6 +35,13 @@ final class InterruptConformanceTests: ConformanceTestCase {
     private static let bolusUnits = 2.0
 
     // MARK: - Setup helpers
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // As in CancelConformanceTests: the base case would end a scenario at its first expected
+        // failure, and on Apple platforms it did, leaving A4's later assertions unrun.
+        continueAfterFailure = true
+    }
 
     /// A paired, synced driver with what a host configures at onboarding (insulin type, basal
     /// schedule) and a pump whose profile rate and bolus speed are the fixture's.
@@ -212,7 +223,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "InitiateBolusRequest"))
 
-        // The driver waits its 30 s response timeout (real time) before giving up.
+        // The driver waits out its response timeout (real time) before giving up.
         let error = try enactBolus(units: 1.0, timeout: 90)
         guard case .communication? = error else {
             return XCTFail("a lost acknowledgement is a communication error, got \(String(describing: error))")
@@ -383,6 +394,13 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         let finalized = try finalizedEvent(raw: raw)
         XCTAssertEqual(finalized.dose?.endDate, scheduledEnd, "finalized at its scheduled end")
+        // In the batch, not the oracle: reconciled() drops a trailing zero-length basal, and the
+        // DoseStore schedule overlay that fills it in is not modelled.
+        let finalizingBatch = try XCTUnwrap(allPumpEventBatches.last { $0.events.contains { $0.raw == raw && $0.dose?.isMutable == false } })
+        XCTAssertTrue(
+            finalizingBatch.events.contains { $0.dose?.type == .basal && abs(($0.dose?.startDate ?? .distantPast).timeIntervalSince(scheduledEnd)) <= 2 },
+            "the scheduled basal resumes at the temp basal's end: \(finalizingBatch.events.map { LoopDoseStoreOracle.describe($0.raw) })"
+        )
         XCTAssertEqual(try XCTUnwrap(finalized.dose?.deliveredUnits), rate * duration / .hours(1), accuracy: 0.0005)
         try assertFinalizedFieldSemantics(finalized, programmed: rate)
 
@@ -390,10 +408,6 @@ final class InterruptConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         let stored = try XCTUnwrap(loop.assertPermanent(raw: raw, "expired temp basal"))
         XCTAssertEqual(stored.dose.endDate, scheduledEnd)
-        XCTAssertTrue(
-            loop.doses.contains { $0.dose.type == .basal && abs($0.dose.startDate.timeIntervalSince(scheduledEnd)) <= 2 },
-            "the scheduled basal resumes at the temp basal's end: \(loop.doses.map(LoopDoseStoreOracle.describe))"
-        )
         trio.assertNoDuplicates()
         XCTAssertEqual(trio.tempBasals.count, 1, "Trio holds one temp basal row: \(trio.tempBasals)")
         XCTAssertEqual(trio.tempBasals.first?.tempBasalDurationMinutes, Int(duration / 60))

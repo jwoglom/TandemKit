@@ -41,6 +41,13 @@ class FaketandemIntegrationTestCase: XCTestCase {
         return created
     }
 
+    #if !canImport(ObjectiveC)
+    override func recordFailure(withDescription description: String, inFile filePath: String, atLine lineNumber: Int, expected: Bool) {
+        if ExpectedFailureScope.absorb(description) { return }
+        super.recordFailure(withDescription: description, inFile: filePath, atLine: lineNumber, expected: expected)
+    }
+    #endif
+
     /// Ends the current driver so a second one (a relaunch) can attach to the pump.
     func shutDownDriver() throws {
         guard let driver else { return }
@@ -61,9 +68,17 @@ class FaketandemIntegrationTestCase: XCTestCase {
             if let fragments = entry.fragments { line += " \(fragments.joined(separator: "|"))" }
             return line
         }
+        #if canImport(ObjectiveC)
         let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
         attachment.name = "faketandem-request-log.txt"
         attachment.lifetime = .keepAlways
         add(attachment)
+        #else
+        // swift-corelibs-xctest has no attachments; integration-test.sh points this at LOG_DIR.
+        guard let directory = ProcessInfo.processInfo.environment["FAKETANDEM_REQUEST_LOG_DIR"] else { return }
+        let file = URL(fileURLWithPath: directory)
+            .appendingPathComponent(name.replacingOccurrences(of: "/", with: "_") + ".faketandem-request-log.txt")
+        try? lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        #endif
     }
 }

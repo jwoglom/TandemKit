@@ -19,6 +19,11 @@ public enum VirtualPump {
     static var endpoint: SocketPumpEndpoint? = ProcessInfo.processInfo.environment[environmentVariable]
         .flatMap(SocketPumpEndpoint.init)
     static var scanInterval: TimeInterval = 1.0
+
+    /// Replace the driver's 30 s response and connect timeouts, which are sized for a real pump's
+    /// slowest command. faketandem answers at once or, when a test tells it not to, never.
+    static var responseTimeout: DispatchTimeInterval?
+    static var connectTimeout: DispatchTimeInterval?
 }
 
 public enum CBPeripheralState: Int {

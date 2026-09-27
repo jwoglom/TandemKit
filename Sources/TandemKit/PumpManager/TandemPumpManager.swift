@@ -55,6 +55,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private static let maximumHeldPumpEventBatches = 64
 
     private var oldState: TandemPumpManagerState
+    // Status is published from the command, CoreBluetooth and delegate queues at once; two
+    // unserialized swaps of oldState release the same snapshot twice.
+    private let publishLock = NSLock()
     public var state: TandemPumpManagerState
     internal let logger = TandemLogger(category: "TandemPumpManager")
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
@@ -269,8 +272,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     internal func notifyDelegateStateUpdated() {
-        let status = TandemPumpManager.makeStatus(from: state)
+        publishLock.lock()
+        let current = state
+        let status = TandemPumpManager.makeStatus(from: current)
         let oldStatus = TandemPumpManager.makeStatus(from: oldState)
+        oldState = TandemPumpManagerState(rawValue: current.rawValue)
+        publishLock.unlock()
 
         if let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
@@ -284,8 +291,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         statusObservers.forEach { observer in
             observer.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
         }
-
-        oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
     // MARK: - Status Observers

@@ -28,8 +28,10 @@ final class BolusIntegrationTests: FaketandemIntegrationTestCase {
 
         XCTAssertNil(error, "enactBolus failed: \(String(describing: error))")
         let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
-        guard case .initiating = driver.manager.state.bolusState else {
-            return XCTFail("bolus state after enact: \(driver.manager.state.bolusState)")
+        switch driver.manager.state.bolusState {
+        // The activation's qualifying event can poll CurrentBolusStatus before this line runs.
+        case .initiating, .inProgress: break
+        default: return XCTFail("bolus state after enact: \(driver.manager.state.bolusState)")
         }
 
         let started = try XCTUnwrap(Array(driver.bolusEvents.dropFirst(eventsBefore)).first, "the enact must be reported")

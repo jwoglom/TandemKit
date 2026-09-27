@@ -1,4 +1,8 @@
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {

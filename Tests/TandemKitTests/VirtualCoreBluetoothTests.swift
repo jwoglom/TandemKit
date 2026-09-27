@@ -3,6 +3,9 @@ import CoreBluetooth
 import Foundation
 @testable import TandemKit
 import XCTest
+#if canImport(Glibc)
+import Glibc
+#endif
 
 private final class CentralRecorder: CBCentralManagerDelegate {
     var onStateUpdate: ((CBCentralManager) -> Void)?
@@ -260,9 +263,15 @@ final class VirtualCoreBluetoothTests: XCTestCase {
 
     func testSocketLinkWriteToAClosedPeerThrowsInsteadOfRaisingSigpipe() {
         var fds: [Int32] = [0, 0]
+        #if canImport(Glibc)
+        XCTAssertEqual(socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, &fds), 0)
+        let link = SocketLink(fd: fds[0])
+        Glibc.close(fds[1])
+        #else
         XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
         let link = SocketLink(fd: fds[0])
         Darwin.close(fds[1])
+        #endif
 
         XCTAssertThrowsError(try link.send(["type": "hello"]))
         link.close()
@@ -557,6 +566,113 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         XCTAssertEqual(fragments[0][2], Jpake4KeyConfirmationResponse.props.opCode)
         XCTAssertNotEqual(fragments[1][2], Jpake4KeyConfirmationResponse.props.opCode, "a continuation packet carries cargo at byte 2")
         XCTAssertEqual(received?.hashDigest, digest)
+    }
+
+    func testAnErrorResponseNamingThePendingRequestFailsTheWriteAtOnce() throws {
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        server.onWrite = { connection, _, value in
+            connection.notify(
+                CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                Self.errorResponse(txId: value[1], requestCodeId: ApiVersionRequest.props.opCode)
+            )
+        }
+
+        let result = writeApiVersion(with: peripheralManager)
+
+        XCTAssertNil(result.response)
+        XCTAssertLessThan(result.seconds, 5, "the production response timeout is 30 s")
+    }
+
+    func testAnErrorResponseForAnotherRequestLeavesTheWritePending() throws {
+        let saved = VirtualPump.responseTimeout
+        VirtualPump.responseTimeout = .seconds(1)
+        defer { VirtualPump.responseTimeout = saved }
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        server.onWrite = { connection, _, value in
+            connection.notify(
+                CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                Self.errorResponse(txId: value[1], requestCodeId: ApiVersionRequest.props.opCode &+ 2)
+            )
+        }
+
+        let result = writeApiVersion(with: peripheralManager)
+
+        XCTAssertNil(result.response)
+        XCTAssertGreaterThanOrEqual(result.seconds, 0.9, "only the response timeout ends it")
+    }
+
+    func testAnErrorResponseArrivingMidResponseLeavesTheResponseStanding() throws {
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        let nonce = Data([0xE6, 0x8B, 0x38, 0xDA, 0x41, 0x3F, 0xC8, 0x68])
+        let digest = Data((0 ..< 32).map { UInt8($0) })
+
+        server.onWrite = { connection, characteristic, value in
+            guard value[0] == 0 else { return }
+            let response = Jpake4KeyConfirmationResponse(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            )
+            let packets = Packetize.parse(message: response, authenticationKey: nil, txId: value[1], timeSinceReset: nil)
+            for (index, packet) in packets.enumerated() {
+                connection.notify(characteristic, packet.build())
+                if index == 0 {
+                    connection.notify(
+                        CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                        Self.errorResponse(txId: value[1], requestCodeId: Jpake4KeyConfirmationRequest.props.opCode)
+                    )
+                }
+            }
+        }
+
+        let answered = expectation(description: "Jpake4KeyConfirmationResponse")
+        var received: Jpake4KeyConfirmationResponse?
+        DispatchQueue.global().async {
+            for characteristic in [CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS, CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS] {
+                peripheralManager.startNotify(service: ServiceUUID.PUMP_SERVICE, characteristic: characteristic)
+            }
+            received = peripheralManager.write(Jpake4KeyConfirmationRequest(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            ))
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 10)
+
+        XCTAssertEqual(received?.hashDigest, digest)
+    }
+
+    /// faketandem's single-fragment, unsigned ErrorResponse (pkg/protocol BuildErrorResponse).
+    private static func errorResponse(txId: UInt8, requestCodeId: UInt8) -> Data {
+        let body = Data([ErrorResponse.props.opCode, txId, 2, requestCodeId, 3])
+        return Data([0, txId]) + body + body.crc16()
+    }
+
+    private func writeApiVersion(with peripheralManager: TandemPeripheralManager) -> (response: ApiVersionResponse?, seconds: TimeInterval) {
+        let answered = expectation(description: "write returned")
+        var response: ApiVersionResponse?
+        var seconds: TimeInterval = 0
+        DispatchQueue.global().async {
+            peripheralManager.startNotify(
+                service: ServiceUUID.PUMP_SERVICE,
+                characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
+            )
+            let started = Date()
+            response = peripheralManager.write(ApiVersionRequest())
+            seconds = Date().timeIntervalSince(started)
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 10)
+        return (response, seconds)
     }
 
     /// Same round trip against a running faketandem (`go run . -transport virtual`), reached at

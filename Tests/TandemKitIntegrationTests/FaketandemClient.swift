@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // The faketandem control API (README.md "Integration harness API" and pkg/api). Everything here is
 // synchronous: the tests drive the pump from the test thread and poll for the driver's reaction.
