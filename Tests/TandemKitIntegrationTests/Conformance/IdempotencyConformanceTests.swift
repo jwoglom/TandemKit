@@ -320,10 +320,11 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         }
 
         // Resume: the batch that reopens delivery must not purge anything still live either.
+        // Counted before the resume: its qualifying event can report the resume ahead of the sync.
+        let beforeResume = allPumpEventBatches.count
         _ = try harness.client.resume()
-        let beforeResumeSync = allPumpEventBatches.count
         _ = try sync()
-        let resumeBatches = newBatches(since: beforeResumeSync)
+        let resumeBatches = newBatches(since: beforeResume)
         XCTAssertFalse(
             resumeBatches.flatMap(\.events).isEmpty,
             "the pump came off suspend; the host must be told: \(resumeBatches.map(describe))"
