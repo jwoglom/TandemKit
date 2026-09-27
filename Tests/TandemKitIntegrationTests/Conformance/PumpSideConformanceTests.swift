@@ -270,13 +270,11 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "InitiateBolus reached the pump"
         )
 
-        try expectDefect("faketandem gap: an error_response fault's ErrorResponse names the replaced response's opcode as requestCodeId, not the request's (pkg/handler/router.go sendErrorResponse), so the driver cannot match it to the pending InitiateBolus and waits out the response timeout") {
-            XCTAssertLessThan(
-                elapsed,
-                FaketandemHarness.responseTimeout / 2,
-                "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
-            )
-        }
+        XCTAssertLessThan(
+            elapsed,
+            FaketandemHarness.responseTimeout / 2,
+            "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
+        )
 
         // The pump has no bolus. (A real pump that answers ErrorResponse did not act.)
         let snapshot = try harness.client.snapshot()
