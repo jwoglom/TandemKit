@@ -70,7 +70,8 @@ the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration t
 a skip means the emulator's addresses never reached the test process.
 
 `.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
-reusing the `virtual-pump` job's build from the Actions cache.
+reusing the `virtual-pump` job's build from the Actions cache. That job runs on pushes to `main`
+and `dev` and on manual runs, not on pull requests.
 
 ### How the tests find the emulator
 
