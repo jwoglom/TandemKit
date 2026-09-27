@@ -407,7 +407,9 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// measured offset must reach the host through `didAdjustPumpClockBy`.
     func testD5PumpClockSkewIsMeasuredAndDosesFollowThePumpsLedger() throws {
         let skew: Double = 900
-        try clock.setSkew(seconds: skew)
+        // A minute behind the wall clock: #339's start-date clamp is to Date.now, so its error is
+        // this lag, and a fast emulator would otherwise shrink it inside the tolerance.
+        try clock.start(at: Date().addingTimeInterval(-60), skewSeconds: skew)
 
         // The phone's schedule: the current segment at 1.0 U/h, the next (in 5 minutes of phone
         // time) at 2.0 U/h. On its own clock the pump is already 15 minutes on, i.e. in that next

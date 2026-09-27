@@ -69,8 +69,10 @@ final class ConformanceClock {
     @discardableResult
     func advanceBoth(seconds: TimeInterval, ticks: Int = 1) throws -> Date {
         precondition(seconds >= 0, "clocks only move forward")
-        let clock = try client.advanceClock(seconds: seconds, ticks: max(1, ticks))
+        // Driver first: a qualifying event the step raises can be handled before advanceClock
+        // returns, and a phone never sees pump state from later than its own clock reads.
         driver.advance(by: seconds)
+        let clock = try client.advanceClock(seconds: seconds, ticks: max(1, ticks))
         try assertAligned(clock)
         return driver.now
     }
