@@ -60,6 +60,7 @@ import XCTest
 
         let request = try XCTUnwrap(bluetooth.sent(SetQuickBolusSettingsRequest.self).first)
         XCTAssertFalse(request.enabled)
+        XCTAssertEqual(request.changedFields, .enabled)
         XCTAssertFalse(try XCTUnwrap(manager.state.quickBolusEnabled))
     }
 

@@ -364,10 +364,10 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
-    func fetchGlobalPumpSettings() {
+    @discardableResult func fetchGlobalPumpSettings() -> PumpGlobalsResponse? {
         guard let response = bluetooth.write(PumpGlobalsRequest()) else {
             logger.error("Failed to fetch global pump settings: \(type(of: PumpGlobalsRequest.self))")
-            return
+            return nil
         }
 
         state.quickBolusAnnun = response.quickBolusAnnouncement
@@ -381,6 +381,7 @@ extension TandemPumpManager {
         state.quickBolusIncrementCarbs = response.quickBolusIncrementCarbs
         state.quickBolusStatus = response.quickBolusStatus
         notifyDelegateStateUpdated()
+        return response
     }
 
     /// Turns the pump's quick bolus button off when `quickBolusButtonSupport` is off and the pump
@@ -393,7 +394,14 @@ extension TandemPumpManager {
 
         logger.warning("Quick bolus button is enabled on the pump; disabling it")
 
-        guard let response = bluetooth.write(SetQuickBolusSettingsRequest(enabled: false, mode: .units, increment: .disabled)) else {
+        let request = SetQuickBolusSettingsRequest(
+            enabled: false,
+            mode: state.quickBolusEntryType.flatMap(QuickBolusMode.init(rawValue:)) ?? .units,
+            incrementUnits: state.quickBolusIncrementUnits ?? 500,
+            incrementCarbs: state.quickBolusIncrementCarbs ?? 2000,
+            changedFields: .enabled
+        )
+        guard let response = bluetooth.write(request) else {
             logger.error("Failed to disable quick bolus button: no response")
             return
         }

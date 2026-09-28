@@ -476,28 +476,6 @@
         }
       }
     },
-    "Carb Increment" : {
-      "comment" : "Label for carb increment picker",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Carb Increment"
-          }
-        }
-      }
-    },
-    "Carbs" : {
-      "comment" : "Quick bolus carbs mode",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Carbs"
-          }
-        }
-      }
-    },
     "Cartridge" : {
       "comment" : "Header for insulin remaining",
       "localizations" : {
@@ -719,13 +697,13 @@
         }
       }
     },
-    "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin or enter carbs using repeated button presses." : {
+    "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin using repeated button presses." : {
       "comment" : "Description for quick bolus settings",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin or enter carbs using repeated button presses."
+            "value" : "Configure the quick bolus button on your pump. Quick bolus lets you deliver insulin using repeated button presses."
           }
         }
       }
@@ -880,6 +858,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not resume insulin delivery"
+          }
+        }
+      }
+    },
+    "Could not save quick bolus settings to the pump." : {
+      "comment" : "Error shown when saving quick bolus settings fails",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not save quick bolus settings to the pump."
           }
         }
       }
@@ -1095,17 +1084,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter the pairing code from your pump"
-          }
-        }
-      }
-    },
-    "Entry Type" : {
-      "comment" : "Label for quick bolus entry type",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entry Type"
           }
         }
       }
@@ -1844,17 +1822,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Manually sync Pump time"
-          }
-        }
-      }
-    },
-    "Mode" : {
-      "comment" : "Header for quick bolus mode",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mode"
           }
         }
       }
@@ -3810,17 +3777,6 @@
         }
       }
     },
-    "Units" : {
-      "comment" : "Quick bolus units mode",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Units"
-          }
-        }
-      }
-    },
     "Unknown" : {
       "comment" : "CGM session state: unknown\nText shown when insulin status unknown\nuser mode unknown",
       "localizations" : {
@@ -4092,6 +4048,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Your pump has no active notifications"
+          }
+        }
+      }
+    },
+    "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Save to switch it back to units, or turn quick bolus off." : {
+      "comment" : "Warning shown when the pump's quick bolus is in carbs mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Save to switch it back to units, or turn quick bolus off."
           }
         }
       }

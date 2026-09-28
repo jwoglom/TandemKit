@@ -1,6 +1,7 @@
 import Foundation
 
-/// Request to configure quick bolus button behavior.
+/// Request to configure quick bolus button behavior. The pump applies only the fields named in
+/// `changedFields`; the Tandem app fills the rest with the pump's current values (#428).
 public class SetQuickBolusSettingsRequest: PumpRequest {
     public typealias Response = SetQuickBolusSettingsResponse
 
@@ -12,38 +13,52 @@ public class SetQuickBolusSettingsRequest: PumpRequest {
         signed: true
     )
 
+    public static let supportedIncrementUnits = [500, 1000, 2000, 5000]
+    public static let supportedIncrementCarbs = [2000, 5000, 10000, 15000]
+
     public var cargo: Data
     public var enabled: Bool
     public var modeRaw: Int
-    public var magic: Data
+    /// Milliunits.
+    public var incrementUnits: Int
+    /// Milligrams.
+    public var incrementCarbs: Int
+    public var changedFields: QuickBolusSettingsFields
 
     public required init(cargo: Data) {
         self.cargo = cargo
         enabled = cargo[0] == 1
         modeRaw = Int(cargo[1])
-        magic = Bytes.dropFirstN(cargo, 2)
+        incrementUnits = Bytes.readShort(cargo, 2)
+        incrementCarbs = Bytes.readShort(cargo, 4)
+        changedFields = QuickBolusSettingsFields(rawValue: cargo[6])
     }
 
-    public init(enabled: Bool, modeRaw: Int, magic: Data) {
+    public init(
+        enabled: Bool,
+        mode: QuickBolusMode,
+        incrementUnits: Int,
+        incrementCarbs: Int,
+        changedFields: QuickBolusSettingsFields
+    ) {
         cargo = Bytes.combine(
             Data([UInt8(enabled ? 1 : 0)]),
-            Data([UInt8(modeRaw & 0xFF)]),
-            magic
+            Data([UInt8(mode.rawValue)]),
+            Bytes.firstTwoBytesLittleEndian(incrementUnits),
+            Bytes.firstTwoBytesLittleEndian(incrementCarbs),
+            Data([changedFields.rawValue])
         )
         self.enabled = enabled
-        self.modeRaw = modeRaw
-        self.magic = magic
-    }
-
-    public convenience init(enabled: Bool, mode: QuickBolusMode, increment: QuickBolusIncrement) {
-        self.init(enabled: enabled, modeRaw: mode.rawValue, magic: increment.magic)
+        modeRaw = mode.rawValue
+        self.incrementUnits = incrementUnits
+        self.incrementCarbs = incrementCarbs
+        self.changedFields = changedFields
     }
 
     public var mode: QuickBolusMode? { QuickBolusMode(rawValue: modeRaw) }
-    public var increment: QuickBolusIncrement? { QuickBolusIncrement.forMagic(magic) }
 
     public var description: String {
-        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(String(describing: mode)), modeRaw=\(modeRaw), magic=\(magic.hexadecimalString))"
+        "SetQuickBolusSettingsRequest(cargo=\(cargo.hexadecimalString), enabled=\(enabled), mode=\(String(describing: mode)), incrementUnits=\(incrementUnits), incrementCarbs=\(incrementCarbs), changedFields=\(changedFields.rawValue))"
     }
 }
 
@@ -53,55 +68,17 @@ public enum QuickBolusMode: Int {
     case carbs = 1
 }
 
-/// Predefined quick bolus increments.
-public enum QuickBolusIncrement: CaseIterable {
-    case disabled
-    case units0_5
-    case units1_0
-    case units2_0
-    case units5_0
-    case carbs2g
-    case carbs5g
-    case carbs10g
-    case carbs15g
+public struct QuickBolusSettingsFields: OptionSet, Equatable {
+    public let rawValue: UInt8
 
-    var enabled: Bool {
-        switch self {
-        case .disabled: return false
-        default: return true
-        }
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
     }
 
-    var mode: QuickBolusMode {
-        switch self {
-        case .carbs2g,
-             .carbs5g,
-             .carbs10g,
-             .carbs15g: return .carbs
-        default: return .units
-        }
-    }
-
-    var magic: Data {
-        switch self {
-        case .disabled: return Data([0xF4, 0x01, 0xD0, 0x07, 0x01])
-        case .units0_5: return Data([0xF4, 0x01, 0xD0, 0x07, 0x01])
-        case .units1_0: return Data([0xE8, 0x03, 0xD0, 0x07, 0x04])
-        case .units2_0: return Data([0xD0, 0x07, 0xD0, 0x07, 0x04])
-        case .units5_0: return Data([0x88, 0x13, 0xD0, 0x07, 0x04])
-        case .carbs2g: return Data([0x88, 0x13, 0xD0, 0x07, 0x08])
-        case .carbs5g: return Data([0x88, 0x13, 0x88, 0x13, 0x08])
-        case .carbs10g: return Data([0x88, 0x13, 0x10, 0x27, 0x08])
-        case .carbs15g: return Data([0x88, 0x13, 0x98, 0x3A, 0x08])
-        }
-    }
-
-    static func forMagic(_ magic: Data) -> QuickBolusIncrement? {
-        for inc in QuickBolusIncrement.allCases where inc.enabled && inc.magic == magic {
-            return inc
-        }
-        return nil
-    }
+    public static let enabled = QuickBolusSettingsFields(rawValue: 0x01)
+    public static let mode = QuickBolusSettingsFields(rawValue: 0x02)
+    public static let incrementUnits = QuickBolusSettingsFields(rawValue: 0x04)
+    public static let incrementCarbs = QuickBolusSettingsFields(rawValue: 0x08)
 }
 
 /// Response indicating if quick bolus settings were updated.
