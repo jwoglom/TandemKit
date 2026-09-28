@@ -211,6 +211,34 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return delegates.flatMap { $0.pumpEventJournal.compactMap(\.pumpEventBatch) }
     }
 
+    /// Replays every batch the host has received, in order, and reports each dose that was live and
+    /// mutable at the host when a `replacePendingEvents: true` batch arrived without carrying it —
+    /// the doses LoopKit's report-or-delete rule (guide §3, §5) deletes.
+    func completeBatchOmissions() -> [String] {
+        drainDelegate()
+        let oracle = LoopDoseStoreOracle()
+        var omissions: [String] = []
+        for delegate in delegates {
+            for entry in delegate.journal {
+                guard let batch = entry.pumpEventBatch else { continue }
+                if batch.replacePendingEvents {
+                    let carried = Set(batch.events.map(\.raw))
+                    for dose in oracle.doses where dose.isMutable && !carried.contains(dose.raw ?? Data()) {
+                        let batchEvents = batch.events.map { LoopDoseStoreOracle.describe($0.raw) }
+                        omissions.append("  \(LoopDoseStoreOracle.describe(dose)) dropped by a replacing batch of \(batchEvents)")
+                    }
+                }
+                oracle.addPumpEvents(
+                    batch.events,
+                    lastReconciliation: batch.lastReconciliation,
+                    replacePendingEvents: batch.replacePendingEvents,
+                    now: entry.hostNow
+                )
+            }
+        }
+        return omissions
+    }
+
     /// The pump's record since this test began, built from the full history feed
     /// (`GET /api/history`) rather than the 50-record tail in the snapshot, which a scenario
     /// running for a while silently outgrows.

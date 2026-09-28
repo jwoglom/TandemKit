@@ -3,8 +3,8 @@
 Scenario model for validating TandemKit against LoopKit's
 [PumpManager dose reporting guide](https://github.com/loopkitdev/LoopKit/blob/next-dev/Documentation/PumpManagerDoseReporting.md),
 using the faketandem integration harness (`docs/integration-harness.md`). Each scenario names the
-guide rule it exercises (§n), the audit point it closes (`docs/dose-reporting-conformance-audit.md`,
-P01–P24 / G01–G07) and the GitHub issue it reproduces where one exists.
+guide rule it exercises (§n), the audit point it closes (P01–P24 / G01–G07, from a dose-reporting
+audit that is not checked in) and the GitHub issue it reproduces where one exists.
 
 The tests live in `Tests/TandemKitIntegrationTests/Conformance/` and run against a real
 `TandemPumpManager` over the virtual GATT link, driving the emulator at its current `main`
@@ -59,7 +59,7 @@ finished, never happened).
 - Delivery: `bolus_rate_units_per_second` set high enough that a 1 U bolus completes in a few
   simulator ticks; `stall`/`resume`/`abort` stage pump-side interruptions.
 
-## A. Interrupt everything (§10 "bolus during BLE loss", §11; P12, P15, P11; #326, #327, #340)
+## A. Interrupt everything (§10 "bolus during BLE loss", §11; P12, P15, P11; #326, #327, #340, #449, #451)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -71,19 +71,19 @@ finished, never happened).
 | A6 | Link drops inside a multi-fragment response | fault `disconnect` with `after: partial_response, fragments_sent: 1` on `PumpVersionRequest` during sync | sync completes with an error, no dose is emitted or duplicated, `lastReconciliation` does not advance, next sync succeeds |
 | A7 | Radio off during a running bolus, on again later | `radio_off` after enact; advance past pump completion; `radio_on`; sync | same as A1; additionally `connectionIssue` surfaced and cleared |
 
-## B. Cancel everything (§3 transitions, §11; P16, P23, P03, P07; #328, #330, #344)
+## B. Cancel everything (§3 transitions, §11; P16, P23, P03, P07; #329, #330, #339, #344, #451, #455)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
 | B1 | Cancel bolus at three points | enact 3 U at 0.1 U/s; `cancelBolus` immediately / after 1 U / after 2.9 U (advance clock between) | finalized dose `deliveredUnits` == pump's `last_bolus.delivered` (0.0 / ~1.0 / ~2.9), `raw` identical to the mutable report, `value` == 3 U programmed |
-| B2 | Cancel with zero delivery | cancel before any delivery (pump `delivered == 0`) | the dose disappears: next `replacePendingEvents: true` batch omits it; oracle shows it deleted; no 0 U immutable dose (P23) |
+| B2 | Cancel with zero delivery | cancel before any delivery (pump `delivered == 0`) | the dose disappears: next `replacePendingEvents: true` batch omits it; oracle shows it deleted; no 0 U immutable dose (P23). B1's first case expects the opposite; #455 decides |
 | B3 | Cancel temp basal early | enact 60 min TBR; advance 12 min; `enactTempBasal(duration: 0)` | one dose, same `raw`, `isMutable false`, `endDate` == cancel time on the pump, `deliveredUnits` == rate × 12 min rounded; Trio oracle shows a truncation record (#329) |
-| B4 | Replace temp basal early | enact TBR A; advance 7 min; enact TBR B | A finalized with real end and delivered units in the same batch that introduces mutable B; B has a new `raw`; no batch omits B while it runs (#338) |
+| B4 | Replace temp basal early | enact TBR A; advance 7 min; enact TBR B | A finalized with real end and delivered units in the same batch that introduces mutable B; B has a new `raw`; no batch omits B while it runs |
 | B5 | Neutral / profile-rate temp | enact TBR at percent 100 / duration 0 with none running | no phantom dose; running TBR is finalized, not silently dropped |
 | B6 | Cancel while disconnected | fault `disconnect` armed; `cancelBolus` | cancel returns a communication error; bolus stays mutable; after reconnect the pump's state decides (still running → mutable; done → finalized) |
 | B7 | Pump-side abort mid-bolus (occlusion) (#333) | enact 3 U; after 1 U `POST /api/state/suspend {reason: occlusion}` | bolus finalized at pump's partial amount with `endDate` at the pump's stop time (not detection time); `.suspend` event dated at the pump's stop time; `.alarm` event for the occlusion (P14) |
 
-## C. Idempotency and complete batches (§3 report-or-delete, §5, §6, §11; P04, P06, P17, P18, P01; #330, #332, #342)
+## C. Idempotency and complete batches (§3 report-or-delete, §5, §6, §11; P04, P06, P17, P18, P01; #330, #332, #342, #347, #352, #449, #450)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -94,8 +94,10 @@ finished, never happened).
 | C5 | Sync with no answer does not advance | fault `drop_response every` on `CurrentBasalStatusRequest` and friends; sync | `hasNewPumpEvents` not called, or called with unchanged `lastReconciliation` |
 | C6 | Relaunch and re-sync | with a finalized bolus and a running TBR, relaunch from `rawValue`; sync | no duplicate of the finalized bolus; TBR continues with the same `raw` |
 | C7 | Events before the delegate attaches (#342, #332) | pair and sync with `delegate = nil`; pump `suspend`; attach delegate; sync | the suspend transition is emitted after attach, not lost |
+| C8 | A bolus that outlives the driver's estimate (#347, #330) | enact 1 U at 0.005 U/s; advance past the driver's model, inside the pump's; wait for the guard to release; enact a TBR | no replacing batch drops the running bolus (refusing the TBR also satisfies it); once the pump finishes, Loop holds the bolus at the pump's amount |
+| C9 | Two markers in one second (#352) | enact TBR; step both clocks to 0.4 s short of its end, the driver's alone 0.5 s on; neutral temp | no batch carries two events under one `raw` |
 
-## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, G04, G06; #331, #333, #349, #350, #351)
+## D. Pump-side failures and events (§7, §10 suspend/resume and faults; P10, P13, P14, G04, G06; #331, #333, #338, #348, #349, #350, #351, #424, #452)
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|
@@ -108,6 +110,10 @@ finished, never happened).
 | D7 | Deleting the pump manager with live doses (#350, G06) | bolus running + TBR running; `prepareForDeactivation` / `notifyDelegateOfDeactivation` | a final batch finalizes the TBR (real end), resolves or marks the bolus, emits `.suspend` if delivery stops, and `pumpManagerWillDeactivate` fires |
 | D8 | Cartridge change | `POST /api/state/history/append CartridgeFilled` + `reservoir_units` reset; sync | `.replaceComponent(.reservoir)` or `.prime` event as the guide requires (#349) |
 | D9 | Basal transition observed while no delegate (G04) | covered by C7 | — |
+| D10 | A wizard finds the pump already stopped (#348) | radio off; pump `suspend`; radio on (no sync, #351); `fetchSuspendStatus`; `resumeDelivery`; sync | a `.suspend` reaches the host no later than the check and is closed by the resume; dated at the pump's stop (#333) |
+| D11 | Resume over a TBR the driver still holds (#338) | enact TBR; radio off; pump `suspend`; radio on; `resumeDelivery`; sync | the resume's replacing batch does not drop the TBR; Loop holds it finalized, ended no later than the resume |
+| D12 | A bolus programmed on the pump (§7, §11 external doses; #452) | history flags on; pump-source bolus in flight; sync twice; enact TBR; pump completes; sync | reported from history, mutable, `wasProgrammedByPumpUI`, dated at the pump's start; re-reported while it runs; no replacing batch drops it; finalized under the same `raw` at the pump's amount |
+| D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | a dose for the extended bolus at `BolexCompleted`'s delivered amount, spanning the two records. faketandem encodes the two records' payloads from `jwoglom/faketandem` `claude/tandemkit-loopkit-conformance-z15fr6` on; before that they decode as zeros, and the marker fires either way |
 
 ## E. Rounding and field semantics (§2, §9 item 7; P07, P19, P22) — folded into A–D
 

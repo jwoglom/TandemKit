@@ -33,6 +33,9 @@ final class CancelConformanceTests: ConformanceTestCase {
     private static let bolusUnits = 3.0
     /// The pump's reporting increment for both volumes and rates (`HistoryToDoseMapper`).
     private static let reportingIncrement = 0.001
+    private static let tempBasalRoundingDefect = "jwoglom/TandemKit#451: the finalized temp basal's deliveredUnits is "
+        + "rate × elapsed hours at full Double precision (UnfinalizedDose.toDoseEntry), never rounded to the pump's "
+        + "0.001 U reporting increment"
 
     private static func deliverySeconds(forUnits units: Double) -> TimeInterval {
         TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)
@@ -169,6 +172,7 @@ final class CancelConformanceTests: ConformanceTestCase {
 
     // MARK: - B1. Cancel a bolus at three points
 
+    /// Requires the 0 U finalized dose that B2 marks as a defect; #455 decides which of the two stays.
     func testB1CancelBolusImmediatelyReportsZeroDelivered() throws {
         try runCancelBolus(deliverUnits: 0)
     }
@@ -294,10 +298,11 @@ final class CancelConformanceTests: ConformanceTestCase {
         let clampBites = pumpEnd.timeIntervalSince(wallClockAtFinalization) > tolerance.time
         if deliverUnits > 0, clampBites {
             XCTExpectFailure(
-                "jwoglom/TandemKit: unfiled — TandemPumpManager.cancelBolus builds the finalized endDate with "
-                    + "BolusEndDate.resolve(...) without passing detectedAt, so the clamp uses Date.now instead of the "
-                    + "driver's injected clock; the reported end lands on the phone's wall clock rather than on the "
-                    + "pump's stop (the emulator's missing bolusInitiationDelay lead-in moves it too, but the other way)",
+                "jwoglom/TandemKit#339: a pump stop that lies ahead of the phone's clock is clamped to it. Here the "
+                    + "clock is the wall clock: TandemPumpManager.cancelBolus calls BolusEndDate.resolve(...) without "
+                    + "detectedAt, so the clamp uses Date.now instead of the driver's injected clock and the reported "
+                    + "end lands on the phone's wall clock rather than on the pump's stop (the emulator's missing "
+                    + "bolusInitiationDelay lead-in moves it too, but the other way)",
                 strict: true
             ) { endAndTimeline() }
         } else if deliverUnits > 0 {
@@ -321,7 +326,7 @@ final class CancelConformanceTests: ConformanceTestCase {
 
     // MARK: - B2. Cancel with zero delivery
 
-    /// Plan B2 (audit P23, #328): a bolus the pump confirms delivered nothing never happened. It has
+    /// Plan B2 (audit P23, #455): a bolus the pump confirms delivered nothing never happened. It has
     /// to stop being sent in a `replacePendingEvents: true` batch so LoopKit removes it, rather than
     /// being frozen as a 0 U immutable dose that can never be revised.
     func testB2CancelWithZeroDeliveryRetractsTheDose() throws {
@@ -355,7 +360,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
 
         XCTExpectFailure(
-            "jwoglom/TandemKit#328 (closed): a cancel the pump confirms delivered 0 U is still finalized as a 0 U immutable dose instead of being retracted (audit P23)",
+            "jwoglom/TandemKit#455: a cancel the pump confirms delivered 0 U is finalized as a 0 U immutable dose instead of being withdrawn (audit P23)",
             strict: true
         ) {
             let zero = self.events(ofType: .bolus, after: start).filter { $0.dose?.isMutable == false }
@@ -380,7 +385,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         let pumpBolus = try XCTUnwrap(timeline.boluses.first { $0.bolusId == bolusId }, "timeline \(timeline)")
         XCTAssertEqual(pumpBolus.deliveredUnits, 0)
         XCTAssertNotEqual(lastBolus.endReasonId, 3, "the pump recorded a completion, not a stop")
-        // Today the driver reports the 0 U dose, so the ledgers agree; once #328's retraction lands
+        // Today the driver reports the 0 U dose, so the ledgers agree; once #455's withdrawal lands
         // the pump will hold a 0 U record with no dose against it, which is the correct end state.
         timeline.assertMatches(
             loop,
@@ -463,7 +468,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         // Trio: the stored temp basal must be truncated, or oref keeps counting the old rate for
         // the remaining 48 minutes.
         XCTExpectFailure(
-            "jwoglom/TandemKit#329: Trio skips a temp basal carrying deliveredUnits and ignores .basal, so ending a temp basal without a replacement never truncates its stored temp basal",
+            "jwoglom/TandemKit#329: Trio skips a temp basal carrying deliveredUnits and ignores .basal, so ending a temp basal without a replacement never truncates its stored temp basal (true of the oracle's older Trio; #454)",
             strict: true
         ) {
             let truncating = trio.tempBasals.contains { row in
@@ -531,9 +536,7 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.tempRate,
             expectedDelivered: deliveredA,
             automatic: true,
-            incrementFailure: "jwoglom/TandemKit: unfiled — audit P11-5: the finalized temp basal's "
-                + "deliveredUnits is rate × elapsed hours with full double precision "
-                + "(UnfinalizedDose.swift:190), never rounded to the pump's 0.001 U reporting increment",
+            incrementFailure: Self.tempBasalRoundingDefect,
             "temp basal A"
         )
 
@@ -636,9 +639,7 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.tempRate,
             expectedDelivered: expectedDelivered,
             automatic: true,
-            incrementFailure: "jwoglom/TandemKit: unfiled — audit P11-5: the finalized temp basal's "
-                + "deliveredUnits is rate × elapsed hours with full double precision "
-                + "(UnfinalizedDose.swift:190), never rounded to the pump's 0.001 U reporting increment",
+            incrementFailure: Self.tempBasalRoundingDefect,
             "neutral over a running temp"
         )
 
@@ -652,7 +653,7 @@ final class CancelConformanceTests: ConformanceTestCase {
         try XCTUnwrap(loop.assertPermanent(raw: finalized.raw, "neutral over a running temp"))
 
         XCTExpectFailure(
-            "jwoglom/TandemKit#329: a neutral temp is the routine case of ending a temp basal without a replacement, and Trio stores no truncating record for it",
+            "jwoglom/TandemKit#329: a neutral temp is the routine case of ending a temp basal without a replacement, and Trio stores no truncating record for it (true of the oracle's older Trio; #454)",
             strict: true
         ) {
             let truncating = trio.tempBasals.contains { row in
