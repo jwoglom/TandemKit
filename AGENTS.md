@@ -181,8 +181,6 @@ edit instead of at the next sync.
   logged; #424), and a pump clock offset from the phone's (history dates use the phone's UTC
   offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` is recorded from
   `SetTempRateResponse` but not yet used; it is for re-keying live temp basals (#344).
-- `docs/tandemkit-history-integration-plan.md` predates this design and still describes a
-  history reconciler that no longer exists (#355). Where the two disagree, this section is right.
 
 ### Therapy command validation
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
