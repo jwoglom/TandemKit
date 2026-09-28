@@ -1,286 +1,109 @@
-# TandemKit Key Files Reference
+# TandemKit key files
 
-## Core Architecture Files
+A map of where things live. [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) explains how the
+pieces fit together. Paths are relative to the repository root.
 
-### Communication Layer
-- **PeripheralManagerTransport** `/Sources/TandemKit/PumpManager/PeripheralManagerTransport.swift`
-  - Implements PumpMessageTransport protocol
-  - Handles message send/receive with packet management
-  - Maintains request/response history
+## Pump manager — `Sources/TandemKit/PumpManager/`
 
-- **PumpComm** `/Sources/TandemKit/PumpManager/PumpComm.swift`
-  - High-level pump communication API
-  - Delegates to PumpCommSession
-  - Manages pairing and authentication
+| File | What it holds |
+| --- | --- |
+| `TandemPumpManager.swift` | The `PumpManager` conformance, including the dosing commands (`enactBolus`, `cancelBolus`, `enactTempBasal`, `suspendDelivery`, `resumeDelivery`), `syncPumpData`, `handleQualifyingEvents`, alert acknowledgement, pump event delivery to the host (`emitPumpEvents`) and `CommandWatchdog`. |
+| `TandemPumpManager+StateSync.swift` | The `fetch…` status reads applied to state on every sync, bolus finalization, and the basal rate check (`verifyDeliveredBasalRate`). |
+| `TandemPumpManager+SyncBasal.swift` | Writes the basal schedule to the pump's IDP profile through `IDPManager` and reads it back. |
+| `TandemPumpManager+Onboarding.swift` | `applyOnboardingSettings`: delivery limits, basal schedule and clock for a newly paired pump (#206). |
+| `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them. |
+| `TandemPumpManager+HistoryStore.swift` | Stores and prunes streamed history logs in the session store. |
+| `TandemPumpManager+HistoryDoseReporting.swift` | Reports boluses found in pump history that the live path missed. |
+| `QualifyingEventFetch.swift` | Maps pumpX2's suggested handlers for each qualifying event onto the manager's fetches. |
+| `PumpBluetoothConnection.swift` | The protocol everything above the BLE layer talks through. |
+| `TandemBluetoothManager.swift` | `CBCentralManager`, the serial command queue (`ensureConnected`), connect, reconnect and scan. |
+| `TandemPeripheralManager.swift` | `CBPeripheral`: session setup (`performInitialSetup`), the write/response path, and routing notifications by characteristic. |
+| `HistoryLogFetcher.swift` | Reads a window of history logs in 255-entry chunks with gap healing, using the store before the pump. |
+| `PumpTelemetryScheduler.swift` | Timer helper. Used today only for the 1 s bolus progress poll. |
+| `TandemDoseProgressReporter.swift` | LoopKit `DoseProgressReporter` for a running bolus. |
+| `BolusEndDate.swift` | Dates a finished bolus from the pump's timestamps rather than from when completion was noticed (#339). |
+| `PumpConnectionIssue.swift` | Why the pump is unreachable (Bluetooth off, unauthorized, out of range), for the UI. |
+| `ControlIQConfigurationError.swift` | Validation errors from `configureControlIQMode`. |
+| `TandemSilentToneManager.swift` | Plays silent audio in the background to keep the app alive when silent mode is on. |
+| `VirtualPump/` | CoreBluetooth stand-ins that talk to faketandem over a socket. Compiled only under `TANDEMKIT_VIRTUAL_PUMP`. |
 
-- **PumpCommSession** `/Sources/TandemKit/PumpManager/PumpCommSession.swift`
-  - Handles JPAKE and legacy pairing flows
-  - Manages session state on serial queue
-  - Routes incoming and outgoing messages
+### History — `Sources/TandemKit/PumpManager/History/`
 
-- **PumpCommRetryPolicy** `/Sources/TandemKit/PumpManager/PumpCommRetryPolicy.swift`
-  - Defines retry strategies for pump fault codes
-  - Default exponential policy caps attempts and spaces retries
+| File | What it holds |
+| --- | --- |
+| `HistoryBackfillCoordinator.swift` | Runs a backfill tick from each sync and each `.bolusChange` event. |
+| `HistoryBackfillPlanner.swift` | Pure arithmetic: the next range to read and the reporting floor. |
+| `HistoryBackfillState.swift` | The persisted watermark and `firstSeenFloor`. |
+| `HistoryFetchGate.swift` | Lets one history reader at a time hold the pump's history stream. |
+| `HistoryLogStore.swift`, `InMemoryHistoryLogStore.swift`, `StoredHistoryLog.swift` | The session-scoped raw history store. It is not persisted (#232). |
+| `HistoryToDoseMapper.swift` | History records → `NewPumpEvent`s. |
+| `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log. |
+| `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
+| `BolusReportLedger.swift` | Persisted 24 h record of app boluses, so history does not report them a second time. |
 
-- **PumpCommFaultEvent** `/Sources/TandemKit/PumpManager/PumpCommFaultEvent.swift`
-  - Captures fault context (request, response, code, attempt, retry decision)
-  - Surfaces category, raw code, and retry delay helpers
+## State — `Sources/TandemKit/State/`
 
-### Bluetooth Layer
-- **BluetoothManager** `/Sources/TandemBLE/Bluetooth/BluetoothManager.swift`
-  - Manages CBCentralManager
-  - Handles peripheral discovery and connection
-  - Implements CBCentralManagerDelegate
+| File | What it holds |
+| --- | --- |
+| `TandemPumpManagerState.swift` | The host-persisted `rawState`. |
+| `PumpState.swift` | Pairing artifacts (`derivedSecret`, `serverNonce`, `pincode`, `peripheralUuid`), `timeSinceReset`, API version, serial number and `pumpModel`. `getAuthKey()` derives the signing key. |
+| `TandemPumpManagerSettings.swift` | Max bolus, max temp basal and max schedule entry. |
+| `TandemFeatureFlags.swift` | `controlIQSupport`, `quickBolusButtonSupport`, `historyBackfill`, `historyDoseReporting`. |
 
-- **PeripheralManager** `/Sources/TandemBLE/Bluetooth/PeripheralManager.swift`
-  - Manages individual peripheral connection
-  - Discovers services and characteristics
-  - Enables notifications
-  - Implements CBPeripheralDelegate
-  - **Key Extension:** `/Sources/TandemBLE/Bluetooth/PeripheralManager+TandemKit.swift`
-    - sendMessagePackets()
-    - readMessagePacket()
-    - performSync()
-    - enableNotifications()
+## Protocol — `Sources/TandemCore/`
 
-- **BluetoothServices** `/Sources/TandemBLE/Bluetooth/BluetoothServices.swift`
-  - Defines Tandem-specific BLE configuration
-  - Service discovery requirements
-  - Notification subscriptions
-  - Value update macros
+| Path | What it holds |
+| --- | --- |
+| `Messages/Message.swift` | `Message`, `PumpRequest` and `MessageProps`. |
+| `Messages/MessageRegistry.swift` | The catalog: response lookup by opcode and characteristic, request/response pairing, lookup by name. |
+| `Messages/Packetizer.swift` | `Packetize.parse` (header, HMAC-SHA1 signing, CRC, chunking) and `Packet`. |
+| `Messages/BTResponseParser.swift` | Reassembles notification packets into a typed response. |
+| `Messages/ErrorResponse.swift` | The pump's refusal of a request. |
+| `Messages/Authentication/`, `Control/`, `ControlStream/`, `CurrentStatus/`, `HistoryLog/`, `QualifyingEvent/` | Message types. A request and its response share a file; history records have one file per type, decoded by `HistoryLog/HistoryLogParser.swift`. |
+| `Messages/Models/` | Shared message models: `KnownApiVersion`, `SupportedDevices`, `MessageSupport` (`isSupported(pumpModel:apiVersion:)`), `PumpFaultCode` and others. |
+| `CharacteristicUUID.swift`, `ServiceUUID.swift` | BLE UUIDs and the list of characteristics subscribed for notifications. |
+| `Builders/JpakeAuthBuilder.swift`, `JpakeStep.swift` | The JPAKE state machine: full pairing, or confirmation only from a stored secret. |
+| `Builders/JpakeRound1Framing.swift` | Splits round 1 on the real group boundary and pads each frame. |
+| `Builders/EcJpake.swift`, `SwiftECCJpakeProvider.swift` | EC-JPAKE on SwiftECC. Apple platforms only; a trapping stub on Linux. |
+| `Builders/Hkdf.swift`, `HmacSha256.swift`, `Common/HmacSha1.swift`, `Common/SHA1.swift`, `Common/SHA256.swift`, `Common/CRC16.swift` | Crypto and checksum primitives. |
+| `Builders/IDPManager.swift` | Reads and edits insulin delivery profiles (pumpX2's `IDPManager`). |
+| `Builders/*RequestBuilder.swift` | Pick the request variant for the pump's API version. |
+| `NotificationBundle.swift`, `MergedNotification.swift`, `PumpNotificationAlert.swift`, `TandemAlertReconciler.swift` | Pump alerts, alarms, reminders and malfunctions: collection, grouping, severity and LoopKit alert reconciliation. |
+| `PumpCommError.swift` | Driver error type surfaced to LoopKit. |
+| `Common/TandemClock.swift` | `TandemClock`, `SystemClock` and `ManualClock`. |
+| `Common/TandemDispatchGroup.swift` | Single-shot wait/signal used for every BLE operation. |
+| `Common/TandemLogger.swift` | OSLog plus file logging on Apple platforms; swift-log on Linux. |
+| `Common/UnfinalizedDose.swift` | An in-flight bolus, temp basal or suspend before it is finalized. |
+| `Common/TandemPumpCapabilities.swift` | Supported bolus volumes and basal rates. |
+| `Common/HistoryLogTimeIndex.swift` | Maps between sequence numbers and dates for the history viewer. |
 
-### Message Handling
-- **Message** `/Sources/TandemCore/Messages/Message.swift`
-  - Protocol for all pump messages
-  - MessageProps structure (opCode, size, type, characteristic)
+## UI — `Sources/TandemKitUI/`, `Sources/TandemKitPlugin/`
 
-- **MessageRegistry** `/Sources/TandemCore/Messages/MessageRegistry.swift`
-  - Registry of all message types (~300+ messages)
-  - Request/response pair mappings
-  - Message lookup by opCode, characteristic, size
-  - Metadata generation
+| Path | What it holds |
+| --- | --- |
+| `TandemPumpManager+UI.swift` | `PumpManagerUI`: setup, settings and delivery-uncertainty view controllers, HUD, status highlights. |
+| `TandemUICoordinator.swift` | `TandemScreen` and navigation between the SwiftUI screens. |
+| `TandemKitHUDProvider.swift` | The HUD shown in the host's status bar. |
+| `Views/`, `ViewModels/` | Onboarding (scan and pair), settings, cartridge/tubing/cannula wizards, CGM setup, notifications, Control-IQ, quick bolus, debug tools, the history log viewer. |
+| `Sources/TandemKitPlugin/TandemKitPlugin.swift` | Loop-style plugin entry point. Not used by Trio. |
 
-- **TronMessageWrapper** `/Sources/TandemBLE/Bluetooth/TronMessageWrapper.swift`
-  - Wraps message for transmission
-  - Creates packets from message
-  - Manages metadata lookups
+## Tests
 
-### Packet Layer
-- **Packetize** `/Sources/TandemBLE/Bluetooth/Packetize.swift`
-  - Converts messages to packets
-  - Computes HMAC-SHA1 for signed messages
-  - Calculates CRC16
-  - Chunks into BLE-sized packets
+| Path | What it covers |
+| --- | --- |
+| `Tests/TandemCoreTests/` | Message serialization (`TestHelpers/MessageTester.swift`, `HistoryLogMessageTester.swift`), JPAKE, framing, notification bundle, alert reconciliation. |
+| `Tests/TandemKitTests/` | `TandemPumpManager` behaviour through `StubPumpBluetooth.swift`, history backfill and reporting, UI view models, and the virtual CoreBluetooth. |
+| `Tests/TandemKitIntegrationTests/` | The real driver against faketandem, including `Conformance/` (LoopKit dose-reporting scenarios and oracles). See [integration-harness.md](integration-harness.md) and [conformance-test-plan.md](conformance-test-plan.md). |
 
-- **Packet** `/Sources/TandemBLE/Bluetooth/Packet.swift`
-  - Represents single BLE packet
-  - Contains: packets remaining, txId, internal cargo
+## Build and CI
 
-- **CRC16** `/Sources/TandemBLE/Bluetooth/CRC16.swift`
-  - CRC16 calculation using lookup table
-
-### Response Parsing
-- **PumpResponseCollector** `/Sources/TandemBLE/Bluetooth/PumpResponseCollector.swift`
-  - Accumulates packet fragments
-  - Assembles into complete message
-  - Handles multi-packet responses
-
-- **BTResponseParser** `/Sources/TandemBLE/Bluetooth/BTResponseParser.swift`
-  - Parses raw BLE data into typed messages
-  - Validates CRC and HMAC
-  - Uses MessageRegistry to decode messages
-
-- **PacketArrayList** (in PeripheralManager.swift extension)
-  - Manages packet assembly state
-  - Validates packets
-  - Calculates expected message size
-
-### Notification Handling
-- **PumpNotificationRouter** `/Sources/TandemKit/BLE/PumpNotificationRouter.swift`
-  - Routes asynchronous pump notifications
-  - Accumulates packets per characteristic/txId
-  - Decodes and dispatches to PumpCommSession
-
-### Authentication & Pairing
-- **JpakeAuthBuilder** `/Sources/TandemCore/Builders/JpakeAuthBuilder.swift`
-  - Manages JPAKE short-code pairing flow
-  - State machine (BOOTSTRAP_INITIAL → COMPLETE)
-  - 5 message roundtrips
-  - Derives shared secret and server nonce
-
-- **CentralChallengeRequestBuilder** `/Sources/TandemCore/Builders/CentralChallengeRequestBuilder.swift`
-  - Builds central challenge for pump challenge pairing
-
-- **PumpChallengeRequestBuilder** `/Sources/TandemCore/Builders/PumpChallengeRequestBuilder.swift`
-  - Builds pump challenge request
-  - Used for legacy (long code) pairing
-
-- **Authentication Message Types** `/Sources/TandemCore/Messages/Authentication/`
-  - Jpake1a/1b/2/3/4 request/response pairs
-  - CentralChallenge request/response
-  - PumpChallenge request/response
-
-### Cryptography
-- **HmacSha1** `/Sources/TandemCore/Common/HmacSha1.swift`
-  - HMAC-SHA1 computation for message signing
-
-- **HmacSha256** `/Sources/TandemCore/Builders/HmacSha256.swift`
-  - HMAC-SHA256 for JPAKE confirmation
-
-- **Hkdf** `/Sources/TandemCore/Builders/Hkdf.swift`
-  - HKDF key derivation from shared secret
-
-- **EcJpake** `/Sources/TandemCore/Builders/EcJpake.swift`
-  - Elliptic Curve JPAKE implementation (via SwiftECC)
-
-### State Management
-- **PumpState** `/Sources/TandemKit/PumpManager/PumpState.swift`
-  - Holds pump address, derivedSecret, serverNonce
-  - RawRepresentable for persistence
-
-- **PumpStateSupplier** `/Sources/TandemCore/Builders/PumpStateSupplier.swift`
-  - Provides access to current authentication key
-  - Stores pairing artifacts
-  - Must be implemented by consumer
-
-### Telemetry
-- **PumpTelemetryScheduler** `/Sources/TandemKit/PumpManager/Telemetry/PumpTelemetryScheduler.swift`
-  - Timer-backed scheduler for reservoir, battery, basal, bolus, time-since-reset, alert/control IQ, home screen, notification count, and history fetch streams
-  - Provides immediate trigger/cancel helpers for all registered telemetry tasks
-
-### TODO – Accuracy Audit
-- [x] PumpComm retry policy entry aligns with `ExponentialPumpCommRetryPolicy` defaults (fault-aware exponential backoff with capped attempts)
-- [x] PumpComm fault event entry reflects captured request/response context plus helper accessors
-- [x] Telemetry scheduler entry matches the enumerated streams and trigger/cancel behavior
-- [x] History utilities entries match their implementations for fetching, deduplication, reconciliation, timestamp handling, and dose mapping
-
-## Message Examples
-
-### Status Messages
-- `/Sources/TandemCore/Messages/CurrentStatus/`
-  - PumpVersion (opCode 84/85)
-  - CurrentBattery (V1 and V2)
-  - CurrentBasalStatus, CurrentBolusStatus
-  - PumpFeatures (V1 and V2)
-  - AlertStatus, AlarmStatus
-  - CGMStatus, ControlIQInfo
-
-### Control Messages
-- `/Sources/TandemCore/Messages/Control/`
-  - InitiateBolus, CancelBolus
-  - SetTempRate, StopTempRate
-  - SetModes, ResumePumping, SuspendPumping
-  - SetMaxBolusLimit, SetMaxBasalLimit
-  - SetIDPSettings, etc.
-
-### History & Logs
-- `/Sources/TandemCore/Messages/HistoryLog/`
-  - HistoryLogRecord, HistoryLogStream
-  - Various log types: BasalDelivery, BolusRequested, etc.
-
-- **HistoryFetchSession** `/Sources/TandemKit/PumpManager/History/HistoryFetchSession.swift`
-  - Coordinates ranged history requests, streaming collection, and retry of transient timeouts
-  - Validates available sequence ranges before fetching
-
-- **HistoryDeduplicator** `/Sources/TandemKit/PumpManager/History/HistoryDeduplicator.swift`
-  - Tracks seen sequence numbers across fetches
-  - Filters unseen logs and persists/restores dedup state
-
-- **HistoryReconciler** `/Sources/TandemKit/PumpManager/History/HistoryReconciler.swift`
-  - Matches pending doses to history-derived events within timing/amount tolerances
-  - Flags lingering pending doses that age into uncertainty windows
-
-- **HistoryTimestampReconciler** `/Sources/TandemKit/PumpManager/History/HistoryTimestampReconciler.swift`
-  - Records clock changes and converts pump timestamps to UTC
-  - Screens for large jumps that break chronological ordering
-
-- **HistoryToDoseMapper** `/Sources/TandemKit/PumpManager/History/HistoryToDoseMapper.swift`
-  - Translates history logs into LoopKit NewPumpEvent/DoseEntry records
-  - Tracks activation/completion pairs and applies clock-change adjustments
-
-### Device Information
-- `/Sources/TandemCore/CharacteristicUUID.swift`
-  - Device manufacturer and model characteristics
-  - Used during initialization
-
-## Protocols & Interfaces
-
-### Transport Protocol
-- **PumpMessageTransport** - Primary interface for message sending
-  - Implemented by: PeripheralManagerTransport
-  - Used by: PumpComm
-
-### Delegate Protocols
-- **BluetoothManagerDelegate** - Peripheral discovery/connection events
-- **PeripheralManagerDelegate** - Service discovery completion
-- **PeripheralManagerNotificationHandler** - Notification routing
-- **PumpCommDelegate** - Pump state and message receipt
-- **PumpCommSessionDelegate** - Session state changes
-
-## Utility Files
-
-### Common Utilities
-- **Bytes** `/Sources/TandemCore/Common/Extensions/Data.swift`
-  - Byte manipulation (readUint32, writeString, combine, etc.)
-
-- **PumpLogger** `/Sources/TandemCore/Common/PumpLogger.swift`
-  - Structured logging throughout system
-
-- **OSLog** `/Sources/TandemCore/Common/OSLog.swift`
-  - OS logging integration
-
-### Configuration
-- **ServiceUUID** `/Sources/TandemCore/ServiceUUID.swift`
-  - BLE service UUIDs (PUMP_SERVICE, DIS_SERVICE, etc.)
-
-- **CharacteristicUUID** `/Sources/TandemCore/CharacteristicUUID.swift`
-  - All characteristic UUIDs and pretty names
-
-## Test Files
-
-- `/Tests/TandemCoreTests/` - Message serialization tests
-- `/Tests/TandemKitTests/` - Integration tests
-
-## Architecture Layers (Bottom to Top)
-
-```
-┌─────────────────────────────────────────┐
-│  App / High-Level API                   │
-├─────────────────────────────────────────┤
-│  PumpComm (Public API)                  │
-│  - pair()                               │
-│  - sendMessage()                        │
-├─────────────────────────────────────────┤
-│  PumpCommSession (Session Management)   │
-│  - Authentication/Pairing logic         │
-├─────────────────────────────────────────┤
-│  PeripheralManagerTransport (Protocol)  │
-│  - Message/Response correlation         │
-│  - History tracking                     │
-├─────────────────────────────────────────┤
-│  Packetization & Serialization          │
-│  - TronMessageWrapper                   │
-│  - Packetize (CRC, HMAC, chunking)      │
-├─────────────────────────────────────────┤
-│  PeripheralManager (BLE Operations)     │
-│  - Send/receive packets                 │
-│  - Notification management              │
-├─────────────────────────────────────────┤
-│  BluetoothManager (BLE Connection)      │
-│  - Device discovery                     │
-│  - Peripheral connection                │
-├─────────────────────────────────────────┤
-│  CBPeripheralDelegate / CBCentralManager│
-│  - Raw CoreBluetooth operations         │
-└─────────────────────────────────────────┘
-```
-
-## Key Concepts for Simulator
-
-1. **Message Routing**: Use MessageRegistry to map opCodes to handlers
-2. **Packet Assembly**: Reassemble multi-packet messages before decoding
-3. **Authentication**: Implement JPAKE server side or accept pre-shared secrets
-4. **CRC/HMAC**: Validate incoming and generate outgoing
-5. **State Management**: Track authenticated sessions and pump state
-6. **Async Notifications**: Queue unsolicited pump messages for async delivery
-
+| Path | What it holds |
+| --- | --- |
+| `TandemKit.xcodeproj` | The supported build. |
+| `Package.swift` | Linux build only (see the comment at its top). |
+| `LinuxShims/` | Fakes of LoopKit, HealthKit, CoreBluetooth and Combine for Linux. Read its README before adding to one. |
+| `VirtualPump.xcconfig` | Sets `TANDEMKIT_VIRTUAL_PUMP`. |
+| `scripts/test-local.sh`, `scripts/integration-test.sh` | Local unit and integration test runs. |
+| `scripts/check_xcodeproj_source_membership.rb` | Checks that every test file is in `TandemKitTests` (`--check`, `--fix`). |
+| `scripts/claude-web-setup.sh` | Toolchain setup for Linux agent sessions. |
+| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux plain, virtual-pump and integration jobs; macOS unit and integration jobs. |
