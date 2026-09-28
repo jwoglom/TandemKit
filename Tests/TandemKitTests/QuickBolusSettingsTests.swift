@@ -56,44 +56,130 @@ import XCTest
         try XCTUnwrap(bluetooth.sent(SetQuickBolusSettingsRequest.self).first).cargo.hexadecimalString
     }
 
-    func testEnablingSendsTheEnabledAndIncrementFieldsTogether() throws {
-        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [
-            globals(enabled: false, incrementUnits: 500),
-            globals(enabled: true, incrementUnits: 1000)
-        ])
+    private func assertSends(
+        _ hex: String,
+        from before: PumpGlobalsResponse,
+        to after: PumpGlobalsResponse,
+        enabled: Bool,
+        incrementUnits: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [before, after])
 
-        XCTAssertTrue(set(enabled: true, incrementUnits: 1000))
-        XCTAssertEqual(try sentCargo(), "0100e803d00705")
+        XCTAssertTrue(set(enabled: enabled, incrementUnits: incrementUnits), file: file, line: line)
+        XCTAssertEqual(try sentCargo(), hex, file: file, line: line)
     }
 
-    func testChangingTheIncrementLeavesTheEnabledFieldUnchanged() throws {
-        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [
-            globals(enabled: true, incrementUnits: 1000),
-            globals(enabled: true, incrementUnits: 2000)
-        ])
-
-        XCTAssertTrue(set(enabled: true, incrementUnits: 2000))
-        XCTAssertEqual(try sentCargo(), "0100d007d00704")
+    func testEnablingAtTheCurrentHalfUnit() throws {
+        try assertSends(
+            "0100f401d00701",
+            from: globals(enabled: false, incrementUnits: 500),
+            to: globals(enabled: true, incrementUnits: 500),
+            enabled: true,
+            incrementUnits: 500
+        )
     }
 
-    func testDisablingCarriesThePumpsCurrentIncrements() throws {
-        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [
-            globals(enabled: true, incrementUnits: 5000),
-            globals(enabled: false, incrementUnits: 5000)
-        ])
-
-        XCTAssertTrue(set(enabled: false, incrementUnits: 5000))
-        XCTAssertEqual(try sentCargo(), "00008813d00701")
+    func testEnablingAtTheCurrentOneUnit() throws {
+        try assertSends(
+            "0100e803d00701",
+            from: globals(enabled: false, incrementUnits: 1000),
+            to: globals(enabled: true, incrementUnits: 1000),
+            enabled: true,
+            incrementUnits: 1000
+        )
     }
 
+    func testEnablingAtANewIncrementSendsBothFields() throws {
+        try assertSends(
+            "0100e803d00705",
+            from: globals(enabled: false, incrementUnits: 500),
+            to: globals(enabled: true, incrementUnits: 1000),
+            enabled: true,
+            incrementUnits: 1000
+        )
+    }
+
+    func testChangingToHalfUnit() throws {
+        try assertSends(
+            "0100f401d00704",
+            from: globals(enabled: true, incrementUnits: 1000),
+            to: globals(enabled: true, incrementUnits: 500),
+            enabled: true,
+            incrementUnits: 500
+        )
+    }
+
+    func testChangingToOneUnit() throws {
+        try assertSends(
+            "0100e803d00704",
+            from: globals(enabled: true, incrementUnits: 500),
+            to: globals(enabled: true, incrementUnits: 1000),
+            enabled: true,
+            incrementUnits: 1000
+        )
+    }
+
+    func testChangingToTwoUnits() throws {
+        try assertSends(
+            "0100d007d00704",
+            from: globals(enabled: true, incrementUnits: 1000),
+            to: globals(enabled: true, incrementUnits: 2000),
+            enabled: true,
+            incrementUnits: 2000
+        )
+    }
+
+    func testChangingToFiveUnits() throws {
+        try assertSends(
+            "01008813d00704",
+            from: globals(enabled: true, incrementUnits: 2000),
+            to: globals(enabled: true, incrementUnits: 5000),
+            enabled: true,
+            incrementUnits: 5000
+        )
+    }
+
+    func testDisablingCarriesTheCurrentHalfUnit() throws {
+        try assertSends(
+            "0000f401d00701",
+            from: globals(enabled: true, incrementUnits: 500),
+            to: globals(enabled: false, incrementUnits: 500),
+            enabled: false,
+            incrementUnits: 500
+        )
+    }
+
+    func testDisablingCarriesTheCurrentOneUnit() throws {
+        try assertSends(
+            "0000e803d00701",
+            from: globals(enabled: true, incrementUnits: 1000),
+            to: globals(enabled: false, incrementUnits: 1000),
+            enabled: false,
+            incrementUnits: 1000
+        )
+    }
+
+    func testDisablingCarriesTheCurrentFiveUnits() throws {
+        try assertSends(
+            "00008813d00701",
+            from: globals(enabled: true, incrementUnits: 5000),
+            to: globals(enabled: false, incrementUnits: 5000),
+            enabled: false,
+            incrementUnits: 5000
+        )
+    }
+
+    /// Not captured: the mirror of the captured switch to carbs, `01018813d00702`.
     func testSavingOnACarbsModePumpSwitchesItBackToUnits() throws {
-        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [
-            globals(enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 10000),
-            globals(enabled: true, mode: .units, incrementUnits: 5000, incrementCarbs: 10000)
-        ])
-
-        XCTAssertTrue(set(enabled: true, incrementUnits: 5000))
-        XCTAssertEqual(try sentCargo(), "01008813102702")
+        try assertSends(
+            "01008813102702",
+            from: globals(enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 10000),
+            to: globals(enabled: true, mode: .units, incrementUnits: 5000, incrementCarbs: 10000),
+            enabled: true,
+            incrementUnits: 5000
+        )
     }
 
     func testAChangeThePumpDidNotApplyFailsTheSave() {

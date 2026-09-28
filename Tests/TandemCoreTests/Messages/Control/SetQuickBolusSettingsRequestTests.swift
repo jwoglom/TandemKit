@@ -1,48 +1,104 @@
 @testable import TandemKit
 import XCTest
 
-/// Cargos captured from the Tandem Mobi app (#428).
+/// One test per cargo the Tandem Mobi app was captured sending (#428), which includes every
+/// entry of pumpX2's `QuickBolusIncrement` magic table.
 final class SetQuickBolusSettingsRequestTests: XCTestCase {
-    private func parse(_ hex: String) throws -> SetQuickBolusSettingsRequest {
-        SetQuickBolusSettingsRequest(cargo: try XCTUnwrap(Data(hexadecimalString: hex)))
+    private func assertCargo(
+        _ hex: String,
+        enabled: Bool,
+        mode: QuickBolusMode,
+        incrementUnits: Int,
+        incrementCarbs: Int,
+        changedFields: QuickBolusSettingsFields,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let parsed = SetQuickBolusSettingsRequest(cargo: try XCTUnwrap(Data(hexadecimalString: hex), file: file, line: line))
+        XCTAssertEqual(parsed.enabled, enabled, "enabled", file: file, line: line)
+        XCTAssertEqual(parsed.mode, mode, "mode", file: file, line: line)
+        XCTAssertEqual(parsed.incrementUnits, incrementUnits, "incrementUnits", file: file, line: line)
+        XCTAssertEqual(parsed.incrementCarbs, incrementCarbs, "incrementCarbs", file: file, line: line)
+        XCTAssertEqual(parsed.changedFields, changedFields, "changedFields", file: file, line: line)
+
+        let built = SetQuickBolusSettingsRequest(
+            enabled: enabled,
+            mode: mode,
+            incrementUnits: incrementUnits,
+            incrementCarbs: incrementCarbs,
+            changedFields: changedFields
+        )
+        XCTAssertEqual(built.cargo.hexadecimalString, hex, "built cargo", file: file, line: line)
     }
 
-    func testDisable() throws {
-        let request = try parse("00008813d00701")
-        XCTAssertFalse(request.enabled)
-        XCTAssertEqual(request.mode, .units)
-        XCTAssertEqual(request.incrementUnits, 5000)
-        XCTAssertEqual(request.incrementCarbs, 2000)
-        XCTAssertEqual(request.changedFields, .enabled)
+    // MARK: - Units
+
+    func testDisableCarryingHalfUnit() throws {
+        try assertCargo("0000f401d00701", enabled: false, mode: .units, incrementUnits: 500, incrementCarbs: 2000, changedFields: .enabled)
+    }
+
+    func testDisableCarryingOneUnit() throws {
+        try assertCargo("0000e803d00701", enabled: false, mode: .units, incrementUnits: 1000, incrementCarbs: 2000, changedFields: .enabled)
+    }
+
+    func testDisableCarryingFiveUnits() throws {
+        try assertCargo("00008813d00701", enabled: false, mode: .units, incrementUnits: 5000, incrementCarbs: 2000, changedFields: .enabled)
+    }
+
+    func testEnableCarryingHalfUnit() throws {
+        try assertCargo("0100f401d00701", enabled: true, mode: .units, incrementUnits: 500, incrementCarbs: 2000, changedFields: .enabled)
+    }
+
+    func testEnableCarryingOneUnit() throws {
+        try assertCargo("0100e803d00701", enabled: true, mode: .units, incrementUnits: 1000, incrementCarbs: 2000, changedFields: .enabled)
     }
 
     func testEnableAtOneUnit() throws {
-        let request = try parse("0100e803d00705")
-        XCTAssertTrue(request.enabled)
-        XCTAssertEqual(request.incrementUnits, 1000)
-        XCTAssertEqual(request.changedFields, [.enabled, .incrementUnits])
-    }
-
-    func testSwitchToCarbs() throws {
-        let request = try parse("01018813d00702")
-        XCTAssertEqual(request.mode, .carbs)
-        XCTAssertEqual(request.changedFields, .mode)
-    }
-
-    func testCarbIncrement() throws {
-        let request = try parse("01018813102708")
-        XCTAssertEqual(request.incrementCarbs, 10000)
-        XCTAssertEqual(request.changedFields, .incrementCarbs)
-    }
-
-    func testBuildMatchesTheCapturedCargo() {
-        let request = SetQuickBolusSettingsRequest(
+        try assertCargo(
+            "0100e803d00705",
             enabled: true,
             mode: .units,
             incrementUnits: 1000,
             incrementCarbs: 2000,
             changedFields: [.enabled, .incrementUnits]
         )
-        XCTAssertEqual(request.cargo.hexadecimalString, "0100e803d00705")
+    }
+
+    func testIncrementHalfUnit() throws {
+        try assertCargo("0100f401d00704", enabled: true, mode: .units, incrementUnits: 500, incrementCarbs: 2000, changedFields: .incrementUnits)
+    }
+
+    func testIncrementOneUnit() throws {
+        try assertCargo("0100e803d00704", enabled: true, mode: .units, incrementUnits: 1000, incrementCarbs: 2000, changedFields: .incrementUnits)
+    }
+
+    func testIncrementTwoUnits() throws {
+        try assertCargo("0100d007d00704", enabled: true, mode: .units, incrementUnits: 2000, incrementCarbs: 2000, changedFields: .incrementUnits)
+    }
+
+    func testIncrementFiveUnits() throws {
+        try assertCargo("01008813d00704", enabled: true, mode: .units, incrementUnits: 5000, incrementCarbs: 2000, changedFields: .incrementUnits)
+    }
+
+    // MARK: - Carbs
+
+    func testSwitchToCarbs() throws {
+        try assertCargo("01018813d00702", enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 2000, changedFields: .mode)
+    }
+
+    func testIncrementTwoGrams() throws {
+        try assertCargo("01018813d00708", enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 2000, changedFields: .incrementCarbs)
+    }
+
+    func testIncrementFiveGrams() throws {
+        try assertCargo("01018813881308", enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 5000, changedFields: .incrementCarbs)
+    }
+
+    func testIncrementTenGrams() throws {
+        try assertCargo("01018813102708", enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 10000, changedFields: .incrementCarbs)
+    }
+
+    func testIncrementFifteenGrams() throws {
+        try assertCargo("01018813983a08", enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 15000, changedFields: .incrementCarbs)
     }
 }
