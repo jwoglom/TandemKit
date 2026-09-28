@@ -15,11 +15,11 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
 
     private let pumpManager: TandemPumpManager?
 
-    static let unitIncrements: [(label: String, increment: QuickBolusIncrement)] = [
-        ("0.5 U", .units0_5),
-        ("1.0 U", .units1_0),
-        ("2.0 U", .units2_0),
-        ("5.0 U", .units5_0)
+    static let unitIncrements: [(label: String, milliunits: Int)] = [
+        ("0.5 U", 500),
+        ("1.0 U", 1000),
+        ("2.0 U", 2000),
+        ("5.0 U", 5000)
     ]
 
     init(pumpManager: TandemPumpManager?) {
@@ -60,11 +60,8 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         }
     }
 
-    var selectedIncrement: QuickBolusIncrement {
-        if !enabled {
-            return .disabled
-        }
-        return Self.unitIncrements[unitsIncrementIndex].increment
+    var canSave: Bool {
+        isDirty || (enabled && pumpIsInCarbsMode)
     }
 
     func submit() {
@@ -73,7 +70,7 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
 
         pumpManager?.setQuickBolusSettings(
             enabled: enabled,
-            increment: selectedIncrement
+            incrementUnits: Self.unitIncrements[unitsIncrementIndex].milliunits
         ) { success in
             DispatchQueue.main.async {
                 self.isLoading = false

@@ -22,7 +22,7 @@ struct TandemKitQuickBolusSettingsView: View {
                 if viewModel.pumpIsInCarbsMode {
                     Section {
                         Text(
-                            "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Switch it back to units from the pump or the Tandem app, or turn quick bolus off here.",
+                            "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Save to switch it back to units, or turn quick bolus off.",
                             comment: "Warning shown when the pump's quick bolus is in carbs mode"
                         )
                         .font(.footnote)
@@ -63,7 +63,7 @@ struct TandemKitQuickBolusSettingsView: View {
                 text: Text("Save", comment: "label for save"),
                 loading: $viewModel.isLoading,
                 disabled: Binding(
-                    get: { !viewModel.isDirty },
+                    get: { !viewModel.canSave },
                     set: { _ in }
                 )
             ) {

@@ -1302,15 +1302,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Quick Bolus Settings
 
-    /// Units mode only (#428): the carbs magic changes the carb increment but leaves the pump in
-    /// units mode, and carbs mode would dose from the pump's carb ratio, which is never synced.
+    /// Units mode only (#428): carbs mode doses from the pump's own carb ratio, which is never
+    /// synced, and the carbs never reach the host.
     func setQuickBolusSettings(
         enabled: Bool,
-        increment: QuickBolusIncrement,
+        incrementUnits: Int,
         completion: @escaping (Bool) -> Void
     ) {
-        guard increment.mode == .units else {
-            logger.error("Refusing to set quick bolus to carbs mode: \(String(describing: increment))")
+        guard SetQuickBolusSettingsRequest.supportedIncrementUnits.contains(incrementUnits) else {
+            logger.error("Refusing unsupported quick bolus increment: \(incrementUnits) mU")
             completion(false)
             return
         }
@@ -1324,7 +1324,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(SetQuickBolusSettingsRequest(enabled: enabled, mode: .units, increment: increment)) else {
+            guard let current = self.fetchGlobalPumpSettings() else {
+                completion(false)
+                return
+            }
+
+            let request = Self.quickBolusSettingsChange(from: current, enabled: enabled, incrementUnits: incrementUnits)
+            guard !request.changedFields.isEmpty else {
+                completion(true)
+                return
+            }
+
+            guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set quick bolus")
                 completion(false)
                 return
@@ -1337,10 +1348,46 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             Thread.sleep(forTimeInterval: .seconds(1))
-            self.fetchGlobalPumpSettings()
+            guard let updated = self.fetchGlobalPumpSettings() else {
+                completion(false)
+                return
+            }
+
+            let applied = Self.quickBolusSettingsChange(from: updated, enabled: enabled, incrementUnits: incrementUnits)
+            guard applied.changedFields.isEmpty else {
+                self.logger.error("Pump accepted the quick bolus change but still reports \(updated)")
+                completion(false)
+                return
+            }
 
             completion(true)
         }
+    }
+
+    /// Carries the pump's current values in every field it is not asked to change, as the Tandem app does.
+    static func quickBolusSettingsChange(
+        from current: PumpGlobalsResponse,
+        enabled: Bool,
+        incrementUnits: Int
+    ) -> SetQuickBolusSettingsRequest {
+        var changedFields: QuickBolusSettingsFields = []
+        if current.isQuickBolusEnabled() != enabled {
+            changedFields.insert(.enabled)
+        }
+        if enabled, current.quickBolusEntryType != QuickBolusMode.units.rawValue {
+            changedFields.insert(.mode)
+        }
+        if enabled, current.quickBolusIncrementUnits != incrementUnits {
+            changedFields.insert(.incrementUnits)
+        }
+
+        return SetQuickBolusSettingsRequest(
+            enabled: enabled,
+            mode: enabled ? .units : QuickBolusMode(rawValue: current.quickBolusEntryType) ?? .units,
+            incrementUnits: enabled ? incrementUnits : current.quickBolusIncrementUnits,
+            incrementCarbs: current.quickBolusIncrementCarbs,
+            changedFields: changedFields
+        )
     }
 
     func getControlIQData(completion: @escaping (ControlIQInfoAbstractResponse?, ControlIQSleepScheduleResponse?) -> Void) {

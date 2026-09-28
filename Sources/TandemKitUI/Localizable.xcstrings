@@ -4052,13 +4052,13 @@
         }
       }
     },
-    "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Switch it back to units from the pump or the Tandem app, or turn quick bolus off here." : {
+    "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Save to switch it back to units, or turn quick bolus off." : {
       "comment" : "Warning shown when the pump's quick bolus is in carbs mode",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Switch it back to units from the pump or the Tandem app, or turn quick bolus off here."
+            "value" : "Your pump's quick bolus is set to carbs, which this app does not support. In carbs mode the pump doses from its own carb ratio, and the carbs are not shared with this app. Save to switch it back to units, or turn quick bolus off."
           }
         }
       }
