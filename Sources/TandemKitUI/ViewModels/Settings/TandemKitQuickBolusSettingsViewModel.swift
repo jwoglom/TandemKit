@@ -3,18 +3,15 @@ import SwiftUI
 
 class TandemKitQuickBolusSettingsViewModel: ObservableObject {
     @Published var enabled: Bool = false { didSet { checkDirtyState() } }
-    @Published var modeIndex: Int = 0 { didSet { checkDirtyState() } }
     @Published var unitsIncrementIndex: Int = 0 { didSet { checkDirtyState() } }
-    @Published var carbsIncrementIndex: Int = 0 { didSet { checkDirtyState() } }
+    @Published var pumpIsInCarbsMode: Bool = false
 
     @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
     @Published var saveError: String?
 
     private var originalEnabled: Bool = false
-    private var originalModeIndex: Int = 0
     private var originalUnitsIncrementIndex: Int = 0
-    private var originalCarbsIncrementIndex: Int = 0
 
     private let pumpManager: TandemPumpManager?
 
@@ -23,13 +20,6 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         ("1.0 U", .units1_0),
         ("2.0 U", .units2_0),
         ("5.0 U", .units5_0)
-    ]
-
-    static let carbIncrements: [(label: String, increment: QuickBolusIncrement)] = [
-        ("2 g", .carbs2g),
-        ("5 g", .carbs5g),
-        ("10 g", .carbs10g),
-        ("15 g", .carbs15g)
     ]
 
     init(pumpManager: TandemPumpManager?) {
@@ -49,21 +39,14 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
 
     private func loadFromState(_ state: TandemPumpManagerState) {
         let isEnabled = state.quickBolusEnabled ?? false
-        let entryType = state.quickBolusEntryType ?? 0
         let incrementUnits = state.quickBolusIncrementUnits ?? 500
-        let incrementCarbs = state.quickBolusIncrementCarbs ?? 2000
 
         enabled = isEnabled
-        modeIndex = entryType == 1 ? 1 : 0
-
-        // Map increment values to picker indices
+        pumpIsInCarbsMode = isEnabled && state.quickBolusEntryType == QuickBolusMode.carbs.rawValue
         unitsIncrementIndex = Self.unitsIndexForMilliunits(incrementUnits)
-        carbsIncrementIndex = Self.carbsIndexForMilliunits(incrementCarbs)
 
         originalEnabled = enabled
-        originalModeIndex = modeIndex
         originalUnitsIncrementIndex = unitsIncrementIndex
-        originalCarbsIncrementIndex = carbsIncrementIndex
     }
 
     private static func unitsIndexForMilliunits(_ milliunits: Int) -> Int {
@@ -77,30 +60,11 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         }
     }
 
-    private static func carbsIndexForMilliunits(_ milliunits: Int) -> Int {
-        // PumpGlobalsResponse quickBolusIncrementCarbs is in milliunits
-        // 2000 = 2g, 5000 = 5g, 10000 = 10g, 15000 = 15g
-        switch milliunits {
-        case ...2000: return 0
-        case 2001 ... 5000: return 1
-        case 5001 ... 10000: return 2
-        default: return 3
-        }
-    }
-
     var selectedIncrement: QuickBolusIncrement {
         if !enabled {
             return .disabled
         }
-        if modeIndex == 1 {
-            return Self.carbIncrements[carbsIncrementIndex].increment
-        } else {
-            return Self.unitIncrements[unitsIncrementIndex].increment
-        }
-    }
-
-    var selectedMode: QuickBolusMode {
-        modeIndex == 1 ? .carbs : .units
+        return Self.unitIncrements[unitsIncrementIndex].increment
     }
 
     func submit() {
@@ -109,16 +73,23 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
 
         pumpManager?.setQuickBolusSettings(
             enabled: enabled,
-            mode: selectedMode,
             increment: selectedIncrement
-        ) { _ in
+        ) { success in
             DispatchQueue.main.async {
                 self.isLoading = false
+                guard success else {
+                    self.saveError = String(
+                        localized: "Could not save quick bolus settings to the pump.",
+                        comment: "Error shown when saving quick bolus settings fails"
+                    )
+                    return
+                }
                 self.originalEnabled = self.enabled
-                self.originalModeIndex = self.modeIndex
                 self.originalUnitsIncrementIndex = self.unitsIncrementIndex
-                self.originalCarbsIncrementIndex = self.carbsIncrementIndex
                 self.isDirty = false
+                if let pumpManager = self.pumpManager {
+                    self.loadFromState(pumpManager.state)
+                }
             }
         }
     }
@@ -127,9 +98,7 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
         DispatchQueue.main.async {
             self.isDirty = (
                 self.originalEnabled != self.enabled ||
-                    self.originalModeIndex != self.modeIndex ||
-                    self.originalUnitsIncrementIndex != self.unitsIncrementIndex ||
-                    self.originalCarbsIncrementIndex != self.carbsIncrementIndex
+                    self.originalUnitsIncrementIndex != self.unitsIncrementIndex
             )
         }
     }

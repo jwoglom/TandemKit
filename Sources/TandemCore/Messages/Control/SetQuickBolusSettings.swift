@@ -65,14 +65,14 @@ public enum QuickBolusIncrement: CaseIterable {
     case carbs10g
     case carbs15g
 
-    var enabled: Bool {
+    public var enabled: Bool {
         switch self {
         case .disabled: return false
         default: return true
         }
     }
 
-    var mode: QuickBolusMode {
+    public var mode: QuickBolusMode {
         switch self {
         case .carbs2g,
              .carbs5g,

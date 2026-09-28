@@ -1302,12 +1302,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Quick Bolus Settings
 
+    /// Units mode only (#428): the carbs magic changes the carb increment but leaves the pump in
+    /// units mode, and carbs mode would dose from the pump's carb ratio, which is never synced.
     func setQuickBolusSettings(
         enabled: Bool,
-        mode: QuickBolusMode,
         increment: QuickBolusIncrement,
         completion: @escaping (Bool) -> Void
     ) {
+        guard increment.mode == .units else {
+            logger.error("Refusing to set quick bolus to carbs mode: \(String(describing: increment))")
+            completion(false)
+            return
+        }
+
         logger.info("Setting quick bolus...")
 
         bluetooth.ensureConnected { error in
@@ -1317,7 +1324,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment)) else {
+            guard let response = self.bluetooth.write(SetQuickBolusSettingsRequest(enabled: enabled, mode: .units, increment: increment)) else {
                 self.logger.error("Failed to set quick bolus")
                 completion(false)
                 return
