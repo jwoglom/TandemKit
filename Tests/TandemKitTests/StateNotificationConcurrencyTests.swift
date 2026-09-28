@@ -15,4 +15,26 @@ import XCTest
 
         XCTAssertEqual(manager.state.basalDose.value, 0.85)
     }
+
+    func testConcurrentStateWritesDoNotOverReleaseTheDosesTheyReplace() {
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
+
+        DispatchQueue.concurrentPerform(iterations: 20000) { index in
+            manager.state.bolusDose = UnfinalizedDose(basalRate: Double(index), insulinType: nil, startDate: Date())
+            _ = manager.state.bolusDose?.value
+        }
+
+        XCTAssertNotNil(manager.state.bolusDose)
+    }
+
+    func testConcurrentInPlaceUpdatesAreNotLost() {
+        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: StubPumpBluetooth())
+        manager.state.quickBolusStatus = 0
+
+        DispatchQueue.concurrentPerform(iterations: 20000) { _ in
+            manager.state.quickBolusStatus! += 1
+        }
+
+        XCTAssertEqual(manager.state.quickBolusStatus, 20000)
+    }
 }
