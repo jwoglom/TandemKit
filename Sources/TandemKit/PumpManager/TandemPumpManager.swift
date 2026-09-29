@@ -24,6 +24,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     var now: Date { clock.now }
 
+    func hostDate(forPumpDate date: Date) -> Date {
+        date.addingTimeInterval(-state.pumpClockOffset)
+    }
+
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile
     public static var onboardingMaximumBasalScheduleEntryCount: Int = 16
 
@@ -740,7 +744,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 startDate: bolusDose.startDate,
                 deliveryStartDate: bolusDose.deliveryStartDate,
                 deliveredUnits: bolusDose.deliveredUnits,
-                pumpTimestamp: lastBolus.pumpTimestamp
+                pumpTimestamp: self.hostDate(forPumpDate: lastBolus.pumpTimestamp)
             ))
 
             var events = self.getActivePumpEvents()
