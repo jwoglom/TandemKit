@@ -516,7 +516,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertPermanent(raw: tbrRaw)
         XCTAssertEqual(trio.boluses.count, 1)
         XCTAssertEqual(trio.tempBasals.count, 1)
-        try expectDefect("jwoglom/TandemKit#343 / #335 and the unfiled end-date clamp above: the host's ledger disagrees with the pump's under clock skew") {
+        try expectDefect("jwoglom/TandemKit#343 / #335 and #339's end-date clamp above: the host's ledger disagrees with the pump's under clock skew") {
             timeline.assertMatches(loop)
         }
     }
