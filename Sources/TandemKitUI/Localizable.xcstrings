@@ -1228,6 +1228,28 @@
     "Failed to dismiss notification" : {
 
     },
+    "Failed to enter change cartridge mode." : {
+      "comment" : "Confirmation dialog title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to enter change cartridge mode."
+          }
+        }
+      }
+    },
+    "REMOVE THE PUMP FROM YOUR BODY NOW.\n\nIf you started a cartridge change and didn't complete it, the pump may still be in that mode. Press OK to attempt to stop the cartridge change operation and then try again." : {
+      "comment" : "Confirmation dialog message shown when the pump refuses to enter cartridge change mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "REMOVE THE PUMP FROM YOUR BODY NOW.\n\nIf you started a cartridge change and didn't complete it, the pump may still be in that mode. Press OK to attempt to stop the cartridge change operation and then try again."
+          }
+        }
+      }
+    },
     "Failed to enter change mode. Ensure insulin delivery is suspended and check pump notifications." : {
       "comment" : "Error message",
       "localizations" : {

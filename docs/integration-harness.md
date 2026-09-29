@@ -64,10 +64,12 @@ invalidate the plain one.
 
 In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
 macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
-TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built from its default
-branch (`faketandem_ref` on a manual run picks another) and the cliparser jar fetched, then hands
-the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips, because
-a skip means the emulator's addresses never reached the test process.
+TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built and the cliparser
+jar fetched, then hands the binary to the script as `FAKETANDEM_BIN`. faketandem comes from its
+default branch; `faketandem_ref` on a manual run picks another, and a pull request uses a faketandem
+branch of the same name when one exists, so a driver change is tested with the emulator change it
+needs. The job fails if any integration test skips, because a skip means the emulator's addresses
+never reached the test process.
 
 `.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
 reusing the `virtual-pump` job's build from the Actions cache. That job runs on pushes to `main`
@@ -206,6 +208,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `SyncIntegrationTests` | `syncPumpData` reports a status update, one reservoir reading, the reconciliation boundary as an empty non-replacing batch; a second sync is quiet and advances the boundary. |
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
+| `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency and pump-side failures, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 

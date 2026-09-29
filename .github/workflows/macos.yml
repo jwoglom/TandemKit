@@ -148,11 +148,26 @@ jobs:
           TandemKit/scripts/ci/background.sh start build bash -c \
             'TandemKit/scripts/test-local.sh build -quiet && TandemKit/scripts/integration-test.sh build -quiet'
 
+      # A change that needs an emulator change pushes both under one branch name, so a pull request
+      # tests against it; without one, the emulator's default branch as before.
+      - name: Pick the faketandem ref
+        id: faketandem-ref
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          ref="${FAKETANDEM_REF}"
+          if [[ -z "${ref}" && -n "${HEAD_REF}" ]] \
+            && git ls-remote --exit-code --heads https://github.com/jwoglom/faketandem "refs/heads/${HEAD_REF}" > /dev/null; then
+            ref="${HEAD_REF}"
+          fi
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "faketandem ref: ${ref:-<default branch>}"
+
       - name: Checkout faketandem
         uses: actions/checkout@v6
         with:
           repository: jwoglom/faketandem
-          ref: ${{ env.FAKETANDEM_REF }}
+          ref: ${{ steps.faketandem-ref.outputs.ref }}
           path: faketandem
           fetch-depth: 1
 

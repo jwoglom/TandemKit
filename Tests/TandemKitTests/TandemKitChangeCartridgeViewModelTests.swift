@@ -45,6 +45,27 @@ import XCTest
         )
     }
 
+    private func stubSuspended(_ suspended: Bool) {
+        bluetooth.stub(
+            CurrentBasalStatusRequest.self,
+            with: CurrentBasalStatusResponse(
+                profileBasalRate: 800,
+                currentBasalRate: suspended ? 0 : 800,
+                basalModifiedBitmask: suspended ? 0x01 : 0x00
+            )
+        )
+    }
+
+    private func stubActiveAlert(_ alert: AlertStatusResponse.AlertResponseType) {
+        bluetooth.stub(AlertStatusRequest.self, with: AlertStatusResponse(intMap: UInt64(1) << UInt64(alert.rawValue)))
+    }
+
+    private var sentCartridgeProcedureRequests: [String] {
+        bluetooth.sentMessages.map { String(describing: type(of: $0)) }.filter {
+            ["EnterChangeCartridgeModeRequest", "ExitChangeCartridgeModeRequest", "ExitFillTubingModeRequest"].contains($0)
+        }
+    }
+
     /// Lets the view model's `DispatchQueue.main.async` hops run. The stub answers writes inline, so
     /// the only thing outstanding is the main-queue scheduling.
     private func drainMainQueue(iterations: Int = 20) {
@@ -166,6 +187,179 @@ import XCTest
 
         XCTAssertTrue(viewModel.failedEnterMode)
         XCTAssertFalse(bluetooth.didSend(EnterChangeCartridgeModeRequest.self))
+    }
+
+    // MARK: - Stuck cartridge procedure
+
+    /// A refusal with delivery suspended and nothing on the pump's notification list is what a
+    /// cartridge procedure left open looks like: the pump gives no other reason.
+    func testARefusalWithDeliverySuspendedAndNoNotificationsOffersRecovery() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.stuckModeRecoveryOffered)
+        XCTAssertTrue(viewModel.failedEnterMode, "the plain failure stays on screen behind the prompt")
+        XCTAssertFalse(viewModel.isProcessing)
+    }
+
+    func testOfferingRecoveryDoesNothingToThePumpUntilItIsAccepted() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+        drainMainQueue()
+
+        XCTAssertEqual(sentCartridgeProcedureRequests, ["EnterChangeCartridgeModeRequest"])
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+    }
+
+    func testARefusalWithAnActiveNotificationDoesNotOfferRecovery() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        stubActiveAlert(.INCOMPLETE_FILL_TUBING_ALERT)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.hasActiveNotifications, "the test needs the pump's alert to have been read")
+        XCTAssertFalse(viewModel.stuckModeRecoveryOffered)
+        XCTAssertTrue(viewModel.failedEnterMode)
+    }
+
+    func testARefusalAfterDeliveryHasResumedDoesNotOfferRecovery() {
+        stubReservoir(units: 0)
+        stubSuspended(false)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.stuckModeRecoveryOffered)
+        XCTAssertTrue(viewModel.failedEnterMode)
+    }
+
+    func testAnUnansweredEnterDoesNotOfferRecovery() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self) { _ in nil }
+        bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 0))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.stuckModeRecoveryOffered)
+    }
+
+    func testASuccessfulEnterDoesNotOfferRecovery() {
+        stubReservoir(units: 120)
+        stubSuspended(true)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 0))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.stuckModeRecoveryOffered)
+    }
+
+    func testAcceptingRecoveryUnwindsThePumpThenResumesTheWizard() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.enqueue(
+            EnterChangeCartridgeModeRequest.self,
+            responses: [EnterChangeCartridgeModeResponse(status: 1), EnterChangeCartridgeModeResponse(status: 0)]
+        )
+        bluetooth.stub(ExitFillTubingModeRequest.self, with: ExitFillTubingModeResponse(status: 0))
+        bluetooth.stub(ExitChangeCartridgeModeRequest.self, with: ExitChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+        XCTAssertTrue(viewModel.stuckModeRecoveryOffered)
+
+        viewModel.recoverFromStuckMode()
+        drainMainQueue()
+
+        XCTAssertEqual(
+            sentCartridgeProcedureRequests,
+            [
+                "EnterChangeCartridgeModeRequest",
+                "ExitFillTubingModeRequest",
+                "ExitChangeCartridgeModeRequest",
+                "EnterChangeCartridgeModeRequest"
+            ]
+        )
+        XCTAssertFalse(viewModel.failedEnterMode)
+        XCTAssertEqual(viewModel.currentStep, .waitingForReady, "the wizard carries on as after a first-time enter")
+        XCTAssertTrue(viewModel.isProcessing)
+    }
+
+    func testAcceptingRecoveryWaitsOutTheRetractionBeforeOfferingToRemoveTheCartridge() {
+        stubReservoir(units: 0) // Worst case: a 15s estimate the test must not wait out.
+        stubSuspended(true)
+        bluetooth.enqueue(
+            EnterChangeCartridgeModeRequest.self,
+            responses: [EnterChangeCartridgeModeResponse(status: 1), EnterChangeCartridgeModeResponse(status: 0)]
+        )
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+        viewModel.recoverFromStuckMode()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.currentStep, .waitingForReady)
+        XCTAssertNil(viewModel.changeCartridgeState)
+    }
+
+    func testARefusalAfterRecoveryIsReportedWithoutOfferingItAgain() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.stub(EnterChangeCartridgeModeRequest.self, with: EnterChangeCartridgeModeResponse(status: 1))
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+        viewModel.stuckModeRecoveryOffered = false // The view consumes the offer when it shows the prompt.
+
+        viewModel.recoverFromStuckMode()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.failedEnterMode)
+        XCTAssertFalse(viewModel.stuckModeRecoveryOffered, "a prompt after every recovery would loop")
+        XCTAssertFalse(viewModel.isProcessing)
+        XCTAssertEqual(viewModel.currentStep, .enterMode)
+    }
+
+    func testAnUnansweredEnterAfterRecoveryLeavesTheModeIndeterminate() {
+        stubReservoir(units: 0)
+        stubSuspended(true)
+        bluetooth.enqueue(
+            EnterChangeCartridgeModeRequest.self,
+            responses: [EnterChangeCartridgeModeResponse(status: 1), nil]
+        )
+
+        let viewModel = makeViewModel()
+        viewModel.enterChangeCartridgeMode()
+        drainMainQueue()
+        viewModel.recoverFromStuckMode()
+        drainMainQueue()
+
+        XCTAssertTrue(viewModel.indeterminateEnterMode)
+        XCTAssertFalse(viewModel.failedEnterMode)
+        XCTAssertFalse(viewModel.isProcessing)
     }
 
     // MARK: - Ready-to-change stream

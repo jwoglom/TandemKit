@@ -49,6 +49,9 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
     /// The pump never answered the enter request and could not be driven back out of change mode,
     /// so which mode it is in is unknown and retrying blind is unsafe.
     @Published var indeterminateEnterMode = false
+    /// Set when the pump refused to enter change mode with delivery suspended and no notification
+    /// to blame, which is what a cartridge procedure left open looks like. The view consumes it.
+    @Published var stuckModeRecoveryOffered = false
 
     @Published var changeCartridgeState: EnterChangeCartridgeModeStateStreamResponse.ChangeCartridgeState?
     @Published var detectingProgress: Int = 0
@@ -181,24 +184,65 @@ class TandemKitChangeCartridgeViewModel: ObservableObject {
 
         pumpManager?.enterChangeCartridgeMode { response in
             DispatchQueue.main.async {
-                guard let response = response else {
-                    // No answer at all: the pump may have entered change mode anyway. Re-sending a
-                    // signed insulin-affecting request blind is the thing to avoid, so drive the
-                    // pump back to a known state instead and only then offer a retry.
-                    self.recoverFromUnansweredEnterMode()
-                    return
-                }
+                self.handleEnterResponse(response, sentAt: sentAt, mayOfferRecovery: true)
+            }
+        }
+    }
 
-                self.loadingEnterMode = false
-                if response.status == 0 {
-                    self.failedEnterMode = false
-                    self.currentStep = self.currentStep.nextStep() ?? .done
-                    self.startMonitoringChangeState(requestSentAt: sentAt)
-                } else {
-                    // The pump answered and refused, so its state is known and a retry is safe.
-                    self.failedEnterMode = true
-                    self.isProcessing = false
+    private func handleEnterResponse(
+        _ response: EnterChangeCartridgeModeResponse?,
+        sentAt: Date,
+        mayOfferRecovery: Bool
+    ) {
+        guard let response = response else {
+            // No answer at all: the pump may have entered change mode anyway. Re-sending a
+            // signed insulin-affecting request blind is the thing to avoid, so drive the
+            // pump back to a known state instead and only then offer a retry.
+            recoverFromUnansweredEnterMode()
+            return
+        }
+
+        loadingEnterMode = false
+        if response.status == 0 {
+            failedEnterMode = false
+            currentStep = currentStep.nextStep() ?? .done
+            startMonitoringChangeState(requestSentAt: sentAt)
+        } else {
+            // The pump answered and refused, so its state is known and a retry is safe.
+            failedEnterMode = true
+            isProcessing = false
+            if mayOfferRecovery {
+                offerStuckModeRecoveryIfNothingElseExplainsTheRefusal()
+            }
+        }
+    }
+
+    /// Reads the pump afresh rather than trusting the screen: the notification list is only polled
+    /// every 15 seconds, and `isSuspended` was last read when the wizard opened.
+    private func offerStuckModeRecoveryIfNothingElseExplainsTheRefusal() {
+        notificationsViewModel.refreshNotifications { [weak self] in
+            guard let self = self, !self.hasActiveNotifications else { return }
+
+            self.pumpManager?.fetchSuspendStatus { isSuspended in
+                DispatchQueue.main.async {
+                    guard isSuspended == true, self.failedEnterMode else { return }
+                    self.stuckModeRecoveryOffered = true
                 }
+            }
+        }
+    }
+
+    func recoverFromStuckMode() {
+        loadingEnterMode = true
+        failedEnterMode = false
+        indeterminateEnterMode = false
+        isProcessing = true
+
+        pumpManager?.recoverAndReenterChangeCartridgeMode { response in
+            DispatchQueue.main.async {
+                // Timed from the answer, not the request: the exits ahead of the enter would
+                // otherwise eat into the retraction wait, and prompting early is the worse error.
+                self.handleEnterResponse(response, sentAt: Date(), mayOfferRecovery: false)
             }
         }
     }

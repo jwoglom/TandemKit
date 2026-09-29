@@ -198,6 +198,15 @@ edit instead of at the next sync.
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)
 
+### Cartridge change
+- The pump refuses `EnterChangeCartridgeMode` while another cartridge procedure is open, and a
+  fill-tubing left open also refuses `ExitChangeCartridgeMode`; the only reason it gives is a nonzero
+  status. When the wizard's enter is refused with delivery suspended and no pump notification to
+  blame, `stuckModeRecoveryOffered` makes the view ask the user to remove the pump. On OK,
+  `recoverAndReenterChangeCartridgeMode` runs `CartridgeModeRecovery`: exit fill tubing, exit change
+  cartridge, enter change cartridge, and no refusal stops it. It is offered once, not again after a
+  refused retry. The refusal rule is inferred from a field report and not confirmed on firmware.
+
 ## Open work
 Beyond the missing tests and the history items above. The `loopkit-conformance` issues track
 where dose reporting departs from LoopKit's guide; `docs/conformance-test-plan.md` maps them to
