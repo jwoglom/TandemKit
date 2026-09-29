@@ -15,8 +15,8 @@ public class CgmDataGxHistoryLog: HistoryLog {
     public required init(cargo: Data) {
         status = Bytes.readShort(cargo, 10)
         type = Int(cargo[12])
-        rate = Int(cargo[13])
-        rssi = Int(cargo[15])
+        rate = Int(Int8(bitPattern: cargo[13]))
+        rssi = Int(Int8(bitPattern: cargo[15]))
         value = Bytes.readShort(cargo, 16)
         timestamp = Bytes.readUint32(cargo, 18)
         transmitterTimestamp = Bytes.readUint32(cargo, 22)
@@ -74,6 +74,7 @@ public class CgmDataGxHistoryLog: HistoryLog {
                 Bytes.firstTwoBytesLittleEndian(status),
                 Data([UInt8(type & 0xFF)]),
                 Data([UInt8(rate & 0xFF)]),
+                Data([0]),
                 Data([UInt8(rssi & 0xFF)]),
                 Bytes.firstTwoBytesLittleEndian(value),
                 Bytes.toUint32(timestamp),

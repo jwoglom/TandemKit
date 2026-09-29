@@ -11,9 +11,9 @@ import Foundation
 
 /// Protocol defining common fields for current battery responses.
 public protocol CurrentBatteryAbstractResponse: Message {
-    /// Unused battery capacity percentage.
+    /// A second 0-100 charge figure, not the displayed one; DailyBasal history logs this one on Mobi (jwoglom/pumpX2#149).
     var currentBatteryAbc: Int { get }
-    /// Used battery capacity percentage displayed by the pump UI.
+    /// Charge remaining, 0-100, as the pump displays it.
     var currentBatteryIbc: Int { get }
     /// Whether the pump is currently charging.
     var isCharging: Bool { get }

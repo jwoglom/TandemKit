@@ -16,10 +16,10 @@ final class CgmAlertAckDexHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(parsedRes.sensorTypeEnum, .dexcomG7)
+        XCTAssertEqual(parsedRes.ackSourceEnum, .user)
     }
 
-    // this sample's ackSource=1 (raw byte 14 = 0x01) reflects the alert being acknowledged
-    // from a source other than the default
     func testCgmAlertAckDexHistoryLog2() {
         let expected = CgmAlertAckDexHistoryLog(
             pumpTimeSec: 579789268,
@@ -34,5 +34,16 @@ final class CgmAlertAckDexHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(parsedRes.sensorTypeEnum, .dexcomG7)
+        XCTAssertEqual(parsedRes.ackSourceEnum, .software)
+    }
+
+    func testCgmAlertAckDexHistoryLogEnumMapping() {
+        let g6 = CgmAlertAckDexHistoryLog(pumpTimeSec: 0, sequenceNum: 0, alertId: 2, sensorType: 1, ackSource: 0)
+        XCTAssertEqual(g6.sensorTypeEnum, .dexcomG6)
+        XCTAssertEqual(g6.ackSourceEnum, .user)
+        let unknown = CgmAlertAckDexHistoryLog(pumpTimeSec: 0, sequenceNum: 0, alertId: 2, sensorType: 9, ackSource: 2)
+        XCTAssertEqual(unknown.sensorTypeEnum, .unknown)
+        XCTAssertNil(unknown.ackSourceEnum)
     }
 }

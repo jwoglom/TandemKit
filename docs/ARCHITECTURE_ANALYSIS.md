@@ -1,787 +1,344 @@
-# TandemKit Architecture - Comprehensive Analysis
+# TandemKit architecture
 
-## Overview
-TandemKit is a Swift framework for communicating with Tandem t:slim X2 insulin pumps over Bluetooth Low Energy (BLE). It provides a complete protocol stack for device discovery, pairing, authentication, and message exchange.
+TandemKit is a LoopKit `PumpManager` for the Tandem t:slim X2 and Mobi, talking to the pump over
+Bluetooth LE. The protocol is ported from [pumpX2](https://github.com/jwoglom/pumpX2); where
+TandemKit deliberately departs from it, the code says so at the point of departure.
 
-## Core Library Structure
+File-level pointers are in [KEY_FILES_REFERENCE.md](KEY_FILES_REFERENCE.md). The faketandem
+integration harness is described in [integration-harness.md](integration-harness.md).
 
-### Three Main Libraries (from Package.swift)
+## Build layout
 
-1. **TandemCore**
-   - Message definitions (requests/responses)
-   - Message registry and metadata
-   - Authentication protocols (JPAKE, pump challenge)
-   - Message builders and serialization
-   - Crypto utilities (HMAC, SHA256, ECC)
-   - Message types: Control, Status, History, Authentication, etc.
-   - Dependencies: SwiftECC, BigInt, Logging
+`TandemKit.xcodeproj` is the supported build. It compiles `Sources/TandemCore`,
+`Sources/TandemKit` and `Sources/TandemKitUI` into a single `TandemKit` framework, and the sources
+rely on that: they reference each other without imports, and every test does
+`@testable import TandemKit`. `Sources/TandemKitPlugin` builds a Loop-style plugin bundle that
+nothing currently uses. Trio links the framework directly.
 
-2. **TandemBLE**
-   - Bluetooth Low Energy abstraction layer
-   - BluetoothManager: BLE central manager
-   - PeripheralManager: Handles peripheral connection and communication
-   - Message packetization (Packet, TronMessageWrapper)
-   - Response parsing and packet collection
-   - Characteristic and Service UUIDs
+LoopKit and LoopKitUI are not package dependencies. The project links them from
+`BUILT_PRODUCTS_DIR`, so another project in the same workspace has to build them, and it must be
+the `loopandlearn/LoopKit` fork Trio uses. Upstream LoopKit has no `Pluggable`.
 
-3. **TandemKit**
-   - High-level pump communication API
-   - PumpComm: Main pump communication interface
-   - PumpCommSession: Session management for pairing/auth
-   - Message transport layer
-   - Pump state management
-   - Integrates TandemCore and TandemBLE
+`Package.swift` has two halves:
 
-### Supporting Modules
+- **Apple.** It describes four targets but cannot compile them, because LoopKit is missing and the
+  module split does not match the code. The comment at the top of the manifest explains this.
+- **Linux.** `Sources/TandemCore` and `Sources/TandemKit` compile into one module named
+  `TandemKit`, against the fakes in `LinuxShims/` (LoopKit, HealthKit, CoreBluetooth, Combine).
+  SwiftECC and BigInt do not build on Linux, so the JPAKE provider there is a stub that traps.
+  Fresh pairing therefore cannot run on Linux; everything that starts from a stored derived
+  secret can. `TandemKitUI` is SwiftUI and is not built on Linux.
 
-- **LoopKit**: Integration with Loop closed-loop system (supplied by the host app; not vendored here)
-
----
-
-## BLE Communication Architecture
-
-### Bluetooth Services and Characteristics
-
-**Services:**
-- `PUMP_SERVICE` (0000fdfb-0000-1000-8000-00805f9b34fb): All pump operations
-- `DIS_SERVICE` (0000180A): Device Information Service (manufacturer, model)
-- `GENERIC_ATTRIBUTE_SERVICE` (00001801): Service Changed notifications
-
-**Characteristics (in PUMP_SERVICE):**
-1. **AUTHORIZATION_CHARACTERISTICS** (7B83FFF9-9F77-4E5C-8064-AAE2C24838B9)
-   - Authentication messages (JPAKE, pump challenge)
-   - Signed with HMAC-SHA1
-
-2. **CURRENT_STATUS_CHARACTERISTICS** (7B83FFF6-9F77-4E5C-8064-AAE2C24838B9)
-   - Pump version, battery, mode, bolus/basal status
-   - Sensor/CGM information
-   - Alerts and notifications
-
-3. **CONTROL_CHARACTERISTICS** (7B83FFFC-9F77-4E5C-8064-AAE2C24838B9)
-   - Signed control commands (bolus, temp rate, mode changes)
-   - Requires authentication
-
-4. **CONTROL_STREAM_CHARACTERISTICS** (7B83FFFD-9F77-4E5C-8064-AAE2C24838B9)
-   - Stream-based responses to control commands
-   - Used for pump state transitions
-
-5. **HISTORY_LOG_CHARACTERISTICS** (7B83FFF8-9F77-4E5C-8064-AAE2C24838B9)
-   - Pump history logs and events
-
-6. **QUALIFYING_EVENTS_CHARACTERISTICS** (7B83FFF7-9F77-4E5C-8064-AAE2C24838B9)
-   - Alarm and alert events
-
----
-
-## Connection Flow
-
-### 1. BluetoothManager (TandemBLE)
-
-**Responsibilities:**
-- Manage CBCentralManager lifecycle
-- Scan for and connect to pump peripheral
-- Delegate to PeripheralManager
-
-**Key Methods:**
-```swift
-scanForPeripheral()          // Start scanning for pump
-permanentDisconnect()        // Final disconnect
-reconnectPeripheral()        // Reconnect if disconnected
-```
-
-**Delegate Methods (CBCentralManagerDelegate):**
-```swift
-centralManagerDidUpdateState()     // Handle BT state changes
-centralManager(didDiscover)        // Found peripheral
-centralManager(didConnect)         // Connected to peripheral
-centralManager(didDisconnect)      // Lost connection
-centralManager(didFailToConnect)   // Connection failed
-```
-
-### 2. PeripheralManager (TandemBLE)
-
-**Responsibilities:**
-- Connect to specific peripheral
-- Discover services and characteristics
-- Enable notifications
-- Send and receive messages
-- Manage command queues and locks
-
-**Key Configuration:**
-```swift
-Configuration.tandemPeripheral
-├── serviceCharacteristics: [Service UUID → [Characteristic UUIDs]]
-├── notifyingCharacteristics: [Service UUID → [Characteristic UUIDs]]
-└── valueUpdateMacros: [Characteristic UUID → (PeripheralManager) → Void]
-```
-
-**Initialization Sequence:**
-1. Verify MTU ≥ 185 bytes
-2. Request high-priority connection latency
-3. Read manufacturer and model from DIS
-4. Enable notifications on all pump characteristics
-5. Signal ready to delegate
-
-**Message Sending:**
-```
-PeripheralManager.sendMessagePackets()
-├── Write packet data to characteristic (withResponse)
-├── Wait for BLE write completion
-├── Wait for pump acknowledgment
-└── Return SendMessageResult
-```
-
-**Message Reception:**
-- Notifications received on pump characteristics
-- valueUpdateMacros add to cmdQueue
-- readMessagePacket() retrieves from queue
-
----
-
-## Message Architecture
-
-### Message Types (TandemCore)
-
-**Protocol:**
-```swift
-protocol Message: CustomStringConvertible {
-    static var props: MessageProps { get }
-    var cargo: Data { get }
-    init(cargo: Data)
-}
-
-struct MessageProps {
-    opCode: UInt8                      // Operation code
-    size: UInt8                        // Expected payload size
-    type: MessageType                  // Request or Response
-    characteristic: CharacteristicUUID // Which characteristic to use
-    signed: Bool                       // Requires HMAC-SHA1
-    modifiesInsulinDelivery: Bool      // Affects insulin delivery
-}
-```
-
-### Message Registry (TandemCore)
-
-```swift
-MessageRegistry
-├── all: [MessageMetadata]  // All registered message types
-├── metadata(for type)      // Get metadata for message type
-├── responseMetadata(for request)  // Find response for request
-├── requestMetadata(for response)  // Find request for response
-└── bestMatches(opCode, characteristic, payloadLength)
-```
-
-**Example Message Pairs:**
-- `PumpVersionRequest` (opCode 84) → `PumpVersionResponse` (opCode 85)
-- `CurrentBatteryV1Request` → `CurrentBatteryV1Response`
-- `Jpake1aRequest` → `Jpake1aResponse`
-- `InitiateBolusRequest` → `InitiateBolusResponse`
-
----
-
-## Packet Format and Serialization
-
-### Packet Structure
+## Layers
 
 ```
-┌─────────────────────────────────────────┐
-│ Packet Format (sent over BLE)          │
-├─────────────────────────────────────────┤
-│ 1 byte: Packets Remaining (0 = last)   │
-│ 1 byte: Transaction ID (TxId)          │
-│ 1 byte: Opcode                         │
-│ 1 byte: Transaction ID                 │
-│ 1 byte: Payload Length                 │
-│ N bytes: Message Cargo (opcode-specific)
-│ (24 bytes HMAC-SHA1 if signed)        │
-│ 2 bytes: CRC16                         │
-└─────────────────────────────────────────┘
+LoopKit host (Trio / Loop)
+  │  PumpManager, PumpManagerUI, Alert, hasNewPumpEvents
+  ▼
+TandemPumpManager  (+Alerts, +StateSync, +SyncBasal, +Onboarding, +HistoryStore, +HistoryDoseReporting)
+  │  state: TandemPumpManagerState  →  rawState, persisted by the host
+  │  history: HistoryBackfillCoordinator → HistoryLogFetcher → HistoryLogStore
+  ▼
+PumpBluetoothConnection           ← StubPumpBluetooth in unit tests
+  └─ TandemBluetoothManager       CBCentralManager, the command queue, connect and reconnect
+       └─ TandemPeripheralManager CBPeripheral, session setup, write/response, notification routing
+            ├─ Packetize          request → signed, CRC'd packets
+            ├─ BTResponseParser   packets → typed response via MessageRegistry
+            └─ JpakeAuthBuilder   pairing and per-connection authentication
+  ▼
+CoreBluetooth                     ← VirtualPump/ shims under TANDEMKIT_VIRTUAL_PUMP
 ```
 
-### Packetization Process (Packetize.swift)
-
-1. Build message header: OpCode + TxId + Payload Length
-2. Append message cargo
-3. If signed:
-   - Append 24 zeros for HMAC space
-   - Calculate HMAC-SHA1 with auth key
-   - Replace zeros with HMAC value
-4. Calculate CRC16
-5. Chunk into packets (18 bytes for data, 40 bytes for control)
-6. Mark remaining packets in header
-
-**Signing Flow:**
-```
-Message Cargo → [OpCode | TxId | Length | Cargo | TSR | 0s]
-                                                      ↓
-                        HMAC-SHA1(key=authKey, data) → 20 bytes HMAC
-```
-
-### TronMessageWrapper
-
-```swift
-public struct TronMessageWrapper {
-    public let message: Message           // Original message
-    public let requestMetadata: MessageMetadata
-    public let responseMetadata: MessageMetadata?
-    public let packets: [Packet]         // Ready to transmit
-}
-```
-
----
-
-## Response Parsing
-
-### PumpResponseCollector
-
-Statefully accumulates packet fragments until complete message received:
-
-```
-Fragment 1 (packets remaining = 2)
-     ↓
-Fragment 2 (packets remaining = 1)
-     ↓
-Fragment 3 (packets remaining = 0) → Message complete
-     ↓
-BTResponseParser.decodeMessage() → Typed Message object
-```
-
-### BTResponseParser
-
-```swift
-static func parse(message, packetArrayList, output, uuid) → PumpResponseMessage?
-├── Validate packet (CRC, HMAC)
-├── If needs more packets: return without message
-├── If complete:
-│   ├── Extract opcode and payload
-│   ├── Validate auth (if signed)
-│   ├── Look up message type in registry
-│   └── Instantiate message: type.init(cargo: payload)
-└── Return PumpResponseMessage
-```
-
----
-
-## Communication Flow
-
-### Synchronous Request-Response (Normal Flow)
-
-```
-PeripheralManagerTransport.sendMessage(message)
-├── Create TronMessageWrapper(message, txId)
-│   ├── Get requestMetadata from registry
-│   ├── Get expectedResponseMetadata from registry
-│   └── Packetize into [Packet]
-├── Send packets via PeripheralManager.sendMessagePackets()
-│   ├── Write each packet to BLE characteristic
-│   └── Wait for write completion
-├── Read response packets until complete
-│   ├── Ingest packets into PumpResponseCollector
-│   ├── Each ingests calls validatePacket() and CRC check
-│   ├── When complete, decode to Message
-│   └── Return decoded response message
-└── Return Message
-```
-
-### Asynchronous Notifications (PumpNotificationRouter)
-
-```
-BLE Notification on Characteristic
-     ↓
-PeripheralManagerDelegate.peripheralManager(_:didUpdateValueFor:)
-     ↓
-ValueUpdateMacro adds to cmdQueue
-     ↓
-PumpNotificationRouter (optional)
-├── Accumulate packets for each (characteristic, txId)
-├── When complete:
-│   ├── Decode to Message
-│   └── Call PumpCommSession.handleIncoming(message)
-```
-
----
-
-## Authentication and Pairing
-
-### Pairing Flows
-
-#### 1. Short Code Pairing (JPAKE - Recommended)
-
-**Prerequisites:** 6-digit pairing code from pump
-
-**Sequence:**
-```
-Client                           Pump
-   │                              │
-   ├─────  Jpake1aRequest ────→   │  (165-byte challenge)
-   │                              │
-   │   ← Jpake1aResponse ─────────┤  (165-byte hash)
-   │                              │
-   ├─────  Jpake1bRequest ────→   │  (165-byte challenge)
-   │                              │
-   │   ← Jpake1bResponse ─────────┤  (165-byte hash)
-   │                              │
-   ├─────  Jpake2Request ────→    │  (165-byte challenge)
-   │                              │
-   │   ← Jpake2Response ──────────┤  (165-byte hash)
-   │                              │
-   ├─  Jpake3SessionKeyRequest──→ │
-   │  [Derive shared secret]       │
-   │                              │
-   │ ← Jpake3SessionKeyResponse ──┤ (server nonce for auth)
-   │                              │
-   ├─ Jpake4KeyConfirmationReq ──→│ (HMAC(serverNonce, derived))
-   │                              │
-   │ ← Jpake4KeyConfirmation ──────┤ (verify response)
-   │                              │
-   └─── PAIRED ───────────────────┘
-```
-
-**JpakeAuthBuilder State Machine:**
-```
-BOOTSTRAP_INITIAL
-    ↓
-ROUND_1A_SENT → ROUND_1A_RECEIVED
-    ↓
-ROUND_1B_SENT → ROUND_1B_RECEIVED
-    ↓
-ROUND_2_SENT → ROUND_2_RECEIVED
-    ↓
-(OR CONFIRM_INITIAL)
-    ↓
-CONFIRM_3_SENT → CONFIRM_3_RECEIVED
-    ↓
-CONFIRM_4_SENT → CONFIRM_4_RECEIVED
-    ↓
-COMPLETE (success) or INVALID (failed)
-```
-
-**Cryptography Used:**
-- ECC-JPAKE (SwiftECC library)
-- HMAC-SHA256
-- HKDF key derivation
-
-#### 2. Long Code Pairing (Pump Challenge - Legacy)
-
-**Prerequisites:** Longer alphanumeric pairing code
-
-**Sequence:**
-```
-CentralChallengeRequest
-  ↓
-CentralChallengeResponse
-  ↓
-PumpChallengeRequest (includes pairing code)
-  ↓
-PumpChallengeResponse (success/failure)
-```
-
-### Pump State
-
-```swift
-public struct PumpState {
-    public let address: UInt32        // Pump address (sometimes 0)
-    public var derivedSecret: Data?   // Shared secret from JPAKE
-    public var serverNonce: Data?     // Server nonce from Jpake3Response
-}
-```
-
-**Persistence:**
-- State stored via `PumpStateSupplier` (must provide implementation)
-- Used to recover authenticated session
-
-### Message Signing
-
-**Signed messages require:**
-1. `derivedSecret` from pairing
-2. `timeSinceReset` from pump
-3. HMAC-SHA1 computation
-
-**Flow:**
-```
-authKey = HKDF.build(serverNonce, derivedSecret)
-hmac = HMAC-SHA1(
-    key: authKey,
-    data: [opcode, txId, length, cargo, timeSinceReset_bytes]
-)
-```
-
----
-
-## PumpComm: High-Level Communication API
-
-### Main Class
-
-```swift
-public class PumpComm {
-    public func pair(transport: PumpMessageTransport, pairingCode: String)
-    
-    public func sendMessage(transport: PumpMessageTransport, 
-                           message: Message) -> Message
-    
-    public func sendMessage<T: Message>(transport: PumpMessageTransport,
-                                       message: Message,
-                                       expecting: T.Type) -> T
-    
-    public var isDevicePaired: Bool    // Has derivedSecret
-    public var isAuthenticated: Bool   // Has derivedSecret
-}
-```
-
-### PumpCommSession
-
-```swift
-public class PumpCommSession {
-    public func pair(transport: PumpMessageTransport, pairingCode: String)
-    
-    public func runSession(withName: String, block: () -> Void)
-    
-    public func runSynchronously<T>(withName: String, block: () throws -> T) -> T
-    
-    func handleIncoming(message: Message, metadata: MessageMetadata?, 
-                       characteristic: CharacteristicUUID, txId: UInt8)
-}
-```
-
----
-
-## PeripheralManagerTransport: Concrete Transport Implementation
-
-```swift
-public final class PeripheralManagerTransport: PumpMessageTransport {
-    public func sendMessage(_ message: Message) throws -> Message
-    
-    // History tracking for debugging
-    public func getHistory() -> [RequestResponsePair]
-    public func getRequestForResponse(_ response: Message) -> Message?
-    public func getResponseForRequest(_ request: Message) -> Message?
-    public func getPairsForRequestType(_ requestType: Message.Type) -> [RequestResponsePair]
-}
-```
-
-**Key Operations:**
-1. Wrap message in TronMessageWrapper
-2. Increment txId
-3. Send packets via PeripheralManager.performSync
-4. Poll for response packets
-5. Ingest into PumpResponseCollector
-6. Return fully parsed Message
-7. Keep RequestResponsePair history
-
----
-
-## Key Interfaces and Protocols
-
-### PumpMessageTransport
-
-```swift
-public protocol PumpMessageTransport {
-    func sendMessage(_ message: Message) throws -> Message
-}
-```
-
-**Implementations:**
-- `PeripheralManagerTransport`: Real BLE communication
-- Mock implementations for testing/simulation
-
-### BluetoothManagerDelegate
-
-```swift
-public protocol BluetoothManagerDelegate: AnyObject {
-    func bluetoothManager(_ manager: BluetoothManager,
-                        peripheralManager: PeripheralManager,
-                        isReadyWithError error: Error?)
-    
-    func bluetoothManager(_ manager: BluetoothManager,
-                        shouldConnectPeripheral peripheral: CBPeripheral,
-                        advertisementData: [String : Any]?) -> Bool
-    
-    func bluetoothManager(_ manager: BluetoothManager,
-                        didCompleteConfiguration peripheralManager: PeripheralManager)
-}
-```
-
-### PeripheralManagerDelegate
-
-```swift
-protocol PeripheralManagerDelegate: AnyObject {
-    func completeConfiguration(for manager: PeripheralManager) throws
-    func peripheralManager(_ manager: PeripheralManager,
-                         didIdentifyDevice manufacturer: String,
-                         model: String)
-}
-```
-
-### PeripheralManagerNotificationHandler
-
-```swift
-public protocol PeripheralManagerNotificationHandler: AnyObject {
-    func peripheralManager(_ manager: PeripheralManager,
-                         didReceiveNotification value: Data,
-                         for characteristic: CBCharacteristic)
-}
-```
-
-### PumpCommDelegate
-
-```swift
-public protocol PumpCommDelegate: AnyObject {
-    func pumpComm(_ pumpComms: PumpComm, didChange pumpState: PumpState)
-    
-    func pumpComm(_ pumpComms: PumpComm,
-                 didReceive message: Message,
-                 metadata: MessageMetadata?,
-                 characteristic: CharacteristicUUID,
-                 txId: UInt8)
-}
-```
-
----
-
-## Error Handling
-
-### Key Error Types
-
-```swift
-enum PeripheralManagerError: Error {
-    case notReady                      // BT not ready or characteristic not found
-    case emptyValue                    // Received empty data
-    case timeout([CommandCondition])   // Command timed out
-    case cbPeripheralError(Error)      // CoreBluetooth error
-}
-
-enum PumpCommError: Error {
-    case pumpNotConnected
-    case noResponse
-    case missingAuthenticationKey
-    case errorResponse(response: Message)
-    case pumpFault(event: PumpCommFaultEvent)
-    case pumpChallengeError
-    case jpakeUnavailable
-    case requestConstructionFailed(reason: String)
-    case unexpectedResponse(expected: String, actual: String)
-    case invalidPumpChallengeResponse
-    case timeSyncFailed
-    case noActiveBolus
-    case responseParsingFailed(underlying: Error)
-    case transportError(underlying: Error)
-}
-```
-
-### Validation
-
-1. **Packet Validation**: CRC16 check
-2. **HMAC Validation**: HMAC-SHA1 for signed messages
-3. **Message Size Validation**: Expected size matches received
-
----
-
-### Authenticated Session Bootstrap
-
-After every reconnect (or app relaunch) the manager keeps the `needsSessionInitialization` flag set until it completes two operations on a background queue:
-
-1. **Stored-credential authentication** – `PumpComm.confirmAuthentication` executes the JPake `CONFIRM_INITIAL` flow using the persisted derived secret to refresh the pump-provided nonce so that subsequent signed requests use a valid HMAC key.
-2. **Time refresh** – once re-authenticated, the manager issues `TimeSinceResetRequest` to update `PumpState.timeSinceReset` and clear the initialization flag.
-
-`pairedTransport` returns `nil` while the flag is `true` so telemetry/UI code cannot dispatch signed commands prematurely. The bootstrap queue retries with exponential backoff when either the authentication step or `TimeSinceResetRequest` fails, and only re-enables telemetry once both succeed.
-
----
-
-## Telemetry Scheduling and History Retrieval (Current Implementation Audit)
-
-### PumpTelemetryScheduler wiring
-
-- **Scheduled kinds** – The scheduler defines `reservoir`, `battery`, `basal`, `bolus`, `timeSinceReset`, `alerts`, `controlIQ`, `homeScreen`, `notifications`, and `history`, but TandemPumpManager only attaches a repeating task for `history` today. Other telemetry fetches run opportunistically through `ensureCurrentPumpData()` rather than timers.
-- **Trigger behavior** – `ensureCurrentPumpData()` installs the history timer (default 30 min unless overridden by tests) and immediately performs single-shot fetches for basal, reservoir, battery, bolus, home screen, Control‑IQ, and notification counts. Session bootstrap completion also triggers an immediate history fetch, and unsolicited history streams flow through the same reconciliation path. The scheduler exposes `trigger`/`triggerAll`, but only the history path calls `trigger` in production code.
-- **Cancel/resume** – The scheduler supports `cancelAll()`, yet the manager currently leaves timers running across disconnects; safeguards inside `performScheduledHistoryFetch()` skip work when the pump is unpaired, offline, or already fetching.
-
-**TODOs from code/doc mismatch**
-- [ ] Add timer-backed scheduling for non-history telemetry kinds or explicitly document that they remain manual to avoid drift between expectations and implementation.
-- [ ] Invoke `cancelAll()` (or rebuild timers) on disconnect/reset flows so the documented pause/resume semantics match runtime behavior instead of relying solely on guard checks.
-
-### History fetch pipeline
-
-- **Request chain** – A history poll sends `HistoryLogStatusRequest` to learn the available sequence range, then issues `HistoryLogRequest` bounded by the desired slice, and finally waits for matching `HistoryLogStreamResponse` notifications to arrive before returning results. `HistoryFetchSession` tracks the active `streamId`, expected count, timeout, and retry policy.
-- **Manager integration** – TandemPumpManager schedules periodic history fetches once telemetry is configured, triggers ad-hoc fetches after session bootstrap, and routes streamed packets either into the active fetch session or through the unsolicited history handler (deduplication → clock reconciliation → mapping to events → delegate notification). The history path runs on a dedicated queue and uses `activeHistoryFetchSession` to coordinate in-flight work.
-- **Transport/session dependencies** – Both the polling flow and unsolicited stream handling rely on a live `PumpMessageTransport` plus authenticated `PumpComm` session; bootstrap gating and transport locks prevent signed requests until credentials refresh, and history telemetry simply returns early when those prerequisites are missing.
-
-**TODOs from code/doc mismatch**
-- [ ] Explicitly tie history timer setup/teardown to transport lifecycle so periodic polling does not fire while disconnected (even if guard clauses no-op).
-- [ ] Document and harden retry/backoff for history streams beyond `HistoryFetchSession`’s limited retry loop (e.g., integrate telemetryScheduler-driven retries when unsolicited streams stall).
-
----
-
-## Synchronization and Threading
-
-### Queue Model
+Everything above `PumpBluetoothConnection` (the manager, its extensions, `HistoryLogFetcher` and
+the UI view models) reaches the pump only through that protocol. Production uses
+`init(state:)`, which builds a `TandemBluetoothManager`. Tests use `init(state:bluetooth:)` with
+`StubPumpBluetooth`.
+
+## Bluetooth surface
+
+| Service | UUID | Use |
+| --- | --- | --- |
+| Pump | `0000fdfb-0000-1000-8000-00805f9b34fb` | Every pump message |
+| Device Information | `0000180A-…` | Manufacturer and model number, read once during setup |
+| Generic Attribute | `00001801-…` | Service Changed |
+| Tandem Device Update | `0000fdfa-…` | Discovered but unused |
+
+| Characteristic (Pump service) | UUID prefix | Carries |
+| --- | --- | --- |
+| `AUTHORIZATION` | `7B83FFF9` | JPAKE and challenge messages |
+| `CURRENT_STATUS` | `7B83FFF6` | Status requests/responses, and `ErrorResponse` |
+| `QUALIFYING_EVENTS` | `7B83FFF7` | Unsolicited 4-byte event bitmasks |
+| `HISTORY_LOG` | `7B83FFF8` | Unsolicited `HistoryLogStreamResponse` only |
+| `CONTROL` | `7B83FFFC` | Signed commands |
+| `CONTROL_STREAM` | `7B83FFFD` | Unsolicited progress streams for cartridge, tubing and cannula operations |
+
+All six are subscribed for notifications during setup. They share the suffix
+`-9F77-4E5C-8064-AAE2C24838B9`.
+
+## Connection lifecycle
+
+### Command queue
+
+`TandemBluetoothManager` runs every connect attempt and every command job on one serial
+`commandQueue`. `ensureConnected(completion:)` connects if needed and then runs `completion` on
+that queue. `write(_:)` blocks until the response arrives, so it must only be called from inside
+an `ensureConnected` job. Serializing everything on one queue is what keeps a loop command, a
+sync and a qualifying-event fetch from interleaving on the write path.
+
+`connectIfNeeded` tries three paths in turn:
+
+1. Reconnect the cached `CBPeripheral`.
+2. Adopt a pump that iOS already reports as connected (`retrieveConnectedPeripherals`).
+3. Scan for the pump's stored `peripheralUuid`.
+
+After two consecutive failures it discards the cached references and goes straight to scanning.
+Each attempt is bounded by `connectTimeout` (30 s). The wait is a semaphore with a timeout rather
+than a timer on the command queue, so a blocked queue cannot starve it.
+
+After an unexpected disconnect, or when Bluetooth comes back on, the manager reconnects on its own
+unless the pump has been deactivated. A reconnect restores the session but does not sync or report
+to the host; nothing reaches the host until the next `ensureCurrentPumpData` (#351).
+
+### Session setup
+
+`TandemPeripheralManager.performInitialSetup` runs on a global queue once service discovery
+finishes. `connectIfNeeded` is still parked in its wait at that point, so nothing else can be
+writing. The steps are:
+
+1. Ask for low connection latency. This is an optimisation only.
+2. Read the DIS manufacturer and model number.
+3. Enable notifications on all six pump characteristics.
+4. Authenticate with JPAKE (next section).
+5. Send `TimeSinceResetRequest`. Its value is part of every signature.
+6. Set `state.isConnected`, mark the session established, and complete the connect attempt.
+
+Qualifying events that arrive before step 6 are acknowledged and held, then handled once the
+session is up.
+
+## Authentication
+
+Pairing uses the 6-digit code shown on the pump. `JpakeAuthBuilder` has two starting points:
+
+| Situation | Rounds sent |
+| --- | --- |
+| No derived secret (first pairing) | `Jpake1a` → `Jpake1b` → `Jpake2` → `Jpake3SessionKey` → `Jpake4KeyConfirmation` |
+| Stored derived secret (every later connection) | `Jpake3SessionKey` → `Jpake4KeyConfirmation` |
+
+Round 1 is two length-prefixed `(point, ZKP)` groups sent as the `1a` and `1b` frames. Each ZKP
+scalar drops its leading zero bytes, so a group is 165 bytes only about 255/256 of the time.
+`JpakeRound1Framing` splits on the real group boundary and right-pads each frame to 165 bytes,
+which is safe because the pump's parser is length-prefixed. The receive side strips the pump's
+padding before reassembling. pumpX2 slices at fixed offsets and still misaligns its `1b` frame
+when the first scalar is short.
+
+A successful exchange yields `derivedSecret` and `serverNonce`, which are stored in `PumpState`
+along with `peripheralUuid` and the pairing code. The signing key is
+`Hkdf.build(nonce: serverNonce, keyMaterial: derivedSecret)` (`PumpState.getAuthKey()`).
+
+The legacy 16-character pump-challenge pairing is not implemented. `CentralChallenge` and
+`PumpChallenge` exist as message types and have serialization tests, but no builder or flow uses
+them.
+
+SwiftECC is slow on its first curve operation because it warms up `Domain.instance`. This is one
+reason setup runs off the main thread.
+
+## Wire format
+
+### Sending (`Packetize.parse`)
 
 ```
-PeripheralManager
-├── queue (main serial queue for CB operations)
-│   └── Confinement: Services, characteristics, writes, reads
-├── commandLock (NSCondition for command synchronization)
-└── queueLock (NSCondition for packet queue)
-
-PumpCommSession
-└── sessionQueue (serial queue for session state)
-
-PumpNotificationRouter
-└── queue (utility QoS queue for async notification processing)
-
-BluetoothManager
-└── managerQueue (unspecified QoS queue for BL operations)
+[opCode][txId][payloadLength][cargo…]                        unsigned
+[opCode][txId][payloadLength][cargo…][TSR:4][HMAC-SHA1:20]   signed (payloadLength includes the 24)
+                                                          + [CRC16:2]
 ```
 
-### Key Patterns
+For a signed message, the 4 bytes after the cargo hold `timeSinceReset` (little-endian), and the
+HMAC-SHA1 over everything before it is keyed with the auth key. A CRC-16 (CCITT table) is
+appended, and the result is chunked. Each chunk goes out as `[packetsRemaining][txId][chunk]`.
+Chunks are 18 bytes by default and 40 bytes for control requests; any signed message uses at
+least 40. `txId` increments with each write and wraps.
 
-**PeripheralManager.performSync**: Call block on peripheral queue
-```swift
-public func performSync<T>(_ block: (_: PeripheralManager) throws -> T) -> T
-```
+Each chunk is written with response. `TandemPeripheralManager.writeUntyped` waits up to 2 s for
+each write acknowledgement, then up to `responseTimeout` (30 s) for the reply. The timeout is
+sized for `EnterChangeCartridgeMode`, which can take 20 s to answer; timing out early would invite
+re-sending an insulin-affecting request.
 
-**runConfigured**: Auto-apply configuration if needed, run block
-```swift
-func runConfigured<T>(_ block: (_ manager: PeripheralManager) throws -> T) throws -> T
-```
+### Receiving (`BTResponseParser.parse`)
 
----
+Reassembly is driven by the low nibble of the first byte (packets remaining), never by fragment
+length. The first packet's opcode is at byte 2 and its cargo starts at byte 5; continuation
+packets carry cargo from byte 2. Once complete, the opcode and characteristic select the response
+type in `MessageRegistry.findResponse`. A fixed-size message whose cargo is shorter than
+`props.size` is dropped rather than parsed, because the parsers slice at fixed offsets and would
+trap. JPAKE responses are allowed a short scalar.
 
-## Configuration and State Management
+Neither the CRC nor the HMAC of a received message is verified. The assembled cargo still has the
+CRC (and, for signed responses, the 24-byte trailer) on the end; the parsers ignore those bytes.
 
-### PeripheralManager.Configuration
+When the pump refuses a request, it sends an `ErrorResponse` on `CURRENT_STATUS` naming the
+refused opcode. The waiting write ends immediately and returns `nil`, the same result as a
+timeout.
 
-```swift
-struct Configuration {
-    var serviceCharacteristics: [CBUUID: [CBUUID]]
-    var notifyingCharacteristics: [CBUUID: [CBUUID]]
-    var valueUpdateMacros: [CBUUID: (_ manager: PeripheralManager) -> Void]
-}
-```
+### Notification routing
 
-### Tandem-Specific Configuration
+`TandemPeripheralManager.peripheral(_:didUpdateValueFor:)` routes each notification in this
+order:
 
-```swift
-.tandemPeripheral
-├── Services to discover:
-│   ├── PUMP_SERVICE (0000fdfb...)
-│   ├── DIS_SERVICE (0000180A)
-│   └── GENERIC_ATTRIBUTE_SERVICE (00001801)
-├── Characteristics to enable notifications:
-│   ├── All pump characteristics
-│   └── SERVICE_CHANGED
-└── Update macros:
-    └── Add received data to cmdQueue on each value update
-```
+1. A pending characteristic read (DIS during setup).
+2. `HISTORY_LOG`: reassembled and published on `pumpManager.historyLogStream`. This is checked
+   before the pending write so a continuation packet cannot alias an expected opcode.
+3. The pending write's response, claimed by characteristic and opcode.
+4. `QUALIFYING_EVENTS`: decoded by `QualifyingEvent.fromRawBytes` and passed to
+   `handleQualifyingEvents`. The pump is acknowledged afterwards by writing four zero bytes.
+5. `CONTROL_STREAM` progress messages: published on the manager's Combine subjects
+   (`fillTubingStateStream`, `pumpingStateStream`, …), which the cartridge and fill view models
+   observe. Two pairs share an opcode and are told apart by length: opcode −29 is
+   Detecting/LoadCartridge and −23 is ExitFillTubingMode/PumpingState.
+6. `ErrorResponse`, as above.
 
----
+## Messages
 
-## Message Examples
+`Message` is the base protocol: `static props`, `cargo`, `init(cargo:)`. `PumpRequest` adds an
+associated `Response` type, so `bluetooth.write(SomeRequest())` returns a typed response. The
+`Nonexistent*StreamRequest` placeholders stand in for unsolicited streams and deliberately do not
+conform to `PumpRequest`.
 
-### Query Pump Version
+`MessageProps` carries the opcode, size, characteristic, and the `signed`, `variableSize`,
+`stream` and `modifiesInsulinDelivery` flags. It also carries `minApi` and `supportedDevices`.
+`props.isSupported(pumpModel:apiVersion:)` and `TandemPumpManager.supports(_:)` use those two
+fields to skip requests the connected pump cannot answer, such as the Mobi-only
+`CGMStatusV2Request`. The API version and model come from `ApiVersionRequest` and
+`PumpVersionBRequest`, which `fetchPumpInformation` reads on the first sync and then about once
+a day.
 
-```swift
-// Request
-let request = PumpVersionRequest()
-// Properties: opCode=84, size=0, type=Request, characteristic=CURRENT_STATUS
+`MessageRegistry` is the catalog. It resolves responses by opcode and characteristic, pairs
+requests with responses by name, and provides the lookup the debug view uses to send any message
+by name. `PumpRequestResponsePairingTests` checks the pairing across the whole catalog.
 
-// Expected Response
-// opCode=85, size=48, type=Response
-// Contains: armSwVer, mspSwVer, serialNum, modelNum, etc.
-```
+A few builders in `Sources/TandemCore/Builders` choose the request variant by API version:
+`ControlIQInfoRequestBuilder`, `CurrentBatteryRequestBuilder`, `IOBRequestBuilder` and
+`LastBolusRequestBuilder`.
 
-### Initiate Bolus (Signed)
+History log records (`Sources/TandemCore/Messages/HistoryLog`) are a separate hierarchy: each is
+a 26-byte record keyed by type ID, parsed by `HistoryLogParser` out of `HistoryLogStreamResponse`.
 
-```swift
-// Request
-let request = InitiateBolusRequest(amount: 2.0, ...)
-// Properties: signed=true, modifiesInsulinDelivery=true
-// Will be HMAC-signed with derivedSecret
+## TandemPumpManager
 
-// Response
-// opCode=87, size=1, signed=true
-// Contains: success flag
-```
+### State
 
-### JPAKE Authentication (4 roundtrips)
+`TandemPumpManagerState` is the host-persisted `rawState`. It holds `PumpState` (pairing
+artifacts and pump identity), `TandemPumpManagerSettings` (max bolus, max temp basal, max
+schedule entry), feature flags, the basal schedule, in-flight doses (`bolusDose`,
+`pendingBolusFinalization`, `basalDose`), last reservoir and battery readings, the history
+backfill watermark (`historyBackfill`) and the `BolusReportLedger`. Access goes through
+`stateLock`, a recursive lock, because the command queue, the notification path and the host all
+touch it. `notifyDelegateStateUpdated()` tells the host to persist it.
 
-1. **Jpake1aRequest/Response**: Client and server round 1 part A
-2. **Jpake1bRequest/Response**: Client and server round 1 part B
-3. **Jpake2Request/Response**: Client and server round 2
-4. **Jpake3SessionKeyRequest/Response**: Derive shared secret, get server nonce
-5. **Jpake4KeyConfirmationRequest/Response**: Verify both sides derived same secret
+### Sync cycle
 
----
+The host calls `ensureCurrentPumpData` about every 5 minutes. It returns immediately if
+`lastReconciliation` is less than 4.5 minutes old; otherwise it calls
+`syncPumpData(onlyIfIdle: true)`. The sync runs as one command job:
 
-## Building a Simulator
+1. Every 24 hours: `fetchControlIQStatus`, `fetchDeliveryLimits`, `fetchGlobalPumpSettings` and
+   `fetchPumpInformation`.
+2. `enforceQuickBolusDisabled`, unless the quick-bolus feature flag is on.
+3. Every time: reservoir, battery, bolus status and pending-bolus finalization, basal status
+   (including the basal rate check), notifications, time since reset, and CGM session.
+4. `lastReconciliation` advances only if the pump actually answered something during this sync
+   (`responseCount` rose). The boundary is reported even when there are no doses.
+5. `historyBackfillCoordinator.runTick()` is started and not awaited.
 
-### Key Components to Emulate
+A sync that is already queued makes later automatic polls stand down. A sync the user asks for
+runs regardless.
 
-1. **BLE Layer**
-   - Mock CBPeripheral and CBCentralManager
-   - Simulate service/characteristic discovery
-   - Queue incoming notifications
+### Commands
 
-2. **Message Handlers**
-   - Implement each message type's Request/Response
-   - Maintain pump state (battery, bolus active, etc.)
-   - Return appropriate responses
+| Host call | Pump messages | Notes |
+| --- | --- | --- |
+| `enactBolus` | `BolusPermissionRequest`, `InitiateBolusRequest` | Rejects ≤ 0 U and anything over `settings.maxBolus`. Rejects automatic boluses while Control-IQ is on. Records the bolus in `BolusReportLedger`. Progress is polled every second through `PumpTelemetryScheduler` until the bolus finishes. |
+| `cancelBolus` | `CancelBolusRequest`, then after 2 s `LastBolusStatus*` for the delivered volume | |
+| `enactTempBasal` | `CurrentBasalStatusRequest`, `StopTempRateRequest` if a temp basal is running, `SetTempRateRequest` | Blocked while Control-IQ is on or a bolus is running. The percentage is computed against the app's schedule, not the pump's profile (#400). |
+| `suspendDelivery` / `resumeDelivery` | `TempRateRequest`, `StopTempRateRequest` if a temp basal is running, `SuspendPumpingRequest` / `ResumePumpingRequest` | The in-app resume button uses `resumeDeliveryAcknowledgingResumeAlarms`: if the pump refuses, it acknowledges the resume-pump alarms and retries once. |
+| `syncDeliveryLimits` | `SetMaxBolusLimitRequest`, `SetMaxBasalLimitRequest` | |
+| `syncBasalRateSchedule` | IDP reads and `SetIDPSegmentRequest` via `IDPManager` | Reads the profile back afterwards and fails with `basalProfileSyncMismatch` if it differs. |
+| `syncPumpTime` | `ChangeTimeDateRequest` | |
 
-3. **Authentication**
-   - Implement JPAKE server side (or pre-shared secret)
-   - Generate server nonces
-   - Verify HMAC on signed messages
+Every host-facing command is wrapped by `watchdogged`, which guarantees exactly one completion
+even if the lower layers wedge. `commandWatchdogTimeout` (180 s) is deliberately much longer than
+the longest real command, because a false failure on a bolus could prompt the host to retry.
 
-4. **Packet Assembly**
-   - Reassemble multi-packet messages
-   - Generate valid CRC16
-   - Validate incoming CRC16 and HMAC
+### Qualifying events
 
-5. **State Machine**
-   - Track pump state (connected, authenticated, idle)
-   - Handle concurrent requests
-   - Implement timeouts
+`handleQualifyingEvents` maps each event to status fetches through
+`QualifyingEventFetch.fetches(for:context:)`. That function is derived from
+`QualifyingEvent.groupSuggestedHandlers`, pumpX2's suggested-handler table, and adds two things:
+a basal read on suspend/resume and on profile changes. Requests the driver has no consumer for
+are not sent. A `.bolusChange` event also starts a history backfill tick, so a bolus given from the
+pump screen is found without waiting for the next sync.
 
-### Mock Transport
+### Alerts
 
-```swift
-public class MockPumpMessageTransport: PumpMessageTransport {
-    public func sendMessage(_ message: Message) throws -> Message {
-        // Route message to handler
-        // Maintain state
-        // Return response
-    }
-}
-```
+`fetchNotifications` reloads `NotificationBundle`, which contains the alert, alarm, reminder,
+CGM-alert, malfunction and AAM status responses. `TandemAlertReconciler` then compares the active
+items with the LoopKit `Alert`s already issued and issues or retracts alerts to match. Alerts,
+alarms and malfunctions are forwarded; CGM alerts are forwarded only if the user opts in, and
+reminders stay in the app. When the host acknowledges an alert, `DismissNotificationRequest`
+clears it on the pump. Basal min/max alerts are acknowledged automatically, because oref sets
+zero temp basals routinely and the pump would otherwise alert on each one.
 
----
+### History
 
-## Summary of Data Flow
+- Every `HistoryLogStreamResponse` goes through `historyLogStream` into `historyLogStore`, an
+  in-memory `InMemoryHistoryLogStore` that is not persisted (#232).
+- `HistoryLogFetcher` reads a window: it sends `HistoryLogStatusRequest`, then walks backward in
+  `HistoryLogRequest` chunks of up to 255 entries, heals gaps, and serves anything already in the
+  store without asking the pump again. `HistoryFetchGate` lets only one reader hold the stream at a
+  time (the backfill and the log viewer).
+- `HistoryBackfillCoordinator` keeps the store caught up with the pump using
+  `HistoryBackfillPlanner`, which is pure arithmetic, and the persisted `HistoryBackfillState`
+  watermark. `HistoryToDoseMapper` and `HistoryTimestampReconciler` turn records into
+  `NewPumpEvent`s, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
+  reported by the live path.
+- The backfill and the dose reporting are behind the `historyBackfill` and `historyDoseReporting`
+  feature flags; the backfill is on by default, dose reporting is off. AGENTS.md has the full
+  rules.
 
-```
-App
-  │
-  └→ PumpComm (high-level API)
-     │
-     └→ PumpCommSession (auth/pairing)
-        │
-        └→ PeripheralManagerTransport (protocol layer)
-           │
-           ├→ TronMessageWrapper (packetize)
-           │   └→ Packetize (compute CRC/HMAC)
-           │
-           └→ PeripheralManager (BLE layer)
-              │
-              ├→ sendMessagePackets() (write to characteristic)
-              │
-              ├→ readMessagePacket() (read from characteristic)
-              │
-              └→ CBPeripheralDelegate (raw BLE notifications)
-                 │
-                 ├→ PumpResponseCollector (reassemble packets)
-                 │
-                 └→ BTResponseParser (decode to Message)
-                    │
-                    └→ MessageRegistry (message lookup)
-                       │
-                       └→ Message.init(cargo:) (instantiate)
-```
+### Reporting to the host
+
+Doses reach the host through `emitPumpEvents` / `hasNewPumpEvents`. The pump is read before the
+host attaches a delegate and a delegate queue, so batches emitted before then are held
+(`PendingPumpEventBatch`). They are replayed from `deliverStateMissedByTheDelegate`, along with
+any pending reservoir reading.
+
+## Threads, queues and timeouts
+
+| Where | What runs there |
+| --- | --- |
+| `TandemBluetoothManager.managerQueue` | `CBCentralManager` and `CBPeripheral` delegate callbacks |
+| `TandemBluetoothManager.commandQueue` | Every connect attempt and command job |
+| Global `.userInitiated` | `performInitialSetup`, while the connect attempt waits |
+| `TandemPumpManager.watchdogQueue` | Command watchdog timeouts. Kept separate so a wedged command cannot starve its own watchdog. |
+| `PumpTelemetryScheduler` queue | The 1 s bolus progress timer |
+
+Each BLE operation waits on its own `TandemDispatchGroup`. Disconnecting or losing Bluetooth
+cancels these waits, so a blocked write returns at once instead of waiting out its timeout.
+
+| Timeout | Value |
+| --- | --- |
+| Connect attempt | 30 s |
+| Characteristic read (setup) | 10 s |
+| Write acknowledgement, per packet | 2 s |
+| Response | 30 s |
+| Write lock | 45 s (must exceed the response timeout) |
+| Command watchdog | 180 s |
+
+The virtual pump build can override the connect and response timeouts (`VirtualPump`).
+
+## Test seams
+
+- `PumpBluetoothConnection` with `StubPumpBluetooth`: stubs responses per request type and
+  records what was sent.
+- `TandemClock` with `ManualClock`: every time-based decision reads `TandemPumpManager.clock`.
+- `TANDEMKIT_VIRTUAL_PUMP`: replaces CoreBluetooth with a socket to faketandem, so the real stack
+  runs end to end (see [integration-harness.md](integration-harness.md)).

@@ -333,6 +333,16 @@
         case resume
         case suspend
         case tempBasal
+
+        public var pumpEventType: PumpEventType {
+            switch self {
+            case .basal: return .basal
+            case .bolus: return .bolus
+            case .resume: return .resume
+            case .suspend: return .suspend
+            case .tempBasal: return .tempBasal
+            }
+        }
     }
 
     @available(macOS 13.0, iOS 14.0, *) public enum DoseUnit: String, Codable {
@@ -388,6 +398,52 @@
             case .unitsPerHour:
                 return value
             }
+        }
+
+        private static let minimumMinimedIncrementPerUnit: Double = 20
+
+        /// Delivered units, or programmed units rounded to the Minimed increment (LoopKit parity shim).
+        public var unitsInDeliverableIncrements: Double {
+            guard case .unitsPerHour = unit else {
+                return deliveredUnits ?? programmedUnits
+            }
+            return deliveredUnits ?? round(programmedUnits * DoseEntry.minimumMinimedIncrementPerUnit) / DoseEntry.minimumMinimedIncrementPerUnit
+        }
+
+        /// LoopKit parity shim of InsulinMath's `trimmed`, which drops `manuallyEntered` there too.
+        public func trimmed(from start: Date? = nil, to end: Date? = nil, syncIdentifier: String? = nil) -> DoseEntry {
+            let originalDuration = endDate.timeIntervalSince(startDate)
+            let startDate = max(start ?? .distantPast, self.startDate)
+            let endDate = max(startDate, min(end ?? .distantFuture, self.endDate))
+
+            var trimmedDeliveredUnits: Double? = deliveredUnits
+            var trimmedValue: Double = value
+
+            if originalDuration > .ulpOfOne && (startDate > self.startDate || endDate < self.endDate) {
+                let updatedActualDelivery = unitsInDeliverableIncrements * (endDate.timeIntervalSince(startDate) / originalDuration)
+                if deliveredUnits != nil {
+                    trimmedDeliveredUnits = updatedActualDelivery
+                }
+                if case .units = unit {
+                    trimmedValue = updatedActualDelivery
+                }
+            }
+
+            return DoseEntry(
+                type: type,
+                startDate: startDate,
+                endDate: endDate,
+                value: trimmedValue,
+                unit: unit,
+                deliveredUnits: trimmedDeliveredUnits,
+                description: description,
+                syncIdentifier: syncIdentifier,
+                scheduledBasalRate: scheduledBasalRate,
+                insulinType: insulinType,
+                automatic: automatic,
+                isMutable: isMutable,
+                wasProgrammedByPumpUI: wasProgrammedByPumpUI
+            )
         }
 
         public init(
@@ -540,6 +596,7 @@
         public let raw: Data
         public let title: String
         public let type: PumpEventType?
+        public let alarmType: PumpAlarmType?
 
         public init(
             date: Date,
@@ -547,15 +604,31 @@
             isMutable: Bool = false,
             raw: Data,
             title: String,
-            type: PumpEventType? = nil
+            type: PumpEventType? = nil,
+            alarmType: PumpAlarmType? = nil
         ) {
             self.date = date
+            // As in LoopKit: the dose takes the event's raw as its identity, and lends its type.
+            var dose = dose
+            dose?.syncIdentifier = raw.map { String(format: "%02hhx", $0) }.joined()
             self.dose = dose
             self.isMutable = isMutable
             self.raw = raw
             self.title = title
-            self.type = type
+            self.type = type ?? dose?.type.pumpEventType
+            self.alarmType = alarmType
         }
+    }
+
+    @available(macOS 13.0, iOS 14.0, *) public enum PumpAlarmType: Equatable, Codable {
+        case autoOff
+        case lowInsulin
+        case lowPower
+        case noDelivery
+        case noInsulin
+        case noPower
+        case occlusion
+        case other(_ details: String)
     }
 
     // MARK: - Errors & Activation

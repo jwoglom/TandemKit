@@ -1,0 +1,228 @@
+name: Linux
+
+# The Linux slice of the package: Sources/TandemCore and Sources/TandemKit compiled as one module
+# against LinuxShims/ (see Package.swift), which is the only build Claude Code web sessions have.
+# This catches a change that breaks the shims, and runs the tests Package.swift declares for Linux.
+# JPAKE is a trapping stub here, so its tests compile out, fresh pairing among them.
+#
+# plain and virtual-pump build side by side: the flag changes every module's compilation
+# conditions, so they share nothing but the toolchain. integration (pushes and manual runs only)
+# runs TandemKitIntegrationTests against faketandem on virtual-pump's build, restored from its
+# cache: same container, same workspace path, so SwiftPM finds it up to date. All use the
+# toolchain scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally
+# sees the same compiler here.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      faketandem_ref:
+        description: "faketandem branch/tag/SHA for the integration tests (default: its default branch)"
+        required: false
+        default: ""
+
+jobs:
+  plain:
+    name: plain build + tests
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    # Steps in a container job default to sh, which has no pipefail.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Ruby and Python for the checks
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ruby python3 > /dev/null
+          gem install xcodeproj --no-document
+
+      - name: Validate Xcode source membership (all targets)
+        run: ruby scripts/check_xcodeproj_source_membership.rb --check
+
+      # Keyed on the sources so a change saves a fresh entry; the fallback restores the nearest one
+      # and the build is incremental from it.
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build
+            ~/.cache/org.swift.swiftpm
+          key: linux-swift-6.1.2-plain-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**', 'LinuxShims/**') }}
+          restore-keys: |
+            linux-swift-6.1.2-plain-
+
+      - name: Build, including test targets
+        run: swift build --build-tests
+
+      # ubuntu-latest has 4 cores. A parallel run prints no "Executed N tests" line, so the count
+      # comes from the xunit report.
+      - name: Run tests
+        run: swift test --skip-build --parallel --num-workers 4 --xunit-output swift-test.xml 2>&1 | tee swift-test.log
+
+      - name: Check that tests actually ran
+        run: scripts/ci/check-test-count.py --xunit swift-test.xml --label "Linux tests"
+
+      - name: Upload test logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-plain-test-logs
+          path: |
+            swift-test.log
+            swift-test.xml
+
+  virtual-pump:
+    name: virtual pump build + tests
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    # Declares TandemKitIntegrationTests (Package.swift), so the cached build carries it for the
+    # integration job.
+    env:
+      TANDEMKIT_INTEGRATION_TESTS: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Python for the checks
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends python3 > /dev/null
+
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: |
+            .build-virtual
+            ~/.cache/org.swift.swiftpm
+          key: linux-swift-6.1.2-virtual-pump-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**', 'LinuxShims/**') }}
+          restore-keys: |
+            linux-swift-6.1.2-virtual-pump-
+
+      # VirtualPump/ compiles only with the flag.
+      - name: Build with the virtual pump
+        run: swift build --build-tests --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP
+
+      - name: Run the virtual CoreBluetooth tests
+        run: |
+          swift test --skip-build --build-path .build-virtual -Xswiftc -DTANDEMKIT_VIRTUAL_PUMP \
+            --filter VirtualCoreBluetoothTests 2>&1 | tee swift-test-virtual-pump.log
+
+      - name: Check that the virtual CoreBluetooth tests actually ran
+        run: scripts/ci/check-test-count.py swift-test-virtual-pump.log --label "Linux VirtualCoreBluetoothTests"
+
+      - name: Upload test logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-virtual-pump-test-logs
+          path: swift-test-virtual-pump.log
+
+  # Not on pull requests: macOS runs the same suite there, in about half the time.
+  integration:
+    name: integration tests (faketandem)
+    needs: virtual-pump
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 45
+    env:
+      TANDEMKIT_INTEGRATION_TESTS: '1'
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      # Inside the TandemKit checkout, so the cached build keeps its paths; Package.swift does not
+      # look at it.
+      - name: Checkout faketandem
+        uses: actions/checkout@v6
+        with:
+          repository: jwoglom/faketandem
+          ref: ${{ env.FAKETANDEM_REF }}
+          path: faketandem
+          fetch-depth: 1
+
+      # The swift image has none of them: curl for `make jar` and the script's API wait, python3
+      # for the script's free ports and the checks.
+      - name: Install curl, make and Python
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ca-certificates curl make python3 > /dev/null
+
+      - name: Restore the virtual pump build
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .build-virtual
+            ~/.cache/org.swift.swiftpm
+          key: linux-swift-6.1.2-virtual-pump-${{ hashFiles('Package.swift', 'Sources/**', 'Tests/**', 'LinuxShims/**') }}
+          restore-keys: |
+            linux-swift-6.1.2-virtual-pump-
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      # faketandem runs pumpX2's jpake-server from the cliparser jar.
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache the pumpX2 cliparser jar
+        uses: actions/cache@v6
+        with:
+          path: faketandem/third_party
+          key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
+
+      - name: Fetch the pumpX2 cliparser jar
+        working-directory: faketandem
+        run: |
+          if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
+            make jar
+          fi
+          ls -l third_party
+
+      - name: Run TandemKitIntegrationTests against faketandem
+        env:
+          FAKETANDEM_DIR: faketandem
+          LOG_DIR: integration-logs
+        run: scripts/integration-test.sh
+
+      # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
+      # a run that never talked to faketandem would still pass.
+      - name: Check that integration tests actually ran
+        run: scripts/ci/check-test-count.py integration-logs/swift-test.log --label "Linux TandemKitIntegrationTests" --no-skips
+
+      - name: Upload test logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-integration-test-logs
+          path: integration-logs/

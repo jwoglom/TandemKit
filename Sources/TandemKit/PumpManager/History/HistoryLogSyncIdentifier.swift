@@ -37,14 +37,8 @@ import Foundation
 /// bytes 6-9  identifier, little-endian UInt32
 /// ```
 ///
-/// **This encoding is frozen.** Every byte feeds the identifier the host app has already persisted;
-/// changing the layout, the scheme numbering or the version orphans finalized rows and re-reports
-/// their doses under new identities, which double-counts insulin. A new format version must only be
-/// introduced alongside a migration story for events already in flight.
-///
-/// Nothing emits these identifiers yet — `NewPumpEvent`'s raw values are still built from the dose
-/// type, volume and timestamp. Adopting them is a separate change; see the type's tests for the
-/// golden values that must not move once it happens.
+/// **This encoding is frozen**: hosts persist it, so any change re-reports doses under new
+/// identities. The live path does not use it yet (#344).
 public enum HistoryLogSyncIdentifier {
     /// Which pump-assigned counter the identifier is built from. Values are persisted indirectly by
     /// the host app; never renumber them.

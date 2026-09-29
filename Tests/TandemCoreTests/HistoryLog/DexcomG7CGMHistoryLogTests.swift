@@ -25,6 +25,8 @@ final class DexcomG7CGMHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(parsedRes.egvCount, 0)
+        XCTAssertEqual(parsedRes.egvSensorType, .dexcomG7)
     }
 
     func testDexcomG7CGMHistoryLog2() {
@@ -91,5 +93,29 @@ final class DexcomG7CGMHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+    }
+
+    func testDexcomG7CGMHistoryLogEgvCountRoundTrip() {
+        let log = DexcomG7CGMHistoryLog(
+            pumpTimeSec: 566_516_808,
+            sequenceNum: 506_707,
+            glucoseValueStatus: 0,
+            cgmDataType: 1,
+            rate: -5,
+            algorithmState: 32,
+            rssi: -61,
+            currentGlucoseDisplayValue: 140,
+            egvTimestamp: 566_516_805,
+            egvInfoBitmask: 0x19E1,
+            interval: 0,
+            egvCount: 3
+        )
+
+        XCTAssertEqual(log.cargo.count, 26)
+        XCTAssertEqual(log.cargo[25], 3)
+        let parsed = DexcomG7CGMHistoryLog(cargo: log.cargo)
+        MessageTester.assertHexEquals(log.cargo, parsed.cargo)
+        XCTAssertEqual(parsed.egvCount, 3)
+        XCTAssertEqual(parsed.egvSensorType, .dexcomG7)
     }
 }

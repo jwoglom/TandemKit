@@ -1,14 +1,32 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// The pieces of faketandem's control surface that only exist as websocket commands
 /// (main.go `configureWebsocketCommands`): the pairing code, the cached JPAKE long-term key and a
 /// pump-side disconnect. Also records every event the emulator pushes, which is its BLE traffic and
 /// connection changes as seen from the pump.
 ///
-/// One socket is held open for the life of the harness: the server keeps a single client
-/// reference and clears it whenever any socket closes, so opening one per command would race the
-/// replies.
+/// One socket is held open for the life of the test process: the server keeps a single client
+/// reference and clears it whenever *any* socket closes, so a socket opened per test races the
+/// previous test's close and the replies go nowhere.
 final class FaketandemControlSocket {
+    private static let sharedLock = NSLock()
+    private static var shared: [URL: FaketandemControlSocket] = [:]
+
+    static func shared(apiBaseURL: URL) throws -> FaketandemControlSocket {
+        sharedLock.lock()
+        defer { sharedLock.unlock() }
+        if let existing = shared[apiBaseURL] {
+            return existing
+        }
+        let created = FaketandemControlSocket(apiBaseURL: apiBaseURL)
+        try created.open()
+        shared[apiBaseURL] = created
+        return created
+    }
+
     struct Event {
         let raw: [String: Any]
         var type: String? { raw["type"] as? String }
@@ -25,8 +43,12 @@ final class FaketandemControlSocket {
     }
 
     private let url: URL
+    #if canImport(ObjectiveC)
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
+    #else
+    private var task: LinuxWebSocket?
+    #endif
     private let lock = NSLock()
     private var _events: [Event] = []
     private var failure: Error?
@@ -37,7 +59,9 @@ final class FaketandemControlSocket {
         components.scheme = components.scheme == "https" ? "wss" : "ws"
         components.path = "/ws"
         url = components.url!
+        #if canImport(ObjectiveC)
         session = URLSession(configuration: .ephemeral)
+        #endif
         self.commandTimeout = commandTimeout
     }
 
@@ -60,44 +84,61 @@ final class FaketandemControlSocket {
 
     func open() throws {
         guard task == nil else { return }
+        #if canImport(ObjectiveC)
         let task = session.webSocketTask(with: url)
         self.task = task
         task.resume()
         receiveNext(on: task)
+        #else
+        let task = LinuxWebSocket(url: url)
+        self.task = task
+        try task.connect(onText: { [weak self] in self?.record($0) }, onFailure: { [weak self] in self?.fail($0) })
+        #endif
         // The server greets with a state message; its arrival proves the socket is up.
         _ = try waitForEvent("websocket greeting", after: 0) { $0.connected != nil }
     }
 
     func close() {
+        #if canImport(ObjectiveC)
         task?.cancel(with: .normalClosure, reason: nil)
+        #else
+        task?.close()
+        #endif
         task = nil
     }
 
+    #if canImport(ObjectiveC)
     private func receiveNext(on task: URLSessionWebSocketTask) {
         task.receive { [weak self] result in
             guard let self else { return }
             switch result {
             case let .success(message):
-                var text: String?
                 switch message {
-                case let .string(string): text = string
-                case let .data(data): text = String(data: data, encoding: .utf8)
+                case let .string(string): self.record(string)
+                case let .data(data): self.record(String(decoding: data, as: UTF8.self))
                 @unknown default: break
-                }
-                if let text, let data = text.data(using: .utf8),
-                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                {
-                    self.lock.lock()
-                    self._events.append(Event(raw: object))
-                    self.lock.unlock()
                 }
                 self.receiveNext(on: task)
             case let .failure(error):
-                self.lock.lock()
-                self.failure = error
-                self.lock.unlock()
+                self.fail(error)
             }
         }
+    }
+    #endif
+
+    private func record(_ text: String) {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return }
+        lock.lock()
+        _events.append(Event(raw: object))
+        lock.unlock()
+    }
+
+    private func fail(_ error: Error) {
+        lock.lock()
+        failure = error
+        lock.unlock()
     }
 
     private func send(command: String, _ params: [String: Any] = [:]) throws {
@@ -106,12 +147,20 @@ final class FaketandemControlSocket {
         }
         var message = params
         message["command"] = command
-        let data = try JSONSerialization.data(withJSONObject: message)
+        let text = String(decoding: try JSONSerialization.data(withJSONObject: message), as: UTF8.self)
+        #if canImport(ObjectiveC)
         let box = ResultBox<Error?>()
-        task.send(.string(String(decoding: data, as: UTF8.self))) { box.set($0) }
+        task.send(.string(text)) { box.set($0) }
         if let error = try box.wait("websocket send \(command)", timeout: commandTimeout) {
             throw FaketandemClientError.transport("websocket send \(command): \(error)")
         }
+        #else
+        do {
+            try task.send(text)
+        } catch {
+            throw FaketandemClientError.transport("websocket send \(command): \(error)")
+        }
+        #endif
     }
 
     private func waitForEvent(

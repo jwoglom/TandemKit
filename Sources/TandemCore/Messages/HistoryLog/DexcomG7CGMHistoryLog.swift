@@ -12,6 +12,8 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
     public let egvTimestamp: UInt32
     public let egvInfoBitmaskRaw: Int
     public let interval: Int
+    /// Byte 25, as on G6; the Mobi G7 fixtures have 0 even for five-minute readings. pumpX2#76.
+    public let egvCount: Int
 
     public required init(cargo: Data) {
         glucoseValueStatusRaw = Bytes.readShort(cargo, 10)
@@ -23,6 +25,7 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         egvTimestamp = Bytes.readUint32(cargo, 18)
         egvInfoBitmaskRaw = Bytes.readShort(cargo, 22)
         interval = Int(cargo[24])
+        egvCount = Int(cargo[25])
         super.init(cargo: cargo)
     }
 
@@ -37,7 +40,8 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         currentGlucoseDisplayValue: Int,
         egvTimestamp: UInt32,
         egvInfoBitmask: Int,
-        interval: Int
+        interval: Int,
+        egvCount: Int = 0
     ) {
         let payload = DexcomG7CGMHistoryLog.buildCargo(
             pumpTimeSec: pumpTimeSec,
@@ -50,7 +54,8 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
             currentGlucoseDisplayValue: currentGlucoseDisplayValue,
             egvTimestamp: egvTimestamp,
             egvInfoBitmask: egvInfoBitmask,
-            interval: interval
+            interval: interval,
+            egvCount: egvCount
         )
         self.glucoseValueStatusRaw = glucoseValueStatus
         self.cgmDataTypeRaw = cgmDataType
@@ -61,6 +66,7 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         self.egvTimestamp = egvTimestamp
         self.egvInfoBitmaskRaw = egvInfoBitmask
         self.interval = interval
+        self.egvCount = egvCount
         super.init(cargo: payload)
     }
 
@@ -75,7 +81,8 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         currentGlucoseDisplayValue: Int,
         egvTimestamp: UInt32,
         egvInfoBitmask: Int,
-        interval: Int
+        interval: Int,
+        egvCount: Int = 0
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
@@ -90,7 +97,8 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
                 Bytes.firstTwoBytesLittleEndian(currentGlucoseDisplayValue),
                 Bytes.toUint32(egvTimestamp),
                 Bytes.firstTwoBytesLittleEndian(egvInfoBitmask),
-                Data([UInt8(interval & 0xFF)])
+                Data([UInt8(interval & 0xFF)]),
+                Data([UInt8(egvCount & 0xFF)])
             )
         )
     }
@@ -143,7 +151,12 @@ public class DexcomG7CGMHistoryLog: HistoryLog {
         DexcomG6CGMHistoryLog.EgvInfo.fromId(egvInfoBitmaskRaw)
     }
 
+    /// Bits 11-13 of `egvInfoBitmaskRaw`: 3 (G7) in every captured record. pumpX2#76.
+    public var egvSensorType: CGMStatusV2Response.CGMSensorType {
+        DexcomG6CGMHistoryLog.egvSensorType(egvInfoBitmaskRaw)
+    }
+
     public var description: String {
-        "DexcomG7CGMHistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatusRaw=\(glucoseValueStatusRaw), cgmDataTypeRaw=\(cgmDataTypeRaw), rate=\(rate), algorithmStateRaw=\(algorithmStateRaw), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), egvTimestamp=\(egvTimestamp), egvInfoBitmaskRaw=\(egvInfoBitmaskRaw), interval=\(interval))"
+        "DexcomG7CGMHistoryLog(cargo=\(cargo.hexadecimalString), glucoseValueStatusRaw=\(glucoseValueStatusRaw), cgmDataTypeRaw=\(cgmDataTypeRaw), rate=\(rate), algorithmStateRaw=\(algorithmStateRaw), rssi=\(rssi), currentGlucoseDisplayValue=\(currentGlucoseDisplayValue), egvTimestamp=\(egvTimestamp), egvInfoBitmaskRaw=\(egvInfoBitmaskRaw), interval=\(interval), egvCount=\(egvCount))"
     }
 }

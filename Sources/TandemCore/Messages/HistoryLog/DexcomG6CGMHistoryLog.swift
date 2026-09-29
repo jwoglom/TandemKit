@@ -12,17 +12,20 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
     public let timeStampSeconds: UInt32
     public let egvInfoBitmask: Int
     public let interval: Int
+    /// Byte 25: 0 in backfill records; in a five-minute reading, the readings it covers (1, or N after N-1 missed). pumpX2#76.
+    public let egvCount: Int
 
     public required init(cargo: Data) {
         glucoseValueStatus = Bytes.readShort(cargo, 10)
         cgmDataType = Int(cargo[12])
-        rate = Int(cargo[13])
+        rate = Int(Int8(bitPattern: cargo[13]))
         algorithmState = Int(cargo[14])
-        rssi = Int(cargo[15])
+        rssi = Int(Int8(bitPattern: cargo[15]))
         currentGlucoseDisplayValue = Bytes.readShort(cargo, 16)
         timeStampSeconds = Bytes.readUint32(cargo, 18)
         egvInfoBitmask = Bytes.readShort(cargo, 22)
         interval = Int(cargo[24])
+        egvCount = Int(cargo[25])
         super.init(cargo: cargo)
     }
 
@@ -37,7 +40,8 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
         currentGlucoseDisplayValue: Int,
         timeStampSeconds: UInt32,
         egvInfoBitmask: Int,
-        interval: Int
+        interval: Int,
+        egvCount: Int = 1
     ) {
         let payload = DexcomG6CGMHistoryLog.buildCargo(
             pumpTimeSec: pumpTimeSec,
@@ -50,7 +54,8 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
             currentGlucoseDisplayValue: currentGlucoseDisplayValue,
             timeStampSeconds: timeStampSeconds,
             egvInfoBitmask: egvInfoBitmask,
-            interval: interval
+            interval: interval,
+            egvCount: egvCount
         )
         self.glucoseValueStatus = glucoseValueStatus
         self.cgmDataType = cgmDataType
@@ -61,6 +66,7 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
         self.timeStampSeconds = timeStampSeconds
         self.egvInfoBitmask = egvInfoBitmask
         self.interval = interval
+        self.egvCount = egvCount
         super.init(cargo: payload)
     }
 
@@ -75,7 +81,8 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
         currentGlucoseDisplayValue: Int,
         timeStampSeconds: UInt32,
         egvInfoBitmask: Int,
-        interval: Int
+        interval: Int,
+        egvCount: Int = 1
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
@@ -91,7 +98,7 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
                 Bytes.toUint32(timeStampSeconds),
                 Bytes.firstTwoBytesLittleEndian(egvInfoBitmask),
                 Data([UInt8(interval & 0xFF)]),
-                Data([1]) // trailing param as in Java implementation
+                Data([UInt8(egvCount & 0xFF)])
             )
         )
     }
@@ -135,6 +142,15 @@ public class DexcomG6CGMHistoryLog: HistoryLog {
 
     public var egvInfo: Set<EgvInfo> {
         EgvInfo.fromId(egvInfoBitmask)
+    }
+
+    /// Bits 11-13 of `egvInfoBitmask`: 1 (G6) from 2023 firmware on, 0 on 2022 firmware. pumpX2#76.
+    public var egvSensorType: CGMStatusV2Response.CGMSensorType {
+        Self.egvSensorType(egvInfoBitmask)
+    }
+
+    static func egvSensorType(_ egvInfoBitmask: Int) -> CGMStatusV2Response.CGMSensorType {
+        CGMStatusV2Response.CGMSensorType(rawValue: (egvInfoBitmask >> 11) & 0x7) ?? .unknown
     }
 
     public enum EgvInfo: Int, CaseIterable {

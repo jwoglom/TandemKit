@@ -1,12 +1,19 @@
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 final class SyncIntegrationTests: FaketandemIntegrationTestCase {
     func testSyncPumpDataReportsStatusReservoirAndTheReconciliationBoundary() throws {
         let driver = makeDriver()
         try harness.pair(driver)
-        try harness.client.setState(["reservoir_units": 137.0, "battery_percent": 64])
+        // 137.5, not 137: the pump reports whole units (the emulator truncates, as a real one does)
+        // and its simulator is draining basal in real time, so a whole starting value reads back one
+        // unit lower the moment any insulin has gone out.
+        try harness.client.setState(["reservoir_units": 137.5, "battery_percent": 64])
         let statusUpdatesBefore = driver.delegate.statusUpdates.count
         let batchesBefore = driver.delegate.pumpEventBatches.count
 
@@ -17,9 +24,10 @@ final class SyncIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertGreaterThan(driver.bluetooth.responseCount, 0)
         XCTAssertGreaterThan(driver.delegate.statusUpdates.count, statusUpdatesBefore, "the host must see a status update")
 
-        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports")
-        XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
+        XCTAssertEqual(driver.delegate.reservoirReadings.count, 1, "one reservoir report per sync")
         XCTAssertFalse(driver.manager.state.lastReservoirReadingNeedsReport)
+        XCTAssertEqual(driver.delegate.reservoirReadings.last?.units, 137, "the reservoir the pump reports, in units")
+        XCTAssertEqual(driver.manager.reservoirLevel?.unitVolume, 137)
         XCTAssertEqual(driver.manager.state.lastBatteryReading?.chargeRemaining, 0.64)
 
         let batches = Array(driver.delegate.pumpEventBatches.dropFirst(batchesBefore))

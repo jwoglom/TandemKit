@@ -20,16 +20,18 @@ import XCTest
         super.tearDown()
     }
 
-    private func makeManager() -> TandemPumpManager {
+    private func makeManager(historyBackfill: Bool) -> TandemPumpManager {
         var state = TandemPumpManagerState(rawValue: [:])
         state.pumpState.apiVersion = KnownApiVersion.apiV2_1.value
+        state.pumpState.pumpSerial = 123_456
+        state.featureFlags[.historyBackfill] = historyBackfill
         return TandemPumpManager(state: state, bluetooth: bluetooth)
     }
 
     /// Runs the handler and returns the request types that reached the wire, in order.
     @discardableResult
-    private func handle(_ events: Set<QualifyingEvent>) -> [String] {
-        let manager = makeManager()
+    private func handle(_ events: Set<QualifyingEvent>, historyBackfill: Bool = false) -> [String] {
+        let manager = makeManager(historyBackfill: historyBackfill)
         let acknowledged = expectation(description: "qualifying events acknowledged")
         manager.handleQualifyingEvents(events: events) { acknowledged.fulfill() }
         wait(for: [acknowledged], timeout: 1)
@@ -80,10 +82,8 @@ import XCTest
         )
     }
 
-    /// The backfill flag is off by default, so a bolus change reads the bolus status and
-    /// nothing else.
     func testBolusChangeDoesNotReadHistoryWhileTheBackfillFlagIsOff() {
-        XCTAssertEqual(handle([.bolusChange]), ["CurrentBolusStatusRequest"])
+        XCTAssertEqual(handle([.bolusChange], historyBackfill: false), ["CurrentBolusStatusRequest"])
     }
 
     func testBasalChangeFetchesBasalStatus() {

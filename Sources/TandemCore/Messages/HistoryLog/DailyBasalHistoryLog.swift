@@ -15,9 +15,13 @@ public class DailyBasalHistoryLog: HistoryLog {
     public let dailyTotalBasal: Float
     public let lastBasalRate: Float
     public let iob: Float
+    /// Set on every record written from 23:58 pump time, and on the one just before a pump date/time change.
     public let finalEventForDay: Bool
     public let batteryChargeRaw: Int
     public let lipoMv: Int
+
+    /// 0-100, unscaled. Tracks `CurrentBatteryV2Response.currentBatteryAbc`, not the `currentBatteryIbc` behind `batteryPercent`.
+    public var batteryChargePercent: Double { Double(batteryChargeRaw) }
 
     public required init(cargo: Data) {
         dailyTotalBasal = Bytes.readFloat(cargo, 10)

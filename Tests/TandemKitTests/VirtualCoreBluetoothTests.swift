@@ -3,6 +3,9 @@ import CoreBluetooth
 import Foundation
 @testable import TandemKit
 import XCTest
+#if canImport(Glibc)
+import Glibc
+#endif
 
 private final class CentralRecorder: CBCentralManagerDelegate {
     var onStateUpdate: ((CBCentralManager) -> Void)?
@@ -256,6 +259,22 @@ final class VirtualCoreBluetoothTests: XCTestCase {
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
         )
         wait(for: [nothing], timeout: 0.6)
+    }
+
+    func testSocketLinkWriteToAClosedPeerThrowsInsteadOfRaisingSigpipe() {
+        var fds: [Int32] = [0, 0]
+        #if canImport(Glibc)
+        XCTAssertEqual(socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0, &fds), 0)
+        let link = SocketLink(fd: fds[0])
+        Glibc.close(fds[1])
+        #else
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds), 0)
+        let link = SocketLink(fd: fds[0])
+        Darwin.close(fds[1])
+        #endif
+
+        XCTAssertThrowsError(try link.send(["type": "hello"]))
+        link.close()
     }
 
     func testScannedPeripheralIsTheSameObjectAsRetrievedAndConnected() throws {
@@ -549,60 +568,111 @@ final class VirtualCoreBluetoothTests: XCTestCase {
         XCTAssertEqual(received?.hashDigest, digest)
     }
 
-    /// Same round trip against a running faketandem (`go run . -transport virtual`), reached at
-    /// TANDEMKIT_VIRTUAL_PUMP_SMOKE=host:port (pass it as TEST_RUNNER_TANDEMKIT_VIRTUAL_PUMP_SMOKE to
-    /// xcodebuild). The pump must be in a connectable pairing state. Skipped otherwise.
-    func testApiVersionRoundTripAgainstARealVirtualPump() throws {
-        guard let address = ProcessInfo.processInfo.environment["TANDEMKIT_VIRTUAL_PUMP_SMOKE"],
-              let endpoint = SocketPumpEndpoint(address)
-        else {
-            throw XCTSkip("TANDEMKIT_VIRTUAL_PUMP_SMOKE not set")
+    func testAnErrorResponseNamingThePendingRequestFailsTheWriteAtOnce() throws {
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        server.onWrite = { connection, _, value in
+            connection.notify(
+                CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                Self.errorResponse(txId: value[1], requestCodeId: ApiVersionRequest.props.opCode)
+            )
         }
-        let real = CBCentralManager(
-            delegate: recorder,
-            queue: DispatchQueue(label: "testApiVersionRoundTripAgainstARealVirtualPump"),
-            endpoint: endpoint,
-            scanInterval: 0.5
-        )
-        defer {
-            for peripheral in real.retrieveConnectedPeripherals(withServices: []) {
-                real.cancelPeripheralConnection(peripheral)
+
+        let result = writeApiVersion(with: peripheralManager)
+
+        XCTAssertNil(result.response)
+        XCTAssertLessThan(result.seconds, 5, "the production response timeout is 30 s")
+    }
+
+    func testAnErrorResponseForAnotherRequestLeavesTheWritePending() throws {
+        let saved = VirtualPump.responseTimeout
+        VirtualPump.responseTimeout = .seconds(1)
+        defer { VirtualPump.responseTimeout = saved }
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        server.onWrite = { connection, _, value in
+            connection.notify(
+                CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                Self.errorResponse(txId: value[1], requestCodeId: ApiVersionRequest.props.opCode &+ 2)
+            )
+        }
+
+        let result = writeApiVersion(with: peripheralManager)
+
+        XCTAssertNil(result.response)
+        XCTAssertGreaterThanOrEqual(result.seconds, 0.9, "only the response timeout ends it")
+    }
+
+    func testAnErrorResponseArrivingMidResponseLeavesTheResponseStanding() throws {
+        let peripheral = try connectPeripheral()
+        try discover(peripheral)
+        let peripheralManager = makePeripheralManager(for: peripheral)
+        let nonce = Data([0xE6, 0x8B, 0x38, 0xDA, 0x41, 0x3F, 0xC8, 0x68])
+        let digest = Data((0 ..< 32).map { UInt8($0) })
+
+        server.onWrite = { connection, characteristic, value in
+            guard value[0] == 0 else { return }
+            let response = Jpake4KeyConfirmationResponse(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            )
+            let packets = Packetize.parse(message: response, authenticationKey: nil, txId: value[1], timeSinceReset: nil)
+            for (index, packet) in packets.enumerated() {
+                connection.notify(characteristic, packet.build())
+                if index == 0 {
+                    connection.notify(
+                        CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
+                        Self.errorResponse(txId: value[1], requestCodeId: Jpake4KeyConfirmationRequest.props.opCode)
+                    )
+                }
             }
         }
 
-        let discovered = expectation(description: "didDiscover")
-        discovered.assertForOverFulfill = false
-        var scanned: CBPeripheral?
-        recorder.onDiscover = { peripheral, _ in
-            scanned = peripheral
-            discovered.fulfill()
+        let answered = expectation(description: "Jpake4KeyConfirmationResponse")
+        var received: Jpake4KeyConfirmationResponse?
+        DispatchQueue.global().async {
+            for characteristic in [CharacteristicUUID.AUTHORIZATION_CHARACTERISTICS, CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS] {
+                peripheralManager.startNotify(service: ServiceUUID.PUMP_SERVICE, characteristic: characteristic)
+            }
+            received = peripheralManager.write(Jpake4KeyConfirmationRequest(
+                appInstanceId: 0,
+                nonce: nonce,
+                reserved: Data(count: 8),
+                hashDigest: digest
+            ))
+            answered.fulfill()
         }
-        real.scanForPeripherals(withServices: [ServiceUUID.PUMP_SERVICE])
-        wait(for: [discovered], timeout: 5)
-        real.stopScan()
-        let peripheral = try XCTUnwrap(scanned)
+        wait(for: [answered], timeout: 10)
 
-        let connected = expectation(description: "didConnect")
-        recorder.onConnect = { _ in connected.fulfill() }
-        recorder.onFailToConnect = { _, error in XCTFail("connect failed: \(String(describing: error))") }
-        real.connect(peripheral)
-        wait(for: [connected], timeout: 5)
-        try discover(peripheral)
+        XCTAssertEqual(received?.hashDigest, digest)
+    }
 
-        let peripheralManager = makePeripheralManager(for: peripheral)
-        let answered = expectation(description: "ApiVersionResponse")
-        var received: ApiVersionResponse?
+    /// faketandem's single-fragment, unsigned ErrorResponse (pkg/protocol BuildErrorResponse).
+    private static func errorResponse(txId: UInt8, requestCodeId: UInt8) -> Data {
+        let body = Data([ErrorResponse.props.opCode, txId, 2, requestCodeId, 3])
+        return Data([0, txId]) + body + body.crc16()
+    }
+
+    private func writeApiVersion(with peripheralManager: TandemPeripheralManager) -> (response: ApiVersionResponse?, seconds: TimeInterval) {
+        let answered = expectation(description: "write returned")
+        var response: ApiVersionResponse?
+        var seconds: TimeInterval = 0
         DispatchQueue.global().async {
             peripheralManager.startNotify(
                 service: ServiceUUID.PUMP_SERVICE,
                 characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS
             )
-            received = peripheralManager.write(ApiVersionRequest())
+            let started = Date()
+            response = peripheralManager.write(ApiVersionRequest())
+            seconds = Date().timeIntervalSince(started)
             answered.fulfill()
         }
-        wait(for: [answered], timeout: 35)
-        XCTAssertNotNil(received)
-        XCTAssertGreaterThan(received?.majorVersion ?? 0, 0)
+        wait(for: [answered], timeout: 10)
+        return (response, seconds)
     }
 
     private func makePeripheralManager(for peripheral: CBPeripheral) -> TandemPeripheralManager {

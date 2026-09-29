@@ -55,7 +55,31 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private static let maximumHeldPumpEventBatches = 64
 
     private var oldState: TandemPumpManagerState
-    public var state: TandemPumpManagerState
+    // Status is published from the command, CoreBluetooth and delegate queues at once; two
+    // unserialized swaps of oldState release the same snapshot twice.
+    private let publishLock = NSLock()
+
+    // Those queues all read and write state. It holds class references (UnfinalizedDose), so an
+    // unserialized write can over-release them; `_modify` keeps `state.x = y` one locked access.
+    private let stateLock = NSRecursiveLock()
+    private var _state: TandemPumpManagerState
+    public var state: TandemPumpManagerState {
+        get {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            return _state
+        }
+        _modify {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            yield &_state
+        }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _state = newValue
+        }
+    }
     internal let logger = TandemLogger(category: "TandemPumpManager")
     internal let telemetryScheduler = PumpTelemetryScheduler(label: "com.loopkit.TandemKit.TelemetryScheduler")
 
@@ -164,7 +188,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// Designated initializer. Tests inject a stub `bluetooth` here to drive command sequences
     /// without CoreBluetooth; production goes through `init(state:)`.
     init(state: TandemPumpManagerState, bluetooth: PumpBluetoothConnection, clock: TandemClock = SystemClock()) {
-        self.state = state
+        _state = state
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         self.clock = clock
@@ -269,8 +293,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     internal func notifyDelegateStateUpdated() {
-        let status = TandemPumpManager.makeStatus(from: state)
+        publishLock.lock()
+        let current = state
+        let status = TandemPumpManager.makeStatus(from: current)
         let oldStatus = TandemPumpManager.makeStatus(from: oldState)
+        oldState = TandemPumpManagerState(rawValue: current.rawValue)
+        publishLock.unlock()
 
         if let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
@@ -284,8 +312,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         statusObservers.forEach { observer in
             observer.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
         }
-
-        oldState = TandemPumpManagerState(rawValue: state.rawValue)
     }
 
     // MARK: - Status Observers
@@ -351,21 +377,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
         flushPendingReservoirReading()
         flushPendingPumpEvents()
-    }
-
-    /// The earliest date the host app will accept pump events for; nil when no delegate is
-    /// attached yet. Its own store ages out, so this moves forward over time and events below it
-    /// would be discarded on arrival — the backfill uses it to bound both what it reads and what
-    /// it will later report.
-    ///
-    /// Deliberately reads `pumpDelegate.delegate` (a plain lock-guarded read) and calls the
-    /// delegate directly, rather than going through `pumpDelegate.call`. `call` does a
-    /// `queue.sync` onto the delegate queue, which defaults to the main queue — so any caller
-    /// already on that queue deadlocks, whether or not a delegate is even attached. The backfill
-    /// reads this from whatever queue its tick happens to run on, so it cannot make that
-    /// promise. The delegate side is a cheap date read, not work that needs serializing.
-    var hostEventFloor: Date? {
-        pumpDelegate.delegate?.startDateToFilterNewPumpEvents(for: self)
     }
 
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
@@ -638,14 +649,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 activationType: activationType
             )
 
+            let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
+            self.state.bolusReportLedger.prune(now: self.now)
+            self.state.bolusReportLedger.record(BolusReportLedger.Entry(
+                bolusId: permissionResponse.bolusId,
+                pumpSerial: HistoryLogSyncIdentifier.PumpSerial(self.state.pumpState.pumpSerial)?.rawValue,
+                origin: .commanded,
+                raw: event.raw,
+                eventDate: event.date,
+                automatic: activationType.isAutomatic,
+                isFinalized: false
+            ))
+
             self.state.bolusDose = dose
             self.state.bolusState = .initiating
             self.state.lastReconciliation = self.now
             self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(
-                [NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)],
-                replacePendingEvents: false
-            )
+            self.emitPumpEvents([event], replacePendingEvents: false)
 
             completion(nil)
         }
@@ -826,7 +846,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 duration: duration,
                 automatic: true,
                 insulinType: self.state.insulinType,
-                startDate: self.now
+                startDate: self.now,
+                tempRateId: response.tempRateId
             )
             var events = self.getActivePumpEvents(endDate: dose.startDate)
             events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
@@ -1281,12 +1302,19 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // MARK: - Quick Bolus Settings
 
+    /// Units mode only (#428): carbs mode doses from the pump's own carb ratio, which is never
+    /// synced, and the carbs never reach the host.
     func setQuickBolusSettings(
         enabled: Bool,
-        mode: QuickBolusMode,
-        increment: QuickBolusIncrement,
+        incrementUnits: Int,
         completion: @escaping (Bool) -> Void
     ) {
+        guard SetQuickBolusSettingsRequest.supportedIncrementUnits.contains(incrementUnits) else {
+            logger.error("Refusing unsupported quick bolus increment: \(incrementUnits) mU")
+            completion(false)
+            return
+        }
+
         logger.info("Setting quick bolus...")
 
         bluetooth.ensureConnected { error in
@@ -1296,7 +1324,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            guard let response = self.bluetooth.write(SetQuickBolusSettingsRequest(enabled: enabled, mode: mode, increment: increment)) else {
+            guard let current = self.fetchGlobalPumpSettings() else {
+                completion(false)
+                return
+            }
+
+            let request = Self.quickBolusSettingsChange(from: current, enabled: enabled, incrementUnits: incrementUnits)
+            guard !request.changedFields.isEmpty else {
+                completion(true)
+                return
+            }
+
+            guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set quick bolus")
                 completion(false)
                 return
@@ -1309,10 +1348,46 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             Thread.sleep(forTimeInterval: .seconds(1))
-            self.fetchGlobalPumpSettings()
+            guard let updated = self.fetchGlobalPumpSettings() else {
+                completion(false)
+                return
+            }
+
+            let applied = Self.quickBolusSettingsChange(from: updated, enabled: enabled, incrementUnits: incrementUnits)
+            guard applied.changedFields.isEmpty else {
+                self.logger.error("Pump accepted the quick bolus change but still reports \(updated)")
+                completion(false)
+                return
+            }
 
             completion(true)
         }
+    }
+
+    /// Carries the pump's current values in every field it is not asked to change, as the Tandem app does.
+    static func quickBolusSettingsChange(
+        from current: PumpGlobalsResponse,
+        enabled: Bool,
+        incrementUnits: Int
+    ) -> SetQuickBolusSettingsRequest {
+        var changedFields: QuickBolusSettingsFields = []
+        if current.isQuickBolusEnabled() != enabled {
+            changedFields.insert(.enabled)
+        }
+        if enabled, current.quickBolusEntryType != QuickBolusMode.units.rawValue {
+            changedFields.insert(.mode)
+        }
+        if enabled, current.quickBolusIncrementUnits != incrementUnits {
+            changedFields.insert(.incrementUnits)
+        }
+
+        return SetQuickBolusSettingsRequest(
+            enabled: enabled,
+            mode: enabled ? .units : QuickBolusMode(rawValue: current.quickBolusEntryType) ?? .units,
+            incrementUnits: enabled ? incrementUnits : current.quickBolusIncrementUnits,
+            incrementCarbs: current.quickBolusIncrementCarbs,
+            changedFields: changedFields
+        )
     }
 
     func getControlIQData(completion: @escaping (ControlIQInfoAbstractResponse?, ControlIQSleepScheduleResponse?) -> Void) {
@@ -1705,8 +1780,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // once rather than twice. QualifyingEventFetch derives this from the pumpX2-aligned
         // suggested handlers on QualifyingEvent.
         if events.contains(.bolusChange) {
-            // When a bolus delivered from the pump's own UI is written to history. Read now
-            // rather than at the next sync, which is a loop cycle or more out of IOB.
+            // A pump-UI bolus reaches the host only through history, so read and report it now
+            // rather than at the next sync, a loop cycle or more out of IOB.
             historyBackfillCoordinator.runTick()
         }
 
@@ -1822,6 +1897,10 @@ extension TandemPumpManager {
     }
 
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+        for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false {
+            state.bolusReportLedger.markFinalized(raw: event.raw)
+        }
+
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
             lastReconciliation: state.lastReconciliation,

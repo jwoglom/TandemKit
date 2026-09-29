@@ -59,6 +59,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
+    public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
@@ -253,6 +254,12 @@ public struct TandemPumpManagerState: RawRepresentable {
             historyBackfill = HistoryBackfillState(rawValue: historyBackfillRaw)
         } else {
             historyBackfill = nil
+        }
+
+        if let ledgerRaw = rawValue["bolusReportLedger"] as? BolusReportLedger.RawValue,
+           let ledger = BolusReportLedger(rawValue: ledgerRaw)
+        {
+            bolusReportLedger = ledger
         }
 
         if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
@@ -456,6 +463,8 @@ public struct TandemPumpManagerState: RawRepresentable {
             raw["historyBackfill"] = historyBackfill.rawValue
         }
 
+        raw["bolusReportLedger"] = bolusReportLedger.rawValue
+
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
             raw["bolusState"] = encodedBolusState
         }
@@ -499,6 +508,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
+            "* bolusReportLedger: \(bolusReportLedger)",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",

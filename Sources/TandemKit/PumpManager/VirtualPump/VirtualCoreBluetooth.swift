@@ -19,6 +19,11 @@ public enum VirtualPump {
     static var endpoint: SocketPumpEndpoint? = ProcessInfo.processInfo.environment[environmentVariable]
         .flatMap(SocketPumpEndpoint.init)
     static var scanInterval: TimeInterval = 1.0
+
+    /// Replace the driver's 30 s response and connect timeouts, which are sized for a real pump's
+    /// slowest command. faketandem answers at once or, when a test tells it not to, never.
+    static var responseTimeout: DispatchTimeInterval?
+    static var connectTimeout: DispatchTimeInterval?
 }
 
 public enum CBPeripheralState: Int {
@@ -242,6 +247,12 @@ public final class CBCentralManager: NSObject {
                 let link = try SocketLink(connectTo: endpoint)
                 defer { link.close() }
                 let hello = try Self.readHello(from: link)
+                // The pump answers hello in every state so a probe can tell why it is refused, but
+                // a real pump that is not discoverable is not advertising, so there is nothing to
+                // report.
+                guard hello.pairingState != VirtualPumpHello.notDiscoverablePairingState else {
+                    return
+                }
                 let peripheral = self.peripheral(for: hello.peripheralId)
                 peripheral.apply(hello)
                 guard self.claimAdvertisement(hello, generation: generation) else {

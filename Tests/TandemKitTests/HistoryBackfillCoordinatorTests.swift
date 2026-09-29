@@ -363,6 +363,7 @@ import XCTest
         let delegate = MockPumpManagerDelegate()
         delegate.startDateToFilterNewPumpEvents = now.addingTimeInterval(-.minutes(15))
         manager.pumpManagerDelegate = delegate
+        manager.state.bolusReportLedger = BolusReportLedger(trackingSince: .distantPast)
 
         stubStatus(first: 1, last: 5000)
         stubHistoryStream(secondsPerSequence: secondsPerSequence(spanning: 1000), newestSequenceNum: 5000)
@@ -385,8 +386,8 @@ import XCTest
         let covered = try XCTUnwrap(outcome.sessionCovered)
         XCTAssertLessThanOrEqual(covered.lowerBound, 5000 - HistoryBackfillPlanner.maxDeepSliceSize)
 
-        // Emission is a different question, and there the host's date is the right bound.
-        XCTAssertEqual(outcome.emitFloor, delegate.startDateToFilterNewPumpEvents)
+        // Nor does it bound reporting: a pump-UI bolus found one sync late sits below it (#345).
+        XCTAssertLessThan(outcome.emitFloor, delegate.startDateToFilterNewPumpEvents)
     }
 
     // MARK: - Pump identity
@@ -510,8 +511,7 @@ import XCTest
         XCTAssertEqual(try manager.historyLogStore.count(pumpSerial: Self.pumpSerial), 10)
     }
 
-    /// Dose reporting is a separate switch, and it does not gate the reading. Nothing consumes
-    /// the store yet, so this only fixes the contract the emission layer will be built against.
+    /// Dose reporting is a separate switch, and it does not gate the reading.
     func testDoseReportingIsOffEvenWithTheBackfillRunning() throws {
         setPumpSerial()
         stubStatus(first: 1, last: 10)

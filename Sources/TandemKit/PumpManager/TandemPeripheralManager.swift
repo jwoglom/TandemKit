@@ -21,6 +21,15 @@ class TandemPeripheralManager: NSObject {
     private var _readQueue: (TandemDispatchGroup, CBUUID)?
     private var _writeQueue: PendingWrite?
     private var _commandLock: TandemDispatchGroup?
+    private var _isSessionEstablished = false
+    private var _eventsBeforeSession: Set<QualifyingEvent> = []
+
+    /// True once setup has authenticated this connection and its first request was answered.
+    var isSessionEstablished: Bool {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        return _isSessionEstablished
+    }
 
     private var readQueue: (TandemDispatchGroup, CBUUID)? {
         get { queueLock.lock()
@@ -38,16 +47,35 @@ class TandemPeripheralManager: NSObject {
     /// is complete.
     private final class PendingWrite {
         let group: TandemDispatchGroup
+        let requestOpCode: UInt8
         let opCode: UInt8
         let characteristic: CBUUID
         private let lock = NSLock()
         private var response = ResponseMessage()
         private var packetsReceived = 0
+        private var _refusal: ErrorResponse?
 
-        init(group: TandemDispatchGroup, opCode: UInt8, characteristic: CBUUID) {
+        init(group: TandemDispatchGroup, requestOpCode: UInt8, opCode: UInt8, characteristic: CBUUID) {
             self.group = group
+            self.requestOpCode = requestOpCode
             self.opCode = opCode
             self.characteristic = characteristic
+        }
+
+        var refusal: ErrorResponse? {
+            lock.lock()
+            defer { lock.unlock() }
+            return _refusal
+        }
+
+        /// Ends the wait the way a timeout does, but at once: the pump said it will not answer.
+        /// Ignored once the response has started arriving, since the pump sends one or the other.
+        func refuse(_ error: ErrorResponse) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard _refusal == nil, packetsReceived == 0 else { return }
+            _refusal = error
+            group.leave(Data())
         }
 
         var message: Message? {
@@ -102,7 +130,12 @@ class TandemPeripheralManager: NSObject {
     // Sized for the slowest command, not the typical one: EnterChangeCartridgeMode doesn't respond
     // until the cartridge is safe to remove, which takes 5-20s. Timing out early reports a failure
     // for a command still in progress, inviting a re-send of an insulin-affecting request.
-    private static let responseTimeout: DispatchTimeInterval = .seconds(30)
+    private static var responseTimeout: DispatchTimeInterval {
+        #if TANDEMKIT_VIRTUAL_PUMP
+        if let override = VirtualPump.responseTimeout { return override }
+        #endif
+        return .seconds(30)
+    }
     // Above responseTimeout, so a caller queued behind one slow write waits it out.
     private static let writeLockTimeout: DispatchTimeInterval = .seconds(45)
 
@@ -148,9 +181,30 @@ class TandemPeripheralManager: NSObject {
         queueLock.lock()
         let completion = _connectCompletion
         _connectCompletion = nil
+        var deferredEvents: Set<QualifyingEvent> = []
+        if error == nil {
+            _isSessionEstablished = true
+            swap(&deferredEvents, &_eventsBeforeSession)
+        }
         queueLock.unlock()
 
         completion?(error)
+
+        if !deferredEvents.isEmpty {
+            logger.info("Handling qualifying events that arrived during setup: \(deferredEvents)")
+            pumpManager.handleQualifyingEvents(events: deferredEvents) {}
+        }
+    }
+
+    /// Holds qualifying events until setup finishes. Fetching on them mid-handshake sends a status
+    /// request the pump does not answer on an unauthenticated link, and that request holds the
+    /// write lane for the whole response timeout while JPAKE waits behind it.
+    private func deferUntilSessionEstablished(_ events: Set<QualifyingEvent>) -> Bool {
+        queueLock.lock()
+        defer { queueLock.unlock() }
+        guard !_isSessionEstablished else { return false }
+        _eventsBeforeSession.formUnion(events)
+        return true
     }
 
     func read(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> Data? {
@@ -221,7 +275,12 @@ class TandemPeripheralManager: NSObject {
 
         let writeQ = TandemDispatchGroup()
         writeQ.enter()
-        let pending = PendingWrite(group: writeQ, opCode: expecting.props.opCode, characteristic: characteristic.uuid)
+        let pending = PendingWrite(
+            group: writeQ,
+            requestOpCode: requestProps.opCode,
+            opCode: expecting.props.opCode,
+            characteristic: characteristic.uuid
+        )
         writeQueue = pending
 
         defer {
@@ -258,6 +317,13 @@ class TandemPeripheralManager: NSObject {
             } else {
                 logger.error("Timeout hit, no response from pump...")
             }
+            return nil
+        }
+
+        if let refusal = pending.refusal {
+            // nil, as for a timeout: callers treat both as a failed command, and a refused
+            // insulin-affecting request is reported no less cautiously than a lost one.
+            logger.error("Pump refused \(message.description): \(refusal.description)")
             return nil
         }
 
@@ -394,10 +460,13 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
                 return
             }
 
-            pumpManager.handleQualifyingEvents(events: events) {
-                // Acknowledge qualifying events
-                self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse)
+            let acknowledge = { self.peripheral.writeValue(Data([0, 0, 0, 0]), for: characteristic, type: .withResponse) }
+            if deferUntilSessionEstablished(events) {
+                logger.info("Deferring qualifying events until setup finishes: \(events)")
+                acknowledge()
+                return
             }
+            pumpManager.handleQualifyingEvents(events: events, completion: acknowledge)
             return
         }
 
@@ -469,6 +538,11 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
         {
             let response = ErrorResponse(cargo: Data(data.dropFirst(5)))
             logger.error("Received error message: \(response.description)")
+            // The pump sends it in place of the response, naming the request it refused; left
+            // unmatched, the write waited out its whole response timeout.
+            if let pending = writeQueue, Int(pending.requestOpCode) == response.requestCodeId {
+                pending.refuse(response)
+            }
             return
         }
 
