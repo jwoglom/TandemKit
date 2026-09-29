@@ -218,12 +218,48 @@ extension TandemPumpManager {
 
         // Normal CurrentBolusStatus fetch
         if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            if state.bolusState != .noBolus || state.bolusDose != nil {
-                state.bolusDose = nil
-                state.bolusState = .noBolus
-                notifyDelegateStateUpdated()
+            guard let dose = state.bolusDose, let bolusId = dose.bolusId else {
+                if state.bolusState != .noBolus {
+                    state.bolusState = .noBolus
+                    notifyDelegateStateUpdated()
+                }
+                return
             }
+
+            var events = getActivePumpEvents()
+            if let lastBolus = queryLastBolusReport(bolusId: bolusId) {
+                dose.deliveredUnits = lastBolus.deliveredUnits
+                events.append(NewPumpEvent.bolus(
+                    dose: dose.toDoseEntry(endDate: BolusEndDate.resolve(
+                        startDate: dose.startDate,
+                        deliveryStartDate: dose.deliveryStartDate,
+                        deliveredUnits: dose.deliveredUnits,
+                        pumpTimestamp: lastBolus.pumpTimestamp
+                    )),
+                    date: dose.startDate
+                ))
+            } else {
+                holdForFinalization(dose)
+                events.append(NewPumpEvent.bolus(
+                    dose: dose.toDoseEntry(isMutable: true),
+                    date: dose.startDate
+                ))
+            }
+
+            state.bolusDose = nil
+            state.bolusState = .noBolus
+            state.lastReconciliation = now
+            notifyDelegateStateUpdated()
+            emitPumpEvents(events)
             return
+        }
+
+        if bolusProgressReport == nil, let dose = state.bolusDose {
+            bolusProgressReport = TandemDoseProgressReporter(
+                pumpManager: self,
+                dose: dose.toDoseEntry(isMutable: true),
+                activationType: dose.automatic ? .automatic : .manualNoRecommendation
+            )
         }
 
         guard let progressReport = bolusProgressReport else {

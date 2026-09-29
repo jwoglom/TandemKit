@@ -320,33 +320,82 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
+        XCTAssertTrue(completeBatchOmissions().isEmpty, "no complete batch may drop the bolus across relaunch")
         trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits)
         XCTAssertNotNil(pumpRecord.end, "the pump finished the bolus")
 
-        // Two wrappers, so a fix that re-reports the bolus but does not yet finalize it shows up.
-        XCTExpectFailure("jwoglom/TandemKit#326: after a relaunch the bolus is never reported again; bolusProgressReport is memory-only and fetchBolusStatus clears the persisted dose silently") {
-            let carried = relaunchBatches.flatMap(\.events).first { $0.raw == raw }
-            XCTAssertNotNil(carried, "the relaunched driver reports the bolus under its original raw; got \(relaunchBatches.flatMap(\.events).map { LoopDoseStoreOracle.describe($0.raw) })")
-            XCTAssertEqual(carried?.dose?.startDate, startDate, "with its original startDate")
-        }
+        let carried = relaunchBatches.flatMap(\.events).first { $0.raw == raw }
+        XCTAssertNotNil(carried, "the relaunched driver reports the bolus under its original raw; got \(relaunchBatches.flatMap(\.events).map { LoopDoseStoreOracle.describe($0.raw) })")
+        XCTAssertEqual(carried?.dose?.startDate, startDate, "with its original startDate")
 
-        try XCTExpectFailure("jwoglom/TandemKit#326: a bolus in flight across an app relaunch is never finalized; bolusProgressReport is memory-only and fetchBolusStatus clears the persisted dose silently") {
-            let finalized = relaunchBatches.flatMap(\.events).first { $0.raw == raw && $0.dose?.isMutable == false }
-            XCTAssertNotNil(finalized, "the relaunched driver finalizes the bolus")
-            XCTAssertEqual(finalized?.dose?.deliveredUnits, lastBolus.deliveredUnits, "from LastBolusStatus, not the estimate")
-            XCTAssertTrue(
-                try messagesSeen(since: logAfterRelaunch).contains { $0.hasPrefix("LastBolusStatus") },
-                "the relaunched driver read the pump's record"
-            )
-            XCTAssertNil(relaunched.manager.state.bolusDose, "state is cleared only once the dose is finalized")
+        let finalized = relaunchBatches.flatMap(\.events).first { $0.raw == raw && $0.dose?.isMutable == false }
+        XCTAssertNotNil(finalized, "the relaunched driver finalizes the bolus")
+        XCTAssertEqual(finalized?.dose?.deliveredUnits, lastBolus.deliveredUnits, "from LastBolusStatus, not the estimate")
+        XCTAssertTrue(
+            try messagesSeen(since: logAfterRelaunch).contains { $0.hasPrefix("LastBolusStatus") },
+            "the relaunched driver read the pump's record"
+        )
+        XCTAssertNil(relaunched.manager.state.bolusDose, "state is cleared only once the dose is finalized")
 
-            let stored = loop.assertPermanent(raw: raw, "after relaunch")
-            XCTAssertEqual(stored?.dose.deliveredUnits, lastBolus.deliveredUnits)
-            try timeline().assertMatches(loop)
-        }
+        let stored = loop.assertPermanent(raw: raw, "after relaunch")
+        XCTAssertEqual(stored?.dose.deliveredUnits, lastBolus.deliveredUnits)
+        try timeline().assertMatches(loop)
         if let finalized = relaunchBatches.flatMap(\.events).first(where: { $0.raw == raw && $0.dose?.isMutable == false }) {
             try assertFinalizedFieldSemantics(finalized, programmed: Self.bolusUnits, activationType: .manualNoRecommendation)
         }
+    }
+
+    func testA3_relaunchKeepsBolusMutableUntilDeliveredVolumeCanBeRead() throws {
+        let first = try stageDriver()
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits))
+        let bolusId = try XCTUnwrap(first.manager.state.bolusDose?.bolusId)
+        let started = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .bolus }
+        )
+        let raw = started.raw
+
+        _ = try relaunch()
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
+        try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
+
+        for name in ["LastBolusStatusV3Request", "LastBolusStatusV2Request", "LastBolusStatusRequest"] {
+            var fault = FaketandemFaultSpec(.dropResponse, message: name)
+            fault.every = true
+            XCTAssertNotNil(try harness.client.armFault(fault))
+        }
+
+        _ = try sync(timeout: 420)
+
+        let held = try XCTUnwrap(current?.manager.state.pendingBolusFinalization)
+        XCTAssertEqual(held.bolusId, bolusId)
+        XCTAssertNil(current?.manager.state.bolusDose)
+        let heldAtHost = try XCTUnwrap(feedOracles().loop.assertSingleDose(raw: raw, "while LastBolusStatus is unavailable after relaunch"))
+        XCTAssertTrue(heldAtHost.isMutable)
+        XCTAssertNil(heldAtHost.dose.deliveredUnits)
+
+        let secondRelaunch = try relaunch()
+        XCTAssertEqual(secondRelaunch.manager.state.pendingBolusFinalization?.bolusId, bolusId)
+        try harness.client.clearFaults()
+        let logBeforeRetry = try harness.client.snapshot().requestLog.lastSeq
+
+        _ = try sync()
+
+        let finalized = try finalizedEvent(raw: raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, lastBolus.deliveredUnits)
+        XCTAssertTrue(
+            try messagesSeen(since: logBeforeRetry).contains { $0.hasPrefix("LastBolusStatus") },
+            "the second relaunched driver retries the pump's delivery record"
+        )
+        XCTAssertNil(secondRelaunch.manager.state.pendingBolusFinalization)
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertTrue(completeBatchOmissions().isEmpty, "no complete batch may drop the bolus while its delivery is unknown")
+        XCTAssertNotNil(loop.assertPermanent(raw: raw, "after the delivered-volume retry"))
+        trio.assertSingleBolus(at: started.date, amount: lastBolus.deliveredUnits)
+        try timeline().assertMatches(loop)
     }
 
     // MARK: - A4

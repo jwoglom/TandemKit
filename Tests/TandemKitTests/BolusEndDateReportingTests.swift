@@ -206,6 +206,36 @@ import XCTest
         )
     }
 
+    func testCompletionAfterRelaunchFinalizesThePersistedDose() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let originalEvent = NewPumpEvent.bolus(
+            dose: try XCTUnwrap(manager.state.bolusDose).toDoseEntry(isMutable: true),
+            date: startDate
+        )
+        let restoredState = TandemPumpManagerState(rawValue: manager.state.rawValue)
+
+        manager = TandemPumpManager(state: restoredState, bluetooth: bluetooth)
+        delegate = MockPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+
+        let pumpEnd = startDate.addingTimeInterval(73)
+        stubLastBolus(deliveredVolume: 1949, timestamp: pumpEnd)
+        stubBolusFinished()
+
+        manager.fetchBolusStatus(fromSync: true)
+
+        let event = try XCTUnwrap(lastFinalizedBolusEvent())
+        XCTAssertEqual(event.raw, originalEvent.raw)
+        XCTAssertEqual(event.date, startDate)
+        XCTAssertEqual(event.dose?.deliveredUnits, 1.949)
+        XCTAssertEqual(event.dose?.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+        XCTAssertNil(manager.state.bolusDose)
+        XCTAssertNil(manager.state.pendingBolusFinalization)
+        XCTAssertTrue(bluetooth.didSend(LastBolusStatusRequest.self))
+    }
+
     func testCompletionWithNoLastBolusAnswerDoesNotFinalize() {
         trackBolusStarted(secondsAgo: 300, units: 2.0)
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
