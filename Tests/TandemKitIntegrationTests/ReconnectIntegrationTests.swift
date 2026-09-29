@@ -40,6 +40,27 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
     }
 
+    /// A command job queued before the pump was deleted, such as a backfill tick's follow-up, must
+    /// not bring the session back and hold the pump's one link.
+    func testADeletedPumpIsNotReconnectedByALaterCommand() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        try shutDownDriver()
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+
+        let refused = expectation(description: "ensureConnected completes")
+        var connectError: Error?
+        driver.bluetooth.ensureConnected { error in
+            connectError = error
+            refused.fulfill()
+        }
+        wait(for: [refused], timeout: 30)
+
+        XCTAssertNotNil(connectError)
+        XCTAssertFalse(try harness.client.snapshot().connection.connected)
+        XCTAssertEqual(try harness.requestLog(since: logStart).filter { $0.kind == "connection" }.count, 0)
+    }
+
     /// The host relaunches: a new manager built from the persisted rawState, with no pairing code
     /// re-entered, must reach the pump on its first command.
     func testRelaunchedDriverReconnectsFromPersistedStateOnTheNextCommand() throws {

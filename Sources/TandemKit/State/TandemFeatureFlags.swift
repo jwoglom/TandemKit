@@ -1,6 +1,6 @@
 import Foundation
 
-/// Opt-in switches for driver features that are not on for everyone yet, persisted in
+/// Switches for driver features that are still being validated, persisted in
 /// `TandemPumpManagerState`.
 ///
 /// A flag decides what the app offers or enforces; it never describes what the pump is doing. The
@@ -31,9 +31,10 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
 
         public var defaultValue: Bool {
             switch self {
+            case .historyBackfill:
+                return true
             case .controlIQSupport,
                  .quickBolusButtonSupport,
-                 .historyBackfill,
                  .historyDoseReporting:
                 return false
             }

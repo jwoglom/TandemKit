@@ -301,7 +301,8 @@ zero temp basals routinely and the pump would otherwise alert on each one.
   `NewPumpEvent`s, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
   reported by the live path.
 - The backfill and the dose reporting are behind the `historyBackfill` and `historyDoseReporting`
-  feature flags, both off by default. AGENTS.md has the full rules.
+  feature flags; the backfill is on by default, dose reporting is off. AGENTS.md has the full
+  rules.
 
 ### Reporting to the host
 

@@ -4,12 +4,12 @@ struct TandemKitFeatureFlagsView: View {
     @StateObject var viewModel: TandemKitFeatureFlagsViewModel
 
     /// Triple-tapping the pump image reveals the flags. Not persisted: the list goes back into
-    /// hiding whenever the screen is left with every flag off.
+    /// hiding whenever the screen is left with every flag at its default.
     @State private var isRevealed = false
 
     var body: some View {
         Group {
-            if isRevealed || viewModel.hasEnabledFlag {
+            if isRevealed || viewModel.hasFlagOffItsDefault {
                 flagList
             } else {
                 emptyState
@@ -32,7 +32,7 @@ struct TandemKitFeatureFlagsView: View {
                         withAnimation { isRevealed = true }
                     }
 
-                Text("No feature flags enabled.", comment: "Empty state for the feature flags screen")
+                Text("No feature flags changed.", comment: "Empty state for the feature flags screen")
                     .foregroundColor(.secondary)
             }
 

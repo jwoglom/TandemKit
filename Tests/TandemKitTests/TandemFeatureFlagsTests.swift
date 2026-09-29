@@ -14,6 +14,23 @@ import XCTest
         XCTAssertFalse(flags.isOverridden(.controlIQSupport))
     }
 
+    func testHistoryBackfillIsOnUntilSomeoneTurnsItOff() {
+        let flags = TandemFeatureFlags.default
+
+        XCTAssertTrue(flags.historyBackfill)
+        XCTAssertFalse(flags.isOverridden(.historyBackfill))
+        XCTAssertFalse(flags.historyDoseReporting)
+    }
+
+    func testTurningHistoryBackfillOffSurvivesTheRawStateRoundTrip() throws {
+        var flags = TandemFeatureFlags.default
+        flags[.historyBackfill] = false
+
+        let restored = try XCTUnwrap(TandemFeatureFlags(rawValue: flags.rawValue))
+
+        XCTAssertFalse(restored.historyBackfill)
+    }
+
     func testEveryFlagAnswersWithItsDeclaredDefault() {
         let flags = TandemFeatureFlags.default
 
@@ -118,19 +135,30 @@ import XCTest
 
     // MARK: - Feature flags screen
 
-    /// The screen hides the flag list behind a triple tap unless something is already on, so a flag
-    /// that is enabled can never be left unreachable.
+    /// The screen hides the flag list behind a triple tap unless a flag is off its default, so a
+    /// choice the user made can never be left unreachable.
     func testTheFlagListIsShownWithoutTheTripleTapOnceAFlagIsOn() {
         let manager = TandemPumpManager(
             state: TandemPumpManagerState(rawValue: [:]),
             bluetooth: StubPumpBluetooth()
         )
 
-        XCTAssertFalse(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasEnabledFlag)
+        XCTAssertFalse(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
 
         manager.setFeatureFlag(.controlIQSupport, enabled: true)
 
-        XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasEnabledFlag)
+        XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
+    }
+
+    func testTheFlagListIsShownWithoutTheTripleTapOnceADefaultOnFlagIsTurnedOff() {
+        let manager = TandemPumpManager(
+            state: TandemPumpManagerState(rawValue: [:]),
+            bluetooth: StubPumpBluetooth()
+        )
+
+        manager.setFeatureFlag(.historyBackfill, enabled: false)
+
+        XCTAssertTrue(TandemKitFeatureFlagsViewModel(pumpManager: manager).hasFlagOffItsDefault)
     }
 
     func testTheFlagsScreenWritesThroughToTheManager() {

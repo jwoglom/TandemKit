@@ -17,8 +17,8 @@ final class TandemKitFeatureFlagsViewModel: ObservableObject {
         TandemFeatureFlags.Flag.allCases
     }
 
-    var hasEnabledFlag: Bool {
-        flags.contains { isEnabled($0) }
+    var hasFlagOffItsDefault: Bool {
+        flags.contains { isEnabled($0) != $0.defaultValue }
     }
 
     func isEnabled(_ flag: TandemFeatureFlags.Flag) -> Bool {
