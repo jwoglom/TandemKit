@@ -64,10 +64,12 @@ invalidate the plain one.
 
 In CI, the `integration` job in `.github/workflows/macos.yml` runs this script on the self-hosted
 macOS runners for every push, pull request and manual run, once the `unit` job has passed. It builds
-TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built from its default
-branch (`faketandem_ref` on a manual run picks another) and the cliparser jar fetched, then hands
-the binary to the script as `FAKETANDEM_BIN`. The job fails if any integration test skips, because
-a skip means the emulator's addresses never reached the test process.
+TandemKit with `VirtualPump.xcconfig` in the background while faketandem is built and the cliparser
+jar fetched, then hands the binary to the script as `FAKETANDEM_BIN`. faketandem comes from its
+default branch; `faketandem_ref` on a manual run picks another, and a pull request uses a faketandem
+branch of the same name when one exists, so a driver change is tested with the emulator change it
+needs. The job fails if any integration test skips, because a skip means the emulator's addresses
+never reached the test process.
 
 `.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
 reusing the `virtual-pump` job's build from the Actions cache. That job runs on pushes to `main`
