@@ -34,7 +34,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
             startDate: dose.startDate,
             deliveryStartDate: deliveryStartDate,
             deliveredUnits: delivered,
-            pumpTimestamp: pumpTimestamp,
+            pumpTimestamp: pumpTimestamp.map(pumpManager.hostDate(forPumpDate:)),
             detectedAt: detectedAt
         )
         return NewPumpEvent.bolus(

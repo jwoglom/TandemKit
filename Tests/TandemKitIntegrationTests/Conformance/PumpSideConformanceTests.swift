@@ -459,22 +459,14 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let pumpBolus = try XCTUnwrap(bolusTimeline.boluses.first { $0.bolusId == bolusId }, "timeline: \(bolusTimeline)")
         let pumpEnd = try XCTUnwrap(pumpBolus.end)
         XCTAssertGreaterThan(pumpEnd, programmedAt)
-        // Both ends of the dose are dated from raw pump-clock timestamps that are never corrected by
-        // the offset the driver measured on the same session, and both are then clamped to the
-        // moment the driver noticed — so with the pump ahead the whole window collapses onto
-        // detection time, which is the error #339 set out to remove.
-        try expectDefect("jwoglom/TandemKit#339 (unfixed under clock skew): CurrentBolusStatus.timestamp is stored raw by UnfinalizedDose.recordDeliveryStart and clamped into startDate...Date.now, so with the pump clock ahead the dose starts at the poll that saw delivery, not when the pump began (Sources/TandemCore/Common/UnfinalizedDose.swift, Sources/TandemKit/PumpManager/TandemPumpManager+StateSync.swift)") {
-            XCTAssertEqual(
-                finalizedBolus.dose?.startDate.timeIntervalSince(pumpBolus.start ?? .distantPast) ?? .infinity, 0, accuracy: 2,
-                "the dose starts when the pump began, in phone time"
-            )
-        }
-        try expectDefect("jwoglom/TandemKit#339 (unfixed under clock skew): BolusEndDate takes LastBolusStatus.timestamp raw and clamps it to detection time instead of subtracting the offset the driver has just measured, so the bolus end is dated at the poll that noticed it (Sources/TandemKit/PumpManager/BolusEndDate.swift)") {
-            XCTAssertEqual(
-                finalizedBolus.dose?.endDate.timeIntervalSince(pumpEnd) ?? .infinity, 0, accuracy: 2,
-                "the dose ends when the pump's record says, in phone time"
-            )
-        }
+        XCTAssertEqual(
+            finalizedBolus.dose?.startDate.timeIntervalSince(pumpBolus.start ?? .distantPast) ?? .infinity, 0, accuracy: 2,
+            "the dose starts when the pump began, in phone time"
+        )
+        XCTAssertEqual(
+            finalizedBolus.dose?.endDate.timeIntervalSince(pumpEnd) ?? .infinity, 0, accuracy: 2,
+            "the dose ends when the pump's record says, in phone time"
+        )
 
         // Temp basal: 1.5 U/h asked for; the driver programs 150 % of what it believes the segment
         // is; the pump applies 150 % to the segment it is in.

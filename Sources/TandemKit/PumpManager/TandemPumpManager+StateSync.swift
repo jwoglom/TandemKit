@@ -234,7 +234,7 @@ extension TandemPumpManager {
             if let dose = state.bolusDose {
                 // The pump's own start of delivery, which runs ~15s behind when we programmed the
                 // bolus, is what the reported dose starts at (#339).
-                dose.recordDeliveryStart(response.timestampDate)
+                dose.recordDeliveryStart(hostDate(forPumpDate: response.timestampDate), now: now)
 
                 // Recalculate endDate of the bolus
                 dose.estimatedEndDate = now.addingTimeInterval(estimatedDuration(toBolus: dose.value))
@@ -602,7 +602,7 @@ extension TandemPumpManager {
                 startDate: pending.startDate,
                 deliveryStartDate: pending.deliveryStartDate,
                 deliveredUnits: pending.deliveredUnits,
-                pumpTimestamp: pumpTimestamp,
+                pumpTimestamp: pumpTimestamp.map(hostDate(forPumpDate:)),
                 detectedAt: now
             ),
             now: now

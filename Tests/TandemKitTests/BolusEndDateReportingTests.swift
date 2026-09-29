@@ -132,6 +132,28 @@ import XCTest
         XCTAssertLessThan(dose.endDate, Date.now.addingTimeInterval(-200))
     }
 
+    func testPumpClockOffsetIsRemovedFromBothEndsOfTheWindow() throws {
+        let offset: TimeInterval = .minutes(15)
+        let checkedAt = Date.now
+        manager.state.currentPumpTime = checkedAt.addingTimeInterval(offset)
+        manager.state.lastPumpTimeCheckDate = checkedAt
+
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let deliveryStart = startDate.addingTimeInterval(15)
+        let pumpEnd = deliveryStart.addingTimeInterval(58)
+
+        stubDelivering(at: deliveryStart.addingTimeInterval(offset))
+        manager.fetchBolusStatus(fromSync: false)
+
+        stubLastBolus(deliveredVolume: 2000, timestamp: pumpEnd.addingTimeInterval(offset))
+        stubBolusFinished()
+        manager.fetchBolusStatus(fromSync: false)
+
+        let dose = try XCTUnwrap(lastFinalizedBolus())
+        XCTAssertEqual(dose.startDate.timeIntervalSince(deliveryStart), 0, accuracy: 1.0)
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+    }
+
     /// The dose may start later than the bolus was programmed, but the *event* must keep the date
     /// it was first reported under: hosts key pump events on it, and a moved date reads as a
     /// second bolus rather than as this one finishing.

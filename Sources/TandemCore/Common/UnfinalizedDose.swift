@@ -90,8 +90,8 @@ public class UnfinalizedDose {
 
     /// Records when the pump said delivery began (`CurrentBolusStatus` in the delivering state).
     ///
-    /// Clamped into `startDate...now`: the two clocks differ by a few seconds, and delivery
-    /// neither began before we programmed the bolus nor in the future.
+    /// Clamped into `startDate...now`: residual clock-measurement error cannot move delivery
+    /// before the command or into the future.
     public func recordDeliveryStart(_ date: Date, now: Date = Date.now) {
         deliveryStartDate = min(max(date, startDate), max(now, startDate))
     }

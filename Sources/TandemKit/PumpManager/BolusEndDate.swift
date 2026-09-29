@@ -21,9 +21,8 @@ import Foundation
 ///   usable pump timestamp, and the floor under one that is older than the delivery can have been.
 ///   Both the rate and the lead-in are `TandemPumpCapabilities` constants.
 ///
-/// The result is clamped to `detectedAt` and floored at the dose's start. The clamp matters: in
-/// those logs the pump clock ran ~7-8 s ahead of the phone's (-3…+10 s), so without it a promptly
-/// detected bolus would be dated into the future. Seconds of clock skew replace minutes of error.
+/// Callers translate pump timestamps onto the host clock before resolving. The result is clamped
+/// to `detectedAt` and floored at the dose's start as a final guard against measurement error.
 enum BolusEndDate {
     /// - Parameters:
     ///   - startDate: When the driver programmed the bolus.
