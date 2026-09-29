@@ -783,16 +783,13 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
 
-        expectDefect("jwoglom/TandemKit#338: the resume batch carries only the resume, with replacePendingEvents: true, and overwrites state.basalDose without finalizing the temp basal, so a temp basal that ran for ten minutes leaves the host's pending set without ever being finalized") {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
-            // By start, not raw: finalizing a temp basal early re-keys it (#344).
-            let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
-            XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
-            XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")
-            XCTAssertGreaterThan(finished?.dose.deliveredUnits ?? 0, 0, "with what it delivered")
-        }
-        expectDefect("jwoglom/TandemKit#338 / #348 / #333: the host never learns of the pump's own stop, so its ledger and the pump's disagree") {
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+        let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
+        XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")
+        XCTAssertGreaterThan(finished?.dose.deliveredUnits ?? 0, 0, "with what it delivered")
+        expectDefect("jwoglom/TandemKit#348 / #333: the host never learns of the pump's own stop, so its ledger and the pump's disagree") {
             timeline.assertMatches(loop)
         }
     }

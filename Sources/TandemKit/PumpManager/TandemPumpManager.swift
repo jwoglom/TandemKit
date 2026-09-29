@@ -982,14 +982,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return PumpCommError.noResponse
         }
 
+        let resumedAt = now
         let dose = UnfinalizedDose(
-            resumeStartTime: now,
+            resumeStartTime: resumedAt,
             insulinType: state.insulinType
         )
-        let events = [NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate)]
+        var events = getActivePumpEvents(endDate: resumedAt)
+        events.append(NewPumpEvent.resume(dose: dose.toDoseEntry(), date: dose.startDate))
 
         state.basalDose = dose
-        state.lastReconciliation = now
+        state.lastReconciliation = resumedAt
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
