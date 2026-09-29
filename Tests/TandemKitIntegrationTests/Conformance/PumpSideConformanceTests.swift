@@ -26,13 +26,13 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// The emulator's default bolus delivery rate (`bolus_rate_units_per_second`).
     private static let defaultDeliveryRate = 0.05
 
-    /// #328 in its surviving form: the driver holds a bolus of unknown volume mutable, but once the
+    /// What #328's fixes left: the driver holds a bolus of unknown volume mutable, but once the
     /// retry window is over it closes the dose with `TandemDoseProgressReporter`'s running estimate.
     /// That estimate is 0 U whenever the driver never sampled a `delivering` status — the pump
     /// finished between two polls — so a bolus the pump delivered in full is reported as 0 U
     /// (`TandemPumpManager+StateSync.finalizePendingBolus`, "finalizing with the estimate 0.0U").
     private static let zeroEstimateDefect = """
-        jwoglom/TandemKit#328: a bolus whose delivered volume the pump never confirms is finalized \
+        jwoglom/TandemKit#448: a bolus whose delivered volume the pump never confirms is finalized \
         with the progress-reporter estimate, which is 0 U when no delivering status was sampled, \
         so a fully delivered bolus reaches the host as 0 U
         """
@@ -516,7 +516,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertPermanent(raw: tbrRaw)
         XCTAssertEqual(trio.boluses.count, 1)
         XCTAssertEqual(trio.tempBasals.count, 1)
-        try expectDefect("jwoglom/TandemKit#343 / #335 and the unfiled end-date clamp above: the host's ledger disagrees with the pump's under clock skew") {
+        try expectDefect("jwoglom/TandemKit#343 / #335 and #339's end-date clamp above: the host's ledger disagrees with the pump's under clock skew") {
             timeline.assertMatches(loop)
         }
     }
@@ -712,7 +712,249 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         timeline.assertMatches(after.loop)
     }
 
+    // MARK: - D10
+
+    /// A fill wizard finds the pump already stopped, by the pump itself out of the driver's hearing, and
+    /// later resumes. Unless the stop reaches the host, the host counts it as delivered basal.
+    func testD10ASuspendAWizardFindsIsReportedBeforeItsResume() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        let batchesBefore = allPumpEventBatches.count
+
+        let suspendedAt = try suspendOutOfEarshot(thenAdvance: .minutes(5))
+        XCTAssertEqual(driver.manager.state.basalDose.type, .basal, "the driver never heard of the stop")
+
+        // The wizards' first step (TandemKit{ChangeCartridge,FillTubing,FillCannula}ViewModel).
+        let checkedAt = clock.now
+        XCTAssertEqual(try fetchSuspendStatus(driver.manager), true, "the pump says it is suspended")
+
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        let resumedAt = clock.now
+        XCTAssertNil(try resumeDelivery(), "the wizard's resume")
+        _ = try sync()
+
+        let events = eventsSince(batchesBefore)
+        let resume = try XCTUnwrap(events.first { $0.type == .resume }, "the app's resume reaches the host: \(events)")
+        XCTAssertEqual(resume.date.timeIntervalSince(resumedAt), 0, accuracy: 1)
+
+        let timeline = try timeline()
+        let pumpSuspend = try XCTUnwrap(timeline.suspends.first, "timeline: \(timeline)")
+        XCTAssertEqual(pumpSuspend.start.timeIntervalSince(suspendedAt), 0, accuracy: 1)
+        XCTAssertEqual(pumpSuspend.resumed?.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+
+        expectDefect("jwoglom/TandemKit#348: fetchSuspendStatus answers the wizard but records nothing, and after the resume fetchBasalStatus takes .basal after .resume for no change, so the pump's own stop never reaches the host") {
+            let suspend = events.first { $0.type == .suspend }
+            XCTAssertNotNil(suspend, "a .suspend for the stop the wizard found: \(events)")
+            XCTAssertLessThanOrEqual(suspend?.date ?? .distantFuture, checkedAt, "dated no later than the check that found it")
+            let stored = loop.doses.first { $0.dose.type == .suspend }
+            XCTAssertEqual(stored?.isMutable, false, "the resume closes the host's suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        }
+        expectDefect("jwoglom/TandemKit#333: a stop the driver learns of late is dated when it is noticed rather than when the pump stopped (and today not reported at all, #348)") {
+            let suspend = events.first { $0.type == .suspend }
+            XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "the suspend is dated at the pump's stop")
+            timeline.assertMatches(loop)
+        }
+    }
+
+    // MARK: - D11
+
+    /// The pump stops on its own under a running temp basal, out of the driver's hearing, and the app
+    /// resumes as a fill wizard does: the resume's replacing batch has to account for that temp basal.
+    func testD11AResumeOverATempBasalTheDriverStillHoldsFinalizesIt() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        let batchesBefore = allPumpEventBatches.count
+
+        let tempStart = clock.now
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(60)))
+        XCTAssertTrue(eventsSince(batchesBefore).contains { $0.dose?.type == .tempBasal && $0.dose?.isMutable == true })
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 10)
+
+        let suspendedAt = try suspendOutOfEarshot(thenAdvance: .minutes(5))
+        XCTAssertEqual(driver.manager.state.basalDose.type, .tempBasal, "the driver still holds the temp basal as running")
+
+        let resumedAt = clock.now
+        XCTAssertNil(try resumeDelivery(), "the wizard's resume")
+        _ = try sync()
+        XCTAssertTrue(eventsSince(batchesBefore).contains { $0.type == .resume }, "the app's resume reaches the host")
+
+        let timeline = try timeline()
+        let pumpTemp = try XCTUnwrap(timeline.tempRates.first, "timeline: \(timeline)")
+        XCTAssertEqual(pumpTemp.start.timeIntervalSince(tempStart), 0, accuracy: 2)
+        XCTAssertTrue(pumpTemp.isFinished, "the stop ended the temp rate on the pump: \(timeline)")
+        let pumpSuspend = try XCTUnwrap(timeline.suspends.first, "timeline: \(timeline)")
+        XCTAssertEqual(pumpSuspend.start.timeIntervalSince(suspendedAt), 0, accuracy: 1)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+
+        expectDefect("jwoglom/TandemKit#338: the resume batch carries only the resume, with replacePendingEvents: true, and overwrites state.basalDose without finalizing the temp basal, so a temp basal that ran for ten minutes leaves the host's pending set without ever being finalized") {
+            let omissions = completeBatchOmissions()
+            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+            // By start, not raw: finalizing a temp basal early re-keys it (#344).
+            let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
+            XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
+            XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")
+            XCTAssertGreaterThan(finished?.dose.deliveredUnits ?? 0, 0, "with what it delivered")
+        }
+        expectDefect("jwoglom/TandemKit#338 / #348 / #333: the host never learns of the pump's own stop, so its ledger and the pump's disagree") {
+            timeline.assertMatches(loop)
+        }
+    }
+
+    // MARK: - D12
+
+    /// Guide §7 and §11 "external doses": the host holds a pump-programmed bolus while it runs and ends
+    /// with it finalized at the pump's delivered amount.
+    func testD12ABolusProgrammedOnThePumpIsReportedFromItsHistory() throws {
+        try startPairedDriverReportingHistory()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.01])
+        let batchesBefore = allPumpEventBatches.count
+
+        let startedAt = clock.now
+        try harness.client.startBolus(units: Self.bolusUnits, source: "pump")
+        let bolusId = try harness.client.snapshot().bolus.bolusId
+        try clock.advanceBoth(seconds: 20, ticks: 4)
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump is still delivering")
+        _ = try sync()
+
+        let reported = try IntegrationWait.value("the pump's bolus reported from its history", timeout: 120) {
+            self.eventsSince(batchesBefore).first { $0.dose?.type == .bolus }
+        }
+        let raw = reported.raw
+        XCTAssertEqual(reported.dose?.wasProgrammedByPumpUI, true, "marked as programmed on the pump (§7)")
+        XCTAssertEqual(reported.dose?.isMutable, true, "reported while it is still delivering")
+        XCTAssertEqual(reported.dose?.programmedUnits ?? -1, Self.bolusUnits, accuracy: 0.0005)
+        XCTAssertEqual(reported.dose?.automatic, false)
+        XCTAssertEqual(reported.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "dated when the pump started it")
+
+        try clock.advanceBoth(seconds: 20, ticks: 4)
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "still delivering at the next sync")
+        let beforeSecondSync = allPumpEventBatches.count
+        _ = try sync()
+        let reReported = (try? IntegrationWait.until("a re-report of the running pump bolus", timeout: 10) {
+            self.eventsSince(beforeSecondSync).contains { $0.raw == raw && $0.dose?.isMutable == true }
+        }) != nil
+        expectDefect("jwoglom/TandemKit#452: a bolus found in flight in the pump's history is reported once and never re-reported until its completion is read") {
+            XCTAssertTrue(reReported, "guide §9 item 4: an in-progress dose is re-reported on every sync until it finalizes")
+        }
+
+        // The loop sets a temp basal meanwhile, as it does every few minutes.
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
+        expectDefect("jwoglom/TandemKit#452: the temp basal goes out in a replacing batch that does not carry the running pump bolus, so the host deletes it") {
+            let omissions = completeBatchOmissions()
+            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+        }
+
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        XCTAssertEqual(lastBolus.deliveredUnits, Self.bolusUnits, accuracy: 0.0005)
+        try clock.advanceBoth(seconds: 30, ticks: 3)
+        _ = try sync()
+        let finalized = try IntegrationWait.value("the pump's bolus finalized from its history", timeout: 120) {
+            self.eventsSince(batchesBefore).first { $0.raw == raw && $0.dose?.isMutable == false }
+        }
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005, "at the pump's delivered amount")
+        XCTAssertEqual(finalized.dose?.wasProgrammedByPumpUI, true)
+        XCTAssertEqual(finalized.date, reported.date, "under the date it was first reported with")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let timeline = try timeline()
+        XCTAssertTrue(timeline.boluses.contains { $0.bolusId == bolusId && $0.isFinished }, "timeline: \(timeline.boluses)")
+        expectDefect("jwoglom/TandemKit#452: the pump bolus the replacing batch deleted is never revived — its finalized report is dropped against the soft-deleted row") {
+            let stored = loop.assertPermanent(raw: raw, "the pump's bolus once it finished")
+            XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+            timeline.assertMatches(loop)
+        }
+    }
+
+    // MARK: - D13
+
+    /// A 100% extended bolus logs no BolusActivated/BolusCompleted pair, only BolexActivated (59) and
+    /// BolexCompleted (21).
+    func testD13AnExtendedBolusProgrammedOnThePumpIsReportedFromItsHistory() throws {
+        let driver = try startPairedDriverReportingHistory()
+        let batchesBefore = allPumpEventBatches.count
+        let bolusId = 7024
+        let units = 2.0
+
+        let startedAt = clock.now
+        try harness.client.appendHistory(type: "BolexActivated", secondsAgo: 0, data: [
+            "bolusId": bolusId, "selectedIob": 0, "iob": 0.0, "bolexSize": units,
+        ])
+        try clock.advanceBoth(seconds: .minutes(30), ticks: 30)
+        let completedAt = clock.now
+        let completedSequence = try harness.client.appendHistory(type: "BolexCompleted", secondsAgo: 0, data: [
+            "completionStatus": 3, "bolusId": bolusId, "iob": 0.0, "insulinDelivered": units, "insulinRequested": units,
+        ]).history.lastSequence
+
+        _ = try sync()
+        try IntegrationWait.until("the backfill to read the extended bolus's completion", timeout: 180) {
+            (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= completedSequence } ?? false
+        }
+        // The report runs as a command job after the tick; a sync queues behind it.
+        _ = try sync()
+
+        let events = eventsSince(batchesBefore)
+        expectDefect("jwoglom/TandemKit#424: BolexActivated (59) and BolexCompleted (21) fall through HistoryToDoseMapper's default: continue, so an extended bolus programmed on the pump never reaches the host") {
+            let extended = events.first { $0.dose?.type == .bolus }
+            XCTAssertNotNil(extended, "a dose for the pump's extended bolus: \(events)")
+            XCTAssertEqual(extended?.dose?.deliveredUnits ?? -1, units, accuracy: 0.0005, "at BolexCompleted's insulinDelivered")
+            XCTAssertEqual(extended?.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "from BolexActivated")
+            XCTAssertEqual(extended?.dose?.endDate.timeIntervalSince(completedAt) ?? .infinity, 0, accuracy: 2, "to BolexCompleted")
+            XCTAssertEqual(extended?.dose?.wasProgrammedByPumpUI, true)
+            XCTAssertGreaterThan(feedOracles().loop.iob(at: completedAt), 0, "the extended bolus counts towards IOB")
+        }
+    }
+
     // MARK: - Helpers
+
+    /// Waits out the first backfill tick, so anything the pump logs from here on is newer than the
+    /// floor it reports from.
+    @discardableResult
+    private func startPairedDriverReportingHistory() throws -> FaketandemHarness.Driver {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.featureFlags[.historyBackfill] = true
+        state.featureFlags[.historyDoseReporting] = true
+        state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
+        state.insulinType = .novolog
+        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]))
+        let driver = startDriver(state: state)
+        try harness.client.setState(["basal_rate": Self.profileRate])
+        try harness.pair(driver)
+        _ = try sync()
+        try IntegrationWait.until("the first backfill tick", timeout: 180) {
+            driver.manager.state.historyBackfill != nil
+        }
+        return driver
+    }
+
+    /// The pump stops delivery while the link is down, so none of its qualifying events reach the
+    /// driver, and the link comes back without a sync (#351): the driver's state is left as it was.
+    private func suspendOutOfEarshot(reason: String = "user", thenAdvance seconds: TimeInterval) throws -> Date {
+        _ = try harness.client.armFault(FaketandemFaultSpec(.radioOff))
+        try IntegrationWait.until("the emulator to drop the link", timeout: 30) {
+            try !self.harness.client.snapshot().connection.connected
+        }
+        let suspendedAt = clock.now
+        _ = try harness.client.suspend(reason: reason)
+        XCTAssertTrue(try harness.client.snapshot().basal.suspended, "the pump stopped")
+        try clock.advanceBoth(seconds: seconds, ticks: max(1, Int(seconds / 60)))
+        _ = try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+        return suspendedAt
+    }
+
+    private func fetchSuspendStatus(_ manager: TandemPumpManager, timeout: TimeInterval = 60) throws -> Bool? {
+        let box = ResultBox<Bool?>()
+        manager.fetchSuspendStatus { box.set($0) }
+        let result = try box.wait("fetchSuspendStatus completion", timeout: timeout)
+        drainDelegate()
+        return result
+    }
 
     /// Start, configure the schedule both sides agree on, pair and sync. `schedule` overrides the
     /// flat one; `pumpProfileRate` lets the pump's profile differ from the phone's current segment.

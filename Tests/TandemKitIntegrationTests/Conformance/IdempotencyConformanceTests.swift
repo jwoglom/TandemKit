@@ -143,7 +143,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         timeline.assertMatches(loop, tolerance: .exact, "after eight syncs inside one bolus")
     }
 
-    // MARK: - C2 (§9 item 4, §11 idempotency; P04-3, P17-2)
+    // MARK: - C2 (§9 item 4, §11 idempotency; P04-3, P17-2; #450)
 
     func testRunningTempBasalKeepsOneIdentityAndItsScheduledEnd() throws {
         let driver = try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
@@ -189,9 +189,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
             }
 
             XCTExpectFailure(
-                "TandemKit audit P04-3 (no issue filed; the sibling of jwoglom/TandemKit#330 for the temp basal): "
-                    + "a running temp basal is not re-reported on routine syncs — fetchBasalStatus emits only on a "
-                    + "basal-type change"
+                "jwoglom/TandemKit#450 (the temp-basal sibling of #330): a running temp basal is not re-reported on "
+                    + "routine syncs — fetchBasalStatus emits only on a basal-type change"
             ) {
                 XCTAssertTrue(
                     batches.contains { batch in
@@ -391,7 +390,7 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         try timeline().assertMatches(feedOracles().loop, tolerance: .exact, "two quiet syncs")
     }
 
-    // MARK: - C5 (§6 safety; P01-2)
+    // MARK: - C5 (§6 safety; P01-2; #449)
 
     func testSyncThePumpDoesNotAnswerDoesNotAdvanceTheTrustBoundary() throws {
         let driver = try startPairedDriver()
@@ -444,9 +443,8 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         XCTAssertTrue(loopBefore.doses.isEmpty, "nothing was invented for a pump that said nothing")
 
         XCTExpectFailure(
-            "TandemKit audit P18-A2 / P01-A1 (no open issue; jwoglom/TandemKit#332 closed the empty-sync half of "
-                + "this): the boundary is stamped when any read answers, so a sync whose delivery reads all went "
-                + "unanswered still moves the host's trust boundary"
+            "jwoglom/TandemKit#449: the boundary is stamped when any read answers, so a sync whose delivery reads "
+                + "all went unanswered still moves the host's trust boundary"
         ) {
             XCTAssertEqual(
                 driver.manager.state.lastReconciliation, boundaryBefore,
@@ -598,6 +596,122 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         timeline.assertMatches(loop, tolerance: .exact, "a suspend observed with no delegate attached")
     }
 
+    // MARK: - C8 (§3 report-or-delete, §5; #347, #330)
+
+    func testTempBasalEnactedWhileTheBolusOutlivesItsEstimateKeepsTheBolus() throws {
+        let driver = try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        // 1 U takes 200 s on this pump and well under a minute in the driver's model.
+        _ = try harness.client.setState(["bolus_rate_units_per_second": 0.005])
+        let units = 1.0
+
+        let beforeBolus = allPumpEventBatches.count
+        XCTAssertNil(try enactBolus(units: units))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let bolusRaw = try XCTUnwrap(newBatches(since: beforeBolus).flatMap(\.events).first { $0.dose?.type == .bolus }).raw
+        // The estimate counts from the first delivering sample; stepping the clock before it is taken
+        // would start the count after the step.
+        try IntegrationWait.until("the driver to see the bolus delivering", timeout: 30) {
+            driver.manager.bolusProgressReport?.bolusStatedOn != nil
+        }
+
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + 10, ticks: 10)
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump is still delivering")
+        try IntegrationWait.until("the driver's estimate to reach the programmed amount", timeout: 15) {
+            driver.manager.bolusProgressReport?.isUnfinalized() == false
+        }
+
+        _ = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump was still delivering when the temp basal went out")
+
+        // Refusing the temp basal and carrying the bolus in its batch both satisfy this.
+        XCTExpectFailure(
+            "jwoglom/TandemKit#347 (and #330): the bolus guard is the driver's own estimate, which reaches the programmed "
+                + "amount while this slower pump is still delivering; the temp basal it lets through goes out in a "
+                + "replacing batch without the bolus, and the host deletes a bolus that is still running"
+        ) {
+            let omissions = completeBatchOmissions()
+            XCTAssertTrue(omissions.isEmpty, "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+            let held = feedOracles().loop
+            XCTAssertEqual(
+                held.mutableDoses.filter { $0.dose.type == .bolus }.count, 1,
+                "the running bolus is still held: \(held.doses.map(LoopDoseStoreOracle.describe))"
+            )
+        }
+
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(2))
+        _ = try sync()
+        let finalized = try IntegrationWait.value("the finalized bolus report", timeout: 30) {
+            self.newBatches(since: beforeBolus).flatMap(\.events).first { $0.raw == bolusRaw && $0.dose?.isMutable == false }
+        }
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let timeline = try timeline()
+        XCTExpectFailure(
+            "jwoglom/TandemKit#347 (and #330): the deletion outlives the delivery — InsulinDeliveryStore keeps the "
+                + "soft-deleted row and, unique on syncIdentifier, drops the finalized report instead of reviving it, "
+                + "so the host has no dose for insulin the pump delivered"
+        ) {
+            let stored = loop.assertPermanent(raw: bolusRaw, "once the pump has finished")
+            XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+            timeline.assertMatches(loop, "a temp basal enacted while the bolus outlived its estimate")
+        }
+    }
+
+    // MARK: - C9 (§4, §8: raw is the identity; #352)
+
+    /// The phone's clock half a second ahead of the pump's, and a neutral temp in the second a temp
+    /// basal was due to end: the expiry's basal marker and the neutral temp's go out in one batch.
+    func testEventsInOneBatchNeverShareAnIdentity() throws {
+        try startPairedDriver(scheduledBasalRate: Self.scheduledBasalRate)
+        let duration: TimeInterval = .minutes(30)
+
+        let beforeTemp = allPumpEventBatches.count
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: duration))
+        let temp = try XCTUnwrap(newBatches(since: beforeTemp).flatMap(\.events).first { $0.dose?.type == .tempBasal })
+        let scheduledEnd = try XCTUnwrap(temp.dose?.endDate)
+
+        // The pump stands 0.4 s short of the end; the phone reads 0.1 s past it, in the same second.
+        try clock.advanceBoth(seconds: duration - 0.4, ticks: 30)
+        manualClock.advance(by: 0.5)
+        XCTAssertTrue(try harness.client.snapshot().basal.tempActive, "the pump is still running the temp rate")
+        XCTAssertEqual(
+            clock.now.timeIntervalSince1970.rounded(.down), scheduledEnd.timeIntervalSince1970.rounded(.down),
+            "the phone is in the temp basal's last second"
+        )
+
+        let beforeNeutral = allPumpEventBatches.count
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.scheduledBasalRate, duration: .minutes(30)), "a neutral temp")
+        let neutralBatches = newBatches(since: beforeNeutral)
+        XCTAssertTrue(
+            neutralBatches.flatMap(\.events).contains { $0.dose?.type == .tempBasal && $0.dose?.isMutable == false },
+            "the neutral temp finalizes the running temp basal: \(neutralBatches.map(describe))"
+        )
+
+        XCTExpectFailure(
+            "jwoglom/TandemKit#352: basal, suspend and resume raw is the type and an ISO8601 date to the whole second "
+                + "with no discriminator, so the temp basal's end marker and the neutral temp's scheduled-basal marker "
+                + "in the same second share one raw"
+        ) {
+            for batch in neutralBatches {
+                let raws = batch.events.map(\.raw)
+                XCTAssertEqual(Set(raws).count, raws.count, "one identity per event in a batch: \(describe(batch))")
+            }
+        }
+
+        let (loop, _) = feedOracles()
+        loop.assertNoDuplicates()
+        XCTAssertEqual(
+            loop.permanentDoses.filter { $0.dose.type == .tempBasal }.count, 1,
+            "one temp basal ran: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        // The pump stopped the temp rate 0.4 s before the phone's scheduled end.
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.001, rate: 0.005), "a neutral temp in a temp basal's last second")
+    }
+
     // MARK: - Helpers
 
     /// Pair, sync, and give both sides the same scheduled basal rate: the driver computes the temp
@@ -611,32 +725,6 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         try harness.pair(driver)
         _ = try sync()
         return driver
-    }
-
-    /// Replays every batch the host has received, in order, and reports each dose that was live and
-    /// mutable at the host when a `replacePendingEvents: true` batch arrived without carrying it —
-    /// the doses LoopKit's report-or-delete rule (guide §3, §5) deletes.
-    private func completeBatchOmissions() -> [String] {
-        let oracle = LoopDoseStoreOracle()
-        var omissions: [String] = []
-        for delegate in delegates {
-            for entry in delegate.journal {
-                guard let batch = entry.pumpEventBatch else { continue }
-                if batch.replacePendingEvents {
-                    let carried = Set(batch.events.map(\.raw))
-                    for dose in oracle.doses where dose.isMutable && !carried.contains(dose.raw ?? Data()) {
-                        omissions.append("  \(LoopDoseStoreOracle.describe(dose)) dropped by \(describe(batch))")
-                    }
-                }
-                oracle.addPumpEvents(
-                    batch.events,
-                    lastReconciliation: batch.lastReconciliation,
-                    replacePendingEvents: batch.replacePendingEvents,
-                    now: entry.hostNow
-                )
-            }
-        }
-        return omissions
     }
 
     private func newBatches(since index: Int) -> [MockPumpManagerDelegate.PumpEventBatch] {

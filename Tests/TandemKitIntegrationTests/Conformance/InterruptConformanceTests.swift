@@ -136,7 +136,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
             XCTAssertEqual(dose.unitsPerHour, programmed, accuracy: 0.0001, "value is the programmed rate", file: file, line: line)
             XCTAssertEqual(dose.automatic, true, "a loop-commanded temp basal is automatic", file: file, line: line)
             XCTAssertFalse(dose.manuallyEntered, file: file, line: line)
-            XCTExpectFailure("audit P11-5 (no issue filed): temp basal deliveredUnits is value × hours with no rounding to the 0.001 U increment (UnfinalizedDose.toDoseEntry)") {
+            XCTExpectFailure("jwoglom/TandemKit#451: temp basal deliveredUnits is value × hours with no rounding to the 0.001 U increment (UnfinalizedDose.toDoseEntry)") {
                 XCTAssertTrue(isOnMilliunitGrid(delivered), "temp basal deliveredUnits \(delivered) is on the 0.001 U increment", file: file, line: line)
             }
         default:
@@ -316,7 +316,6 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         let relaunchBatches = relaunched.delegate.pumpEventBatches
         XCTAssertFalse(relaunchBatches.isEmpty, "the relaunched driver's sync reports to the host")
-        let firstBatch = relaunchBatches[0]
         let pumpRecord = try pumpBolus(bolusId)
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
@@ -324,11 +323,14 @@ final class InterruptConformanceTests: ConformanceTestCase {
         trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits)
         XCTAssertNotNil(pumpRecord.end, "the pump finished the bolus")
 
-        try XCTExpectFailure("jwoglom/TandemKit#326: a bolus in flight across an app relaunch is never finalized; bolusProgressReport is memory-only and fetchBolusStatus clears the persisted dose silently") {
-            let carried = firstBatch.events.first { $0.raw == raw }
-            XCTAssertNotNil(carried, "the first batch after relaunch contains the bolus under its original raw; got \(firstBatch.events.map { LoopDoseStoreOracle.describe($0.raw) })")
+        // Two wrappers, so a fix that re-reports the bolus but does not yet finalize it shows up.
+        XCTExpectFailure("jwoglom/TandemKit#326: after a relaunch the bolus is never reported again; bolusProgressReport is memory-only and fetchBolusStatus clears the persisted dose silently") {
+            let carried = relaunchBatches.flatMap(\.events).first { $0.raw == raw }
+            XCTAssertNotNil(carried, "the relaunched driver reports the bolus under its original raw; got \(relaunchBatches.flatMap(\.events).map { LoopDoseStoreOracle.describe($0.raw) })")
             XCTAssertEqual(carried?.dose?.startDate, startDate, "with its original startDate")
+        }
 
+        try XCTExpectFailure("jwoglom/TandemKit#326: a bolus in flight across an app relaunch is never finalized; bolusProgressReport is memory-only and fetchBolusStatus clears the persisted dose silently") {
             let finalized = relaunchBatches.flatMap(\.events).first { $0.raw == raw && $0.dose?.isMutable == false }
             XCTAssertNotNil(finalized, "the relaunched driver finalizes the bolus")
             XCTAssertEqual(finalized?.dose?.deliveredUnits, lastBolus.deliveredUnits, "from LastBolusStatus, not the estimate")
@@ -534,7 +536,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(interrupted.loop.doses.isEmpty)
 
         // The trust boundary must not move: bolus and basal status were never read.
-        XCTExpectFailure("unfiled: syncPumpData stamps lastReconciliation whenever any response arrived (responseCount > responsesBefore), so a sync whose link dropped before the bolus and basal reads still advances the boundary") {
+        XCTExpectFailure("jwoglom/TandemKit#449: syncPumpData stamps lastReconciliation whenever any response arrived (responseCount > responsesBefore), so a sync whose link dropped before the bolus and basal reads still advances the boundary") {
             XCTAssertEqual(lastSync, boundaryBefore, "the sync completed without reconciling; lastSync stays where it was")
             XCTAssertEqual(driver.manager.state.lastReconciliation, boundaryBefore)
             XCTAssertEqual(interrupted.loop.lastReconciliation, boundaryBefore, "the host's boundary did not advance")
