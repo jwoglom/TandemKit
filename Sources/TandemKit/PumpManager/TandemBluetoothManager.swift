@@ -63,9 +63,8 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // Guarded by connectStateLock because it is set on commandQueue and cancelled on managerQueue.
     private let connectStateLock = NSLock()
     private var inFlightConnectGroup: TandemDispatchGroup?
-    // Set once the pump is deactivated/deleted. Suppresses the automatic reconnect paths so a
-    // removed pump does not silently re-establish its session and re-persist its state. Guarded by
-    // connectStateLock because it is set off-queue (from deactivate()) and read on managerQueue.
+    // Set on delete, never cleared: refuses every connect, even a command job queued before the
+    // delete, so a removed pump cannot take back its link. Locked because deactivate() is off-queue.
     private var isDeactivated = false
     // Responses the pump has actually returned. Bumped on commandQueue and read from the command
     // jobs there, but guarded by connectStateLock so an off-queue reader cannot race the increment.
@@ -78,7 +77,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // Two, so a single dropout that resolves itself does not pay for a rescan.
     private let staleFastPathThreshold = 2
 
-    private var shouldAutoReconnect: Bool {
+    private var isActive: Bool {
         connectStateLock.lock()
         defer { connectStateLock.unlock() }
         return !isDeactivated
@@ -263,6 +262,11 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// timeout is intrinsic to the wait and needs no separate timer, so it cannot be starved by
     /// this queue being blocked — which is exactly the failure mode of the previous design.
     private func connectIfNeeded() -> Error? {
+        guard isActive else {
+            logger.info("Pump deactivated; refusing to connect")
+            return PumpCommError.pumpNotConnected
+        }
+
         if hasLiveSession {
             consecutiveConnectFailures = 0
             return nil
@@ -447,7 +451,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // So the UI stops blaming Bluetooth before the reconnect has even been attempted.
         pumpManager?.notifyDelegateStateUpdated()
 
-        guard shouldAutoReconnect else {
+        guard isActive else {
             logger.info("Pump deactivated; not auto-reconnecting")
             return
         }
@@ -516,7 +520,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
 
         if let pendingConnect {
             pendingConnect(PumpCommError.pumpNotConnected)
-        } else if shouldAutoReconnect {
+        } else if isActive {
             logger.debug("Auto reconnect...")
             ensureConnected { error in
                 if let error = error {
