@@ -215,6 +215,8 @@ struct FaketandemSnapshot: Decodable {
     let alerts: [Alert]
     /// Every alarm that has been raised *and* cleared, with both ends (`alarms_history`).
     let alarmsHistory: [ClearedAlarm]
+    /// The cartridge procedure the pump has open: `none`, `change_cartridge` or `fill_tubing`.
+    let workflowMode: String?
     let history: History
     let requestLog: RequestLog
 }

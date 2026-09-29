@@ -33,7 +33,13 @@ struct TandemKitChangeCartridgeView: View {
             switch sheet {
             case .cancel: return cancelOperationSheet
             case .suspend: return suspendInsulinSheet
+            case .recoverStuckMode: return recoverStuckModeSheet
             }
+        }
+        .onChange(of: viewModel.stuckModeRecoveryOffered) { offered in
+            guard offered else { return }
+            viewModel.stuckModeRecoveryOffered = false
+            actionSheet = .recoverStuckMode
         }
         .task {
             guard !didLoad else { return }
@@ -508,6 +514,27 @@ struct TandemKitChangeCartridgeView: View {
         )
     }
 
+    var recoverStuckModeSheet: ConfirmationDialogContent {
+        ConfirmationDialogContent(
+            title: Text("Failed to enter change cartridge mode.", comment: "Confirmation dialog title"),
+            message: Text(
+                """
+                REMOVE THE PUMP FROM YOUR BODY NOW.
+
+                If you started a cartridge change and didn't complete it, the pump may still be in that mode. \
+                Press OK to attempt to stop the cartridge change operation and then try again.
+                """,
+                comment: "Confirmation dialog message shown when the pump refuses to enter cartridge change mode"
+            ),
+            actions: [
+                .standard(Text("OK", comment: "OK button")) {
+                    viewModel.recoverFromStuckMode()
+                },
+                .cancel(Text("Cancel", comment: "Cancel button"))
+            ]
+        )
+    }
+
     var cancelOperationSheet: ConfirmationDialogContent {
         ConfirmationDialogContent(
             title: Text("Cancel cartridge change?", comment: "Confirmation dialog title"),
@@ -529,6 +556,7 @@ struct TandemKitChangeCartridgeView: View {
 enum CartridgeActionSheet: Identifiable {
     case cancel
     case suspend
+    case recoverStuckMode
     var id: Self { self }
 }
 

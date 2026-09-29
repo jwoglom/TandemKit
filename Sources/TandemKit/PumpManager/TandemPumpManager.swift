@@ -1065,6 +1065,26 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    func recoverAndReenterChangeCartridgeMode(completion: @escaping (EnterChangeCartridgeModeResponse?) -> Void) {
+        logger.info("Backing out of any unfinished cartridge procedure, then re-entering change mode")
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect for change mode recovery: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+
+            let recovery = CartridgeModeRecovery(
+                exitFillTubing: { self.bluetooth.write(ExitFillTubingModeRequest())?.status },
+                exitChangeCartridge: { self.bluetooth.write(ExitChangeCartridgeModeRequest())?.status },
+                enterChangeCartridge: { self.bluetooth.write(EnterChangeCartridgeModeRequest()) },
+                log: { self.logger.info($0) }
+            )
+            completion(recovery.run())
+        }
+    }
+
     func exitChangeCartridgeMode(completion: @escaping (ExitChangeCartridgeModeResponse?) -> Void) {
         logger.info("Exiting cartridge change mode")
 
