@@ -216,21 +216,67 @@ extension TandemPumpManager {
             return
         }
 
-        // Normal CurrentBolusStatus fetch
-        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
-            if state.bolusState != .noBolus || state.bolusDose != nil {
-                state.bolusDose = nil
-                state.bolusState = .noBolus
-                notifyDelegateStateUpdated()
+        // The pump runs one bolus at a time: another id delivering means ours finished out of contact.
+        let trackedBolusId = state.bolusDose?.bolusId
+        let deliveringAnother = response.status == .delivering && trackedBolusId != nil && response.bolusId != trackedBolusId
+        if deliveringAnother {
+            logger.warning("Pump is delivering bolus \(response.bolusId), not \(trackedBolusId ?? -1); finishing ours")
+        }
+
+        if response.status == .alreadyDeliveredOrInvalid || deliveringAnother, bolusProgressReport == nil {
+            guard let dose = state.bolusDose, let bolusId = dose.bolusId else {
+                if state.bolusState != .noBolus {
+                    state.bolusState = .noBolus
+                    notifyDelegateStateUpdated()
+                }
+                return
             }
+
+            var events = getActivePumpEvents()
+            if let lastBolus = queryLastBolusReport(bolusId: bolusId) {
+                dose.deliveredUnits = lastBolus.deliveredUnits
+                events.append(NewPumpEvent.bolus(
+                    dose: dose.toDoseEntry(
+                        endDate: BolusEndDate.resolve(
+                            startDate: dose.startDate,
+                            deliveryStartDate: dose.deliveryStartDate,
+                            deliveredUnits: dose.deliveredUnits,
+                            pumpTimestamp: hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                            detectedAt: now
+                        ),
+                        now: now
+                    ),
+                    date: dose.startDate
+                ))
+            } else {
+                holdForFinalization(dose)
+                events.append(NewPumpEvent.bolus(
+                    dose: dose.toDoseEntry(isMutable: true),
+                    date: dose.startDate
+                ))
+            }
+
+            state.bolusDose = nil
+            state.bolusState = .noBolus
+            state.lastReconciliation = now
+            notifyDelegateStateUpdated()
+            emitPumpEvents(events)
             return
+        }
+
+        if bolusProgressReport == nil, let dose = state.bolusDose {
+            bolusProgressReport = TandemDoseProgressReporter(
+                pumpManager: self,
+                dose: dose.toDoseEntry(isMutable: true),
+                activationType: dose.automatic ? .automatic : .manualNoRecommendation
+            )
         }
 
         guard let progressReport = bolusProgressReport else {
             return
         }
 
-        if response.status == .delivering {
+        if response.status == .delivering, !deliveringAnother {
             if let dose = state.bolusDose {
                 // The pump's own start of delivery, which runs ~15s behind when we programmed the
                 // bolus, is what the reported dose starts at (#339).
@@ -253,8 +299,7 @@ extension TandemPumpManager {
             return
         }
 
-        if response.bolusId == 0 {
-            // Bolus is finished
+        if response.bolusId == 0 || deliveringAnother {
             telemetryScheduler.cancelAll()
 
             // The pump's own timestamp dates the end of delivery, not this detection (#339).
