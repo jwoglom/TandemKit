@@ -31,9 +31,8 @@ class FaketandemIntegrationTestCase: XCTestCase {
         try super.tearDownWithError()
     }
 
-    /// `stageBasalScheduleSync` marks setup's basal sync done, as a seeded pairing stages the key:
-    /// the emulator's profile ignores segment writes, so a real sync only succeeds for a schedule
-    /// that already matches it.
+    /// `stageBasalScheduleSync` marks setup's basal sync done, as a seeded pairing stages the key,
+    /// so a test about something else can set temp basals without syncing a schedule first.
     func makeDriver(
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
         clock: TandemClock = ManualClock(Date()),

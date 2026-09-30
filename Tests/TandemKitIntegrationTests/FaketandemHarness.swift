@@ -80,6 +80,10 @@ final class FaketandemHarness {
         _ = try control.resetLongTermKey()
         try client.setClock(mode: "real", pumpOffsetSeconds: 0)
         try client.setPairingState(.pairStep2)
+        // An emulator without profile modelling has nothing to restore.
+        if try client.snapshot().idpProfiles != nil {
+            try client.setIDPProfiles([.emulatorDefault])
+        }
         try client.clearRequestLog()
         resetLogSequence = try client.snapshot().requestLog.lastSeq
 

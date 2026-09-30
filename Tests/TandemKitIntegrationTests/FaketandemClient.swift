@@ -217,8 +217,58 @@ struct FaketandemSnapshot: Decodable {
     let alarmsHistory: [ClearedAlarm]
     /// The cartridge procedure the pump has open: `none`, `change_cartridge` or `fill_tubing`.
     let workflowMode: String?
+    /// nil from an emulator that predates profile modelling.
+    let idpProfiles: [FaketandemIDPProfile]?
     let history: History
     let requestLog: RequestLog
+}
+
+/// One insulin delivery profile, in the wire's units; slot 0 of `idp_profiles` is the active one.
+struct FaketandemIDPProfile: Decodable, Equatable {
+    struct Segment: Decodable, Equatable {
+        /// Minutes after midnight, pump local time.
+        let startTime: Int
+        /// Milliunits per hour.
+        let basalRate: Int
+        var carbRatio: Int = 10000
+        var targetBg: Int = 110
+        var isf: Int = 50
+
+        init(startTime: Int, basalRate: Int) {
+            self.startTime = startTime
+            self.basalRate = basalRate
+        }
+
+        var fields: [String: Any] {
+            ["start_time": startTime, "basal_rate": basalRate, "carb_ratio": carbRatio, "target_bg": targetBg, "isf": isf]
+        }
+    }
+
+    let id: Int
+    var name: String = "Profile 1"
+    var insulinDuration: Int = 300
+    var maxBolus: Int = 25000
+    var carbEntry: Bool = true
+    let segments: [Segment]
+
+    init(id: Int, segments: [Segment]) {
+        self.id = id
+        self.segments = segments
+    }
+
+    /// What a fresh emulator holds (`state.DefaultIDPProfiles`).
+    static let emulatorDefault = FaketandemIDPProfile(id: 1, segments: [Segment(startTime: 0, basalRate: 850)])
+
+    var fields: [String: Any] {
+        [
+            "id": id,
+            "name": name,
+            "insulin_duration": insulinDuration,
+            "max_bolus": maxBolus,
+            "carb_entry": carbEntry,
+            "segments": segments.map(\.fields)
+        ]
+    }
 }
 
 /// An RFC 3339 time the emulator emits as an empty string (Go's `omitempty` on a formatted zero
@@ -492,6 +542,11 @@ final class FaketandemClient {
             throw FaketandemClientError.http(status: 200, path: "/api/state", body: "fields not applied: \(missing.sorted())")
         }
         return body.state
+    }
+
+    /// Replaces every profile on the pump, with none of the checks a request goes through.
+    func setIDPProfiles(_ profiles: [FaketandemIDPProfile]) throws {
+        try setState(["idp_profiles": profiles.map(\.fields)])
     }
 
     // MARK: - Clock
