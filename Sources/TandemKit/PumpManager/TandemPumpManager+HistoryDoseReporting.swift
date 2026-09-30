@@ -5,10 +5,7 @@ import LoopKit
 /// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
-        guard state.featureFlags.historyBackfill,
-              let serial = historyLogStoreSerial,
-              let covered = outcome.sessionCovered
-        else {
+        guard state.featureFlags.historyBackfill, let serial = historyLogStoreSerial else {
             return
         }
 
@@ -18,15 +15,8 @@ extension TandemPumpManager {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
                 return
             }
-            self.reportHistoryDeliveryTransitions(
-                in: covered,
-                pumpSerial: serial,
-                floor: outcome.emitFloor,
-                completeThrough: outcome.readsThroughPumpEnd ? outcome.startedAt : nil,
-                reachesBack: outcome.isDeepBackfillComplete || outcome.reachesPumpStart,
-                now: now
-            )
-            if self.state.featureFlags.historyDoseReporting {
+            self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
         }

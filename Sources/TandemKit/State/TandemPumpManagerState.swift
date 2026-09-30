@@ -60,7 +60,7 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
-    public var deliveryTransitions = DeliveryTransitionLedger(trackingSince: Date())
+    public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?

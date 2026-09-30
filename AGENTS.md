@@ -169,29 +169,49 @@ edit instead of at the next sync.
   `replacePendingEvents: false`, ascending, through `emitPumpEvents`. App-commanded temp
   basals stay with the live path.
 - Suspends, resumes and temp basal ends the pump made on its own
-  (`TandemPumpManager+DeliveryTransitions.swift`, #333) need only `historyBackfill`. Neither
-  host revises a finished suspend, resume or temp basal, so `fetchBasalStatus` does not report
-  one it did not command: it records a `PendingTransition` in `DeliveryTransitionLedger`, puts
-  a placeholder in `basalDose` for status, and kicks a tick. The pass after a tick that read
-  the pump's log past the detection reports it at the pump's time and finishes the temp basal
-  the host holds open at `TempRateCompleted` (or the suspend). Suspend/resume pairs that fell
-  entirely inside an outage, which no status read can see, are reported from history too.
-  The ledger records every suspend and resume the driver reports with the span its pump
-  record can fall in, so history never reports one twice; with the flag off the live path
-  still reports at detection, and records the span back to the last reading.
+  (`TandemPumpManager+DeliveryTransitions.swift`, #333, #331). Neither host revises one once
+  told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older than
+  its last finished basal (#354). So the first report carries the pump's date, and reaches the
+  host before anything the app commands after it.
+  - Every `CurrentBasalStatus` reading goes through `observeDeliveryState` (sync, qualifying
+    events, `enactTempBasal`'s own read, `fetchSuspendStatus`). With `historyBackfill` on, a
+    change the app did not command is left as a `PendingTransition` in
+    `DeliveryTransitionLedger`, with a placeholder in `basalDose` for status, until a history
+    pass dates it from `PumpingSuspended`/`PumpingResumed`/`TempRateCompleted`. The first tick
+    that starts after the change dates it if it read the log to its end and reaches back to
+    the last reading before the change, and otherwise reports it at detection.
+  - A sync, or a wizard's `fetchSuspendStatus`, that leaves a change pending completes once it
+    is reported, or after `transitionHistoryWait` (30 s) at detection; `ensureCurrentPumpData`
+    is not throttled while one is pending, so the host doses on a sync that has reported it.
+    Before an app command emits (temp basal, cancel, suspend, resume) a pending change is
+    reported at detection first. A second change before history dates the first reports the
+    first at detection.
+  - At detection each end is dated the way that counts more insulin: a stop at detection, a
+    resume at the last reading that saw the pump suspended, a temp basal below the schedule
+    ended at that reading and one above it at detection, against the host's schedule on the
+    phone's clock. A pump-side resume is always a `.resume`, never a `.basal` marker. With the
+    flag off everything is reported this way. A temp basal whose `TempRateCompleted` has
+    `timeLeft` 0, within a minute of its programmed end, ends exactly then, so it keeps the
+    identity it was reported under.
+  - The history pass also reports suspend/resume pairs that fell inside an outage, which no
+    reading can see. The ledger records every suspend and resume the driver reports with the
+    span its pump record can fall in, so a record is matched rather than reported twice. It
+    tracks one pump from the last record of the first history status it sees (`trackedAfter`),
+    so nothing written before the driver watched the pump is reported; a new serial or an
+    erased log starts it again. Records older than 24 hours or dated ahead of the phone are
+    ignored.
   - Never sent: a suspend whose resume has not been read while the pump delivers (Trio takes a
     trailing suspend as lasting until now), a resume with no suspend before it in the host's
-    view (Trio takes the pump as suspended until it), a suspend and resume in one second
-    (Trio's IOB throws), and a second suspend in a row (Loop keeps only the later).
-  - History dates are moved onto the phone's clock with `pumpClockOffset`.
-  - A change history has not dated within `historyTransitionDeadline` (15 min) is reported at
-    detection, each end dated the way that counts more insulin: a stop at detection, a resume
-    at the last reading that saw the pump suspended, a temp basal below the schedule ended at
-    that reading and one above it at detection.
-  - Loop's DoseStore only counts non-bolus events newer than its last finished basal event
-    (#354), so a gap-contained pair it hears about after a later live basal event is stored
-    but not counted. Trio counts it either way.
-  - Scenarios: conformance group F, `OutageConformanceTests`.
+    view (Trio takes the pump as suspended since its history began), a suspend and resume in
+    one second (Trio's IOB throws), and a second suspend in a row (Loop keeps only the later).
+    Only the same-second pair is marked handled; the others are reconsidered next pass, since
+    the other half may be in a gap the next tick fills. The host's view falls back to the dose
+    it holds when the ledger has no entry (a suspend from before the ledger, or pruned).
+  - History dates are moved onto the phone's clock with `hostDate(forPumpDate:)`.
+  - Loop still stores but does not count a gap-contained pair it hears about after a later
+    finished basal (#354). Trio counts it either way.
+  - Scenarios: conformance group F, `OutageConformanceTests`; unit tests in
+    `DeliveryTransitionReportingTests`.
 - The live path and history identify one bolus differently (#344), so `BolusReportLedger`
   (persisted, 24 h) records each app bolus's `bolusId`, live `raw` and event date at
   `InitiateBolus`, and `emitPumpEvents` marks it finalized when an immutable report with that

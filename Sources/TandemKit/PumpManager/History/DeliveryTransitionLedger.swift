@@ -31,15 +31,14 @@ public struct DeliveryTransitionLedger: Equatable {
         }
     }
 
-    /// A delivery change the live path saw on the pump and left for history to date. Until it is
-    /// resolved `basalDose` holds a placeholder starting at `detectedAt`.
+    /// A delivery change the live path saw on the pump and left for history to date. While it is
+    /// pending `basalDose` holds a placeholder for status and `prior` is what the host holds.
     public struct PendingTransition: Equatable {
-        /// The dose the host held before the change; a temp basal here is still open in the host.
+        /// A temp basal here is still open in the host.
         public let prior: UnfinalizedDose
-        /// What the pump reports now.
-        public var observed: DoseType
+        public let observed: DoseType
         public let detectedAt: Date
-        /// The last time the pump was seen in `prior`'s state. The change happened after this.
+        /// The last reading that saw the pump in `prior`'s state. The change happened after this.
         public let lastConfirmed: Date
 
         public init(prior: UnfinalizedDose, observed: DoseType, detectedAt: Date, lastConfirmed: Date) {
@@ -58,26 +57,49 @@ public struct DeliveryTransitionLedger: Equatable {
         }
     }
 
+    /// Pump records older than this are never reported, so entries that can only match them go.
     public static let retention: TimeInterval = .hours(24)
 
-    /// When this build started recording. A history record older than this may have been reported
-    /// live without an entry, so it is never reported.
-    public let trackingSince: Date
+    /// The pump whose sequence numbers `trackedAfter` and the entries refer to.
+    public private(set) var pumpSerial: UInt32?
+    /// The pump's last record when the driver started watching it. Records up to it may have
+    /// been reported live without an entry, so they are never reported.
+    public private(set) var trackedAfter: UInt32?
     public private(set) var entries: [Entry]
     public var pending: PendingTransition?
-    /// The last time the live path saw the pump in the state it had reported.
+    /// The last reading that saw the pump in the state the host holds, or will once `pending` is
+    /// reported.
     public var lastConfirmedObservation: Date?
 
     public init(
-        trackingSince: Date,
+        pumpSerial: UInt32? = nil,
+        trackedAfter: UInt32? = nil,
         entries: [Entry] = [],
         pending: PendingTransition? = nil,
         lastConfirmedObservation: Date? = nil
     ) {
-        self.trackingSince = trackingSince
+        self.pumpSerial = pumpSerial
+        self.trackedAfter = trackedAfter
         self.entries = entries
         self.pending = pending
         self.lastConfirmedObservation = lastConfirmedObservation
+    }
+
+    /// Starts tracking `pumpSerial` after `lastSequenceNum`: on first sight, a replacement pump, or
+    /// a log the pump erased. What the host was told stays; which record accounts for it does not.
+    public mutating func track(pumpSerial: UInt32, after lastSequenceNum: UInt32) {
+        self.pumpSerial = pumpSerial
+        trackedAfter = lastSequenceNum
+        entries = entries.filter(\.isReported).map { entry in
+            var entry = entry
+            entry.sequenceNum = nil
+            return entry
+        }
+    }
+
+    public func isTracking(pumpSerial: UInt32, lastSequenceNum: UInt32) -> Bool {
+        guard self.pumpSerial == pumpSerial, let trackedAfter else { return false }
+        return lastSequenceNum >= trackedAfter
     }
 
     public mutating func record(_ entry: Entry) {
@@ -100,13 +122,12 @@ public struct DeliveryTransitionLedger: Equatable {
         return true
     }
 
-    /// The last suspend or resume the host was given before `date`.
     public func lastReported(before date: Date) -> Entry? {
         entries.last { $0.isReported && $0.date < date }
     }
 
-    public mutating func prune(now: Date) {
-        entries.removeAll { now.timeIntervalSince($0.date) > Self.retention }
+    public mutating func prune(before floor: Date) {
+        entries.removeAll { $0.latest < floor }
     }
 }
 
@@ -116,11 +137,9 @@ extension DeliveryTransitionLedger: RawRepresentable {
     public typealias RawValue = [String: Any]
 
     public init?(rawValue: RawValue) {
-        guard let trackingSince = rawValue["trackingSince"] as? TimeInterval else {
-            return nil
-        }
         self.init(
-            trackingSince: Date(timeIntervalSinceReferenceDate: trackingSince),
+            pumpSerial: rawValue["pumpSerial"] as? UInt32,
+            trackedAfter: rawValue["trackedAfter"] as? UInt32,
             entries: (rawValue["entries"] as? [[String: Any]] ?? []).compactMap(Entry.init(rawValue:)),
             pending: (rawValue["pending"] as? [String: Any]).flatMap(PendingTransition.init(rawValue:)),
             lastConfirmedObservation: (rawValue["lastConfirmedObservation"] as? TimeInterval)
@@ -129,10 +148,9 @@ extension DeliveryTransitionLedger: RawRepresentable {
     }
 
     public var rawValue: RawValue {
-        var raw: RawValue = [
-            "trackingSince": trackingSince.timeIntervalSinceReferenceDate,
-            "entries": entries.map(\.rawValue)
-        ]
+        var raw: RawValue = ["entries": entries.map(\.rawValue)]
+        raw["pumpSerial"] = pumpSerial
+        raw["trackedAfter"] = trackedAfter
         raw["pending"] = pending?.rawValue
         raw["lastConfirmedObservation"] = lastConfirmedObservation?.timeIntervalSinceReferenceDate
         return raw

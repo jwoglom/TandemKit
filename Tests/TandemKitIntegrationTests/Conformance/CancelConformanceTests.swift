@@ -843,17 +843,12 @@ final class CancelConformanceTests: ConformanceTestCase {
             suspends.first,
             "the pump stopped delivering and no .suspend was reported: \(describe(batches(after: start)))"
         )
-        XCTExpectFailure(
-            "jwoglom/TandemKit#333: a pump-initiated stop is dated at detection, so the basal between the occlusion and the next sync is credited as delivered",
-            strict: true
-        ) {
-            XCTAssertEqual(
-                suspendEvent.date.timeIntervalSince(stoppedAt),
-                0,
-                accuracy: 2,
-                "the suspend is dated \(suspendEvent.date), the pump stopped at \(stoppedAt)"
-            )
-        }
+        XCTAssertEqual(
+            suspendEvent.date.timeIntervalSince(stoppedAt),
+            0,
+            accuracy: 2,
+            "the suspend is dated \(suspendEvent.date), the pump stopped at \(stoppedAt), not at \(detectedAfter)"
+        )
 
         // The occlusion itself, as an alarm the host can show and act on (audit P14).
         XCTExpectFailure(
@@ -875,19 +870,22 @@ final class CancelConformanceTests: ConformanceTestCase {
         trio.assertNoDuplicates("occlusion")
         XCTAssertEqual(trio.suspends.count, 1, "Trio stores one PumpSuspend: \(trio.events)")
 
-        // Pump side: the diff cannot close while the suspend is dated at detection (#333).
         let timeline = try timeline()
         let pumpBolus = try XCTUnwrap(timeline.boluses.first { $0.bolusId == bolusId }, "timeline \(timeline)")
         XCTAssertEqual(pumpBolus.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 1e-9)
         XCTAssertNotEqual(lastBolus.endReasonId, 3, "the occlusion stopped the bolus, it did not complete")
         XCTAssertEqual(timeline.suspends.count, 1, "the pump recorded one suspend: \(timeline)")
         XCTAssertFalse(timeline.alarms.isEmpty, "the pump recorded the occlusion alarm: \(timeline)")
-        XCTExpectFailure(
-            "jwoglom/TandemKit#333: the reported suspend is dated at detection, so the pump's ledger and the host's disagree by a whole sync interval",
-            strict: true
-        ) {
-            timeline.assertMatches(loop, "occlusion")
-        }
+        // The bolus end is floored by the pump's initiation lead-in, as in B1.
+        timeline.assertMatches(
+            loop,
+            tolerance: PumpTimeline.Tolerance(
+                time: TandemPumpCapabilities.bolusInitiationDelay + 2,
+                units: Self.reportingIncrement,
+                rate: 0.005
+            ),
+            "occlusion"
+        )
     }
 
     // MARK: - B8. Cancel whose delivered volume cannot be read

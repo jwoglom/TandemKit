@@ -111,6 +111,8 @@ final class HistoryBackfillCoordinator {
             }
             if let outcome {
                 self.pumpManager?.reportHistoryDoses(after: outcome, now: now)
+            } else {
+                self.pumpManager?.historyTickFailed(startedAt: now)
             }
 
             self.lock.lock()

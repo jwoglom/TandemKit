@@ -139,7 +139,8 @@ Finalized doses in groups A, B and D are also checked for: `value` == programmed
 The pump changes delivery while the phone is out of range: `radio_off`, the change, time passes,
 `radio_on`, sync. Every scenario runs with the History Backfill flag on, which is what reads the
 pump's history; the driver leaves a change it did not command to the next history pass, which
-reports it at the pump's time (`TandemPumpManager+DeliveryTransitions`). `OutageConformanceTests`.
+reports it at the pump's time before the sync that saw it completes
+(`TandemPumpManager+DeliveryTransitions`). `OutageConformanceTests`.
 
 | ID | Scenario | Stage | Assert |
 |---|---|---|---|

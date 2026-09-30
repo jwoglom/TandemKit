@@ -1,6 +1,10 @@
 import Foundation
 import LoopKit
 @testable import TandemKit
+// Package.swift: on Linux the oracles and MockPumpManagerDelegate are compiled into TandemKitTests.
+#if os(Linux)
+@testable import TandemKitTests
+#endif
 import XCTest
 
 /// Conformance group F (`docs/conformance-test-plan.md`): the pump changes delivery while the
