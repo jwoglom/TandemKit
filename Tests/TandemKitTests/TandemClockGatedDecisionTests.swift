@@ -809,6 +809,38 @@ import XCTest
         XCTAssertEqual(try XCTUnwrap(reportedDoses.last { $0.type == .resume }).startDate, t1)
     }
 
+    func testResumingDeliveryFinalizesATempBasalTheDriverStillHolds() throws {
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 1.5,
+            duration: .hours(1),
+            automatic: false,
+            insulinType: .novolog,
+            startDate: Self.t0
+        )
+        bluetooth.stub(ResumePumpingRequest.self, with: ResumePumpingResponse(status: 0))
+        advance()
+
+        let done = expectation(description: "resumeDelivery")
+        manager.resumeDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 10.0)
+        settle()
+
+        let batch = try XCTUnwrap(delegate.pumpEventBatches.last)
+        XCTAssertTrue(batch.replacePendingEvents)
+        XCTAssertEqual(batch.events.compactMap(\.dose).map(\.type), [.tempBasal, .resume])
+
+        let tempBasal = try XCTUnwrap(batch.events.compactMap(\.dose).first)
+        XCTAssertFalse(tempBasal.isMutable)
+        XCTAssertEqual(tempBasal.startDate, Self.t0)
+        XCTAssertEqual(tempBasal.endDate, t1)
+        XCTAssertEqual(tempBasal.deliveredUnits ?? -1, 1.5 * Self.step / .hours(1), accuracy: 0.000_001)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertEqual(manager.state.basalDose.startDate, t1)
+    }
+
     func testRecordSiteChangeDefaultsToTheClock() {
         advance()
 
