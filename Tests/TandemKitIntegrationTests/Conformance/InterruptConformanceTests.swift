@@ -110,7 +110,6 @@ final class InterruptConformanceTests: ConformanceTestCase {
         _ event: NewPumpEvent,
         programmed: Double,
         activationType: BolusActivationType? = nil,
-        hasManuallyEnteredDefect: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
@@ -126,13 +125,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
             XCTAssertTrue(isOnMilliunitGrid(delivered), "bolus deliveredUnits \(delivered) is on the 0.001 U increment", file: file, line: line)
             let activation = try XCTUnwrap(activationType, "bolus semantics need the activation type", file: file, line: line)
             XCTAssertEqual(dose.automatic, activation.isAutomatic, "automatic reflects the activation type", file: file, line: line)
-            if activation == .manualNoRecommendation, hasManuallyEnteredDefect {
-                XCTExpectFailure("jwoglom/TandemKit#337: manuallyEntered is set for a normal pump-delivered bolus (DoseEntry.bolus maps manualNoRecommendation to manuallyEntered)") {
-                    XCTAssertFalse(dose.manuallyEntered, "a pump-delivered bolus is not manually entered", file: file, line: line)
-                }
-            } else {
-                XCTAssertFalse(dose.manuallyEntered, "a pump-delivered bolus is not manually entered", file: file, line: line)
-            }
+            XCTAssertFalse(dose.manuallyEntered, "a pump-delivered bolus is not manually entered", file: file, line: line)
         case .tempBasal:
             XCTAssertEqual(dose.unitsPerHour, programmed, accuracy: 0.0001, "value is the programmed rate", file: file, line: line)
             XCTAssertEqual(dose.automatic, true, "a loop-commanded temp basal is automatic", file: file, line: line)
@@ -342,12 +335,10 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(stored?.dose.deliveredUnits, lastBolus.deliveredUnits)
         try timeline().assertMatches(loop)
         if let finalized = relaunchBatches.flatMap(\.events).first(where: { $0.raw == raw && $0.dose?.isMutable == false }) {
-            // Finalized through `UnfinalizedDose.toDoseEntry`, not the `DoseEntry.bolus` mapping #337 is in.
             try assertFinalizedFieldSemantics(
                 finalized,
                 programmed: Self.bolusUnits,
-                activationType: .manualNoRecommendation,
-                hasManuallyEnteredDefect: false
+                activationType: .manualNoRecommendation
             )
         }
     }
@@ -780,12 +771,10 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(dose.startDate.timeIntervalSince(ourStart), 0, accuracy: 2, "started when our bolus did (pump \(ourStart))")
         let ourEnd = try XCTUnwrap(ours.end)
         XCTAssertEqual(dose.endDate.timeIntervalSince(ourEnd), 0, accuracy: 2, "ended when our bolus did (pump \(ourEnd))")
-        // Only the completion path with the progress reporter goes through the `DoseEntry.bolus` mapping #337 is in.
         try assertFinalizedFieldSemantics(
             finalized,
             programmed: Self.bolusUnits,
-            activationType: .manualNoRecommendation,
-            hasManuallyEnteredDefect: interruption == .linkDown && recordReadable
+            activationType: .manualNoRecommendation
         )
 
         let (loop, trio) = feedOracles()
