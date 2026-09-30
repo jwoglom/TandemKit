@@ -110,6 +110,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         _ event: NewPumpEvent,
         programmed: Double,
         activationType: BolusActivationType? = nil,
+        hasManuallyEnteredDefect: Bool = true,
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
@@ -125,7 +126,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
             XCTAssertTrue(isOnMilliunitGrid(delivered), "bolus deliveredUnits \(delivered) is on the 0.001 U increment", file: file, line: line)
             let activation = try XCTUnwrap(activationType, "bolus semantics need the activation type", file: file, line: line)
             XCTAssertEqual(dose.automatic, activation.isAutomatic, "automatic reflects the activation type", file: file, line: line)
-            if activation == .manualNoRecommendation {
+            if activation == .manualNoRecommendation, hasManuallyEnteredDefect {
                 XCTExpectFailure("jwoglom/TandemKit#337: manuallyEntered is set for a normal pump-delivered bolus (DoseEntry.bolus maps manualNoRecommendation to manuallyEntered)") {
                     XCTAssertFalse(dose.manuallyEntered, "a pump-delivered bolus is not manually entered", file: file, line: line)
                 }
@@ -341,7 +342,13 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertEqual(stored?.dose.deliveredUnits, lastBolus.deliveredUnits)
         try timeline().assertMatches(loop)
         if let finalized = relaunchBatches.flatMap(\.events).first(where: { $0.raw == raw && $0.dose?.isMutable == false }) {
-            try assertFinalizedFieldSemantics(finalized, programmed: Self.bolusUnits, activationType: .manualNoRecommendation)
+            // Finalized through `UnfinalizedDose.toDoseEntry`, not the `DoseEntry.bolus` mapping #337 is in.
+            try assertFinalizedFieldSemantics(
+                finalized,
+                programmed: Self.bolusUnits,
+                activationType: .manualNoRecommendation,
+                hasManuallyEnteredDefect: false
+            )
         }
     }
 
@@ -357,14 +364,14 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let raw = started.raw
 
         _ = try relaunch()
-        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
-        try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
-
+        // Before completion: the pump's bolusChange at completion makes the driver read LastBolusStatus.
         for name in ["LastBolusStatusV3Request", "LastBolusStatusV2Request", "LastBolusStatusRequest"] {
             var fault = FaketandemFaultSpec(.dropResponse, message: name)
             fault.every = true
             XCTAssertNotNil(try harness.client.armFault(fault))
         }
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
+        try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
 
         _ = try sync(timeout: 420)
 
