@@ -199,12 +199,12 @@ import XCTest
         XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId)
     }
 
-    func testRetryGivesUpWithTheEstimateAfterTheWindow() throws {
+    func testRetryGivesUpWithTheFallbackAfterTheWindow() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
         cancelBolus()
 
-        // Stands in for a progress reporter that had counted 0.7U out before the cancel.
+        // Stands in for the elapsed-time estimate the cancel recorded.
         manager.state.pendingBolusFinalization?.deliveredUnits = 0.7
 
         let afterWindow = Date.now

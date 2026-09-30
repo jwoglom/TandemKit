@@ -702,14 +702,18 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.failure(.communication(PumpCommError.invalidPacket)))
                 return
             }
+            let stoppedAt = self.now
 
             // Allow the Mobi to store the bolus in storage
             Thread.sleep(forTimeInterval: .seconds(2))
 
-            let estimatedDelivered = min(
-                max(self.bolusProgressReport?.progress.deliveredUnits ?? 0, 0),
-                bolusDose.value
-            )
+            // From programming when delivery start was never seen: over by the initiation delay,
+            // never under. Not the progress reporter's estimate, which is 0 U until a second
+            // delivering status (#448).
+            let estimatedDelivered = HistoryToDoseMapper.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(
+                in: stoppedAt.timeIntervalSince(bolusDose.deliveryStartDate ?? bolusDose.startDate),
+                ofBolus: bolusDose.value
+            ))
 
             self.telemetryScheduler.cancelAll()
             self.bolusProgressReport = nil
@@ -721,8 +725,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.error(
                     "No delivered volume for cancelled bolus \(bolusId); keeping it mutable and retrying on the next sync"
                 )
-                bolusDose.deliveredUnits = estimatedDelivered
-                self.holdForFinalization(bolusDose)
+                self.holdForFinalization(bolusDose, fallbackUnits: estimatedDelivered)
 
                 let mutableDose = bolusDose.toDoseEntry(isMutable: true)
                 var events = self.getActivePumpEvents()

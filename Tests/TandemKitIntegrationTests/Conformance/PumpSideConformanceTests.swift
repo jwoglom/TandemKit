@@ -26,17 +26,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// The emulator's default bolus delivery rate (`bolus_rate_units_per_second`).
     private static let defaultDeliveryRate = 0.05
 
-    /// What #328's fixes left: the driver holds a bolus of unknown volume mutable, but once the
-    /// retry window is over it closes the dose with `TandemDoseProgressReporter`'s running estimate.
-    /// That estimate is 0 U whenever the driver never sampled a `delivering` status — the pump
-    /// finished between two polls — so a bolus the pump delivered in full is reported as 0 U
-    /// (`TandemPumpManager+StateSync.finalizePendingBolus`, "finalizing with the estimate 0.0U").
-    private static let zeroEstimateDefect = """
-        jwoglom/TandemKit#448: a bolus whose delivered volume the pump never confirms is finalized \
-        with the progress-reporter estimate, which is 0 U when no delivering status was sampled, \
-        so a fully delivered bolus reaches the host as 0 U
-        """
-
     /// `harness.reset()` restores pairing, clock, faults and the link, not delivery: a suspend, a
     /// running bolus or temp rate and a changed profile rate would carry into the next scenario
     /// (the emulator answers 409 to a second suspend). Put the pump back before the base teardown,
@@ -301,11 +290,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     // MARK: - D4
 
     /// The pump completes a bolus but cannot say how much it delivered — first no `LastBolusStatus`
-    /// answer at all, then an answer about a different bolus. The dose stays mutable rather than
-    /// finalizing at 0 U or at the programmed total, and is closed with the estimate only once the
-    /// retry window is over.
+    /// answer at all, then an answer about a different bolus — and with history backfill off there
+    /// is no other record. The dose stays mutable while the driver retries, and once the window is
+    /// over is finalized at its programmed amount, never 0 U (#448).
     func testD4DeliveredVolumeReadFailureKeepsTheBolusMutable() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        turnOffHistoryBackfill(driver)
         try harness.client.setState(["bolus_rate_units_per_second": Self.deliveryRate])
         let batchesBefore = allPumpEventBatches.count
 
@@ -359,8 +349,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let heldAfterStale = try XCTUnwrap(afterStale.loop.assertSingleDose(raw: raw, "after the stale LastBolusStatus"))
         XCTAssertTrue(heldAfterStale.isMutable, LoopDoseStoreOracle.describe(heldAfterStale))
 
-        // Phase 3: the retry window ends; the dose is closed with the estimate taken when delivery
-        // stopped — a number, never a placeholder — under the same raw.
+        // Phase 3: the retry window ends; the dose is closed at the programmed amount Loop counted
+        // while it was held, under the same raw.
         try clock.advanceBoth(seconds: TandemPumpManager.bolusFinalizationWindow + .minutes(1))
         _ = try sync()
         XCTAssertNil(driver.manager.state.pendingBolusFinalization)
@@ -371,10 +361,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let delivered = try XCTUnwrap(finalized.dose?.deliveredUnits)
         XCTAssertLessThanOrEqual(delivered, Self.bolusUnits + 0.0005)
         assertFieldSemantics(finalized, programmed: Self.bolusUnits, automatic: false)
-        try expectDefect(Self.zeroEstimateDefect) {
-            XCTAssertGreaterThan(delivered, 0, "never finalized at 0 U")
-            XCTAssertEqual(delivered, lastBolus.deliveredUnits, accuracy: 0.05, "the estimate is close to what the pump delivered")
-        }
+        XCTAssertEqual(delivered, Self.bolusUnits, "the programmed amount, which the pump delivered in full")
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
@@ -385,13 +372,60 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
         // Pump side: the app's bolus agrees with Loop; the only record Loop lacks is the pump-side
         // 0.05 U bolus staged to make last_bolus stale.
+        // With no pump timestamp the end is the driver's model, which counts the 15 s lead-in the
+        // emulator does not.
         let timeline = try timeline()
-        let diff = timeline.diff(against: loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.05, rate: 0.005))
+        let diff = timeline.diff(
+            against: loop,
+            tolerance: PumpTimeline.Tolerance(time: TandemPumpCapabilities.bolusInitiationDelay + 2, units: 0.001, rate: 0.005)
+        )
         XCTAssertEqual(diff.missing, ["bolus \(staleId) (0.05 U)"], "\(diff)")
-        try expectDefect(Self.zeroEstimateDefect) {
-            trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits, accuracy: 0.1)
-            XCTAssertTrue(diff.duplicated.isEmpty && diff.mismatched.isEmpty && diff.extra.isEmpty, "\(diff)")
-        }
+        trio.assertSingleBolus(at: started.date, amount: Self.bolusUnits)
+        XCTAssertTrue(diff.duplicated.isEmpty && diff.mismatched.isEmpty && diff.extra.isEmpty, "\(diff)")
+    }
+
+    /// D4 with history backfill on, and a bolus the pump stops short: `LastBolusStatus` never
+    /// answers, so the volume comes from the `BolusCompleted` record backfill reads, before the
+    /// retry window ends and below the programmed-amount fallback (#448).
+    func testD4bAnUnreadableBolusIsFinalizedFromThePumpsHistory() throws {
+        let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        // Slower than the driver's model, so the pump's timestamp, not the model, dates the end.
+        try harness.client.setState(["bolus_rate_units_per_second": Self.bolusUnits / 100])
+        let batchesBefore = allPumpEventBatches.count
+        try dropEveryLastBolusStatus()
+
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits))
+        let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
+        let started = try XCTUnwrap(eventsSince(batchesBefore).first { $0.dose?.type == .bolus })
+        let raw = started.raw
+
+        try clock.advanceBoth(seconds: 60, ticks: 12)
+        try harness.client.abortBolus()
+        let lastBolus = try XCTUnwrap(try harness.client.snapshot().lastBolus)
+        XCTAssertEqual(lastBolus.bolusId, bolusId)
+        XCTAssertLessThan(lastBolus.deliveredUnits, Self.bolusUnits - 0.2, "stopped short of the programmed amount")
+        try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
+
+        let heldFrom = clock.now
+        let finalized = try syncUntilFinalized(raw: raw)
+        XCTAssertLessThan(clock.now.timeIntervalSince(heldFrom), TandemPumpManager.bolusFinalizationWindow, "without waiting out the window")
+        XCTAssertFalse(
+            try harness.requestLog().contains { $0.isResponse && ($0.message ?? "").hasPrefix("LastBolusStatus") && $0.fault == nil },
+            "no LastBolusStatus answer ever reached the driver"
+        )
+
+        let dose = try XCTUnwrap(finalized.dose)
+        XCTAssertEqual(dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005, "the pump's recorded volume")
+        XCTAssertEqual(dose.endDate.timeIntervalSince(lastBolus.endTime), 0, accuracy: 2, "dated by the pump's record")
+        XCTAssertNil(driver.manager.state.pendingBolusFinalization)
+        assertFieldSemantics(finalized, programmed: Self.bolusUnits, automatic: false)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(loop.assertPermanent(raw: raw)?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        trio.assertSingleBolus(at: started.date, amount: lastBolus.deliveredUnits)
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.001, rate: 0.005))
     }
 
     // MARK: - D5

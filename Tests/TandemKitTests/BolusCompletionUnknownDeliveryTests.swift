@@ -159,7 +159,7 @@ import XCTest
     }
 
     /// Only one dose is held at a time, so an older one must not be dropped still mutable.
-    func testHoldingASecondBolusFinalizesTheFirstWithItsEstimate() throws {
+    func testHoldingASecondBolusFinalizesTheFirstWithItsFallback() throws {
         startBolus()
         bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
         reportBolusFinished()
@@ -173,7 +173,7 @@ import XCTest
             insulinType: nil,
             bolusId: Self.bolusId + 1
         )
-        manager.holdForFinalization(second)
+        manager.holdForFinalization(second, fallbackUnits: Self.programmedUnits)
         delegateQueue.sync {}
 
         XCTAssertEqual(manager.state.pendingBolusFinalization?.bolusId, Self.bolusId + 1)

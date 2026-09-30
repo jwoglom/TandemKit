@@ -198,6 +198,17 @@ edit instead of at the next sync.
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)
 
+### Unconfirmed bolus volume
+- A bolus whose `LastBolusStatus` can't be read is held mutable in `pendingBolusFinalization` and
+  retried every sync. The retry also takes its `BolusCompleted` record from the session
+  `historyLogStore`, which only history backfill fills: it never reads history itself, so the
+  flag's promise that the app reads no pump history while it is off still holds.
+- `holdForFinalization` takes the fallback used once `bolusFinalizationWindow` passes (#448): the
+  programmed amount for a bolus the pump finished, which is what Loop counted while the dose was
+  mutable, and for a cancel the elapsed time at the pump's rate from the delivery start (from
+  programming if it was never seen). Never the progress reporter's sample, which is 0 U until a
+  second delivering status. A fallback is only logged; nothing tells the user yet (#464).
+
 ### Cartridge change
 - The pump refuses `EnterChangeCartridgeMode` while another cartridge procedure is open, and a
   fill-tubing left open also refuses `ExitChangeCartridgeMode`; the only reason it gives is a nonzero

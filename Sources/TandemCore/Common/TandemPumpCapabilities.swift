@@ -36,4 +36,11 @@ public enum TandemPumpCapabilities {
             units / bolusSpeedOver10U
         }
     }
+
+    /// Units of a `units` bolus the pump delivers in `elapsed` seconds of delivery, at its
+    /// nominal rate.
+    public static func unitsDelivered(in elapsed: TimeInterval, ofBolus units: Double) -> Double {
+        let rate = units < 10 ? bolusSpeedUnder10U : bolusSpeedOver10U
+        return min(units, max(0, elapsed) * rate)
+    }
 }
