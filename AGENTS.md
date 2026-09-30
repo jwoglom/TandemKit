@@ -182,6 +182,12 @@ edit instead of at the next sync.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
+- Debug Options → History Backfill Activity shows both from `HistoryBackfillMonitor` (in
+  memory: this session's ticks and reporting passes) and `BolusResolutionLog` (persisted, 24 h
+  of events plus running counts: each bolus the live path couldn't settle alone, and how it was
+  settled). Nothing that decides a dose reads either; a new way of settling a bolus records a
+  `BolusResolutionLog.Kind` too, or the screen undercounts it. The copied report leaves out the
+  pump serial and every `raw`, which embed it.
 - Still open: gap-aware `lastReconciliation` (#353), extended boluses (Bolex records are only
   logged; #424), and a pump clock offset from the phone's (history dates use the phone's UTC
   offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` is recorded from
@@ -213,7 +219,8 @@ edit instead of at the next sync.
   programmed amount for a bolus the pump finished, which is what Loop counted while the dose was
   mutable, and for a cancel the elapsed time at the pump's rate from the delivery start (from
   programming if it was never seen). Never the progress reporter's sample, which is 0 U until a
-  second delivering status. A fallback is only logged; nothing tells the user yet (#464).
+  second delivering status. A fallback is logged and recorded in `BolusResolutionLog`, which the
+  debug screen flags; nothing tells the user yet (#464).
 
 ### Cartridge change
 - The pump refuses `EnterChangeCartridgeMode` while another cartridge procedure is open, and a

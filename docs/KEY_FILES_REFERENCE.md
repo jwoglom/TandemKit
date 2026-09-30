@@ -40,6 +40,9 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log. |
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
 | `BolusReportLedger.swift` | Persisted 24 h record of app boluses, so history does not report them a second time. |
+| `BolusResolutionLog.swift` | Persisted 24 h log and running counts of boluses the live path couldn't settle alone: found in history, finalized from it, or finalized with a fallback. Diagnostics only. |
+| `HistoryBackfillMonitor.swift` | In-memory record of this session's backfill ticks and reporting passes. Diagnostics only. |
+| `HistoryBackfillSnapshot.swift`, `HistoryBackfillReport.swift` | The debug screen's snapshot of the backfill and dose reporting, and its layout and copyable text. |
 
 ## State — `Sources/TandemKit/State/`
 
@@ -84,7 +87,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager+UI.swift` | `PumpManagerUI`: setup, settings and delivery-uncertainty view controllers, HUD, status highlights. |
 | `TandemUICoordinator.swift` | `TandemScreen` and navigation between the SwiftUI screens. |
 | `TandemKitHUDProvider.swift` | The HUD shown in the host's status bar. |
-| `Views/`, `ViewModels/` | Onboarding (scan and pair), settings, cartridge/tubing/cannula wizards, CGM setup, notifications, Control-IQ, quick bolus, debug tools, the history log viewer. |
+| `Views/`, `ViewModels/` | Onboarding (scan and pair), settings, cartridge/tubing/cannula wizards, CGM setup, notifications, Control-IQ, quick bolus, debug tools, the history log viewer, the history backfill diagnostics. |
 | `Sources/TandemKitPlugin/TandemKitPlugin.swift` | Loop-style plugin entry point. Not used by Trio. |
 
 ## Tests

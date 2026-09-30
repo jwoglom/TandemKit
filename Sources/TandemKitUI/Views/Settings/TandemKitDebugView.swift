@@ -66,6 +66,13 @@ struct TandemKitDebugView: View {
                     Label("History Log Viewer", systemImage: "list.bullet.rectangle")
                 }
                 .disabled(viewModel.openHistoryLogViewer == nil)
+
+                Button {
+                    viewModel.openHistoryBackfill?()
+                } label: {
+                    Label("History Backfill Activity", systemImage: "clock.arrow.circlepath")
+                }
+                .disabled(viewModel.openHistoryBackfill == nil)
             }
 
             Section(header: Text("PumpState")) {

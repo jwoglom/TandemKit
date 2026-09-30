@@ -20,6 +20,23 @@ final class HistoryBackfillCoordinator {
         var isDeepBackfillComplete: Bool
         /// Earliest date a dose may be reported for, as of this tick.
         var emitFloor: Date
+
+        // The rest is for the diagnostics screen.
+        var pumpStatus: HistoryLogStatusReading?
+        var plan: HistoryBackfillPlanner.Plan?
+        /// After matching against the connected pump, before any log-erase reset.
+        var watermarkBefore: UInt32?
+        var watermarkWasReset = false
+        /// Re-derived next tick.
+        var rangesFailed: [ClosedRange<UInt32>] = []
+        var hitDeepSliceCap = false
+    }
+
+    private struct RunResult {
+        var bookkeeping: HistoryBackfillState
+        var read: [ClosedRange<UInt32>] = []
+        var failed: [ClosedRange<UInt32>] = []
+        var hitDeepSliceCap = false
     }
 
     private let logger = TandemLogger(category: "HistoryBackfill")
@@ -61,6 +78,7 @@ final class HistoryBackfillCoordinator {
             // — a watermark written for entries that were never read would mark them read and
             // suppress them once the flag goes on.
             logger.info("Skipping backfill tick: the History Backfill feature flag is off")
+            pumpManager?.historyBackfillMonitor.tickSkipped(.flagOff, at: now)
             completion?(nil)
             return
         }
@@ -68,6 +86,7 @@ final class HistoryBackfillCoordinator {
         guard let pumpManager, let serial = pumpManager.historyLogStoreSerial else {
             // No serial yet means no store key and no bookkeeping identity. Nothing can be
             // filed anywhere findable until a PumpVersionResponse has landed.
+            pumpManager?.historyBackfillMonitor.tickSkipped(.noPumpSerial, at: now)
             completion?(nil)
             return
         }
@@ -78,22 +97,28 @@ final class HistoryBackfillCoordinator {
             rerunRequested = true
             lock.unlock()
             logger.info("Backfill tick already running; another will follow it")
+            pumpManager.historyBackfillMonitor.tickSkipped(.queuedBehindRunningTick, at: now)
             completion?(nil)
             return
         }
         guard !pumpManager.historyFetchGate.isBusy else {
             lock.unlock()
             logger.info("Skipping backfill tick: another history reader is active")
+            pumpManager.historyBackfillMonitor.tickSkipped(.readerBusy, at: now)
             completion?(nil)
             return
         }
         isRunning = true
         lock.unlock()
+        pumpManager.historyBackfillMonitor.tickStarted(at: now)
 
         let finish: (TickOutcome?) -> Void = { [weak self] outcome in
             guard let self else {
                 completion?(outcome)
                 return
+            }
+            if let pumpManager = self.pumpManager {
+                pumpManager.historyBackfillMonitor.tickFinished(startedAt: now, finishedAt: pumpManager.now, outcome: outcome)
             }
             if let outcome {
                 self.pumpManager?.reportHistoryDoses(after: outcome, now: now)
@@ -128,12 +153,14 @@ final class HistoryBackfillCoordinator {
                 finish(nil)
                 return
             }
+            let reading = HistoryLogStatusReading(status, readAt: pumpManager.now)
 
             // A pump holding less than has been read from it had its log erased and its counter
             // restarted; drop the stale read position and the session's view of the old
             // numbering.
             let bookkeeping = reconciled.resettingWatermarkIfAbove(lastSequenceNum: status.lastSequenceNum)
-            if bookkeeping.watermark != reconciled.watermark {
+            let watermarkWasReset = bookkeeping.watermark != reconciled.watermark
+            if watermarkWasReset {
                 self.logger.warning(
                     "Pump history log restarted below the watermark " +
                         "(\(String(describing: reconciled.watermark)) > \(status.lastSequenceNum)); " +
@@ -164,7 +191,11 @@ final class HistoryBackfillCoordinator {
                     rangesRead: [],
                     sessionCovered: self.sessionCoverage,
                     isDeepBackfillComplete: plan.isDeepBackfillComplete,
-                    emitFloor: emitFloor
+                    emitFloor: emitFloor,
+                    pumpStatus: reading,
+                    plan: plan,
+                    watermarkBefore: reconciled.watermark,
+                    watermarkWasReset: watermarkWasReset
                 ))
                 return
             }
@@ -174,15 +205,21 @@ final class HistoryBackfillCoordinator {
                 bookkeeping: bookkeeping,
                 firstSequenceNum: status.firstSequenceNum,
                 now: now
-            ) { updated, rangesRead in
-                self.persist(updated)
+            ) { result in
+                self.persist(result.bookkeeping)
                 finish(TickOutcome(
-                    bookkeeping: updated,
-                    rangesRead: rangesRead,
+                    bookkeeping: result.bookkeeping,
+                    rangesRead: result.read,
                     sessionCovered: self.sessionCoverage,
-                    isDeepBackfillComplete: self.isDeepTargetCovered(bookkeeping: updated, now: now)
+                    isDeepBackfillComplete: self.isDeepTargetCovered(bookkeeping: result.bookkeeping, now: now)
                         || (self.sessionCoverage.map { $0.lowerBound <= status.firstSequenceNum } ?? false),
-                    emitFloor: emitFloor
+                    emitFloor: emitFloor,
+                    pumpStatus: reading,
+                    plan: plan,
+                    watermarkBefore: reconciled.watermark,
+                    watermarkWasReset: watermarkWasReset,
+                    rangesFailed: result.failed,
+                    hitDeepSliceCap: result.hitDeepSliceCap
                 ))
             }
         }
@@ -202,25 +239,25 @@ final class HistoryBackfillCoordinator {
         bookkeeping: HistoryBackfillState,
         firstSequenceNum: UInt32,
         now: Date,
-        completion: @escaping (HistoryBackfillState, [ClosedRange<UInt32>]) -> Void
+        completion: @escaping (RunResult) -> Void
     ) {
-        var bookkeeping = bookkeeping
-        var read: [ClosedRange<UInt32>] = []
+        var result = RunResult(bookkeeping: bookkeeping)
         var deepSlicesWalked = 0
 
         func fetch(_ range: ClosedRange<UInt32>, then: @escaping (Bool) -> Void) {
             let count = Int(range.upperBound - range.lowerBound) + 1
             logger.info("Backfilling history \(range.lowerBound)-\(range.upperBound) (\(count) entries)")
 
-            fetcher.start(numberOfLogs: count, endingAtSequenceNum: range.upperBound) { result in
-                switch result {
+            fetcher.start(numberOfLogs: count, endingAtSequenceNum: range.upperBound) { fetched in
+                switch fetched {
                 case .success:
-                    bookkeeping.advanceWatermark(through: range.upperBound)
+                    result.bookkeeping.advanceWatermark(through: range.upperBound)
                     self.noteSessionCoverage(of: range)
-                    read.append(range)
+                    result.read.append(range)
                     then(true)
                 case let .failure(error):
                     self.logger.warning("Backfill range \(range.lowerBound)-\(range.upperBound) failed: \(error)")
+                    result.failed.append(range)
                     then(false)
                 }
             }
@@ -229,7 +266,7 @@ final class HistoryBackfillCoordinator {
         /// Walks the deep slices, re-deriving each from the frontier the previous one left.
         func stepDeep(_ slice: ClosedRange<UInt32>?) {
             guard let slice else {
-                completion(bookkeeping, read)
+                completion(result)
                 return
             }
             guard deepSlicesWalked < HistoryBackfillPlanner.maxDeepSlicesPerTick else {
@@ -237,19 +274,20 @@ final class HistoryBackfillCoordinator {
                     "Deep backfill hit its per-tick slice cap " +
                         "(\(HistoryBackfillPlanner.maxDeepSlicesPerTick)); resuming next tick"
                 )
-                completion(bookkeeping, read)
+                result.hitDeepSliceCap = true
+                completion(result)
                 return
             }
             deepSlicesWalked += 1
 
             fetch(slice) { succeeded in
                 guard succeeded else {
-                    completion(bookkeeping, read)
+                    completion(result)
                     return
                 }
                 stepDeep(self.nextDeepSlice(
                     firstSequenceNum: firstSequenceNum,
-                    bookkeeping: bookkeeping,
+                    bookkeeping: result.bookkeeping,
                     now: now
                 ))
             }
@@ -261,7 +299,7 @@ final class HistoryBackfillCoordinator {
                 // tick read anything — on first contact the plan cannot name a slice at all.
                 stepDeep(self.nextDeepSlice(
                     firstSequenceNum: firstSequenceNum,
-                    bookkeeping: bookkeeping,
+                    bookkeeping: result.bookkeeping,
                     now: now
                 ))
                 return

@@ -303,6 +303,9 @@ zero temp basals routinely and the pump would otherwise alert on each one.
 - The backfill and the dose reporting are behind the `historyBackfill` and `historyDoseReporting`
   feature flags; the backfill is on by default, dose reporting is off. AGENTS.md has the full
   rules.
+- Debug Options → History Backfill Activity shows what both are doing, from
+  `HistoryBackfillMonitor` (this session's ticks and reporting passes) and `BolusResolutionLog`
+  (persisted, 24 h), laid out by `HistoryBackfillReport`.
 
 ### Reporting to the host
 

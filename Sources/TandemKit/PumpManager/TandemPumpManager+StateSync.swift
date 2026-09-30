@@ -605,16 +605,34 @@ extension TandemPumpManager {
             // Only one is held at a time, so the older settles now rather than staying mutable
             // forever. Not from LastBolusStatus: that describes the newer bolus.
             let record = stale.bolusId.flatMap { historyBolusReport(bolusId: $0, startedAt: stale.startDate) }
+            let staleFallback = stale.deliveredUnits
             if let record {
                 stale.deliveredUnits = record.deliveredUnits
             }
-            finalize(stale, pumpTimestamp: record?.pumpTimestamp, now: now)
+            finalize(
+                stale,
+                pumpTimestamp: record?.pumpTimestamp,
+                now: now,
+                resolution: record == nil ? .heldBolusFinalizedWithFallback : .heldBolusFinalizedFromHistory,
+                fallbackUnits: staleFallback,
+                note: "Superseded by bolus \(dose.bolusId.map(String.init) ?? "?")"
+            )
         }
 
         dose.deliveredUnits = fallbackUnits
         // Delivery has stopped; also the start of the retry window.
         dose.estimatedEndDate = now
         state.pendingBolusFinalization = dose
+        state.bolusResolutionLog.record(BolusResolutionLog.Event(
+            date: now,
+            kind: .bolusHeld,
+            bolusId: dose.bolusId,
+            doseDate: dose.startDate,
+            programmedUnits: dose.value,
+            fallbackUnits: fallbackUnits,
+            isMutable: true,
+            automatic: dose.automatic
+        ))
     }
 
     /// Closes out a bolus left mutable because its delivered volume was unknown, with the pump's
@@ -630,8 +648,11 @@ extension TandemPumpManager {
         // bolus carrying the same id.
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
         let record = lastBolus ?? historyBolusReport(bolusId: bolusId, startedAt: pending.startDate)
+        let fallbackUnits = pending.deliveredUnits
+        let resolution: BolusResolutionLog.Kind
         if let record {
             pending.deliveredUnits = record.deliveredUnits
+            resolution = lastBolus == nil ? .heldBolusFinalizedFromHistory : .heldBolusConfirmedByPump
         } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.bolusFinalizationWindow {
             logger.warning("Pump still has no delivered volume for bolus \(bolusId); leaving it mutable")
             return
@@ -639,9 +660,10 @@ extension TandemPumpManager {
             logger.error(
                 "Giving up on the pump's delivered volume for bolus \(bolusId); finalizing with the fallback \(pending.deliveredUnits)U"
             )
+            resolution = .heldBolusFinalizedWithFallback
         }
 
-        finalize(pending, pumpTimestamp: record?.pumpTimestamp, now: now)
+        finalize(pending, pumpTimestamp: record?.pumpTimestamp, now: now, resolution: resolution, fallbackUnits: fallbackUnits)
     }
 
     /// The pump's `BolusCompleted` record for `bolusId`, if history backfill has already read it
@@ -677,7 +699,14 @@ extension TandemPumpManager {
         )
     }
 
-    private func finalize(_ pending: UnfinalizedDose, pumpTimestamp: Date?, now: Date) {
+    private func finalize(
+        _ pending: UnfinalizedDose,
+        pumpTimestamp: Date?,
+        now: Date,
+        resolution: BolusResolutionLog.Kind,
+        fallbackUnits: Double,
+        note: String? = nil
+    ) {
         let finalizedDose = pending.toDoseEntry(
             endDate: BolusEndDate.resolve(
                 startDate: pending.startDate,
@@ -690,6 +719,17 @@ extension TandemPumpManager {
         )
 
         state.pendingBolusFinalization = nil
+        state.bolusResolutionLog.record(BolusResolutionLog.Event(
+            date: now,
+            kind: resolution,
+            bolusId: pending.bolusId,
+            doseDate: pending.startDate,
+            programmedUnits: pending.value,
+            deliveredUnits: finalizedDose.deliveredUnits,
+            fallbackUnits: fallbackUnits,
+            automatic: pending.automatic,
+            note: note
+        ))
 
         var events = getActivePumpEvents()
         events.append(NewPumpEvent.bolus(dose: finalizedDose, date: pending.startDate))

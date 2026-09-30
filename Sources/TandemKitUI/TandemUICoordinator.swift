@@ -20,6 +20,7 @@ enum TandemScreen {
     case alertSettings
     case debug
     case historyLogViewer
+    case historyBackfill
     case featureFlags
     case troubleshootConnection
 
@@ -305,6 +306,7 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             let viewModel = TandemKitDebugViewModel(
                 pumpManager: pumpManager,
                 openHistoryLogViewer: { self.navigateTo(.historyLogViewer) },
+                openHistoryBackfill: { self.navigateTo(.historyBackfill) },
                 openFeatureFlags: { self.navigateTo(.featureFlags) },
                 rerunInitialSetup: {
                     self.pumpManager.deleteSavedPumpState()
@@ -321,6 +323,13 @@ class TandemUICoordinator: UINavigationController, PumpManagerOnboarding, Comple
             return hostingController(
                 rootView: TandemKitHistoryLogViewerView(viewModel: viewModel),
                 title: String(localized: "History Log Viewer", comment: "Title for history log viewer screen")
+            )
+
+        case .historyBackfill:
+            let viewModel = TandemKitHistoryBackfillViewModel(pumpManager: pumpManager)
+            return hostingController(
+                rootView: TandemKitHistoryBackfillView(viewModel: viewModel),
+                title: String(localized: "History Backfill", comment: "Title for history backfill diagnostics screen")
             )
 
         case .featureFlags:

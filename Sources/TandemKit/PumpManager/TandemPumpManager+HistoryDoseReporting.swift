@@ -15,6 +15,9 @@ extension TandemPumpManager {
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
+                var pass = HistoryBackfillMonitor.ReportingPass(date: self.now, covered: covered, floor: outcome.emitFloor)
+                pass.result = .deferred(error.localizedDescription)
+                self.historyBackfillMonitor.reportingPassFinished(pass)
                 return
             }
             self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
@@ -27,6 +30,11 @@ extension TandemPumpManager {
         floor: Date,
         now: Date
     ) {
+        // `now` is when the tick started, which can be a whole walk earlier.
+        let decidedAt = self.now
+        var pass = HistoryBackfillMonitor.ReportingPass(date: decidedAt, covered: covered, floor: floor)
+        defer { historyBackfillMonitor.reportingPassFinished(pass) }
+
         let logs: [HistoryLog]
         do {
             logs = try historyLogStore.logs(pumpSerial: serial.rawValue, in: covered)
@@ -34,12 +42,24 @@ extension TandemPumpManager {
                 .filter(Self.isReportedBolusInput)
         } catch {
             logger.error("Could not read the history log store for dose reporting: \(error)")
+            pass.result = .storeUnreadable
             return
         }
 
         for bolex in logs.compactMap({ $0 as? BolexActivatedHistoryLog }) {
             logger.warning("Extended bolus \(bolex.bolusId) in pump history is not reported to the app")
+            pass.extendedBoluses += 1
+            if !state.bolusResolutionLog.contains(.extendedBolusNotReported, bolusId: bolex.bolusId) {
+                state.bolusResolutionLog.record(BolusResolutionLog.Event(
+                    date: decidedAt,
+                    kind: .extendedBolusNotReported,
+                    bolusId: bolex.bolusId,
+                    doseDate: Dates.fromJan12008EpochSecondsToDate(TimeInterval(bolex.pumpTimeSec)),
+                    programmedUnits: HistoryToDoseMapper.roundToReportingResolution(Double(bolex.bolexSize))
+                ))
+            }
         }
+        let bolusSources = Self.bolusSources(in: logs)
 
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
@@ -57,13 +77,39 @@ extension TandemPumpManager {
 
         var reports: [NewPumpEvent] = []
         for event in events {
-            guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
+            guard let dose = event.dose, dose.type == .bolus,
                   let decoded = HistoryLogSyncIdentifier.decode(event.raw), decoded.scheme == .bolus
             else {
                 continue
             }
-            if let report = historyBolusReport(event, dose: dose, bolusId: Int(decoded.identifier), serial: serial) {
+            pass.boluses += 1
+            guard dose.startDate >= floor else {
+                pass.belowFloor += 1
+                continue
+            }
+
+            let bolusId = Int(decoded.identifier)
+            switch historyBolusDecision(event, dose: dose, bolusId: bolusId, serial: serial) {
+            case let .report(report, kind):
                 reports.append(report)
+                pass.reported += 1
+                state.bolusResolutionLog.record(BolusResolutionLog.Event(
+                    date: decidedAt,
+                    kind: kind,
+                    bolusId: bolusId,
+                    doseDate: report.date,
+                    programmedUnits: report.dose?.programmedUnits,
+                    deliveredUnits: report.dose?.isMutable == false ? report.dose?.deliveredUnits : nil,
+                    isMutable: report.dose?.isMutable ?? false,
+                    automatic: report.dose?.automatic,
+                    bolusSource: bolusSources[bolusId]
+                ))
+            case .alreadyFinalized:
+                pass.alreadyFinalized += 1
+            case .awaitingCompletion:
+                pass.awaitingCompletion += 1
+            case .liveTracking:
+                pass.leftToLivePath += 1
             }
         }
 
@@ -87,12 +133,29 @@ extension TandemPumpManager {
         }
     }
 
-    private func historyBolusReport(
+    /// `BolusDeliveryHistoryLog.BolusSource` raw value per `bolusId`.
+    private static func bolusSources(in logs: [HistoryLog]) -> [Int: Int] {
+        var sources: [Int: Int] = [:]
+        for case let delivery as BolusDeliveryHistoryLog in logs {
+            sources[delivery.bolusID] = delivery.bolusSource
+        }
+        return sources
+    }
+
+    private enum HistoryBolusDecision {
+        case report(NewPumpEvent, BolusResolutionLog.Kind)
+        case alreadyFinalized
+        /// Already reported mutable; nothing new until its completion is read (#452).
+        case awaitingCompletion
+        case liveTracking
+    }
+
+    private func historyBolusDecision(
         _ event: NewPumpEvent,
         dose: DoseEntry,
         bolusId: Int,
         serial: HistoryLogSyncIdentifier.PumpSerial
-    ) -> NewPumpEvent? {
+    ) -> HistoryBolusDecision {
         guard let entry = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue) else {
             state.bolusReportLedger.record(BolusReportLedger.Entry(
                 bolusId: bolusId,
@@ -103,21 +166,25 @@ extension TandemPumpManager {
                 automatic: dose.automatic ?? false,
                 isFinalized: false
             ))
-            return event
+            return .report(event, .pumpBolusFound)
         }
 
-        guard !entry.isFinalized, !dose.isMutable else {
-            return nil
+        guard !entry.isFinalized else {
+            return .alreadyFinalized
+        }
+        guard !dose.isMutable else {
+            return .awaitingCompletion
         }
 
         if entry.origin == .commanded {
             guard !isTrackingBolusLive(bolusId) else {
-                return nil
+                return .liveTracking
             }
             releaseLiveBolusState(bolusId)
+            return .report(Self.reported(dose, as: entry), .appBolusFinalizedFromHistory)
         }
 
-        return Self.reported(dose, as: entry)
+        return .report(Self.reported(dose, as: entry), .pumpBolusFinalized)
     }
 
     private func isTrackingBolusLive(_ bolusId: Int) -> Bool {

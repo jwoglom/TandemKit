@@ -120,6 +120,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// `syncPumpData` rather than `telemetryScheduler`, which the bolus path cancels wholesale.
     lazy var historyBackfillCoordinator = HistoryBackfillCoordinator(pumpManager: self)
 
+    /// Here rather than on the coordinator, so the diagnostics screen's polling never races a sync
+    /// to create that lazy property.
+    let historyBackfillMonitor: HistoryBackfillMonitor
+
     internal var bolusProgressReport: TandemDoseProgressReporter?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
@@ -196,6 +200,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: state.rawValue)
         self.bluetooth = bluetooth
         self.clock = clock
+        historyBackfillMonitor = HistoryBackfillMonitor(startedAt: clock.now)
         bluetooth.pumpManager = self
 
         // Every history log that streams in — telemetry, viewer fetches, probes — lands in the
