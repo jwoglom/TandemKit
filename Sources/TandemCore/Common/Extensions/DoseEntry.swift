@@ -22,7 +22,6 @@ public extension DoseEntry {
                 deliveredUnits: deliveredUnits,
                 insulinType: insulinType,
                 automatic: activationType.isAutomatic,
-                manuallyEntered: activationType == .manualNoRecommendation,
                 isMutable: false
             )
         }
@@ -36,7 +35,6 @@ public extension DoseEntry {
             deliveredUnits: deliveredUnits,
             insulinType: insulinType,
             automatic: activationType.isAutomatic,
-            manuallyEntered: activationType == .manualNoRecommendation,
             isMutable: true
         )
     }

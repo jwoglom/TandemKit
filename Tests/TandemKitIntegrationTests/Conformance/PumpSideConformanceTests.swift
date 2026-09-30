@@ -37,12 +37,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         so a fully delivered bolus reaches the host as 0 U
         """
 
-    /// Section E's `manuallyEntered == false`, which every manually activated bolus trips.
-    private static let manuallyEnteredDefect = """
-        jwoglom/TandemKit#337: manuallyEntered is set for a normal pump-delivered bolus \
-        (DoseEntry.bolus maps manualNoRecommendation to manuallyEntered)
-        """
-
     /// `harness.reset()` restores pairing, clock, faults and the link, not delivery: a suspend, a
     /// running bolus or temp rate and a changed profile rate would carry into the next scenario
     /// (the emulator answers 409 to a second suspend). Put the pump back before the base teardown,
@@ -451,8 +445,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         assertFieldSemantics(
             finalizedBolus,
             programmed: Self.bolusUnits,
-            automatic: false,
-            manuallyEnteredDefect: Self.manuallyEnteredDefect
+            automatic: false
         )
 
         let bolusTimeline = try timeline()
@@ -992,7 +985,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         _ event: NewPumpEvent,
         programmed: Double?,
         automatic: Bool?,
-        manuallyEnteredDefect: String? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -1009,13 +1001,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         } else {
             XCTFail("a finalized dose carries deliveredUnits: \(event)", file: file, line: line)
         }
-        if let manuallyEnteredDefect {
-            expectDefect(manuallyEnteredDefect) {
-                XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
-            }
-        } else {
-            XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
-        }
+        XCTAssertFalse(dose.manuallyEntered, "pump-delivered doses are not manually entered", file: file, line: line)
         if let automatic {
             XCTAssertEqual(dose.automatic, automatic, "automatic reflects the activation type", file: file, line: line)
         }

@@ -118,15 +118,11 @@ final class CancelConformanceTests: ConformanceTestCase {
     /// `deliveredUnits` on the pump's increment, `isMutable` false, `manuallyEntered` false for a
     /// pump-delivered dose, `automatic` matching the activation, `insulinType` set, and
     /// `syncIdentifier` derived from `raw` rather than set independently.
-    ///
-    /// `manuallyEntered` is checked separately by the caller when the path under test is the one
-    /// #337 covers, so that only that assertion carries the marker.
     private func assertFieldSemantics(
         _ event: NewPumpEvent,
         programmedValue: Double,
         expectedDelivered: Double,
         automatic: Bool,
-        checkManuallyEntered: Bool = true,
         incrementFailure: String? = nil,
         _ what: String,
         file: StaticString = #filePath,
@@ -165,9 +161,7 @@ final class CancelConformanceTests: ConformanceTestCase {
             file: file,
             line: line
         )
-        if checkManuallyEntered {
-            XCTAssertEqual(dose.manuallyEntered, false, "\(what): a pump-delivered dose is not manually entered", file: file, line: line)
-        }
+        XCTAssertEqual(dose.manuallyEntered, false, "\(what): a pump-delivered dose is not manually entered", file: file, line: line)
     }
 
     // MARK: - B1. Cancel a bolus at three points
@@ -750,15 +744,8 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.bolusUnits,
             expectedDelivered: lastBolus.deliveredUnits,
             automatic: false,
-            checkManuallyEntered: false,
             "cancel while disconnected"
         )
-        XCTExpectFailure(
-            "jwoglom/TandemKit#337: the completion path marks a pump-delivered bolus manuallyEntered, which makes it an external dose in Trio",
-            strict: true
-        ) {
-            XCTAssertEqual(finalized.dose?.manuallyEntered, false, "a pump-delivered dose is not manually entered")
-        }
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("cancel while disconnected")
@@ -836,7 +823,6 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.bolusUnits,
             expectedDelivered: lastBolus.deliveredUnits,
             automatic: false,
-            checkManuallyEntered: false,
             "occlusion"
         )
         // Tolerance is the pump's initiation lead-in: `BolusEndDate` floors a finalized end at
@@ -850,12 +836,6 @@ final class CancelConformanceTests: ConformanceTestCase {
             accuracy: TandemPumpCapabilities.bolusInitiationDelay + 2,
             "the bolus ended when the pump stopped it, not when the driver noticed (\(detectedAfter))"
         )
-        XCTExpectFailure(
-            "jwoglom/TandemKit#337: the completion path marks a pump-delivered bolus manuallyEntered, which makes it an external dose in Trio",
-            strict: true
-        ) {
-            XCTAssertEqual(finalized.dose?.manuallyEntered, false, "a pump-delivered dose is not manually entered")
-        }
 
         // The suspend: dated when delivery stopped.
         let suspends = events(ofType: .suspend, after: start)
