@@ -106,6 +106,35 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return driver
     }
 
+    /// Leaves the driver no pump history to recover a bolus volume from, for scenarios where the
+    /// volume must be unknown everywhere (#448). Persists across `relaunch()`.
+    func turnOffHistoryBackfill(_ driver: FaketandemHarness.Driver) {
+        driver.manager.state.featureFlags[.historyBackfill] = false
+    }
+
+    /// Drops every `LastBolusStatus` answer, whichever version the driver asks for.
+    func dropEveryLastBolusStatus() throws {
+        for name in ["LastBolusStatusV3Request", "LastBolusStatusV2Request", "LastBolusStatusRequest"] {
+            var fault = FaketandemFaultSpec(.dropResponse, message: name)
+            fault.every = true
+            XCTAssertNotNil(try harness.client.armFault(fault))
+        }
+    }
+
+    /// Syncs a minute apart until `raw`'s finalized report arrives: a backfill tick reads history
+    /// after the sync's bolus reconciliation, so a record it finds is used by the next sync.
+    func syncUntilFinalized(raw: Data, maxSyncs: Int = 4) throws -> NewPumpEvent {
+        for _ in 0 ..< maxSyncs {
+            _ = try sync()
+            drainDelegate()
+            if let finalized = allPumpEventBatches.flatMap(\.events).first(where: { $0.raw == raw && $0.dose?.isMutable == false }) {
+                return finalized
+            }
+            try clock.advanceBoth(seconds: .minutes(1))
+        }
+        throw IntegrationWaitTimeout(what: "finalized report of \(LoopDoseStoreOracle.describe(raw))", timeout: TimeInterval(maxSyncs) * 60)
+    }
+
     /// The app restarts: persist `rawValue`, drop the manager, build a new one from the persisted
     /// state with a new delegate. Returns the new driver. The old delegate's journal is kept in
     /// `delegates`, so `feedOracles()` still sees every batch the host ever received.

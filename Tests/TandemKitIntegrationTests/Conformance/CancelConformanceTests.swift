@@ -889,4 +889,92 @@ final class CancelConformanceTests: ConformanceTestCase {
             timeline.assertMatches(loop, "occlusion")
         }
     }
+
+    // MARK: - B8. Cancel whose delivered volume cannot be read
+
+    /// `LastBolusStatus` never answers after a cancel and history backfill is off: once the retry
+    /// window is over the bolus is finalized with the time delivery ran, never 0 U (#448).
+    func testB8CancelWithTheVolumeNeverReadableFinalizesWithTheTimeDeliveryRan() throws {
+        try runCancelWithUnreadableVolume(historyBackfill: false)
+    }
+
+    /// As B8 with backfill on: the `BolusCompleted` record gives the pump's own volume, without
+    /// waiting out the window (#448).
+    func testB8bCancelWithAnUnreadableVolumeIsFinalizedFromThePumpsHistory() throws {
+        try runCancelWithUnreadableVolume(historyBackfill: true)
+    }
+
+    private func runCancelWithUnreadableVolume(historyBackfill: Bool) throws {
+        let driver = try startCancelDriver()
+        if !historyBackfill {
+            turnOffHistoryBackfill(driver)
+        }
+        let start = allPumpEventBatches.count
+        let what = historyBackfill ? "cancel, volume from history" : "cancel, volume never readable"
+        try dropEveryLastBolusStatus()
+        // #448's case: the driver never sees a delivering status, so its progress estimate stays 0 U.
+        var statusFault = FaketandemFaultSpec(.dropResponse, message: "CurrentBolusStatusRequest")
+        statusFault.every = true
+        let noStatus = try XCTUnwrap(try harness.client.armFault(statusFault))
+
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits), what)
+        let raw = try firstMutable(.bolus, after: start, what).raw
+        let seconds = Self.deliverySeconds(forUnits: 1.0)
+        try clock.advanceBoth(seconds: seconds, ticks: max(1, Int(seconds.rounded())))
+        XCTAssertNil(driver.manager.state.bolusDose?.deliveryStartDate, "\(what): no delivering status reached the driver")
+
+        // The cancel waits out the driver's response timeout on the dropped LastBolusStatus.
+        guard case let .success(returned) = try cancelBolus(timeout: 120) else {
+            return XCTFail("\(what): cancelBolus failed")
+        }
+        try harness.client.clearFault(id: noStatus.id)
+        XCTAssertEqual(returned?.isMutable, true, "\(what): an unconfirmed cancel is handed back mutable")
+        let lastBolus = try XCTUnwrap(try harness.client.snapshot().lastBolus, what)
+        XCTAssertEqual(lastBolus.deliveredUnits, 1.0, accuracy: 0.02, "\(what): the pump stopped after about 1 U")
+        XCTAssertEqual(driver.manager.state.pendingBolusFinalization?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.02, "\(what): the fallback is the time delivery ran")
+
+        let finalized: NewPumpEvent
+        if historyBackfill {
+            let heldFrom = clock.now
+            finalized = try syncUntilFinalized(raw: raw)
+            XCTAssertLessThan(clock.now.timeIntervalSince(heldFrom), TandemPumpManager.bolusFinalizationWindow, "\(what): without waiting out the window")
+        } else {
+            _ = try sync(timeout: 420)
+            XCTAssertNotNil(driver.manager.state.pendingBolusFinalization, "\(what): held while the window runs")
+            XCTAssertFalse(events(ofType: .bolus, after: start).contains { $0.dose?.isMutable == false }, "\(what): not finalized on a guess inside the window")
+            try clock.advanceBoth(seconds: TandemPumpManager.bolusFinalizationWindow + .minutes(1))
+            _ = try sync(timeout: 420)
+            finalized = try lastFinalized(.bolus, after: start, what)
+        }
+        XCTAssertEqual(finalized.raw, raw, "\(what): raw kept")
+        XCTAssertNil(driver.manager.state.pendingBolusFinalization, what)
+
+        let delivered = try XCTUnwrap(finalized.dose?.deliveredUnits, what)
+        XCTAssertGreaterThan(delivered, 0, "\(what): never 0 U for insulin that went in")
+        // From history it is the pump's number; the fallback is the modelled rate over the same time.
+        try assertFieldSemantics(
+            finalized,
+            programmedValue: Self.bolusUnits,
+            expectedDelivered: historyBackfill ? lastBolus.deliveredUnits : delivered,
+            automatic: false,
+            what
+        )
+        XCTAssertEqual(delivered, lastBolus.deliveredUnits, accuracy: historyBackfill ? Self.reportingIncrement : 0.02, what)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates(what)
+        trio.assertNoDuplicates(what)
+        XCTAssertEqual(loop.assertPermanent(raw: raw, what)?.dose.deliveredUnits, delivered, what)
+        trio.assertSingleBolus(at: try firstMutable(.bolus, after: start, what).date, amount: delivered, accuracy: Self.reportingIncrement, what)
+        // With no delivering status seen, the driver's end model adds the 15 s lead-in the emulator lacks.
+        try timeline().assertMatches(
+            loop,
+            tolerance: PumpTimeline.Tolerance(
+                time: TandemPumpCapabilities.bolusInitiationDelay + 2,
+                units: historyBackfill ? Self.reportingIncrement : 0.02,
+                rate: 0.005
+            ),
+            what
+        )
+    }
 }

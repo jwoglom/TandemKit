@@ -15,6 +15,8 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     public private(set) var bolusStatedOn: Date?
     private var deliveredUnits: Double = 0
 
+    var programmedUnits: Double { total }
+
     public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType) {
         self.pumpManager = pumpManager
         self.dose = dose

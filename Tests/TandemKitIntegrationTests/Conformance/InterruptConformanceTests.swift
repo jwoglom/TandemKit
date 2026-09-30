@@ -345,6 +345,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
     func testA3_relaunchKeepsBolusMutableUntilDeliveredVolumeCanBeRead() throws {
         let first = try stageDriver()
+        turnOffHistoryBackfill(first)
         let batchesBefore = allPumpEventBatches.count
 
         XCTAssertNil(try enactBolus(units: Self.bolusUnits))
@@ -356,11 +357,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         _ = try relaunch()
         // Before completion: the pump's bolusChange at completion makes the driver read LastBolusStatus.
-        for name in ["LastBolusStatusV3Request", "LastBolusStatusV2Request", "LastBolusStatusRequest"] {
-            var fault = FaketandemFaultSpec(.dropResponse, message: name)
-            fault.every = true
-            XCTAssertNotNil(try harness.client.armFault(fault))
-        }
+        try dropEveryLastBolusStatus()
         let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
         try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
 
@@ -394,6 +391,88 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertNotNil(loop.assertPermanent(raw: raw, "after the delivered-volume retry"))
         trio.assertSingleBolus(at: started.date, amount: lastBolus.deliveredUnits)
         try timeline().assertMatches(loop)
+    }
+
+    /// No `LastBolusStatus` answer and no history to read: once the retry window is over, a
+    /// bolus the pump finished is finalized at its programmed amount, not the persisted 0 U (#448).
+    func testA3c_relaunchWithTheVolumeNeverReadableFinalizesAtTheProgrammedAmount() throws {
+        let first = try stageDriver()
+        turnOffHistoryBackfill(first)
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits))
+        let bolusId = try XCTUnwrap(first.manager.state.bolusDose?.bolusId)
+        let started = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .bolus }
+        )
+        let raw = started.raw
+
+        _ = try relaunch()
+        try dropEveryLastBolusStatus()
+        let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId, step: 2)
+        XCTAssertEqual(lastBolus.deliveredUnits, Self.bolusUnits)
+        try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
+        _ = try sync(timeout: 420)
+        XCTAssertEqual(current?.manager.state.pendingBolusFinalization?.bolusId, bolusId)
+        XCTAssertTrue(allPumpEventBatches.flatMap(\.events).allSatisfy { $0.raw != raw || $0.dose?.isMutable == true })
+
+        try clock.advanceBoth(seconds: TandemPumpManager.bolusFinalizationWindow + .minutes(1))
+        _ = try sync(timeout: 420)
+
+        let finalized = try finalizedEvent(raw: raw)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, Self.bolusUnits, "the programmed amount Loop counted while it was held")
+        XCTAssertNil(current?.manager.state.pendingBolusFinalization)
+        try assertFinalizedFieldSemantics(finalized, programmed: Self.bolusUnits, activationType: .manualNoRecommendation)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(loop.assertPermanent(raw: raw)?.dose.deliveredUnits, lastBolus.deliveredUnits)
+        trio.assertSingleBolus(at: started.date, amount: lastBolus.deliveredUnits)
+        // With no pump timestamp, the end is the driver's delivery model, not the slower pump's.
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(time: 60, units: 0.001, rate: 0.005))
+    }
+
+    /// The pump stops the bolus short while the app is away and `LastBolusStatus` never answers:
+    /// the volume comes from the `BolusCompleted` record backfill reads, not the programmed fallback.
+    func testA3d_relaunchRecoversAStoppedBolusFromThePumpsHistory() throws {
+        let first = try stageDriver()
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertNil(try enactBolus(units: Self.bolusUnits))
+        let bolusId = try XCTUnwrap(first.manager.state.bolusDose?.bolusId)
+        let started = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .bolus }
+        )
+        let raw = started.raw
+
+        let persisted = first.manager.state.rawValue
+        try shutDownDriver()
+        try dropEveryLastBolusStatus()
+        try clock.advanceBoth(seconds: 60, ticks: 12)
+        try harness.client.abortBolus()
+        let lastBolus = try XCTUnwrap(try harness.client.snapshot().lastBolus)
+        XCTAssertEqual(lastBolus.bolusId, bolusId)
+        XCTAssertLessThan(lastBolus.deliveredUnits, Self.bolusUnits - 0.5, "stopped well short of the programmed amount")
+        try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
+
+        startDriver(state: TandemPumpManagerState(rawValue: persisted))
+        let finalizedAt = clock.now
+        let finalized = try syncUntilFinalized(raw: raw)
+        XCTAssertLessThan(clock.now.timeIntervalSince(finalizedAt), TandemPumpManager.bolusFinalizationWindow, "without waiting out the window")
+
+        let dose = try XCTUnwrap(finalized.dose)
+        XCTAssertEqual(dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005, "the pump's recorded volume")
+        XCTAssertEqual(dose.endDate.timeIntervalSince(lastBolus.endTime), 0, accuracy: 2, "dated by the pump's record")
+        XCTAssertNil(current?.manager.state.pendingBolusFinalization)
+        try assertFinalizedFieldSemantics(finalized, programmed: Self.bolusUnits, activationType: .manualNoRecommendation)
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertNotNil(loop.assertPermanent(raw: raw))
+        trio.assertSingleBolus(at: started.date, amount: lastBolus.deliveredUnits)
+        try timeline().assertMatches(loop, tolerance: PumpTimeline.Tolerance(time: 2, units: 0.001, rate: 0.005))
     }
 
     // MARK: - A4
@@ -695,6 +774,9 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
     private func runAnotherBolusDelivering(after interruption: Interruption, recordReadable: Bool) throws {
         let first = try stageDriver()
+        if !recordReadable {
+            turnOffHistoryBackfill(first)
+        }
         let batchesBefore = allPumpEventBatches.count
 
         XCTAssertNil(try enactBolus(units: Self.bolusUnits))
@@ -724,11 +806,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         try clock.advanceBoth(seconds: first.manager.estimatedDuration(toBolus: Self.bolusUnits) + .minutes(2))
 
         if !recordReadable {
-            for name in ["LastBolusStatusV3Request", "LastBolusStatusV2Request", "LastBolusStatusRequest"] {
-                var fault = FaketandemFaultSpec(.dropResponse, message: name)
-                fault.every = true
-                XCTAssertNotNil(try harness.client.armFault(fault))
-            }
+            try dropEveryLastBolusStatus()
         }
 
         switch interruption {

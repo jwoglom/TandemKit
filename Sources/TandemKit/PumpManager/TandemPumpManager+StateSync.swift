@@ -249,7 +249,7 @@ extension TandemPumpManager {
                     date: dose.startDate
                 ))
             } else {
-                holdForFinalization(dose)
+                holdForFinalization(dose, fallbackUnits: dose.value)
                 events.append(NewPumpEvent.bolus(
                     dose: dose.toDoseEntry(isMutable: true),
                     date: dose.startDate
@@ -308,8 +308,6 @@ extension TandemPumpManager {
                 lastBolus = queryLastBolusReport(bolusId: bolusId)
             }
 
-            let estimatedDelivered = max(progressReport.progress.deliveredUnits, 0)
-
             var events = getActivePumpEvents()
             if let lastBolus {
                 events.append(progressReport.getPumpEvent(
@@ -318,18 +316,17 @@ extension TandemPumpManager {
                     deliveryStartDate: state.bolusDose?.deliveryStartDate
                 ))
             } else if let dose = state.bolusDose {
-                // Unknown, not the programmed total: a bolus the pump stopped early would be
-                // recorded as fully delivered, and a finalized dose is never revised (#328).
+                // Held, not finalized at the programmed total: the pump may yet say it stopped early,
+                // and a finalized dose is never revised (#328).
                 logger.error("No delivered volume for finished bolus \(dose.bolusId ?? -1); keeping it mutable")
-                dose.deliveredUnits = estimatedDelivered
-                holdForFinalization(dose)
+                holdForFinalization(dose, fallbackUnits: dose.value)
                 events.append(NewPumpEvent.bolus(
                     dose: dose.toDoseEntry(isMutable: true),
                     date: dose.startDate
                 ))
             } else {
-                // No dose to hold: the observed estimate is the only number there is.
-                events.append(progressReport.getPumpEvent(actualDeliveredUnits: estimatedDelivered))
+                // Not the sampled estimate, which is 0 U until a second delivering status (#448).
+                events.append(progressReport.getPumpEvent(actualDeliveredUnits: progressReport.programmedUnits))
             }
 
             bolusProgressReport = nil
@@ -600,24 +597,29 @@ extension TandemPumpManager {
 
     static let bolusFinalizationWindow: TimeInterval = .minutes(15)
 
-    /// Holds `dose` mutable, with `deliveredUnits` carrying the estimate to fall back on, until
-    /// the pump reports what it delivered (#328).
-    func holdForFinalization(_ dose: UnfinalizedDose, now: Date? = nil) {
+    /// Holds `dose` mutable until the pump or its history says what it delivered (#328), and
+    /// records `fallbackUnits` as what it is finalized with if neither ever does (#448).
+    func holdForFinalization(_ dose: UnfinalizedDose, fallbackUnits: Double, now: Date? = nil) {
         let now = now ?? self.now
         if let stale = state.pendingBolusFinalization, stale.bolusId != dose.bolusId {
-            // Only one is held at a time, so the older settles for its estimate now rather than
-            // staying mutable forever.
-            finalize(stale, pumpTimestamp: nil, now: now)
+            // Only one is held at a time, so the older settles now rather than staying mutable
+            // forever. Not from LastBolusStatus: that describes the newer bolus.
+            let record = stale.bolusId.flatMap { historyBolusReport(bolusId: $0, startedAt: stale.startDate) }
+            if let record {
+                stale.deliveredUnits = record.deliveredUnits
+            }
+            finalize(stale, pumpTimestamp: record?.pumpTimestamp, now: now)
         }
 
+        dose.deliveredUnits = fallbackUnits
         // Delivery has stopped; also the start of the retry window.
         dose.estimatedEndDate = now
         state.pendingBolusFinalization = dose
     }
 
     /// Closes out a bolus left mutable because its delivered volume was unknown, with the pump's
-    /// number or, past the window, the estimate taken when delivery ended — never a placeholder
-    /// (#328).
+    /// number from `LastBolusStatus` or its history or, past the window, the fallback recorded
+    /// when it was held (#328, #448).
     func finalizePendingBolus(now: Date? = nil) {
         let now = now ?? self.now
         guard let pending = state.pendingBolusFinalization, let bolusId = pending.bolusId else {
@@ -627,18 +629,52 @@ extension TandemPumpManager {
         // `LastBolusStatus` reports whatever the pump stored last, which mid-bolus may be a later
         // bolus carrying the same id.
         let lastBolus = state.bolusDose == nil ? queryLastBolusReport(bolusId: bolusId) : nil
-        if let lastBolus {
-            pending.deliveredUnits = lastBolus.deliveredUnits
+        let record = lastBolus ?? historyBolusReport(bolusId: bolusId, startedAt: pending.startDate)
+        if let record {
+            pending.deliveredUnits = record.deliveredUnits
         } else if now.timeIntervalSince(pending.estimatedEndDate) < Self.bolusFinalizationWindow {
             logger.warning("Pump still has no delivered volume for bolus \(bolusId); leaving it mutable")
             return
         } else {
             logger.error(
-                "Giving up on the pump's delivered volume for bolus \(bolusId); finalizing with the estimate \(pending.deliveredUnits)U"
+                "Giving up on the pump's delivered volume for bolus \(bolusId); finalizing with the fallback \(pending.deliveredUnits)U"
             )
         }
 
-        finalize(pending, pumpTimestamp: lastBolus?.pumpTimestamp, now: now)
+        finalize(pending, pumpTimestamp: record?.pumpTimestamp, now: now)
+    }
+
+    /// The pump's `BolusCompleted` record for `bolusId`, if history backfill has already read it
+    /// into the session store. Never reads the pump itself, so it honours the backfill flag (#448).
+    func historyBolusReport(bolusId: Int, startedAt: Date) -> LastBolusReport? {
+        guard let serial = historyLogStoreSerial else {
+            return nil
+        }
+
+        // An hour's margin for clock skew; bolus ids repeat only over far longer.
+        let since = Dates.fromInstantToJan12008EpochSeconds(startedAt.addingTimeInterval(state.pumpClockOffset - .hours(1)))
+        let stored: [StoredHistoryLog]
+        do {
+            stored = try historyLogStore.logs(
+                pumpSerial: serial.rawValue,
+                ofTypes: [BolusCompletedHistoryLog.typeId],
+                sincePumpTimeSec: UInt32(clamping: Int64(max(0, since)))
+            )
+        } catch {
+            logger.error("Failed to read history for bolus \(bolusId): \(error)")
+            return nil
+        }
+
+        guard let completion = stored.compactMap({ $0.parsed() as? BolusCompletedHistoryLog }).last(where: { $0.bolusId == bolusId })
+        else {
+            return nil
+        }
+        logger.info("Delivered volume for bolus \(bolusId) recovered from pump history")
+        return LastBolusReport(
+            deliveredUnits: HistoryToDoseMapper.roundToReportingResolution(Double(completion.insulinDelivered)),
+            // Same pump clock and epoch as `LastBolusStatus`, so `finalize` translates it the same way.
+            pumpTimestamp: Dates.fromJan12008EpochSecondsToDate(TimeInterval(completion.pumpTimeSec))
+        )
     }
 
     private func finalize(_ pending: UnfinalizedDose, pumpTimestamp: Date?, now: Date) {
