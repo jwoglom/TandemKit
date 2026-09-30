@@ -216,8 +216,14 @@ extension TandemPumpManager {
             return
         }
 
-        // Normal CurrentBolusStatus fetch
-        if response.status == .alreadyDeliveredOrInvalid, bolusProgressReport == nil {
+        // The pump runs one bolus at a time: another id delivering means ours finished out of contact.
+        let trackedBolusId = state.bolusDose?.bolusId
+        let deliveringAnother = response.status == .delivering && trackedBolusId != nil && response.bolusId != trackedBolusId
+        if deliveringAnother {
+            logger.warning("Pump is delivering bolus \(response.bolusId), not \(trackedBolusId ?? -1); finishing ours")
+        }
+
+        if response.status == .alreadyDeliveredOrInvalid || deliveringAnother, bolusProgressReport == nil {
             guard let dose = state.bolusDose, let bolusId = dose.bolusId else {
                 if state.bolusState != .noBolus {
                     state.bolusState = .noBolus
@@ -270,7 +276,7 @@ extension TandemPumpManager {
             return
         }
 
-        if response.status == .delivering {
+        if response.status == .delivering, !deliveringAnother {
             if let dose = state.bolusDose {
                 // The pump's own start of delivery, which runs ~15s behind when we programmed the
                 // bolus, is what the reported dose starts at (#339).
@@ -293,8 +299,7 @@ extension TandemPumpManager {
             return
         }
 
-        if response.bolusId == 0 {
-            // Bolus is finished
+        if response.bolusId == 0 || deliveringAnother {
             telemetryScheduler.cancelAll()
 
             // The pump's own timestamp dates the end of delivery, not this detection (#339).

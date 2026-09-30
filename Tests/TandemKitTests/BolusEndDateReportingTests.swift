@@ -75,10 +75,10 @@ import XCTest
     }
 
     /// The pump reports it has started delivering, stamped with its own start of delivery.
-    private func stubDelivering(at deliveryStart: Date) {
+    private func stubDelivering(at deliveryStart: Date, bolusId: Int = BolusEndDateReportingTests.bolusId) {
         bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
             statusId: 1,
-            bolusId: Self.bolusId,
+            bolusId: bolusId,
             timestamp: UInt32(Dates.fromInstantToJan12008EpochSeconds(deliveryStart)),
             requestedVolume: 2000,
             bolusSourceId: 0,
@@ -235,6 +235,64 @@ import XCTest
         XCTAssertNil(manager.state.bolusDose)
         XCTAssertNil(manager.state.pendingBolusFinalization)
         XCTAssertTrue(bluetooth.didSend(LastBolusStatusRequest.self))
+    }
+
+    func testAnotherBolusDeliveringFinalizesTheTrackedOneFromItsRecord() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let pumpEnd = startDate.addingTimeInterval(73)
+        stubLastBolus(deliveredVolume: 2000, timestamp: pumpEnd)
+        stubDelivering(at: Date.now.addingTimeInterval(-60), bolusId: Self.bolusId + 1)
+
+        manager.fetchBolusStatus(fromSync: true)
+
+        let event = try XCTUnwrap(lastFinalizedBolusEvent())
+        let dose = try XCTUnwrap(event.dose)
+        XCTAssertEqual(event.date, startDate)
+        XCTAssertEqual(dose.deliveredUnits, 2.0)
+        XCTAssertLessThan(dose.startDate, pumpEnd, "not moved to the other bolus's start")
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+        XCTAssertNil(manager.state.bolusDose)
+        XCTAssertNil(manager.bolusProgressReport)
+        XCTAssertTrue(bluetooth.didSend(LastBolusStatusRequest.self))
+    }
+
+    func testAnotherBolusDeliveringAfterRelaunchFinalizesThePersistedDose() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        let restoredState = TandemPumpManagerState(rawValue: manager.state.rawValue)
+        manager = TandemPumpManager(state: restoredState, bluetooth: bluetooth)
+        delegate = MockPumpManagerDelegate()
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+
+        let pumpEnd = startDate.addingTimeInterval(73)
+        stubLastBolus(deliveredVolume: 1949, timestamp: pumpEnd)
+        stubDelivering(at: Date.now.addingTimeInterval(-60), bolusId: Self.bolusId + 1)
+
+        manager.fetchBolusStatus(fromSync: true)
+
+        let event = try XCTUnwrap(lastFinalizedBolusEvent())
+        let dose = try XCTUnwrap(event.dose)
+        XCTAssertEqual(event.date, startDate)
+        XCTAssertEqual(dose.deliveredUnits, 1.949)
+        XCTAssertEqual(dose.endDate.timeIntervalSince(pumpEnd), 0, accuracy: 1.0)
+        XCTAssertNil(manager.state.bolusDose)
+        XCTAssertNil(manager.bolusProgressReport, "no reporter is attached to the pump's bolus")
+    }
+
+    func testAnotherBolusDeliveringWithNoLastBolusAnswerHoldsTheTrackedOne() throws {
+        let startDate = trackBolusStarted(secondsAgo: 300, units: 2.0)
+        bluetooth.stub(LastBolusStatusRequest.self) { _ in nil }
+        stubDelivering(at: Date.now.addingTimeInterval(-60), bolusId: Self.bolusId + 1)
+
+        manager.fetchBolusStatus(fromSync: true)
+
+        XCTAssertNil(lastFinalizedBolus(), "An unknown delivered volume must not be finalized (#328)")
+        let held = try XCTUnwrap(manager.state.pendingBolusFinalization)
+        XCTAssertEqual(held.bolusId, Self.bolusId)
+        XCTAssertNil(held.deliveryStartDate, "not dated by the other bolus's delivery")
+        XCTAssertEqual(held.startDate, startDate)
+        XCTAssertNil(manager.state.bolusDose)
     }
 
     func testCompletionWithNoLastBolusAnswerDoesNotFinalize() {
