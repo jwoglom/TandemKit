@@ -230,12 +230,16 @@ extension TandemPumpManager {
             if let lastBolus = queryLastBolusReport(bolusId: bolusId) {
                 dose.deliveredUnits = lastBolus.deliveredUnits
                 events.append(NewPumpEvent.bolus(
-                    dose: dose.toDoseEntry(endDate: BolusEndDate.resolve(
-                        startDate: dose.startDate,
-                        deliveryStartDate: dose.deliveryStartDate,
-                        deliveredUnits: dose.deliveredUnits,
-                        pumpTimestamp: lastBolus.pumpTimestamp
-                    )),
+                    dose: dose.toDoseEntry(
+                        endDate: BolusEndDate.resolve(
+                            startDate: dose.startDate,
+                            deliveryStartDate: dose.deliveryStartDate,
+                            deliveredUnits: dose.deliveredUnits,
+                            pumpTimestamp: hostDate(forPumpDate: lastBolus.pumpTimestamp),
+                            detectedAt: now
+                        ),
+                        now: now
+                    ),
                     date: dose.startDate
                 ))
             } else {
