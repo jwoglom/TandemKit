@@ -243,6 +243,32 @@ import XCTest
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
     }
 
+    func testScheduleOverTheSegmentLimitIsRejectedWithoutTouchingThePump() {
+        let bluetooth = makeStub(profile: StubIDPPump([.init(startTime: 0, basalRate: 1000)]))
+        let schedule = (0 ..< 17).map { (Double($0), 1.0 + Double($0) / 100) }
+
+        let result = runSync(bluetooth: bluetooth, schedule: schedule)
+
+        guard case let .failure(error) = result else {
+            return XCTFail("Expected a failure, got \(result)")
+        }
+        XCTAssertEqual(error as? BasalScheduleSyncError, .tooManyEntries(count: 17, maximum: 16))
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    func testScheduleAtTheSegmentLimitIsWritten() {
+        let profile = StubIDPPump([.init(startTime: 0, basalRate: 1000)])
+        let bluetooth = makeStub(profile: profile)
+        let schedule = (0 ..< 16).map { (Double($0), 1.0 + Double($0) / 100) }
+
+        let result = runSync(bluetooth: bluetooth, schedule: schedule)
+
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
+        }
+        XCTAssertEqual(profile.segments.count, 16)
+    }
+
     // MARK: - Harness
 
     private func runSync(
