@@ -42,6 +42,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
             ],
             timeZone: TimeZone(secondsFromGMT: 0)!
         )!
+        state.hasSyncedBasalRateSchedule = true
         state.useControlIQ = true
         state.controlIQEnabled = true
         state.controlIQWeightLbs = 154
@@ -89,6 +90,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(restored.lastBatteryReading?.isCharging, true)
         XCTAssertEqual(restored.insulinType, .novolog)
         XCTAssertEqual(restored.basalRateSchedule, state.basalRateSchedule)
+        XCTAssertTrue(restored.hasSyncedBasalRateSchedule)
     }
 
     func testRawValueRoundTripPreservesPumpSettings() throws {
@@ -182,6 +184,7 @@ final class TandemPumpManagerStateTests: XCTestCase {
         XCTAssertEqual(state.bolusState, .noBolus)
         XCTAssertNil(state.settings.maxBolus)
         XCTAssertFalse(state.useControlIQ)
+        XCTAssertFalse(state.hasSyncedBasalRateSchedule)
     }
 
     /// Builds before the weight unit was tracked stored `controlIQWeight` in whichever unit the pump

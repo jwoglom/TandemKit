@@ -210,6 +210,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency and pump-side failures, each ending in a diff of the host's stored doses against `PumpTimeline`. |
+| `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443). |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -231,7 +232,11 @@ and a few seconds per pairing.
    attaches the request log.
 2. `let driver = makeDriver()` (optionally with a seeded `TandemPumpManagerState` or a
    clock), then `try harness.pair(driver)` when an authenticated session is the
-   precondition.
+   precondition. `makeDriver` also marks setup's basal sync done
+   (`hasSyncedBasalRateSchedule`), so a test can set temp basals without syncing a schedule
+   first; pass `stageBasalScheduleSync: false` to start from a driver that has never synced.
+   `reset()` puts the emulator's profile back to its default (one segment, 0.85 U/hr);
+   `client.setIDPProfiles` stages another, or none.
 3. Stage the pump with `harness.client` (`setState`, `startBolus`, `suspend`, `setClock`,
    `armFault`, …), drive the driver, and wait with `IntegrationWait.until` /
    `IntegrationWait.value` or `ResultBox` rather than sleeping.
@@ -312,6 +317,13 @@ shape of it explains what the harness is for:
   (`-virtual-mtu`, `GET`/`PUT /api/transport`, and announced as `att_mtu` in `hello`), so
   the unfragmented framing a real Mobi produces is exercised too — `MTUIntegrationTests`,
   and `FaketandemHarness.reset()` puts the MTU back to the 23-byte default before each test.
+- **The insulin delivery profile was a fixed table entry.** `ProfileStatusResponse` put id 0
+  in slot 0 while the settings and segment reads answered as id 1, so the driver's profile
+  read asked for id 0 forever, and `SetIDPSegmentRequest` and `CreateIDPRequest` were
+  answered OK without being applied. Profiles are pump state now (`idp_profiles` in
+  `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
+  shared start time, segment 0 fixed at midnight. They still do not drive delivery;
+  `basal_rate` does.
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).

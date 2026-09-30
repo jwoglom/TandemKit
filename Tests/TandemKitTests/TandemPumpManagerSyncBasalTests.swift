@@ -243,13 +243,71 @@ import XCTest
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
     }
 
+    func testScheduleOverTheSegmentLimitIsRejectedWithoutTouchingThePump() {
+        let bluetooth = makeStub(profile: StubIDPPump([.init(startTime: 0, basalRate: 1000)]))
+        let manager = makeManager(bluetooth: bluetooth)
+        let schedule = (0 ..< 17).map { (Double($0), 1.0 + Double($0) / 100) }
+
+        let result = runSync(manager, schedule: schedule)
+
+        guard case let .failure(error) = result else {
+            return XCTFail("Expected a failure, got \(result)")
+        }
+        XCTAssertEqual(error as? BasalScheduleSyncError, .tooManyEntries(count: 17, maximum: 16))
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testSuccessfulSyncIsRecorded() {
+        let manager = makeManager(bluetooth: makeStub(profile: StubIDPPump([.init(startTime: 0, basalRate: 1000)])))
+
+        guard case .success = runSync(manager, schedule: [(0, 1.0), (6, 0.8)]) else {
+            return XCTFail("Expected success")
+        }
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testSyncThatLeavesThePumpMismatchedIsNotRecorded() {
+        let profile = StubIDPPump([.init(startTime: 0, basalRate: 1000)])
+        profile.appliesWrites = false
+        let manager = makeManager(bluetooth: makeStub(profile: profile))
+
+        guard case .failure = runSync(manager, schedule: [(0, 1.0), (6, 0.8)]) else {
+            return XCTFail("Expected failure")
+        }
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testScheduleAtTheSegmentLimitIsWritten() {
+        let profile = StubIDPPump([.init(startTime: 0, basalRate: 1000)])
+        let bluetooth = makeStub(profile: profile)
+        let schedule = (0 ..< 16).map { (Double($0), 1.0 + Double($0) / 100) }
+
+        let result = runSync(bluetooth: bluetooth, schedule: schedule)
+
+        guard case .success = result else {
+            return XCTFail("Expected success, got \(result)")
+        }
+        XCTAssertEqual(profile.segments.count, 16)
+    }
+
     // MARK: - Harness
+
+    private func makeManager(bluetooth: StubPumpBluetooth) -> TandemPumpManager {
+        TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+    }
 
     private func runSync(
         bluetooth: StubPumpBluetooth,
         schedule: [(Double, Double)]
     ) -> Result<BasalRateSchedule, Error> {
-        let manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
+        runSync(makeManager(bluetooth: bluetooth), schedule: schedule)
+    }
+
+    private func runSync(
+        _ manager: TandemPumpManager,
+        schedule: [(Double, Double)]
+    ) -> Result<BasalRateSchedule, Error> {
         let items = schedule.map { RepeatingScheduleValue(startTime: $0.0 * 3600, value: $0.1) }
 
         var result: Result<BasalRateSchedule, Error>?

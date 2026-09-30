@@ -128,6 +128,9 @@ edit instead of at the next sync.
   onboarding, so without it the pump kept its own profile while the driver reported the app's
   (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
   Pump sounds are not written, since onboarding collects no value for them.
+- `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
+  when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
+  doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
@@ -191,6 +194,9 @@ edit instead of at the next sync.
   via `SetMaxBolusLimitRequest`.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
+- `enactTempBasal` refuses everything but a cancel until the first successful
+  `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
+  pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

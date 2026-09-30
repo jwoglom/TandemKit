@@ -1,5 +1,40 @@
 import LoopKit
 
+public enum BasalScheduleSyncError: Error, Equatable {
+    /// Refused before any write: the pump keeps a segment per entry, and a write sequence stopped
+    /// at the pump's limit would leave it holding part of the new schedule (#443).
+    case tooManyEntries(count: Int, maximum: Int)
+}
+
+extension BasalScheduleSyncError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case let .tooManyEntries(count, maximum):
+            return String(
+                format: String(
+                    localized: "This basal schedule has %1$@ rates, but the pump can hold at most %2$@.",
+                    comment: "Error when a basal schedule has more entries than the pump's profile can hold"
+                ),
+                String(count),
+                String(maximum)
+            )
+        }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case let .tooManyEntries(_, maximum):
+            return String(
+                format: String(
+                    localized: "Edit your basal schedule down to %@ rates or fewer, then save it again.",
+                    comment: "Recovery suggestion when a basal schedule has too many entries for the pump"
+                ),
+                String(maximum)
+            )
+        }
+    }
+}
+
 public extension TandemPumpManager {
     func syncBasalRateSchedule(
         items scheduleItems: [RepeatingScheduleValue<Double>],
@@ -10,6 +45,17 @@ public extension TandemPumpManager {
         guard !scheduleItems.isEmpty else {
             logger.error("Basal schedule is empty")
             completion(.failure(PumpManagerError.configuration(nil)))
+            return
+        }
+
+        guard scheduleItems.count <= maximumBasalScheduleEntryCount else {
+            logger.error(
+                "Basal schedule has \(scheduleItems.count) entries; the pump holds at most \(self.maximumBasalScheduleEntryCount)"
+            )
+            completion(.failure(BasalScheduleSyncError.tooManyEntries(
+                count: scheduleItems.count,
+                maximum: maximumBasalScheduleEntryCount
+            )))
             return
         }
 
@@ -182,6 +228,7 @@ public extension TandemPumpManager {
             let previousRate = self.getScheduledBasalRate(at: self.now.addingTimeInterval(self.state.pumpClockOffset))
 
             self.state.basalRateSchedule = schedule
+            self.state.hasSyncedBasalRateSchedule = true
             self.state.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
             self.notifyDelegateStateUpdated()
 

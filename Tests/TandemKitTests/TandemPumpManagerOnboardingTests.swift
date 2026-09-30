@@ -214,6 +214,16 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self), "The time write is unaffected")
     }
 
+    func testScheduleOverTheSegmentLimitFailsSetupWithoutWritingSegments() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 800)])
+        let manager = makeManager(schedule: schedule((0 ..< 17).map { (3600.0 * Double($0), 0.65) }))
+
+        let failure = applyOnboardingSettings(manager)
+
+        XCTAssertEqual(failure?.basalSchedule as? BasalScheduleSyncError, .tooManyEntries(count: 17, maximum: 16))
+        XCTAssertTrue(bluetooth.sent(SetIDPSegmentRequest.self).isEmpty)
+    }
+
     func testWritesScheduleContainingAZeroSegment() {
         stubPump(segments: [.init(startTime: 0, basalRate: 800)])
         let manager = makeManager(schedule: schedule([(0, 0.65), (3600.0 * 2, 0)]))
