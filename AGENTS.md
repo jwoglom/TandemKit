@@ -194,6 +194,9 @@ edit instead of at the next sync.
   via `SetMaxBolusLimitRequest`.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
+- `enactTempBasal` refuses everything but a cancel until the first successful
+  `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
+  pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

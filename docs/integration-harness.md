@@ -210,6 +210,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency and pump-side failures, each ending in a diff of the host's stored doses against `PumpTimeline`. |
+| `BasalScheduleSyncGateIntegrationTests` | `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until `syncBasalRateSchedule` first succeeds, including after setup refuses a schedule with more than 16 entries; once a sync succeeds the temp basal goes out (#443). |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -231,7 +232,9 @@ and a few seconds per pairing.
    attaches the request log.
 2. `let driver = makeDriver()` (optionally with a seeded `TandemPumpManagerState` or a
    clock), then `try harness.pair(driver)` when an authenticated session is the
-   precondition.
+   precondition. `makeDriver` also marks setup's basal sync done
+   (`hasSyncedBasalRateSchedule`), since the emulator's profile cannot take one (below);
+   pass `stageBasalScheduleSync: false` to start from a driver that has never synced.
 3. Stage the pump with `harness.client` (`setState`, `startBolus`, `suspend`, `setClock`,
    `armFault`, …), drive the driver, and wait with `IntegrationWait.until` /
    `IntegrationWait.value` or `ResultBox` rather than sleeping.
@@ -266,13 +269,21 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-One open, in `PumpSideConformanceTests` (plan D3):
+Two open. In `PumpSideConformanceTests` (plan D3):
 
 - **An armed `error_response` is applied on the response path**
   (`pkg/handler/router.go` `sendWithFaults`), after the handler has already run. A pump
   answering `ErrorResponse` to `InitiateBolusRequest` did not start the bolus; the emulator
   starts it and then replaces the answer, so the driver's error arrives over a pump that is
   delivering.
+
+Worked around by `FaketandemIntegrationTestCase.makeDriver`:
+
+- **The insulin delivery profile is fixed**: one segment at 0.85 U/hr from midnight
+  (`pkg/settings/defaults.go`), and `SetIDPSegmentRequest` is answered OK without being
+  applied. A `syncBasalRateSchedule` therefore only succeeds for a schedule that already
+  matches it, which is what `BasalScheduleSyncGateIntegrationTests` syncs. The profile does
+  not drive the emulator's basal rate either; `basal_rate` in `/api/state` does.
 
 Everything else the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:
@@ -312,6 +323,9 @@ shape of it explains what the harness is for:
   (`-virtual-mtu`, `GET`/`PUT /api/transport`, and announced as `att_mtu` in `hello`), so
   the unfragmented framing a real Mobi produces is exercised too — `MTUIntegrationTests`,
   and `FaketandemHarness.reset()` puts the MTU back to the 23-byte default before each test.
+- **`ProfileStatusResponse` put profile id 0 in slot 0** while `IDPSettingsResponse` and
+  `IDPSegmentResponse` answered as id 1, so the driver's profile read asked for id 0
+  forever and no basal sync could finish. Slot 0 holds id 1 now.
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).

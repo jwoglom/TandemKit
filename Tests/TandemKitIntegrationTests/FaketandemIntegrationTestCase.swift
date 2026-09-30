@@ -31,11 +31,19 @@ class FaketandemIntegrationTestCase: XCTestCase {
         try super.tearDownWithError()
     }
 
+    /// `stageBasalScheduleSync` marks setup's basal sync done, as a seeded pairing stages the key:
+    /// the emulator's profile ignores segment writes, so a real sync only succeeds for a schedule
+    /// that already matches it.
     func makeDriver(
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
-        clock: TandemClock = ManualClock(Date())
+        clock: TandemClock = ManualClock(Date()),
+        stageBasalScheduleSync: Bool = true
     ) -> FaketandemHarness.Driver {
         precondition(driver == nil, "one driver per test; shut the previous one down first")
+        var state = state
+        if stageBasalScheduleSync {
+            state.hasSyncedBasalRateSchedule = true
+        }
         let created = harness.makeDriver(state: state, clock: clock)
         driver = created
         return created

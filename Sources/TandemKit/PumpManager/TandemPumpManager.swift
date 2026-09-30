@@ -783,6 +783,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
+        guard duration < .ulpOfOne || state.hasSyncedBasalRateSchedule else {
+            logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
+            completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
+            return
+        }
+
         let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
@@ -1255,6 +1262,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func deleteSavedPumpState() {
         logger.debug("Deleting saved pump state for re-setup")
         state.pumpState = PumpState()
+        state.hasSyncedBasalRateSchedule = false
         notifyDelegateStateUpdated()
     }
 

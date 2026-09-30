@@ -228,6 +228,7 @@ public extension TandemPumpManager {
             let previousRate = self.getScheduledBasalRate(at: self.now.addingTimeInterval(self.state.pumpClockOffset))
 
             self.state.basalRateSchedule = schedule
+            self.state.hasSyncedBasalRateSchedule = true
             self.state.settings.maxBasalScheduleEntry = sortedItems.map(\.value).max()
             self.notifyDelegateStateUpdated()
 

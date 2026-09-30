@@ -62,6 +62,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case maximumBolusExceeded(requested: Double, maximum: Double)
     case controlIQModeActive
     case bolusIsRunning
+    case basalScheduleNotSynced
 
     public var errorDescription: String? {
         switch self {
@@ -92,6 +93,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 localized: "A bolus is still being delivered",
                 comment: "Error when a command is blocked because a bolus is in progress"
             )
+        case .basalScheduleNotSynced:
+            return String(
+                localized: "Your basal rates have not been saved to the pump yet",
+                comment: "Error when a temp basal is blocked because the basal schedule has never been synced to the pump"
+            )
         }
     }
 
@@ -112,6 +118,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "Wait for the bolus to finish, then try again.",
                 comment: "Recovery suggestion when a bolus is in progress"
+            )
+        case .basalScheduleNotSynced:
+            return String(
+                localized: "Save your basal rates in the app's settings. Temporary basal rates start once the pump has them.",
+                comment: "Recovery suggestion when a temp basal is blocked because the basal schedule has never been synced to the pump"
             )
         }
     }

@@ -286,6 +286,7 @@ import XCTest
     private static func makeState() -> TandemPumpManagerState {
         let schedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
         var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        state.hasSyncedBasalRateSchedule = true
         state.featureFlags[.historyBackfill] = true
         return state
     }

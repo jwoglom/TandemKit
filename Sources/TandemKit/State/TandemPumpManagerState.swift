@@ -66,6 +66,9 @@ public struct TandemPumpManagerState: RawRepresentable {
     public var pendingBolusFinalization: UnfinalizedDose?
     public var basalDose: UnfinalizedDose
     public var basalRateSchedule: BasalRateSchedule
+    /// Set by the first successful `syncBasalRateSchedule`; until then the pump's profile may not
+    /// be the app's, and a temp rate (a percent of that profile) would deliver an unknown rate.
+    public var hasSyncedBasalRateSchedule: Bool = false
     /// Basal min/max alerts are auto-acknowledged unconditionally: oref routinely sets a zero
     /// basal rate, which the pump would otherwise announce with a notification every time. Kept as
     /// state rather than a constant so tests can exercise the disabled path, but there is no
@@ -185,6 +188,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         // mandatory may hold `false`, and those pumps should migrate on, not stay off.
         autoAcknowledgeBasalAlerts = true
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
+        hasSyncedBasalRateSchedule = rawValue["hasSyncedBasalRateSchedule"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
         // The legacy "controlIQWeight" key is deliberately not read: it stored whatever unit the
@@ -409,6 +413,7 @@ public struct TandemPumpManagerState: RawRepresentable {
         raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
         raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["useControlIQ"] = useControlIQ
+        raw["hasSyncedBasalRateSchedule"] = hasSyncedBasalRateSchedule
         raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
         raw["basalDose"] = basalDose.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
@@ -521,6 +526,7 @@ public struct TandemPumpManagerState: RawRepresentable {
             "* alarmAnnun: \(String(describing: alarmAnnun))",
             "* generalAnnun: \(String(describing: generalAnnun))",
             "* useControlIQ: \(useControlIQ)",
+            "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",

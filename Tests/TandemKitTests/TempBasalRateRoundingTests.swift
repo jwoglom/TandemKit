@@ -23,7 +23,8 @@ import XCTest
     /// `getScheduledBasalRate()` reads.
     private func makeManager(baseline: Double) -> TandemPumpManager {
         let schedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: baseline)])!
-        let state = TandemPumpManagerState(basalRateSchedule: schedule)
+        var state = TandemPumpManagerState(basalRateSchedule: schedule)
+        state.hasSyncedBasalRateSchedule = true
         return TandemPumpManager(state: state, bluetooth: bluetooth)
     }
 

@@ -104,4 +104,59 @@ import XCTest
 
         XCTAssertEqual(validationError(from: error), .controlIQModeActive)
     }
+
+    // MARK: - Basal schedule never synced
+
+    private func makeUnsyncedManager(bluetooth: StubPumpBluetooth) -> TandemPumpManager {
+        let schedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!
+        return TandemPumpManager(state: TandemPumpManagerState(basalRateSchedule: schedule), bluetooth: bluetooth)
+    }
+
+    private func enactTempBasal(_ manager: TandemPumpManager, unitsPerHour: Double, for duration: TimeInterval) -> PumpManagerError? {
+        let expectation = expectation(description: "Temp basal completion")
+        var error: PumpManagerError?
+        manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return error
+    }
+
+    func testTempBasalIsBlockedUntilTheBasalScheduleHasSynced() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeUnsyncedManager(bluetooth: bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30))
+
+        guard case let .configuration(underlying?) = error else {
+            return XCTFail("Expected a configuration error, got \(String(describing: error))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .basalScheduleNotSynced)
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    func testTempBasalCancelIsAllowedBeforeTheBasalScheduleHasSynced() {
+        let bluetooth = StubPumpBluetooth()
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: 2000,
+            basalModifiedBitmask: 0x02
+        ))
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+        let manager = makeUnsyncedManager(bluetooth: bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
+    }
+
+    func testDeletingSavedPumpStateForgetsTheBasalScheduleSync() {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.hasSyncedBasalRateSchedule = true
+        let manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth())
+
+        manager.deleteSavedPumpState()
+
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
 }

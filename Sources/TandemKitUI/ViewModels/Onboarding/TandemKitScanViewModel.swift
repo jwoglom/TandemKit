@@ -134,12 +134,12 @@ class TandemKitScanViewModel: ObservableObject {
         switch (failure.basalSchedule, failure.deliveryLimits) {
         case (.some, .some):
             summary = String(
-                localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows.",
+                localized: "Your basal rates and delivery limits were not saved to the pump. The pump is still using its own settings, so it may not deliver what the app shows. The app will not set temporary basal rates until your basal rates are saved to the pump.",
                 comment: "Setup error when neither the basal schedule nor the delivery limits reached the pump"
             )
         case (.some, .none):
             summary = String(
-                localized: "Your basal rates were not saved to the pump. The pump is still using its own basal rates, so it may not deliver what the app shows.",
+                localized: "Your basal rates were not saved to the pump. The pump is still using its own basal rates, so it may not deliver what the app shows. The app will not set temporary basal rates until your basal rates are saved to the pump.",
                 comment: "Setup error when the basal schedule did not reach the pump"
             )
         default:
