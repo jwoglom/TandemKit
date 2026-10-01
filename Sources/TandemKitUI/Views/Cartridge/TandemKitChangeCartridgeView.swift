@@ -7,6 +7,7 @@ struct TandemKitChangeCartridgeView: View {
 
     @State private var didLoad = false
     @State private var actionSheet: CartridgeActionSheet?
+    @State private var isConfirmingChangeCartridge = false
 
     var body: some View {
         WizardStepContainer(
@@ -40,6 +41,20 @@ struct TandemKitChangeCartridgeView: View {
             guard offered else { return }
             viewModel.stuckModeRecoveryOffered = false
             actionSheet = .recoverStuckMode
+        }
+        .alert(
+            String(localized: "Change Cartridge", comment: "Title for the change cartridge disconnect confirmation alert"),
+            isPresented: $isConfirmingChangeCartridge
+        ) {
+            Button(String(localized: "Cancel", comment: "Cancel button"), role: .cancel) { }
+            Button(String(localized: "Begin Cartridge Change", comment: "Confirm button to begin the cartridge change")) {
+                viewModel.enterChangeCartridgeMode()
+            }
+        } message: {
+            Text(
+                "Has the pump been removed from your body?",
+                comment: "Change cartridge safety confirmation asking the user to confirm the pump is removed from their body"
+            )
         }
         .task {
             guard !didLoad else { return }
@@ -91,7 +106,7 @@ struct TandemKitChangeCartridgeView: View {
                     set: { _ in }
                 )
             ) {
-                viewModel.enterChangeCartridgeMode()
+                isConfirmingChangeCartridge = true
             }
         case .waitingForReady:
             EmptyView()
