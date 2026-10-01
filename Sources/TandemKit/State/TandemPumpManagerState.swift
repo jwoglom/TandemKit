@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import LoopKit
 
-public struct TandemPumpManagerState: RawRepresentable {
+public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public typealias RawValue = [String: Any]
 
     public struct BatteryReading: Equatable {
@@ -163,6 +163,75 @@ public struct TandemPumpManagerState: RawRepresentable {
     /// Prime amount, in units, of the last successful cannula fill. Persisted so the fill
     /// cannula wizard can pre-fill the amount the user chose last time instead of the default.
     public var lastCannulaFillAmount: Double?
+
+    public static func == (lhs: TandemPumpManagerState, rhs: TandemPumpManagerState) -> Bool {
+        // Not one && chain: that takes the type checker ten times as long, most of a second.
+        guard lhs.onboarded == rhs.onboarded,
+              lhs.pumpState == rhs.pumpState,
+              lhs.isConnected == rhs.isConnected,
+              lhs.lastReconciliation == rhs.lastReconciliation,
+              lhs.settings == rhs.settings,
+              lhs.featureFlags == rhs.featureFlags,
+              lhs.latestInsulinOnBoard == rhs.latestInsulinOnBoard,
+              lhs.lastReservoirReading?.startDate == rhs.lastReservoirReading?.startDate,
+              lhs.lastReservoirReading?.unitVolume == rhs.lastReservoirReading?.unitVolume,
+              lhs.lastReservoirReadingNeedsReport == rhs.lastReservoirReadingNeedsReport,
+              lhs.lastBatteryReading == rhs.lastBatteryReading,
+              lhs.lastBasalStatusDate == rhs.lastBasalStatusDate,
+              lhs.basalRateMismatchSince == rhs.basalRateMismatchSince,
+              lhs.basalRateMismatchConfirmed == rhs.basalRateMismatchConfirmed,
+              lhs.historyBackfill == rhs.historyBackfill,
+              lhs.bolusReportLedger == rhs.bolusReportLedger,
+              lhs.bolusState == rhs.bolusState,
+              lhs.insulinType == rhs.insulinType,
+              lhs.bolusDose == rhs.bolusDose,
+              lhs.pendingBolusFinalization == rhs.pendingBolusFinalization,
+              lhs.basalDose == rhs.basalDose,
+              lhs.basalRateSchedule == rhs.basalRateSchedule,
+              lhs.hasSyncedBasalRateSchedule == rhs.hasSyncedBasalRateSchedule,
+              lhs.autoAcknowledgeBasalAlerts == rhs.autoAcknowledgeBasalAlerts,
+              lhs.useSilentTones == rhs.useSilentTones,
+              lhs.currentPumpTime == rhs.currentPumpTime,
+              lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
+              lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
+              lhs.quickBolusAnnun == rhs.quickBolusAnnun,
+              lhs.reminderAnnun == rhs.reminderAnnun,
+              lhs.alertAnnun == rhs.alertAnnun,
+              lhs.alarmAnnun == rhs.alarmAnnun,
+              lhs.generalAnnun == rhs.generalAnnun,
+              lhs.quickBolusEnabled == rhs.quickBolusEnabled,
+              lhs.quickBolusEntryType == rhs.quickBolusEntryType,
+              lhs.quickBolusIncrementUnits == rhs.quickBolusIncrementUnits,
+              lhs.quickBolusIncrementCarbs == rhs.quickBolusIncrementCarbs,
+              lhs.quickBolusStatus == rhs.quickBolusStatus,
+              lhs.maxBasalLimitMilliunits == rhs.maxBasalLimitMilliunits,
+              lhs.maxBasalLimitDefaultMilliunits == rhs.maxBasalLimitDefaultMilliunits,
+              lhs.maxBolusLimitMilliunits == rhs.maxBolusLimitMilliunits,
+              lhs.maxBolusLimitDefaultMilliunits == rhs.maxBolusLimitDefaultMilliunits,
+              lhs.useControlIQ == rhs.useControlIQ,
+              lhs.pendingEnableClosedLoop == rhs.pendingEnableClosedLoop,
+              lhs.controlIQEnabled == rhs.controlIQEnabled,
+              lhs.controlIQUserMode == rhs.controlIQUserMode,
+              lhs.controlIQWeightLbs == rhs.controlIQWeightLbs,
+              lhs.controlIQWeightUnit == rhs.controlIQWeightUnit,
+              lhs.controlIQTotalDailyInsulin == rhs.controlIQTotalDailyInsulin,
+              lhs.lastControlIQUpdate == rhs.lastControlIQUpdate,
+              lhs.cgmSessionState == rhs.cgmSessionState,
+              lhs.lastCGMStatusUpdate == rhs.lastCGMStatusUpdate,
+              lhs.alertSnoozeEnabled == rhs.alertSnoozeEnabled,
+              lhs.alertSnoozeDuration == rhs.alertSnoozeDuration,
+              lhs.notificationCount == rhs.notificationCount,
+              lhs.lastNotificationUpdate == rhs.lastNotificationUpdate,
+              lhs.issuedAlertIdentifiers == rhs.issuedAlertIdentifiers,
+              lhs.forwardCGMAlerts == rhs.forwardCGMAlerts,
+              lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
+              lhs.lastCartridgeChangeDate == rhs.lastCartridgeChangeDate,
+              lhs.lastCannulaFillAmount == rhs.lastCannulaFillAmount
+        else {
+            return false
+        }
+        return true
+    }
 
     public init(
         basalRateSchedule: BasalRateSchedule,

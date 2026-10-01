@@ -6,7 +6,7 @@ final class StateTypesAreEquatable: XCTestCase {
     func testStateStructsAreEquatable() {
         let structs = Self.scope.flatMap { $0.structs(includeNested: true) }.withSuffix("State").filter(Self.isVisible)
 
-        structs.assertTrue(rule: Self.rule, strict: true, baseline: Self.structBaseline) {
+        structs.assertTrue(rule: Self.rule, strict: true) {
             Self.declaresEquality($0.inheritanceTypesNames)
         }
     }
@@ -28,10 +28,6 @@ final class StateTypesAreEquatable: XCTestCase {
     private static func declaresEquality(_ conformances: [String]) -> Bool {
         conformances.contains("Equatable") || conformances.contains("Hashable")
     }
-
-    private static let structBaseline: [String] = [
-        "TandemPumpManagerState"
-    ]
 
     private static let rule = Rule(
         description: "State types in the driver and the UI are Equatable.",
