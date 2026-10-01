@@ -28,4 +28,12 @@ final class SetSensorTypeResponseTests: XCTestCase {
         XCTAssertEqual(1, resp.status)
         XCTAssertEqual(.missingOrInvalidCgmSupportPackage, resp.statusAcknowledgementType)
     }
+
+    func testUnrecognisedStatusAcknowledgementIsUnknown() {
+        let parsed = SetSensorTypeResponse(cargo: Data([0x01, 0x63]))
+
+        XCTAssertEqual(1, parsed.status)
+        XCTAssertEqual(99, parsed.statusAcknowledgement)
+        XCTAssertEqual(.unknown, parsed.statusAcknowledgementType)
+    }
 }

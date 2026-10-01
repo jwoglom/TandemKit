@@ -25,7 +25,7 @@ public extension LastBolusStatusAbstractResponse {
     typealias BolusStatus = LastBolusStatusAbstractResponseBolusStatus
 
     var bolusSource: BolusSource? { BolusSource.fromId(bolusSourceId) }
-    var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
+    var bolusTypes: Set<BolusDeliveryHistoryLog.BolusType> { BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeBitmask) }
     var bolusStatus: BolusStatus? { BolusStatus(rawValue: bolusStatusId) }
     var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }

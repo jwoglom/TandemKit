@@ -76,8 +76,8 @@ public class SetSensorTypeResponse: Message, StatusMessage {
         case unknown = 6
     }
 
-    public var statusAcknowledgementType: StatusAcknowledgementType? {
-        StatusAcknowledgementType(rawValue: statusAcknowledgement)
+    public var statusAcknowledgementType: StatusAcknowledgementType {
+        StatusAcknowledgementType(rawValue: statusAcknowledgement) ?? .unknown
     }
 
     public var description: String {

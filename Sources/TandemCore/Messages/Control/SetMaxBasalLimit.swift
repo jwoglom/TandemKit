@@ -20,7 +20,15 @@ public class SetMaxBasalLimitRequest: PumpRequest {
         maxHourlyBasalMilliunits = Int(Bytes.readUint32(cargo, 0))
     }
 
-    public init(maxHourlyBasalMilliunits: Int) {
+    public static let minBasalLimitMilliunits = 1000
+    public static let maxBasalLimitMilliunits = 15000
+
+    public init(maxHourlyBasalMilliunits: Int) throws {
+        guard (Self.minBasalLimitMilliunits ... Self.maxBasalLimitMilliunits).contains(maxHourlyBasalMilliunits) else {
+            throw PumpCommError.requestConstructionFailed(
+                reason: "max basal limit \(maxHourlyBasalMilliunits) mU/h is outside 1 U/h to 15 U/h"
+            )
+        }
         cargo = Bytes.toUint32(UInt32(maxHourlyBasalMilliunits))
         self.maxHourlyBasalMilliunits = maxHourlyBasalMilliunits
     }

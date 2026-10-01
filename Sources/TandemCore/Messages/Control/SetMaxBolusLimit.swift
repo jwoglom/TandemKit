@@ -20,7 +20,15 @@ public class SetMaxBolusLimitRequest: PumpRequest {
         maxBolusMilliunits = Bytes.readShort(cargo, 0)
     }
 
-    public init(maxBolusMilliunits: Int) {
+    public static let minBolusLimitMilliunits = 1000
+    public static let maxBolusLimitMilliunits = 25000
+
+    public init(maxBolusMilliunits: Int) throws {
+        guard (Self.minBolusLimitMilliunits ... Self.maxBolusLimitMilliunits).contains(maxBolusMilliunits) else {
+            throw PumpCommError.requestConstructionFailed(
+                reason: "max bolus limit \(maxBolusMilliunits) mU is outside 1 U to 25 U"
+            )
+        }
         cargo = Bytes.firstTwoBytesLittleEndian(maxBolusMilliunits)
         self.maxBolusMilliunits = maxBolusMilliunits
     }

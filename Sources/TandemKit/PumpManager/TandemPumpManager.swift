@@ -1071,6 +1071,22 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let completion = watchdogged(timeoutResult: .failure(PumpCommError.pumpNotConnected), completion)
         logger.info("syncDeliveryLimits...")
 
+        let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
+        let basalRequest: SetMaxBasalLimitRequest?
+        let bolusRequest: SetMaxBolusLimitRequest?
+        do {
+            basalRequest = try limits.maximumBasalRate.map {
+                try SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: Int(($0.doubleValue(for: hkUnit) * 1000.0).rounded()))
+            }
+            bolusRequest = try limits.maximumBolus.map {
+                try SetMaxBolusLimitRequest(maxBolusMilliunits: Int(($0.doubleValue(for: HKUnit.internationalUnit()) * 1000.0).rounded()))
+            }
+        } catch {
+            logger.error("Delivery limits rejected before sending: \(error.localizedDescription)")
+            completion(.failure(error))
+            return
+        }
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sync delivery limits: \(error.localizedDescription)")
@@ -1078,11 +1094,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let hkUnit = HKUnit.internationalUnit().unitDivided(by: .hour())
-
-            if let maxBasal = limits.maximumBasalRate?.doubleValue(for: hkUnit) {
-                let milliunits = Int((maxBasal * 1000.0).rounded())
-                guard let basalResponse = self.bluetooth.write(SetMaxBasalLimitRequest(maxHourlyBasalMilliunits: milliunits)) else {
+            if let basalRequest {
+                guard let basalResponse = self.bluetooth.write(basalRequest) else {
                     self.logger.error("Failed to set maxBasalLimit")
                     completion(.failure(PumpCommError.invalidPacket))
                     return
@@ -1095,10 +1108,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             }
 
-            if let maxBolus = limits.maximumBolus?.doubleValue(for: HKUnit.internationalUnit()) {
-                let milliunits = Int((maxBolus * 1000.0).rounded())
-
-                guard let bolusResponse = self.bluetooth.write(SetMaxBolusLimitRequest(maxBolusMilliunits: milliunits)) else {
+            if let bolusRequest {
+                guard let bolusResponse = self.bluetooth.write(bolusRequest) else {
                     self.logger.error("Failed to set maxBolusLimit")
                     completion(.failure(PumpCommError.invalidPacket))
                     return
