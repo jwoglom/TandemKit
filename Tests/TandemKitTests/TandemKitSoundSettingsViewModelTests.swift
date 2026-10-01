@@ -275,6 +275,16 @@ import XCTest
         XCTAssertEqual(manager.state.generalAnnun, .audioHigh)
         XCTAssertEqual(manager.state.alarmAnnun, .audioHigh)
         XCTAssertEqual(manager.state.reminderAnnun, .vibrate)
+        XCTAssertEqual(
+            manager.state.onboardingSounds,
+            TandemPumpManagerState.PumpSounds(
+                quickBolus: .audioHigh,
+                general: .audioHigh,
+                reminder: .vibrate,
+                alert: .audioHigh,
+                alarm: .audioHigh
+            )
+        )
     }
 
     func testDuringOnboardingContinuingWithoutAChangeStoresVibrateForEverySound() {

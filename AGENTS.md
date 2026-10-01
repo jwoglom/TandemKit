@@ -131,7 +131,11 @@ edit instead of at the next sync.
   pump: delivery limits, basal schedule, pump clock. Loop and Trio never sync these during
   onboarding, so without it the pump kept its own profile while the driver reported the app's
   (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
-  Pump sounds are not written, since onboarding collects no value for them.
+- The onboarding sound screen runs before pairing, so `applyOnboardingSettings` also writes its
+  choices: one `SetPumpSoundsRequest` flagging only the chosen sounds, and nothing if none were.
+  They wait in `state.onboardingSounds`, not the `*Annun` mirror, which a qualifying event's
+  pump-globals read can overwrite first. A failed sound write is logged and doesn't stop setup;
+  the choices stay until the pump accepts them, so a retry resends them.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
   doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).

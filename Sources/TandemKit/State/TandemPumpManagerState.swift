@@ -19,6 +19,15 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
     }
 
+    /// A nil sound is left as the pump has it.
+    public struct PumpSounds: Equatable {
+        public var quickBolus: PumpGlobalsResponse.AnnunciationEnum?
+        public var general: PumpGlobalsResponse.AnnunciationEnum?
+        public var reminder: PumpGlobalsResponse.AnnunciationEnum?
+        public var alert: PumpGlobalsResponse.AnnunciationEnum?
+        public var alarm: PumpGlobalsResponse.AnnunciationEnum?
+    }
+
     public enum ControlIQUserMode: Int, RawRepresentable, Equatable {
         case standard = 0
         case sleep = 1
@@ -88,6 +97,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    /// The onboarding sound screen's choices until `applyOnboardingSettings` writes them, held apart
+    /// from the `*Annun` mirror, which a pump-globals read can overwrite first. In memory only.
+    public var onboardingSounds: PumpSounds?
 
     // Quick bolus settings (from PumpGlobalsResponse)
     public var quickBolusEnabled: Bool?
@@ -200,6 +212,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.alertAnnun == rhs.alertAnnun,
               lhs.alarmAnnun == rhs.alarmAnnun,
               lhs.generalAnnun == rhs.generalAnnun,
+              lhs.onboardingSounds == rhs.onboardingSounds,
               lhs.quickBolusEnabled == rhs.quickBolusEnabled,
               lhs.quickBolusEntryType == rhs.quickBolusEntryType,
               lhs.quickBolusIncrementUnits == rhs.quickBolusIncrementUnits,
@@ -595,6 +608,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* alertAnnun: \(String(describing: alertAnnun))",
             "* alarmAnnun: \(String(describing: alarmAnnun))",
             "* generalAnnun: \(String(describing: generalAnnun))",
+            "* onboardingSounds: \(String(describing: onboardingSounds))",
             "* useControlIQ: \(useControlIQ)",
             "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
