@@ -57,44 +57,83 @@ public class AlarmStatusResponse: Message, NotificationMessage {
 
     /// Alarm types encoded in the response bitmask.
     public enum AlarmResponseType: Int, CaseIterable, Comparable, NotificationEnum {
-        case CARTRIDGE_ALARM = 0
-        case CARTRIDGE_ALARM_2 = 1
+        /// Tandem firmware name: Alarm_DELIVERY_NOT_STOPPED
+        case CARTRIDGE_ALARM_DELIVERY_NOT_STOPPED = 0
+        /// Tandem firmware name: Alarm_SPOOL_MOVE
+        case CARTRIDGE_ALARM_SPOOL_MOVE = 1
+        /// Tandem firmware name: Alarm_OCCLUSION
         case OCCLUSION_ALARM = 2
+        /// Tandem firmware name: Alarm_NO_STARTUP_ACK
         case PUMP_RESET_ALARM = 3
-        case DEFAULT_ALARM_4 = 4
-        case CARTRIDGE_ALARM_3 = 5
-        case CARTRIDGE_ALARM_4 = 6
+        /// Tandem firmware name: Alarm_OBE
+        case OBE_ALARM = 4
+        /// Tandem firmware name: Alarm_P2
+        case CARTRIDGE_ALARM_P2 = 5
+        /// Tandem firmware name: Alarm_VENT_NOT_WORKING
+        case CARTRIDGE_ALARM_VENT_NOT_WORKING = 6
+        /// Tandem firmware name: Alarm_AUTO_OFF_TRIGGERED
         case AUTO_OFF_ALARM = 7
+        /// Tandem firmware name: Alarm_LIQ_OUT
         case EMPTY_CARTRIDGE_ALARM = 8
-        case CARTRIDGE_ALARM_5 = 9
+        /// Tandem firmware name: Alarm_LIQ_EX
+        case CARTRIDGE_ALARM_LIQ_EX = 9
+        /// Tandem firmware name: Alarm_TEMPERATURE_OOR
         case TEMPERATURE_ALARM = 10
+        /// Tandem firmware name: Alarm_TEMPERATURE_XDCR
         case TEMPERATURE_ALARM2 = 11
+        /// Tandem firmware name: Alarm_LIPO_VERY_LOW
         case BATTERY_SHUTDOWN_ALARM = 12
+        /// Tandem firmware name: Alarm_FLUID_CHANGE_obsolete
         case DEFAULT_ALARM_13 = 13
+        /// Tandem firmware name: Alarm_USER_DATE_INVALID
         case INVALID_DATE_ALARM = 14
+        /// Tandem firmware name: Alarm_LIPO_TEMPERATURE
         case TEMPERATURE_ALARM3 = 15
-        case CARTRIDGE_ALARM_6 = 16
+        /// Tandem firmware name: Alarm_DELIVERY_REQUEST_FAIL
+        case CARTRIDGE_ALARM_DELIVERY_REQUEST_FAIL = 16
+        /// Tandem firmware name: Alarm_CANT_HOME_obsolete
         case DEFAULT_ALARM_17 = 17
+        /// Tandem firmware name: Alarm_STATE_SUSPEND
         case RESUME_PUMP_ALARM = 18
+        /// Tandem firmware name: Alarm_UNICORN_DO_NOT_USE
         case DEFAULT_ALARM_19 = 19
-        case CARTRIDGE_ALARM_7 = 20
+        /// Tandem firmware name: Alarm_MOTOR_PICASSO
+        case CARTRIDGE_ALARM_MOTOR_PICASSO = 20
+        /// Tandem firmware name: Alarm_PRESSURE_DISAGREE
         case ALTITUDE_ALARM = 21
+        /// Tandem firmware name: Alarm_STUCK_BUTTON
         case STUCK_BUTTON_ALARM = 22
+        /// Tandem firmware name: Alarm_GENERIC
         case RESUME_PUMP_ALARM2 = 23
+        /// Tandem firmware name: Alarm_PATM
         case ATMOSPHERIC_PRESSURE_OUT_OF_RANGE_ALARM = 24
+        /// Tandem firmware name: Alarm_CART_REMOVED
         case CARTRIDGE_REMOVED_ALARM = 25
+        /// Tandem firmware name: Alarm_OCCLUSION_THE_YOUNGER
         case OCCLUSION_ALARM2 = 26
+        /// Tandem firmware name: Alarm_UNUSED_1
         case DEFAULT_ALARM_27 = 27
+        /// Tandem firmware name: Alarm_UNUSED_2
         case DEFAULT_ALARM_28 = 28
-        case CARTRIDGE_ALARM_10 = 29
-        case CARTRIDGE_ALARM_11 = 30
-        case CARTRIDGE_ALARM_12 = 31
-        case DEFAULT_ALARM_32 = 32
-        case DEFAULT_ALARM_33 = 33
-        case CARTRIDGE_ALARM_34 = 34
-        case DEFAULT_ALARM_35 = 35
-        case DEFAULT_ALARM_36 = 36
-        case DEFAULT_ALARM_37 = 37
+        /// Tandem firmware name: Alarm_MOTOR_CART_RANGE_LOW
+        case CARTRIDGE_ALARM_MOTOR_CART_RANGE_LOW = 29
+        /// Tandem firmware name: Alarm_MOTOR_STALL
+        case CARTRIDGE_ALARM_MOTOR_STALL = 30
+        /// Tandem firmware name: Alarm_MOTOR_VENT_STALL
+        case CARTRIDGE_ALARM_MOTOR_VENT_STALL = 31
+        /// Tandem firmware name: Alarm_NO_CARTRIDGE_DETECTED
+        case NO_CARTRIDGE_DETECTED_ALARM = 32
+        /// Tandem firmware name: Alarm_LIPO_INSUFF_POWER
+        case LIPO_INSUFF_POWER_ALARM = 33
+        /// Tandem firmware name: Alarm_MOTOR_HALL_EFFECT_FAIL
+        case CARTRIDGE_ALARM_MOTOR_HALL_EFFECT_FAIL = 34
+        /// Tandem firmware name: Alarm_MOTOR_FAILURE_MODE
+        case MOTOR_FAILURE_MODE_ALARM = 35
+        /// Tandem firmware name: Alarm_MOTOR_PRIME_STALL_OBE
+        case MOTOR_PRIME_STALL_OBE_ALARM = 36
+        /// Tandem firmware name: Alarm_AUXCPU_SYSTEM_RESET
+        case AUXCPU_SYSTEM_RESET_ALARM = 37
+        /// Tandem firmware name: NUM_ALARMS
         case DEFAULT_ALARM_38 = 38
         case DEFAULT_ALARM_39 = 39
         case DEFAULT_ALARM_40 = 40
@@ -144,17 +183,17 @@ public class AlarmStatusResponse: Message, NotificationMessage {
 
         public var notificationDescription: String? {
             switch self {
-            case .CARTRIDGE_ALARM,
-                 .CARTRIDGE_ALARM_2,
-                 .CARTRIDGE_ALARM_3,
-                 .CARTRIDGE_ALARM_4,
-                 .CARTRIDGE_ALARM_5,
-                 .CARTRIDGE_ALARM_6,
-                 .CARTRIDGE_ALARM_7,
-                 .CARTRIDGE_ALARM_10,
-                 .CARTRIDGE_ALARM_11,
-                 .CARTRIDGE_ALARM_12,
-                 .CARTRIDGE_ALARM_34:
+            case .CARTRIDGE_ALARM_DELIVERY_NOT_STOPPED,
+                 .CARTRIDGE_ALARM_SPOOL_MOVE,
+                 .CARTRIDGE_ALARM_P2,
+                 .CARTRIDGE_ALARM_VENT_NOT_WORKING,
+                 .CARTRIDGE_ALARM_LIQ_EX,
+                 .CARTRIDGE_ALARM_DELIVERY_REQUEST_FAIL,
+                 .CARTRIDGE_ALARM_MOTOR_PICASSO,
+                 .CARTRIDGE_ALARM_MOTOR_CART_RANGE_LOW,
+                 .CARTRIDGE_ALARM_MOTOR_STALL,
+                 .CARTRIDGE_ALARM_MOTOR_VENT_STALL,
+                 .CARTRIDGE_ALARM_MOTOR_HALL_EFFECT_FAIL:
                 return "There is an issue with the cartridge and it needs to be replaced."
             case .OCCLUSION_ALARM,
                  .OCCLUSION_ALARM2:

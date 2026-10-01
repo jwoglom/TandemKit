@@ -18,9 +18,9 @@ final class PumpNotificationAlertTests: XCTestCase {
         // Alternate bit positions of the same condition share a slug but must map to
         // distinct identifiers via the trailing id, as must the same bit across categories.
         let identifiers = [
-            NotificationItem(type: .alarm, id: 0, name: "CARTRIDGE_ALARM"),
-            NotificationItem(type: .alarm, id: 1, name: "CARTRIDGE_ALARM_2"),
-            NotificationItem(type: .alarm, id: 5, name: "CARTRIDGE_ALARM_3"),
+            NotificationItem(type: .alarm, id: 0, name: "CARTRIDGE_ALARM_DELIVERY_NOT_STOPPED"),
+            NotificationItem(type: .alarm, id: 1, name: "CARTRIDGE_ALARM_SPOOL_MOVE"),
+            NotificationItem(type: .alarm, id: 5, name: "CARTRIDGE_ALARM_P2"),
             NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT"),
             NotificationItem(type: .cgmAlert, id: 0, name: "DEFAULT_CGM_ALERT_0"),
             NotificationItem(type: .malfunction, id: 12, name: "12-0x2071")
