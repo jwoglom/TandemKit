@@ -104,7 +104,7 @@ let package = Package(
             // targets; DoseOracleTests and MockPumpManagerDelegate use them.
             path: "Tests",
             exclude: [
-                "TandemKitTests/FillTubingNotificationRefreshTests.swift",
+                "TandemKitTests/TandemKitFillTubingViewModelTests.swift",
                 "TandemKitTests/TandemFeatureFlagsTests.swift",
                 "TandemKitTests/TandemKitChangeCartridgeViewModelTests.swift",
                 "TandemKitTests/TandemKitFillCannulaViewModelTests.swift",

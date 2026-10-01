@@ -7,7 +7,7 @@ import XCTest
 /// when the fill button comes back up, so the screen re-reads the pump's notification state right
 /// then instead of waiting out its next poll — otherwise it offers to complete a fill the pump has
 /// actually paused (#248).
-@available(macOS 13.0, iOS 14.0, *) final class FillTubingNotificationRefreshTests: XCTestCase {
+@available(macOS 13.0, iOS 14.0, *) final class TandemKitFillTubingViewModelTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
     private var viewModel: TandemKitFillTubingViewModel!
