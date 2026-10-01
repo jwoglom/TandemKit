@@ -210,7 +210,7 @@ final class NotificationBundleTests: XCTestCase {
     func testAlertNotificationIdsExcludeDefaultAlerts() {
         let response = AlertStatusResponse(intMap: bitmask(21, 22))
 
-        XCTAssertFalse(response.notificationIds.contains(21)) // DEFAULT_ALERT_21
+        XCTAssertFalse(response.notificationIds.contains(21)) // FSL2_SUPPORT_PACKAGE_ERROR_ALERT has no description
         XCTAssertTrue(response.notificationIds.contains(22)) // SENSOR_EXPIRING_ALERT
     }
 

@@ -53,69 +53,132 @@ public class AlertStatusResponse: Message, NotificationMessage {
 
     /// Alert types encoded in the response bitmask.
     public enum AlertResponseType: Int, CaseIterable, Comparable, NotificationEnum {
+        /// Tandem firmware name: oaAlert_LIQ_LOW
         case LOW_INSULIN_ALERT = 0
+        /// Tandem firmware name: oaAlert_USB_INSUFF_CURRENT
         case USB_CONNECTION_ALERT = 1
+        /// Tandem firmware name: aaAlert_LIPO_LOW
         case LOW_POWER_ALERT = 2
+        /// Tandem firmware name: aaAlert_LIPO_VERY_LOW
         case LOW_POWER_ALERT2 = 3
+        /// Tandem firmware name: oaAlert_NVM
         case DATA_ERROR_ALERT = 4
+        /// Tandem firmware name: oaAlert_AUTO_OFF
         case AUTO_OFF_ALERT = 5
+        /// Tandem firmware name: oaAlert_BASAL_RATE_LIMIT
         case MAX_BASAL_RATE_ALERT = 6
+        /// Tandem firmware name: oaAlert_LIPO_CANT_CHARGE
         case POWER_SOURCE_ALERT = 7
+        /// Tandem firmware name: oaAlert_BASAL_RATE_TOO_LOW
         case MIN_BASAL_ALERT = 8
+        /// Tandem firmware name: aaAlert_USB_NOT_RECOGNIZED
         case CONNECTION_ERROR_ALERT = 9
+        /// Tandem firmware name: aaAlert_BAD_PC_COM
         case CONNECTION_ERROR_ALERT2 = 10
+        /// Tandem firmware name: oaAlert_INCOMPLETE_BOLUS
         case INCOMPLETE_BOLUS_ALERT = 11
+        /// Tandem firmware name: oaAlert_INCOMPLETE_TEMP_RATE
         case INCOMPLETE_TEMP_RATE_ALERT = 12
+        /// Tandem firmware name: oaAlert_INCOMPLETE_CARTRIDGE
         case INCOMPLETE_CARTRIDGE_CHANGE_ALERT = 13
+        /// Tandem firmware name: oaAlert_INCOMPLETE_TUBING
         case INCOMPLETE_FILL_TUBING_ALERT = 14
+        /// Tandem firmware name: oaAlert_INCOMPLETE_CANNULA
         case INCOMPLETE_FILL_CANNULA_ALERT = 15
+        /// Tandem firmware name: oaAlert_INCOMPLETE_SETTING
         case INCOMPLETE_SETTING_ALERT = 16
+        /// Tandem firmware name: oaAlert_LIQ_VERY_LOW
         case LOW_INSULIN_ALERT2 = 17
+        /// Tandem firmware name: oaAlert_ABS_MAX_BASAL_LIMIT
         case MAX_BASAL_ALERT = 18
+        /// Tandem firmware name: aaAlert_STUCK_BUTTON
         case LOW_TRANSMITTER_ALERT = 19
+        /// Tandem firmware name: aaAlert_CGM_SUPPORT_PACKAGE_ERROR
         case TRANSMITTER_ALERT = 20
-        case DEFAULT_ALERT_21 = 21
+        /// Tandem firmware name: aaAlert_FSL2_SUPPORT_PACKAGE_ERROR
+        case FSL2_SUPPORT_PACKAGE_ERROR_ALERT = 21
+        /// Tandem firmware name: aaAlert_STK_CSP_REQ
         case SENSOR_EXPIRING_ALERT = 22
+        /// Tandem firmware name: oaAlert_USB_SHUTDOWN
         case PUMP_REBOOTING_ALERT = 23
+        /// Tandem firmware name: aaAlert_CGM_MANY_SENSORS
         case DEVICE_CONNECTION_ERROR = 24
+        /// Tandem firmware name: aaAlert_CGM_GRAPH_REMOVAL
         case CGM_GRAPH_REMOVED = 25
+        /// Tandem firmware name: oaAlert_BASAL_RATE_LOW
         case MIN_BASAL_ALERT2 = 26
+        /// Tandem firmware name: aaAlert_CGM_INCOMPLETE_CAL
         case INCOMPLETE_CALIBRATION = 27
+        /// Tandem firmware name: aaAlert_CGM_CAL_TIMEOUT
         case CALIBRATION_TIMEOUT = 28
+        /// Tandem firmware name: aaAlert_CGM_INVALID_TX_ID
         case INVALID_TRANSMITTER_ID = 29
-        case DEFAULT_ALERT_30 = 30
-        case DEFAULT_ALERT_32 = 32
+        /// Tandem firmware name: aaAlert_DEBUG_INFO_DECLARED
+        case DEBUG_INFO_DECLARED_ALERT = 30
+        /// Tandem firmware name: oaAlert_OPEN_SESAME
+        case OPEN_SESAME_ALERT = 32
+        /// Tandem firmware name: aaAlert_QUICK_BOLUS_ABORT
         case BUTTON_ALERT = 33
+        /// Tandem firmware name: aaAlert_MANY_FAILED_QUICK_BOLUS
         case QUICK_BOLUS_ALERT = 34
+        /// Tandem firmware name: Alert_AP_ALERT
         case BASAL_IQ_ALERT = 35
-        case DEFAULT_ALERT_36 = 36
-        case DEFAULT_ALERT_37 = 37
-        case DEFAULT_ALERT_38 = 38
+        /// Tandem firmware name: aaAlert_STK_EXCHANGE_REQ
+        case STK_EXCHANGE_REQ_ALERT = 36
+        /// Tandem firmware name: aaAlert_STK_ODYSSEY_REQ
+        case STK_ODYSSEY_REQ_ALERT = 37
+        /// Tandem firmware name: aaAlert_STK_INVALID
+        case STK_INVALID_ALERT = 38
+        /// Tandem firmware name: aaAlert_CGM_TX_EOL
         case TRANSMITTER_END_OF_LIFE = 39
+        /// Tandem firmware name: aaAlert_CGM_BLE_SD
         case CGM_ERROR = 40
+        /// Tandem firmware name: aaAlert_CGM_BLE_HW_WATCHDOG
         case CGM_ERROR2 = 41
+        /// Tandem firmware name: aaAlert_CGM_BLE_HW_TIMEOUT
         case CGM_ERROR3 = 42
-        case DEFAULT_ALERT_43 = 43
+        /// Tandem firmware name: aaAlert_CGM_INCOMPATIBLE
+        case CGM_INCOMPATIBLE_ALERT = 43
+        /// Tandem firmware name: aaAlert_CGM_TX_EXPIRING_SOON_1
         case TRANSMITTER_EXPIRING_ALERT = 44
+        /// Tandem firmware name: aaAlert_CGM_TX_EXPIRING_SOON_2
         case TRANSMITTER_EXPIRING_ALERT2 = 45
+        /// Tandem firmware name: aaAlert_CGM_TX_EXPIRING_STARTUP
         case TRANSMITTER_EXPIRING_ALERT3 = 46
-        case DEFAULT_ALERT_47 = 47
+        /// Tandem firmware name: oaAlert_TZ_INCOMPLETE_SETTING
+        case TZ_INCOMPLETE_SETTING_ALERT = 47
+        /// Tandem firmware name: aaAlert_CGM_NO_READINGS
         case CGM_UNAVAILABLE = 48
+        /// Tandem firmware name: aaAlert_PRIME_LIMIT
         case FILL_TUBING_STILL_IN_PROGRESS = 49
-        case DEFAULT_ALERT_50 = 50
+        /// Tandem firmware name: aaAlert_TZ_HYPER_LIGHT
+        case TZ_HYPER_LIGHT_ALERT = 50
+        /// Tandem firmware name: aaAlert_TZ_HYPO_LIGHT
         case CONTROL_IQ_LOW = 51
-        case DEFAULT_ALERT_52 = 52
-        case DEFAULT_ALERT_53 = 53
+        /// Tandem firmware name: aaAlert_TZ_IIDM
+        case TZ_IIDM_ALERT = 52
+        /// Tandem firmware name: aaAlert_BLE_CRASH_DUMP
+        case BLE_CRASH_DUMP_ALERT = 53
+        /// Tandem firmware name: aaAlert_MH_PAIRED
         case DEVICE_PAIRED = 54
-        case DEFAULT_ALERT_55 = 55
-        case DEFAULT_ALERT_56 = 56
-        case DEFAULT_ALERT_57 = 57
-        case DEFAULT_ALERT_58 = 58
-        case DEFAULT_ALERT_59 = 59
-        case DEFAULT_ALERT_60 = 60
-        case DEFAULT_ALERT_61 = 61
-        case DEFAULT_ALERT_62 = 62
-        case DEFAULT_ALERT_63 = 63
+        /// Tandem firmware name: aaAlert_BLE_HW_ERROR
+        case BLE_HW_ERROR_ALERT = 55
+        /// Tandem firmware name: aaAlert_USER_SET_MAX_BASAL
+        case USER_SET_MAX_BASAL_ALERT = 56
+        /// Tandem firmware name: aaAlert_SENSOR
+        case SENSOR_ALERT = 57
+        /// Tandem firmware name: aaAlert_COM_LOG_ERROR_LOGGED
+        case COM_LOG_ERROR_LOGGED_ALERT = 58
+        /// Tandem firmware name: alert_FCL_AUTOMATION_OFF
+        case FCL_AUTOMATION_OFF_ALERT = 59
+        /// Tandem firmware name: oaAlert_CONTROLLER_CONNECTION_LOST
+        case CONTROLLER_CONNECTION_LOST_ALERT = 60
+        /// Tandem firmware name: aaAlert_LIPO_SUPER_LOW
+        case LIPO_SUPER_LOW_ALERT = 61
+        /// Tandem firmware name: aaAlert_LIPO_INSUFF_POWER
+        case LIPO_INSUFF_POWER_ALERT = 62
+        /// Tandem firmware name: oaAlert_BTLE_PAIRING_TIMEOUT
+        case BTLE_PAIRING_TIMEOUT_ALERT = 63
 
         public static func < (lhs: AlertResponseType, rhs: AlertResponseType) -> Bool {
             lhs.rawValue < rhs.rawValue

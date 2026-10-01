@@ -90,6 +90,8 @@ public class MalfunctionBitmaskStatusResponse: Message, NotificationMessage {
         case overtravelStall = 8_388_608
         case undertravelStall = 16_777_216
         case pushoffStall = 33_554_432
+        /// Tandem firmware name: Malf_HW_CRYPTO_FAIL
+        case hwCryptoFail = 67_108_864
         
         public static func < (lhs: MalfunctionType, rhs: MalfunctionType) -> Bool {
             lhs.rawValue < rhs.rawValue
@@ -133,6 +135,8 @@ public class MalfunctionBitmaskStatusResponse: Message, NotificationMessage {
                 return String(localized: "External Binaries", comment: "MalfunctionType: externalBins")
             case .swInit:
                 return String(localized: "Software init", comment: "MalfunctionType: swInit")
+            case .hwCryptoFail:
+                return String(localized: "Hardware crypto failure", comment: "MalfunctionType: hwCryptoFail")
             case .vibe:
                 return String(localized: "Vibe", comment: "MalfunctionType: vibe")
             case .periphPower:
