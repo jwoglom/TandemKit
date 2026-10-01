@@ -101,7 +101,10 @@ Rules that are easy to break without noticing. The overall design is in
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
 a direct call from a driver queue crashes it, as a backfill tick reading
 `startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue. `MockPumpManagerDelegate`
+`queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
+host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
+`.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
+what was held once the second one lands. `MockPumpManagerDelegate`
 fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
 attaches one queue for the manager's life, as hosts do.
 
