@@ -387,13 +387,35 @@
     "Basal" : {
 
     },
-    "Beep" : {
+    "Beep (high)" : {
       "comment" : "sound setting audioHigh",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Beep"
+            "value" : "Beep (high)"
+          }
+        }
+      }
+    },
+    "Beep (low)" : {
+      "comment" : "sound setting audioLow",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beep (low)"
+          }
+        }
+      }
+    },
+    "Beep (medium)" : {
+      "comment" : "sound setting audioMedium",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beep (medium)"
           }
         }
       }
@@ -884,6 +906,17 @@
         }
       }
     },
+    "Could not save the sound settings to the pump." : {
+      "comment" : "Error shown when saving the pump sound settings fails",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not save the sound settings to the pump."
+          }
+        }
+      }
+    },
     "Could not stop temp rate" : {
       "comment" : "Title for failure to stop temp rate",
       "localizations" : {
@@ -913,6 +946,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not update alert snooze"
+          }
+        }
+      }
+    },
+    "Could not update sound settings" : {
+      "comment" : "Title for failure to save pump sound settings",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not update sound settings"
           }
         }
       }
