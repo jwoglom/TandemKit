@@ -17,7 +17,7 @@ public class DataLogCorruptionHistoryLog: HistoryLog {
 
     public required init(cargo: Data) {
         block = Bytes.readUint32(cargo, 10)
-        reason = Int(cargo[cargo.startIndex + 17])
+        reason = Int(cargo[cargo.startIndex + 14])
         super.init(cargo: cargo)
     }
 
@@ -44,8 +44,8 @@ public class DataLogCorruptionHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(block),
-                Data([0, 0, 0]),
-                Data([UInt8(reason & 0xFF)])
+                Data([UInt8(reason & 0xFF)]),
+                Data([0, 0, 0])
             )
         )
     }

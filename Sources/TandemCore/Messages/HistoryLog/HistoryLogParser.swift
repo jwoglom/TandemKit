@@ -261,6 +261,20 @@ public enum HistoryLogParser {
             return CgmPairingCodeG7HistoryLog(cargo: raw)
         case TipsErrorHistoryLog.typeId:
             return TipsErrorHistoryLog(cargo: raw)
+        case SyncDoseStartHistoryLog.typeId:
+            return SyncDoseStartHistoryLog(cargo: raw)
+        case SyncDoseCompleteHistoryLog.typeId:
+            return SyncDoseCompleteHistoryLog(cargo: raw)
+        case AntDailyStatus1HistoryLog.typeId:
+            return AntDailyStatus1HistoryLog(cargo: raw)
+        case AntDailyStatus2HistoryLog.typeId:
+            return AntDailyStatus2HistoryLog(cargo: raw)
+        case TempAdjustmentCompletedHistoryLog.typeId:
+            return TempAdjustmentCompletedHistoryLog(cargo: raw)
+        case TempAdjustmentActivatedHistoryLog.typeId:
+            return TempAdjustmentActivatedHistoryLog(cargo: raw)
+        case AntSleepEatSchedSettingChangeHistoryLog.typeId:
+            return AntSleepEatSchedSettingChangeHistoryLog(cargo: raw)
         case CgmCalibrationG7HistoryLog.typeId:
             return CgmCalibrationG7HistoryLog(cargo: raw)
         case CgmBleCalibrationEvtG7HistoryLog.typeId:

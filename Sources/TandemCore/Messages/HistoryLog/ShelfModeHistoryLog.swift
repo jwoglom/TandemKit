@@ -4,17 +4,21 @@ public class ShelfModeHistoryLog: HistoryLog {
     public static let typeId = 53
 
     public let msecSinceReset: UInt32
+    /// Battery internal capacity, in percent.
     public let lipoIbc: Int
+    /// Battery available capacity, in percent.
     public let lipoAbc: Int
+    /// Signed battery current, in mA.
     public let lipoCurrent: Int
     public let lipoRemCap: UInt32
     public let lipoMv: UInt32
 
     public required init(cargo: Data) {
         msecSinceReset = Bytes.readUint32(cargo, 10)
-        lipoIbc = Int(cargo[14])
-        lipoAbc = Int(cargo[15])
-        lipoCurrent = Bytes.readShort(cargo, 16)
+        // Layout per the Tandem Source event schema: LiPoCurrent int16 @14, LiPo_ABC u8 @16, LiPo_IBC u8 @17.
+        lipoCurrent = Int(Int16(bitPattern: UInt16(truncatingIfNeeded: Bytes.readShort(cargo, 14))))
+        lipoAbc = Int(cargo[cargo.startIndex + 16])
+        lipoIbc = Int(cargo[cargo.startIndex + 17])
         lipoRemCap = Bytes.readUint32(cargo, 18)
         lipoMv = Bytes.readUint32(cargo, 22)
         super.init(cargo: cargo)
@@ -65,9 +69,9 @@ public class ShelfModeHistoryLog: HistoryLog {
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
                 Bytes.toUint32(msecSinceReset),
-                Data([UInt8(truncatingIfNeeded: lipoIbc)]),
+                Bytes.firstTwoBytesLittleEndian(lipoCurrent & 0xFFFF),
                 Data([UInt8(truncatingIfNeeded: lipoAbc)]),
-                Bytes.firstTwoBytesLittleEndian(lipoCurrent),
+                Data([UInt8(truncatingIfNeeded: lipoIbc)]),
                 Bytes.toUint32(lipoRemCap),
                 Bytes.toUint32(lipoMv)
             )
