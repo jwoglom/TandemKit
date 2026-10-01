@@ -39,12 +39,13 @@ class TandemKitG6SetupViewModel: ObservableObject {
 
     // MARK: - Validation
 
+    // ASCII only: isLetter/isNumber also accept "É" or "١", which overrun the request or fail Int().
     var isTransmitterIdValid: Bool {
-        transmitterId.count == 6 && transmitterId.allSatisfy { $0.isLetter || $0.isNumber }
+        transmitterId.count == 6 && transmitterId.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
 
     var isSensorCodeValid: Bool {
-        sensorCode.count == 4 && sensorCode.allSatisfy { $0.isNumber }
+        sensorCode.count == 4 && sensorCode.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     var canStartSensor: Bool {
@@ -84,13 +85,12 @@ class TandemKitG6SetupViewModel: ObservableObject {
     // MARK: - Start Sensor
 
     func startNewSensor() {
-        guard canStartSensor else { return }
+        guard canStartSensor, let code = Int(sensorCode) else { return }
 
         error = nil
         isLoading = true
 
         let txId = transmitterId.uppercased()
-        let code = Int(sensorCode) ?? 0
         pumpManager?.connectToG6CGM(txId: txId, code: code) { success in
             DispatchQueue.main.async {
                 self.isLoading = false
