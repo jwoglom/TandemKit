@@ -156,17 +156,6 @@ struct TandemKitSettingsView: View {
                     comment: "Message for failed to play pump sound"
                 )
             )
-        case .alertSnooze:
-            content = ErrorSheetContent(
-                title: String(
-                    localized: "Could not update alert snooze",
-                    comment: "Title for failure to set alert snooze"
-                ),
-                message: String(
-                    localized: "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status.",
-                    comment: "Message for failed to set alert snooze"
-                )
-            )
         }
         return ErrorSheetView(content: content, tint: guidanceColors.critical)
     }

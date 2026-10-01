@@ -3431,17 +3431,6 @@
         }
       }
     },
-    "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status." : {
-      "comment" : "Message for failed to set alert snooze",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The pump rejected the alert snooze setting change. Check \"View Notifications\" to see the pump's current status."
-          }
-        }
-      }
-    },
     "The pump rejected the Control-IQ change. Check \"View Notifications\" to see the pump's current status." : {
       "comment" : "Message for failed to toggle Control-IQ",
       "localizations" : {

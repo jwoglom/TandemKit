@@ -81,6 +81,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var lastPumpTimeCheckDate: Date?
 
     // Pump global settings
+    /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
     public var lastSettingsCheckedAt: Date?
     public var quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var reminderAnnun: PumpGlobalsResponse.AnnunciationEnum?
