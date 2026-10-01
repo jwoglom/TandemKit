@@ -8,6 +8,8 @@ import XCTest
     private typealias ViewModel = TandemKitSoundSettingsViewModel
 
     private let beep = PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue
+    private let mediumBeep = PumpGlobalsResponse.AnnunciationEnum.audioMedium.rawValue
+    private let lowBeep = PumpGlobalsResponse.AnnunciationEnum.audioLow.rawValue
     private let vibrate = PumpGlobalsResponse.AnnunciationEnum.vibrate.rawValue
 
     private var bluetooth: StubPumpBluetooth!
@@ -155,6 +157,34 @@ import XCTest
         XCTAssertFalse(viewModel.isDirty)
         XCTAssertEqual(viewModel.generalAnnun, beep)
         XCTAssertEqual(viewModel.alertAnnun, vibrate)
+        XCTAssertNil(viewModel.saveError)
+    }
+
+    func testSavingMediumAndLowBeepsSendsThemWithTheirChangeBits() throws {
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 0))
+        bluetooth.stub(
+            PumpGlobalsRequest.self,
+            with: pumpGlobals(quickBolus: mediumBeep, general: vibrate, reminder: lowBeep, alert: beep, alarm: vibrate)
+        )
+        let viewModel = makeViewModel()
+        viewModel.quickBolusAnnun = mediumBeep
+        viewModel.reminderAnnun = lowBeep
+        drainMainQueue()
+
+        viewModel.submit()
+        drainMainQueue()
+
+        let sent = try XCTUnwrap(bluetooth.sent(SetPumpSoundsRequest.self).first)
+        let request = SetPumpSoundsRequest(cargo: sent.cargo)
+        XCTAssertEqual(request.changeBitmask, [.quickBolusAnnun, .reminderAnnun])
+        XCTAssertEqual(request.quickBolusAnnun, .audioMedium)
+        XCTAssertEqual(request.reminderAnnun, .audioLow)
+        XCTAssertEqual(request.generalAnnun, .vibrate)
+        XCTAssertEqual(request.alertAnnun, .audioHigh)
+        XCTAssertEqual(request.alarmAnnun, .vibrate)
+        XCTAssertEqual(viewModel.quickBolusAnnun, mediumBeep)
+        XCTAssertEqual(viewModel.reminderAnnun, lowBeep)
+        XCTAssertFalse(viewModel.isDirty)
         XCTAssertNil(viewModel.saveError)
     }
 
