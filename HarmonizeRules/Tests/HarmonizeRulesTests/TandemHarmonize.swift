@@ -82,6 +82,23 @@ extension SyntaxProtocol {
         return false
     }
 
+    var ancestors: UnfoldSequence<Syntax, Syntax?> {
+        sequence(state: parent) { (node: inout Syntax?) -> Syntax? in
+            defer { node = node?.parent }
+            return node
+        }
+    }
+
+    var enclosingTypeName: String? {
+        for ancestor in ancestors {
+            if let type = ancestor.as(StructDeclSyntax.self) { return type.name.text }
+            if let type = ancestor.as(ClassDeclSyntax.self) { return type.name.text }
+            if let type = ancestor.as(EnumDeclSyntax.self) { return type.name.text }
+            if let type = ancestor.as(ExtensionDeclSyntax.self) { return type.extendedType.trimmedDescription }
+        }
+        return nil
+    }
+
     /// The last component of the called function's name, e.g. `error` for `self.log.error(...)`.
     var calleeName: String? {
         guard let call = self.as(FunctionCallExprSyntax.self) else { return nil }

@@ -110,12 +110,3 @@ enum TextLiterals {
         literal.segments.trimmedDescription
     }
 }
-
-private extension SyntaxProtocol {
-    var ancestors: UnfoldSequence<Syntax, Syntax?> {
-        sequence(state: parent) { (node: inout Syntax?) -> Syntax? in
-            defer { node = node?.parent }
-            return node
-        }
-    }
-}
