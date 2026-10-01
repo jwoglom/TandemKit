@@ -89,7 +89,10 @@ public class CgmJoinSessionHistoryLog: HistoryLog {
         case DEXBLES_REASON_TRANSMITTER_IN_SESSION = 10
         case DEXBLES_REASON_BLESTACK_INVALID = 11
         case DEXBLES_REASON_NEW_AUTOCAL_SESSION_STARTED_SUCCESS = 12
+        /// Tandem schema name: DEXBLES_REASON_AUTOCAL_SESSION_IN_PROGRESS
         case DEXBLES_REASON_NO_AUTOCAL_SESSION_IN_PROGRESS = 13
+        case DEXBLES_REASON_STALE_START_CMD = 21
+        case DEXBLES_REASON_STALE_STOP_CMD = 22
 
         public static func fromId(_ id: Int) -> SessionJoinReason? {
             SessionJoinReason(rawValue: id)
