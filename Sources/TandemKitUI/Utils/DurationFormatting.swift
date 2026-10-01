@@ -9,12 +9,16 @@ func formatCompactDuration(seconds: UInt32) -> String {
     let minutes = totalMinutes % 60
 
     if days > 0 {
-        return hours > 0 ? String(format: "%dd %dh", days, hours) : String(format: "%dd", days)
+        return hours > 0
+            ? String(format: String(localized: "%dd %dh", comment: "Compact duration in days and hours"), days, hours)
+            : String(format: String(localized: "%dd", comment: "Compact duration in days"), days)
     }
     if hours > 0 {
-        return minutes > 0 ? String(format: "%dh %dm", hours, minutes) : String(format: "%dh", hours)
+        return minutes > 0
+            ? String(format: String(localized: "%dh %dm", comment: "Compact duration in hours and minutes"), hours, minutes)
+            : String(format: String(localized: "%dh", comment: "Compact duration in hours"), hours)
     }
-    return String(format: "%dm", minutes)
+    return String(format: String(localized: "%dm", comment: "Compact duration in minutes"), minutes)
 }
 
 /// Compact duration between `date` and now. Negative intervals (pump clock skew can place a

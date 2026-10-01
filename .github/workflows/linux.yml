@@ -83,6 +83,48 @@ jobs:
             swift-test.log
             swift-test.xml
 
+  # The Harmonize lint rules (HarmonizeRules/, rooted by .harmonize.yaml) parse the sources rather than
+  # compile them, so they need neither the shims nor the driver's build.
+  harmonize:
+    name: Harmonize lint rules
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Python for the checks
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends python3 > /dev/null
+
+      - name: Cache the build
+        uses: actions/cache@v6
+        with:
+          path: HarmonizeRules/.build
+          key: linux-swift-6.1.2-harmonize-${{ hashFiles('HarmonizeRules/Package.resolved', 'HarmonizeRules/Tests/**') }}
+          restore-keys: |
+            linux-swift-6.1.2-harmonize-
+
+      - name: Run the Harmonize rules
+        run: swift test --package-path HarmonizeRules 2>&1 | tee harmonize.log
+
+      - name: Check that the rules actually ran
+        run: scripts/ci/check-test-count.py harmonize.log --label "Harmonize rules"
+
+      - name: Upload the log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-harmonize-log
+          path: harmonize.log
+
   virtual-pump:
     name: virtual pump build + tests
     runs-on: ubuntu-latest

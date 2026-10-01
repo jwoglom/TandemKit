@@ -1,3 +1,4 @@
+import LoopKitUI
 import SwiftUI
 
 /// iPhone-style battery indicator: an outlined body with a proportional fill, a terminal nub,
@@ -10,6 +11,8 @@ struct BatteryIndicatorView: View {
     let chargeRemaining: Double?
     /// Whether the pump is charging. Only newer pump API versions report this.
     let isCharging: Bool
+
+    @Environment(\.guidanceColors) private var guidanceColors
 
     /// Height of the battery body. Every other dimension is derived from it so the indicator
     /// scales as a unit with Dynamic Type.
@@ -26,22 +29,22 @@ struct BatteryIndicatorView: View {
         chargeRemaining.map { min(max($0, 0), 1) }
     }
 
-    /// Green while charging, red at or below 20%, otherwise the foreground color (white in dark
-    /// mode, black in light mode). An unknown level stays muted.
+    /// Green while charging, critical at or below 20%, otherwise the foreground color (white in
+    /// dark mode, black in light mode). An unknown level stays muted.
     ///
     /// Exposed so an adjacent percentage label can carry the same state color.
-    static func tintColor(chargeRemaining: Double?, isCharging: Bool) -> Color {
+    static func tintColor(chargeRemaining: Double?, isCharging: Bool, guidanceColors: GuidanceColors) -> Color {
         if isCharging {
             return .green
         }
         guard let chargeRemaining = chargeRemaining else {
             return .secondary
         }
-        return min(max(chargeRemaining, 0), 1) <= 0.2 ? .red : .primary
+        return min(max(chargeRemaining, 0), 1) <= 0.2 ? guidanceColors.critical : .primary
     }
 
     private var tintColor: Color {
-        Self.tintColor(chargeRemaining: clampedCharge, isCharging: isCharging)
+        Self.tintColor(chargeRemaining: clampedCharge, isCharging: isCharging, guidanceColors: guidanceColors)
     }
 
     var body: some View {

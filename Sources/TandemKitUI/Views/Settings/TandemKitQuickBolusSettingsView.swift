@@ -2,6 +2,7 @@ import LoopKitUI
 import SwiftUI
 
 struct TandemKitQuickBolusSettingsView: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     @ObservedObject var viewModel: TandemKitQuickBolusSettingsViewModel
 
     var body: some View {
@@ -26,7 +27,7 @@ struct TandemKitQuickBolusSettingsView: View {
                             comment: "Warning shown when the pump's quick bolus is in carbs mode"
                         )
                         .font(.footnote)
-                        .foregroundColor(.orange)
+                        .foregroundColor(guidanceColors.warning)
                     }
                 }
 
@@ -54,7 +55,7 @@ struct TandemKitQuickBolusSettingsView: View {
 
             if let error = viewModel.saveError {
                 Text(error)
-                    .foregroundColor(.red)
+                    .foregroundColor(guidanceColors.critical)
                     .font(.caption)
                     .padding(.horizontal)
             }

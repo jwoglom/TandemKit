@@ -37,9 +37,9 @@ struct TandemKitAlertSettingsView: View {
                             }
                         )
                     ) {
-                        Text("10 min").tag(10)
-                        Text("20 min").tag(20)
-                        Text("30 min").tag(30)
+                        Text("10 min", comment: "Alert snooze duration option").tag(10)
+                        Text("20 min", comment: "Alert snooze duration option").tag(20)
+                        Text("30 min", comment: "Alert snooze duration option").tag(30)
                     }
                 }
 
@@ -68,5 +68,17 @@ struct TandemKitAlertSettingsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
+        .alert(
+            String(localized: "Could not update alert snooze", comment: "Title for failure to set alert snooze"),
+            isPresented: Binding(
+                get: { viewModel.saveError != nil },
+                set: { if !$0 { viewModel.saveError = nil } }
+            ),
+            presenting: viewModel.saveError,
+            actions: { _ in
+                Button(String(localized: "OK", comment: "OK button"), action: {})
+            },
+            message: { Text($0) }
+        )
     }
 }

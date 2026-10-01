@@ -1,5 +1,6 @@
+import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 class TandemKitSoundSettingsViewModel: ObservableObject {
     @Published var generalAnnun: Int = 0 { didSet { checkDirtyState() } }

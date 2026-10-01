@@ -104,13 +104,22 @@ let package = Package(
             // targets; DoseOracleTests and MockPumpManagerDelegate use them.
             path: "Tests",
             exclude: [
-                "TandemKitTests/FillTubingNotificationRefreshTests.swift",
-                "TandemKitTests/TandemFeatureFlagsTests.swift",
+                "TandemKitTests/TandemKitFillTubingViewModelTests.swift",
                 "TandemKitTests/TandemKitChangeCartridgeViewModelTests.swift",
                 "TandemKitTests/TandemKitFillCannulaViewModelTests.swift",
                 "TandemKitTests/TandemKitControlIQSettingsViewModelTests.swift",
                 "TandemKitTests/TandemKitNotificationsViewModelTests.swift",
-                "TandemKitTests/TandemKitScanViewModelTests.swift"
+                "TandemKitTests/TandemKitScanViewModelTests.swift",
+                "TandemKitTests/TandemKitAlertSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitSoundSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitQuickBolusSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitPumpInformationViewModelTests.swift",
+                "TandemKitTests/TandemKitFeatureFlagsViewModelTests.swift",
+                "TandemKitTests/TandemKitSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitG6SetupViewModelTests.swift",
+                "TandemKitTests/TandemKitG7SetupViewModelTests.swift",
+                "TandemKitTests/TandemKitCGMSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitTroubleshootConnectionViewModelTests.swift"
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )

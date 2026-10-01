@@ -31,7 +31,7 @@ struct TandemKitG6SetupWizardView: View {
             Alert(
                 title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
-                dismissButton: .default(Text("OK"))
+                dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
             )
         }
         .onChange(of: viewModel.didComplete) { completed in
@@ -91,7 +91,9 @@ struct TandemKitG6SetupWizardView: View {
             .font(.body)
 
             Button(action: {
-                viewModel.goToSensorDetails()
+                withAnimation {
+                    viewModel.goToSensorDetails()
+                }
             }) {
                 HStack {
                     Spacer()
@@ -106,7 +108,9 @@ struct TandemKitG6SetupWizardView: View {
             }
 
             Button(action: {
-                viewModel.goToConnectExisting()
+                withAnimation {
+                    viewModel.goToConnectExisting()
+                }
             }) {
                 HStack {
                     Spacer()
@@ -132,7 +136,7 @@ struct TandemKitG6SetupWizardView: View {
                     .font(.headline)
 
                 TextField(
-                    "XXXXXX",
+                    String(localized: "XXXXXX", comment: "Placeholder for the 6-character G6 transmitter ID"),
                     text: $viewModel.transmitterId
                 )
                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -203,7 +207,7 @@ struct TandemKitG6SetupWizardView: View {
                     .font(.headline)
 
                 TextField(
-                    "XXXXXX",
+                    String(localized: "XXXXXX", comment: "Placeholder for the 6-character G6 transmitter ID"),
                     text: $viewModel.transmitterId
                 )
                 .textFieldStyle(RoundedBorderTextFieldStyle())

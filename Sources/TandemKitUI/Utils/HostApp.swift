@@ -23,7 +23,11 @@ public enum HostApp {
         switch self {
         case .trio: return "Trio"
         case .loop: return "Loop"
-        case .unknown: return "this app"
+        case .unknown:
+            return String(
+                localized: "this app",
+                comment: "Stands in for the host app's name in a sentence when the app is neither Trio nor Loop"
+            )
         }
     }
 
@@ -32,7 +36,11 @@ public enum HostApp {
         switch self {
         case .trio: return "Trio"
         case .loop: return "Loop"
-        case .unknown: return "DIY"
+        case .unknown:
+            return String(
+                localized: "DIY",
+                comment: "Name of the host app's dosing algorithm when the app is neither Trio nor Loop"
+            )
         }
     }
 }

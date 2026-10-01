@@ -1,6 +1,7 @@
+import Combine
 import CoreBluetooth
+import Foundation
 import LoopKit
-import SwiftUI
 
 enum CommandFailure: Int, Identifiable {
     case resume

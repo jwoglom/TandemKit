@@ -47,14 +47,6 @@ public struct DeliveryTransitionLedger: Equatable {
             self.detectedAt = detectedAt
             self.lastConfirmed = lastConfirmed
         }
-
-        public static func == (lhs: PendingTransition, rhs: PendingTransition) -> Bool {
-            let (a, b) = (lhs.prior, rhs.prior)
-            return lhs.observed == rhs.observed && lhs.detectedAt == rhs.detectedAt && lhs.lastConfirmed == rhs.lastConfirmed
-                && a.type == b.type && a.value == b.value && a.startDate == b.startDate
-                && a.estimatedEndDate == b.estimatedEndDate && a.tempRateId == b.tempRateId && a.bolusId == b.bolusId
-                && a.insulinType == b.insulinType && a.automatic == b.automatic
-        }
     }
 
     /// Pump records older than this are never reported, so entries that can only match them go.
