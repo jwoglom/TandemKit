@@ -198,7 +198,8 @@ struct TandemKitSettingsView: View {
                                     .foregroundColor(
                                         BatteryIndicatorView.tintColor(
                                             chargeRemaining: viewModel.batteryChargeRemaining,
-                                            isCharging: viewModel.batteryIsCharging
+                                            isCharging: viewModel.batteryIsCharging,
+                                            guidanceColors: guidanceColors
                                         )
                                     )
                             }
@@ -266,7 +267,7 @@ struct TandemKitSettingsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(connectionIssue.title)
                                     .font(Font.subheadline.weight(.bold))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(guidanceColors.critical)
                                 Text(connectionIssue.detail(appName: viewModel.appName))
                                     .font(Font.footnote.weight(.semibold))
                                     .fixedSize(horizontal: false, vertical: true)
@@ -293,7 +294,7 @@ struct TandemKitSettingsView: View {
                             ),
                             viewModel.algorithmName
                         ),
-                        color: .orange,
+                        color: guidanceColors.warning,
                         actionLabel: disableControlIQLabel,
                         action: { activeAlert = .switchToDIY }
                     )
@@ -304,14 +305,14 @@ struct TandemKitSettingsView: View {
                             format: String(localized: "%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
                             viewModel.algorithmName
                         ),
-                        color: .orange,
+                        color: guidanceColors.warning,
                         actionLabel: disableControlIQLabel,
                         action: { activeAlert = .switchToDIY }
                     )
                 } else if !viewModel.isClosedLoopEnabled {
                     statusBanner(
                         title: String(localized: "Open loop mode", comment: "title for open loop notice"),
-                        color: .orange
+                        color: guidanceColors.warning
                     )
                     .contentShape(Rectangle())
                 }
@@ -341,7 +342,7 @@ struct TandemKitSettingsView: View {
                             if viewModel.notificationCount > 0 {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.red)
+                                        .fill(guidanceColors.critical)
                                         .frame(width: 24, height: 24)
                                     Text("\(viewModel.notificationCount)")
                                         .foregroundColor(.white)
@@ -791,7 +792,7 @@ struct TandemKitSettingsView: View {
             Text(viewModel.algorithmModeText)
                 .font(.system(size: 28))
                 .fontWeight(.regular)
-                .foregroundColor(viewModel.useControlIQ ? .orange : .secondary)
+                .foregroundColor(viewModel.useControlIQ ? guidanceColors.warning : .secondary)
                 .fixedSize()
         }
     }

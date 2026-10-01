@@ -2,6 +2,7 @@ import LoopKitUI
 import SwiftUI
 
 struct TandemKitControlIQSettingsView: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitControlIQSettingsViewModel
     @State private var isEditingWeight = false
     @State private var isEditingTDI = false
@@ -122,7 +123,7 @@ struct TandemKitControlIQSettingsView: View {
             if let validationMessage = viewModel.validationMessage {
                 Text(validationMessage)
                     .font(.footnote)
-                    .foregroundColor(.orange)
+                    .foregroundColor(guidanceColors.warning)
             }
         }
     }
