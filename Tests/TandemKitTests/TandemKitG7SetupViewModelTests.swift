@@ -27,11 +27,11 @@ import XCTest
 
     // MARK: - Validation
 
-    func testAPairingCodeIsDigitsOnly() {
+    func testAPairingCodeIsFourDigits() {
         viewModel.pairingCode = "4321"
         XCTAssertTrue(viewModel.isPairingCodeValid)
 
-        for invalid in ["", "43a1", "43 1", "-432"] {
+        for invalid in ["", "432", "43210", "70000", "43a1", "43 1", "-432", "١٢٣٤", "１２３４"] {
             viewModel.pairingCode = invalid
             XCTAssertFalse(viewModel.isPairingCodeValid, "\"\(invalid)\" was accepted")
         }
@@ -108,6 +108,17 @@ import XCTest
 
     func testAnInvalidPairingCodeSendsNothing() {
         viewModel.pairingCode = "43a1"
+
+        viewModel.startG7Sensor()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    func testAPairingCodeLongerThanFourDigitsSendsNothing() {
+        viewModel.pairingCode = "70000"
 
         viewModel.startG7Sensor()
         drainMainQueue()

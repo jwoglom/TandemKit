@@ -310,7 +310,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: current.rawValue)
         publishLock.unlock()
 
-        if let delegate = pumpManagerDelegate {
+        // Until the host sets its queue this would land on `.main`; the queue setter replays it.
+        if canNotifyDelegate, let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
 
@@ -1324,23 +1325,28 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
     }
 
-    func setPumpSound(request: SetPumpSoundsRequest, completion: @escaping () -> Void) {
+    func setPumpSound(request: SetPumpSoundsRequest, completion: @escaping (Bool) -> Void) {
         logger.info("Setting pump sounds...")
 
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for sound settings: \(error.localizedDescription)")
-                completion()
+                completion(false)
                 return
             }
 
-            _ = self.bluetooth.write(request)
+            let response = self.bluetooth.write(request)
+            let accepted = response?.isStatusOK ?? false
+            if !accepted {
+                let reason = response.map { "status \($0.status)" } ?? "no response"
+                self.logger.error("Failed to set pump sounds: \(reason)")
+            }
 
             // Allow the patch to set values
             Thread.sleep(forTimeInterval: .seconds(1))
             self.fetchGlobalPumpSettings()
 
-            completion()
+            completion(accepted)
         }
     }
 

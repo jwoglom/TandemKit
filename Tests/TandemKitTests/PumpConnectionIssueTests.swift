@@ -221,6 +221,8 @@ import XCTest
         bluetooth.handleBluetoothStateChange(.poweredOff)
 
         wait(for: [published], timeout: 5.0)
+        // The status update follows didUpdateState in the same delegate-queue block, so let it land.
+        manager.delegateQueue.sync {}
         XCTAssertFalse(delegate.statusUpdates.isEmpty)
     }
 }

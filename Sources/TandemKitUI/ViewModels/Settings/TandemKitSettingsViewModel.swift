@@ -11,7 +11,6 @@ enum CommandFailure: Int, Identifiable {
     case sleepMode
     case stopTempRate
     case playSound
-    case alertSnooze
 
     var id: Int { rawValue }
 }

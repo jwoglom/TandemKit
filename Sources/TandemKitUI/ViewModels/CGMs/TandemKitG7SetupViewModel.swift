@@ -33,8 +33,9 @@ class TandemKitG7SetupViewModel: ObservableObject {
 
     // MARK: - Validation
 
+    // Four ASCII digits; isNumber alone also accepts "١" or "½", which fail Int().
     var isPairingCodeValid: Bool {
-        !pairingCode.isEmpty && pairingCode.allSatisfy { $0.isNumber }
+        pairingCode.count == 4 && pairingCode.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     // MARK: - Start G7 Sensor

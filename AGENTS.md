@@ -101,7 +101,10 @@ Rules that are easy to break without noticing. The overall design is in
 `delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
 a direct call from a driver queue crashes it, as a backfill tick reading
 `startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
-`queue.sync`, which deadlocks a caller already on the delegate queue. `MockPumpManagerDelegate`
+`queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
+host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
+`.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
+what was held once the second one lands. `MockPumpManagerDelegate`
 fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
 attaches one queue for the manager's life, as hosts do.
 
@@ -131,7 +134,11 @@ edit instead of at the next sync.
   pump: delivery limits, basal schedule, pump clock. Loop and Trio never sync these during
   onboarding, so without it the pump kept its own profile while the driver reported the app's
   (issue #206). Setup stops on a failed basal or limits write; a failed clock write does not.
-  Pump sounds are not written, since onboarding collects no value for them.
+- The onboarding sound screen runs before pairing, so `applyOnboardingSettings` also writes its
+  choices, the `*Annun` values it stored: one `SetPumpSoundsRequest` flagging the sounds that are
+  set. `pumpSoundsAwaitingWrite` stops a qualifying event's pump-globals read from replacing them
+  before then. It clears once the write is tried, so a failed one is logged, doesn't stop setup and
+  isn't retried, and the next read shows what the pump holds.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
   doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).

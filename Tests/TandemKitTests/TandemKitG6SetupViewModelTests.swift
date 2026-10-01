@@ -31,7 +31,7 @@ import XCTest
         viewModel.transmitterId = "8G12AB"
         XCTAssertTrue(viewModel.isTransmitterIdValid)
 
-        for invalid in ["", "8G12A", "8G12ABC", "8G-12A", "8G 12A"] {
+        for invalid in ["", "8G12A", "8G12ABC", "8G-12A", "8G 12A", "8É12AB", "8G12A١"] {
             viewModel.transmitterId = invalid
             XCTAssertFalse(viewModel.isTransmitterIdValid, "\"\(invalid)\" was accepted")
         }
@@ -41,7 +41,7 @@ import XCTest
         viewModel.sensorCode = "5678"
         XCTAssertTrue(viewModel.isSensorCodeValid)
 
-        for invalid in ["", "567", "56789", "56a8", "56 8"] {
+        for invalid in ["", "567", "56789", "56a8", "56 8", "١٢٣٤", "１２３４", "12½4"] {
             viewModel.sensorCode = invalid
             XCTAssertFalse(viewModel.isSensorCodeValid, "\"\(invalid)\" was accepted")
         }
@@ -167,6 +167,18 @@ import XCTest
     func testAnIncompleteSensorCodeSendsNothing() {
         viewModel.transmitterId = "8G12AB"
         viewModel.sensorCode = "567"
+
+        viewModel.startNewSensor()
+        drainMainQueue()
+
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    func testANonASCIISensorCodeSendsNothingRatherThanCodeZero() {
+        viewModel.transmitterId = "8G12AB"
+        viewModel.sensorCode = "１２３４"
 
         viewModel.startNewSensor()
         drainMainQueue()

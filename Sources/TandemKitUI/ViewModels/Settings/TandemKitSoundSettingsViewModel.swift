@@ -3,23 +3,24 @@ import Foundation
 import LoopKit
 
 class TandemKitSoundSettingsViewModel: ObservableObject {
-    @Published var generalAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var quickBolusAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var reminderAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var alertAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var alarmAnnun: Int = 0 { didSet { checkDirtyState() } }
+    private static let defaultSound = PumpGlobalsResponse.AnnunciationEnum.vibrate
+
+    @Published var generalAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var quickBolusAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var reminderAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var alertAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var alarmAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
 
     @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
     @Published var isDisabled: Bool = false
+    @Published var saveError: String?
 
-    var originalGeneralAnnun: Int = 0
-    var originalQuickBolusAnnun: Int = 0
-    var originalBolusAnnun: Int = 0
-    var originalReminderAnnun: Int = 0
-    var originalAlertAnnun: Int = 0
-    var originalAlarmAnnun: Int = 0
-    var originalFillTubingAnnun: Int = 0
+    var originalGeneralAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalQuickBolusAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalReminderAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalAlertAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalAlarmAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
 
     private let pumpManager: TandemPumpManager?
     let onSubmit: (() -> Void)?
@@ -47,11 +48,12 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
                 return
             }
 
-            pumpManager.state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? .audioHigh
-            pumpManager.state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? .audioHigh
-            pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? .audioHigh
-            pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? .audioHigh
-            pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? .audioHigh
+            pumpManager.state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? Self.defaultSound
+            pumpManager.state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? Self.defaultSound
+            pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? Self.defaultSound
+            pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? Self.defaultSound
+            pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? Self.defaultSound
+            pumpManager.state.pumpSoundsAwaitingWrite = true
             pumpManager.notifyDelegateStateUpdated()
 
             onSubmit()
@@ -82,9 +84,19 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
 
         isDirty = false
         isLoading = true
-        pumpManager?.setPumpSound(request: request) {
+        saveError = nil
+        pumpManager?.setPumpSound(request: request) { accepted in
             DispatchQueue.main.async {
                 self.isLoading = false
+
+                guard accepted else {
+                    self.showPumpSounds()
+                    self.saveError = String(
+                        localized: "Could not save the sound settings to the pump.",
+                        comment: "Error shown when saving the pump sound settings fails"
+                    )
+                    return
+                }
 
                 self.originalGeneralAnnun = self.generalAnnun
                 self.originalQuickBolusAnnun = self.quickBolusAnnun
@@ -108,6 +120,24 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             self.isDisabled = !self.isDirty && self.onSubmit == nil
         }
     }
+
+    private func showPumpSounds() {
+        guard let pumpManager = pumpManager else {
+            return
+        }
+
+        quickBolusAnnun = (pumpManager.state.quickBolusAnnun ?? Self.defaultSound).rawValue
+        generalAnnun = (pumpManager.state.generalAnnun ?? Self.defaultSound).rawValue
+        reminderAnnun = (pumpManager.state.reminderAnnun ?? Self.defaultSound).rawValue
+        alertAnnun = (pumpManager.state.alertAnnun ?? Self.defaultSound).rawValue
+        alarmAnnun = (pumpManager.state.alarmAnnun ?? Self.defaultSound).rawValue
+
+        originalGeneralAnnun = generalAnnun
+        originalQuickBolusAnnun = quickBolusAnnun
+        originalReminderAnnun = reminderAnnun
+        originalAlertAnnun = alertAnnun
+        originalAlarmAnnun = alarmAnnun
+    }
 }
 
 extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
@@ -116,22 +146,12 @@ extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
         didUpdate _: LoopKit.PumpManagerStatus,
         oldStatus _: LoopKit.PumpManagerStatus
     ) {
-        guard let pumpManager = pumpManager, !isDirty else {
+        guard !isDirty else {
             return
         }
 
         DispatchQueue.main.async {
-            self.quickBolusAnnun = pumpManager.state.quickBolusAnnun?.rawValue ?? 0
-            self.generalAnnun = pumpManager.state.generalAnnun?.rawValue ?? 0
-            self.reminderAnnun = pumpManager.state.reminderAnnun?.rawValue ?? 0
-            self.alertAnnun = pumpManager.state.alertAnnun?.rawValue ?? 0
-            self.alarmAnnun = pumpManager.state.alarmAnnun?.rawValue ?? 0
-
-            self.originalGeneralAnnun = self.generalAnnun
-            self.originalQuickBolusAnnun = self.quickBolusAnnun
-            self.originalReminderAnnun = self.reminderAnnun
-            self.originalAlertAnnun = self.alertAnnun
-            self.originalAlarmAnnun = self.alarmAnnun
+            self.showPumpSounds()
         }
     }
 }

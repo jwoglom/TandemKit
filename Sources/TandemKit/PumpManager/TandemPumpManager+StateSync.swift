@@ -372,11 +372,13 @@ extension TandemPumpManager {
             return nil
         }
 
-        state.quickBolusAnnun = response.quickBolusAnnouncement
-        state.reminderAnnun = response.reminderAnnouncement
-        state.alarmAnnun = response.alarmAnnouncement
-        state.alertAnnun = response.alertAnnouncement
-        state.generalAnnun = response.generalAnnouncement
+        if !state.pumpSoundsAwaitingWrite {
+            state.quickBolusAnnun = response.quickBolusAnnouncement
+            state.reminderAnnun = response.reminderAnnouncement
+            state.alarmAnnun = response.alarmAnnouncement
+            state.alertAnnun = response.alertAnnouncement
+            state.generalAnnun = response.generalAnnouncement
+        }
         state.quickBolusEnabled = response.isQuickBolusEnabled()
         state.quickBolusEntryType = response.quickBolusEntryType
         state.quickBolusIncrementUnits = response.quickBolusIncrementUnits
