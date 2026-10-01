@@ -14,6 +14,7 @@ private enum CGMAlertType: Identifiable {
 }
 
 struct TandemKitCGMSettingsView: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitCGMSettingsViewModel
     @State private var activeAlert: CGMAlertType?
 
@@ -42,7 +43,7 @@ struct TandemKitCGMSettingsView: View {
                                     Spacer()
                                     Text("Stop Sensor", comment: "Button to stop sensor during startup")
                                         .fontWeight(.semibold)
-                                        .foregroundColor(.red)
+                                        .foregroundColor(guidanceColors.critical)
                                     Spacer()
                                 }
                             }
@@ -74,7 +75,7 @@ struct TandemKitCGMSettingsView: View {
                 return Alert(
                     title: Text("Error", comment: "Error alert title"),
                     message: Text(message),
-                    dismissButton: .default(Text("OK"))
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
                 )
             }
         }
@@ -151,7 +152,7 @@ struct TandemKitCGMSettingsView: View {
                     Text("Grace Period", comment: "Label for grace period")
                     Spacer()
                     Text("Active", comment: "Grace period is active")
-                        .foregroundColor(.orange)
+                        .foregroundColor(guidanceColors.warning)
                 }
             }
 
@@ -185,7 +186,7 @@ struct TandemKitCGMSettingsView: View {
                         Spacer()
                         Text("Stop CGM Sensor", comment: "Button to stop CGM sensor")
                             .fontWeight(.semibold)
-                            .foregroundColor(.red)
+                            .foregroundColor(guidanceColors.critical)
                         Spacer()
                     }
                 }
@@ -231,7 +232,7 @@ struct TandemKitCGMSettingsView: View {
         case .active: return .green
         case .stopped: return .secondary
         case .startPending,
-             .stopPending: return .orange
+             .stopPending: return guidanceColors.warning
         case .unknown: return .secondary
         }
     }

@@ -29,7 +29,7 @@ struct TandemKitG7SetupWizardView: View {
             Alert(
                 title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
-                dismissButton: .default(Text("OK"))
+                dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
             )
         }
         .onChange(of: viewModel.didComplete) { completed in

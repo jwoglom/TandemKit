@@ -1,6 +1,7 @@
+import Combine
 import CoreBluetooth
+import Foundation
 import LoopKit
-import SwiftUI
 
 final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitTroubleshootConnectionViewModel")
@@ -60,7 +61,10 @@ final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
         if let peripheralUuid = pumpState.peripheralUuid {
             var parts = ["Tandem Mobi"]
             if let serial = pumpState.pumpSerial {
-                parts.append("SN \(serial)")
+                parts.append(String(
+                    localized: "SN \(String(serial))",
+                    comment: "Pump serial number on the troubleshoot connection screen"
+                ))
             }
             savedPumpText = parts.joined(separator: " · ")
 

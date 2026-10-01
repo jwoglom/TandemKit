@@ -1,6 +1,8 @@
+import LoopKitUI
 import SwiftUI
 
 struct TandemKitTroubleshootConnectionView: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     @StateObject var viewModel: TandemKitTroubleshootConnectionViewModel
 
     var body: some View {
@@ -10,7 +12,7 @@ struct TandemKitTroubleshootConnectionView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(connectionIssue.title)
                             .font(Font.subheadline.weight(.bold))
-                            .foregroundColor(.red)
+                            .foregroundColor(guidanceColors.critical)
                         Text(connectionIssue.detail(appName: viewModel.appName))
                             .font(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
@@ -79,7 +81,7 @@ struct TandemKitTroubleshootConnectionView: View {
                 if let reconnectResultText = viewModel.reconnectResultText {
                     Text(reconnectResultText)
                         .font(.footnote)
-                        .foregroundColor(viewModel.isConnected ? .secondary : .red)
+                        .foregroundColor(viewModel.isConnected ? .secondary : guidanceColors.critical)
                 }
             } footer: {
                 Text(
@@ -141,7 +143,7 @@ struct TandemKitTroubleshootConnectionView: View {
             Text(value)
                 .foregroundColor(.secondary)
             Image(systemName: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundColor(ok ? .green : .red)
+                .foregroundColor(ok ? .green : guidanceColors.critical)
         }
     }
 

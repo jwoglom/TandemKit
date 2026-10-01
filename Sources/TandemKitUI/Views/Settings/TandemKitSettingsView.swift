@@ -198,7 +198,8 @@ struct TandemKitSettingsView: View {
                                     .foregroundColor(
                                         BatteryIndicatorView.tintColor(
                                             chargeRemaining: viewModel.batteryChargeRemaining,
-                                            isCharging: viewModel.batteryIsCharging
+                                            isCharging: viewModel.batteryIsCharging,
+                                            guidanceColors: guidanceColors
                                         )
                                     )
                             }
@@ -266,7 +267,7 @@ struct TandemKitSettingsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(connectionIssue.title)
                                     .font(Font.subheadline.weight(.bold))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(guidanceColors.critical)
                                 Text(connectionIssue.detail(appName: viewModel.appName))
                                     .font(Font.footnote.weight(.semibold))
                                     .fixedSize(horizontal: false, vertical: true)
@@ -293,7 +294,7 @@ struct TandemKitSettingsView: View {
                             ),
                             viewModel.algorithmName
                         ),
-                        color: .orange,
+                        color: guidanceColors.warning,
                         actionLabel: disableControlIQLabel,
                         action: { activeAlert = .switchToDIY }
                     )
@@ -304,14 +305,14 @@ struct TandemKitSettingsView: View {
                             format: String(localized: "%@ closed-loop is not in use.", comment: "subtitle for CIQ active notice"),
                             viewModel.algorithmName
                         ),
-                        color: .orange,
+                        color: guidanceColors.warning,
                         actionLabel: disableControlIQLabel,
                         action: { activeAlert = .switchToDIY }
                     )
                 } else if !viewModel.isClosedLoopEnabled {
                     statusBanner(
                         title: String(localized: "Open loop mode", comment: "title for open loop notice"),
-                        color: .orange
+                        color: guidanceColors.warning
                     )
                     .contentShape(Rectangle())
                 }
@@ -341,7 +342,7 @@ struct TandemKitSettingsView: View {
                             if viewModel.notificationCount > 0 {
                                 ZStack {
                                     Circle()
-                                        .fill(Color.red)
+                                        .fill(guidanceColors.critical)
                                         .frame(width: 24, height: 24)
                                     Text("\(viewModel.notificationCount)")
                                         .foregroundColor(.white)
@@ -369,7 +370,10 @@ struct TandemKitSettingsView: View {
                 } else {
                     Button(action: {}) {
                         HStack {
-                            Text("Insulin delivery status unknown")
+                            Text(
+                                "Insulin delivery status unknown",
+                                comment: "Disabled suspend/resume row when the pump's delivery state is not known"
+                            )
                         }
                     }.disabled(true)
                 }
@@ -610,7 +614,7 @@ struct TandemKitSettingsView: View {
                         Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
                         action: { viewModel.openCgmSettings() }
                     ),
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .controlIQValuesRequired:
                 return Alert(
@@ -629,7 +633,7 @@ struct TandemKitSettingsView: View {
                         ),
                         action: { viewModel.openControlIQSettings() }
                     ),
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .diyRestored:
                 return Alert(
@@ -642,7 +646,7 @@ struct TandemKitSettingsView: View {
                         "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
                         comment: "Message for DIY mode restored notice"
                     ), viewModel.algorithmName)),
-                    dismissButton: .default(Text("OK"))
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .noCGMConnected:
                 // Control-IQ without a CGM is open-loop on both sides, so turning it straight back
@@ -657,7 +661,7 @@ struct TandemKitSettingsView: View {
                     primaryButton: .default(Text(disableControlIQLabel)) {
                         viewModel.switchAlgorithmToDIY()
                     },
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .stopTempRate:
                 return Alert(
@@ -772,7 +776,7 @@ struct TandemKitSettingsView: View {
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
                             .fixedSize()
-                        Text("U")
+                        Text("U", comment: "Insulin units after the cartridge's remaining insulin")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -791,7 +795,7 @@ struct TandemKitSettingsView: View {
             Text(viewModel.algorithmModeText)
                 .font(.system(size: 28))
                 .fontWeight(.regular)
-                .foregroundColor(viewModel.useControlIQ ? .orange : .secondary)
+                .foregroundColor(viewModel.useControlIQ ? guidanceColors.warning : .secondary)
                 .fixedSize()
         }
     }
@@ -821,7 +825,7 @@ struct TandemKitSettingsView: View {
                             .fontWeight(.heavy)
                             .fixedSize()
 
-                        Text("U/hr")
+                        Text("U/hr", comment: "Units per hour after the basal rate")
                             .foregroundColor(.secondary)
                             .fixedSize()
                     }
@@ -837,23 +841,32 @@ struct TandemKitSettingsView: View {
     }
 
     var stopTempRateMessage: String {
-        let rateText = String(format: "%.2f U/hr", viewModel.basalDose?.value ?? 0)
+        let rateText = String(
+            format: String(localized: "%.2f U/hr", comment: "Temp basal rate in the stop temp rate alert"),
+            viewModel.basalDose?.value ?? 0
+        )
 
+        let durationFormatter = DateComponentsFormatter()
+        durationFormatter.unitsStyle = .full
+        durationFormatter.allowedUnits = [.hour, .minute]
+
+        // Rounded up, so a temp rate with seconds left still reads "1 minute", not "0 minutes".
         let durationText: String
-        if let start = viewModel.basalDose?.startDate, let end = viewModel.basalDose?.estimatedEndDate {
-            let minutes = Int(end.timeIntervalSince(start)) / 60
-            let hours = minutes / 60
-            let mins = minutes % 60
-            if hours > 0 {
-                durationText = "\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"
-            } else {
-                durationText = "\(mins) minute\(mins == 1 ? "" : "s")"
-            }
+        if let end = viewModel.basalDose?.estimatedEndDate,
+           let formatted = durationFormatter.string(from: (max(0, end.timeIntervalSinceNow) / 60).rounded(.up) * 60)
+        {
+            durationText = formatted
         } else {
-            durationText = "an unknown duration"
+            durationText = String(
+                localized: "an unknown duration",
+                comment: "Stands in for the temp basal duration in the stop temp rate alert when it is not known"
+            )
         }
 
-        return "The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?"
+        return String(
+            localized: "The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?",
+            comment: "Stop temp rate alert message (1: rate, 2: duration)"
+        )
     }
 
     var deliverySectionTitle: String {
@@ -959,18 +972,6 @@ struct TandemKitSettingsView: View {
             return String(localized: "Exercise", comment: "user mode exercise")
         default:
             return String(localized: "Unknown", comment: "user mode unknown")
-        }
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let minutes = Int(seconds) / 60
-        let hours = minutes / 60
-        let mins = minutes % 60
-
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        } else {
-            return "\(mins)m"
         }
     }
 

@@ -19,28 +19,6 @@ import XCTest
         super.tearDown()
     }
 
-    private func globals(
-        enabled: Bool,
-        mode: QuickBolusMode = .units,
-        incrementUnits: Int,
-        incrementCarbs: Int = 2000
-    ) -> PumpGlobalsResponse {
-        PumpGlobalsResponse(
-            quickBolusEnabledRaw: enabled ? 1 : 0,
-            quickBolusIncrementUnits: incrementUnits,
-            quickBolusIncrementCarbs: incrementCarbs,
-            quickBolusEntryType: mode.rawValue,
-            quickBolusStatus: 1,
-            buttonAnnun: 0,
-            quickBolusAnnun: 0,
-            generalAnnun: 0,
-            reminderAnnun: 0,
-            alertAnnun: 0,
-            alarmAnnun: 0,
-            fillTubingAnnun: 0
-        )
-    }
-
     private func set(enabled: Bool, incrementUnits: Int) -> Bool {
         let done = expectation(description: "setQuickBolusSettings")
         var result = false
@@ -74,8 +52,8 @@ import XCTest
     func testEnablingAtTheCurrentHalfUnit() throws {
         try assertSends(
             "0100f401d00701",
-            from: globals(enabled: false, incrementUnits: 500),
-            to: globals(enabled: true, incrementUnits: 500),
+            from: .quickBolus(enabled: false, incrementUnits: 500),
+            to: .quickBolus(enabled: true, incrementUnits: 500),
             enabled: true,
             incrementUnits: 500
         )
@@ -84,8 +62,8 @@ import XCTest
     func testEnablingAtTheCurrentOneUnit() throws {
         try assertSends(
             "0100e803d00701",
-            from: globals(enabled: false, incrementUnits: 1000),
-            to: globals(enabled: true, incrementUnits: 1000),
+            from: .quickBolus(enabled: false, incrementUnits: 1000),
+            to: .quickBolus(enabled: true, incrementUnits: 1000),
             enabled: true,
             incrementUnits: 1000
         )
@@ -94,8 +72,8 @@ import XCTest
     func testEnablingAtANewIncrementSendsBothFields() throws {
         try assertSends(
             "0100e803d00705",
-            from: globals(enabled: false, incrementUnits: 500),
-            to: globals(enabled: true, incrementUnits: 1000),
+            from: .quickBolus(enabled: false, incrementUnits: 500),
+            to: .quickBolus(enabled: true, incrementUnits: 1000),
             enabled: true,
             incrementUnits: 1000
         )
@@ -104,8 +82,8 @@ import XCTest
     func testChangingToHalfUnit() throws {
         try assertSends(
             "0100f401d00704",
-            from: globals(enabled: true, incrementUnits: 1000),
-            to: globals(enabled: true, incrementUnits: 500),
+            from: .quickBolus(enabled: true, incrementUnits: 1000),
+            to: .quickBolus(enabled: true, incrementUnits: 500),
             enabled: true,
             incrementUnits: 500
         )
@@ -114,8 +92,8 @@ import XCTest
     func testChangingToOneUnit() throws {
         try assertSends(
             "0100e803d00704",
-            from: globals(enabled: true, incrementUnits: 500),
-            to: globals(enabled: true, incrementUnits: 1000),
+            from: .quickBolus(enabled: true, incrementUnits: 500),
+            to: .quickBolus(enabled: true, incrementUnits: 1000),
             enabled: true,
             incrementUnits: 1000
         )
@@ -124,8 +102,8 @@ import XCTest
     func testChangingToTwoUnits() throws {
         try assertSends(
             "0100d007d00704",
-            from: globals(enabled: true, incrementUnits: 1000),
-            to: globals(enabled: true, incrementUnits: 2000),
+            from: .quickBolus(enabled: true, incrementUnits: 1000),
+            to: .quickBolus(enabled: true, incrementUnits: 2000),
             enabled: true,
             incrementUnits: 2000
         )
@@ -134,8 +112,8 @@ import XCTest
     func testChangingToFiveUnits() throws {
         try assertSends(
             "01008813d00704",
-            from: globals(enabled: true, incrementUnits: 2000),
-            to: globals(enabled: true, incrementUnits: 5000),
+            from: .quickBolus(enabled: true, incrementUnits: 2000),
+            to: .quickBolus(enabled: true, incrementUnits: 5000),
             enabled: true,
             incrementUnits: 5000
         )
@@ -144,8 +122,8 @@ import XCTest
     func testDisablingCarriesTheCurrentHalfUnit() throws {
         try assertSends(
             "0000f401d00701",
-            from: globals(enabled: true, incrementUnits: 500),
-            to: globals(enabled: false, incrementUnits: 500),
+            from: .quickBolus(enabled: true, incrementUnits: 500),
+            to: .quickBolus(enabled: false, incrementUnits: 500),
             enabled: false,
             incrementUnits: 500
         )
@@ -154,8 +132,8 @@ import XCTest
     func testDisablingCarriesTheCurrentOneUnit() throws {
         try assertSends(
             "0000e803d00701",
-            from: globals(enabled: true, incrementUnits: 1000),
-            to: globals(enabled: false, incrementUnits: 1000),
+            from: .quickBolus(enabled: true, incrementUnits: 1000),
+            to: .quickBolus(enabled: false, incrementUnits: 1000),
             enabled: false,
             incrementUnits: 1000
         )
@@ -164,8 +142,8 @@ import XCTest
     func testDisablingCarriesTheCurrentFiveUnits() throws {
         try assertSends(
             "00008813d00701",
-            from: globals(enabled: true, incrementUnits: 5000),
-            to: globals(enabled: false, incrementUnits: 5000),
+            from: .quickBolus(enabled: true, incrementUnits: 5000),
+            to: .quickBolus(enabled: false, incrementUnits: 5000),
             enabled: false,
             incrementUnits: 5000
         )
@@ -175,22 +153,22 @@ import XCTest
     func testSavingOnACarbsModePumpSwitchesItBackToUnits() throws {
         try assertSends(
             "01008813102702",
-            from: globals(enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 10000),
-            to: globals(enabled: true, mode: .units, incrementUnits: 5000, incrementCarbs: 10000),
+            from: .quickBolus(enabled: true, mode: .carbs, incrementUnits: 5000, incrementCarbs: 10000),
+            to: .quickBolus(enabled: true, mode: .units, incrementUnits: 5000, incrementCarbs: 10000),
             enabled: true,
             incrementUnits: 5000
         )
     }
 
     func testAChangeThePumpDidNotApplyFailsTheSave() {
-        bluetooth.stub(PumpGlobalsRequest.self, with: globals(enabled: true, mode: .carbs, incrementUnits: 500))
+        bluetooth.stub(PumpGlobalsRequest.self, with: PumpGlobalsResponse.quickBolus(enabled: true, mode: .carbs, incrementUnits: 500))
 
         XCTAssertFalse(set(enabled: true, incrementUnits: 500))
         XCTAssertTrue(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
     }
 
     func testNothingIsWrittenWhenThePumpAlreadyMatches() {
-        bluetooth.stub(PumpGlobalsRequest.self, with: globals(enabled: true, incrementUnits: 2000))
+        bluetooth.stub(PumpGlobalsRequest.self, with: PumpGlobalsResponse.quickBolus(enabled: true, incrementUnits: 2000))
 
         XCTAssertTrue(set(enabled: true, incrementUnits: 2000))
         XCTAssertFalse(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
@@ -199,5 +177,29 @@ import XCTest
     func testUnsupportedIncrementIsRefusedWithoutTalkingToThePump() {
         XCTAssertFalse(set(enabled: true, incrementUnits: 750))
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+}
+
+extension PumpGlobalsResponse {
+    static func quickBolus(
+        enabled: Bool,
+        mode: QuickBolusMode = .units,
+        incrementUnits: Int,
+        incrementCarbs: Int = 2000
+    ) -> PumpGlobalsResponse {
+        PumpGlobalsResponse(
+            quickBolusEnabledRaw: enabled ? 1 : 0,
+            quickBolusIncrementUnits: incrementUnits,
+            quickBolusIncrementCarbs: incrementCarbs,
+            quickBolusEntryType: mode.rawValue,
+            quickBolusStatus: 1,
+            buttonAnnun: 0,
+            quickBolusAnnun: 0,
+            generalAnnun: 0,
+            reminderAnnun: 0,
+            alertAnnun: 0,
+            alarmAnnun: 0,
+            fillTubingAnnun: 0
+        )
     }
 }

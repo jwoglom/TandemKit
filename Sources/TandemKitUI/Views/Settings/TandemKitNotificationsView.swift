@@ -124,6 +124,7 @@ struct TandemKitNotificationsView: View {
 }
 
 struct NotificationRow: View {
+    @Environment(\.guidanceColors) private var guidanceColors
     let item: NotificationItem
     let onDismiss: () -> Void
     var backgroundColor = Color(UIColor.systemBackground)
@@ -166,7 +167,7 @@ struct NotificationRow: View {
 
                 if !item.canDismiss {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(guidanceColors.warning)
                         .font(.system(size: 20))
                 }
             }

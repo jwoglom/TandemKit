@@ -1,5 +1,6 @@
+import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 enum G6SetupStep: Int {
     case landing = 0
@@ -29,15 +30,11 @@ class TandemKitG6SetupViewModel: ObservableObject {
     // MARK: - Navigation
 
     func goToSensorDetails() {
-        withAnimation {
-            currentStep = .sensorDetails
-        }
+        currentStep = .sensorDetails
     }
 
     func goToConnectExisting() {
-        withAnimation {
-            currentStep = .connectExisting
-        }
+        currentStep = .connectExisting
     }
 
     // MARK: - Validation

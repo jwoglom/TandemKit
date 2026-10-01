@@ -29,11 +29,20 @@ public final class HistoryLogFetcher {
         public var errorDescription: String? {
             switch self {
             case .noStatusResponse:
-                return "Unable to read the history log status from the pump"
+                return String(
+                    localized: "Unable to read the history log status from the pump",
+                    comment: "Error when the pump does not answer the history log status request"
+                )
             case .cancelled:
-                return "History log fetch was cancelled"
+                return String(
+                    localized: "History log fetch was cancelled",
+                    comment: "Error when a history log read is cancelled before it finishes"
+                )
             case .busy:
-                return "Another history log read is already in progress"
+                return String(
+                    localized: "Another history log read is already in progress",
+                    comment: "Error when a history log read is refused because another read holds the pump's history stream"
+                )
             }
         }
     }

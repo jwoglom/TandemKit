@@ -149,7 +149,10 @@ extension PumpCommError: LocalizedError {
                 comment: "Error when scheduled basal rate is invalid"
             )
         default:
-            return "Other PumpCommError: \(String(describing: self))"
+            return String(
+                localized: "Other PumpCommError: \(String(describing: self))",
+                comment: "Pump communication error with no specific message; the placeholder is the error's internal name"
+            )
         }
     }
 

@@ -1,5 +1,6 @@
+import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 class TandemKitQuickBolusSettingsViewModel: ObservableObject {
     @Published var enabled: Bool = false { didSet { checkDirtyState() } }
@@ -16,10 +17,10 @@ class TandemKitQuickBolusSettingsViewModel: ObservableObject {
     private let pumpManager: TandemPumpManager?
 
     static let unitIncrements: [(label: String, milliunits: Int)] = [
-        ("0.5 U", 500),
-        ("1.0 U", 1000),
-        ("2.0 U", 2000),
-        ("5.0 U", 5000)
+        (String(localized: "0.5 U", comment: "Quick bolus increment option, in insulin units"), 500),
+        (String(localized: "1.0 U", comment: "Quick bolus increment option, in insulin units"), 1000),
+        (String(localized: "2.0 U", comment: "Quick bolus increment option, in insulin units"), 2000),
+        (String(localized: "5.0 U", comment: "Quick bolus increment option, in insulin units"), 5000)
     ]
 
     init(pumpManager: TandemPumpManager?) {

@@ -1,7 +1,7 @@
 import Foundation
 import LoopKit
 
-public class UnfinalizedDose {
+public class UnfinalizedDose: Equatable {
     public typealias RawValue = [String: Any]
 
     private let logger = TandemLogger(category: "UnfinalizedDose")
@@ -20,6 +20,19 @@ public class UnfinalizedDose {
     public var deliveredUnits: Double = 0
     public let insulinType: InsulinType?
     public let automatic: Bool
+
+    public static func == (lhs: UnfinalizedDose, rhs: UnfinalizedDose) -> Bool {
+        lhs.bolusId == rhs.bolusId &&
+            lhs.tempRateId == rhs.tempRateId &&
+            lhs.type == rhs.type &&
+            lhs.startDate == rhs.startDate &&
+            lhs.deliveryStartDate == rhs.deliveryStartDate &&
+            lhs.estimatedEndDate == rhs.estimatedEndDate &&
+            lhs.value == rhs.value &&
+            lhs.deliveredUnits == rhs.deliveredUnits &&
+            lhs.insulinType == rhs.insulinType &&
+            lhs.automatic == rhs.automatic
+    }
 
     public init(
         units: Double,

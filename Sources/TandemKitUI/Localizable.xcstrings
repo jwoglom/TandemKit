@@ -873,6 +873,17 @@
         }
       }
     },
+    "Could not save the alert snooze setting to the pump." : {
+      "comment" : "Error shown when saving the alert snooze setting fails",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not save the alert snooze setting to the pump."
+          }
+        }
+      }
+    },
     "Could not stop temp rate" : {
       "comment" : "Title for failure to stop temp rate",
       "localizations" : {

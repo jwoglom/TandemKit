@@ -1,6 +1,6 @@
 import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 enum CartridgeChangeStep: Int {
     case suspend = 0
