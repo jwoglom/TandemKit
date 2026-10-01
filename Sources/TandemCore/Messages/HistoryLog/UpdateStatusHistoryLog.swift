@@ -12,12 +12,15 @@ public class UpdateStatusHistoryLog: HistoryLog {
     public let swPartNum: UInt32
 
     public required init(cargo: Data) {
-        metadataAndVersionStatus = Bytes.readShort(cargo, 10)
-        swUpdateStatus = Bytes.readShort(cargo, 12)
-        fileDlAndSideloadStatus = Bytes.readShort(cargo, 14)
-        fullDlAndCrcStatus = Bytes.readShort(cargo, 16)
-        updateSuccessful = Int(cargo[cargo.startIndex + 19])
-        externalFlashStatus = Bytes.readShort(cargo, 20)
+        // Layout per the Tandem Source event schema: SwUpdateStatus u16 @10, MetadataAndVersionStatus u16 @12,
+        // FullDlAndCrcStatus u16 @14, FileDlAndSideloadStatus u16 @16, ExternalFlashStatus u16 @18,
+        // UpdateSuccessful u8 @20, SwPartNum u32 @22.
+        swUpdateStatus = Bytes.readShort(cargo, 10)
+        metadataAndVersionStatus = Bytes.readShort(cargo, 12)
+        fullDlAndCrcStatus = Bytes.readShort(cargo, 14)
+        fileDlAndSideloadStatus = Bytes.readShort(cargo, 16)
+        externalFlashStatus = Bytes.readShort(cargo, 18)
+        updateSuccessful = Int(cargo[cargo.startIndex + 20])
         swPartNum = Bytes.readUint32(cargo, 22)
         super.init(cargo: cargo)
     }
@@ -92,12 +95,12 @@ public class UpdateStatusHistoryLog: HistoryLog {
                 HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
-                Bytes.firstTwoBytesLittleEndian(metadataAndVersionStatus),
                 Bytes.firstTwoBytesLittleEndian(swUpdateStatus),
-                Bytes.firstTwoBytesLittleEndian(fileDlAndSideloadStatus),
+                Bytes.firstTwoBytesLittleEndian(metadataAndVersionStatus),
                 Bytes.firstTwoBytesLittleEndian(fullDlAndCrcStatus),
-                Data([0, UInt8(truncatingIfNeeded: updateSuccessful)]),
+                Bytes.firstTwoBytesLittleEndian(fileDlAndSideloadStatus),
                 Bytes.firstTwoBytesLittleEndian(externalFlashStatus),
+                Data([UInt8(truncatingIfNeeded: updateSuccessful), 0]),
                 Bytes.toUint32(swPartNum)
             )
         )

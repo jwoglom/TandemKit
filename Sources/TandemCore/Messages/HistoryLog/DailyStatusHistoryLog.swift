@@ -6,11 +6,22 @@ public class DailyStatusHistoryLog: HistoryLog {
     public let sensorType: Int
     public let userMode: Int
     public let pumpControlState: Int
+    /// Raw weight unit, see `WeightUnit`.
+    public let weightUnit: Int
+    /// Configured weight, in the unit given by `weightUnit`.
+    public let weight: Int
+    /// Current total daily insulin (population) estimate, in units.
+    public let currentTdiPop: Int
 
     public required init(cargo: Data) {
-        sensorType = Int(cargo[11])
-        userMode = Int(cargo[12])
-        pumpControlState = Int(cargo[13])
+        // Layout per the Tandem Source event schema: PumpControlState @10, usermode @11, SensorType @12,
+        // WeightUnit @13, Weight u16 @14, currentTDIpop @16.
+        pumpControlState = Int(cargo[cargo.startIndex + 10])
+        userMode = Int(cargo[cargo.startIndex + 11])
+        sensorType = Int(cargo[cargo.startIndex + 12])
+        weightUnit = Int(cargo[cargo.startIndex + 13])
+        weight = Bytes.readShort(cargo, 14)
+        currentTdiPop = Int(cargo[cargo.startIndex + 16])
         super.init(cargo: cargo)
     }
 
@@ -19,18 +30,27 @@ public class DailyStatusHistoryLog: HistoryLog {
         sequenceNum: UInt32,
         sensorType: Int,
         userMode: Int,
-        pumpControlState: Int
+        pumpControlState: Int,
+        weightUnit: Int = 0,
+        weight: Int = 0,
+        currentTdiPop: Int = 0
     ) {
         let payload = DailyStatusHistoryLog.buildCargo(
             pumpTimeSec: pumpTimeSec,
             sequenceNum: sequenceNum,
             sensorType: sensorType,
             userMode: userMode,
-            pumpControlState: pumpControlState
+            pumpControlState: pumpControlState,
+            weightUnit: weightUnit,
+            weight: weight,
+            currentTdiPop: currentTdiPop
         )
         self.sensorType = sensorType
         self.userMode = userMode
         self.pumpControlState = pumpControlState
+        self.weightUnit = weightUnit
+        self.weight = weight
+        self.currentTdiPop = currentTdiPop
         super.init(cargo: payload)
     }
 
@@ -39,14 +59,19 @@ public class DailyStatusHistoryLog: HistoryLog {
         sequenceNum: UInt32,
         sensorType: Int,
         userMode: Int,
-        pumpControlState: Int
+        pumpControlState: Int,
+        weightUnit: Int = 0,
+        weight: Int = 0,
+        currentTdiPop: Int = 0
     ) -> Data {
         HistoryLog.fillCargo(
             Bytes.combine(
                 HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
-                Data([0, UInt8(sensorType & 0xFF), UInt8(userMode & 0xFF), UInt8(pumpControlState & 0xFF)])
+                Data([UInt8(pumpControlState & 0xFF), UInt8(userMode & 0xFF), UInt8(sensorType & 0xFF), UInt8(weightUnit & 0xFF)]),
+                Bytes.firstTwoBytesLittleEndian(weight),
+                Data([UInt8(currentTdiPop & 0xFF)])
             )
         )
     }
@@ -62,6 +87,12 @@ public class DailyStatusHistoryLog: HistoryLog {
         case normal = 0
         case sleeping = 1
         case exercising = 2
+    }
+
+    public enum WeightUnit: Int {
+        case notSet = 0
+        case pounds = 1
+        case kilograms = 2
     }
 
     public enum PumpControlState: Int {
@@ -84,7 +115,11 @@ public class DailyStatusHistoryLog: HistoryLog {
         PumpControlState(rawValue: pumpControlState)
     }
 
+    public var weightUnitEnum: WeightUnit? {
+        WeightUnit(rawValue: weightUnit)
+    }
+
     public var description: String {
-        "DailyStatusHistoryLog(cargo=\(cargo.hexadecimalString), sensorType=\(sensorType), userMode=\(userMode), pumpControlState=\(pumpControlState))"
+        "DailyStatusHistoryLog(cargo=\(cargo.hexadecimalString), sensorType=\(sensorType), userMode=\(userMode), pumpControlState=\(pumpControlState), weightUnit=\(weightUnit), weight=\(weight), currentTdiPop=\(currentTdiPop))"
     }
 }

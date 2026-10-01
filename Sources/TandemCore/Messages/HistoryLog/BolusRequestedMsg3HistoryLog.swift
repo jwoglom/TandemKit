@@ -13,6 +13,7 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
     public static let typeId = 66
 
     public let bolusId: Int
+    /// The raw 16-bit word at offset 2. Its low byte is the queued flag, see `queued`.
     public let spare: Int
     public let foodBolusSize: Float
     public let correctionBolusSize: Float
@@ -74,6 +75,11 @@ public class BolusRequestedMsg3HistoryLog: HistoryLog {
                 Bytes.toFloat(totalBolusSize)
             )
         )
+    }
+
+    /// True if the bolus was queued (Tandem Source schema field "Queued", byte 2).
+    public var queued: Bool {
+        (spare & 0xFF) != 0
     }
 
     public var description: String {

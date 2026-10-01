@@ -8,9 +8,9 @@ final class ShelfModeHistoryLogTests: XCTestCase {
             pumpTimeSec: 580_777_764,
             sequenceNum: 491_136,
             msecSinceReset: 1_078_644_679,
-            lipoIbc: 0,
-            lipoAbc: 0,
-            lipoCurrent: 23130,
+            lipoIbc: 90,
+            lipoAbc: 90,
+            lipoCurrent: 0,
             lipoRemCap: 130,
             lipoMv: 4176
         ).withHeaderHighNibble(1)
@@ -20,5 +20,8 @@ final class ShelfModeHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(0, parsedRes.lipoCurrent)
+        XCTAssertEqual(90, parsedRes.lipoAbc)
+        XCTAssertEqual(90, parsedRes.lipoIbc)
     }
 }
