@@ -68,5 +68,17 @@ struct TandemKitAlertSettingsView: View {
             }
         }
         .listStyle(InsetGroupedListStyle())
+        .alert(
+            String(localized: "Could not update alert snooze", comment: "Title for failure to set alert snooze"),
+            isPresented: Binding(
+                get: { viewModel.saveError != nil },
+                set: { if !$0 { viewModel.saveError = nil } }
+            ),
+            presenting: viewModel.saveError,
+            actions: { _ in
+                Button(String(localized: "OK", comment: "OK button"), action: {})
+            },
+            message: { Text($0) }
+        )
     }
 }
