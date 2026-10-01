@@ -20,9 +20,7 @@ final class UserFacingTextIsLocalized: XCTestCase {
         "TandemKitDebugView.swift",
         "TandemKitDebugViewModel.swift",
         "TandemKitHistoryLogViewerView.swift",
-        "TandemKitHistoryLogViewerViewModel.swift",
-        // TandemOnboardingView, an unused Xcode template; deleting it means editing the project file.
-        "Hello, World!"
+        "TandemKitHistoryLogViewerViewModel.swift"
     ]
 
     private static let rule = Rule(
