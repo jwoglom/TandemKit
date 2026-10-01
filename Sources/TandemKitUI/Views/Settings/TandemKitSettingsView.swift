@@ -847,9 +847,10 @@ struct TandemKitSettingsView: View {
         durationFormatter.unitsStyle = .full
         durationFormatter.allowedUnits = [.hour, .minute]
 
+        // Rounded up, so a temp rate with seconds left still reads "1 minute", not "0 minutes".
         let durationText: String
-        if let start = viewModel.basalDose?.startDate, let end = viewModel.basalDose?.estimatedEndDate,
-           let formatted = durationFormatter.string(from: TimeInterval(Int(end.timeIntervalSince(start)) / 60 * 60))
+        if let end = viewModel.basalDose?.estimatedEndDate,
+           let formatted = durationFormatter.string(from: (max(0, end.timeIntervalSinceNow) / 60).rounded(.up) * 60)
         {
             durationText = formatted
         } else {
