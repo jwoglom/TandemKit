@@ -661,6 +661,11 @@
 		8EF2F6D12989B8EB9353E87F /* ReminderStatusResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5300E219978608A316E9826 /* ReminderStatusResponseTests.swift */; };
 		8F4BB92D0EAA279B3CF6F026 /* QuickBolusSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C822C6F35ABFC4751498B84 /* QuickBolusSettingsTests.swift */; };
 		8F822072D942BEBA7056F8FF /* CgmDataFsl3HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190AABDCD962A0E49181FD0F /* CgmDataFsl3HistoryLogTests.swift */; };
+		CA90F7805F7DC07EE11B3348 /* CgmStopSessionFsl3HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B64721D643838372363BAA10 /* CgmStopSessionFsl3HistoryLogTests.swift */; };
+		EFF50F201303BC89AF870A44 /* CgmJoinSessionFsl3HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 009448B0D314067E20B8F652 /* CgmJoinSessionFsl3HistoryLogTests.swift */; };
+		BB1E355325C9D2EA19C30707 /* CgmJoinSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */; };
+		EF03244CA47143BA49FC97C9 /* CgmStopSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */; };
+		8CE6416D66349228A146F8F8 /* CgmStartSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */; };
 		8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */; };
 		90D51D78784A90C64DE7ACFA /* AamAnnunciationHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8ED615114667344C110907 /* AamAnnunciationHistoryLog.swift */; };
 		9132D4C4EFB6B0FBD7659CAE /* TubingFilledHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD813F15B60D8BA3ACB2BE71 /* TubingFilledHistoryLogTests.swift */; };
@@ -977,6 +982,11 @@
 		17D54930BCA8C509E88DE95B /* CGMAlertStatusResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CGMAlertStatusResponseTests.swift; sourceTree = "<group>"; };
 		1848A9C9534F2B03EB3CC34C /* DismissNotificationResponseHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DismissNotificationResponseHistoryLog.swift; sourceTree = "<group>"; };
 		190AABDCD962A0E49181FD0F /* CgmDataFsl3HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmDataFsl3HistoryLogTests.swift; sourceTree = "<group>"; };
+		B64721D643838372363BAA10 /* CgmStopSessionFsl3HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl3HistoryLogTests.swift; sourceTree = "<group>"; };
+		009448B0D314067E20B8F652 /* CgmJoinSessionFsl3HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl3HistoryLogTests.swift; sourceTree = "<group>"; };
+		CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
+		17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
+		A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStartSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
 		19781D877985CAC1E4178EB3 /* HistoryLogMessageTester.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryLogMessageTester.swift; sourceTree = "<group>"; };
 		1A02E3ED2F2C949900203519 /* ErrorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSheet.swift; sourceTree = "<group>"; };
 		1A0E17262ED105CC00E75219 /* NotificationBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBundle.swift; sourceTree = "<group>"; };
@@ -3078,6 +3088,11 @@
 				5F512696F29CC0A7099C21D2 /* CgmAlertClearedDexHistoryLogTests.swift */,
 				63C11DDBB7EC1B5D41B6E465 /* CgmDataFsl2HistoryLogTests.swift */,
 				190AABDCD962A0E49181FD0F /* CgmDataFsl3HistoryLogTests.swift */,
+				B64721D643838372363BAA10 /* CgmStopSessionFsl3HistoryLogTests.swift */,
+				009448B0D314067E20B8F652 /* CgmJoinSessionFsl3HistoryLogTests.swift */,
+				CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */,
+				17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */,
+				A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */,
 				742314A78CF09FC792E73DCD /* DexcomG7CGMHistoryLogTests.swift */,
 				8C2A562BC9EEABF875E62028 /* AlarmAckHistoryLogTests.swift */,
 				DDF093DB8D0803478C40D8F0 /* AlarmClearedHistoryLogTests.swift */,
@@ -3989,6 +4004,11 @@
 				DE2158968BB35DD6FDAB324C /* CgmAlertClearedDexHistoryLogTests.swift in Sources */,
 				9B2D3A9F0EE5EB12357BE503 /* CgmDataFsl2HistoryLogTests.swift in Sources */,
 				8F822072D942BEBA7056F8FF /* CgmDataFsl3HistoryLogTests.swift in Sources */,
+				CA90F7805F7DC07EE11B3348 /* CgmStopSessionFsl3HistoryLogTests.swift in Sources */,
+				EFF50F201303BC89AF870A44 /* CgmJoinSessionFsl3HistoryLogTests.swift in Sources */,
+				BB1E355325C9D2EA19C30707 /* CgmJoinSessionFsl2HistoryLogTests.swift in Sources */,
+				EF03244CA47143BA49FC97C9 /* CgmStopSessionFsl2HistoryLogTests.swift in Sources */,
+				8CE6416D66349228A146F8F8 /* CgmStartSessionFsl2HistoryLogTests.swift in Sources */,
 				A20C5CA98311969F593FBBA9 /* DexcomG7CGMHistoryLogTests.swift in Sources */,
 				2D6FF798CDA51CA0DA93B401 /* AlarmAckHistoryLogTests.swift in Sources */,
 				A164564C55F5A546E9ECCA34 /* AlarmClearedHistoryLogTests.swift in Sources */,
