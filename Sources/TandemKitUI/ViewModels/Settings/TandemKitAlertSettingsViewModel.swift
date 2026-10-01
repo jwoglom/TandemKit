@@ -1,4 +1,5 @@
-import SwiftUI
+import Combine
+import Foundation
 
 class TandemKitAlertSettingsViewModel: ObservableObject {
     @Published var alertSnoozeEnabled: Bool = false

@@ -1,5 +1,5 @@
+import Combine
 import Foundation
-import SwiftUI
 
 final class TandemKitFeatureFlagsViewModel: ObservableObject {
     @Published private(set) var values: [TandemFeatureFlags.Flag: Bool] = [:]

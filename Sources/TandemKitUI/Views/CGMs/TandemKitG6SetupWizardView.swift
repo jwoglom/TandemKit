@@ -91,7 +91,9 @@ struct TandemKitG6SetupWizardView: View {
             .font(.body)
 
             Button(action: {
-                viewModel.goToSensorDetails()
+                withAnimation {
+                    viewModel.goToSensorDetails()
+                }
             }) {
                 HStack {
                     Spacer()
@@ -106,7 +108,9 @@ struct TandemKitG6SetupWizardView: View {
             }
 
             Button(action: {
-                viewModel.goToConnectExisting()
+                withAnimation {
+                    viewModel.goToConnectExisting()
+                }
             }) {
                 HStack {
                     Spacer()

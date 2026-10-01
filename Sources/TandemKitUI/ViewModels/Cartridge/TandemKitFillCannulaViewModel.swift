@@ -1,6 +1,6 @@
 import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 enum CannulaFillStep: Int {
     case suspend = 0

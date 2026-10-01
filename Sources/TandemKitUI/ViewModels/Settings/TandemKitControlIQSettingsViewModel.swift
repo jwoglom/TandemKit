@@ -1,5 +1,6 @@
+import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 class TandemKitControlIQSettingsViewModel: ObservableObject {
     /// Values the pickers scroll from when the pump has none configured. `weightLbs` and

@@ -1,6 +1,7 @@
+import Combine
 import CoreBluetooth
+import Foundation
 import LoopKit
-import SwiftUI
 
 class TandemKitNotificationsViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitNotificationsViewModel")

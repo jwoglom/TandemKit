@@ -1,6 +1,7 @@
+import Combine
 import CoreBluetooth
+import Foundation
 import LoopKit
-import SwiftUI
 
 final class TandemKitTroubleshootConnectionViewModel: ObservableObject {
     private let log = TandemLogger(category: "TandemKitTroubleshootConnectionViewModel")

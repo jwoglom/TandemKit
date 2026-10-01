@@ -1,6 +1,6 @@
 import Combine
+import Foundation
 import LoopKit
-import SwiftUI
 
 enum TubingFillStep: Int {
     case suspend = 0
