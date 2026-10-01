@@ -845,16 +845,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let reReported = (try? IntegrationWait.until("a re-report of the running pump bolus", timeout: 10) {
             self.eventsSince(beforeSecondSync).contains { $0.raw == raw && $0.dose?.isMutable == true }
         }) != nil
-        expectDefect("jwoglom/TandemKit#452: a bolus found in flight in the pump's history is reported once and never re-reported until its completion is read") {
-            XCTAssertTrue(reReported, "guide §9 item 4: an in-progress dose is re-reported on every sync until it finalizes")
-        }
+        XCTAssertTrue(reReported, "guide §9 item 4: an in-progress dose is re-reported on every sync until it finalizes")
 
         // The loop sets a temp basal meanwhile, as it does every few minutes.
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
-        expectDefect("jwoglom/TandemKit#452: the temp basal goes out in a replacing batch that does not carry the running pump bolus, so the host deletes it") {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
-        }
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
 
         let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
         XCTAssertEqual(lastBolus.deliveredUnits, Self.bolusUnits, accuracy: 0.0005)
@@ -872,11 +868,9 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         trio.assertNoDuplicates()
         let timeline = try timeline()
         XCTAssertTrue(timeline.boluses.contains { $0.bolusId == bolusId && $0.isFinished }, "timeline: \(timeline.boluses)")
-        expectDefect("jwoglom/TandemKit#452: the pump bolus the replacing batch deleted is never revived — its finalized report is dropped against the soft-deleted row") {
-            let stored = loop.assertPermanent(raw: raw, "the pump's bolus once it finished")
-            XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
-            timeline.assertMatches(loop)
-        }
+        let stored = loop.assertPermanent(raw: raw, "the pump's bolus once it finished")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        timeline.assertMatches(loop)
     }
 
     // MARK: - D13

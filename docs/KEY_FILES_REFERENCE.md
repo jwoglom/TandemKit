@@ -39,7 +39,7 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryToDoseMapper.swift` | History records → `NewPumpEvent`s. |
 | `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log. |
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
-| `BolusReportLedger.swift` | Persisted 24 h record of app boluses, so history does not report them a second time. |
+| `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time and can carry its own in-flight ones in replacing batches. |
 
 ## State — `Sources/TandemKit/State/`
 

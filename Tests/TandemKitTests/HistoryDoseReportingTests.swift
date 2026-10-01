@@ -172,24 +172,140 @@ import XCTest
         XCTAssertEqual(reportedBoluses.count, 1, "A re-read of the same history reports nothing new")
     }
 
-    func testInFlightPumpBolusIsReportedMutableThenFinalizedInPlace() throws {
+    func testInFlightPumpBolusIsReReportedUntilItsCompletionIsRead() throws {
         let start = quickBolusStart(bolusId: 43, units: 0.5, firstSequenceNum: 200, secondsAgo: 60)
         report(start)
 
         let inFlight = try XCTUnwrap(reportedBoluses.last)
         XCTAssertEqual(inFlight.dose?.isMutable, true)
         XCTAssertEqual(inFlight.dose?.programmedUnits, 0.5, "Counted in full while it runs")
+        XCTAssertEqual(delegate.pumpEventBatches.last?.replacePendingEvents, false)
 
         report(start)
-        XCTAssertEqual(reportedBoluses.count, 1, "Nothing new while it is still running")
+        let reReported = try XCTUnwrap(reportedBoluses.last)
+        XCTAssertEqual(reportedBoluses.count, 2)
+        XCTAssertEqual(reReported.raw, inFlight.raw)
+        XCTAssertEqual(reReported.date, inFlight.date)
+        XCTAssertEqual(reReported.dose?.isMutable, true)
+        XCTAssertEqual(delegate.pumpEventBatches.last?.replacePendingEvents, true)
 
         report(start + [bolusCompletion(bolusId: 43, delivered: 0.5, requested: 0.5, sequenceNum: 203, secondsAgo: 45)])
 
-        XCTAssertEqual(reportedBoluses.count, 2)
+        XCTAssertEqual(reportedBoluses.count, 3)
         let finalized = try XCTUnwrap(reportedBoluses.last)
         XCTAssertEqual(finalized.dose?.isMutable, false)
         XCTAssertEqual(finalized.raw, inFlight.raw)
         XCTAssertEqual(finalized.date, inFlight.date)
+        XCTAssertEqual(delegate.pumpEventBatches.last?.replacePendingEvents, true)
+        XCTAssertEqual(manager.state.bolusReportLedger.entry(bolusId: 43, pumpSerial: Self.pumpSerial)?.isFinalized, true)
+    }
+
+    func testEveryReplacingBatchCarriesAnInFlightPumpBolus() throws {
+        let start = quickBolusStart(bolusId: 45, units: 1.5, firstSequenceNum: 250, secondsAgo: 30)
+        report(start)
+        let inFlight = try XCTUnwrap(reportedBoluses.last)
+
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+
+        let batch = try XCTUnwrap(delegate.pumpEventBatches.last)
+        XCTAssertTrue(batch.replacePendingEvents)
+        let carried = try XCTUnwrap(batch.events.first { $0.raw == inFlight.raw })
+        XCTAssertEqual(carried.date, inFlight.date)
+        XCTAssertEqual(carried.dose?.isMutable, true)
+        XCTAssertEqual(carried.dose?.programmedUnits, 1.5)
+        XCTAssertEqual(carried.dose?.syncIdentifier, inFlight.dose?.syncIdentifier)
+        XCTAssertEqual(carried.dose?.wasProgrammedByPumpUI, true)
+        XCTAssertEqual(carried.dose?.automatic, false)
+    }
+
+    func testAnInFlightPumpBolusIsStillCarriedAfterARelaunch() throws {
+        let start = quickBolusStart(bolusId: 46, units: 1.5, firstSequenceNum: 260, secondsAgo: 30)
+        report(start)
+        let inFlight = try XCTUnwrap(reportedBoluses.last)
+
+        manager = makeManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue))
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+
+        let carried = try XCTUnwrap(delegate.pumpEventBatches.last?.events.first { $0.raw == inFlight.raw })
+        XCTAssertEqual(carried.dose?.isMutable, true)
+        XCTAssertEqual(carried.dose?.programmedUnits, 1.5)
+    }
+
+    func testAFinalizedPumpBolusIsNoLongerCarried() {
+        let start = quickBolusStart(bolusId: 47, units: 1.0, firstSequenceNum: 270, secondsAgo: 90)
+        report(start)
+        report(start + [bolusCompletion(bolusId: 47, delivered: 1.0, requested: 1.0, sequenceNum: 273, secondsAgo: 60)])
+
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+
+        XCTAssertFalse(delegate.pumpEventBatches.last?.events.contains { $0.dose?.type == .bolus } ?? true)
+    }
+
+    func testABolusFirstSeenFinishedIsNeverCarried() {
+        report(quickBolusStart(bolusId: 48, units: 1.0, firstSequenceNum: 280, secondsAgo: 90)
+            + [bolusCompletion(bolusId: 48, delivered: 1.0, requested: 1.0, sequenceNum: 283, secondsAgo: 60)])
+
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+
+        XCTAssertFalse(delegate.pumpEventBatches.last?.events.contains { $0.dose?.type == .bolus } ?? true)
+    }
+
+    // MARK: - What Loop ends up holding
+
+    private func feedLoop() -> LoopDoseStoreOracle {
+        let loop = LoopDoseStoreOracle()
+        for batch in delegate.pumpEventBatches {
+            loop.addPumpEvents(
+                batch.events,
+                lastReconciliation: batch.lastReconciliation,
+                replacePendingEvents: batch.replacePendingEvents,
+                now: Date()
+            )
+        }
+        return loop
+    }
+
+    /// The field report on #452: the completion read one tick after the first sighting, then a replacing batch.
+    func testLoopKeepsAPumpBolusFinalizedRightAfterItWasSeenInFlight() throws {
+        manager.state.lastReconciliation = now
+        let start = quickBolusStart(bolusId: 91, units: 1.0, firstSequenceNum: 290, secondsAgo: 30)
+        report(start)
+        let raw = try XCTUnwrap(reportedBoluses.last?.raw)
+
+        report(start + [bolusCompletion(bolusId: 91, delivered: 1.0, requested: 1.0, sequenceNum: 293, secondsAgo: 2)])
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+
+        let stored = try XCTUnwrap(feedLoop().assertPermanent(raw: raw))
+        XCTAssertEqual(stored.dose.deliveredUnits, 1.0)
+    }
+
+    func testLoopKeepsAPumpBolusThroughAReplacingBatchWhileItRuns() throws {
+        manager.state.lastReconciliation = now
+        // A batch with no dose that outlasts reconciliation never reaches InsulinDeliveryStore.
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 1.5,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: nil,
+            startDate: now.addingTimeInterval(-.minutes(10))
+        )
+        let start = quickBolusStart(bolusId: 92, units: 1.0, firstSequenceNum: 300, secondsAgo: 30)
+        report(start)
+        let raw = try XCTUnwrap(reportedBoluses.last?.raw)
+
+        manager.startScheduledBasalDose()
+        delegateQueue.sync {}
+        XCTAssertEqual(feedLoop().dose(raw: raw)?.isMutable, true)
+
+        report(start + [bolusCompletion(bolusId: 92, delivered: 0.75, requested: 1.0, sequenceNum: 303, secondsAgo: 2)])
+
+        let stored = try XCTUnwrap(feedLoop().assertPermanent(raw: raw))
+        XCTAssertEqual(stored.dose.deliveredUnits, 0.75)
     }
 
     func testControlIQBolusIsReportedAsAutomatic() throws {
@@ -375,7 +491,8 @@ import XCTest
             raw: Data([1, 2, 3]),
             eventDate: Date(timeIntervalSinceReferenceDate: 2000),
             automatic: true,
-            isFinalized: false
+            isFinalized: false,
+            programmedUnits: 1.25
         ))
 
         XCTAssertEqual(BolusReportLedger(rawValue: ledger.rawValue), ledger)

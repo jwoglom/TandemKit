@@ -57,14 +57,18 @@ extension TandemPumpManager {
         )
 
         var reports: [NewPumpEvent] = []
+        var reportsHeldDose = false
         for event in events {
             guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
                   let decoded = HistoryLogSyncIdentifier.decode(event.raw), decoded.scheme == .bolus
             else {
                 continue
             }
-            if let report = historyBolusReport(event, dose: dose, bolusId: Int(decoded.identifier), serial: serial) {
+            let bolusId = Int(decoded.identifier)
+            let isHeld = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue) != nil
+            if let report = historyBolusReport(event, dose: dose, bolusId: bolusId, serial: serial) {
                 reports.append(report)
+                reportsHeldDose = reportsHeldDose || isHeld
             }
         }
 
@@ -73,8 +77,33 @@ extension TandemPumpManager {
         }
 
         logger.info("Reporting \(reports.count) bolus event(s) from pump history")
-        emitPumpEvents(reports.sorted { $0.date < $1.date }, replacePendingEvents: false)
+        let sorted = reports.sorted { $0.date < $1.date }
+        // Loop keeps a stored PumpEvent row over a non-replacing report with its raw, so a dose the
+        // host holds as mutable takes a re-report or finalization only in a replacing batch (#452).
+        if reportsHeldDose {
+            emitPumpEvents(getActivePumpEvents() + sorted)
+        } else {
+            emitPumpEvents(sorted, replacePendingEvents: false)
+        }
         notifyDelegateStateUpdated()
+    }
+
+    func inFlightHistoryBolusEvents() -> [NewPumpEvent] {
+        state.bolusReportLedger.entries.compactMap { entry in
+            guard entry.origin == .history, !entry.isFinalized, let units = entry.programmedUnits else {
+                return nil
+            }
+            let dose = DoseEntry(
+                type: .bolus,
+                startDate: entry.eventDate,
+                value: units,
+                unit: .units,
+                description: "Bolus #\(entry.bolusId)",
+                insulinType: state.insulinType,
+                isMutable: true
+            )
+            return Self.reported(dose, as: entry)
+        }
     }
 
     private static func isReportedBolusInput(_ log: HistoryLog) -> Bool {
@@ -102,17 +131,19 @@ extension TandemPumpManager {
                 raw: event.raw,
                 eventDate: event.date,
                 automatic: dose.automatic ?? false,
-                isFinalized: false
+                isFinalized: false,
+                programmedUnits: dose.isMutable ? dose.programmedUnits : nil
             ))
             return event
         }
 
-        guard !entry.isFinalized, !dose.isMutable else {
+        guard !entry.isFinalized else {
             return nil
         }
 
         if entry.origin == .commanded {
-            guard !isTrackingBolusLive(bolusId) else {
+            // The live path reports and carries a running app bolus itself.
+            guard !dose.isMutable, !isTrackingBolusLive(bolusId) else {
                 return nil
             }
             releaseLiveBolusState(bolusId)
