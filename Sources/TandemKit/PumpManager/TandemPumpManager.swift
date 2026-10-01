@@ -1997,13 +1997,13 @@ extension TandemPumpManager {
     }
 
     /// Every bolus the host holds as mutable, as it was last reported: a replacing batch that
-    /// leaves one out deletes it, and Loop never revives a deleted dose (#330, #452).
+    /// leaves one out deletes it, and Loop never revives a deleted dose (#330).
     func inProgressBolusEvents() -> [NewPumpEvent] {
-        let live = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
+        let events = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
             dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), date: $0.startDate) }
         }
         var seen = Set<Data>()
-        return (live + inFlightHistoryBolusEvents()).filter { seen.insert($0.raw).inserted }
+        return events.filter { seen.insert($0.raw).inserted }
     }
 
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {

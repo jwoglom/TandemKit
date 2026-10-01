@@ -152,11 +152,11 @@ edit instead of at the next sync.
 
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
-  and Loop never revives a deleted one. `emitPumpEvents` appends every bolus the host holds as
-  mutable to each one: `bolusDose`, `pendingBolusFinalization` and history boluses still in
-  flight (#330, #452). The temp basal is still each call site's job, via `getActivePumpEvents`.
+  and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as
+  mutable, `bolusDose` and `pendingBolusFinalization`, to each one (#330). The temp basal is still
+  each call site's job, via `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
-  `raw`, so re-reporting or finalizing a dose the host holds as mutable takes a replacing batch.
+  `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
 - Still open: a sync re-sends nothing while a dose runs, since its boundary batch is empty and
   non-replacing (#330, #450).
 
@@ -187,8 +187,8 @@ edit instead of at the next sync.
   the past and drop a pump-UI bolus found one sync late.
 - Reporting (`TandemPumpManager+HistoryDoseReporting.swift`) runs as a command job after every
   tick. Boluses need `historyDoseReporting` as well; their batches go out ascending through
-  `emitPumpEvents`, and replace only when they carry a bolus already reported. App-commanded
-  temp basals stay with the live path.
+  `emitPumpEvents`, and replace only when they finalize a bolus already reported.
+  App-commanded temp basals stay with the live path.
 - Suspends, resumes and temp basal ends the pump made on its own
   (`TandemPumpManager+DeliveryTransitions.swift`, #333, #331). Neither host revises one once
   told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older than
@@ -244,9 +244,10 @@ edit instead of at the next sync.
     `pendingBolusFinalization`/`bolusDose`;
   - doesn't hold — is a pump-UI, Control-IQ or lost-acknowledgement bolus, reported under
     `HistoryLogSyncIdentifier.bolus`, dated at activation, with `automatic` from the bolus
-    source and `wasProgrammedByPumpUI` set. While in flight it is mutable, re-reported every
-    tick, and carried in every replacing batch from the programmed amount its entry keeps, until
-    its completion is read.
+    source and `wasProgrammedByPumpUI` set. It is reported once, finalized, when its
+    `BolusCompleted` is read, and not while it runs (#452): a mutable report would have to ride
+    every replacing batch until then. Its insulin is missing from IOB for that long, roughly the
+    delivery time, since the pump's `.bolusChange` at completion kicks a tick.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.

@@ -3,7 +3,7 @@ import LoopKit
 import XCTest
 
 /// A `replacePendingEvents: true` batch deletes every mutable dose it leaves out, so each one must
-/// carry every bolus the host still holds as mutable (#330, #452).
+/// carry every bolus the host still holds as mutable (#330).
 @available(macOS 13.0, iOS 14.0, *) final class ReplacingBatchCompletenessTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!

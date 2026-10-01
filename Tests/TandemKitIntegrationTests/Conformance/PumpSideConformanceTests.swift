@@ -814,10 +814,10 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     // MARK: - D12
 
-    /// Guide §7 and §11 "external doses": the host holds a pump-programmed bolus while it runs and ends
-    /// with it finalized at the pump's delivered amount.
+    /// Guide §7 and §11 "external doses", but reported only once the pump's completion is read: one
+    /// finalized dose at the pump's delivered amount, and nothing while it runs (#452).
     func testD12ABolusProgrammedOnThePumpIsReportedFromItsHistory() throws {
-        try startPairedDriverReportingHistory()
+        let driver = try startPairedDriverReportingHistory()
         try harness.client.setState(["bolus_rate_units_per_second": 0.01])
         let batchesBefore = allPumpEventBatches.count
 
@@ -826,26 +826,18 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         let bolusId = try harness.client.snapshot().bolus.bolusId
         try clock.advanceBoth(seconds: 20, ticks: 4)
         XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump is still delivering")
+        let activatedSequence = try harness.client.snapshot().history.lastSequence
         _ = try sync()
-
-        let reported = try IntegrationWait.value("the pump's bolus reported from its history", timeout: 120) {
-            self.eventsSince(batchesBefore).first { $0.dose?.type == .bolus }
+        try IntegrationWait.until("the backfill to read the running bolus", timeout: 120) {
+            (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= activatedSequence } ?? false
         }
-        let raw = reported.raw
-        XCTAssertEqual(reported.dose?.wasProgrammedByPumpUI, true, "marked as programmed on the pump (§7)")
-        XCTAssertEqual(reported.dose?.isMutable, true, "reported while it is still delivering")
-        XCTAssertEqual(reported.dose?.programmedUnits ?? -1, Self.bolusUnits, accuracy: 0.0005)
-        XCTAssertEqual(reported.dose?.automatic, false)
-        XCTAssertEqual(reported.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "dated when the pump started it")
-
-        try clock.advanceBoth(seconds: 20, ticks: 4)
-        XCTAssertTrue(try harness.client.snapshot().bolus.active, "still delivering at the next sync")
-        let beforeSecondSync = allPumpEventBatches.count
+        // The report runs as a command job after the tick; a sync queues behind it.
         _ = try sync()
-        let reReported = (try? IntegrationWait.until("a re-report of the running pump bolus", timeout: 10) {
-            self.eventsSince(beforeSecondSync).contains { $0.raw == raw && $0.dose?.isMutable == true }
-        }) != nil
-        XCTAssertTrue(reReported, "guide §9 item 4: an in-progress dose is re-reported on every sync until it finalizes")
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "still delivering once the backfill has read it")
+        XCTAssertFalse(
+            eventsSince(batchesBefore).contains { $0.dose?.type == .bolus },
+            "a running pump bolus is not reported: \(eventsSince(batchesBefore))"
+        )
 
         // The loop sets a temp basal meanwhile, as it does every few minutes.
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
@@ -856,12 +848,19 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertEqual(lastBolus.deliveredUnits, Self.bolusUnits, accuracy: 0.0005)
         try clock.advanceBoth(seconds: 30, ticks: 3)
         _ = try sync()
-        let finalized = try IntegrationWait.value("the pump's bolus finalized from its history", timeout: 120) {
-            self.eventsSince(batchesBefore).first { $0.raw == raw && $0.dose?.isMutable == false }
+        let reported = try IntegrationWait.value("the pump's bolus reported from its history", timeout: 120) {
+            self.eventsSince(batchesBefore).first { $0.dose?.type == .bolus }
         }
-        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005, "at the pump's delivered amount")
-        XCTAssertEqual(finalized.dose?.wasProgrammedByPumpUI, true)
-        XCTAssertEqual(finalized.date, reported.date, "under the date it was first reported with")
+        let raw = reported.raw
+        XCTAssertEqual(reported.dose?.isMutable, false, "reported finished")
+        XCTAssertEqual(reported.dose?.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005, "at the pump's delivered amount")
+        XCTAssertEqual(reported.dose?.programmedUnits ?? -1, Self.bolusUnits, accuracy: 0.0005)
+        XCTAssertEqual(reported.dose?.wasProgrammedByPumpUI, true, "marked as programmed on the pump (§7)")
+        XCTAssertEqual(reported.dose?.automatic, false)
+        XCTAssertEqual(reported.dose?.startDate.timeIntervalSince(startedAt) ?? .infinity, 0, accuracy: 2, "dated when the pump started it")
+
+        _ = try sync()
+        XCTAssertEqual(eventsSince(batchesBefore).filter { $0.raw == raw }.count, 1, "reported once")
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()

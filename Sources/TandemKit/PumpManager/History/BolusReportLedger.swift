@@ -18,9 +18,6 @@ public struct BolusReportLedger: Equatable {
         public let automatic: Bool
         /// The host never revises a finalized row, so nothing more is sent once this is set.
         public var isFinalized: Bool
-        /// Set for a history bolus first seen in flight, so a replacing batch can carry it until its
-        /// completion is read, relaunch or not (#452).
-        public let programmedUnits: Double?
 
         public init(
             bolusId: Int,
@@ -29,8 +26,7 @@ public struct BolusReportLedger: Equatable {
             raw: Data,
             eventDate: Date,
             automatic: Bool,
-            isFinalized: Bool,
-            programmedUnits: Double? = nil
+            isFinalized: Bool
         ) {
             self.bolusId = bolusId
             self.pumpSerial = pumpSerial
@@ -39,7 +35,6 @@ public struct BolusReportLedger: Equatable {
             self.eventDate = eventDate
             self.automatic = automatic
             self.isFinalized = isFinalized
-            self.programmedUnits = programmedUnits
         }
     }
 
@@ -120,8 +115,7 @@ extension BolusReportLedger.Entry: RawRepresentable {
             raw: raw,
             eventDate: Date(timeIntervalSinceReferenceDate: eventDate),
             automatic: rawValue["automatic"] as? Bool ?? false,
-            isFinalized: rawValue["isFinalized"] as? Bool ?? false,
-            programmedUnits: rawValue["programmedUnits"] as? Double
+            isFinalized: rawValue["isFinalized"] as? Bool ?? false
         )
     }
 
@@ -135,7 +129,6 @@ extension BolusReportLedger.Entry: RawRepresentable {
             "isFinalized": isFinalized
         ]
         raw["pumpSerial"] = pumpSerial
-        raw["programmedUnits"] = programmedUnits
         return raw
     }
 }
