@@ -7,7 +7,7 @@ struct WizardProgressBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Step \(current) of \(total)")
+            Text("Step \(current) of \(total)", comment: "Wizard progress above the step (1: current step, 2: total steps)")
                 .font(.caption)
                 .foregroundColor(.secondary)
 

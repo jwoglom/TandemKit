@@ -15,7 +15,10 @@ struct TandemKitFeatureFlagsView: View {
                 emptyState
             }
         }
-        .navigationBarTitle("Feature Flags", displayMode: .inline)
+        .navigationBarTitle(
+            String(localized: "Feature Flags", comment: "Title for the feature flags screen"),
+            displayMode: .inline
+        )
     }
 
     private var emptyState: some View {

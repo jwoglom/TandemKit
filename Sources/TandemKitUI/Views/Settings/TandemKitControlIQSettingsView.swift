@@ -50,7 +50,7 @@ struct TandemKitControlIQSettingsView: View {
             Alert(
                 title: Text("Error", comment: "Error alert title"),
                 message: Text(error.message),
-                dismissButton: .default(Text("OK"))
+                dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
             )
         }
     }
@@ -88,7 +88,7 @@ struct TandemKitControlIQSettingsView: View {
                         )),
                         id: \.self
                     ) { lbs in
-                        Text("\(lbs) lbs").tag(lbs)
+                        Text("\(lbs) lbs", comment: "Control-IQ weight picker option, in pounds").tag(lbs)
                     }
                 }
                 .pickerStyle(.wheel)
@@ -113,7 +113,7 @@ struct TandemKitControlIQSettingsView: View {
                         )),
                         id: \.self
                     ) { units in
-                        Text("\(units) U").tag(units)
+                        Text("\(units) U", comment: "Control-IQ total daily insulin picker option, in insulin units").tag(units)
                     }
                 }
                 .pickerStyle(.wheel)
@@ -133,7 +133,7 @@ struct TandemKitControlIQSettingsView: View {
             Text("Weight", comment: "Label for weight")
             Spacer()
             if let weightLbs = viewModel.weightLbs {
-                Text("\(weightLbs) lbs")
+                Text("\(weightLbs) lbs", comment: "Control-IQ weight, in pounds")
                     .foregroundColor(isEditingWeight ? .accentColor : .secondary)
             } else {
                 Text("Not set", comment: "Shown when a Control-IQ value has never been configured")
@@ -154,7 +154,7 @@ struct TandemKitControlIQSettingsView: View {
             Text("Total Daily Insulin", comment: "Label for total daily insulin")
             Spacer()
             if let totalDailyInsulin = viewModel.totalDailyInsulin {
-                Text("\(totalDailyInsulin) U")
+                Text("\(totalDailyInsulin) U", comment: "Control-IQ total daily insulin, in insulin units")
                     .foregroundColor(isEditingTDI ? .accentColor : .secondary)
             } else {
                 Text("Not set", comment: "Shown when a Control-IQ value has never been configured")

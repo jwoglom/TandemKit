@@ -37,9 +37,9 @@ struct TandemKitAlertSettingsView: View {
                             }
                         )
                     ) {
-                        Text("10 min").tag(10)
-                        Text("20 min").tag(20)
-                        Text("30 min").tag(30)
+                        Text("10 min", comment: "Alert snooze duration option").tag(10)
+                        Text("20 min", comment: "Alert snooze duration option").tag(20)
+                        Text("30 min", comment: "Alert snooze duration option").tag(30)
                     }
                 }
 

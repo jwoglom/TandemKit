@@ -171,7 +171,10 @@ struct TandemKitFillCannulaView: View {
                 }
 
                 if viewModel.isEditingAmount {
-                    Picker("Amount", selection: $viewModel.primeAmount) {
+                    Picker(
+                        String(localized: "Amount", comment: "Label for the cannula fill amount picker"),
+                        selection: $viewModel.primeAmount
+                    ) {
                         ForEach(TandemKitFillCannulaViewModel.primeAmountOptions, id: \.self) { amount in
                             Text(String(format: "%.1f", amount) + self.unitText).tag(amount)
                         }

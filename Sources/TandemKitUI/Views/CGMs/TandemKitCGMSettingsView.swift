@@ -75,7 +75,7 @@ struct TandemKitCGMSettingsView: View {
                 return Alert(
                     title: Text("Error", comment: "Error alert title"),
                     message: Text(message),
-                    dismissButton: .default(Text("OK"))
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an error alert"))
                 )
             }
         }

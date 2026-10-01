@@ -370,7 +370,10 @@ struct TandemKitSettingsView: View {
                 } else {
                     Button(action: {}) {
                         HStack {
-                            Text("Insulin delivery status unknown")
+                            Text(
+                                "Insulin delivery status unknown",
+                                comment: "Disabled suspend/resume row when the pump's delivery state is not known"
+                            )
                         }
                     }.disabled(true)
                 }
@@ -611,7 +614,7 @@ struct TandemKitSettingsView: View {
                         Text("CGM Settings", comment: "Button to open CGM settings from the no-CGM Control-IQ alert"),
                         action: { viewModel.openCgmSettings() }
                     ),
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .controlIQValuesRequired:
                 return Alert(
@@ -630,7 +633,7 @@ struct TandemKitSettingsView: View {
                         ),
                         action: { viewModel.openControlIQSettings() }
                     ),
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .diyRestored:
                 return Alert(
@@ -643,7 +646,7 @@ struct TandemKitSettingsView: View {
                         "Control-IQ has been disabled and you are currently in open-loop. To re-enable %@ closed-loop, go to your app's Algorithm settings.",
                         comment: "Message for DIY mode restored notice"
                     ), viewModel.algorithmName)),
-                    dismissButton: .default(Text("OK"))
+                    dismissButton: .default(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .noCGMConnected:
                 // Control-IQ without a CGM is open-loop on both sides, so turning it straight back
@@ -658,7 +661,7 @@ struct TandemKitSettingsView: View {
                     primaryButton: .default(Text(disableControlIQLabel)) {
                         viewModel.switchAlgorithmToDIY()
                     },
-                    secondaryButton: .cancel(Text("OK"))
+                    secondaryButton: .cancel(Text("OK", comment: "Button to dismiss an alert"))
                 )
             case .stopTempRate:
                 return Alert(
@@ -773,7 +776,7 @@ struct TandemKitSettingsView: View {
                             .font(.system(size: 28))
                             .fontWeight(.heavy)
                             .fixedSize()
-                        Text("U")
+                        Text("U", comment: "Insulin units after the cartridge's remaining insulin")
                             .foregroundColor(.secondary)
                     }
                 }
@@ -822,7 +825,7 @@ struct TandemKitSettingsView: View {
                             .fontWeight(.heavy)
                             .fixedSize()
 
-                        Text("U/hr")
+                        Text("U/hr", comment: "Units per hour after the basal rate")
                             .foregroundColor(.secondary)
                             .fixedSize()
                     }
