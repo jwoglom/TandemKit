@@ -70,29 +70,10 @@ Manager tests go through `StubPumpBluetooth`, which returns constructed response
 never encodes or decodes cargo, so they say nothing about the wire format. The integration tests
 do exercise it, against pumpX2's encoder via faketandem, but only for the flows they run.
 
-These messages are sent or decoded by the driver and have no serialization test for the request,
-the response, or both. Write tests for these before the rest of the catalog:
-- Commands that change delivery or delivery limits: `SetTempRate`, `StopTempRate`,
-  `SuspendPumping`, `SetMaxBolusLimit`, `SetMaxBasalLimit`, `SetIDPSegment` and `SetModes`
-  (both sides); the responses to `InitiateBolus`, `CancelBolus`, `ResumePumping`, `CreateIDP`,
-  `DeleteIDP` and `SetActiveIDP`.
-- Status reads the driver acts on: `CurrentBasalStatus`, `CurrentBolusStatus`, `InsulinStatus`,
-  `TempRate`, `LastBolusStatus`, `LastBolusStatusV2`, `TimeSinceReset`, `PumpVersionB`,
-  `PumpGlobals`, `ControlIQInfoV1`, `ControlIQInfoV2`, `ControlIQSleepSchedule`,
-  `ProfileStatus`, `IDPSettings`, `IDPSegment`, `HistoryLogStatus`, `HistoryLog`,
-  `MalfunctionStatus`, `HighestAam` and `ActiveAamBits` (both sides); `ApiVersionResponse`,
-  `BolusPermissionResponse`, `CGMStatusV2Request`, `CurrentBatteryV2Request`,
-  `LastBolusStatusV3Request` and `HistoryLogStreamResponse`.
-- Cartridge, CGM and settings commands: `SetG6TransmitterId`, `SetSensorType`,
-  `StartDexcomG6SensorSession`, `StopDexcomCGMSensorSession`, `SetSleepSchedule`,
-  `SetPumpSounds` and `SetPumpAlertSnooze` (both sides); the responses to
-  `EnterChangeCartridgeMode`, `ExitChangeCartridgeMode`, `EnterFillTubingMode`,
-  `ExitFillTubingMode`, `FillCannula`, `ChangeControlIQSettings`, `ChangeTimeDate`,
-  `DismissNotification`, `SetQuickBolusSettings` and `SetDexcomG7PairingCode`; and the
-  `DetectingCartridge`, `EnterChangeCartridgeMode`, `FillCannula` and `FillTubing` state streams.
-
-The Harmonize rule `DriverMessagesHaveSerializationTests` (below) works the full list out from the
-code, so its baseline is the complete current list; delete a type from it when you add the test.
+The Harmonize rule `DriverMessagesHaveSerializationTests` (below) works out from the code which
+messages the driver sends or decodes; its baseline lists those still without a serialization test,
+which come before the rest of the catalog. None of them has a usable vector in pumpX2's tests, so
+each needs a pump capture. Delete a type from the baseline when you add its test.
 
 ### Harmonize lint rules
 `HarmonizeRules/` is a separate SwiftPM package of
