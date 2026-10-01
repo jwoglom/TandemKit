@@ -242,6 +242,13 @@
 		3EB807932FBCDCD70075D19E /* AaTdiSettingChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C490E05FF0876B00A2571E2 /* AaTdiSettingChangeHistoryLog.swift */; };
 		3EB807942FBCDCD70075D19E /* CgmFraSettingsHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C9977957439AFA0C6024A1 /* CgmFraSettingsHistoryLog.swift */; };
 		3EB807952FBCDCD70075D19E /* CgmDataFsl3HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */; };
+		C71C88CE8A9B7EC7A2F82059 /* AntSleepEatSchedSettingChangeHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97DDCC63AD66B60586ACCAC6 /* AntSleepEatSchedSettingChangeHistoryLog.swift */; };
+		6CEB3F0EA87F89B6900D2362 /* TempAdjustmentActivatedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 213B8ECF3FBD37E5DE937A90 /* TempAdjustmentActivatedHistoryLog.swift */; };
+		27076AA4EF7B748C96793F60 /* TempAdjustmentCompletedHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27206D2B52BD8308C0E2099D /* TempAdjustmentCompletedHistoryLog.swift */; };
+		27BC64CB2CE830EB8BBAC33D /* AntDailyStatus2HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D703A48070E2CEAF3C7D09 /* AntDailyStatus2HistoryLog.swift */; };
+		4DDD655341EBE780B3FAF228 /* AntDailyStatus1HistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED84F04040882413C7D22B23 /* AntDailyStatus1HistoryLog.swift */; };
+		D23D9DECD3DE320C26DF2AFE /* SyncDoseCompleteHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3238428614162CDAA7F45991 /* SyncDoseCompleteHistoryLog.swift */; };
+		2E22290A6DCC52032CC16C75 /* SyncDoseStartHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE5B7A5D0FAE037334FCBB2 /* SyncDoseStartHistoryLog.swift */; };
 		3EB807962FBCDCD70075D19E /* TipscReqPrimeCannulaHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33C90FD06F65E682998E704 /* TipscReqPrimeCannulaHistoryLog.swift */; };
 		3EB807972FBCDCD70075D19E /* UnknownHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE345002EC91299008A07F6 /* UnknownHistoryLog.swift */; };
 		3EB807982FBCDCD70075D19E /* BolusDeliveryHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EE344D72EC91299008A07F6 /* BolusDeliveryHistoryLog.swift */; };
@@ -666,6 +673,17 @@
 		BB1E355325C9D2EA19C30707 /* CgmJoinSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */; };
 		EF03244CA47143BA49FC97C9 /* CgmStopSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */; };
 		8CE6416D66349228A146F8F8 /* CgmStartSessionFsl2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */; };
+		7C2C68E8ADC96D2E68C02B19 /* UpdateStatusHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C282C2B7167C35C4FE43E29 /* UpdateStatusHistoryLogTests.swift */; };
+		0B8CB511701B076810436329 /* VersionInfoHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C34FFB90E452D7210F0E0E33 /* VersionInfoHistoryLogTests.swift */; };
+		D892D063F21660717E21F6D2 /* DataLogCorruptionHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C65D60366B59BAB0A99EB6 /* DataLogCorruptionHistoryLogTests.swift */; };
+		6DF2735E6BA77B881D908B35 /* PlgsPeriodicHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9D9FC296F8EC6A4327E0755 /* PlgsPeriodicHistoryLogTests.swift */; };
+		8AB6D06F985A5B09E2DC4884 /* AntSleepEatSchedSettingChangeHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D990E52642785E05C4821E4 /* AntSleepEatSchedSettingChangeHistoryLogTests.swift */; };
+		904FC42B5A143150DDF69F13 /* TempAdjustmentActivatedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E12E671CC5916479D365E2 /* TempAdjustmentActivatedHistoryLogTests.swift */; };
+		69D60F7AB1F022FECF55E013 /* TempAdjustmentCompletedHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B800DE2C2056806A3366D5EE /* TempAdjustmentCompletedHistoryLogTests.swift */; };
+		2FE3CC431444DEC64F411A0E /* AntDailyStatus2HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78B6DCB4DDA1A49A60D82E4C /* AntDailyStatus2HistoryLogTests.swift */; };
+		015D8CA50A8DA8EA3DDBC422 /* AntDailyStatus1HistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3BD69326FEF81E976CFC74 /* AntDailyStatus1HistoryLogTests.swift */; };
+		C799B4859EC75B0FBFAFDF33 /* SyncDoseCompleteHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E943A229BCBC6A7D46BF8E7 /* SyncDoseCompleteHistoryLogTests.swift */; };
+		73463FA4D487BC727C911CBA /* SyncDoseStartHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369704A8634A8693D863661 /* SyncDoseStartHistoryLogTests.swift */; };
 		8FA48CC6567A11C67F084AD4 /* TandemKitAlertSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */; };
 		90D51D78784A90C64DE7ACFA /* AamAnnunciationHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8ED615114667344C110907 /* AamAnnunciationHistoryLog.swift */; };
 		9132D4C4EFB6B0FBD7659CAE /* TubingFilledHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD813F15B60D8BA3ACB2BE71 /* TubingFilledHistoryLogTests.swift */; };
@@ -987,6 +1005,17 @@
 		CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmJoinSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
 		17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
 		A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStartSessionFsl2HistoryLogTests.swift; sourceTree = "<group>"; };
+		8C282C2B7167C35C4FE43E29 /* UpdateStatusHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UpdateStatusHistoryLogTests.swift; sourceTree = "<group>"; };
+		C34FFB90E452D7210F0E0E33 /* VersionInfoHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VersionInfoHistoryLogTests.swift; sourceTree = "<group>"; };
+		96C65D60366B59BAB0A99EB6 /* DataLogCorruptionHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DataLogCorruptionHistoryLogTests.swift; sourceTree = "<group>"; };
+		D9D9FC296F8EC6A4327E0755 /* PlgsPeriodicHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlgsPeriodicHistoryLogTests.swift; sourceTree = "<group>"; };
+		5D990E52642785E05C4821E4 /* AntSleepEatSchedSettingChangeHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntSleepEatSchedSettingChangeHistoryLogTests.swift; sourceTree = "<group>"; };
+		D3E12E671CC5916479D365E2 /* TempAdjustmentActivatedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempAdjustmentActivatedHistoryLogTests.swift; sourceTree = "<group>"; };
+		B800DE2C2056806A3366D5EE /* TempAdjustmentCompletedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TempAdjustmentCompletedHistoryLogTests.swift; sourceTree = "<group>"; };
+		78B6DCB4DDA1A49A60D82E4C /* AntDailyStatus2HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntDailyStatus2HistoryLogTests.swift; sourceTree = "<group>"; };
+		7A3BD69326FEF81E976CFC74 /* AntDailyStatus1HistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AntDailyStatus1HistoryLogTests.swift; sourceTree = "<group>"; };
+		9E943A229BCBC6A7D46BF8E7 /* SyncDoseCompleteHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SyncDoseCompleteHistoryLogTests.swift; sourceTree = "<group>"; };
+		D369704A8634A8693D863661 /* SyncDoseStartHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SyncDoseStartHistoryLogTests.swift; sourceTree = "<group>"; };
 		19781D877985CAC1E4178EB3 /* HistoryLogMessageTester.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryLogMessageTester.swift; sourceTree = "<group>"; };
 		1A02E3ED2F2C949900203519 /* ErrorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSheet.swift; sourceTree = "<group>"; };
 		1A0E17262ED105CC00E75219 /* NotificationBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationBundle.swift; sourceTree = "<group>"; };
@@ -1035,6 +1064,13 @@
 		23BB8E81108C80EC699BA2B9 /* BleDailyConnectionsHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BleDailyConnectionsHistoryLog.swift; sourceTree = "<group>"; };
 		23BE8319BF1F6557A5A1423C /* ScanIntegrationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScanIntegrationTests.swift; sourceTree = "<group>"; };
 		244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CgmDataFsl3HistoryLog.swift; sourceTree = "<group>"; };
+		97DDCC63AD66B60586ACCAC6 /* AntSleepEatSchedSettingChangeHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntSleepEatSchedSettingChangeHistoryLog.swift; sourceTree = "<group>"; };
+		213B8ECF3FBD37E5DE937A90 /* TempAdjustmentActivatedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempAdjustmentActivatedHistoryLog.swift; sourceTree = "<group>"; };
+		27206D2B52BD8308C0E2099D /* TempAdjustmentCompletedHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempAdjustmentCompletedHistoryLog.swift; sourceTree = "<group>"; };
+		63D703A48070E2CEAF3C7D09 /* AntDailyStatus2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntDailyStatus2HistoryLog.swift; sourceTree = "<group>"; };
+		ED84F04040882413C7D22B23 /* AntDailyStatus1HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntDailyStatus1HistoryLog.swift; sourceTree = "<group>"; };
+		3238428614162CDAA7F45991 /* SyncDoseCompleteHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDoseCompleteHistoryLog.swift; sourceTree = "<group>"; };
+		3FE5B7A5D0FAE037334FCBB2 /* SyncDoseStartHistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDoseStartHistoryLog.swift; sourceTree = "<group>"; };
 		24800EB19634822854337717 /* ReminderDismissedHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReminderDismissedHistoryLogTests.swift; sourceTree = "<group>"; };
 		24D5FEC45895262E209D4C44 /* ReservoirEstimateHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReservoirEstimateHistoryLogTests.swift; sourceTree = "<group>"; };
 		24DC1562C6E40633EA9A9F13 /* CgmStopSessionReqGxHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmStopSessionReqGxHistoryLog.swift; sourceTree = "<group>"; };
@@ -2420,6 +2456,13 @@
 				3EE344DF2EC91299008A07F6 /* CgmCalibrationHistoryLog.swift */,
 				ADED320DE37A39C869F6CFC6 /* CgmDataFsl2HistoryLog.swift */,
 				244C7C655D60CF3DB50262D9 /* CgmDataFsl3HistoryLog.swift */,
+				97DDCC63AD66B60586ACCAC6 /* AntSleepEatSchedSettingChangeHistoryLog.swift */,
+				213B8ECF3FBD37E5DE937A90 /* TempAdjustmentActivatedHistoryLog.swift */,
+				27206D2B52BD8308C0E2099D /* TempAdjustmentCompletedHistoryLog.swift */,
+				63D703A48070E2CEAF3C7D09 /* AntDailyStatus2HistoryLog.swift */,
+				ED84F04040882413C7D22B23 /* AntDailyStatus1HistoryLog.swift */,
+				3238428614162CDAA7F45991 /* SyncDoseCompleteHistoryLog.swift */,
+				3FE5B7A5D0FAE037334FCBB2 /* SyncDoseStartHistoryLog.swift */,
 				3EE344E02EC91299008A07F6 /* CgmDataGxHistoryLog.swift */,
 				3EE344E12EC91299008A07F6 /* CgmDataSampleHistoryLog.swift */,
 				476421528614F2007B3BC7AF /* CgmJoinSessionFsl2HistoryLog.swift */,
@@ -3093,6 +3136,17 @@
 				CB5A4DA60FF2B82635891BE5 /* CgmJoinSessionFsl2HistoryLogTests.swift */,
 				17A305A86D9DA0193BD45033 /* CgmStopSessionFsl2HistoryLogTests.swift */,
 				A61B71909D4CD8D93C84B06C /* CgmStartSessionFsl2HistoryLogTests.swift */,
+				8C282C2B7167C35C4FE43E29 /* UpdateStatusHistoryLogTests.swift */,
+				C34FFB90E452D7210F0E0E33 /* VersionInfoHistoryLogTests.swift */,
+				96C65D60366B59BAB0A99EB6 /* DataLogCorruptionHistoryLogTests.swift */,
+				D9D9FC296F8EC6A4327E0755 /* PlgsPeriodicHistoryLogTests.swift */,
+				5D990E52642785E05C4821E4 /* AntSleepEatSchedSettingChangeHistoryLogTests.swift */,
+				D3E12E671CC5916479D365E2 /* TempAdjustmentActivatedHistoryLogTests.swift */,
+				B800DE2C2056806A3366D5EE /* TempAdjustmentCompletedHistoryLogTests.swift */,
+				78B6DCB4DDA1A49A60D82E4C /* AntDailyStatus2HistoryLogTests.swift */,
+				7A3BD69326FEF81E976CFC74 /* AntDailyStatus1HistoryLogTests.swift */,
+				9E943A229BCBC6A7D46BF8E7 /* SyncDoseCompleteHistoryLogTests.swift */,
+				D369704A8634A8693D863661 /* SyncDoseStartHistoryLogTests.swift */,
 				742314A78CF09FC792E73DCD /* DexcomG7CGMHistoryLogTests.swift */,
 				8C2A562BC9EEABF875E62028 /* AlarmAckHistoryLogTests.swift */,
 				DDF093DB8D0803478C40D8F0 /* AlarmClearedHistoryLogTests.swift */,
@@ -3604,6 +3658,13 @@
 				3EB807932FBCDCD70075D19E /* AaTdiSettingChangeHistoryLog.swift in Sources */,
 				3EB807942FBCDCD70075D19E /* CgmFraSettingsHistoryLog.swift in Sources */,
 				3EB807952FBCDCD70075D19E /* CgmDataFsl3HistoryLog.swift in Sources */,
+				C71C88CE8A9B7EC7A2F82059 /* AntSleepEatSchedSettingChangeHistoryLog.swift in Sources */,
+				6CEB3F0EA87F89B6900D2362 /* TempAdjustmentActivatedHistoryLog.swift in Sources */,
+				27076AA4EF7B748C96793F60 /* TempAdjustmentCompletedHistoryLog.swift in Sources */,
+				27BC64CB2CE830EB8BBAC33D /* AntDailyStatus2HistoryLog.swift in Sources */,
+				4DDD655341EBE780B3FAF228 /* AntDailyStatus1HistoryLog.swift in Sources */,
+				D23D9DECD3DE320C26DF2AFE /* SyncDoseCompleteHistoryLog.swift in Sources */,
+				2E22290A6DCC52032CC16C75 /* SyncDoseStartHistoryLog.swift in Sources */,
 				3EB807962FBCDCD70075D19E /* TipscReqPrimeCannulaHistoryLog.swift in Sources */,
 				3EB807972FBCDCD70075D19E /* UnknownHistoryLog.swift in Sources */,
 				3EB807982FBCDCD70075D19E /* BolusDeliveryHistoryLog.swift in Sources */,
@@ -4009,6 +4070,17 @@
 				BB1E355325C9D2EA19C30707 /* CgmJoinSessionFsl2HistoryLogTests.swift in Sources */,
 				EF03244CA47143BA49FC97C9 /* CgmStopSessionFsl2HistoryLogTests.swift in Sources */,
 				8CE6416D66349228A146F8F8 /* CgmStartSessionFsl2HistoryLogTests.swift in Sources */,
+				7C2C68E8ADC96D2E68C02B19 /* UpdateStatusHistoryLogTests.swift in Sources */,
+				0B8CB511701B076810436329 /* VersionInfoHistoryLogTests.swift in Sources */,
+				D892D063F21660717E21F6D2 /* DataLogCorruptionHistoryLogTests.swift in Sources */,
+				6DF2735E6BA77B881D908B35 /* PlgsPeriodicHistoryLogTests.swift in Sources */,
+				8AB6D06F985A5B09E2DC4884 /* AntSleepEatSchedSettingChangeHistoryLogTests.swift in Sources */,
+				904FC42B5A143150DDF69F13 /* TempAdjustmentActivatedHistoryLogTests.swift in Sources */,
+				69D60F7AB1F022FECF55E013 /* TempAdjustmentCompletedHistoryLogTests.swift in Sources */,
+				2FE3CC431444DEC64F411A0E /* AntDailyStatus2HistoryLogTests.swift in Sources */,
+				015D8CA50A8DA8EA3DDBC422 /* AntDailyStatus1HistoryLogTests.swift in Sources */,
+				C799B4859EC75B0FBFAFDF33 /* SyncDoseCompleteHistoryLogTests.swift in Sources */,
+				73463FA4D487BC727C911CBA /* SyncDoseStartHistoryLogTests.swift in Sources */,
 				A20C5CA98311969F593FBBA9 /* DexcomG7CGMHistoryLogTests.swift in Sources */,
 				2D6FF798CDA51CA0DA93B401 /* AlarmAckHistoryLogTests.swift in Sources */,
 				A164564C55F5A546E9ECCA34 /* AlarmClearedHistoryLogTests.swift in Sources */,

@@ -14,6 +14,7 @@ final class CannulaFilledHistoryLogTests: XCTestCase {
             expected
         )
         MessageTester.assertHexEquals(expected.cargo, parsedRes.cargo)
+        XCTAssertEqual(.defaultTubed, parsedRes.infusionSetType)
     }
 
     func testCannulaFilledHistoryLog2() {
