@@ -3,24 +3,24 @@ import Foundation
 import LoopKit
 
 class TandemKitSoundSettingsViewModel: ObservableObject {
-    @Published var generalAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var quickBolusAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var reminderAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var alertAnnun: Int = 0 { didSet { checkDirtyState() } }
-    @Published var alarmAnnun: Int = 0 { didSet { checkDirtyState() } }
+    private static let defaultSound = PumpGlobalsResponse.AnnunciationEnum.vibrate
+
+    @Published var generalAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var quickBolusAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var reminderAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var alertAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
+    @Published var alarmAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue { didSet { checkDirtyState() } }
 
     @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
     @Published var isDisabled: Bool = false
     @Published var saveError: String?
 
-    var originalGeneralAnnun: Int = 0
-    var originalQuickBolusAnnun: Int = 0
-    var originalBolusAnnun: Int = 0
-    var originalReminderAnnun: Int = 0
-    var originalAlertAnnun: Int = 0
-    var originalAlarmAnnun: Int = 0
-    var originalFillTubingAnnun: Int = 0
+    var originalGeneralAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalQuickBolusAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalReminderAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalAlertAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
+    var originalAlarmAnnun: Int = TandemKitSoundSettingsViewModel.defaultSound.rawValue
 
     private let pumpManager: TandemPumpManager?
     let onSubmit: (() -> Void)?
@@ -48,11 +48,11 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
                 return
             }
 
-            pumpManager.state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? .audioHigh
-            pumpManager.state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? .audioHigh
-            pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? .audioHigh
-            pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? .audioHigh
-            pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? .audioHigh
+            pumpManager.state.generalAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun) ?? Self.defaultSound
+            pumpManager.state.quickBolusAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun) ?? Self.defaultSound
+            pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? Self.defaultSound
+            pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? Self.defaultSound
+            pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? Self.defaultSound
             pumpManager.notifyDelegateStateUpdated()
 
             onSubmit()
@@ -125,11 +125,11 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             return
         }
 
-        quickBolusAnnun = pumpManager.state.quickBolusAnnun?.rawValue ?? 0
-        generalAnnun = pumpManager.state.generalAnnun?.rawValue ?? 0
-        reminderAnnun = pumpManager.state.reminderAnnun?.rawValue ?? 0
-        alertAnnun = pumpManager.state.alertAnnun?.rawValue ?? 0
-        alarmAnnun = pumpManager.state.alarmAnnun?.rawValue ?? 0
+        quickBolusAnnun = (pumpManager.state.quickBolusAnnun ?? Self.defaultSound).rawValue
+        generalAnnun = (pumpManager.state.generalAnnun ?? Self.defaultSound).rawValue
+        reminderAnnun = (pumpManager.state.reminderAnnun ?? Self.defaultSound).rawValue
+        alertAnnun = (pumpManager.state.alertAnnun ?? Self.defaultSound).rawValue
+        alarmAnnun = (pumpManager.state.alarmAnnun ?? Self.defaultSound).rawValue
 
         originalGeneralAnnun = generalAnnun
         originalQuickBolusAnnun = quickBolusAnnun

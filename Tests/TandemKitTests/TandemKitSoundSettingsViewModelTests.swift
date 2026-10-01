@@ -57,6 +57,22 @@ import XCTest
         )
     }
 
+    private func forgetPumpSounds() {
+        manager.state.quickBolusAnnun = nil
+        manager.state.generalAnnun = nil
+        manager.state.reminderAnnun = nil
+        manager.state.alertAnnun = nil
+        manager.state.alarmAnnun = nil
+    }
+
+    private func assertEverySoundIsVibrate(_ viewModel: ViewModel, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(viewModel.quickBolusAnnun, vibrate, file: file, line: line)
+        XCTAssertEqual(viewModel.generalAnnun, vibrate, file: file, line: line)
+        XCTAssertEqual(viewModel.reminderAnnun, vibrate, file: file, line: line)
+        XCTAssertEqual(viewModel.alertAnnun, vibrate, file: file, line: line)
+        XCTAssertEqual(viewModel.alarmAnnun, vibrate, file: file, line: line)
+    }
+
     /// Runs the main queue long enough for the view model's nested main-queue hops to land: a status
     /// update reaches it on the main queue, then schedules the reload and the dirty check behind it.
     private func drainMainQueue(iterations: Int = 20) {
@@ -77,6 +93,19 @@ import XCTest
         XCTAssertEqual(viewModel.alarmAnnun, vibrate)
         XCTAssertFalse(viewModel.isDirty)
         XCTAssertTrue(viewModel.isDisabled)
+    }
+
+    func testSoundsThePumpHasNotReportedOpenOnVibrate() {
+        forgetPumpSounds()
+
+        let viewModel = makeViewModel()
+
+        assertEverySoundIsVibrate(viewModel)
+        XCTAssertFalse(viewModel.isDirty)
+    }
+
+    func testWithoutAPumpManagerEverySoundOpensOnVibrate() {
+        assertEverySoundIsVibrate(ViewModel(pumpManager: nil, onSubmit: {}))
     }
 
     // MARK: - Unsaved changes
@@ -246,5 +275,28 @@ import XCTest
         XCTAssertEqual(manager.state.generalAnnun, .audioHigh)
         XCTAssertEqual(manager.state.alarmAnnun, .audioHigh)
         XCTAssertEqual(manager.state.reminderAnnun, .vibrate)
+    }
+
+    func testDuringOnboardingContinuingWithoutAChangeStoresVibrateForEverySound() {
+        forgetPumpSounds()
+        let viewModel = makeViewModel(onSubmit: {})
+
+        viewModel.submit()
+
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertEqual(manager.state.quickBolusAnnun, .vibrate)
+        XCTAssertEqual(manager.state.generalAnnun, .vibrate)
+        XCTAssertEqual(manager.state.reminderAnnun, .vibrate)
+        XCTAssertEqual(manager.state.alertAnnun, .vibrate)
+        XCTAssertEqual(manager.state.alarmAnnun, .vibrate)
+    }
+
+    func testDuringOnboardingASoundThePumpDoesNotDefineIsStoredAsVibrate() {
+        let viewModel = makeViewModel(onSubmit: {})
+        viewModel.generalAnnun = 7
+
+        viewModel.submit()
+
+        XCTAssertEqual(manager.state.generalAnnun, .vibrate)
     }
 }
