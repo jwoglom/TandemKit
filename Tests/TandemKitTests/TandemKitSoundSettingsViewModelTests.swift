@@ -155,9 +155,10 @@ import XCTest
         XCTAssertFalse(viewModel.isDirty)
         XCTAssertEqual(viewModel.generalAnnun, beep)
         XCTAssertEqual(viewModel.alertAnnun, vibrate)
+        XCTAssertNil(viewModel.saveError)
     }
 
-    func testAChangeThePumpRefusedIsReplacedByWhatItReportsBack() {
+    func testAChangeThePumpRefusedIsReplacedByWhatItReportsBackAndSaysSo() {
         bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
         bluetooth.stub(
             PumpGlobalsRequest.self,
@@ -174,6 +175,23 @@ import XCTest
         XCTAssertEqual(viewModel.generalAnnun, vibrate)
         XCTAssertFalse(viewModel.isDirty)
         XCTAssertFalse(viewModel.isLoading)
+        XCTAssertNotNil(viewModel.saveError)
+    }
+
+    func testAChangeWithNoConnectionSendsNothingAndSaysSo() {
+        bluetooth.connectError = PumpCommError.pumpNotConnected
+        let viewModel = makeViewModel()
+        viewModel.generalAnnun = beep
+        drainMainQueue()
+
+        viewModel.submit()
+        drainMainQueue()
+
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertEqual(viewModel.generalAnnun, vibrate)
+        XCTAssertFalse(viewModel.isDirty)
+        XCTAssertFalse(viewModel.isLoading)
+        XCTAssertNotNil(viewModel.saveError)
     }
 
     // MARK: - Onboarding

@@ -115,6 +115,18 @@ struct TandemKitSoundSettingsView: View {
             .padding(.horizontal)
         }
         .listStyle(InsetGroupedListStyle())
+        .alert(
+            String(localized: "Could not update sound settings", comment: "Title for failure to save pump sound settings"),
+            isPresented: Binding(
+                get: { viewModel.saveError != nil },
+                set: { if !$0 { viewModel.saveError = nil } }
+            ),
+            presenting: viewModel.saveError,
+            actions: { _ in
+                Button(String(localized: "OK", comment: "OK button"), action: {})
+            },
+            message: { Text($0) }
+        )
     }
 
     func toggleEditors(propertyName: String) {

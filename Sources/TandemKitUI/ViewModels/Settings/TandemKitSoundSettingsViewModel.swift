@@ -12,6 +12,7 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isDirty: Bool = false
     @Published var isDisabled: Bool = false
+    @Published var saveError: String?
 
     var originalGeneralAnnun: Int = 0
     var originalQuickBolusAnnun: Int = 0
@@ -82,9 +83,19 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
 
         isDirty = false
         isLoading = true
-        pumpManager?.setPumpSound(request: request) {
+        saveError = nil
+        pumpManager?.setPumpSound(request: request) { accepted in
             DispatchQueue.main.async {
                 self.isLoading = false
+
+                guard accepted else {
+                    self.showPumpSounds()
+                    self.saveError = String(
+                        localized: "Could not save the sound settings to the pump.",
+                        comment: "Error shown when saving the pump sound settings fails"
+                    )
+                    return
+                }
 
                 self.originalGeneralAnnun = self.generalAnnun
                 self.originalQuickBolusAnnun = self.quickBolusAnnun
@@ -108,6 +119,24 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             self.isDisabled = !self.isDirty && self.onSubmit == nil
         }
     }
+
+    private func showPumpSounds() {
+        guard let pumpManager = pumpManager else {
+            return
+        }
+
+        quickBolusAnnun = pumpManager.state.quickBolusAnnun?.rawValue ?? 0
+        generalAnnun = pumpManager.state.generalAnnun?.rawValue ?? 0
+        reminderAnnun = pumpManager.state.reminderAnnun?.rawValue ?? 0
+        alertAnnun = pumpManager.state.alertAnnun?.rawValue ?? 0
+        alarmAnnun = pumpManager.state.alarmAnnun?.rawValue ?? 0
+
+        originalGeneralAnnun = generalAnnun
+        originalQuickBolusAnnun = quickBolusAnnun
+        originalReminderAnnun = reminderAnnun
+        originalAlertAnnun = alertAnnun
+        originalAlarmAnnun = alarmAnnun
+    }
 }
 
 extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
@@ -116,22 +145,12 @@ extension TandemKitSoundSettingsViewModel: PumpManagerStatusObserver {
         didUpdate _: LoopKit.PumpManagerStatus,
         oldStatus _: LoopKit.PumpManagerStatus
     ) {
-        guard let pumpManager = pumpManager, !isDirty else {
+        guard !isDirty else {
             return
         }
 
         DispatchQueue.main.async {
-            self.quickBolusAnnun = pumpManager.state.quickBolusAnnun?.rawValue ?? 0
-            self.generalAnnun = pumpManager.state.generalAnnun?.rawValue ?? 0
-            self.reminderAnnun = pumpManager.state.reminderAnnun?.rawValue ?? 0
-            self.alertAnnun = pumpManager.state.alertAnnun?.rawValue ?? 0
-            self.alarmAnnun = pumpManager.state.alarmAnnun?.rawValue ?? 0
-
-            self.originalGeneralAnnun = self.generalAnnun
-            self.originalQuickBolusAnnun = self.quickBolusAnnun
-            self.originalReminderAnnun = self.reminderAnnun
-            self.originalAlertAnnun = self.alertAnnun
-            self.originalAlarmAnnun = self.alarmAnnun
+            self.showPumpSounds()
         }
     }
 }
