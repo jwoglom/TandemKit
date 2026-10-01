@@ -122,7 +122,7 @@ import XCTest
         manager.reportHistoryBoluses(
             in: sequences.min()! ... sequences.max()!,
             pumpSerial: serial,
-            floor: floor ?? now.addingTimeInterval(-BolusReportLedger.retention),
+            floor: floor ?? now.addingTimeInterval(-BolusReportLedger.reportingHorizon),
             now: now
         )
         delegateQueue.sync {}
@@ -444,6 +444,26 @@ import XCTest
             + [bolusCompletion(bolusId: 60, delivered: 1.0, requested: 1.0, sequenceNum: 803, secondsAgo: 3560)]
 
         report(logs, floor: now.addingTimeInterval(-1800))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
+    }
+
+    /// The unexplained second report on #452.
+    func testAnAppBolusAgingOutOfTheHorizonIsNotReportedAgain() {
+        let secondsAgo = UInt32(BolusReportLedger.reportingHorizon) + 5
+        // Dated at programming, past the horizon; history dates it at activation, 14 s later, inside it.
+        manager.state.bolusReportLedger.record(BolusReportLedger.Entry(
+            bolusId: 63,
+            pumpSerial: Self.pumpSerial,
+            origin: .commanded,
+            raw: Data("bolus 1.0 live".utf8),
+            eventDate: now.addingTimeInterval(-TimeInterval(secondsAgo)),
+            automatic: false,
+            isFinalized: true
+        ))
+
+        report(quickBolusStart(bolusId: 63, units: 1.0, firstSequenceNum: 1100, secondsAgo: secondsAgo)
+            + [bolusCompletion(bolusId: 63, delivered: 1.0, requested: 1.0, sequenceNum: 1103, secondsAgo: secondsAgo - 44)])
 
         XCTAssertTrue(delegate.pumpEventBatches.isEmpty)
     }

@@ -236,7 +236,8 @@ edit instead of at the next sync.
 - The live path and history identify one bolus differently (#344), so `BolusReportLedger`
   (persisted) records each app bolus's `bolusId`, live `raw` and event date at `InitiateBolus`,
   and `emitPumpEvents` marks it finalized when an immutable report with that `raw` goes out. It
-  keeps entries for 24 h. A history bolus the ledger:
+  keeps entries 12 h past the 24 h reporting horizon, since history dates an app bolus at
+  activation on the pump's clock, which can be later than its entry. A history bolus the ledger:
   - has finalized — is skipped;
   - holds as an unfinalized app bolus — is finalized under the live `raw`/date once the live
     path is no longer tracking it (relaunch mid-bolus, unknown delivered volume), releasing
