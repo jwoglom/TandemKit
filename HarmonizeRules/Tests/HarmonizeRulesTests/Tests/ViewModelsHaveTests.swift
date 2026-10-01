@@ -11,12 +11,8 @@ final class ViewModelsHaveTests: XCTestCase {
     }
 
     private static let baseline: [String] = [
-        "TandemKitCGMSettingsViewModel",
         "TandemKitDebugViewModel",
-        "TandemKitG6SetupViewModel",
-        "TandemKitG7SetupViewModel",
-        "TandemKitHistoryLogViewerViewModel",
-        "TandemKitTroubleshootConnectionViewModel"
+        "TandemKitHistoryLogViewerViewModel"
     ]
 
     private static let rule = Rule(

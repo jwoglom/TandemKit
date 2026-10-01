@@ -115,7 +115,11 @@ let package = Package(
                 "TandemKitTests/TandemKitQuickBolusSettingsViewModelTests.swift",
                 "TandemKitTests/TandemKitPumpInformationViewModelTests.swift",
                 "TandemKitTests/TandemKitFeatureFlagsViewModelTests.swift",
-                "TandemKitTests/TandemKitSettingsViewModelTests.swift"
+                "TandemKitTests/TandemKitSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitG6SetupViewModelTests.swift",
+                "TandemKitTests/TandemKitG7SetupViewModelTests.swift",
+                "TandemKitTests/TandemKitCGMSettingsViewModelTests.swift",
+                "TandemKitTests/TandemKitTroubleshootConnectionViewModelTests.swift"
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )
