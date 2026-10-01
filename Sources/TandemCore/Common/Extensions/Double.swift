@@ -9,10 +9,7 @@ public extension Double {
 
 public extension UInt32 {
     var hexadecimalString: String {
-        var hex = String(self, radix: 16)
-        for i in 0..<(8 - hex.count) {
-            hex += "0"
-        }
-        return "0x\(hex)"
+        let hex = String(self, radix: 16)
+        return "0x" + String(repeating: "0", count: 8 - hex.count) + hex
     }
 }

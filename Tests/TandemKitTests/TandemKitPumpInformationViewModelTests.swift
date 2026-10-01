@@ -59,6 +59,16 @@ import XCTest
         XCTAssertEqual(viewModel.controlBitsB, "0x9abcdef0")
     }
 
+    func testShortConfigurationBitsArePaddedOnTheLeft() {
+        manager.state.pumpState = PumpState(controlBitsA: 0x1, controlBitsB: 0x0002_0400)
+
+        let viewModel = ViewModel(pumpManager: manager)
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.controlBitsA, "0x00000001")
+        XCTAssertEqual(viewModel.controlBitsB, "0x00020400")
+    }
+
     func testTheScreenPicksUpAnIdentityReadAfterItOpened() {
         let viewModel = ViewModel(pumpManager: manager)
         drainMainQueue()
