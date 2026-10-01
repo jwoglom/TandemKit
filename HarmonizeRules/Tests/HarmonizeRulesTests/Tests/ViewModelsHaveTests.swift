@@ -13,11 +13,9 @@ final class ViewModelsHaveTests: XCTestCase {
     private static let baseline: [String] = [
         "TandemKitCGMSettingsViewModel",
         "TandemKitDebugViewModel",
-        "TandemKitFeatureFlagsViewModel",
         "TandemKitG6SetupViewModel",
         "TandemKitG7SetupViewModel",
         "TandemKitHistoryLogViewerViewModel",
-        "TandemKitSettingsViewModel",
         "TandemKitTroubleshootConnectionViewModel"
     ]
 

@@ -105,7 +105,6 @@ let package = Package(
             path: "Tests",
             exclude: [
                 "TandemKitTests/TandemKitFillTubingViewModelTests.swift",
-                "TandemKitTests/TandemFeatureFlagsTests.swift",
                 "TandemKitTests/TandemKitChangeCartridgeViewModelTests.swift",
                 "TandemKitTests/TandemKitFillCannulaViewModelTests.swift",
                 "TandemKitTests/TandemKitControlIQSettingsViewModelTests.swift",
@@ -114,7 +113,9 @@ let package = Package(
                 "TandemKitTests/TandemKitAlertSettingsViewModelTests.swift",
                 "TandemKitTests/TandemKitSoundSettingsViewModelTests.swift",
                 "TandemKitTests/TandemKitQuickBolusSettingsViewModelTests.swift",
-                "TandemKitTests/TandemKitPumpInformationViewModelTests.swift"
+                "TandemKitTests/TandemKitPumpInformationViewModelTests.swift",
+                "TandemKitTests/TandemKitFeatureFlagsViewModelTests.swift",
+                "TandemKitTests/TandemKitSettingsViewModelTests.swift"
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )
