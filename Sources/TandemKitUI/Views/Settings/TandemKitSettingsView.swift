@@ -838,23 +838,31 @@ struct TandemKitSettingsView: View {
     }
 
     var stopTempRateMessage: String {
-        let rateText = String(format: "%.2f U/hr", viewModel.basalDose?.value ?? 0)
+        let rateText = String(
+            format: String(localized: "%.2f U/hr", comment: "Temp basal rate in the stop temp rate alert"),
+            viewModel.basalDose?.value ?? 0
+        )
+
+        let durationFormatter = DateComponentsFormatter()
+        durationFormatter.unitsStyle = .full
+        durationFormatter.allowedUnits = [.hour, .minute]
 
         let durationText: String
-        if let start = viewModel.basalDose?.startDate, let end = viewModel.basalDose?.estimatedEndDate {
-            let minutes = Int(end.timeIntervalSince(start)) / 60
-            let hours = minutes / 60
-            let mins = minutes % 60
-            if hours > 0 {
-                durationText = "\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"
-            } else {
-                durationText = "\(mins) minute\(mins == 1 ? "" : "s")"
-            }
+        if let start = viewModel.basalDose?.startDate, let end = viewModel.basalDose?.estimatedEndDate,
+           let formatted = durationFormatter.string(from: TimeInterval(Int(end.timeIntervalSince(start)) / 60 * 60))
+        {
+            durationText = formatted
         } else {
-            durationText = "an unknown duration"
+            durationText = String(
+                localized: "an unknown duration",
+                comment: "Stands in for the temp basal duration in the stop temp rate alert when it is not known"
+            )
         }
 
-        return "The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?"
+        return String(
+            localized: "The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?",
+            comment: "Stop temp rate alert message (1: rate, 2: duration)"
+        )
     }
 
     var deliverySectionTitle: String {
@@ -960,18 +968,6 @@ struct TandemKitSettingsView: View {
             return String(localized: "Exercise", comment: "user mode exercise")
         default:
             return String(localized: "Unknown", comment: "user mode unknown")
-        }
-    }
-
-    private func formatDuration(_ seconds: Double) -> String {
-        let minutes = Int(seconds) / 60
-        let hours = minutes / 60
-        let mins = minutes % 60
-
-        if hours > 0 {
-            return "\(hours)h \(mins)m"
-        } else {
-            return "\(mins)m"
         }
     }
 

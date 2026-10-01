@@ -52,7 +52,10 @@ class TandemKitScanViewModel: ObservableObject {
 
     func processPinPrompt() {
         guard !devicePinCode.isEmpty else {
-            pinCodePromptError = "Please enter a pairing code"
+            pinCodePromptError = String(
+                localized: "Please enter a pairing code",
+                comment: "Error when the pairing code field is empty"
+            )
             return
         }
 
@@ -61,13 +64,19 @@ class TandemKitScanViewModel: ObservableObject {
 
         guard let pumpManager = pumpManager else {
             isConnectionError = true
-            connectionErrorMessage = "Pump manager not initialized"
+            connectionErrorMessage = String(
+                localized: "Pump manager not initialized",
+                comment: "Pairing error when the pump manager is missing"
+            )
             return
         }
 
         guard let peripheral = selectedPeripheral else {
             isConnectionError = true
-            connectionErrorMessage = "No peripheral selected"
+            connectionErrorMessage = String(
+                localized: "No peripheral selected",
+                comment: "Pairing error when no pump was chosen from the scan results"
+            )
             return
         }
 
