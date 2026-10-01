@@ -41,12 +41,12 @@ enum TextLiterals {
         "Loop", "Trio", "Tandem Mobi", "t:slim X2", "Control-IQ", "CIQ", "Basal-IQ", "Dexcom G6", "Dexcom G7", "Libre 2"
     ]
 
-    /// SwiftUI initializers and modifiers whose first unlabeled `String` literal is a `LocalizedStringKey`.
+    /// SwiftUI initializers and modifiers that look an unlabeled literal up in the host app's bundle, not TandemKit's.
     private static let localizedStringKeyAPIs: Set<String> = [
-        "Text", "Button", "Label", "Toggle", "Picker", "TextField", "SecureField", "DatePicker", "Section",
+        "Button", "Label", "Toggle", "Picker", "TextField", "SecureField", "DatePicker", "Section",
         "NavigationLink", "Stepper", "ProgressView", "Link", "Menu", "LabeledContent", "GroupBox", "DisclosureGroup",
         "navigationTitle", "navigationBarTitle", "alert", "confirmationDialog", "help",
-        "accessibilityLabel", "accessibilityHint", "accessibilityValue", "LocalizedStringKey", "LocalizedStringResource"
+        "accessibilityLabel", "accessibilityHint", "accessibilityValue"
     ]
 
     private static let localizingFunctions: Set<String> = ["NSLocalizedString", "LocalizedString"]
@@ -89,7 +89,11 @@ enum TextLiterals {
 
         if callee == "String" { return label == "localized" }
         if localizingFunctions.contains(callee) { return true }
-        if label == nil, localizedStringKeyAPIs.contains(callee) { return true }
+        // TandemCore's Text(_:comment:) is what looks a key up in TandemKit's bundle; SwiftUI's own Text uses the host app's.
+        if label == nil, callee == "Text" {
+            return call.arguments.contains { $0.label?.text == "comment" || $0.label?.text == "bundle" }
+        }
+        if label == nil, localizedStringKeyAPIs.contains(callee) { return false }
         if nonTextCalls.contains(callee) { return true }
         if let receiver = call.calledExpression.as(MemberAccessExprSyntax.self)?.base?.trimmedDescription.lowercased() {
             return logReceivers.contains { receiver.hasSuffix($0) }
