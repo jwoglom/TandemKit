@@ -9,6 +9,38 @@ import XCTest
 
     private let idpId = 10
 
+    private struct Sounds: Equatable {
+        var quickBolus: PumpGlobalsResponse.AnnunciationEnum?
+        var general: PumpGlobalsResponse.AnnunciationEnum?
+        var reminder: PumpGlobalsResponse.AnnunciationEnum?
+        var alert: PumpGlobalsResponse.AnnunciationEnum?
+        var alarm: PumpGlobalsResponse.AnnunciationEnum?
+    }
+
+    /// Differs from the all-`audioHigh` pump in `pumpGlobals` on every sound.
+    private let chosenSounds = Sounds(
+        quickBolus: .audioMedium,
+        general: .vibrate,
+        reminder: .audioLow,
+        alert: .vibrate,
+        alarm: .audioMedium
+    )
+
+    private let pumpGlobals = PumpGlobalsResponse(
+        quickBolusEnabledRaw: 0,
+        quickBolusIncrementUnits: 500,
+        quickBolusIncrementCarbs: 2000,
+        quickBolusEntryType: 0,
+        quickBolusStatus: 0,
+        buttonAnnun: 0,
+        quickBolusAnnun: PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue,
+        generalAnnun: PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue,
+        reminderAnnun: PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue,
+        alertAnnun: PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue,
+        alarmAnnun: PumpGlobalsResponse.AnnunciationEnum.audioHigh.rawValue,
+        fillTubingAnnun: 0
+    )
+
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
@@ -28,15 +60,32 @@ import XCTest
     private func makeManager(
         schedule basalRateSchedule: BasalRateSchedule,
         maxBasalRateUnitsPerHour: Double? = nil,
-        maxBolusUnits: Double? = nil
+        maxBolusUnits: Double? = nil,
+        sounds: Sounds? = nil
     ) -> TandemPumpManager {
-        TandemPumpManager(
-            state: TandemPumpManagerState(
-                basalRateSchedule: basalRateSchedule,
-                maxBasalRateUnitsPerHour: maxBasalRateUnitsPerHour,
-                maxBolusUnits: maxBolusUnits
-            ),
-            bluetooth: bluetooth
+        var state = TandemPumpManagerState(
+            basalRateSchedule: basalRateSchedule,
+            maxBasalRateUnitsPerHour: maxBasalRateUnitsPerHour,
+            maxBolusUnits: maxBolusUnits
+        )
+        if let sounds {
+            state.quickBolusAnnun = sounds.quickBolus
+            state.generalAnnun = sounds.general
+            state.reminderAnnun = sounds.reminder
+            state.alertAnnun = sounds.alert
+            state.alarmAnnun = sounds.alarm
+            state.pumpSoundsAwaitingWrite = true
+        }
+        return TandemPumpManager(state: state, bluetooth: bluetooth)
+    }
+
+    private func sounds(in state: TandemPumpManagerState) -> Sounds {
+        Sounds(
+            quickBolus: state.quickBolusAnnun,
+            general: state.generalAnnun,
+            reminder: state.reminderAnnun,
+            alert: state.alertAnnun,
+            alarm: state.alarmAnnun
         )
     }
 
@@ -44,11 +93,23 @@ import XCTest
     private func stubPump(segments: [StubIDPPump.Segment]) -> StubIDPPump {
         bluetooth.stub(SetMaxBasalLimitRequest.self, with: SetMaxBasalLimitResponse(status: 0))
         bluetooth.stub(SetMaxBolusLimitRequest.self, with: SetMaxBolusLimitResponse(status: 0))
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 0))
         bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 0))
 
         let pump = StubIDPPump(segments, idpId: idpId)
         pump.install(on: bluetooth)
         return pump
+    }
+
+    private func soundsChanged(by request: SetPumpSoundsRequest) -> Sounds {
+        let changed = request.changeBitmask
+        return Sounds(
+            quickBolus: changed.contains(.quickBolusAnnun) ? request.quickBolusAnnun : nil,
+            general: changed.contains(.generalAnnun) ? request.generalAnnun : nil,
+            reminder: changed.contains(.reminderAnnun) ? request.reminderAnnun : nil,
+            alert: changed.contains(.alertAnnun) ? request.alertAnnun : nil,
+            alarm: changed.contains(.alarmAnnun) ? request.alarmAnnun : nil
+        )
     }
 
     private func applyOnboardingSettings(_ manager: TandemPumpManager) -> OnboardingSettingsFailure? {
@@ -135,11 +196,12 @@ import XCTest
 
     func testSyncsPumpTimeAfterTheOtherWrites() {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
-        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
 
         XCTAssertNil(applyOnboardingSettings(manager))
 
         let order = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
+        XCTAssertTrue(order.contains("SetPumpSoundsRequest"))
         XCTAssertEqual(order.last, "ChangeTimeDateRequest")
     }
 
@@ -236,12 +298,134 @@ import XCTest
     func testReportsErrorWhenPumpIsUnreachable() {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.connectError = PumpCommError.pumpNotConnected
-        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
 
         let failure = applyOnboardingSettings(manager)
 
         XCTAssertNotNil(failure?.basalSchedule)
         XCTAssertNotNil(failure?.deliveryLimits)
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
+    // MARK: - Sounds
+
+    func testWritesTheSoundsChosenDuringOnboarding() throws {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        let writes = bluetooth.sent(SetPumpSoundsRequest.self)
+        XCTAssertEqual(writes.count, 1)
+        let request = try XCTUnwrap(writes.first)
+        XCTAssertEqual(request.changeBitmask, [.quickBolusAnnun, .generalAnnun, .reminderAnnun, .alertAnnun, .alarmAnnun])
+        XCTAssertEqual(soundsChanged(by: request), chosenSounds)
+        XCTAssertEqual(sounds(in: manager.state), chosenSounds)
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
+    }
+
+    func testWritesOnlyTheSoundsThatWereChosen() throws {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let chosen = Sounds(general: .vibrate, alarm: .audioLow)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosen)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        let request = try XCTUnwrap(bluetooth.sent(SetPumpSoundsRequest.self).first)
+        XCTAssertEqual(request.changeBitmask, [.generalAnnun, .alarmAnnun])
+        XCTAssertEqual(soundsChanged(by: request), chosen)
+    }
+
+    func testWritesNoSoundsWhenTheSoundScreenSetNone() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: Sounds())
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertFalse(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
+    }
+
+    func testSoundsReadFromThePumpAreNotWrittenBack() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+        manager.state.generalAnnun = .vibrate
+        manager.state.alarmAnnun = .vibrate
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertFalse(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+    }
+
+    func testARefusedSoundWriteDoesNotFailSetup() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertTrue(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+    }
+
+    func testAfterARefusedSoundWriteThePumpsOwnSoundsAreShown() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
+        bluetooth.stub(PumpGlobalsRequest.self, with: pumpGlobals)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
+        manager.fetchGlobalPumpSettings()
+
+        XCTAssertEqual(
+            sounds(in: manager.state),
+            Sounds(quickBolus: .audioHigh, general: .audioHigh, reminder: .audioHigh, alert: .audioHigh, alarm: .audioHigh)
+        )
+    }
+
+    func testAnUnansweredSoundWriteDoesNotFailSetup() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(SetPumpSoundsRequest.self) { _ in nil }
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertTrue(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+    }
+
+    func testTryingSetupAgainDoesNotResendTheSounds() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertEqual(bluetooth.sent(SetPumpSoundsRequest.self).count, 1)
+    }
+
+    func testChosenSoundsSurviveAPumpGlobalsReadBeforeTheyAreWritten() throws {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(PumpGlobalsRequest.self, with: pumpGlobals)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
+        // A .globalPumpSettings event, handled before the sound write as one deferred from pairing would be.
+        bluetooth.stub(SetMaxBolusLimitRequest.self) { [weak manager] _ in
+            manager?.handleQualifyingEvents(events: [.globalPumpSettings]) {}
+            return SetMaxBolusLimitResponse(status: 0)
+        }
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        let order = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
+        let read = try XCTUnwrap(order.firstIndex(of: "PumpGlobalsRequest"))
+        let write = try XCTUnwrap(order.firstIndex(of: "SetPumpSoundsRequest"))
+        XCTAssertLessThan(read, write)
+        let request = try XCTUnwrap(bluetooth.sent(SetPumpSoundsRequest.self).first)
+        XCTAssertEqual(soundsChanged(by: request), chosenSounds)
+        XCTAssertEqual(sounds(in: manager.state), chosenSounds)
     }
 }

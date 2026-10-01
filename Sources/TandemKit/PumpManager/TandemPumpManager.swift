@@ -304,7 +304,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         oldState = TandemPumpManagerState(rawValue: current.rawValue)
         publishLock.unlock()
 
-        if let delegate = pumpManagerDelegate {
+        // Until the host sets its queue this would land on `.main`; the queue setter replays it.
+        if canNotifyDelegate, let delegate = pumpManagerDelegate {
             pumpDelegate.queue.async { [weak self] in
                 guard let self = self else { return }
 

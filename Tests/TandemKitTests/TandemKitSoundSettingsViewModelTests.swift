@@ -275,6 +275,7 @@ import XCTest
         XCTAssertEqual(manager.state.generalAnnun, .audioHigh)
         XCTAssertEqual(manager.state.alarmAnnun, .audioHigh)
         XCTAssertEqual(manager.state.reminderAnnun, .vibrate)
+        XCTAssertTrue(manager.state.pumpSoundsAwaitingWrite)
     }
 
     func testDuringOnboardingContinuingWithoutAChangeStoresVibrateForEverySound() {

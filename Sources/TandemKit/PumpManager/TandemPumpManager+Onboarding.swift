@@ -2,8 +2,8 @@ import Foundation
 import HealthKit
 import LoopKit
 
-/// No clock field: a failed time write doesn't block setup, and `showPumpTimeSyncWarning` flags
-/// a wrong pump clock afterwards.
+/// No clock or sounds field: neither failed write blocks setup. `showPumpTimeSyncWarning` flags a
+/// wrong pump clock afterwards, and sounds are not a safety setting.
 public struct OnboardingSettingsFailure: Error {
     public let basalSchedule: Error?
     public let deliveryLimits: Error?
@@ -19,16 +19,18 @@ public extension TandemPumpManager {
         // that segment.
         syncOnboardingDeliveryLimits { limitsError in
             self.syncOnboardingBasalSchedule { basalError in
-                self.writePumpTime { timeError in
-                    if let timeError {
-                        self.logger.warning("Pump clock not set during setup: \(timeError.localizedDescription)")
-                    }
+                self.writeOnboardingSounds {
+                    self.writePumpTime { timeError in
+                        if let timeError {
+                            self.logger.warning("Pump clock not set during setup: \(timeError.localizedDescription)")
+                        }
 
-                    guard basalError != nil || limitsError != nil else {
-                        completion(nil)
-                        return
+                        guard basalError != nil || limitsError != nil else {
+                            completion(nil)
+                            return
+                        }
+                        completion(OnboardingSettingsFailure(basalSchedule: basalError, deliveryLimits: limitsError))
                     }
-                    completion(OnboardingSettingsFailure(basalSchedule: basalError, deliveryLimits: limitsError))
                 }
             }
         }
@@ -65,6 +67,69 @@ private extension TandemPumpManager {
         )
 
         syncDeliveryLimits(limits: limits) { completion($0.failure) }
+    }
+
+    func writeOnboardingSounds(completion: @escaping () -> Void) {
+        guard state.pumpSoundsAwaitingWrite else {
+            completion()
+            return
+        }
+        guard let request = state.pumpSoundsRequest else {
+            state.pumpSoundsAwaitingWrite = false
+            completion()
+            return
+        }
+
+        bluetooth.ensureConnected { error in
+            // Written or not, the next pump-globals read should show what the pump holds.
+            defer {
+                self.state.pumpSoundsAwaitingWrite = false
+                completion()
+            }
+
+            if let error {
+                self.logger.warning("Pump sounds not set during setup: \(error.localizedDescription)")
+                return
+            }
+
+            guard let response = self.bluetooth.write(request) else {
+                self.logger.warning("Pump sounds not set during setup: no response")
+                return
+            }
+
+            guard response.isStatusOK else {
+                self.logger.warning("Pump sounds not set during setup: status \(response.status)")
+                return
+            }
+        }
+    }
+}
+
+private extension TandemPumpManagerState {
+    /// A nil sound is left as the pump has it.
+    var pumpSoundsRequest: SetPumpSoundsRequest? {
+        var changed: [PumpSoundChangeBitmask] = []
+        if quickBolusAnnun != nil { changed.append(.quickBolusAnnun) }
+        if generalAnnun != nil { changed.append(.generalAnnun) }
+        if reminderAnnun != nil { changed.append(.reminderAnnun) }
+        if alertAnnun != nil { changed.append(.alertAnnun) }
+        if alarmAnnun != nil { changed.append(.alarmAnnun) }
+
+        guard !changed.isEmpty else {
+            return nil
+        }
+
+        // The pump applies only the fields whose bit is set; the zeros stand in for the rest.
+        return SetPumpSoundsRequest(
+            quickBolusAnnunRaw: quickBolusAnnun?.rawValue ?? 0,
+            generalAnnunRaw: generalAnnun?.rawValue ?? 0,
+            reminderAnnunRaw: reminderAnnun?.rawValue ?? 0,
+            alertAnnunRaw: alertAnnun?.rawValue ?? 0,
+            alarmAnnunRaw: alarmAnnun?.rawValue ?? 0,
+            cgmAlertAnnunA: 0,
+            cgmAlertAnnunB: 0,
+            changeBitmaskRaw: PumpSoundChangeBitmask.toBitmask(changed)
+        )
     }
 }
 

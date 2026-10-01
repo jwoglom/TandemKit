@@ -88,6 +88,9 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var alertAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var alarmAnnun: PumpGlobalsResponse.AnnunciationEnum?
     public var generalAnnun: PumpGlobalsResponse.AnnunciationEnum?
+    /// Set by the onboarding sound screen: the `*Annun` values are the user's choices, which no
+    /// pump-globals read may replace until `applyOnboardingSettings` has tried to write them. In memory only.
+    public var pumpSoundsAwaitingWrite = false
 
     // Quick bolus settings (from PumpGlobalsResponse)
     public var quickBolusEnabled: Bool?
@@ -200,6 +203,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.alertAnnun == rhs.alertAnnun,
               lhs.alarmAnnun == rhs.alarmAnnun,
               lhs.generalAnnun == rhs.generalAnnun,
+              lhs.pumpSoundsAwaitingWrite == rhs.pumpSoundsAwaitingWrite,
               lhs.quickBolusEnabled == rhs.quickBolusEnabled,
               lhs.quickBolusEntryType == rhs.quickBolusEntryType,
               lhs.quickBolusIncrementUnits == rhs.quickBolusIncrementUnits,
@@ -595,6 +599,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* alertAnnun: \(String(describing: alertAnnun))",
             "* alarmAnnun: \(String(describing: alarmAnnun))",
             "* generalAnnun: \(String(describing: generalAnnun))",
+            "* pumpSoundsAwaitingWrite: \(pumpSoundsAwaitingWrite)",
             "* useControlIQ: \(useControlIQ)",
             "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
