@@ -9,8 +9,16 @@ import XCTest
 
     private let idpId = 10
 
+    private struct Sounds: Equatable {
+        var quickBolus: PumpGlobalsResponse.AnnunciationEnum?
+        var general: PumpGlobalsResponse.AnnunciationEnum?
+        var reminder: PumpGlobalsResponse.AnnunciationEnum?
+        var alert: PumpGlobalsResponse.AnnunciationEnum?
+        var alarm: PumpGlobalsResponse.AnnunciationEnum?
+    }
+
     /// Differs from the all-`audioHigh` pump in `pumpGlobals` on every sound.
-    private let chosenSounds = TandemPumpManagerState.PumpSounds(
+    private let chosenSounds = Sounds(
         quickBolus: .audioMedium,
         general: .vibrate,
         reminder: .audioLow,
@@ -53,15 +61,32 @@ import XCTest
         schedule basalRateSchedule: BasalRateSchedule,
         maxBasalRateUnitsPerHour: Double? = nil,
         maxBolusUnits: Double? = nil,
-        sounds: TandemPumpManagerState.PumpSounds? = nil
+        sounds: Sounds? = nil
     ) -> TandemPumpManager {
         var state = TandemPumpManagerState(
             basalRateSchedule: basalRateSchedule,
             maxBasalRateUnitsPerHour: maxBasalRateUnitsPerHour,
             maxBolusUnits: maxBolusUnits
         )
-        state.onboardingSounds = sounds
+        if let sounds {
+            state.quickBolusAnnun = sounds.quickBolus
+            state.generalAnnun = sounds.general
+            state.reminderAnnun = sounds.reminder
+            state.alertAnnun = sounds.alert
+            state.alarmAnnun = sounds.alarm
+            state.pumpSoundsAwaitingWrite = true
+        }
         return TandemPumpManager(state: state, bluetooth: bluetooth)
+    }
+
+    private func sounds(in state: TandemPumpManagerState) -> Sounds {
+        Sounds(
+            quickBolus: state.quickBolusAnnun,
+            general: state.generalAnnun,
+            reminder: state.reminderAnnun,
+            alert: state.alertAnnun,
+            alarm: state.alarmAnnun
+        )
     }
 
     @discardableResult
@@ -76,9 +101,9 @@ import XCTest
         return pump
     }
 
-    private func soundsChanged(by request: SetPumpSoundsRequest) -> TandemPumpManagerState.PumpSounds {
+    private func soundsChanged(by request: SetPumpSoundsRequest) -> Sounds {
         let changed = request.changeBitmask
-        return TandemPumpManagerState.PumpSounds(
+        return Sounds(
             quickBolus: changed.contains(.quickBolusAnnun) ? request.quickBolusAnnun : nil,
             general: changed.contains(.generalAnnun) ? request.generalAnnun : nil,
             reminder: changed.contains(.reminderAnnun) ? request.reminderAnnun : nil,
@@ -295,12 +320,13 @@ import XCTest
         let request = try XCTUnwrap(writes.first)
         XCTAssertEqual(request.changeBitmask, [.quickBolusAnnun, .generalAnnun, .reminderAnnun, .alertAnnun, .alarmAnnun])
         XCTAssertEqual(soundsChanged(by: request), chosenSounds)
-        XCTAssertNil(manager.state.onboardingSounds)
+        XCTAssertEqual(sounds(in: manager.state), chosenSounds)
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
     }
 
     func testWritesOnlyTheSoundsThatWereChosen() throws {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
-        let chosen = TandemPumpManagerState.PumpSounds(general: .vibrate, alarm: .audioLow)
+        let chosen = Sounds(general: .vibrate, alarm: .audioLow)
         let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosen)
 
         XCTAssertNil(applyOnboardingSettings(manager))
@@ -310,20 +336,27 @@ import XCTest
         XCTAssertEqual(soundsChanged(by: request), chosen)
     }
 
-    func testWritesNoSoundsWhenNoneWereChosen() {
-        for sounds in [nil, TandemPumpManagerState.PumpSounds()] {
-            bluetooth.resetRecordedTraffic()
-            stubPump(segments: [.init(startTime: 0, basalRate: 0)])
-            let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: sounds)
-            // Sounds in the pump-globals mirror are not choices.
-            manager.state.generalAnnun = .vibrate
-            manager.state.alarmAnnun = .vibrate
+    func testWritesNoSoundsWhenTheSoundScreenSetNone() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: Sounds())
 
-            XCTAssertNil(applyOnboardingSettings(manager))
+        XCTAssertNil(applyOnboardingSettings(manager))
 
-            XCTAssertFalse(bluetooth.didSend(SetPumpSoundsRequest.self), String(describing: sounds))
-            XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
-        }
+        XCTAssertFalse(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
+    }
+
+    func testSoundsReadFromThePumpAreNotWrittenBack() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+        manager.state.generalAnnun = .vibrate
+        manager.state.alarmAnnun = .vibrate
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertFalse(bluetooth.didSend(SetPumpSoundsRequest.self))
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
     func testARefusedSoundWriteDoesNotFailSetup() {
@@ -337,6 +370,22 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
+    func testAfterARefusedSoundWriteThePumpsOwnSoundsAreShown() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
+        bluetooth.stub(PumpGlobalsRequest.self, with: pumpGlobals)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosenSounds)
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+        XCTAssertFalse(manager.state.pumpSoundsAwaitingWrite)
+        manager.fetchGlobalPumpSettings()
+
+        XCTAssertEqual(
+            sounds(in: manager.state),
+            Sounds(quickBolus: .audioHigh, general: .audioHigh, reminder: .audioHigh, alert: .audioHigh, alarm: .audioHigh)
+        )
+    }
+
     func testAnUnansweredSoundWriteDoesNotFailSetup() {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
         bluetooth.stub(SetPumpSoundsRequest.self) { _ in nil }
@@ -348,17 +397,15 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 
-    func testTryingSetupAgainResendsSoundsOnlyUntilThePumpAcceptsThem() {
+    func testTryingSetupAgainDoesNotResendTheSounds() {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
-        bluetooth.enqueue(SetPumpSoundsRequest.self, responses: [SetPumpSoundsResponse(status: 1)])
+        bluetooth.stub(SetPumpSoundsRequest.self, with: SetPumpSoundsResponse(status: 1))
         let manager = makeManager(schedule: schedule([(0, 0.65)]), sounds: chosenSounds)
 
         XCTAssertNil(applyOnboardingSettings(manager))
         XCTAssertNil(applyOnboardingSettings(manager))
-        XCTAssertNil(applyOnboardingSettings(manager))
 
-        let writes = bluetooth.sent(SetPumpSoundsRequest.self)
-        XCTAssertEqual(writes.map { soundsChanged(by: $0) }, [chosenSounds, chosenSounds])
+        XCTAssertEqual(bluetooth.sent(SetPumpSoundsRequest.self).count, 1)
     }
 
     func testChosenSoundsSurviveAPumpGlobalsReadBeforeTheyAreWritten() throws {
@@ -379,5 +426,6 @@ import XCTest
         XCTAssertLessThan(read, write)
         let request = try XCTUnwrap(bluetooth.sent(SetPumpSoundsRequest.self).first)
         XCTAssertEqual(soundsChanged(by: request), chosenSounds)
+        XCTAssertEqual(sounds(in: manager.state), chosenSounds)
     }
 }

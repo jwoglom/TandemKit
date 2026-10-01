@@ -70,13 +70,22 @@ private extension TandemPumpManager {
     }
 
     func writeOnboardingSounds(completion: @escaping () -> Void) {
-        guard let request = state.onboardingSounds?.request else {
+        guard state.pumpSoundsAwaitingWrite else {
+            completion()
+            return
+        }
+        guard let request = state.pumpSoundsRequest else {
+            state.pumpSoundsAwaitingWrite = false
             completion()
             return
         }
 
         bluetooth.ensureConnected { error in
-            defer { completion() }
+            // Written or not, the next pump-globals read should show what the pump holds.
+            defer {
+                self.state.pumpSoundsAwaitingWrite = false
+                completion()
+            }
 
             if let error {
                 self.logger.warning("Pump sounds not set during setup: \(error.localizedDescription)")
@@ -92,20 +101,19 @@ private extension TandemPumpManager {
                 self.logger.warning("Pump sounds not set during setup: status \(response.status)")
                 return
             }
-
-            self.state.onboardingSounds = nil
         }
     }
 }
 
-private extension TandemPumpManagerState.PumpSounds {
-    var request: SetPumpSoundsRequest? {
+private extension TandemPumpManagerState {
+    /// A nil sound is left as the pump has it.
+    var pumpSoundsRequest: SetPumpSoundsRequest? {
         var changed: [PumpSoundChangeBitmask] = []
-        if quickBolus != nil { changed.append(.quickBolusAnnun) }
-        if general != nil { changed.append(.generalAnnun) }
-        if reminder != nil { changed.append(.reminderAnnun) }
-        if alert != nil { changed.append(.alertAnnun) }
-        if alarm != nil { changed.append(.alarmAnnun) }
+        if quickBolusAnnun != nil { changed.append(.quickBolusAnnun) }
+        if generalAnnun != nil { changed.append(.generalAnnun) }
+        if reminderAnnun != nil { changed.append(.reminderAnnun) }
+        if alertAnnun != nil { changed.append(.alertAnnun) }
+        if alarmAnnun != nil { changed.append(.alarmAnnun) }
 
         guard !changed.isEmpty else {
             return nil
@@ -113,11 +121,11 @@ private extension TandemPumpManagerState.PumpSounds {
 
         // The pump applies only the fields whose bit is set; the zeros stand in for the rest.
         return SetPumpSoundsRequest(
-            quickBolusAnnunRaw: quickBolus?.rawValue ?? 0,
-            generalAnnunRaw: general?.rawValue ?? 0,
-            reminderAnnunRaw: reminder?.rawValue ?? 0,
-            alertAnnunRaw: alert?.rawValue ?? 0,
-            alarmAnnunRaw: alarm?.rawValue ?? 0,
+            quickBolusAnnunRaw: quickBolusAnnun?.rawValue ?? 0,
+            generalAnnunRaw: generalAnnun?.rawValue ?? 0,
+            reminderAnnunRaw: reminderAnnun?.rawValue ?? 0,
+            alertAnnunRaw: alertAnnun?.rawValue ?? 0,
+            alarmAnnunRaw: alarmAnnun?.rawValue ?? 0,
             cgmAlertAnnunA: 0,
             cgmAlertAnnunB: 0,
             changeBitmaskRaw: PumpSoundChangeBitmask.toBitmask(changed)

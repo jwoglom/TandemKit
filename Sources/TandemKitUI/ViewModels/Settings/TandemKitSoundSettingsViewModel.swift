@@ -53,13 +53,7 @@ class TandemKitSoundSettingsViewModel: ObservableObject {
             pumpManager.state.reminderAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun) ?? Self.defaultSound
             pumpManager.state.alertAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun) ?? Self.defaultSound
             pumpManager.state.alarmAnnun = PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun) ?? Self.defaultSound
-            pumpManager.state.onboardingSounds = TandemPumpManagerState.PumpSounds(
-                quickBolus: PumpGlobalsResponse.AnnunciationEnum(rawValue: quickBolusAnnun),
-                general: PumpGlobalsResponse.AnnunciationEnum(rawValue: generalAnnun),
-                reminder: PumpGlobalsResponse.AnnunciationEnum(rawValue: reminderAnnun),
-                alert: PumpGlobalsResponse.AnnunciationEnum(rawValue: alertAnnun),
-                alarm: PumpGlobalsResponse.AnnunciationEnum(rawValue: alarmAnnun)
-            )
+            pumpManager.state.pumpSoundsAwaitingWrite = true
             pumpManager.notifyDelegateStateUpdated()
 
             onSubmit()

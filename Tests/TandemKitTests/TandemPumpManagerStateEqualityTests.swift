@@ -52,7 +52,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.basalRateMismatchSince = nil
         state.basalRateMismatchConfirmed = false
         state.lastSettingsCheckedAt = nil
-        state.onboardingSounds = nil
+        state.pumpSoundsAwaitingWrite = false
 
         XCTAssertEqual(TandemPumpManagerState(rawValue: state.rawValue), state)
     }
@@ -103,7 +103,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("alertAnnun", { $0.alertAnnun = nil }),
             ("alarmAnnun", { $0.alarmAnnun = nil }),
             ("generalAnnun", { $0.generalAnnun = nil }),
-            ("onboardingSounds", { $0.onboardingSounds = nil }),
+            ("pumpSoundsAwaitingWrite", { $0.pumpSoundsAwaitingWrite = false }),
             ("quickBolusEnabled", { $0.quickBolusEnabled = nil }),
             ("quickBolusEntryType", { $0.quickBolusEntryType = nil }),
             ("quickBolusIncrementUnits", { $0.quickBolusIncrementUnits = nil }),
@@ -229,13 +229,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.alertAnnun = .audioLow
         state.alarmAnnun = .vibrate
         state.generalAnnun = .audioHigh
-        state.onboardingSounds = .init(
-            quickBolus: .vibrate,
-            general: .audioLow,
-            reminder: .audioMedium,
-            alert: .vibrate,
-            alarm: .audioHigh
-        )
+        state.pumpSoundsAwaitingWrite = true
         state.quickBolusEnabled = true
         state.quickBolusEntryType = 1
         state.quickBolusIncrementUnits = 500
