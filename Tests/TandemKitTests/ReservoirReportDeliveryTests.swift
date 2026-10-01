@@ -8,16 +8,20 @@ import XCTest
 @available(macOS 13.0, iOS 14.0, *) final class ReservoirReportDeliveryTests: XCTestCase {
     private var bluetooth: StubPumpBluetooth!
     private var manager: TandemPumpManager!
+    /// Shared by every attach, since a host keeps one queue for the manager's life.
+    private var delegateQueue: DispatchQueue!
 
     override func setUp() {
         super.setUp()
         bluetooth = StubPumpBluetooth()
+        delegateQueue = DispatchQueue(label: "reservoir-report-test")
         manager = TandemPumpManager(state: TandemPumpManagerState(rawValue: [:]), bluetooth: bluetooth)
     }
 
     override func tearDown() {
         manager = nil
         bluetooth = nil
+        delegateQueue = nil
         super.tearDown()
     }
 
@@ -35,7 +39,7 @@ import XCTest
         _ delegate: MockPumpManagerDelegate,
         queueFirst: Bool = false
     ) -> DispatchQueue {
-        let queue = DispatchQueue(label: "reservoir-report-test")
+        let queue: DispatchQueue = delegateQueue
 
         if queueFirst {
             manager.delegateQueue = queue

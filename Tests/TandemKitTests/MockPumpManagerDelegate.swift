@@ -127,6 +127,20 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         set { synchronized { _startDateToFilterNewPumpEvents = newValue } }
     }
 
+    // MARK: - Delegate queue
+
+    private static let delegateQueueKey = DispatchSpecificKey<ObjectIdentifier>()
+
+    /// Loop's delegate methods `dispatchPrecondition` onto its `delegateQueue`, and crashed when a
+    /// backfill tick called `startDateToFilterNewPumpEvents` from the command queue.
+    private func expectDelegateQueue(of manager: DeviceManager, _ method: String = #function) {
+        guard let queue = (manager as? PumpManager)?.delegateQueue else { return }
+        let id = ObjectIdentifier(queue)
+        queue.setSpecific(key: Self.delegateQueueKey, value: id)
+        guard DispatchQueue.getSpecific(key: Self.delegateQueueKey) != id else { return }
+        XCTFail("\(method) was called off the pump manager's delegateQueue")
+    }
+
     // MARK: - Journal
 
     /// Must be called with `lock` held.
@@ -166,12 +180,13 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     // MARK: - DeviceManagerDelegate
 
     func deviceManager(
-        _: DeviceManager,
+        _ manager: DeviceManager,
         logEventForDeviceIdentifier _: String?,
         type _: DeviceLogEntryType,
         message _: String,
         completion: ((Error?) -> Void)?
     ) {
+        expectDelegateQueue(of: manager)
         completion?(nil)
     }
 
@@ -215,7 +230,8 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     // MARK: - PumpManagerStatusObserver
 
-    func pumpManager(_: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
+    func pumpManager(_ manager: PumpManager, didUpdate status: PumpManagerStatus, oldStatus: PumpManagerStatus) {
+        expectDelegateQueue(of: manager)
         synchronized {
             let update = StatusUpdate(newStatus: status, oldStatus: oldStatus)
             _statusUpdates.append(update)
@@ -225,31 +241,39 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
 
     // MARK: - PumpManagerDelegate
 
-    func pumpManagerBLEHeartbeatDidFire(_: PumpManager) {
+    func pumpManagerBLEHeartbeatDidFire(_ manager: PumpManager) {
+        expectDelegateQueue(of: manager)
         synchronized { record(.bleHeartbeatDidFire) }
     }
 
-    func pumpManagerMustProvideBLEHeartbeat(_: PumpManager) -> Bool { false }
+    func pumpManagerMustProvideBLEHeartbeat(_ manager: PumpManager) -> Bool {
+        expectDelegateQueue(of: manager)
+        return false
+    }
 
-    func pumpManagerWillDeactivate(_: PumpManager) {
+    func pumpManagerWillDeactivate(_ manager: PumpManager) {
+        expectDelegateQueue(of: manager)
         synchronized {
             _willDeactivateCount += 1
             record(.willDeactivate)
         }
     }
 
-    func pumpManagerPumpWasReplaced(_: PumpManager) {
+    func pumpManagerPumpWasReplaced(_ manager: PumpManager) {
+        expectDelegateQueue(of: manager)
         synchronized {
             _pumpWasReplacedCount += 1
             record(.pumpWasReplaced)
         }
     }
 
-    func pumpManager(_: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents value: Bool) {
+    func pumpManager(_ manager: PumpManager, didUpdatePumpRecordsBasalProfileStartEvents value: Bool) {
+        expectDelegateQueue(of: manager)
         synchronized { record(.didUpdatePumpRecordsBasalProfileStartEvents(value)) }
     }
 
-    func pumpManager(_: PumpManager, didError error: PumpManagerError) {
+    func pumpManager(_ manager: PumpManager, didError error: PumpManagerError) {
+        expectDelegateQueue(of: manager)
         synchronized {
             _errors.append(error)
             record(.didError(error))
@@ -257,12 +281,13 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func pumpManager(
-        _: PumpManager,
+        _ manager: PumpManager,
         hasNewPumpEvents events: [NewPumpEvent],
         lastReconciliation: Date?,
         replacePendingEvents: Bool,
         completion: @escaping (Error?) -> Void
     ) {
+        expectDelegateQueue(of: manager)
         synchronized {
             let batch = PumpEventBatch(
                 events: events,
@@ -278,7 +303,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func pumpManager(
-        _: PumpManager,
+        _ manager: PumpManager,
         didReadReservoirValue units: Double,
         at date: Date,
         completion: @escaping (Swift.Result<
@@ -286,6 +311,7 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
             Error
         >) -> Void
     ) {
+        expectDelegateQueue(of: manager)
         synchronized {
             let reading = ReservoirReading(units: units, date: date)
             _reservoirReadings.append(reading)
@@ -295,14 +321,16 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
         completion(.success((SimpleReservoirValue(startDate: date, unitVolume: units), nil, true)))
     }
 
-    func pumpManager(_: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) {
+    func pumpManager(_ manager: PumpManager, didAdjustPumpClockBy adjustment: TimeInterval) {
+        expectDelegateQueue(of: manager)
         synchronized {
             _clockAdjustments.append(adjustment)
             record(.didAdjustPumpClock(by: adjustment))
         }
     }
 
-    func pumpManagerDidUpdateState(_: PumpManager) {
+    func pumpManagerDidUpdateState(_ manager: PumpManager) {
+        expectDelegateQueue(of: manager)
         synchronized {
             _didUpdateStateCount += 1
             record(.didUpdateState)
@@ -311,15 +339,17 @@ final class MockPumpManagerDelegate: PumpManagerDelegate {
     }
 
     func pumpManager(
-        _: PumpManager,
+        _ manager: PumpManager,
         didRequestBasalRateScheduleChange schedule: BasalRateSchedule,
         completion: @escaping (Error?) -> Void
     ) {
+        expectDelegateQueue(of: manager)
         synchronized { record(.didRequestBasalRateScheduleChange(schedule)) }
         completion(nil)
     }
 
-    func startDateToFilterNewPumpEvents(for _: PumpManager) -> Date {
-        startDateToFilterNewPumpEvents
+    func startDateToFilterNewPumpEvents(for manager: PumpManager) -> Date {
+        expectDelegateQueue(of: manager)
+        return startDateToFilterNewPumpEvents
     }
 }

@@ -96,6 +96,15 @@ Don't add to a baseline to get a new violation through.
 Rules that are easy to break without noticing. The overall design is in
 [docs/ARCHITECTURE_ANALYSIS.md](docs/ARCHITECTURE_ANALYSIS.md).
 
+### Delegate queue
+`PumpManagerDelegate` methods are only called through `pumpDelegate.notify` or
+`delegateQueue.async`. Loop opens them with `dispatchPrecondition(condition: .onQueue(queue))`, so
+a direct call from a driver queue crashes it, as a backfill tick reading
+`startDateToFilterNewPumpEvents` from the command queue did. `pumpDelegate.call` is a
+`queue.sync`, which deadlocks a caller already on the delegate queue. `MockPumpManagerDelegate`
+fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
+attaches one queue for the manager's life, as hosts do.
+
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
 suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /
