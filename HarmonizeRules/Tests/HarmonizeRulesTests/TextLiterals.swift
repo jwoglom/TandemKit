@@ -105,7 +105,9 @@ enum TextLiterals {
     /// when not templated, a lowercase or SCREAMING_SNAKE spelling.
     private static func looksLikeIdentifier(_ text: String, templated: Bool) -> Bool {
         guard text.range(of: #"^[A-Za-z0-9_.\-:/#]+$"#, options: .regularExpression) != nil else { return false }
-        if text.range(of: #"[_.\-:/#]"#, options: .regularExpression) != nil { return true }
+        if text.range(of: #"[_.\-:#]"#, options: .regularExpression) != nil { return true }
+        // A "/" with no other such punctuation is more often a unit ("U/hr") than a path.
+        if text.contains("/") { return false }
         guard !templated, let first = text.first else { return false }
         return first.isLowercase || (text.contains("_") && text.uppercased() == text)
     }
