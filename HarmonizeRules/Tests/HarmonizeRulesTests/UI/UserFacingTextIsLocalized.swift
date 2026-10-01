@@ -12,55 +12,14 @@ final class UserFacingTextIsLocalized: XCTestCase {
         let literals = (TandemHarmonize.driverPackage.sources() + TandemHarmonize.corePackage.sources())
             .flatMap(TextLiterals.unlocalizedErrorText(in:))
 
-        literals.assertEmpty(rule: Self.rule, baseline: Self.driverBaseline)
+        literals.assertEmpty(rule: Self.rule)
     }
 
-    // Developer screens by file; everything else by text, so a new string in the same file still fails.
+    // Developer screens, left in English.
     private static let uiBaseline: [String] = [
         "TandemKitDebugView.swift",
         "TandemKitDebugViewModel.swift",
-        "TandemKitHistoryLogViewerViewModel.swift",
-        // DurationFormatting.swift
-        "%dd %dh",
-        "%dd",
-        "%dh %dm",
-        "%dh",
-        "%dm",
-        // HostApp.swift
-        "this app",
-        "DIY",
-        // TandemKitControlIQSettingsViewModel.swift
-        "S",
-        "M",
-        "T",
-        "W",
-        "F",
-        // TandemKitQuickBolusSettingsViewModel.swift
-        "0.5 U",
-        "1.0 U",
-        "2.0 U",
-        "5.0 U",
-        // TandemKitScanViewModel.swift
-        "Please enter a pairing code",
-        "Pump manager not initialized",
-        "No peripheral selected",
-        // TandemKitSettingsView.swift
-        "%.2f U/hr",
-        #"\(hours) hour\(hours == 1 ? "" : "s") \(mins) minute\(mins == 1 ? "" : "s")"#,
-        #"\(mins) minute\(mins == 1 ? "" : "s")"#,
-        "an unknown duration",
-        #"The current temp rate is \(rateText) for the next \(durationText). Would you like to revert to your scheduled basal rate?"#,
-        #"\(hours)h \(mins)m"#,
-        #"\(mins)m"#,
-        // TandemKitTroubleshootConnectionViewModel.swift
-        #"SN \(serial)"#
-    ]
-
-    private static let driverBaseline: [String] = [
-        "Unable to read the history log status from the pump",
-        "History log fetch was cancelled",
-        "Another history log read is already in progress",
-        #"Other PumpCommError: \(String(describing: self))"#
+        "TandemKitHistoryLogViewerViewModel.swift"
     ]
 
     private static let rule = Rule(

@@ -20,15 +20,9 @@ final class StatusColorsComeFromGuidanceColors: XCTestCase {
 
     // By file: a colour has no name to tell one occurrence from another.
     private static let baseline: [String] = [
-        "BatteryIndicatorView.swift",
-        "TandemKitCGMSettingsView.swift",
-        "TandemKitControlIQSettingsView.swift",
         "TandemKitDebugView.swift",
         "TandemKitHistoryLogViewerView.swift",
-        "TandemKitNotificationsView.swift",
-        "TandemKitQuickBolusSettingsView.swift",
-        "TandemKitSettingsView.swift",
-        "TandemKitTroubleshootConnectionView.swift"
+        "TandemKitNotificationsView.swift"
     ]
 
     private static let rule = Rule(

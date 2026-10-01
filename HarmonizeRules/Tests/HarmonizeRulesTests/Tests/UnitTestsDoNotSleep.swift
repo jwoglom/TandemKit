@@ -10,14 +10,11 @@ final class UnitTestsDoNotSleep: XCTestCase {
             }
         }
 
-        sleeps.assertEmpty(rule: Self.rule, baseline: Self.baseline)
+        sleeps.assertEmpty(rule: Self.rule)
     }
 
     private static let sleepCalls: Set<String> = ["sleep", "usleep", "Thread.sleep", "Task.sleep"]
 
-    private static let baseline: [String] = [
-        "CommandWatchdogTests.swift"
-    ]
 
     private static let rule = Rule(
         description: "Unit tests never sleep.",

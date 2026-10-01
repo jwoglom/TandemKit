@@ -11,24 +11,8 @@ final class ViewModelsDoNotImportSwiftUI: XCTestCase {
     private static let uiFrameworks = ["SwiftUI", "UIKit", "LoopKitUI"]
 
     private static let baseline: [String] = [
-        "TandemKitAlertSettingsViewModel.swift",
-        "TandemKitCGMSettingsViewModel.swift",
-        "TandemKitChangeCartridgeViewModel.swift",
-        "TandemKitControlIQSettingsViewModel.swift",
         "TandemKitDebugViewModel.swift",
-        "TandemKitFeatureFlagsViewModel.swift",
-        "TandemKitFillCannulaViewModel.swift",
-        "TandemKitFillTubingViewModel.swift",
-        "TandemKitG6SetupViewModel.swift",
-        "TandemKitG7SetupViewModel.swift",
-        "TandemKitHistoryLogViewerViewModel.swift",
-        "TandemKitNotificationsViewModel.swift",
-        "TandemKitPumpInformationViewModel.swift",
-        "TandemKitQuickBolusSettingsViewModel.swift",
-        "TandemKitScanViewModel.swift",
-        "TandemKitSettingsViewModel.swift",
-        "TandemKitSoundSettingsViewModel.swift",
-        "TandemKitTroubleshootConnectionViewModel.swift"
+        "TandemKitHistoryLogViewerViewModel.swift"
     ]
 
     private static let rule = Rule(

@@ -15,7 +15,6 @@ final class ViewModelsHaveTests: XCTestCase {
         "TandemKitCGMSettingsViewModel",
         "TandemKitDebugViewModel",
         "TandemKitFeatureFlagsViewModel",
-        "TandemKitFillTubingViewModel",
         "TandemKitG6SetupViewModel",
         "TandemKitG7SetupViewModel",
         "TandemKitHistoryLogViewerViewModel",
