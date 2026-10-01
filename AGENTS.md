@@ -91,6 +91,20 @@ the response, or both. Write tests for these before the rest of the catalog:
   `DismissNotification`, `SetQuickBolusSettings` and `SetDexcomG7PairingCode`; and the
   `DetectingCartridge`, `EnterChangeCartridgeMode`, `FillCannula` and `FillTubing` state streams.
 
+The Harmonize rule `DriverMessagesHaveSerializationTests` (below) works the full list out from the
+code, so its baseline is the complete current list; delete a type from it when you add the test.
+
+### Harmonize lint rules
+`HarmonizeRules/` is a separate SwiftPM package of
+[Harmonize](https://github.com/perrystreetsoftware/Harmonize) rules: XCTest cases that parse
+`Sources/` and `Tests/` (rooted by `.harmonize.yaml`) and assert on their structure. It lives
+outside `Tests/`, so it is not part of `TandemKitTests`. Run it with `swift test --package-path
+HarmonizeRules` (`--filter <RuleName>` for one rule); the Linux workflow's `harmonize` job runs it.
+A failing rule prints what it enforces, why, how to fix it and an example, at the offending line:
+fix the code, not the rule. Each rule's baseline lists the violations that predate it, and
+Harmonize fails on an entry that no longer violates, so remove it in the change that fixes it.
+Don't add to a baseline to get a new violation through.
+
 ### LoopKit and Linux
 - Apple-platform builds resolve `LoopKit`/`LoopKitUI` from the surrounding Xcode workspace, which must build them — Trio's workspace does, via its `loopandlearn/LoopKit` submodule. SwiftPM cannot build these targets at all; see the comment atop `Package.swift`.
 - Linux builds compile against the fakes in `LinuxShims/`, which can drift from the real LoopKit;
