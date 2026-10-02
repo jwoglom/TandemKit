@@ -157,6 +157,14 @@ struct FaketandemSnapshot: Decodable {
         let endPumpSeconds: Int
     }
 
+    /// The pump's delivery limits, in milliunits (per hour for basal).
+    struct Limits: Decodable, Equatable {
+        let maxBolusMilliunits: Int
+        let maxBolusDefaultMilliunits: Int
+        let maxBasalMilliunits: Int
+        let maxBasalDefaultMilliunits: Int
+    }
+
     struct Insulin: Decodable {
         let reservoirUnits: Double
         let iob: Double
@@ -221,6 +229,8 @@ struct FaketandemSnapshot: Decodable {
     let basal: Basal
     let bolus: Bolus
     let lastBolus: LastBolus?
+    /// nil from an emulator that predates limit modelling.
+    let limits: Limits?
     let insulin: Insulin
     let battery: Battery
     let alerts: [Alert]

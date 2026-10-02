@@ -81,6 +81,7 @@ public class DailyStatusHistoryLog: HistoryLog {
         case cgmTypeDexcomG6 = 1
         case cgmTypeLibre2 = 2
         case cgmTypeDexcomG7 = 3
+        case cgmTypeLibre3 = 4
     }
 
     public enum UserMode: Int {

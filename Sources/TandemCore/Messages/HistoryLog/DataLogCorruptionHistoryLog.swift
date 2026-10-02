@@ -50,6 +50,21 @@ public class DataLogCorruptionHistoryLog: HistoryLog {
         )
     }
 
+    public enum Reason: Int {
+        case INVALID_HEADER_ID = 0
+        case BAD_INTEGRITY = 1
+        case INVALID_BLOCK = 2
+        case SPARE_DEACTIVATION_FAILED = 3
+        case INVALID_SEQUENCE_NUMBER = 4
+        case PATTERN_MISMATCH = 5
+        case BAD_FIRST_BLOCK = 6
+        case DISCOVERY_BAD_SEQUENCE_NUMBER_INCREMENT = 7
+    }
+
+    public var reasonEnum: Reason? {
+        Reason(rawValue: reason)
+    }
+
     public var description: String {
         "DataLogCorruptionHistoryLog(cargo=\(cargo.hexadecimalString), block=\(block), reason=\(reason))"
     }
