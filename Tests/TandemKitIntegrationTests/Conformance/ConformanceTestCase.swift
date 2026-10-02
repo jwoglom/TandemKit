@@ -51,6 +51,9 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     }
 
     override func tearDownWithError() throws {
+        // On this scenario's clock: cleared after the reset, a running bolus would end hours
+        // before it started, on the real clock.
+        try? clearLeftoverDelivery()
         // Time must move for the teardown handshake's wall-clock waits to line up with the pump;
         // the next test's reset puts the clock back to real mode anyway.
         try? clock?.unfreeze()
