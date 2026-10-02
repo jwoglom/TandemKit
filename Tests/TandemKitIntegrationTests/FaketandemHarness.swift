@@ -82,7 +82,9 @@ final class FaketandemHarness {
         }
         _ = try control.setPairingCode(Self.pairingCode)
         _ = try control.resetLongTermKey()
-        try client.setClock(mode: "real", pumpOffsetSeconds: 0)
+        // Naming the zone sets the pump's clock back to the phone's local time, which a test that
+        // changed the pump's clock or the phone's zone left elsewhere.
+        try client.setClock(mode: "real", pumpOffsetSeconds: 0, pumpTimezone: TimeZone.current.identifier)
         try client.setPairingState(.pairStep2)
         // An emulator without profile or limit modelling has nothing to restore.
         let snapshot = try client.snapshot()

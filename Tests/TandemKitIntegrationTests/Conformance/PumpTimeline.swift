@@ -13,14 +13,13 @@ import XCTest
 /// reports are diffed against (guide §11 "diff your reported timeline"; plan "PumpTimeline").
 ///
 /// **Times.** Every instant here is a *true* instant on the pump's Clock, reconstructed from the
-/// record's `pump_seconds` — what actually went on the wire — with both of the emulator's offsets
-/// removed:
+/// record's `pump_seconds` — what actually went on the wire — with the emulator's offsets removed:
 ///
-///     unix = pump_seconds + 1_199_145_600 - pump_timezone_offset_seconds - pump_offset_seconds
+///     unix = pump_seconds + 1_199_145_600 - wire_offset_seconds
 ///
-/// The zone offset is the pump's local-time convention (a Tandem pump keeps its clock in local time
-/// with no zone attached, and `Dates.fromJan12008ToUnixEpochSeconds` decodes on that assumption);
-/// the skew is `pump_offset_seconds`, the lie the pump tells about the time. The snapshot's
+/// `wire_offset_seconds` is the record's own: the offset the pump's clock was set to plus its
+/// skew when the record was written, which for every record since the clock was last set is
+/// `pump_timezone_offset_seconds + pump_offset_seconds`. Live snapshot fields use the clock's. The snapshot's
 /// formatted `time` strings carry the same instants, but the wire seconds are what a driver
 /// actually sees, so they stay the source.
 struct PumpTimeline {
@@ -155,13 +154,14 @@ struct PumpTimeline {
     ) -> PumpTimeline {
         let entries = history.filter { $0.sequence > afterSequence }.sorted { $0.sequence < $1.sequence }
 
-        // Instants come from the wire seconds with both offsets removed, never from the formatted
+        // Instants come from the wire seconds with the offsets removed, never from the formatted
         // `time` strings: the wire seconds are what a driver decodes, so reconstructing from them
         // is the same arithmetic the driver does and any disagreement is the emulator's, not a
-        // rendering difference. The zone offset is read at `pump_now`, which is exact for every
-        // scenario that does not step across a DST transition.
+        // rendering difference. A history record carries the offset it was written under, which
+        // differs from the clock's for one written before the pump's clock was last set.
         let clock = snapshot.clock
         func instant(_ pumpSeconds: Int) -> Date { clock.instant(fromPumpSeconds: pumpSeconds) }
+        func instant(_ entry: FaketandemHistoryEntry) -> Date { entry.instant(clock: clock) }
 
         var boluses: [Int: Bolus] = [:]
         var bolusOrder: [Int] = []
@@ -186,7 +186,7 @@ struct PumpTimeline {
                 boluses[id] = Bolus(
                     bolusId: id,
                     programmedUnits: data["bolusSize"]?.doubleValue,
-                    start: instant(entry.pumpSeconds),
+                    start: instant(entry),
                     startPumpSeconds: entry.pumpSeconds,
                     end: nil,
                     endPumpSeconds: nil,
@@ -210,7 +210,7 @@ struct PumpTimeline {
                     programmedUnits: existing?.programmedUnits ?? data["insulinRequested"]?.doubleValue,
                     start: existing?.start,
                     startPumpSeconds: existing?.startPumpSeconds,
-                    end: instant(entry.pumpSeconds),
+                    end: instant(entry),
                     endPumpSeconds: entry.pumpSeconds,
                     deliveredUnits: data["insulinDelivered"]?.doubleValue,
                     endReason: BolusEndReason(id: data["completionStatusId"]?.intValue),
@@ -226,7 +226,7 @@ struct PumpTimeline {
                 let profile = extra["normalRate"]?.doubleValue ?? snapshot.basal.profileRate
                 let percent = data["percent"]?.intValue
                 let rate = extra["tempRate"]?.doubleValue ?? percent.map { profile * Double($0) / 100 }
-                let start = instant(entry.pumpSeconds)
+                let start = instant(entry)
                 let scheduledEnd = extra["scheduledEndPumpSeconds"]?.intValue.map(instant)
                     ?? durationSeconds.map { start.addingTimeInterval($0) }
                 tempRates.append(TempRate(
@@ -260,7 +260,7 @@ struct PumpTimeline {
                     start: open.start,
                     startPumpSeconds: open.startPumpSeconds,
                     scheduledEnd: open.scheduledEnd,
-                    end: instant(entry.pumpSeconds),
+                    end: instant(entry),
                     endPumpSeconds: entry.pumpSeconds,
                     timeLeft: data["timeLeft"]?.intValue
                 )
@@ -272,7 +272,7 @@ struct PumpTimeline {
                 suspends.append(Suspend(
                     reason: extra["reason"]?.stringValue ?? reasonId.map(Self.suspendReasonName),
                     reasonId: reasonId,
-                    start: instant(entry.pumpSeconds),
+                    start: instant(entry),
                     startPumpSeconds: entry.pumpSeconds,
                     resumed: nil,
                     resumedPumpSeconds: nil
@@ -286,7 +286,7 @@ struct PumpTimeline {
                         reasonId: open.reasonId,
                         start: open.start,
                         startPumpSeconds: open.startPumpSeconds,
-                        resumed: instant(entry.pumpSeconds),
+                        resumed: instant(entry),
                         resumedPumpSeconds: entry.pumpSeconds
                     )
                 } else {
@@ -301,7 +301,7 @@ struct PumpTimeline {
                     alertType: extra["alertTypeName"]?.stringValue,
                     reason: extra["reason"]?.stringValue,
                     message: extra["message"]?.stringValue,
-                    at: instant(entry.pumpSeconds),
+                    at: instant(entry),
                     pumpSeconds: entry.pumpSeconds,
                     cleared: nil,
                     clearedPumpSeconds: nil
@@ -322,7 +322,7 @@ struct PumpTimeline {
                     message: open.message ?? extra["message"]?.stringValue,
                     at: open.at,
                     pumpSeconds: open.pumpSeconds,
-                    cleared: instant(entry.pumpSeconds),
+                    cleared: instant(entry),
                     clearedPumpSeconds: entry.pumpSeconds
                 )
 

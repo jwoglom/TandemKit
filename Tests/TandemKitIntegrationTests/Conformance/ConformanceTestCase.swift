@@ -36,15 +36,24 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         try clearLeftoverDelivery()
-        manualClock = ManualClock(Date())
+        // Earlier scenarios ran their clocks ahead of real time; starting behind their records
+        // would put them in this scenario's future, where a fresh driver reports them as new.
+        // The latest-dated, not the last: clearing a leftover dose above stamps its record now.
+        let history = try harness.client.snapshot().history
+        let newestRecord = history.latestTime ?? history.entries.map(\.time).max() ?? .distantPast
+        let start = max(Date(), newestRecord.addingTimeInterval(.minutes(1)))
+        manualClock = ManualClock(start)
         clock = ConformanceClock(driver: manualClock, client: harness.client)
-        try clock.start()
+        try clock.start(at: start)
         let snapshot = try harness.client.snapshot()
         historyStartSequence = snapshot.history.lastSequence
         logStartSequence = snapshot.requestLog.lastSeq
     }
 
     override func tearDownWithError() throws {
+        // On this scenario's clock: cleared after the reset, a running bolus would end hours
+        // before it started, on the real clock.
+        try? clearLeftoverDelivery()
         // Time must move for the teardown handshake's wall-clock waits to line up with the pump;
         // the next test's reset puts the clock back to real mode anyway.
         try? clock?.unfreeze()

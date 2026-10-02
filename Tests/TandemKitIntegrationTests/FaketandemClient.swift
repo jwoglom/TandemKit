@@ -69,6 +69,15 @@ struct FaketandemHistoryEntry: Decodable {
     let extra: [String: FaketandemJSONValue]?
     /// The high nibble of the record's type-id word (1 on Mobi captures, 0 on older ones).
     let sourceNibble: Int?
+    /// How far `pumpSeconds` runs ahead of `time`, as the pump's clock was set when the record was
+    /// written. nil from an emulator that predates clock setting.
+    let wireOffsetSeconds: Int?
+
+    /// The true instant the record's wire timestamp stands for.
+    func instant(clock: FaketandemClock) -> Date {
+        guard let wireOffsetSeconds else { return clock.instant(fromPumpSeconds: pumpSeconds) }
+        return Date(timeIntervalSince1970: FaketandemClock.tandemEpochUnix + Double(pumpSeconds - wireOffsetSeconds))
+    }
 }
 
 /// `GET /api/history?since=&limit=`, the full history feed. `since` is exclusive — the last
@@ -208,6 +217,8 @@ struct FaketandemSnapshot: Decodable {
         let count: Int
         let firstSequence: Int
         let lastSequence: Int
+        /// The latest instant any record was written at; nil from an older emulator or an empty log.
+        let latestTime: Date?
         let entries: [HistoryEntry]
     }
 
@@ -650,6 +661,19 @@ final class FaketandemClient {
     func appendHistory(type: String, secondsAgo: Double, data: [String: Any]) throws -> FaketandemSnapshot {
         _ = try send("POST", "/api/state/history/append", json: ["type": type, "seconds_ago": secondsAgo, "data": data])
         return try snapshot()
+    }
+
+    /// The pump's user sets its date and time on the pump: the clock moves by `deltaSeconds` and the
+    /// pump writes `TimeChanged`/`DateChange` records; no connected driver is told. Returns the
+    /// clock's wire reading before and after.
+    @discardableResult
+    func setPumpTimeOnThePump(deltaSeconds: TimeInterval) throws -> (prior: Int, after: Int) {
+        struct Body: Decodable {
+            let priorPumpSeconds: Int
+            let pumpSeconds: Int
+        }
+        let body = try decode(send("POST", "/api/state/time", json: ["delta_seconds": deltaSeconds]), as: Body.self)
+        return (body.priorPumpSeconds, body.pumpSeconds)
     }
 
     /// Answers with the bitmask it raised, not a snapshot.

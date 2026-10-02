@@ -12,14 +12,13 @@ import XCTest
 /// The two offsets between the emulator's clock and the wire are kept apart here the way the
 /// emulator keeps them apart (README "Clock"):
 ///
-/// - **the pump's zone** is its local-time convention, not a lie. A Tandem pump keeps its clock in
-///   local time with no zone attached, and TandemKit decodes every pump-epoch timestamp on that
-///   assumption (`Dates.fromJan12008ToUnixEpochSeconds` subtracts `TimeZone.current.secondsFromGMT()`).
-///   `start()` therefore puts the emulator in the *test process's own* zone, so the driver decodes
-///   back exactly the instant the pump meant. Earlier this was faked with a wire skew equal to
-///   `secondsFromGMT`, because the emulator stamped pump-epoch seconds from UTC; it encodes in the
-///   pump's zone now, and `pump_timezone` is the honest knob (and the one that reproduces a
-///   traveling pump or a DST boundary).
+/// - **the pump's zone** is the local time its clock was set to, not a lie. A Tandem pump holds a
+///   date and time with no zone attached, and TandemKit decodes every pump-epoch timestamp as local
+///   time (`Dates.fromJan12008ToUnixEpochSeconds` subtracts `TimeZone.current.secondsFromGMT()`).
+///   `start()` therefore sets the emulator's clock to the *test process's own* local time, so the
+///   driver decodes back exactly the instant the pump meant. The emulator fixes the offset when the
+///   zone is named and does not follow DST, as a pump does not; only `start()` and `setTimezone`
+///   name it, so nothing else moves a clock a scenario set.
 /// - **`pumpOffsetSeconds` is a genuine skew**, a lie the pump tells about the time: it moves every
 ///   wire timestamp on top of the zone without touching delivery. It is 0 unless a scenario asks
 ///   for a skewed pump clock (plan D5).
@@ -28,8 +27,8 @@ final class ConformanceClock {
     let client: FaketandemClient
     /// The pump's clock skew, in seconds. Zero is a pump whose clock is right.
     private(set) var pumpOffsetSeconds: Double = 0
-    /// The IANA zone the pump keeps its clock in. The test process's own, so that what the driver
-    /// decodes out of a wire timestamp is the instant the pump recorded.
+    /// The IANA zone whose local time the pump's clock was set to. The test process's own, so that
+    /// what the driver decodes out of a wire timestamp is the instant the pump recorded.
     private(set) var pumpTimezone: String = TimeZone.current.identifier
     private(set) var frozen = true
 
@@ -80,7 +79,7 @@ final class ConformanceClock {
     /// Stops the emulator's clock where it is (it stands still until the next `advanceBoth`).
     func freeze() throws {
         frozen = true
-        try client.setClock(mode: "manual", frozen: true, pumpOffsetSeconds: pumpOffsetSeconds, pumpTimezone: pumpTimezone)
+        try client.setClock(mode: "manual", frozen: true, pumpOffsetSeconds: pumpOffsetSeconds)
     }
 
     /// Lets the emulator's clock run at wall-clock speed from where it stands. The driver's clock
@@ -88,7 +87,7 @@ final class ConformanceClock {
     /// pump, and `freeze()` again before asserting on times.
     func unfreeze() throws {
         frozen = false
-        try client.setClock(mode: "manual", frozen: false, pumpOffsetSeconds: pumpOffsetSeconds, pumpTimezone: pumpTimezone)
+        try client.setClock(mode: "manual", frozen: false, pumpOffsetSeconds: pumpOffsetSeconds)
     }
 
     /// Moves the driver's clock up to the emulator's, after an unfrozen stretch.
@@ -102,10 +101,11 @@ final class ConformanceClock {
     /// Changes the pump's clock skew (on top of its zone) without moving either clock.
     func setSkew(seconds: Double) throws {
         pumpOffsetSeconds = seconds
-        try client.setClock(mode: "manual", frozen: frozen, pumpOffsetSeconds: pumpOffsetSeconds, pumpTimezone: pumpTimezone)
+        try client.setClock(mode: "manual", frozen: frozen, pumpOffsetSeconds: pumpOffsetSeconds)
     }
 
-    /// Moves the pump to another time zone: every wire timestamp moves with it, delivery does not.
+    /// Sets the pump's clock to local time in `identifier` without a history record, as at pairing:
+    /// every wire timestamp moves with it, delivery does not.
     func setTimezone(_ identifier: String) throws {
         pumpTimezone = identifier
         try client.setClock(mode: "manual", frozen: frozen, pumpOffsetSeconds: pumpOffsetSeconds, pumpTimezone: identifier)

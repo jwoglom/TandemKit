@@ -131,17 +131,26 @@ it simply reports skips.
 
 ### Pump time is local time
 
-A Tandem pump keeps its clock in **local time with no zone attached**: its pump-epoch
-seconds count from 2008-01-01 00:00:00 as read on the pump's own clock, and every consumer
-decodes on that assumption — TandemKit's `Dates.fromJan12008ToUnixEpochSeconds` subtracts
-`TimeZone.current.secondsFromGMT()`. The emulator encodes the same way, so two separate
-offsets sit between its clock and the wire and they mean different things:
+A Tandem pump holds a **date and time with no zone attached**: its pump-epoch seconds count
+from 2008-01-01 00:00:00 as read on the pump's own clock, and every consumer decodes them as
+local time — TandemKit's `Dates.fromJan12008ToUnixEpochSeconds` subtracts
+`TimeZone.current.secondsFromGMT()`. The pump only changes its clock when someone sets it, on
+the pump or with `ChangeTimeDateRequest`; it does not follow DST or a trip. The emulator
+encodes the same way, so two separate offsets sit between its clock and the wire and they mean
+different things:
 
 | `/api/clock` field | Meaning |
 | --- | --- |
-| `pump_timezone` | The IANA zone the pump keeps its clock in; settable, which is how a test reproduces a traveling pump or a DST boundary. `UTC` turns the convention off. |
-| `pump_timezone_offset_seconds` | That zone's offset in force at `pump_now`. Read-only, and the quantity a decoder subtracts back out. |
-| `pump_offset_seconds` | A genuine **skew**: a lie the pump tells about the time, stacked on the zone, which moves every wire timestamp without touching delivery arithmetic. |
+| `pump_timezone` | The IANA zone whose local time the pump's clock was last set to. Naming it in a `PUT` sets the clock to that zone's local time at that moment; the offset is then fixed. A `PUT` that leaves it out does not move the clock. `UTC` turns the convention off. |
+| `pump_timezone_offset_seconds` | How far the pump's clock is set ahead of UTC, apart from the skew. Read-only, and the quantity a decoder subtracts back out. |
+| `pump_offset_seconds` | A genuine **skew**: a lie the pump tells about the time, stacked on the offset, which moves every wire timestamp without touching delivery arithmetic. |
+
+Setting the pump's date and time — `ChangeTimeDateRequest` from the driver, or
+`POST /api/state/time` (`FaketandemClient.setPumpTimeOnThePump`) for a user on the pump's own
+screen — moves `pump_timezone_offset_seconds` and writes the pump's `TimeChanged` (13) and
+`DateChange` (14) records, stamped on the new clock. Records already in the log keep their old
+stamps, so each record in `/api/history` carries the `wire_offset_seconds` it was written
+under.
 
 One rule governs every time field the harness reports. Wall-clock fields (`time`,
 `start_time`, `end_time`, `temp_start`, `temp_end`, `cleared_time`) are **true instants**
@@ -150,12 +159,22 @@ fields are **what went on the wire**, with both offsets applied. Either is deriv
 the other:
 
 ```
-unix(time) = pump_seconds + 1_199_145_600 - pump_timezone_offset_seconds - pump_offset_seconds
+unix(time) = pump_seconds + 1_199_145_600 - wire_offset_seconds
 ```
 
-`ConformanceClock` puts the emulator in the test process's own zone and leaves
+where `wire_offset_seconds` is `pump_timezone_offset_seconds + pump_offset_seconds` for
+anything written since the clock was last set.
+
+`ConformanceClock` sets the emulator's clock to the test process's own local time and leaves
 `pump_offset_seconds` at 0, so a dose's second on the driver side is the second the pump
-recorded; `setSkew(_:)` adds a real skew on top for the clock-skew scenarios.
+recorded; `setSkew(_:)` adds a real skew on top for the clock-skew scenarios. The phone's zone
+is moved with `PhoneTimeZone`, which sets `TZ` (`NSTimeZone.default` does not reach
+`TimeZone.current` on Linux); `reset()` sets the pump back to the phone's local time.
+
+Each conformance scenario starts its clocks a minute after the newest record on the emulator,
+or at real time if that is later. Earlier scenarios run their clocks ahead of real time, and a
+fresh driver starting behind their records would find them in its future and report them as
+new.
 
 ### History records
 
@@ -209,7 +228,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
-| `Conformance/` | The dose-reporting conformance groups A–D and F (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures and outages, each ending in a diff of the host's stored doses against `PumpTimeline`. |
+| `Conformance/` | The dose-reporting conformance groups A–D, F and G (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages and time changes, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443). |
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
@@ -319,6 +338,9 @@ shape of it explains what the harness is for:
   `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
   shared start time, segment 0 fixed at midnight. They still do not drive delivery;
   `basal_rate` does.
+- **The pump's clock followed the time zone database.** It moved at every DST transition, and
+  `ChangeTimeDateRequest` was answered OK without changing anything. A pump holds a date and
+  time someone set; the emulator now does too, and setting it writes `TimeChanged`/`DateChange`.
 - **An armed `error_response` was applied after the handler had run**, so the emulator
   answered `ErrorResponse` to `InitiateBolusRequest` and started the bolus anyway (plan D3). It
   refuses the request now, as a pump that answers `ErrorResponse` does.
