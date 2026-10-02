@@ -43,6 +43,8 @@ public class BolusRequestedMsg2HistoryLog: HistoryLog {
         case bleExtended = 5
         case eatingSoonAutomatic = 6
         case lateBolus = 7
+        /// Tandem schema bit 8: BLE with AID Recommendation Bolus
+        case bleWithAidRecommendation = 8
     }
 
     public enum SelectedIOBType: Int {

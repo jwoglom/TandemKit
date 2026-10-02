@@ -203,8 +203,14 @@ public class BolusDeliveryHistoryLog: HistoryLog {
     public enum BolusSource: Int {
         case quickBolus = 0
         case gui = 1
+        /// Tandem schema: Remote
+        case remote = 5
         case controlIQAutoBolus = 7
         case bluetoothRemoteBolus = 8
+        /// Tandem schema: Eating Soon Bolus
+        case eatingSoonBolus = 9
+        /// Tandem schema: BLE with AID Recommendation
+        case bleWithAidRecommendation = 11
     }
 
     /// Bitmask values validated against a real-pump capture (286/286 records cross-checked
@@ -217,6 +223,8 @@ public class BolusDeliveryHistoryLog: HistoryLog {
         case correction = 8
         case carb = 16
         case eatingSoonMode = 32
+        /// Tandem schema bit 6: Queued
+        case queued = 64
 
         public static func fromBitmask(_ bitmask: Int) -> Set<BolusType> {
             var ret: Set<BolusType> = []
