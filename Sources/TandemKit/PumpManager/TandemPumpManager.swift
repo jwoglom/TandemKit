@@ -56,6 +56,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
 
+    /// Run once the pending delivery change has been reported.
+    private var deliveryTransitionWaiters: [() -> Void] = []
+    private let deliveryTransitionWaiterLock = NSLock()
+
     private static let maximumHeldPumpEventBatches = 64
 
     private var oldState: TandemPumpManagerState
@@ -137,6 +141,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // (Follow-up: on a bolus timeout, surfacing uncertain delivery would be safer than a clean
     // failure. Tracked separately.) Exposed (internal) so tests can override it with a short value.
     var commandWatchdogTimeout: DispatchTimeInterval = .seconds(180)
+    /// How long a sync that saw a delivery change waits for history to date it.
+    var transitionHistoryWait: DispatchTimeInterval = .seconds(30)
 
     // Syncs queued or running on the command queue. Loop polls every ~5 minutes, and a sync
     // against an unresponsive pump spends that long working through bounded write timeouts, so
@@ -419,7 +425,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         logger.info("Sync pump data...")
 
-        if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5) {
+        if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5),
+           state.deliveryTransitions.pending == nil
+        {
             logger.warning("State already in sync: \(now.timeIntervalSince(lastSync)) sec")
             completion?(lastSync)
             return
@@ -518,10 +526,45 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
             // and the loop is waiting on `completion` for the status reads above, not on
             // history. Overlapping ticks are dropped by the coordinator.
-            self.historyBackfillCoordinator.runTick()
+            guard self.state.deliveryTransitions.pending != nil else {
+                self.historyBackfillCoordinator.runTick()
+                completion(self.state.lastReconciliation)
+                return
+            }
 
-            completion(self.state.lastReconciliation)
+            // Except when the reads saw a change history has to date: the host doses on this
+            // result, and whatever it commands next must reach it after the change.
+            self.afterDeliveryTransitionIsReported {
+                completion(self.state.lastReconciliation)
+            }
+            self.historyBackfillCoordinator.runTick()
         }
+    }
+
+    /// Runs `completion` once the pending delivery change is reported: by a history pass, or at
+    /// detection when none has within `transitionHistoryWait`.
+    func afterDeliveryTransitionIsReported(_ completion: @escaping () -> Void) {
+        let finish = watchdogged(timeoutResult: false, timeout: transitionHistoryWait) { reported in
+            guard !reported else {
+                completion()
+                return
+            }
+            self.bluetooth.ensureConnected { _ in
+                self.settleDeliveryTransition()
+                completion()
+            }
+        }
+        deliveryTransitionWaiterLock.lock()
+        deliveryTransitionWaiters.append { finish(true) }
+        deliveryTransitionWaiterLock.unlock()
+    }
+
+    func deliveryTransitionReported() {
+        deliveryTransitionWaiterLock.lock()
+        let waiters = deliveryTransitionWaiters
+        deliveryTransitionWaiters = []
+        deliveryTransitionWaiterLock.unlock()
+        waiters.forEach { $0() }
     }
 
     public func setMustProvideBLEHeartbeat(_: Bool) {}
@@ -813,6 +856,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
+            self.observeDeliveryState(currentBasal.basalType)
 
             if currentBasal.basalType == .tempBasal {
                 guard let stopCurrentRate = self.bluetooth.write(StopTempRateRequest()) else {
@@ -856,6 +900,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            self.settleDeliveryTransition()
             let dose = UnfinalizedDose(
                 tempRate: absoluteRate,
                 duration: duration,
@@ -913,12 +958,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            self.settleDeliveryTransition()
             let suspendDose = UnfinalizedDose(suspendStartTime: self.now)
             var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
             events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
 
             self.state.basalDose = suspendDose
             self.state.lastReconciliation = self.now
+            self.recordReportedTransition(.suspend, at: suspendDose.startDate)
 
             self.notifyDelegateStateUpdated()
             self.emitPumpEvents(events)
@@ -993,7 +1040,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return PumpCommError.noResponse
         }
 
-        let resumedAt = now
+        settleDeliveryTransition()
+        var resumedAt = now
+        if let host = hostTransition(before: .distantFuture), host.kind == .suspend {
+            // Trio's IOB throws on a suspend and resume in the same second.
+            resumedAt = max(resumedAt, host.date.addingTimeInterval(1))
+        }
         let dose = UnfinalizedDose(
             resumeStartTime: resumedAt,
             insulinType: state.insulinType
@@ -1003,6 +1055,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         state.basalDose = dose
         state.lastReconciliation = resumedAt
+        recordReportedTransition(.resume, at: dose.startDate)
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
@@ -1850,6 +1903,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             for fetch in fetches {
                 self.runFetch(fetch)
             }
+            if self.state.deliveryTransitions.pending != nil {
+                self.historyBackfillCoordinator.runTick()
+            }
 
             // The fetches move the boundary even when none of them found a dose.
             self.reportReconciliationBoundary()
@@ -1896,6 +1952,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 extension TandemPumpManager {
     /// Closes out a running temp basal dose at `now` and records scheduled basal from `now`.
     func startScheduledBasalDose() {
+        settleDeliveryTransition()
         let dose = UnfinalizedDose(basalRate: getScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
 
         var events = getActivePumpEvents(endDate: dose.startDate)

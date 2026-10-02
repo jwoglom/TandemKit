@@ -60,6 +60,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
+    public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
     public var bolusDose: UnfinalizedDose?
@@ -186,6 +187,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.basalRateMismatchConfirmed == rhs.basalRateMismatchConfirmed,
               lhs.historyBackfill == rhs.historyBackfill,
               lhs.bolusReportLedger == rhs.bolusReportLedger,
+              lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
               lhs.bolusDose == rhs.bolusDose,
@@ -338,6 +340,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
            let ledger = BolusReportLedger(rawValue: ledgerRaw)
         {
             bolusReportLedger = ledger
+        }
+
+        if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
+           let ledger = DeliveryTransitionLedger(rawValue: ledgerRaw)
+        {
+            deliveryTransitions = ledger
         }
 
         if let bolusDoseRaw = rawValue["bolusDose"] as? UnfinalizedDose.RawValue {
@@ -543,6 +551,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
 
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
+        raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
             raw["bolusState"] = encodedBolusState
@@ -588,6 +597,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusReportLedger: \(bolusReportLedger)",
+            "* deliveryTransitions: \(deliveryTransitions)",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
             "* autoAcknowledgeBasalAlerts: \(autoAcknowledgeBasalAlerts)",

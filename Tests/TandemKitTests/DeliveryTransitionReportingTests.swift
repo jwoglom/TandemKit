@@ -1,0 +1,922 @@
+import LoopKit
+@testable import TandemKit
+import XCTest
+
+@available(macOS 13.0, iOS 14.0, *) final class DeliveryTransitionReportingTests: XCTestCase {
+    private static let pumpSerial: UInt32 = 123_456
+    private let serial = HistoryLogSyncIdentifier.PumpSerial(DeliveryTransitionReportingTests.pumpSerial)!
+    private static let scheduledRate = 1.0
+    private static let firstSequenceNum: UInt32 = 1000
+
+    private var bluetooth: StubPumpBluetooth!
+    private var clock: ManualClock!
+    private var manager: TandemPumpManager!
+    private var delegate: MockPumpManagerDelegate!
+    private var delegateQueue: DispatchQueue!
+
+    /// Whole seconds: pump timestamps are.
+    private let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    private var nextSequenceNum = DeliveryTransitionReportingTests.firstSequenceNum
+
+    override func setUp() {
+        super.setUp()
+        bluetooth = StubPumpBluetooth()
+        clock = ManualClock(start)
+        manager = makeManager(state: Self.backfillState(start: start))
+    }
+
+    override func tearDown() {
+        manager = nil
+        delegate = nil
+        delegateQueue = nil
+        clock = nil
+        bluetooth = nil
+        super.tearDown()
+    }
+
+    private static func backfillState(start: Date) -> TandemPumpManagerState {
+        var state = TandemPumpManagerState(rawValue: [:])
+        state.featureFlags[.historyBackfill] = true
+        state.pumpState.pumpSerial = pumpSerial
+        state.insulinType = .novolog
+        state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: scheduledRate)])!
+        state.basalDose = UnfinalizedDose(basalRate: scheduledRate, insulinType: .novolog, startDate: start)
+        state.hasSyncedBasalRateSchedule = true
+        // Watching the pump since before the records these tests write.
+        state.deliveryTransitions = DeliveryTransitionLedger(pumpSerial: pumpSerial, trackedAfter: firstSequenceNum - 1)
+        return state
+    }
+
+    private func makeManager(state: TandemPumpManagerState) -> TandemPumpManager {
+        let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
+        delegate = MockPumpManagerDelegate()
+        delegateQueue = DispatchQueue(label: "delivery-transition-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+        return manager
+    }
+
+    // MARK: - Driving the pump
+
+    private func minutes(_ minutes: Double) -> Date {
+        start.addingTimeInterval(minutes * 60)
+    }
+
+    private func advance(to date: Date) {
+        clock.set(date)
+    }
+
+    /// `basalModifiedBitmask` 0 is scheduled basal, 1 suspended, 2 a temp rate.
+    private func stubBasalStatus(_ bitmask: Int) {
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: bitmask == 1 ? 0 : 1000,
+            basalModifiedBitmask: bitmask
+        ))
+    }
+
+    private func observe(_ bitmask: Int) {
+        stubBasalStatus(bitmask)
+        manager.fetchBasalStatus()
+        delegateQueue.sync {}
+    }
+
+    private func pumpTimeSec(_ date: Date, pumpAhead offset: TimeInterval = 0) -> UInt32 {
+        UInt32(Dates.fromInstantToJan12008EpochSeconds(date.addingTimeInterval(offset)))
+    }
+
+    private func takeSequenceNum() -> UInt32 {
+        defer { nextSequenceNum += 1 }
+        return nextSequenceNum
+    }
+
+    private func suspended(at date: Date, pumpAhead offset: TimeInterval = 0) -> HistoryLog {
+        PumpingSuspendedHistoryLog(
+            pumpTimeSec: pumpTimeSec(date, pumpAhead: offset),
+            sequenceNum: takeSequenceNum(),
+            preSuspendState: 106,
+            insulinAmount: 100,
+            reasonId: 1,
+            rpaTimeout: 15
+        )
+    }
+
+    private func resumed(at date: Date) -> HistoryLog {
+        PumpingResumedHistoryLog(pumpTimeSec: pumpTimeSec(date), sequenceNum: takeSequenceNum(), preResumeState: 100, insulinAmount: 100)
+    }
+
+    /// `timeLeft` is the seconds of its programmed duration still to run; 0 once it ran out.
+    private func tempRateCompleted(_ tempRateId: Int, at date: Date, timeLeft: UInt32) -> HistoryLog {
+        TempRateCompletedHistoryLog(pumpTimeSec: pumpTimeSec(date), sequenceNum: takeSequenceNum(), tempRateId: tempRateId, timeLeft: timeLeft)
+    }
+
+    private func storedSequenceNums() -> [UInt32] {
+        (try? manager.historyLogStore.logs(pumpSerial: Self.pumpSerial, in: 0 ... UInt32.max))?.map(\.sequenceNum) ?? []
+    }
+
+    /// Stores `logs` and runs the history pass as a tick that started at `startedAt` (default now)
+    /// and read the whole store, of a pump whose log ends at `pumpLast` if given.
+    private func pass(
+        _ logs: [HistoryLog],
+        startedAt: Date? = nil,
+        pumpLast: UInt32? = nil,
+        reachesBack: Bool = true
+    ) {
+        manager.storeHistoryLogs(logs, now: clock.now)
+        let sequences = storedSequenceNums()
+        guard let first = sequences.min(), let last = sequences.max() else { return }
+        manager.reportHistoryDeliveryTransitions(
+            after: HistoryBackfillCoordinator.TickOutcome(
+                bookkeeping: HistoryBackfillState(pumpSerial: Self.pumpSerial, watermark: last),
+                rangesRead: [first ... last],
+                sessionCovered: first ... last,
+                isDeepBackfillComplete: reachesBack,
+                emitFloor: .distantPast,
+                startedAt: startedAt ?? clock.now,
+                pumpSequenceRange: (reachesBack ? first : first - 1) ... max(last, pumpLast ?? last)
+            ),
+            pumpSerial: serial
+        )
+        delegateQueue.sync {}
+    }
+
+    private var batches: [MockPumpManagerDelegate.PumpEventBatch] { delegate.pumpEventBatches }
+
+    private var events: [NewPumpEvent] { batches.flatMap(\.events) }
+
+    private func events(_ type: DoseType) -> [NewPumpEvent] {
+        events.filter { $0.dose?.type == type }
+    }
+
+    private var transitions: [DoseType?] {
+        events.map(\.dose?.type).filter { $0 == .suspend || $0 == .resume }
+    }
+
+    private func appSuspend() {
+        bluetooth.stub(TempRateRequest.self, with: TempRateResponse(active: false, percentage: 0, startTimeRaw: 0, duration: 0))
+        bluetooth.stub(SuspendPumpingRequest.self, with: SuspendPumpingResponse(status: 0))
+        let done = expectation(description: "suspendDelivery")
+        manager.suspendDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+    }
+
+    private func appResume() {
+        bluetooth.stub(ResumePumpingRequest.self, with: ResumePumpingResponse(status: 0))
+        let done = expectation(description: "resumeDelivery")
+        manager.resumeDelivery { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+    }
+
+    private func appTempBasal(_ rate: Double, pumpShows bitmask: Int) {
+        stubBasalStatus(bitmask)
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 50))
+        let done = expectation(description: "enactTempBasal")
+        manager.enactTempBasal(unitsPerHour: rate, for: .minutes(30)) { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+    }
+
+    private func runningTempBasal(_ rate: Double, tempRateId: Int? = 7) {
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: rate,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: .novolog,
+            startDate: start,
+            tempRateId: tempRateId
+        )
+    }
+
+    // MARK: - Dated from history
+
+    func testASuspendDuringAnOutageIsReportedAtThePumpsTimeNotAtDetection() throws {
+        advance(to: minutes(30))
+        observe(1)
+
+        XCTAssertTrue(batches.isEmpty, "nothing is reported at detection: \(events)")
+        XCTAssertEqual(manager.state.basalDose.type, .suspend, "status shows the pump suspended straight away")
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+
+        pass([suspended(at: minutes(10))])
+
+        let suspend = try XCTUnwrap(events(.suspend).first)
+        XCTAssertEqual(events(.suspend).count, 1)
+        XCTAssertEqual(suspend.date, minutes(10))
+        XCTAssertEqual(suspend.dose?.startDate, minutes(10))
+        XCTAssertEqual(suspend.dose?.isMutable, false)
+        XCTAssertEqual(manager.state.basalDose.type, .suspend)
+        XCTAssertEqual(manager.state.basalDose.startDate, minutes(10))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testASuspendAndResumeBothInsideAnOutageAreReportedAsAPair() {
+        observe(0)
+        advance(to: minutes(30))
+        observe(0)
+        XCTAssertNil(manager.state.deliveryTransitions.pending, "the pump looks unchanged to the live path")
+
+        pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
+
+        XCTAssertEqual(events.map(\.dose?.type), [.suspend, .resume])
+        XCTAssertEqual(events.map(\.date), [minutes(5), minutes(15)])
+        XCTAssertEqual(batches.last?.replacePendingEvents, false, "nothing the host holds open is being finished")
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testAResumeDuringAnOutageAfterAnAppSuspendIsReportedAsAResume() throws {
+        appSuspend()
+        let appSuspendReport = try XCTUnwrap(events(.suspend).first)
+        let suspendRecord = suspended(at: start.addingTimeInterval(1))
+
+        advance(to: minutes(30))
+        observe(0)
+        XCTAssertEqual(events(.suspend).count, 1, "only the app's own suspend so far")
+        XCTAssertTrue(events(.basal).isEmpty, "no scheduled-basal marker in place of the resume (#331)")
+
+        pass([suspendRecord, resumed(at: minutes(12))])
+
+        XCTAssertEqual(events(.suspend), [appSuspendReport], "the app's suspend is not reported again from history")
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(12)])
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertEqual(manager.state.basalDose.startDate, minutes(12))
+    }
+
+    func testATempBasalStoppedByAnOutageSuspendEndsAtItsCompletion() throws {
+        runningTempBasal(2.0)
+        advance(to: minutes(20))
+        observe(1)
+        XCTAssertTrue(batches.isEmpty)
+
+        pass([tempRateCompleted(7, at: minutes(8), timeLeft: 22 * 60), suspended(at: minutes(8))])
+
+        let batch = try XCTUnwrap(batches.last)
+        XCTAssertTrue(batch.replacePendingEvents, "the temp basal the host holds open is finished in the same batch")
+        let temp = try XCTUnwrap(batch.events.first { $0.dose?.type == .tempBasal })
+        XCTAssertEqual(temp.dose?.isMutable, false)
+        XCTAssertEqual(temp.dose?.startDate, start)
+        XCTAssertEqual(temp.dose?.endDate, minutes(8), "ended when the pump stopped it, not at reconnect")
+        XCTAssertEqual(try XCTUnwrap(temp.dose?.deliveredUnits), 2.0 * 8 / 60, accuracy: 0.0005)
+        XCTAssertEqual(batch.events.first { $0.dose?.type == .suspend }?.date, minutes(8))
+        XCTAssertEqual(manager.state.basalDose.type, .suspend)
+    }
+
+    func testATempBasalWithNoRateIdEndsAtTheSuspendInsideTheGap() {
+        runningTempBasal(2.0, tempRateId: nil)
+        advance(to: minutes(20))
+        observe(1)
+
+        pass([suspended(at: minutes(8))])
+
+        XCTAssertEqual(events(.tempBasal).first?.dose?.endDate, minutes(8))
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(8)])
+    }
+
+    func testATempBasalThatRanOutDuringAnOutageEndsAtItsScheduledEnd() {
+        runningTempBasal(2.0, tempRateId: 8)
+        advance(to: minutes(50))
+        observe(0)
+
+        pass([tempRateCompleted(8, at: minutes(30), timeLeft: 0)])
+
+        XCTAssertEqual(events(.tempBasal).first?.dose?.endDate, minutes(30))
+        XCTAssertEqual(events(.basal).first?.date, minutes(30), "scheduled basal resumes at the temp basal's end")
+        XCTAssertTrue(transitions.isEmpty)
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testATempBasalThatRanOutIsFinishedUnderTheIdentityItWasReportedUnder() throws {
+        runningTempBasal(2.0, tempRateId: 8)
+        let reported = NewPumpEvent.tempBasal(dose: manager.state.basalDose.toDoseEntry(isMutable: true), date: start)
+        advance(to: minutes(50))
+        observe(0)
+
+        pass([tempRateCompleted(8, at: minutes(30).addingTimeInterval(-1), timeLeft: 0)])
+
+        let finished = try XCTUnwrap(events(.tempBasal).first)
+        XCTAssertEqual(finished.dose?.endDate, minutes(30))
+        XCTAssertEqual(finished.raw, reported.raw, "a second's difference in the pump's record would re-key it")
+    }
+
+    func testATempBasalWhoseRecordSaysItRanOutButIsDatedEarlyEndsAtTheRecord() {
+        runningTempBasal(2.0, tempRateId: 8)
+        advance(to: minutes(50))
+        observe(0)
+
+        pass([tempRateCompleted(8, at: minutes(20), timeLeft: 0)])
+
+        XCTAssertEqual(events(.tempBasal).first?.dose?.endDate, minutes(20), "the record's date wins over a timeLeft it contradicts")
+    }
+
+    func testATempBasalEndedByASuspendAndResumeInsideAnOutageIsFinishedWithThePair() throws {
+        runningTempBasal(2.0, tempRateId: 9)
+        advance(to: minutes(40))
+        observe(0)
+
+        pass([tempRateCompleted(9, at: minutes(10), timeLeft: 20 * 60), suspended(at: minutes(10)), resumed(at: minutes(20))])
+
+        let batch = try XCTUnwrap(batches.last)
+        XCTAssertEqual(batch.events.map(\.dose?.type), [.tempBasal, .suspend, .resume])
+        XCTAssertEqual(batch.events.first?.dose?.endDate, minutes(10))
+        XCTAssertTrue(batch.replacePendingEvents)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertEqual(manager.state.basalDose.startDate, minutes(20))
+    }
+
+    func testHistoryTimesAreMovedOntoThePhonesClock() {
+        manager.state.currentPumpTime = minutes(0).addingTimeInterval(120)
+        manager.state.lastPumpTimeCheckDate = minutes(0)
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10), pumpAhead: 120)])
+
+        XCTAssertEqual(events(.suspend).first?.date, minutes(10))
+    }
+
+    // MARK: - Waiting for history
+
+    func testNothingIsReportedByATickThatStartedBeforeTheChangeWasSeen() {
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10))], startedAt: minutes(29))
+
+        XCTAssertTrue(batches.isEmpty)
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATickThatDidNotReadToThePumpsLastRecordReportsTheChangeAtDetection() {
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10))], pumpLast: Self.firstSequenceNum + 5)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)], "a later record could be the one that dates it")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATickWhoseStoreDoesNotReachBackToTheLastReadingReportsTheChangeAtDetection() {
+        observe(0)
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10))], reachesBack: false)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)], "a record before the store's first could be the one that dates it")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAPendingChangeSurvivesARelaunch() {
+        advance(to: minutes(30))
+        observe(1)
+
+        manager = makeManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue))
+        XCTAssertEqual(manager.state.basalDose.type, .suspend)
+        pass([suspended(at: minutes(10))])
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+    }
+
+    // MARK: - Reported at detection
+
+    func testASecondChangeBeforeHistoryDatesTheFirstReportsTheFirstAtDetection() {
+        advance(to: minutes(30))
+        observe(1)
+        advance(to: minutes(40))
+        observe(0)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)], "the latest the pump can have stopped")
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending, "the resume is left for history")
+
+        pass([suspended(at: minutes(10)), resumed(at: minutes(35))])
+
+        XCTAssertEqual(transitions, [.suspend, .resume], "the stop's record matches the report, and the resume goes out once")
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(35)])
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testAChangeWhoseRecordPredatesTrackingIsReportedAtDetection() {
+        manager.state.deliveryTransitions = DeliveryTransitionLedger(pumpSerial: Self.pumpSerial, trackedAfter: Self.firstSequenceNum)
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10))])
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)], "a record from before tracking may have been reported without an entry")
+    }
+
+    func testAResumeWithNoRecordIsReportedAtTheLastReadingThatSawTheSuspend() {
+        appSuspend()
+        let appRecord = suspended(at: start.addingTimeInterval(1))
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+
+        pass([appRecord])
+
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(5)], "the earliest the pump can have resumed, which counts more insulin")
+    }
+
+    func testWithTheFlagOffASuspendIsReportedAtDetection() throws {
+        manager.state.featureFlags[.historyBackfill] = false
+        advance(to: minutes(30))
+        observe(1)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+        let entry = try XCTUnwrap(manager.state.deliveryTransitions.entries.first)
+        XCTAssertEqual(entry.earliest, start.addingTimeInterval(-TandemPumpManager.transitionMatchTolerance), "its pump record can be anywhere since the last reading")
+        XCTAssertEqual(entry.latest, minutes(30).addingTimeInterval(TandemPumpManager.transitionMatchTolerance))
+    }
+
+    func testWithTheFlagOffAPumpSideResumeIsReportedAsAResume() {
+        manager.state.featureFlags[.historyBackfill] = false
+        appSuspend()
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(5)], "a resume, not a scheduled-basal marker (#331), at the last reading that saw the suspend")
+        XCTAssertTrue(events(.basal).isEmpty)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testWithTheFlagOffAResumeIntoATempRateIsReportedAsAResume() {
+        manager.state.featureFlags[.historyBackfill] = false
+        appSuspend()
+        advance(to: minutes(30))
+        observe(2)
+
+        XCTAssertEqual(events(.resume).count, 1)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testWithTheFlagOffATempBasalAboveTheScheduleEndsAtDetection() {
+        manager.state.featureFlags[.historyBackfill] = false
+        runningTempBasal(2.0)
+        advance(to: minutes(10))
+        observe(2)
+        advance(to: minutes(20))
+        observe(0)
+
+        XCTAssertEqual(events(.tempBasal).first?.dose?.endDate, minutes(20), "the latest it can have ended, which counts more insulin")
+        XCTAssertEqual(events(.basal).first?.date, minutes(20))
+    }
+
+    func testWithTheFlagOffATempBasalBelowTheScheduleEndsAtTheLastReading() {
+        manager.state.featureFlags[.historyBackfill] = false
+        runningTempBasal(0.5)
+        advance(to: minutes(10))
+        observe(2)
+        advance(to: minutes(20))
+        observe(0)
+
+        XCTAssertEqual(events(.tempBasal).first?.dose?.endDate, minutes(10), "the earliest it can have ended, which counts more insulin")
+        XCTAssertEqual(events(.basal).first?.date, minutes(10))
+    }
+
+    func testTurningTheFlagOffReportsAPendingChangeAtTheNextReading() {
+        advance(to: minutes(30))
+        observe(1)
+        manager.state.featureFlags[.historyBackfill] = false
+
+        advance(to: minutes(31))
+        observe(1)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    // MARK: - App commands go out after the change
+
+    func testAnAppTempBasalWhileAResumeIsPendingReportsTheResumeFirst() {
+        appSuspend()
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+        let before = batches.count
+
+        appTempBasal(2.0, pumpShows: 0)
+
+        let after = Array(batches.dropFirst(before)).flatMap(\.events)
+        XCTAssertEqual(after.map(\.dose?.type), [.resume, .tempBasal], "Loop closes an open suspend at the temp basal for good (#354)")
+        XCTAssertEqual(after.first?.date, minutes(5))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    func testAnAppResumeWhileASuspendIsPendingReportsTheSuspendFirst() {
+        advance(to: minutes(30))
+        observe(1)
+
+        appResume()
+
+        XCTAssertEqual(transitions, [.suspend, .resume], "Trio takes a resume with no suspend before it as suspended since its history began")
+        XCTAssertEqual(events(.suspend).first?.date, minutes(30))
+        XCTAssertEqual(events(.resume).first?.date, minutes(30).addingTimeInterval(1), "Trio's IOB throws on a suspend and resume in one second")
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testAnAppSuspendWhileAResumeIsPendingReportsTheResumeFirst() {
+        appSuspend()
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+
+        appSuspend()
+
+        XCTAssertEqual(transitions, [.suspend, .resume, .suspend])
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(5)])
+        XCTAssertEqual(events(.suspend).last?.date, minutes(30))
+    }
+
+    func testThePumpsRecordOfAChangeReportedBeforeACommandIsNotReportedAgain() {
+        appSuspend()
+        let suspendRecord = suspended(at: start.addingTimeInterval(1))
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+        appTempBasal(2.0, pumpShows: 0)
+        let reported = events.count
+
+        pass([suspendRecord, resumed(at: minutes(12))])
+
+        XCTAssertEqual(events.count, reported)
+    }
+
+    func testAnAppTempBasalFinishesTheOneThePumpEndedAtTheLastReadingThatSawIt() throws {
+        runningTempBasal(0.5)
+        advance(to: minutes(10))
+        observe(2)
+        advance(to: minutes(20))
+
+        appTempBasal(2.0, pumpShows: 0)
+
+        let finished = try XCTUnwrap(events(.tempBasal).first { $0.dose?.isMutable == false })
+        XCTAssertEqual(finished.dose?.endDate, minutes(10), "a temp basal below the schedule is ended as early as it can have ended")
+        XCTAssertEqual(events(.tempBasal).last?.dose?.isMutable, true, "then the new one")
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self), "the pump was not running one to stop")
+    }
+
+    // MARK: - The sync waits for history
+
+    /// Serves `logs` the way the pump does: status from their range, entries streamed back on
+    /// `historyLogStream` after the request is acknowledged.
+    private func stubPump(serving logs: [HistoryLog], streams: Bool = true) {
+        let bySequence = Dictionary(uniqueKeysWithValues: logs.map { ($0.sequenceNum, $0) })
+        let sequences = logs.map(\.sequenceNum)
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(
+            numEntries: UInt32(logs.count),
+            firstSequenceNum: sequences.min()!,
+            lastSequenceNum: sequences.max()!
+        ))
+        bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: 7))
+        guard streams else { return }
+        bluetooth.onWrite = { [weak self] message in
+            guard let self, let request = message as? HistoryLogRequest else { return }
+            let top = request.startLog
+            let bottom = top >= UInt32(max(request.numberOfLogs, 1)) ? top - UInt32(max(request.numberOfLogs, 1)) + 1 : 0
+            let streamed = stride(from: top, through: bottom, by: -1).compactMap { bySequence[$0] }
+            guard !streamed.isEmpty else { return }
+            self.manager.historyLogStream.send(HistoryLogStreamResponse(
+                numberOfHistoryLogs: streamed.count,
+                streamId: 7,
+                historyLogStreamBytes: streamed.map(\.cargo)
+            ))
+        }
+    }
+
+    private func sync() {
+        let synced = expectation(description: "syncPumpData")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 60)
+        delegateQueue.sync {}
+    }
+
+    func testASyncThatSeesAChangeCompletesOnceHistoryHasDatedIt() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        sync()
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)], "reported before the host is told the sync is done")
+        XCTAssertTrue(events(.resume).isEmpty, "the resume before the outage had no suspend to close")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testASyncThatEndsWhileAnEarlierTickRunsWaitsForTheTickAfterIt() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(29))
+        manager.historyBackfillCoordinator.runTick()
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        sync()
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)], "the running tick started before the change was seen; the one after it dates it")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testASyncWhoseHistoryCannotBeReadReportsTheChangeAtDetection() {
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        sync()
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testASyncWhoseHistoryIsSlowReportsTheChangeAtDetectionOnceTheWaitIsOver() {
+        manager.transitionHistoryWait = .milliseconds(300)
+        stubPump(serving: [suspended(at: minutes(10))], streams: false)
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        sync()
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testASyncThatSeesNoChangeDoesNotWaitForHistory() {
+        stubPump(serving: [suspended(at: minutes(10))], streams: false)
+        stubBasalStatus(0)
+
+        let began = Date()
+        sync()
+
+        XCTAssertLessThan(Date().timeIntervalSince(began), 1, "the tick runs on after the sync")
+    }
+
+    private func fetchSuspendStatus() -> Bool? {
+        let done = expectation(description: "fetchSuspendStatus")
+        var answer: Bool?
+        manager.fetchSuspendStatus { isSuspended in
+            answer = isSuspended
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 60)
+        delegateQueue.sync {}
+        return answer
+    }
+
+    func testTheSuspendAWizardFindsIsReportedFromHistoryBeforeItAnswers() {
+        stubPump(serving: [resumed(at: start.addingTimeInterval(-60)), suspended(at: minutes(10))])
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        XCTAssertEqual(fetchSuspendStatus(), true)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)], "the wizard resumes next; the host must hold the suspend first (#348)")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testWithTheFlagOffTheSuspendAWizardFindsIsReportedAtDetection() {
+        manager.state.featureFlags[.historyBackfill] = false
+        advance(to: minutes(30))
+        stubBasalStatus(1)
+
+        XCTAssertEqual(fetchSuspendStatus(), true)
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(30)])
+    }
+
+    func testEnsureCurrentPumpDataSyncsWhileAChangeIsPending() {
+        advance(to: minutes(30))
+        observe(1)
+        manager.state.lastReconciliation = minutes(30)
+        let reads = bluetooth.sent(CurrentBasalStatusRequest.self).count
+
+        let done = expectation(description: "ensureCurrentPumpData")
+        manager.ensureCurrentPumpData { _ in done.fulfill() }
+        wait(for: [done], timeout: 60)
+
+        XCTAssertGreaterThan(bluetooth.sent(CurrentBasalStatusRequest.self).count, reads, "not throttled while the host has not been told")
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    // MARK: - What history never reports
+
+    func testAResumeWithNoSuspendBeforeItIsNotReported() {
+        advance(to: minutes(30))
+        pass([resumed(at: minutes(5))])
+
+        XCTAssertTrue(batches.isEmpty, "Trio would take the pump as suspended until the resume")
+    }
+
+    func testAResumeWhoseSuspendArrivesLaterFromAGapIsReportedWithIt() {
+        let suspend = suspended(at: minutes(5))
+        let resume = resumed(at: minutes(15))
+        advance(to: minutes(30))
+        pass([resume])
+        XCTAssertTrue(batches.isEmpty)
+
+        pass([suspend])
+
+        XCTAssertEqual(events.map(\.dose?.type), [.suspend, .resume], "never a suspend without the resume that closes it")
+        XCTAssertEqual(events.map(\.date), [minutes(5), minutes(15)])
+    }
+
+    func testASuspendAndResumeInTheSameSecondAreNotReported() {
+        advance(to: minutes(30))
+        pass([suspended(at: minutes(5)), resumed(at: minutes(5))])
+        pass([])
+
+        XCTAssertTrue(batches.isEmpty)
+    }
+
+    func testASuspendWhoseResumeIsNotReadYetWaitsWhileThePumpDelivers() {
+        advance(to: minutes(30))
+        pass([suspended(at: minutes(5))])
+        XCTAssertTrue(batches.isEmpty, "Trio would take a trailing suspend as lasting until now")
+
+        pass([resumed(at: minutes(15))])
+
+        XCTAssertEqual(events.map(\.dose?.type), [.suspend, .resume])
+    }
+
+    func testASecondSuspendInARowIsNotReported() {
+        appSuspend()
+        let appRecord = suspended(at: start.addingTimeInterval(1))
+        advance(to: minutes(30))
+
+        pass([appRecord, suspended(at: minutes(10))])
+
+        XCTAssertEqual(events(.suspend).count, 1, "Loop keeps only the later of two suspends")
+    }
+
+    func testAnAppSuspendIsNotReportedAgainFromHistory() {
+        appSuspend()
+        let reported = events.count
+
+        pass([suspended(at: start.addingTimeInterval(2))])
+
+        XCTAssertEqual(events.count, reported)
+        XCTAssertEqual(manager.state.deliveryTransitions.entries.first?.sequenceNum, Self.firstSequenceNum)
+    }
+
+    func testAnAppResumeIsNotReportedAgainFromHistory() {
+        appSuspend()
+        let suspendRecord = suspended(at: start.addingTimeInterval(1))
+        advance(to: minutes(10))
+        appResume()
+        let reported = events.count
+
+        pass([suspendRecord, resumed(at: minutes(10).addingTimeInterval(1))])
+
+        XCTAssertEqual(events.count, reported)
+    }
+
+    func testAPassRunTwiceReportsNothingTheSecondTime() {
+        advance(to: minutes(30))
+        pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
+        let reported = events.count
+
+        pass([])
+
+        XCTAssertEqual(events.count, reported)
+    }
+
+    func testRecordsOlderThanTheRetentionAreNotReported() {
+        advance(to: minutes(30).addingTimeInterval(DeliveryTransitionLedger.retention))
+
+        pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
+
+        XCTAssertTrue(batches.isEmpty)
+    }
+
+    func testRecordsDatedAheadOfThePhoneAreNotReported() {
+        pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
+
+        XCTAssertTrue(batches.isEmpty)
+    }
+
+    // MARK: - The host's view
+
+    func testAResumeIsReportedWhenTheHostsSuspendPredatesTheLedger() {
+        manager.state.basalDose = UnfinalizedDose(suspendStartTime: start)
+        advance(to: minutes(30))
+        observe(0)
+
+        pass([resumed(at: minutes(12))])
+
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(12)], "the host holds the suspend; without a resume Trio keeps it open")
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+    }
+
+    func testAResumeIsReportedWhenTheHostsSuspendIsOlderThanTheLedgerKeepsAndHistoryHasNoRecord() {
+        manager.state.basalDose = UnfinalizedDose(suspendStartTime: start.addingTimeInterval(-.hours(30)))
+        advance(to: minutes(5))
+        observe(1)
+        advance(to: minutes(30))
+        observe(0)
+
+        pass([suspended(at: minutes(1))])
+
+        XCTAssertEqual(events(.resume).map(\.date), [minutes(5)])
+    }
+
+    // MARK: - Tracking
+
+    func testTrackingStartsAfterThePumpsLastRecordOnFirstSight() {
+        manager.state.deliveryTransitions = DeliveryTransitionLedger()
+        advance(to: minutes(30))
+
+        pass([suspended(at: minutes(5)), resumed(at: minutes(15))])
+        XCTAssertTrue(batches.isEmpty, "records from before the driver watched this pump")
+        XCTAssertEqual(manager.state.deliveryTransitions.trackedAfter, Self.firstSequenceNum + 1)
+
+        pass([suspended(at: minutes(20)), resumed(at: minutes(25))])
+        XCTAssertEqual(events.map(\.date), [minutes(20), minutes(25)])
+    }
+
+    func testTrackingStartsFromTheStatusOfATickWhoseReadFailed() {
+        manager.state.deliveryTransitions = DeliveryTransitionLedger()
+        manager.reportHistoryDeliveryTransitions(
+            after: HistoryBackfillCoordinator.TickOutcome(
+                bookkeeping: HistoryBackfillState(pumpSerial: Self.pumpSerial),
+                rangesRead: [],
+                sessionCovered: nil,
+                isDeepBackfillComplete: false,
+                emitFloor: .distantPast,
+                startedAt: clock.now,
+                pumpSequenceRange: 1 ... Self.firstSequenceNum - 1
+            ),
+            pumpSerial: serial
+        )
+        XCTAssertEqual(manager.state.deliveryTransitions.trackedAfter, Self.firstSequenceNum - 1)
+        advance(to: minutes(30))
+        observe(1)
+
+        pass([suspended(at: minutes(10))])
+
+        XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)], "written after the status that started tracking")
+    }
+
+    func testAnotherPumpOrAnErasedLogStartsTrackingAgain() {
+        var ledger = DeliveryTransitionLedger(pumpSerial: 1, trackedAfter: 100)
+        ledger.record(DeliveryTransitionLedger.Entry(kind: .suspend, date: start, earliest: start, latest: start, sequenceNum: 150, isReported: true))
+        ledger.record(DeliveryTransitionLedger.Entry(kind: .resume, date: start, earliest: start, latest: start, sequenceNum: 151, isReported: false))
+
+        XCTAssertTrue(ledger.isTracking(pumpSerial: 1, lastSequenceNum: 200))
+        XCTAssertFalse(ledger.isTracking(pumpSerial: 2, lastSequenceNum: 200))
+        XCTAssertFalse(ledger.isTracking(pumpSerial: 1, lastSequenceNum: 99), "an erased log restarts its numbering")
+
+        ledger.track(pumpSerial: 2, after: 20)
+
+        XCTAssertEqual(ledger.trackedAfter, 20)
+        XCTAssertEqual(ledger.entries.map(\.sequenceNum), [nil], "the host still holds the suspend; no record of this pump accounts for it")
+        XCTAssertFalse(ledger.isHandled(sequenceNum: 150))
+    }
+
+    func testLedgerRoundTripsThroughRawValue() {
+        var ledger = DeliveryTransitionLedger(
+            pumpSerial: Self.pumpSerial,
+            trackedAfter: 41,
+            pending: DeliveryTransitionLedger.PendingTransition(
+                prior: UnfinalizedDose(tempRate: 1.5, duration: 1800, automatic: true, insulinType: .novolog, startDate: start, tempRateId: 3),
+                observed: .suspend,
+                detectedAt: minutes(20),
+                lastConfirmed: minutes(2)
+            ),
+            lastConfirmedObservation: minutes(2)
+        )
+        ledger.record(DeliveryTransitionLedger.Entry(
+            kind: .suspend,
+            date: minutes(1),
+            earliest: minutes(0),
+            latest: minutes(2),
+            sequenceNum: 42,
+            isReported: true
+        ))
+        ledger.record(DeliveryTransitionLedger.Entry(
+            kind: .resume,
+            date: minutes(3),
+            earliest: minutes(3),
+            latest: minutes(3),
+            sequenceNum: nil,
+            isReported: false
+        ))
+
+        XCTAssertEqual(DeliveryTransitionLedger(rawValue: ledger.rawValue), ledger)
+    }
+}

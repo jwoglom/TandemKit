@@ -127,7 +127,14 @@ extension TandemPumpManager {
                 return
             }
 
-            completion(response.basalType == .suspend)
+            // The wizards resume after this; a stop it found must reach the host first (#348).
+            let isSuspended = response.basalType == .suspend
+            guard self.observeDeliveryState(response.basalType) else {
+                completion(isSuspended)
+                return
+            }
+            self.afterDeliveryTransitionIsReported { completion(isSuspended) }
+            self.historyBackfillCoordinator.runTick()
         }
     }
 
@@ -139,54 +146,7 @@ extension TandemPumpManager {
 
         verifyDeliveredBasalRate(response)
 
-        let activeBasalType = response.basalType
-        if activeBasalType != state.basalDose.type {
-            if activeBasalType == .basal, state.basalDose.type == .resume {
-                // This is also the same
-                return
-            }
-
-            logger.debug("Updating new basal dose: \(activeBasalType)")
-            let now = self.now
-            var events = getActivePumpEvents(endDate: now)
-
-            if activeBasalType == .suspend {
-                let dose = UnfinalizedDose(suspendStartTime: now)
-                events.append(NewPumpEvent.suspend(
-                    dose: dose.toDoseEntry(),
-                    date: dose.startDate
-                ))
-
-                state.basalDose = dose
-                state.lastReconciliation = now
-
-                emitPumpEvents(events)
-                notifyDelegateStateUpdated()
-                return
-            }
-
-            if activeBasalType == .basal {
-                if !events.contains(where: { $0.type == .basal }) {
-                    let dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
-                        insulinType: state.insulinType,
-                        startDate: now
-                    )
-                    events.append(NewPumpEvent.basal(
-                        dose: dose.toDoseEntry(),
-                        date: dose.startDate
-                    ))
-
-                    state.basalDose = dose
-                }
-
-                state.lastReconciliation = now
-
-                emitPumpEvents(events)
-                notifyDelegateStateUpdated()
-                return
-            }
-        }
+        observeDeliveryState(response.basalType)
     }
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)

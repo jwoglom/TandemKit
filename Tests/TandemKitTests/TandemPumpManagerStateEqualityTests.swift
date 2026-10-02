@@ -81,6 +81,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("basalRateMismatchConfirmed", { $0.basalRateMismatchConfirmed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
+            ("deliveryTransitions", { $0.deliveryTransitions.lastConfirmedObservation = later }),
             ("bolusState", { $0.bolusState = .noBolus }),
             ("insulinType", { $0.insulinType = .humalog }),
             ("bolusDose", { $0.bolusDose = nil }),

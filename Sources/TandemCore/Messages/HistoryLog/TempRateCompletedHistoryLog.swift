@@ -39,6 +39,8 @@ public class TempRateCompletedHistoryLog: HistoryLog {
                 HistoryLog.typeIdBytes(typeId),
                 Bytes.toUint32(pumpTimeSec),
                 Bytes.toUint32(sequenceNum),
+                // Unparsed; `init(cargo:)` reads tempRateId after it, at 12.
+                Data([0, 0]),
                 Bytes.firstTwoBytesLittleEndian(tempRateId),
                 Bytes.toUint32(timeLeft)
             )

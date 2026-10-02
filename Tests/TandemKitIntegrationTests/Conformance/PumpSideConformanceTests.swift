@@ -128,21 +128,19 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertEqual(trio.suspends.count, 1)
         XCTAssertEqual(trio.suspends.first?.timestamp, suspend.date)
 
-        try expectDefect("jwoglom/TandemKit#331: a resume the app did not command is reported as a .basal dose, never as .resume, so the host's suspend stays open") {
-            let resume = afterResume.first { $0.type == .resume }
-            XCTAssertNotNil(resume, "a .resume dose for the pump-side resume: \(afterResume)")
-            XCTAssertEqual(resume?.date.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1, "the resume is dated at the pump's restart")
-            XCTAssertEqual(resume?.dose?.isMutable, false, "a resume is an immutable point event")
+        let resume = afterResume.first { $0.type == .resume }
+        XCTAssertNotNil(resume, "a .resume dose for the pump-side resume: \(afterResume)")
+        XCTAssertEqual(resume?.date.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1, "the resume is dated at the pump's restart")
+        XCTAssertEqual(resume?.dose?.isMutable, false, "a resume is an immutable point event")
 
-            // Loop closes the suspend at the resume: ten minutes, immutable.
-            let stored = loop.doses.first { $0.dose.type == .suspend }
-            XCTAssertEqual(stored?.isMutable, false, "an unpaired suspend is held mutable (InsulinMath.reconciled): \(stored.map(LoopDoseStoreOracle.describe) ?? "nil")")
-            XCTAssertEqual(stored?.dose.endDate.timeIntervalSince(suspendedAt) ?? 0, .minutes(10), accuracy: 2, "suspend duration")
+        // Loop closes the suspend at the resume: ten minutes, immutable.
+        let stored = loop.doses.first { $0.dose.type == .suspend }
+        XCTAssertEqual(stored?.isMutable, false, "an unpaired suspend is held mutable (InsulinMath.reconciled): \(stored.map(LoopDoseStoreOracle.describe) ?? "nil")")
+        XCTAssertEqual(stored?.dose.endDate.timeIntervalSince(suspendedAt) ?? 0, .minutes(10), accuracy: 2, "suspend duration")
 
-            // Trio: a PumpResume row closes the PumpSuspend.
-            XCTAssertEqual(trio.resumes.count, 1, "Trio resumes: \(trio.resumes)")
-            timeline.assertMatches(loop)
-        }
+        // Trio: a PumpResume row closes the PumpSuspend.
+        XCTAssertEqual(trio.resumes.count, 1, "Trio resumes: \(trio.resumes)")
+        timeline.assertMatches(loop)
     }
 
     // MARK: - D2
@@ -209,16 +207,14 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             XCTAssertNotNil(cleared, "an .alarmClear event once the alarm is acknowledged: \(eventsSince(batchesBefore))")
         }
 
-        try expectDefect("jwoglom/TandemKit#331: the pump-side resume after the occlusion is reported as .basal, never .resume, so the suspend stays open") {
-            let resume = eventsSince(batchesBefore).first { $0.type == .resume }
-            XCTAssertNotNil(resume, "\(eventsSince(batchesBefore))")
-            XCTAssertEqual(resume?.date.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1)
-            let stored = loop.doses.first { $0.dose.type == .suspend }
-            XCTAssertEqual(stored?.isMutable, false)
-            XCTAssertEqual(stored?.dose.endDate.timeIntervalSince(stoppedAt) ?? 0, .minutes(5), accuracy: 2)
-            XCTAssertEqual(trio.resumes.count, 1)
-            timeline.assertMatches(loop)
-        }
+        let resume = eventsSince(batchesBefore).first { $0.type == .resume }
+        XCTAssertNotNil(resume, "\(eventsSince(batchesBefore))")
+        XCTAssertEqual(resume?.date.timeIntervalSince(resumedAt) ?? .infinity, 0, accuracy: 1)
+        let stored = loop.doses.first { $0.dose.type == .suspend }
+        XCTAssertEqual(stored?.isMutable, false)
+        XCTAssertEqual(stored?.dose.endDate.timeIntervalSince(stoppedAt) ?? 0, .minutes(5), accuracy: 2)
+        XCTAssertEqual(trio.resumes.count, 1)
+        timeline.assertMatches(loop)
     }
 
     // MARK: - D3
@@ -764,18 +760,18 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
 
-        expectDefect("jwoglom/TandemKit#348: fetchSuspendStatus answers the wizard but records nothing, and after the resume fetchBasalStatus takes .basal after .resume for no change, so the pump's own stop never reaches the host") {
-            let suspend = events.first { $0.type == .suspend }
-            XCTAssertNotNil(suspend, "a .suspend for the stop the wizard found: \(events)")
-            XCTAssertLessThanOrEqual(suspend?.date ?? .distantFuture, checkedAt, "dated no later than the check that found it")
-            let stored = loop.doses.first { $0.dose.type == .suspend }
-            XCTAssertEqual(stored?.isMutable, false, "the resume closes the host's suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-        }
-        expectDefect("jwoglom/TandemKit#333: a stop the driver learns of late is dated when it is noticed rather than when the pump stopped (and today not reported at all, #348)") {
-            let suspend = events.first { $0.type == .suspend }
-            XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "the suspend is dated at the pump's stop")
-            timeline.assertMatches(loop)
-        }
+        let suspend = events.first { $0.type == .suspend }
+        XCTAssertNotNil(suspend, "a .suspend for the stop the wizard found: \(events)")
+        XCTAssertLessThan(
+            events.firstIndex { $0.type == .suspend } ?? .max,
+            events.firstIndex { $0.type == .resume } ?? .min,
+            "reported before the resume: Trio takes a resume with no suspend before it as suspended since its history began"
+        )
+        XCTAssertLessThanOrEqual(suspend?.date ?? .distantFuture, checkedAt, "dated no later than the check that found it")
+        let stored = loop.doses.first { $0.dose.type == .suspend }
+        XCTAssertEqual(stored?.isMutable, false, "the resume closes the host's suspend: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(suspend?.date.timeIntervalSince(suspendedAt) ?? .infinity, 0, accuracy: 1, "the suspend is dated at the pump's stop")
+        timeline.assertMatches(loop)
     }
 
     // MARK: - D11
@@ -819,7 +815,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
         XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")
         XCTAssertGreaterThan(finished?.dose.deliveredUnits ?? 0, 0, "with what it delivered")
-        expectDefect("jwoglom/TandemKit#348 / #333: the host never learns of the pump's own stop, so its ledger and the pump's disagree") {
+        expectDefect("jwoglom/TandemKit#348: resumeDelivery does not read the pump first, so the temp basal its stop ended is finished at the resume, and Loop does not count the stop history reports after it (#354)") {
             timeline.assertMatches(loop)
         }
     }

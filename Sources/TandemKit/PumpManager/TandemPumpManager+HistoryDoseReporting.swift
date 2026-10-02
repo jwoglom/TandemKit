@@ -1,23 +1,24 @@
 import Foundation
 import LoopKit
 
-/// Reports history boluses the live path didn't report or couldn't finish. Boluses only (#354).
+/// Reports history boluses the live path didn't report or couldn't finish (#354), and the pump's
+/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
-        guard state.featureFlags.historyDoseReporting,
-              let serial = historyLogStoreSerial,
-              let covered = outcome.sessionCovered
-        else {
+        guard state.featureFlags.historyBackfill, let serial = historyLogStoreSerial else {
             return
         }
 
-        // A command job, so it cannot interleave with the live path finalizing the same bolus.
+        // A command job, so it cannot interleave with the live path reporting the same dose.
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
                 return
             }
-            self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
+            self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
+                self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
+            }
         }
     }
 

@@ -482,7 +482,7 @@ import XCTest
         XCTAssertEqual(manager.state.lastReconciliation, t1)
     }
 
-    func testFetchBasalStatusDatesAResumedBasalDoseByTheClock() {
+    func testFetchBasalStatusDatesAPumpSideResumeAtTheLastReadingThatSawTheSuspend() {
         manager.state.basalDose = UnfinalizedDose(suspendStartTime: Self.t0)
         bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
             profileBasalRate: 1000,
@@ -494,8 +494,8 @@ import XCTest
         manager.fetchBasalStatus()
         settle()
 
-        XCTAssertEqual(manager.state.basalDose.type, .basal)
-        XCTAssertEqual(manager.state.basalDose.startDate, t1)
+        XCTAssertEqual(manager.state.basalDose.type, .resume)
+        XCTAssertEqual(manager.state.basalDose.startDate, Self.t0.addingTimeInterval(1))
         XCTAssertEqual(manager.state.lastReconciliation, t1)
     }
 
@@ -904,8 +904,9 @@ import XCTest
     /// A running temp basal superseded by a plain basal is closed off at the boundary its caller
     /// read from the clock — `getActivePumpEvents(endDate:)` is only ever given `now`.
     func testAnInterruptedTempBasalIsClosedAtTheClocksCurrentReading() throws {
+        // Above the schedule, so it is ended as late as it can have run.
         manager.state.basalDose = UnfinalizedDose(
-            tempRate: 0.8,
+            tempRate: 3.0,
             duration: .hours(3),
             automatic: true,
             insulinType: .novolog,
