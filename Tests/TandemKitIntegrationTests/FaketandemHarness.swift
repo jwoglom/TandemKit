@@ -68,6 +68,8 @@ final class FaketandemHarness {
     /// faketandem's defaults (`state.DefaultDeliveryLimits`), pumpX2's test-vector values.
     static let defaultMaxBolusMilliunits = 25000
     static let defaultMaxBasalMilliunits = 5000
+    /// `SetPumpSoundsRequest` writes the sounds into the pump globals the emulator launched with.
+    private static var launchPumpGlobals: [String: Any]?
 
     func reset() throws {
         try client.clearFaults()
@@ -92,6 +94,11 @@ final class FaketandemHarness {
             try client.setIDPProfiles([.emulatorDefault])
         }
         try client.setState(["closed_loop_enabled": false])
+        if let globals = Self.launchPumpGlobals {
+            try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
+        } else {
+            Self.launchPumpGlobals = try client.settingsConfig(for: "PumpGlobalsRequest")
+        }
         if snapshot.limits != nil {
             try client.setState(["max_bolus_milliunits": Self.defaultMaxBolusMilliunits, "max_basal_milliunits": Self.defaultMaxBasalMilliunits])
         }

@@ -770,6 +770,17 @@ final class FaketandemClient {
         return object["value"] as? [String: Any] ?? [:]
     }
 
+    func settingsConfig(for messageType: String) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: send("GET", "/api/settings/\(messageType)")) as? [String: Any] else {
+            throw FaketandemClientError.decoding("settings for \(messageType) is not an object")
+        }
+        return object
+    }
+
+    func setSettingsConfig(_ config: [String: Any], for messageType: String) throws {
+        _ = try send("PUT", "/api/settings/\(messageType)", json: config)
+    }
+
     // MARK: - Plumbing
 
     /// Every pump-initiated action answers `{"state": <snapshot>}` (`pkg/harness/actions.go`

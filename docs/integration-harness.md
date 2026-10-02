@@ -231,6 +231,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `Conformance/` | The dose-reporting conformance groups A–D, F and G (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages and time changes, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443). |
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
+| `OnboardingIntegrationTests` | `applyOnboardingSettings` on a freshly paired pump with no profile and a clock an hour fast: limits, basal profile, sounds and clock reach the pump in that order and the pump holds them afterwards. A refused profile or max-basal write fails setup, and with no profile written a temp basal is refused (#443); a refused clock write does not fail setup and leaves the time-sync warning showing. Sounds chosen before pairing survive a pump-globals read triggered before they are written. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -348,6 +349,10 @@ shape of it explains what the harness is for:
   and `SetMaxBasalLimitRequest` never changed what the pump reported, and the default max bolus
   read as 2.5 U. They are pump state in milliunits now, and a bolus above the max is refused
   (with status 1; the status a real pump uses is unconfirmed).
+- **`SetPumpSoundsRequest` was answered OK without changing anything**, so a pump-globals read
+  after setup showed the emulator's defaults. The sounds it flags are written into
+  `PumpGlobalsResponse` now; `FaketandemHarness.reset()` restores the globals the emulator
+  launched with.
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
