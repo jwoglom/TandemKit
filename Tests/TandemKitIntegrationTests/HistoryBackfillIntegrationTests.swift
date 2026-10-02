@@ -218,15 +218,16 @@ final class HistoryBackfillIntegrationTests: ConformanceTestCase {
         let bolusId = try XCTUnwrap(relaunched.manager.state.bolusDose?.bolusId)
         _ = try syncBox.wait("the sync", timeout: syncTimeout)
 
+        try IntegrationWait.until("the walk to finish", timeout: 900) {
+            try self.missingFromSessionStore(relaunched, staged.upperBound - 1000 ... staged.upperBound).isEmpty
+        }
+
         let log = try harness.requestLog(since: mark).filter(\.isRequest)
         let bolusAt = try XCTUnwrap(log.firstIndex { $0.message == "InitiateBolusRequest" }, "the bolus never went out")
         let readsBefore = log[..<bolusAt].filter { $0.message == "HistoryLogRequest" }.count
         let readsAfter = log[bolusAt...].filter { $0.message == "HistoryLogRequest" }.count
         XCTAssertGreaterThan(readsAfter, 0, "the bolus waited for the whole walk (\(readsBefore) reads before it)")
         XCTAssertLessThanOrEqual(readsBefore, 3, "the bolus waited for more than the slice in flight")
-        try IntegrationWait.until("the walk to finish", timeout: 900) {
-            try self.missingFromSessionStore(relaunched, staged.upperBound - 1000 ... staged.upperBound).isEmpty
-        }
         try advanceUntilBolusFinishes(bolusId: bolusId)
     }
 
