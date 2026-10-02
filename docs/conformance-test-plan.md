@@ -149,10 +149,27 @@ reports it at the pump's time before the sync that saw it completes
 | F3 | App suspend, pump resumed during the outage | `suspendDelivery`; `radio_off`; advance 10 min; `resume`; advance 10 min; `radio_on`; sync | a `.resume` at the pump's restart, never a `.basal` marker in its place (#331); the app's suspend is not reported again from history; Trio's suspend is closed |
 | F4 | Temp basal ended by an occlusion during an outage | enact 1.5 U/h for 60 min; advance 5 min; `radio_off`; advance 3 min; `suspend {reason: occlusion}`; advance 20 min; `radio_on`; sync | the temp basal is finalized at the occlusion with delivered units to it, in the same batch as the `.suspend`; one temp basal row in Trio |
 
+## G. Time changes (§2 dates, §11; #482, #343)
+
+A Tandem pump holds a date and time with no zone and only moves when someone sets it; the driver
+decodes pump timestamps with the phone's current UTC offset and takes out the pump clock offset it
+last measured (`hostDate(forPumpDate:)`), and `HistoryTimestampReconciler` moves records written
+before a pump clock change onto the clock now in force. Each scenario changes one side's clock,
+with and without the pump being told, and asserts every dose at the instant the pump delivered it.
+Phone and pump start on the same fixed-offset zone; the phone's zone is moved with `PhoneTimeZone`.
+Both history flags are on. `TimeChangeConformanceTests`.
+
+| ID | Scenario | Stage | Assert |
+|---|---|---|---|
+| G1 | The phone changes zone, the pump is not told | phone UTC-4 → UTC-7; sync; app bolus; `radio_off`; pump `suspend`, 10 min, `resume`; pump-programmed bolus; `radio_on`; sync | `pumpClockOffset` +3 h and the time-sync warning shown; the app bolus, the suspend and the resume at their instants; the pump bolus at its instant (#482) |
+| G2 | The phone changes zone, the app sets the pump | app temp basal 60 min; `radio_off`; pump-programmed bolus; phone UTC-4 → UTC-7; `radio_on`; `syncPumpTime`; temp basal runs out; pump `suspend`/`resume` | `ChangeTimeDateRequest` sent, pump reads UTC-7, one `TimeChanged`; offset ~0, warning cleared; the bolus logged before the change at its instant; the temp basal finalized at its programmed end and full volume; the later suspend at its instant |
+| G3 | The user sets the pump's clock on the pump | `radio_off`; pump `suspend`; pump clock +1 h on the pump; `resume`; pump-programmed bolus; `radio_on`; sync; `syncPumpTime`; app bolus | `pumpClockOffset` +1 h and the warning; the suspend (before the change) and the resume (after it) at their instants; the pump bolus at its instant (#482); after `syncPumpTime` a second `TimeChanged`, offset ~0, warning cleared, the app bolus at its instant |
+| G4 | The phone's offset changes between syncs (DST) | phone UTC-4 → UTC-5, no sync; pump `suspend` in range; `radio_off`; `resume`; `radio_on`; sync | the suspend from the qualifying event and the resume from history at their instants, with the offset the driver holds an hour stale until the sync measures it again |
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles
    and the journal replay have unit tests).
 2. Group C (idempotency) — cheapest to stage, establishes the batch-shape assertions.
-3. Group B (cancel), then A (interrupt), then D (pump-side), then F (outages).
+3. Group B (cancel), then A (interrupt), then D (pump-side), then F (outages), then G (time changes).
 4. Timeline diff on every scenario once 1–3 are green in their expected-failure shape.

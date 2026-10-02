@@ -239,7 +239,8 @@ edit instead of at the next sync.
   entry.
 - Still open: gap-aware `lastReconciliation` (#353), extended boluses (Bolex records are only
   logged; #424), and a pump clock offset from the phone's for boluses (bolus history dates use
-  the phone's UTC offset, not `pumpClockOffset`). `UnfinalizedDose.tempRateId` matches a live
+  the phone's UTC offset, not `pumpClockOffset`, so after a trip or a pump clock change they
+  land hours off; #482, conformance group G). `UnfinalizedDose.tempRateId` matches a live
   temp basal to its `TempRateCompleted`; re-keying live temp basals on it is still open (#344).
   Temp rates the app did not set are still not reported.
 

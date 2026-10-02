@@ -36,9 +36,13 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         try clearLeftoverDelivery()
-        manualClock = ManualClock(Date())
+        // Earlier scenarios ran their clocks ahead of real time; starting behind their records
+        // would put them in this scenario's future, where a fresh driver reports them as new.
+        let newestRecord = try harness.client.snapshot().history.entries.last?.time ?? .distantPast
+        let start = max(Date(), newestRecord.addingTimeInterval(.minutes(1)))
+        manualClock = ManualClock(start)
         clock = ConformanceClock(driver: manualClock, client: harness.client)
-        try clock.start()
+        try clock.start(at: start)
         let snapshot = try harness.client.snapshot()
         historyStartSequence = snapshot.history.lastSequence
         logStartSequence = snapshot.requestLog.lastSeq
