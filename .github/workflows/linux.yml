@@ -6,8 +6,7 @@ name: Linux
 # JPAKE is a trapping stub here, so its tests compile out, fresh pairing among them.
 #
 # plain and virtual-pump build side by side: the flag changes every module's compilation
-# conditions, so they share nothing but the toolchain. integration (pushes and manual runs only)
-# runs TandemKitIntegrationTests against faketandem on virtual-pump's build, restored from its
+# conditions, so they share nothing but the toolchain. integration runs TandemKitIntegrationTests against faketandem on virtual-pump's build, restored from its
 # cache: same container, same workspace path, so SwiftPM finds it up to date. All use the
 # toolchain scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally
 # sees the same compiler here.
@@ -177,11 +176,9 @@ jobs:
           name: linux-virtual-pump-test-logs
           path: swift-test-virtual-pump.log
 
-  # Not on pull requests: macOS runs the same suite there, in about half the time.
   integration:
     name: integration tests (faketandem)
     needs: virtual-pump
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
     timeout-minutes: 45
