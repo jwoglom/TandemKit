@@ -249,6 +249,33 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(ControlIQInfoV2Request.self))
     }
 
+    // MARK: - useControlIQ follows the pump
+
+    private func readControlIQStatus(closedLoopEnabled: Bool) {
+        manager.state.pumpState.apiVersion = KnownApiVersion.apiV3_4.value
+        bluetooth.stub(
+            ControlIQInfoV2Request.self,
+            with: controlIQInfo(closedLoopEnabled: closedLoopEnabled, weight: 150, weightUnit: .pounds, totalDailyInsulin: 40)
+        )
+        manager.fetchControlIQStatus()
+    }
+
+    func testControlIQTurnedOnAtThePumpTurnsUseControlIQOn() {
+        manager.state.useControlIQ = false
+
+        readControlIQStatus(closedLoopEnabled: true)
+
+        XCTAssertTrue(manager.state.useControlIQ)
+    }
+
+    func testControlIQTurnedOffAtThePumpTurnsUseControlIQOff() {
+        manager.state.useControlIQ = true
+
+        readControlIQStatus(closedLoopEnabled: false)
+
+        XCTAssertFalse(manager.state.useControlIQ)
+    }
+
     // MARK: - Sleep schedules
 
     /// Sleep schedule writes are Mobi-only, from API 3.5. On anything else the request would go
