@@ -26,13 +26,15 @@ extension TandemPumpManager {
             return
         }
 
-        state.controlIQEnabled = response.getClosedLoopEnabled()
+        let closedLoopEnabled = response.getClosedLoopEnabled()
+        state.controlIQEnabled = closedLoopEnabled
 
-        // If the pump reports ControlIQ is enabled (e.g., turned on via pump screen),
-        // sync useControlIQ so dosing guards activate and Trio disables closed loop
-        if response.getClosedLoopEnabled(), !state.useControlIQ {
-            logger.warning("[handleControlIQResponse] Pump has ControlIQ enabled but useControlIQ was false -- syncing")
-            state.useControlIQ = true
+        // The dosing guards follow useControlIQ, so it mirrors the pump's state whenever that
+        // differs from what's expected: a stale true refused every temp basal
+        // (jwoglom/tandemkit-stress#4).
+        if closedLoopEnabled != state.useControlIQ {
+            logger.warning("Pump reports Control-IQ \(closedLoopEnabled ? "on" : "off") but useControlIQ was \(state.useControlIQ); syncing")
+            state.useControlIQ = closedLoopEnabled
         }
 
         if let userMode = response.currentUserModeType {
