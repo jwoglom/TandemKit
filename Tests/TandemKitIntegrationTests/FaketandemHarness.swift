@@ -70,6 +70,8 @@ final class FaketandemHarness {
     static let defaultMaxBasalMilliunits = 5000
     /// U/hr; `FaketandemIDPProfile.emulatorDefault`'s one segment.
     static let defaultBasalRate = 0.85
+    /// `SetPumpSoundsRequest` writes the sounds into the pump globals the emulator launched with.
+    private static var launchPumpGlobals: [String: Any]?
 
     func reset() throws {
         try client.clearFaults()
@@ -95,6 +97,11 @@ final class FaketandemHarness {
         }
         // Tests stage the rate in force, and a profile write sets it too.
         try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate])
+        if let globals = Self.launchPumpGlobals {
+            try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
+        } else {
+            Self.launchPumpGlobals = try client.settingsConfig(for: "PumpGlobalsRequest")
+        }
         if snapshot.limits != nil {
             try client.setState(["max_bolus_milliunits": Self.defaultMaxBolusMilliunits, "max_basal_milliunits": Self.defaultMaxBasalMilliunits])
         }
