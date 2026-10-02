@@ -39,7 +39,8 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         // Earlier scenarios ran their clocks ahead of real time; starting behind their records
         // would put them in this scenario's future, where a fresh driver reports them as new.
         // The latest-dated, not the last: clearing a leftover dose above stamps its record now.
-        let newestRecord = try harness.client.snapshot().history.entries.map(\.time).max() ?? .distantPast
+        let history = try harness.client.snapshot().history
+        let newestRecord = history.latestTime ?? history.entries.map(\.time).max() ?? .distantPast
         let start = max(Date(), newestRecord.addingTimeInterval(.minutes(1)))
         manualClock = ManualClock(start)
         clock = ConformanceClock(driver: manualClock, client: harness.client)
