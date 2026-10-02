@@ -721,6 +721,10 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     /// later resumes. Unless the stop reaches the host, the host counts it as delivered basal.
     func testD10ASuspendAWizardFindsIsReportedBeforeItsResume() throws {
         let driver = try startPairedDriver(scheduledRate: Self.profileRate)
+        // A first history read the outage cuts short would start tracking after the stop.
+        try IntegrationWait.until("the driver to start tracking the pump's history", timeout: 60) {
+            driver.manager.state.deliveryTransitions.trackedAfter != nil
+        }
         let batchesBefore = allPumpEventBatches.count
 
         let suspendedAt = try suspendOutOfEarshot(thenAdvance: .minutes(5))
