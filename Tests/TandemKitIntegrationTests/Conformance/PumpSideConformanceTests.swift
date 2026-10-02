@@ -255,18 +255,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "the refusal should be reported promptly, not after the response timeout; took \(elapsed)s"
         )
 
-        // The pump has no bolus. (A real pump that answers ErrorResponse did not act.)
-        let snapshot = try harness.client.snapshot()
-        let pumpStartedBolusAnyway = snapshot.bolus.active
-        if pumpStartedBolusAnyway {
-            try expectDefect("faketandem gap: error_response is applied on the response path (pkg/handler/router.go sendWithFaults), after the InitiateBolus handler has already started the bolus; a real pump answering ErrorResponse would not have acted") {
-                XCTAssertFalse(snapshot.bolus.active, "the pump must not be delivering a bolus it refused")
-            }
-            // Stop what the emulator started so nothing keeps running into the next scenario.
-            try harness.client.abortBolus()
-        } else {
-            XCTAssertFalse(snapshot.bolus.active)
-        }
+        // A pump that answers ErrorResponse did not act.
+        XCTAssertFalse(try harness.client.snapshot().bolus.active, "the pump must not be delivering a bolus it refused")
 
         // The session survives the refusal.
         XCTAssertNotNil(try sync())
@@ -278,9 +268,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
         let diff = try timeline().diff(against: loop)
         XCTAssertTrue(diff.duplicated.isEmpty && diff.mismatched.isEmpty && diff.extra.isEmpty, "\(diff)")
-        // The only pump-side record the host does not know about is the bolus the emulator started
-        // despite answering with an error.
-        XCTAssertEqual(diff.missing.count, pumpStartedBolusAnyway ? 1 : 0, "\(diff)")
+        XCTAssertTrue(diff.missing.isEmpty, "\(diff)")
     }
 
     // MARK: - D4
