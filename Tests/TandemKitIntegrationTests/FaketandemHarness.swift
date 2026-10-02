@@ -65,6 +65,10 @@ final class FaketandemHarness {
     /// Back to a pump that has never met this driver: nobody attached, no session key, no cached
     /// long-term key, the known pairing code, advertising PairStep2, on the real clock at the
     /// default ATT MTU with no faults armed and an empty request log.
+    /// faketandem's defaults (`state.DefaultDeliveryLimits`), pumpX2's test-vector values.
+    static let defaultMaxBolusMilliunits = 25000
+    static let defaultMaxBasalMilliunits = 5000
+
     func reset() throws {
         try client.clearFaults()
         if try client.transport().mtuConfigurable {
@@ -82,9 +86,14 @@ final class FaketandemHarness {
         // changed the pump's clock or the phone's zone left elsewhere.
         try client.setClock(mode: "real", pumpOffsetSeconds: 0, pumpTimezone: TimeZone.current.identifier)
         try client.setPairingState(.pairStep2)
-        // An emulator without profile modelling has nothing to restore.
-        if try client.snapshot().idpProfiles != nil {
+        // An emulator without profile or limit modelling has nothing to restore.
+        let snapshot = try client.snapshot()
+        if snapshot.idpProfiles != nil {
             try client.setIDPProfiles([.emulatorDefault])
+        }
+        try client.setState(["closed_loop_enabled": false])
+        if snapshot.limits != nil {
+            try client.setState(["max_bolus_milliunits": Self.defaultMaxBolusMilliunits, "max_basal_milliunits": Self.defaultMaxBasalMilliunits])
         }
         try client.clearRequestLog()
         resetLogSequence = try client.snapshot().requestLog.lastSeq

@@ -140,6 +140,18 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         try harness.client.history(since: historyStartSequence).filter { $0.type == type }
     }
 
+    /// A completed pump bolus two hours before the driver began tracking the pump: inside the
+    /// three hours a zone change west moves every record by, so only a corrected date keeps it out.
+    private func stageBolusFromBeforeTracking(_ driver: FaketandemHarness.Driver) throws {
+        try harness.client.appendHistory(type: "BolusActivated", secondsAgo: 7200, data: ["bolusId": Self.untrackedBolusId, "bolusSize": 1.0])
+        try harness.client.appendHistory(type: "BolusCompleted", secondsAgo: 7180, data: [
+            "completionStatusId": 3, "bolusId": Self.untrackedBolusId, "insulinDelivered": 1.0, "insulinRequested": 1.0,
+        ])
+        _ = try sync()
+        try waitForBackfill(driver)
+        XCTAssertTrue(eventsSince(0).filter { $0.dose?.type == .bolus }.isEmpty, "a bolus from before the driver tracked the pump is not reported")
+    }
+
     private func expectDefect(_ reason: String, _ body: () throws -> Void) rethrows {
         let options = XCTExpectedFailure.Options()
         options.isStrict = true
@@ -150,7 +162,15 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
-        let timeline = try timeline()
+        // The staged bolus from before tracking is in the pump's record but rightly in no host's.
+        let history = try harness.client.history(since: historyStartSequence)
+            .filter { $0.data?["bolusId"]?.intValue != Self.untrackedBolusId }
+        let timeline = PumpTimeline.build(
+            snapshot: try harness.client.snapshot(),
+            history: history,
+            log: try harness.requestLog(since: logStartSequence),
+            afterSequence: historyStartSequence
+        )
         guard let defect else {
             timeline.assertMatches(loop, file: file, line: line)
             return
@@ -158,6 +178,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         expectDefect(defect) { timeline.assertMatches(loop, file: file, line: line) }
     }
 
+    private static let untrackedBolusId = 4242
     private static let historyBolusDefect = "jwoglom/TandemKit#482: a bolus reported from the pump's history is dated without the pump clock offset"
 
     // MARK: - G1
@@ -214,6 +235,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
     /// `TimeChanged` record says by how much.
     func testG2_phoneChangesZoneAndTheAppSetsThePumpsClock() throws {
         let driver = try stageDriver(zone: Self.eastern)
+        try stageBolusFromBeforeTracking(driver)
         let batchesBefore = allPumpEventBatches.count
         let rate = 1.5
         let duration: TimeInterval = .minutes(60)
@@ -239,9 +261,11 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         XCTAssertFalse(driver.manager.state.showPumpTimeSyncWarning)
 
         let pumpReport = try waitForEvent("the pump's bolus from its history", since: batchesBefore) {
-            $0.dose?.type == .bolus && $0.dose?.wasProgrammedByPumpUI == true
+            $0.dose?.type == .bolus && $0.dose?.wasProgrammedByPumpUI == true && $0.dose?.programmedUnits == 0.5
         }
         XCTAssertEqual(try XCTUnwrap(pumpReport.dose?.startDate).timeIntervalSince(pump.start), 0, accuracy: 2, "logged before the change, dated at the instant it started")
+        let old = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus && $0.dose?.programmedUnits == 1.0 }
+        XCTAssertTrue(old.isEmpty, "a bolus from before the driver tracked the pump was reported: \(old)")
 
         // The temp basal started before the change and runs out after it.
         try clock.advanceBoth(seconds: tempStart.addingTimeInterval(duration).timeIntervalSince(clock.now) + 30, ticks: 10)
@@ -321,9 +345,9 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
     /// past the reporting floor.
     func testG4_phoneOffsetChangesBetweenSyncsAndThePumpStopsFirst() throws {
         let driver = try stageDriver(zone: Self.eastern)
-        try harness.client.appendHistory(type: "BolusActivated", secondsAgo: 1800, data: ["bolusId": 4242, "bolusSize": 1.0])
+        try harness.client.appendHistory(type: "BolusActivated", secondsAgo: 1800, data: ["bolusId": Self.untrackedBolusId, "bolusSize": 1.0])
         try harness.client.appendHistory(type: "BolusCompleted", secondsAgo: 1780, data: [
-            "completionStatusId": 3, "bolusId": 4242, "insulinDelivered": 1.0, "insulinRequested": 1.0,
+            "completionStatusId": 3, "bolusId": Self.untrackedBolusId, "insulinDelivered": 1.0, "insulinRequested": 1.0,
         ])
         _ = try sync()
         try waitForBackfill(driver)
