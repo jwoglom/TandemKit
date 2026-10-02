@@ -211,6 +211,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
 | `Conformance/` | The dose-reporting conformance groups A–D and F (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures and outages, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443). |
+| `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -271,15 +272,9 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-One open, in `PumpSideConformanceTests` (plan D3):
+None open.
 
-- **An armed `error_response` is applied on the response path**
-  (`pkg/handler/router.go` `sendWithFaults`), after the handler has already run. A pump
-  answering `ErrorResponse` to `InitiateBolusRequest` did not start the bolus; the emulator
-  starts it and then replaces the answer, so the driver's error arrives over a pump that is
-  delivering.
-
-Everything else the harness found has been fixed in faketandem. What was fixed, because the
+Everything the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:
 
 - **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler
@@ -324,6 +319,13 @@ shape of it explains what the harness is for:
   `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
   shared start time, segment 0 fixed at midnight. They still do not drive delivery;
   `basal_rate` does.
+- **An armed `error_response` was applied after the handler had run**, so the emulator
+  answered `ErrorResponse` to `InitiateBolusRequest` and started the bolus anyway (plan D3). It
+  refuses the request now, as a pump that answers `ErrorResponse` does.
+- **The delivery limits were a fixed table entry, in the wrong unit.** `SetMaxBolusLimitRequest`
+  and `SetMaxBasalLimitRequest` never changed what the pump reported, and the default max bolus
+  read as 2.5 U. They are pump state in milliunits now, and a bolus above the max is refused
+  (with status 1; the status a real pump uses is unconfirmed).
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
