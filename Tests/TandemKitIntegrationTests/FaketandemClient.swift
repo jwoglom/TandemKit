@@ -378,6 +378,8 @@ struct FaketandemLogEntry: Decodable {
     let note: String?
     let connected: Bool?
     let fault: String?
+    /// The parsed request's fields, under pumpX2's names.
+    let cargo: [String: FaketandemJSONValue]?
 
     var isRequest: Bool { kind == "request" }
     var isResponse: Bool { kind == "response" }
@@ -661,6 +663,22 @@ final class FaketandemClient {
     func appendHistory(type: String, secondsAgo: Double, data: [String: Any]) throws -> FaketandemSnapshot {
         _ = try send("POST", "/api/state/history/append", json: ["type": type, "seconds_ago": secondsAgo, "data": data])
         return try snapshot()
+    }
+
+    /// Appends `records` (each `type`, `seconds_ago`, `data`) in order; returns their sequence numbers.
+    @discardableResult
+    func appendHistory(records: [[String: Any]]) throws -> ClosedRange<Int> {
+        struct Body: Decodable {
+            let firstSequence: Int
+            let lastSequence: Int
+        }
+        let body = try decode(send("POST", "/api/state/history/bulk", json: ["records": records]), as: Body.self)
+        return body.firstSequence ... body.lastSequence
+    }
+
+    /// Empties the pump's history log; the next record is sequence 1.
+    func eraseHistory() throws {
+        _ = try send("POST", "/api/state/history/erase", json: [:])
     }
 
     /// The pump's user sets its date and time on the pump: the clock moves by `deltaSeconds` and the
