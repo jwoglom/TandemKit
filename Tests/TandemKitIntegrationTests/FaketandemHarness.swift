@@ -68,6 +68,8 @@ final class FaketandemHarness {
     /// faketandem's defaults (`state.DefaultDeliveryLimits`), pumpX2's test-vector values.
     static let defaultMaxBolusMilliunits = 25000
     static let defaultMaxBasalMilliunits = 5000
+    /// U/hr; `FaketandemIDPProfile.emulatorDefault`'s one segment.
+    static let defaultBasalRate = 0.85
     /// `SetPumpSoundsRequest` writes the sounds into the pump globals the emulator launched with.
     private static var launchPumpGlobals: [String: Any]?
 
@@ -93,7 +95,8 @@ final class FaketandemHarness {
         if snapshot.idpProfiles != nil {
             try client.setIDPProfiles([.emulatorDefault])
         }
-        try client.setState(["closed_loop_enabled": false])
+        // Tests stage the rate in force, and a profile write sets it too.
+        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate])
         if let globals = Self.launchPumpGlobals {
             try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
         } else {

@@ -233,6 +233,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `HistoryBackfillIntegrationTests` | History backfill over logs thousands of records long, measured from the pump's request log: with the flag off no `HistoryLog*` request is ever sent; a pump first seen with two days of history has none of it read or reported; after a relaunch the walk re-reads the seven-hour lookback in 255-record slices across more than one tick, and stops within a slice of it; a bolus during the walk waits for the slice in flight at most; a record lost from a stream is asked for again in the same fetch; a relaunch reports no history bolus twice; an erased log is read from its new start. |
 | `OnboardingIntegrationTests` | `applyOnboardingSettings` on a freshly paired pump with no profile and a clock an hour fast: limits, basal profile, sounds and clock reach the pump in that order and the pump holds them afterwards. A refused profile or max-basal write fails setup, and with no profile written a temp basal is refused (#443); a refused clock write does not fail setup and leaves the time-sync warning showing. Sounds chosen before pairing survive a pump-globals read triggered before they are written. |
+| `Conformance/BasalScheduleChangeTests` | The pump's rate against the app's schedule: a rate off the schedule is noted on the first reading and flagged only once it outlasts `basalMismatchConfirmationInterval`, then cleared when the pump runs the schedule again; never while suspended or under Control-IQ. A schedule change that alters the rate in force stops a running temp basal after the profile write and restarts the scheduled basal at the new rate, and Loop ends the temp basal at the stop (Trio marked for #329). A `profileChange` event runs the check without a sync. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -338,8 +339,11 @@ shape of it explains what the harness is for:
   read asked for id 0 forever, and `SetIDPSegmentRequest` and `CreateIDPRequest` were
   answered OK without being applied. Profiles are pump state now (`idp_profiles` in
   `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
-  shared start time, segment 0 fixed at midnight. They still do not drive delivery;
-  `basal_rate` does.
+  shared start time, segment 0 fixed at midnight.
+- **A write to the active profile left the rate in force alone**, so a driver that changed the
+  schedule saw the old rate and reported a mismatch. The write sets `basal_rate` to the new
+  segment in force and rescales a running temp rate, as the pump does; the emulator still does
+  not follow later segment boundaries.
 - **The pump's clock followed the time zone database.** It moved at every DST transition, and
   `ChangeTimeDateRequest` was answered OK without changing anything. A pump holds a date and
   time someone set; the emulator now does too, and setting it writes `TimeChanged`/`DateChange`.
