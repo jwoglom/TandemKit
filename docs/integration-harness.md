@@ -231,6 +231,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `Conformance/` | The dose-reporting conformance groups A–D, F and G (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages and time changes, each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443). |
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
+| `Conformance/BasalScheduleChangeTests` | The pump's rate against the app's schedule: a rate off the schedule is noted on the first reading and flagged only once it outlasts `basalMismatchConfirmationInterval`, then cleared when the pump runs the schedule again; never while suspended or under Control-IQ. A schedule change that alters the rate in force stops a running temp basal after the profile write and restarts the scheduled basal at the new rate, and Loop ends the temp basal at the stop (Trio marked for #329). A `profileChange` event runs the check without a sync. |
 | `MTUIntegrationTests` | The same pair/sync/bolus traffic at both framings: at ATT MTU 247 every response that fits arrives in one notification and the flow still runs; at the default 23 the same responses are cut into 18-byte chunks and the driver reassembles them. |
 
 ### Pairing method
@@ -336,8 +337,11 @@ shape of it explains what the harness is for:
   read asked for id 0 forever, and `SetIDPSegmentRequest` and `CreateIDPRequest` were
   answered OK without being applied. Profiles are pump state now (`idp_profiles` in
   `/api/state`), written by those requests under the pump's rules: at most 16 segments, no
-  shared start time, segment 0 fixed at midnight. They still do not drive delivery;
-  `basal_rate` does.
+  shared start time, segment 0 fixed at midnight.
+- **A write to the active profile left the rate in force alone**, so a driver that changed the
+  schedule saw the old rate and reported a mismatch. The write sets `basal_rate` to the new
+  segment in force and rescales a running temp rate, as the pump does; the emulator still does
+  not follow later segment boundaries.
 - **The pump's clock followed the time zone database.** It moved at every DST transition, and
   `ChangeTimeDateRequest` was answered OK without changing anything. A pump holds a date and
   time someone set; the emulator now does too, and setting it writes `TimeChanged`/`DateChange`.

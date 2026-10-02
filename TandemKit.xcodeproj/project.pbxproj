@@ -656,6 +656,7 @@
 		80E7ED4258FF94168FF44A61 /* SyncIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5DC61FBE7D2FB02E24CCF0 /* SyncIntegrationTests.swift */; };
 		822B7440F68930413450B8D8 /* CGMStatusRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB60DF8752502C7D8FB10E0 /* CGMStatusRequestTests.swift */; };
 		82C8844B99C4A711602AC179 /* DismissNotificationRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC70DD804588BCF232F5FB1 /* DismissNotificationRequestTests.swift */; };
+		83190ADB4442B63991B87665 /* BasalScheduleChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F0AFDD6861D905C6EE18F7 /* BasalScheduleChangeTests.swift */; };
 		841983520BD68ECF11FBF6B8 /* TandemPumpManagerCGMStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B308CA96AD2C2E7AEE7506C /* TandemPumpManagerCGMStatusTests.swift */; };
 		850FED661A31B116BD870743 /* DexcomG6CGMHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65506F9A0F916404C5F6C49 /* DexcomG6CGMHistoryLogTests.swift */; };
 		855D452C271E97ECE4B3553D /* HistoryTimestampReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9500CD11C5B7880A0B49AC19 /* HistoryTimestampReconciler.swift */; };
@@ -1079,6 +1080,7 @@
 		28033DD97B4557D0E8F9BC2B /* StubIDPPump.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StubIDPPump.swift; sourceTree = "<group>"; };
 		28503CA56A1101D10A3060EA /* CartridgeModeRecoveryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CartridgeModeRecoveryTests.swift; sourceTree = "<group>"; };
 		28DDF9E9C49674C107BB72AD /* PumpGlobalsResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PumpGlobalsResponseTests.swift; sourceTree = "<group>"; };
+		28F0AFDD6861D905C6EE18F7 /* BasalScheduleChangeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BasalScheduleChangeTests.swift; sourceTree = "<group>"; };
 		297BF78E0B6F71AE52CE423A /* IobSnapshotPostBolusHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IobSnapshotPostBolusHistoryLogTests.swift; sourceTree = "<group>"; };
 		299EF60197502FB47BE1F493 /* TandemKitAlertSettingsViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitAlertSettingsViewModelTests.swift; sourceTree = "<group>"; };
 		29D4EE67E8FE71DA6FB63E29 /* TandemKitAlertSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TandemKitAlertSettingsView.swift; sourceTree = "<group>"; };
@@ -3065,6 +3067,7 @@
 				41C2351B2FF879B364F115D2 /* OutageConformanceTests.swift */,
 				5B91683A0C175F04B8CC4B09 /* PhoneTimeZone.swift */,
 				DA082307135C1ABC348B3259 /* TimeChangeConformanceTests.swift */,
+				28F0AFDD6861D905C6EE18F7 /* BasalScheduleChangeTests.swift */,
 			);
 			name = Conformance;
 			path = Conformance;
@@ -4398,6 +4401,7 @@
 				E599662C8BE8FD0A01265E55 /* PhoneTimeZone.swift in Sources */,
 				30CB520E2F986952ABA2A90A /* TimeChangeConformanceTests.swift in Sources */,
 				4BD690966FD70A894BBA132E /* DeliveryLimitIntegrationTests.swift in Sources */,
+				83190ADB4442B63991B87665 /* BasalScheduleChangeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
