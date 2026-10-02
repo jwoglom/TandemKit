@@ -54,7 +54,12 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
     @discardableResult
     private func stageDriver(zone: String) throws -> FaketandemHarness.Driver {
         phone.set(zone)
-        try clock.setTimezone(zone)
+        // Naming the zone moves the pump's clock without a TimeChanged record, so a record written
+        // under the process's zone decodes hours later here (#482): start past it as decoded.
+        let newestAsDecoded = try harness.client.history().map {
+            Date(timeIntervalSince1970: FaketandemClock.tandemEpochUnix + Double($0.pumpSeconds - TimeZone.current.secondsFromGMT()))
+        }.max()
+        try clock.start(at: max(clock.now, newestAsDecoded?.addingTimeInterval(.minutes(1)) ?? .distantPast), timezone: zone)
         try harness.client.setState(["basal_rate": Self.profileRate])
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
