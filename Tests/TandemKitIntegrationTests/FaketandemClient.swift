@@ -209,6 +209,8 @@ struct FaketandemSnapshot: Decodable {
         let count: Int
         let firstSequence: Int
         let lastSequence: Int
+        /// The latest instant any record was written at; nil from an older emulator or an empty log.
+        let latestTime: Date?
         let entries: [HistoryEntry]
     }
 
