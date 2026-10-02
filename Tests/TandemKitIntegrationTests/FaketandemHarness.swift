@@ -68,6 +68,8 @@ final class FaketandemHarness {
     /// faketandem's defaults (`state.DefaultDeliveryLimits`), pumpX2's test-vector values.
     static let defaultMaxBolusMilliunits = 25000
     static let defaultMaxBasalMilliunits = 5000
+    /// U/hr; `FaketandemIDPProfile.emulatorDefault`'s one segment.
+    static let defaultBasalRate = 0.85
 
     func reset() throws {
         try client.clearFaults()
@@ -91,7 +93,8 @@ final class FaketandemHarness {
         if snapshot.idpProfiles != nil {
             try client.setIDPProfiles([.emulatorDefault])
         }
-        try client.setState(["closed_loop_enabled": false])
+        // Tests stage the rate in force, and a profile write sets it too.
+        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate])
         if snapshot.limits != nil {
             try client.setState(["max_bolus_milliunits": Self.defaultMaxBolusMilliunits, "max_basal_milliunits": Self.defaultMaxBasalMilliunits])
         }
