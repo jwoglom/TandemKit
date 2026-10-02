@@ -7,9 +7,10 @@ name: Linux
 #
 # plain and virtual-pump build side by side: the flag changes every module's compilation
 # conditions, so they share nothing but the toolchain. integration runs TandemKitIntegrationTests
-# against faketandem on virtual-pump's build, restored from its cache: same container, same workspace path, so SwiftPM finds it up to date. All use the
-# toolchain scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally
-# sees the same compiler here.
+# against faketandem on virtual-pump's build, restored from its cache: same container,
+# same workspace path, so SwiftPM finds it up to date. All use the toolchain
+# scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally sees the
+# same compiler here.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
