@@ -40,6 +40,30 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
     }
 
+    /// The pump goes out of range long enough for the reconnect to fail, then comes back. Nothing
+    /// tells the driver, and the host's sync is throttled, so the driver has to keep trying itself
+    /// (jwoglom/tandemkit-stress#4).
+    func testRadioOutageIsFollowedByAReconnectWithoutASync() throws {
+        let driver = makeDriver()
+        try harness.pair(driver)
+        addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
+
+        try harness.client.armFault(FaketandemFaultSpec(.radioOff))
+        try IntegrationWait.until("the driver to notice the link is gone", timeout: 30) { !driver.manager.state.isConnected }
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+
+        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
+        try IntegrationWait.until("the driver to reconnect on its own", timeout: retryBudget) {
+            try driver.manager.state.isConnected && harness.client.snapshot().auth.authenticated
+        }
+        XCTAssertEqual(
+            try authOpcodes(since: logStart),
+            [Int(Jpake3SessionKeyRequest.props.opCode), Int(Jpake4KeyConfirmationRequest.props.opCode)]
+        )
+        XCTAssertNotNil(try harness.sync(driver), "the new session must serve commands")
+    }
+
     /// A command job queued before the pump was deleted, such as a backfill tick's follow-up, must
     /// not bring the session back and hold the pump's one link.
     func testADeletedPumpIsNotReconnectedByALaterCommand() throws {

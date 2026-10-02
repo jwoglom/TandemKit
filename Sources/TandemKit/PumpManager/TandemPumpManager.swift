@@ -425,8 +425,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     public func ensureCurrentPumpData(completion: ((_ lastSync: Date?) -> Void)?) {
         logger.info("Sync pump data...")
 
+        // Not while the link is down: this sync is the host's one periodic chance to reconnect.
         if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5),
-           state.deliveryTransitions.pending == nil
+           state.deliveryTransitions.pending == nil, state.isConnected
         {
             logger.warning("State already in sync: \(now.timeIntervalSince(lastSync)) sec")
             completion?(lastSync)
