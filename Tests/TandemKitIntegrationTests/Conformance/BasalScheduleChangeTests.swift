@@ -9,8 +9,9 @@ import XCTest
 
 /// The pump's basal rate against the app's schedule (AGENTS.md "Onboarding and the basal
 /// schedule"): a rate the schedule doesn't have is flagged only once it outlasts
-/// `basalMismatchConfirmationInterval`, and a schedule change that alters the rate in force stops a
-/// running temp basal instead of leaving the pump to rescale it.
+/// `basalMismatchConfirmationInterval`, a confirmed one stops temp basals until the rates agree, and a
+/// schedule change that alters the rate in force stops a running temp basal instead of leaving the
+/// pump to rescale it.
 final class BasalScheduleChangeTests: ConformanceTestCase {
     private static let scheduledRate = 1.0
     /// Not on the schedule: what a profile edited on the pump's own screen leaves running.
@@ -205,5 +206,98 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         try IntegrationWait.until("the second event to confirm the mismatch", timeout: 30) {
             driver.manager.state.basalRateMismatchConfirmed
         }
+    }
+
+    // MARK: - S4
+
+    private func profile(rate: Double) -> FaketandemIDPProfile {
+        FaketandemIDPProfile(id: 1, segments: [.init(startTime: 0, basalRate: Int((rate * 1000).rounded()))])
+    }
+
+    private func tempBasalsReported(since start: Int) -> [NewPumpEvent] {
+        allPumpEventBatches.dropFirst(start).flatMap(\.events).filter { $0.dose?.type == .tempBasal }
+    }
+
+    private func assertTempBasalRefused(
+        _ expected: TandemPumpManagerValidationError,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let start = allPumpEventBatches.count
+        let mark = try logMark()
+
+        let error = try enactTempBasal(unitsPerHour: Self.scheduledRate * 1.46, duration: .minutes(30))
+
+        let underlying: Error?
+        switch error {
+        case let .deviceState(error?), let .configuration(error?): underlying = error
+        default: underlying = nil
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, expected, "got \(String(describing: error))", file: file, line: line)
+        let sent = try harness.requestsSeen(since: mark).map(\.message)
+        XCTAssertFalse(sent.contains("SetTempRateRequest"), "pump saw \(sent)", file: file, line: line)
+        XCTAssertFalse(sent.contains("StopTempRateRequest"), "pump saw \(sent)", file: file, line: line)
+        let reported = tempBasalsReported(since: start)
+        XCTAssertTrue(reported.isEmpty, "no temp basal reaches the host: \(reported)", file: file, line: line)
+    }
+
+    /// The field report: a Mobi whose active profile reads 0 U/hr under a driver that holds the
+    /// schedule as synced. Every temp rate is a percent of 0, so none goes out: first because the
+    /// rate is 0, then because the confirmed mismatch unsyncs the schedule, until the host's schedule
+    /// is written to the pump.
+    func testS4_aZeroRateProfileRefusesTempBasalsUntilTheScheduleIsWrittenToThePump() throws {
+        let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: 0)])
+        try harness.client.setState(["basal_rate": 0.0])
+
+        try assertTempBasalRefused(.pumpProfileBasalRateIsZero)
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "one reading does not unsync the schedule")
+
+        _ = try sync()
+        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval + .minutes(1), ticks: 5)
+        _ = try sync()
+        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule, "a confirmed mismatch unsyncs the schedule")
+        try assertTempBasalRefused(.basalScheduleNotSynced)
+
+        let box = ResultBox<Result<BasalRateSchedule, Error>>()
+        driver.manager.syncBasalRateSchedule(items: [RepeatingScheduleValue(startTime: 0, value: Self.scheduledRate)]) { box.set($0) }
+        if case let .failure(error) = try box.wait("syncBasalRateSchedule", timeout: syncTimeout) {
+            return XCTFail("the schedule sync failed: \(error)")
+        }
+        XCTAssertEqual(try harness.client.snapshot().basal.profileRate, Self.scheduledRate, accuracy: 0.001)
+
+        _ = try sync()
+        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed, "the pump runs the schedule again")
+        let tempRate = Self.scheduledRate * 1.5
+        XCTAssertNil(try enactTempBasal(unitsPerHour: tempRate, duration: .minutes(30)))
+        let pump = try harness.client.snapshot().basal
+        XCTAssertTrue(pump.tempActive)
+        XCTAssertEqual(pump.tempRate, tempRate, accuracy: 0.001, "the pump delivers the rate the host was told")
+    }
+
+    // MARK: - S5
+
+    /// A matching profile does not explain a live rate that differs, so it is not adopted while the
+    /// mismatch stands; once the pump runs the schedule again, it is, and temp basals resume.
+    func testS5_aConfirmedMismatchRefusesTempBasalsUntilThePumpRunsTheScheduleAgain() throws {
+        let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: Self.scheduledRate)])
+        try pumpRunsARateOffTheSchedule()
+
+        _ = try sync()
+        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval + .minutes(1), ticks: 5)
+        _ = try sync()
+        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
+        try assertTempBasalRefused(.basalScheduleNotSynced)
+
+        try harness.client.setState(["basal_rate": Self.scheduledRate])
+        _ = try sync()
+        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: Self.scheduledRate * 1.5, duration: .minutes(30)))
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "the matching profile was adopted")
+        XCTAssertTrue(try harness.client.snapshot().basal.tempActive)
     }
 }

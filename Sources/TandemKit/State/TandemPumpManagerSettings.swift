@@ -63,6 +63,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case controlIQModeActive
     case bolusIsRunning
     case basalScheduleNotSynced
+    case pumpProfileBasalRateIsZero
 
     public var errorDescription: String? {
         switch self {
@@ -95,8 +96,13 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             )
         case .basalScheduleNotSynced:
             return String(
-                localized: "Your basal rates have not been saved to the pump yet",
-                comment: "Error when a temp basal is blocked because the basal schedule has never been synced to the pump"
+                localized: "The pump's basal rates are not confirmed to match the app's",
+                comment: "Error when a temp basal is blocked because the basal schedule has not been synced to the pump, or the pump's rate stopped matching it"
+            )
+        case .pumpProfileBasalRateIsZero:
+            return String(
+                localized: "The pump's basal rate is 0 U/hr",
+                comment: "Error when a temp basal is blocked because the pump's active profile has a basal rate of zero"
             )
         }
     }
@@ -122,7 +128,12 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
         case .basalScheduleNotSynced:
             return String(
                 localized: "Save your basal rates in the app's settings. Temporary basal rates start once the pump has them.",
-                comment: "Recovery suggestion when a temp basal is blocked because the basal schedule has never been synced to the pump"
+                comment: "Recovery suggestion when a temp basal is blocked because the basal schedule has not been synced to the pump"
+            )
+        case .pumpProfileBasalRateIsZero:
+            return String(
+                localized: "A temporary basal rate is a percentage of the pump's basal rate, so it would deliver no insulin. Check the active profile on the pump, or save your basal rates in the app's settings.",
+                comment: "Recovery suggestion when a temp basal is blocked because the pump's active profile has a basal rate of zero"
             )
         }
     }

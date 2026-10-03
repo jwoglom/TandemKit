@@ -863,6 +863,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
             self.observeDeliveryState(currentBasal.basalType)
 
+            // Every percent of 0 U/hr is 0, while the host would be told the requested rate runs.
+            if !isCancel, currentBasal.profileBasalRate == 0 {
+                self.logger.error("[enactTempBasal] Blocked: the pump's profile basal rate is 0 U/hr")
+                completion(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
+                return
+            }
+
             if currentBasal.basalType == .tempBasal {
                 guard let stopCurrentRate = self.bluetooth.write(StopTempRateRequest()) else {
                     self.logger.error("Failed to stop temp rate")

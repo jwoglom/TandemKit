@@ -182,6 +182,144 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
     }
 
+    // MARK: - Pump profile at 0 U/hr
+
+    private func makeSyncedManager(bluetooth: StubPumpBluetooth, pumpBasal: CurrentBasalStatusResponse) -> TandemPumpManager {
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: pumpBasal)
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 8))
+        let manager = makeUnsyncedManager(bluetooth: bluetooth)
+        manager.state.hasSyncedBasalRateSchedule = true
+        return manager
+    }
+
+    /// The field report: a synced driver, a Mobi whose active profile reads 0 U/hr, Trio asking for 1.46.
+    func testTempBasalIsRefusedWhenThePumpProfileRateIsZero() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 0,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0
+        ))
+
+        let error = enactTempBasal(manager, unitsPerHour: 1.46, for: .minutes(30))
+
+        XCTAssertEqual(validationError(from: error), .pumpProfileBasalRateIsZero)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertNotEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    func testRefusalOnAZeroProfileLeavesTheRunningTempBasalAlone() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 0,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0x02
+        ))
+
+        let error = enactTempBasal(manager, unitsPerHour: 1.46, for: .minutes(30))
+
+        XCTAssertEqual(validationError(from: error), .pumpProfileBasalRateIsZero)
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testZeroTempBasalIsRefusedWhenThePumpProfileRateIsZero() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 0,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0
+        ))
+
+        let error = enactTempBasal(manager, unitsPerHour: 0, for: .minutes(30))
+
+        XCTAssertEqual(validationError(from: error), .pumpProfileBasalRateIsZero)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testTempBasalCancelGoesThroughWhenThePumpProfileRateIsZero() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 0,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0x02
+        ))
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
+    }
+
+    func testTempBasalIsRefusedOnAZeroProfileWhileSuspended() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 0,
+            currentBasalRate: 0,
+            basalModifiedBitmask: 0x01
+        ))
+
+        let error = enactTempBasal(manager, unitsPerHour: 1.46, for: .minutes(30))
+
+        XCTAssertEqual(validationError(from: error), .pumpProfileBasalRateIsZero)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testTempBasalGoesOutOnANonZeroPumpProfile() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: 1000,
+            basalModifiedBitmask: 0
+        ))
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.46, for: .minutes(30)))
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [146])
+    }
+
+    // MARK: - Confirmed basal rate mismatch
+
+    func testTempBasalIsRefusedAfterAConfirmedMismatchEvenThoughThePumpProfileMatches() {
+        let bluetooth = StubPumpBluetooth()
+        StubIDPPump([.init(startTime: 0, basalRate: 1000)]).install(on: bluetooth)
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: CurrentBasalStatusResponse(
+            profileBasalRate: 1400,
+            currentBasalRate: 1400,
+            basalModifiedBitmask: 0
+        ))
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.verifyDeliveredBasalRate(CurrentBasalStatusResponse(
+            profileBasalRate: 1400,
+            currentBasalRate: 1400,
+            basalModifiedBitmask: 0
+        ))
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+
+        let error = enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30))
+
+        guard case let .configuration(underlying?) = error else {
+            return XCTFail("Expected a configuration error, got \(String(describing: error))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .basalScheduleNotSynced)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertFalse(bluetooth.didSend(IDPSegmentRequest.self), "a matching profile is not read to re-adopt it")
+    }
+
+    func testTempBasalGoesOutAgainOnceTheMismatchClearsAndTheProfileMatches() {
+        let bluetooth = StubPumpBluetooth()
+        StubIDPPump([.init(startTime: 0, basalRate: 1000)]).install(on: bluetooth)
+        let matching = CurrentBasalStatusResponse(profileBasalRate: 1000, currentBasalRate: 1000, basalModifiedBitmask: 0)
+        let manager = makeSyncedManager(bluetooth: bluetooth, pumpBasal: matching)
+        manager.state.hasSyncedBasalRateSchedule = false
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
+
+        manager.verifyDeliveredBasalRate(matching)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30)))
+        XCTAssertTrue(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+    }
+
     func testDeletingSavedPumpStateForgetsTheBasalScheduleSync() {
         var state = TandemPumpManagerState(rawValue: [:])
         state.hasSyncedBasalRateSchedule = true

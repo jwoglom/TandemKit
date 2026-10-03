@@ -28,12 +28,13 @@ import XCTest
         return TandemPumpManager(state: state, bluetooth: bluetooth)
     }
 
-    /// Stubs the pump traffic `enactTempBasal` needs: no temp rate currently running, and a pump
-    /// that accepts whatever percent it is given.
-    private func stubHappyPump() {
+    /// Stubs the pump traffic `enactTempBasal` needs: the pump running `baseline` with no temp rate,
+    /// and accepting whatever percent it is given.
+    private func stubHappyPump(baseline: Double) {
+        let milliunits = UInt32((baseline * 1000).rounded())
         bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
-            profileBasalRate: 0,
-            currentBasalRate: 0,
+            profileBasalRate: milliunits,
+            currentBasalRate: milliunits,
             basalModifiedBitmask: 0
         ))
         bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
@@ -235,7 +236,7 @@ import XCTest
     func testEnactReportsARateAtOrBelowTheRequest() throws {
         let manager = makeManager(baseline: 4.0)
         let (delegate, queue) = attach(manager)
-        stubHappyPump()
+        stubHappyPump(baseline: 4.0)
 
         XCTAssertNil(enact(manager, unitsPerHour: 3.02))
         queue.sync {}
@@ -252,7 +253,7 @@ import XCTest
     func testJustBelowBaselineEnactsATempRateInsteadOfReportingTheScheduledRate() throws {
         let manager = makeManager(baseline: 2.0)
         let (delegate, queue) = attach(manager)
-        stubHappyPump()
+        stubHappyPump(baseline: 2.0)
 
         XCTAssertNil(enact(manager, unitsPerHour: 1.99))
         queue.sync {}
@@ -268,7 +269,7 @@ import XCTest
     func testRequestEqualToScheduledRateStillSkipsTheTempRate() throws {
         let manager = makeManager(baseline: 2.0)
         let (delegate, queue) = attach(manager)
-        stubHappyPump()
+        stubHappyPump(baseline: 2.0)
 
         XCTAssertNil(enact(manager, unitsPerHour: 2.0))
         queue.sync {}
@@ -292,7 +293,7 @@ import XCTest
                 bluetooth = StubPumpBluetooth()
                 let manager = makeManager(baseline: baseline)
                 let (delegate, queue) = attach(manager)
-                stubHappyPump()
+                stubHappyPump(baseline: baseline)
 
                 XCTAssertNil(enact(manager, unitsPerHour: requested), "baseline \(baseline), max \(requested)")
                 queue.sync {}
