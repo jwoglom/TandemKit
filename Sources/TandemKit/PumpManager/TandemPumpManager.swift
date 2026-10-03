@@ -897,7 +897,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 baseline: self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
             )
 
-            if percent == 100 {
+            // Skewed, the host counts its own schedule rather than the pump's rate when no temp runs.
+            let hostCountsThePumpsRate = !self.state.isPumpClockSkewed
+                || Int((absoluteRate * 1000).rounded()) == Int((self.getScheduledBasalRate() * 1000).rounded())
+            if percent == 100, isCancel || hostCountsThePumpsRate {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
                 if self.state.isPumpClockSkewed, let status = self.bluetooth.write(CurrentBasalStatusRequest()) {

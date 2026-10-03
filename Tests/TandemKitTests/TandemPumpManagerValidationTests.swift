@@ -789,6 +789,28 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
+    /// The host asks for the pump's own 2.0 while counting its schedule's 1.0 when no temp runs.
+    func testASkewedPumpRunsARequestEqualToItsOwnRateAsAnExplicitTemp() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30)))
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [100])
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+        XCTAssertEqual(manager.state.basalDose.value, 2.0, accuracy: 0.0001)
+    }
+
+    func testARequestEqualToThePumpsRateSetsNoTempWhenNotSkewed() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.0, for: .minutes(30)))
+
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
     func testNoSkewTempWhileAMismatchIsConfirmed() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)

@@ -311,7 +311,9 @@ edit instead of at the next sync.
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host
   counts its own scheduled rate the pump runs a temp at the percent of its own rate that delivers
   it (`maintainPumpClockSkewCompensation`, every basal read and after a cancel). The host is not
-  told of it: what it counts is what runs. A temp the driver did not set is left alone.
+  told of it: what it counts is what runs. A temp the driver did not set is left alone. A request
+  equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
+  firmware accepts 100% is unconfirmed, and a refusal fails the command.
   `syncPumpData` reads the pump's clock before its basal status for this.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
