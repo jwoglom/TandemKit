@@ -158,34 +158,32 @@ final class IDPManagerTests: XCTestCase {
 
     // MARK: - Modify Segment Tests
 
-    func testModifySegmentMessageIncludesAllFields() throws {
-        let manager = IDPManager()
+    /// The masks a modify can carry, each as Tandem's app sent it in pumpX2's captures
+    /// (`SetIDPSegmentRequestTests`).
+    func testModifySegmentMessageFlagsOnlyTheChangedFields() throws {
+        let combinations: [(Set<IDPSegmentResponse.IDPSegmentStatus>, Int)] = [
+            ([.BASAL_RATE], 1),
+            ([.START_TIME], 16),
+            ([.BASAL_RATE, .START_TIME], 17)
+        ]
 
-        // Setup complete manager
-        setupCompleteManager(manager)
+        for (fields, mask) in combinations {
+            let manager = IDPManager()
+            setupCompleteManager(manager)
+            let profile = try XCTUnwrap(manager.getActiveProfile())
+            let segment = try XCTUnwrap(profile.getSegments().last)
+            segment.profileStartTime = 600
+            segment.profileBasalRate = 1500
 
-        let profile = try XCTUnwrap(manager.getActiveProfile())
-        let segments = profile.getSegments()
-        let segment = try XCTUnwrap(segments.first)
+            let request = profile.modifySegmentMessage(segment: segment, changedFields: fields)
 
-        // Modify the segment
-        var modifiedSegment = segment
-        modifiedSegment.profileBasalRate = 1500
-
-        let request = profile.modifySegmentMessage(segment: modifiedSegment)
-
-        XCTAssertEqual(request.idpId, profile.idpId)
-        XCTAssertEqual(request.segmentIndex, segment.segmentIndex)
-        XCTAssertEqual(request.operation, .modifySegmentId)
-        XCTAssertEqual(request.idpStatusId, 31, "Must include all 5 fields")
-
-        // Verify all 5 flags are set
-        let flags = IDPSegmentResponse.IDPSegmentStatus.fromBitmask(request.idpStatusId)
-        XCTAssertTrue(flags.contains(.BASAL_RATE))
-        XCTAssertTrue(flags.contains(.CARB_RATIO))
-        XCTAssertTrue(flags.contains(.TARGET_BG))
-        XCTAssertTrue(flags.contains(.CORRECTION_FACTOR))
-        XCTAssertTrue(flags.contains(.START_TIME))
+            XCTAssertEqual(request.idpId, profile.idpId)
+            XCTAssertEqual(request.segmentIndex, segment.segmentIndex)
+            XCTAssertEqual(request.operation, .modifySegmentId)
+            XCTAssertEqual(request.profileStartTime, 600)
+            XCTAssertEqual(request.profileBasalRate, 1500)
+            XCTAssertEqual(request.idpStatusId, mask, "\(fields)")
+        }
     }
 
     // MARK: - Create Segment Tests

@@ -4,6 +4,8 @@ public enum BasalScheduleSyncError: Error, Equatable {
     /// Refused before any write: the pump keeps a segment per entry, and a write sequence stopped
     /// at the pump's limit would leave it holding part of the new schedule (#443).
     case tooManyEntries(count: Int, maximum: Int)
+    /// Refused before any write: segment 0, which the pump keeps at midnight, takes the first entry.
+    case firstEntryNotAtMidnight
 }
 
 extension BasalScheduleSyncError: LocalizedError {
@@ -18,6 +20,11 @@ extension BasalScheduleSyncError: LocalizedError {
                 String(count),
                 String(maximum)
             )
+        case .firstEntryNotAtMidnight:
+            return String(
+                localized: "This basal schedule does not start at midnight, but the pump's first basal rate always does.",
+                comment: "Error when a basal schedule's first entry is not at midnight"
+            )
         }
     }
 
@@ -30,6 +37,11 @@ extension BasalScheduleSyncError: LocalizedError {
                     comment: "Recovery suggestion when a basal schedule has too many entries for the pump"
                 ),
                 String(maximum)
+            )
+        case .firstEntryNotAtMidnight:
+            return String(
+                localized: "Edit your basal schedule so its first rate starts at midnight, then save it again.",
+                comment: "Recovery suggestion when a basal schedule's first entry is not at midnight"
             )
         }
     }
@@ -60,6 +72,12 @@ public extension TandemPumpManager {
         }
 
         let sortedItems = scheduleItems.sorted { $0.startTime < $1.startTime }
+
+        guard Int((sortedItems[0].startTime / 60).rounded()) == 0 else {
+            logger.error("Basal schedule starts at \(sortedItems[0].startTime)s, not midnight")
+            completion(.failure(BasalScheduleSyncError.firstEntryNotAtMidnight))
+            return
+        }
 
         bluetooth.ensureConnected { error in
             if let error {
@@ -176,9 +194,16 @@ public extension TandemPumpManager {
                 let write = pendingWrites.remove(at: applicable)
 
                 if let segment = write.segment {
+                    var changedFields: Set<IDPSegmentResponse.IDPSegmentStatus> = []
+                    if segment.profileStartTime != write.startTime {
+                        changedFields.insert(.START_TIME)
+                    }
+                    if segment.profileBasalRate != write.basalRate {
+                        changedFields.insert(.BASAL_RATE)
+                    }
                     segment.profileStartTime = write.startTime
                     segment.profileBasalRate = write.basalRate
-                    requests.append(activeProfile.modifySegmentMessage(segment: segment))
+                    requests.append(activeProfile.modifySegmentMessage(segment: segment, changedFields: changedFields))
                     occupiedStartTimes[segment.segmentIndex] = write.startTime
                 } else {
                     let firstSegment = currentSegments.first!

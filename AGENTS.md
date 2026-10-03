@@ -142,6 +142,11 @@ edit instead of at the next sync.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
   doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).
+  It fails the same way with `firstEntryNotAtMidnight` when the first entry is not at 00:00, the
+  start time of the pump's segment 0; past the deletes, the pump would refuse it mid-write.
+- A segment modify flags in its status mask only the fields it changes (`START_TIME`,
+  `BASAL_RATE`), never segment 0's start time, as Tandem's app does: a Mobi refused every
+  segment-0 modify flagging all five. Creates and deletes flag all five.
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
