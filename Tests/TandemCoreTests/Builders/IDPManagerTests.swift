@@ -158,21 +158,32 @@ final class IDPManagerTests: XCTestCase {
 
     // MARK: - Modify Segment Tests
 
+    /// The masks a modify can carry, each as Tandem's app sent it in pumpX2's captures
+    /// (`SetIDPSegmentRequestTests`).
     func testModifySegmentMessageFlagsOnlyTheChangedFields() throws {
-        let manager = IDPManager()
-        setupCompleteManager(manager)
+        let combinations: [(Set<IDPSegmentResponse.IDPSegmentStatus>, Int)] = [
+            ([.BASAL_RATE], 1),
+            ([.START_TIME], 16),
+            ([.BASAL_RATE, .START_TIME], 17)
+        ]
 
-        let profile = try XCTUnwrap(manager.getActiveProfile())
-        let segment = try XCTUnwrap(profile.getSegments().first)
-        segment.profileBasalRate = 1500
+        for (fields, mask) in combinations {
+            let manager = IDPManager()
+            setupCompleteManager(manager)
+            let profile = try XCTUnwrap(manager.getActiveProfile())
+            let segment = try XCTUnwrap(profile.getSegments().last)
+            segment.profileStartTime = 600
+            segment.profileBasalRate = 1500
 
-        let request = profile.modifySegmentMessage(segment: segment, changedFields: [.BASAL_RATE])
+            let request = profile.modifySegmentMessage(segment: segment, changedFields: fields)
 
-        XCTAssertEqual(request.idpId, profile.idpId)
-        XCTAssertEqual(request.segmentIndex, segment.segmentIndex)
-        XCTAssertEqual(request.operation, .modifySegmentId)
-        XCTAssertEqual(request.profileBasalRate, 1500)
-        XCTAssertEqual(request.idpStatusId, 1)
+            XCTAssertEqual(request.idpId, profile.idpId)
+            XCTAssertEqual(request.segmentIndex, segment.segmentIndex)
+            XCTAssertEqual(request.operation, .modifySegmentId)
+            XCTAssertEqual(request.profileStartTime, 600)
+            XCTAssertEqual(request.profileBasalRate, 1500)
+            XCTAssertEqual(request.idpStatusId, mask, "\(fields)")
+        }
     }
 
     // MARK: - Create Segment Tests

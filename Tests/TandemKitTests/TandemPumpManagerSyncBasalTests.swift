@@ -2,13 +2,14 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// Drives `syncBasalRateSchedule` against a pump model that enforces the constraint real Tandem
-/// firmware does: two segments in a profile may never hold the same start time.
+/// Drives `syncBasalRateSchedule` against a pump model of Tandem firmware: no two segments share a
+/// start time, a modify changes only the fields its status mask flags, and one flagging a start
+/// time on segment 0 is refused (inferred from a Mobi's refusals, not confirmed on firmware).
 ///
 /// Each case states the profile the pump starts with, the schedule to sync, the exact commands the
-/// driver should send, and the profile those commands produce. The command sequence is asserted
-/// against what the driver sent, and separately replayed through the pump model to confirm it
-/// reaches the stated end state without a rejection.
+/// driver should send, with the fields each modify flags, and the profile those commands produce.
+/// The command sequence is asserted against what the driver sent, and separately replayed through
+/// the pump model to confirm it reaches the stated end state without a rejection.
 @available(macOS 13.0, iOS 14.0, *) final class TandemPumpManagerSyncBasalTests: XCTestCase {
     private typealias Segment = StubIDPPump.Segment
     private typealias Command = StubIDPPump.Command
@@ -55,15 +56,64 @@ import XCTest
             commands: [],
             expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)]
         ),
+
+        // One segment, one field: segment 0 can only change its rate.
+        Case(
+            "segment 0's rate changes",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.1), (3, 0.9)],
+            commands: [.modify(segment: 0, basalRate: 1100)],
+            expected: [.init(startTime: 0, basalRate: 1100), .init(startTime: 180, basalRate: 900)]
+        ),
+        Case(
+            "a later segment's rate changes",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (3, 0.8)],
+            commands: [.modify(segment: 1, basalRate: 800)],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 800)]
+        ),
+        Case(
+            "a later segment moves later",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (5, 0.9)],
+            commands: [.modify(segment: 1, startTime: 300)],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 300, basalRate: 900)]
+        ),
+        Case(
+            "a later segment moves earlier",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (1, 0.9)],
+            commands: [.modify(segment: 1, startTime: 60)],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 60, basalRate: 900)]
+        ),
+        Case(
+            "a later segment moves and changes rate",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (5, 0.7)],
+            commands: [.modify(segment: 1, startTime: 300, basalRate: 700)],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 300, basalRate: 700)]
+        ),
+
+        // Several segments, each flagging its own fields.
         Case(
             "rates change but start times do not",
             current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
             schedule: [(0, 1.15), (3, 0.8)],
             commands: [
-                .modify(segment: 0, startTime: 0, basalRate: 1150),
-                .modify(segment: 1, startTime: 180, basalRate: 800)
+                .modify(segment: 0, basalRate: 1150),
+                .modify(segment: 1, basalRate: 800)
             ],
             expected: [.init(startTime: 0, basalRate: 1150), .init(startTime: 180, basalRate: 800)]
+        ),
+        Case(
+            "segment 0's rate and a later segment's start and rate change",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.2), (5, 0.7)],
+            commands: [
+                .modify(segment: 0, basalRate: 1200),
+                .modify(segment: 1, startTime: 300, basalRate: 700)
+            ],
+            expected: [.init(startTime: 0, basalRate: 1200), .init(startTime: 300, basalRate: 700)]
         ),
         Case(
             // Each write lands on the next segment's start time, so they have to go back to front.
@@ -76,9 +126,9 @@ import XCTest
             ],
             schedule: [(0, 1.0), (4, 0.9), (9, 0.8), (12, 0.7)],
             commands: [
-                .modify(segment: 1, startTime: 240, basalRate: 900),
-                .modify(segment: 3, startTime: 720, basalRate: 700),
-                .modify(segment: 2, startTime: 540, basalRate: 800)
+                .modify(segment: 1, startTime: 240),
+                .modify(segment: 3, startTime: 720),
+                .modify(segment: 2, startTime: 540)
             ],
             expected: [
                 .init(startTime: 0, basalRate: 1000),
@@ -98,9 +148,9 @@ import XCTest
             ],
             schedule: [(0, 1.0), (3, 0.9), (8, 0.8), (9, 0.7)],
             commands: [
-                .modify(segment: 1, startTime: 180, basalRate: 900),
-                .modify(segment: 2, startTime: 480, basalRate: 800),
-                .modify(segment: 3, startTime: 540, basalRate: 700)
+                .modify(segment: 1, startTime: 180),
+                .modify(segment: 2, startTime: 480),
+                .modify(segment: 3, startTime: 540)
             ],
             expected: [
                 .init(startTime: 0, basalRate: 1000),
@@ -109,9 +159,62 @@ import XCTest
                 .init(startTime: 540, basalRate: 700)
             ]
         ),
+
+        // Shrinking: deletes go first, then the retained segments are modified.
         Case(
-            // The reported failure: deleting the surplus tail is not enough, because segment 3
-            // survives the delete and still holds the 09:00 that segment 2 has to move onto.
+            // The Mobi onboarding report: the pump refused this modify while it flagged a start time.
+            "three segments at one rate become one faster rate",
+            current: [
+                .init(startTime: 0, basalRate: 1100),
+                .init(startTime: 480, basalRate: 1100),
+                .init(startTime: 720, basalRate: 1100)
+            ],
+            schedule: [(0, 1.2)],
+            commands: [
+                .delete(segment: 2),
+                .delete(segment: 1),
+                .modify(segment: 0, basalRate: 1200)
+            ],
+            expected: [.init(startTime: 0, basalRate: 1200)]
+        ),
+        Case(
+            "schedule shrinks to a single entry at the same rate",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0)],
+            commands: [.delete(segment: 1)],
+            expected: [.init(startTime: 0, basalRate: 1000)]
+        ),
+        Case(
+            "schedule shrinks and the retained segment changes rate",
+            current: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800)
+            ],
+            schedule: [(0, 1.0), (3, 0.85)],
+            commands: [
+                .delete(segment: 2),
+                .modify(segment: 1, basalRate: 850)
+            ],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 850)]
+        ),
+        Case(
+            "schedule shrinks and the retained segment takes a deleted one's start time",
+            current: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 180, basalRate: 900),
+                .init(startTime: 480, basalRate: 800)
+            ],
+            schedule: [(0, 1.0), (8, 0.9)],
+            commands: [
+                .delete(segment: 2),
+                .modify(segment: 1, startTime: 480)
+            ],
+            expected: [.init(startTime: 0, basalRate: 1000), .init(startTime: 480, basalRate: 900)]
+        ),
+        Case(
+            // Deleting the surplus tail is not enough, because segment 3 survives the delete and
+            // still holds the 09:00 that segment 2 has to move onto.
             "schedule shrinks past a retained segment",
             current: [
                 .init(startTime: 0, basalRate: 800),
@@ -126,8 +229,8 @@ import XCTest
             commands: [
                 .delete(segment: 6),
                 .delete(segment: 5),
-                .modify(segment: 0, startTime: 0, basalRate: 1150),
-                .modify(segment: 1, startTime: 180, basalRate: 850),
+                .modify(segment: 0, basalRate: 1150),
+                .modify(segment: 1, basalRate: 850),
                 .modify(segment: 4, startTime: 1200, basalRate: 700),
                 .modify(segment: 3, startTime: 840, basalRate: 750),
                 .modify(segment: 2, startTime: 540, basalRate: 850)
@@ -140,20 +243,31 @@ import XCTest
                 .init(startTime: 1200, basalRate: 700)
             ]
         ),
+
+        // Growing: creates go after the modifies, with all five fields flagged.
         Case(
-            "schedule shrinks to a single entry",
-            current: [
-                .init(startTime: 0, basalRate: 1000),
-                .init(startTime: 180, basalRate: 900),
-                .init(startTime: 480, basalRate: 800)
-            ],
-            schedule: [(0, 1.25)],
+            "schedule grows from a single segment",
+            current: [.init(startTime: 0, basalRate: 1000)],
+            schedule: [(0, 1.2), (6, 0.8)],
             commands: [
-                .delete(segment: 2),
-                .delete(segment: 1),
-                .modify(segment: 0, startTime: 0, basalRate: 1250)
+                .modify(segment: 0, basalRate: 1200),
+                .create(startTime: 360, basalRate: 800)
             ],
-            expected: [.init(startTime: 0, basalRate: 1250)]
+            expected: [.init(startTime: 0, basalRate: 1200), .init(startTime: 360, basalRate: 800)]
+        ),
+        Case(
+            "a moved segment frees the start time a created one takes",
+            current: [.init(startTime: 0, basalRate: 1000), .init(startTime: 180, basalRate: 900)],
+            schedule: [(0, 1.0), (1, 0.9), (3, 0.8)],
+            commands: [
+                .modify(segment: 1, startTime: 60),
+                .create(startTime: 180, basalRate: 800)
+            ],
+            expected: [
+                .init(startTime: 0, basalRate: 1000),
+                .init(startTime: 60, basalRate: 900),
+                .init(startTime: 180, basalRate: 800)
+            ]
         ),
         Case(
             "schedule grows",
@@ -164,7 +278,7 @@ import XCTest
             ],
             schedule: [(0, 1.0), (5, 0.9), (9, 0.85), (14, 0.8)],
             commands: [
-                .modify(segment: 1, startTime: 300, basalRate: 900),
+                .modify(segment: 1, startTime: 300),
                 .modify(segment: 2, startTime: 540, basalRate: 850),
                 .create(startTime: 840, basalRate: 800)
             ],
@@ -183,7 +297,7 @@ import XCTest
             ],
             schedule: [(0, 1.0), (8, 0.9), (12, 0.8), (3, 0.95)],
             commands: [
-                .modify(segment: 1, startTime: 180, basalRate: 950),
+                .modify(segment: 1, basalRate: 950),
                 .create(startTime: 480, basalRate: 900),
                 .create(startTime: 720, basalRate: 800)
             ],
@@ -236,16 +350,38 @@ import XCTest
         }
     }
 
-    func testModifyFlagsOnlyTheFieldsItChanges() {
-        let profile = StubIDPPump([.init(startTime: 0, basalRate: 1100), .init(startTime: 480, basalRate: 1100)])
-        let bluetooth = makeStub(profile: profile)
+    /// Every profile of up to four segments, at two rates and start times from 00:00, 03:00, 08:00
+    /// and 12:00, synced to every other: the pump ends up holding the schedule, and each modify
+    /// flags exactly the fields that differ.
+    func testEveryProfileCombinationSyncs() {
+        let profiles = Self.profileCombinations(startTimes: [180, 480, 720], basalRates: [800, 1000])
 
-        guard case .success = runSync(bluetooth: bluetooth, schedule: [(0, 1.2), (6, 1.1)]) else {
-            return XCTFail("Expected success")
+        for current in profiles {
+            for target in profiles {
+                let profile = StubIDPPump(current)
+                let bluetooth = makeStub(profile: profile)
+                let schedule = target.map { (Double($0.startTime) / 60, Double($0.basalRate) / 1000) }
+                let label = "\(current) -> \(target)"
+
+                guard case .success = runSync(bluetooth: bluetooth, schedule: schedule) else {
+                    XCTFail("\(label): sync failed")
+                    continue
+                }
+                XCTAssertEqual(profile.segments, target, label)
+
+                let writes = bluetooth.sent(SetIDPSegmentRequest.self)
+                XCTAssertEqual(writes.compactMap(Command.init).count, writes.count, "\(label): unexpected mask")
+                if current == target {
+                    XCTAssertTrue(writes.isEmpty, "\(label): wrote an unchanged profile")
+                }
+                for case let .modify(index, startTime, basalRate) in writes.compactMap(Command.init) {
+                    let before = current[index]
+                    XCTAssertTrue(startTime != nil || basalRate != nil, "\(label): empty modify of \(index)")
+                    XCTAssertNotEqual(startTime, before.startTime, "\(label): flagged an unchanged start time")
+                    XCTAssertNotEqual(basalRate, before.basalRate, "\(label): flagged an unchanged rate")
+                }
+            }
         }
-
-        let flagged = bluetooth.sent(SetIDPSegmentRequest.self).map { [$0.segmentIndex: $0.idpStatus] }
-        XCTAssertEqual(flagged, [[0: [.BASAL_RATE]], [1: [.START_TIME]]])
     }
 
     func testEmptyScheduleIsRejectedWithoutTouchingThePump() {
@@ -331,6 +467,20 @@ import XCTest
         wait(for: [expectation], timeout: 5)
 
         return result ?? .failure(PumpCommError.requestConstructionFailed(reason: "no completion"))
+    }
+
+    /// Segment 0 at midnight plus every ascending subset of `startTimes`, at every rate assignment.
+    private static func profileCombinations(startTimes: [Int], basalRates: [Int]) -> [[Segment]] {
+        let startSets = (0 ..< (1 << startTimes.count)).map { mask in
+            [0] + startTimes.indices.filter { mask & (1 << $0) != 0 }.map { startTimes[$0] }
+        }
+        return startSets.flatMap { starts in
+            starts.reduce([[Segment]()]) { prefixes, start in
+                prefixes.flatMap { prefix in
+                    basalRates.map { prefix + [Segment(startTime: start, basalRate: $0)] }
+                }
+            }
+        }
     }
 
     private func makeStub(profile: StubIDPPump) -> StubPumpBluetooth {
