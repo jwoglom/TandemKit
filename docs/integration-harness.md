@@ -297,9 +297,13 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-None open.
+- **A segment change never rescales a running temp rate.** faketandem puts a profile's rate in
+  force only when the profile is written, not when its clock passes a segment's start, so the
+  driver's cut of a temp basal at a segment change (`splitAtSegmentChanges`) is covered by unit
+  tests in `TandemPumpManagerValidationTests` only. Staging `basal_rate` moves the profile rate
+  but leaves a running temp's rate as it was.
 
-Everything the harness found has been fixed in faketandem. What was fixed, because the
+Everything else the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:
 
 - **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler
