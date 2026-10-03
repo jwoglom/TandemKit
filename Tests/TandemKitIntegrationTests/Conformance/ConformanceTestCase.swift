@@ -95,6 +95,12 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         }
     }
 
+    /// Empties the pump's log; this scenario's records then start at sequence 1.
+    func eraseHistory() throws {
+        try harness.client.eraseHistory()
+        historyStartSequence = 0
+    }
+
     // MARK: - Driver lifecycle
 
     /// One driver on the shared clock; the harness gives its delegate that clock to journal with.

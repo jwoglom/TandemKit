@@ -6,9 +6,9 @@ name: Linux
 # JPAKE is a trapping stub here, so its tests compile out, fresh pairing among them.
 #
 # plain and virtual-pump build side by side: the flag changes every module's compilation
-# conditions, so they share nothing but the toolchain. integration runs TandemKitIntegrationTests
-# against faketandem on virtual-pump's build, restored from its cache: same container,
-# same workspace path, so SwiftPM finds it up to date. All use the toolchain
+# conditions, so they share nothing but the toolchain. The faketandem job builds the emulator
+# alongside them. integration then runs TandemKitIntegrationTests in two halves at once, against
+# that emulator, on virtual-pump's build restored from its cache. All use the toolchain
 # scripts/claude-web-setup.sh installs, so a session that passes `swift test` locally sees the
 # same compiler here.
 concurrency:
@@ -177,15 +177,85 @@ jobs:
           name: linux-virtual-pump-test-logs
           path: swift-test-virtual-pump.log
 
-  integration:
-    name: integration tests (faketandem)
-    needs: virtual-pump
+  # In the same image as the integration jobs, so the binary links against the libc they run.
+  faketandem:
+    name: faketandem build
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
-    timeout-minutes: 45
+    timeout-minutes: 15
+    env:
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout faketandem
+        uses: actions/checkout@v6
+        with:
+          repository: jwoglom/faketandem
+          ref: ${{ env.FAKETANDEM_REF }}
+          path: faketandem
+          fetch-depth: 1
+
+      # The swift image has neither; `make jar` downloads the jar with curl.
+      - name: Install curl and make
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends ca-certificates curl make > /dev/null
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Cache the pumpX2 cliparser jar
+        uses: actions/cache@v6
+        with:
+          path: faketandem/third_party
+          key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
+
+      # Laid out as the script reads a faketandem checkout: the binary at the top, the jar in
+      # third_party/.
+      - name: Build faketandem and fetch the pumpX2 cliparser jar
+        working-directory: faketandem
+        run: |
+          if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
+            make jar
+          fi
+          mkdir -p ../faketandem-dist/third_party
+          cp "$(ls -t third_party/pumpx2-cliparser-*.jar | head -n1)" ../faketandem-dist/third_party/
+          go build -o ../faketandem-dist/faketandem .
+          ls -lR ../faketandem-dist
+
+      - name: Upload faketandem
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-faketandem
+          path: faketandem-dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  # integration_fault takes the conformance groups built on injected link and response faults (A-D
+  # and F in docs/conformance-test-plan.md), integration everything else, so a new class lands in
+  # integration unless it is added to FAULT_SUITES.
+  integration:
+    name: ${{ matrix.suite }} tests (faketandem)
+    needs: [virtual-pump, faketandem]
+    runs-on: ubuntu-latest
+    container: swift:6.1.2-noble
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: integration
+            selection: --skip
+          - suite: integration_fault
+            selection: --filter
     env:
       TANDEMKIT_INTEGRATION_TESTS: '1'
-      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+      FAULT_SUITES: 'TandemKitIntegrationTests\.(Interrupt|Cancel|Idempotency|PumpSide|Outage)ConformanceTests'
     defaults:
       run:
         shell: bash
@@ -195,24 +265,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Inside the TandemKit checkout, so the cached build keeps its paths; Package.swift does not
-      # look at it.
-      - name: Checkout faketandem
-        uses: actions/checkout@v6
-        with:
-          repository: jwoglom/faketandem
-          ref: ${{ env.FAKETANDEM_REF }}
-          path: faketandem
-          fetch-depth: 1
-
-      # The swift image has none of them: curl for `make jar` and the script's API wait, python3
-      # for the script's free ports and the checks.
-      - name: Install curl, make and Python
+      # curl for the script's API wait, python3 for its free ports and the checks.
+      - name: Install curl and Python
         run: |
           apt-get update -qq
-          apt-get install -y -qq --no-install-recommends ca-certificates curl make python3 > /dev/null
+          apt-get install -y -qq --no-install-recommends curl python3 > /dev/null
 
       - name: Restore the virtual pump build
+        id: build-cache
         uses: actions/cache/restore@v6
         with:
           path: |
@@ -222,11 +282,11 @@ jobs:
           restore-keys: |
             linux-swift-6.1.2-virtual-pump-
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - name: Download faketandem
+        uses: actions/download-artifact@v8
         with:
-          go-version: stable
-          cache: false
+          name: linux-faketandem
+          path: faketandem
 
       # faketandem runs pumpX2's jpake-server from the cliparser jar.
       - name: Set up Java
@@ -235,34 +295,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Cache the pumpX2 cliparser jar
-        uses: actions/cache@v6
-        with:
-          path: faketandem/third_party
-          key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
-
-      - name: Fetch the pumpX2 cliparser jar
-        working-directory: faketandem
-        run: |
-          if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
-            make jar
-          fi
-          ls -l third_party
-
+      # An exact hit is virtual-pump's build of these sources, run as is: the checkout's file times
+      # are newer than the cached build's, so a build here would recompile all of it. Anything else
+      # was built from older sources and is only a starting point.
       - name: Run TandemKitIntegrationTests against faketandem
         env:
           FAKETANDEM_DIR: faketandem
+          FAKETANDEM_BIN: faketandem/faketandem
           LOG_DIR: integration-logs
-        run: scripts/integration-test.sh
+          MODE: ${{ steps.build-cache.outputs.cache-hit == 'true' && 'test' || 'all' }}
+        run: |
+          chmod +x "$FAKETANDEM_BIN"
+          scripts/integration-test.sh "$MODE" ${{ matrix.selection }} "$FAULT_SUITES"
 
       # Every test throws XCTSkip when the emulator's addresses do not reach the test process, so
       # a run that never talked to faketandem would still pass.
       - name: Check that integration tests actually ran
-        run: scripts/ci/check-test-count.py integration-logs/swift-test.log --label "Linux TandemKitIntegrationTests" --no-skips
+        run: scripts/ci/check-test-count.py integration-logs/swift-test.log --label "Linux ${{ matrix.suite }}" --no-skips
 
       - name: Upload test logs (on failure)
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: linux-integration-test-logs
+          name: linux-${{ matrix.suite }}-test-logs
           path: integration-logs/

@@ -71,9 +71,12 @@ branch of the same name when one exists, so a driver change is tested with the e
 needs. The job fails if any integration test skips, because a skip means the emulator's addresses
 never reached the test process.
 
-`.github/workflows/linux.yml` runs it too, in its `integration` job on GitHub-hosted Ubuntu,
-reusing the `virtual-pump` job's build from the Actions cache. That job runs on pushes to `main`
-and `dev` and on manual runs, not on pull requests.
+`.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
+`dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
+job the emulator and jar, side by side; the `integration` job then runs the suite in two halves at
+once, on that build restored from the Actions cache without rebuilding. `integration_fault` takes the
+classes `FAULT_SUITES` names, the conformance groups built on injected faults; `integration` takes
+the rest, so a new class runs there unless it is added to `FAULT_SUITES`.
 
 ### How the tests find the emulator
 

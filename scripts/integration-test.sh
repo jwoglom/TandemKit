@@ -22,7 +22,8 @@
 #   FAKETANDEM_DIR    faketandem checkout (default: ../faketandem next to this repo).
 #   FAKETANDEM_JAR    pumpX2 cliparser jar (default: newest
 #                     $FAKETANDEM_DIR/third_party/pumpx2-cliparser-*.jar; `make jar` there fetches it).
-#   FAKETANDEM_BIN    Prebuilt faketandem binary; skips the go build.
+#   FAKETANDEM_BIN    Prebuilt faketandem binary; skips the go build, so FAKETANDEM_DIR need only
+#                     hold third_party/ (or set FAKETANDEM_JAR).
 #   FAKETANDEM_ARGS   Extra flags for the emulator (e.g. "-q" for info-level logging).
 #   FAKETANDEM_HOST   Interface to bind (default 127.0.0.1; the simulator shares the host network).
 #   LOG_DIR           Where faketandem.log, the test log and results go (default:
@@ -89,8 +90,8 @@ if [[ "$mode" == "build" ]]; then
   exit
 fi
 
-if [[ ! -f "$FAKETANDEM_DIR/go.mod" ]]; then
-  echo "faketandem checkout not found at $FAKETANDEM_DIR; set FAKETANDEM_DIR" >&2
+if [[ -z "${FAKETANDEM_BIN:-}" && ! -f "$FAKETANDEM_DIR/go.mod" ]]; then
+  echo "faketandem checkout not found at $FAKETANDEM_DIR; set FAKETANDEM_DIR or FAKETANDEM_BIN" >&2
   exit 1
 fi
 if [[ -z "${FAKETANDEM_JAR:-}" ]]; then
