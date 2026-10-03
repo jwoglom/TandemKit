@@ -9,6 +9,8 @@ public class UnfinalizedDose: Equatable {
     public var bolusId: Int?
     /// The pump's id for a temp rate the app set, from `SetTempRateResponse`.
     public var tempRateId: Int?
+    /// The percent of the pump's profile a temp rate the app set runs at.
+    public var tempPercent: Int?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every
     /// `NewPumpEvent` for it carries, which hosts dedupe on — so it never moves.
@@ -24,6 +26,7 @@ public class UnfinalizedDose: Equatable {
     public static func == (lhs: UnfinalizedDose, rhs: UnfinalizedDose) -> Bool {
         lhs.bolusId == rhs.bolusId &&
             lhs.tempRateId == rhs.tempRateId &&
+            lhs.tempPercent == rhs.tempPercent &&
             lhs.type == rhs.type &&
             lhs.startDate == rhs.startDate &&
             lhs.deliveryStartDate == rhs.deliveryStartDate &&
@@ -66,7 +69,8 @@ public class UnfinalizedDose: Equatable {
         automatic: Bool,
         insulinType: InsulinType?,
         startDate: Date = Date.now,
-        tempRateId: Int? = nil
+        tempRateId: Int? = nil,
+        tempPercent: Int? = nil
     ) {
         type = .tempBasal
         value = tempRate
@@ -75,6 +79,7 @@ public class UnfinalizedDose: Equatable {
         estimatedEndDate = startDate.addingTimeInterval(duration)
         self.automatic = automatic
         self.tempRateId = tempRateId
+        self.tempPercent = tempPercent
     }
 
     public init(suspendStartTime: Date) {
@@ -169,6 +174,7 @@ public class UnfinalizedDose: Equatable {
         }
 
         tempRateId = rawValue["tempRateId"] as? Int
+        tempPercent = rawValue["tempPercent"] as? Int
     }
 
     public var rawValue: RawValue {
@@ -184,6 +190,7 @@ public class UnfinalizedDose: Equatable {
         raw["automatic"] = automatic
         raw["bolusId"] = bolusId
         raw["tempRateId"] = tempRateId
+        raw["tempPercent"] = tempPercent
 
         return raw
     }

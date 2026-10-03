@@ -831,8 +831,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        let baselineRate = getScheduledBasalRate()
-        guard baselineRate > 0 else {
+        let isCancel = duration <= 0
+        // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
+        let isZeroTemp = !isCancel && unitsPerHour == 0
+
+        guard isZeroTemp || getScheduledBasalRate() > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
             completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
             return
@@ -845,9 +848,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let isCancel = duration <= 0
             // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-            if !isCancel {
+            if !isCancel, !isZeroTemp {
                 self.adoptMatchingPumpProfile()
                 guard self.state.hasSyncedBasalRateSchedule else {
                     self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
@@ -863,8 +865,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
             self.observeDeliveryState(currentBasal.basalType)
 
-            // Every percent of 0 U/hr is 0, while the host would be told the requested rate runs.
-            if !isCancel, currentBasal.profileBasalRate == 0 {
+            if !isCancel, !isZeroTemp, currentBasal.profileBasalRate == 0 {
                 self.logger.error("[enactTempBasal] Blocked: the pump's profile basal rate is 0 U/hr")
                 completion(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
                 return
@@ -886,10 +887,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.info("Current temp basal cancelled!")
             }
 
-            let (percent, absoluteRate) = self
-                .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
+            let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
+                requestedRate: unitsPerHour,
+                baseline: self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
+            )
 
-            if isCancel || percent == 100 {
+            if percent == 100 {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
                 completion(nil)
@@ -912,16 +915,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            // The percent came from the host's schedule; the pump applies it to its own profile.
             if let readback = self.bluetooth.write(CurrentBasalStatusRequest()) {
-                guard Self.tempBasalReadbackMatches(
-                    readback,
-                    reportedRate: absoluteRate,
-                    exactRate: baselineRate * Double(percent) / 100
-                ) else {
+                guard Self.tempBasalReadbackMatches(readback, percent: percent) else {
                     self.rejectMismatchedTempBasal(
                         readback,
                         expectedRate: absoluteRate,
+                        percent: percent,
                         duration: duration,
                         tempRateId: response.tempRateId,
                         completion: completion
@@ -932,13 +931,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, duration: duration, tempRateId: response.tempRateId)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: duration, tempRateId: response.tempRateId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
     }
 
-    private func recordTempBasal(rate: Double, duration: TimeInterval, tempRateId: Int) {
+    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,
@@ -946,7 +945,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             automatic: true,
             insulinType: state.insulinType,
             startDate: now,
-            tempRateId: tempRateId
+            tempRateId: tempRateId,
+            tempPercent: percent
         )
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
@@ -958,16 +958,29 @@ public class TandemPumpManager: PumpManager, Pluggable {
         emitPumpEvents(events)
     }
 
-    /// Within one 0.01 U/hr step of the rate reported to the host, or of the unrounded percent of
-    /// the schedule: the pump's own rounding of a temp rate is not known.
-    static func tempBasalReadbackMatches(
-        _ readback: CurrentBasalStatusResponse,
-        reportedRate: Double,
-        exactRate: Double
-    ) -> Bool {
+    /// How long before the pump's rate changes a temp basal is worked out against the larger of the
+    /// two rates, about one host loop cycle.
+    static let segmentChangeWindow: TimeInterval = .minutes(5)
+
+    /// `pumpRate` is the rate the pump has in force. Within `segmentChangeWindow` of a change, the
+    /// larger of it and the next: the temp then runs at most the request on either side, and the
+    /// host, told the request, can only over-count until the change.
+    func tempBasalBaseline(pumpRate: Double) -> Double {
+        guard let change = pumpSegmentChanges(after: now, through: now.addingTimeInterval(Self.segmentChangeWindow)).first
+        else {
+            return pumpRate
+        }
+        return max(pumpRate, change.rate)
+    }
+
+    /// The pump runs a temp at `percent` of its own rate in force. Within one 0.01 U/hr step of
+    /// that, unrounded or floored onto the reported grid: the pump's own rounding is not known.
+    static func tempBasalReadbackMatches(_ readback: CurrentBasalStatusResponse, percent: Int) -> Bool {
         guard readback.basalType == .tempBasal else { return false }
+        let exact = readback.profileBasalRate * Double(percent) / 100
+        let floored = TandemPumpCapabilities.supportedBasalRates.last { $0 <= exact } ?? 0
         let actual = Int((readback.currentBasalRate * 1000).rounded())
-        return [reportedRate, exactRate].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
+        return [exact, floored].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
     }
 
     /// Stops the temp basal so the host is not told a rate the pump isn't running. If it can't be
@@ -975,6 +988,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func rejectMismatchedTempBasal(
         _ readback: CurrentBasalStatusResponse,
         expectedRate: Double,
+        percent: Int,
         duration: TimeInterval,
         tempRateId: Int,
         completion: @escaping (PumpManagerError?) -> Void
@@ -991,7 +1005,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         case .tempBasal:
             guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
                 logger.error("Could not stop the mismatched temp basal; reporting it at the pump's rate")
-                recordTempBasal(rate: readback.currentBasalRate, duration: duration, tempRateId: tempRateId)
+                recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId)
                 completion(.deviceState(error))
                 return
             }
@@ -2211,6 +2225,34 @@ extension TandemPumpManager {
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
         return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+    }
+
+    /// Where the pump's rate changes after `start` through `end`, dated on the phone's clock. Reads
+    /// the host's schedule on the pump's clock, which is the pump's profile whenever temp basals are
+    /// allowed at all.
+    func pumpSegmentChanges(after start: Date, through end: Date) -> [(date: Date, rate: Double)] {
+        let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
+        guard items.count > 1, end > start else { return [] }
+
+        let offset = state.pumpClockOffset
+        let pumpStart = start.addingTimeInterval(offset)
+        let startOfDay = Calendar.current.startOfDay(for: pumpStart)
+        var rate = getScheduledBasalRate(at: pumpStart)
+        var changes: [(date: Date, rate: Double)] = []
+
+        for day in 0 ... Int(end.timeIntervalSince(start) / .days(1)) + 1 {
+            for item in items {
+                let pumpDate = startOfDay.addingTimeInterval(.days(Double(day)) + item.startTime)
+                let date = pumpDate.addingTimeInterval(-offset)
+                guard date > start else { continue }
+                guard date <= end else { return changes }
+                if Int((item.value * 1000).rounded()) != Int((rate * 1000).rounded()) {
+                    changes.append((date, item.value))
+                    rate = item.value
+                }
+            }
+        }
+        return changes
     }
 }
 

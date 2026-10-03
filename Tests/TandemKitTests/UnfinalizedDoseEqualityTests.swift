@@ -46,6 +46,7 @@ final class UnfinalizedDoseEqualityTests: XCTestCase {
         [
             ("bolusId", { $0["bolusId"] = 2005 }),
             ("tempRateId", { $0["tempRateId"] = nil }),
+            ("tempPercent", { $0["tempPercent"] = nil }),
             ("type", { $0["type"] = DoseType.tempBasal.rawValue }),
             ("startDate", { $0["startDate"] = t0.addingTimeInterval(1) }),
             ("deliveryStartDate", { $0["deliveryStartDate"] = nil }),
@@ -67,6 +68,7 @@ final class UnfinalizedDoseEqualityTests: XCTestCase {
             now: t0
         )
         dose.tempRateId = 17
+        dose.tempPercent = 150
         dose.recordDeliveryStart(t0.addingTimeInterval(4), now: t0.addingTimeInterval(10))
         dose.deliveredUnits = 1.1
         return dose
