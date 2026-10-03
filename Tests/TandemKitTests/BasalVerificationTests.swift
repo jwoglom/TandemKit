@@ -380,6 +380,67 @@ import XCTest
         XCTAssertNotNil(manager.state.basalRateMismatchSince)
     }
 
+    // MARK: - Running temp on a mismatched profile
+
+    private func runTempBasal(value: Double, percent: Int) {
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: value,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: nil,
+            startDate: manager.now.addingTimeInterval(-.minutes(5)),
+            tempRateId: 7,
+            tempPercent: percent
+        )
+    }
+
+    /// Schedule 0.65 U/hr; the pump's profile reads 0.4 and runs the temp at 200% of it.
+    private func pumpRunsTempOnAWrongProfile(percent: Int) {
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 400,
+            currentBasalRate: UInt32(400 * percent / 100),
+            basalModifiedBitmask: 0x02
+        ))
+        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
+    }
+
+    func testAConfirmedMismatchStopsARunningTemp() {
+        setSchedule([(0, 0.65)])
+        runTempBasal(value: 1.3, percent: 200)
+        pumpRunsTempOnAWrongProfile(percent: 200)
+        manager.state.basalRateMismatchSince = manager.now.addingTimeInterval(-.hours(1))
+
+        manager.fetchBasalStatus()
+
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testAnUnconfirmedMismatchLeavesTheTempRunning() {
+        setSchedule([(0, 0.65)])
+        runTempBasal(value: 1.3, percent: 200)
+        pumpRunsTempOnAWrongProfile(percent: 200)
+
+        manager.fetchBasalStatus()
+
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    func testAZeroTempKeepsRunningThroughAConfirmedMismatch() {
+        setSchedule([(0, 0.65)])
+        runTempBasal(value: 0, percent: 0)
+        pumpRunsTempOnAWrongProfile(percent: 0)
+        manager.state.basalRateMismatchSince = manager.now.addingTimeInterval(-.hours(1))
+
+        manager.fetchBasalStatus()
+
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
     // MARK: - Event-driven trigger
 
     func testProfileEventsTriggerTheBasalRead() {

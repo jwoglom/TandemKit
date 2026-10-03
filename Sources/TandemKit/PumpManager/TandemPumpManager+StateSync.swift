@@ -152,7 +152,22 @@ extension TandemPumpManager {
 
         if response.basalType == .tempBasal {
             reportTempBasalSegmentChanges()
+            stopTempBasalOnConfirmedMismatch()
         }
+    }
+
+    /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs
+    /// other than what the host was told. A zero temp is 0% of any profile and keeps running.
+    func stopTempBasalOnConfirmedMismatch() {
+        guard state.basalRateMismatchConfirmed, state.basalDose.type == .tempBasal, state.basalDose.value > 0 else {
+            return
+        }
+        guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
+            logger.error("Could not stop the temp basal running on a basal profile that differs from the schedule")
+            return
+        }
+        logger.warning("Stopped the temp basal: the pump's basal rate does not match the schedule")
+        startScheduledBasalDose()
     }
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)
