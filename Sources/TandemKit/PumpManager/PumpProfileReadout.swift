@@ -22,6 +22,19 @@ public struct PumpProfileReadout {
     /// Why the read stopped early; nil when every profile and segment was read.
     public var failure: String?
 
+    public func isActive(_ profile: Profile) -> Bool {
+        profileStatus?.activeIdpSlotId == profile.idpId
+    }
+
+    /// `activeSegmentIndex` as the segment now in force is pumpX2's reading, unconfirmed on a pump.
+    public func isActive(segment index: Int, of profile: Profile) -> Bool {
+        isActive(profile) && profileStatus?.activeSegmentIndex == index
+    }
+
+    private var profileStatus: ProfileStatusResponse? {
+        status?.response as? ProfileStatusResponse
+    }
+
     /// A message's stored properties in declaration order, excluding `cargo`.
     public static func fields(of message: Message) -> [(label: String, value: String)] {
         Mirror(reflecting: message).children.compactMap { child in
@@ -47,8 +60,11 @@ public struct PumpProfileReadout {
             "profiles": profiles.map { profile in
                 [
                     "idpId": profile.idpId,
+                    "active": isActive(profile),
                     "settings": Self.jsonObject(for: profile.settings),
-                    "segments": profile.segments.map(Self.jsonObject(for:))
+                    "segments": profile.segments.enumerated().map { index, segment in
+                        Self.jsonObject(for: segment).merging(["active": isActive(segment: index, of: profile)]) { $1 }
+                    }
                 ] as [String: Any]
             }
         ]

@@ -18,7 +18,7 @@ final class PumpProfileReadoutTests: XCTestCase {
         super.tearDown()
     }
 
-    private func stubProfiles(segmentCounts: [Int: Int]) {
+    private func stubProfiles(segmentCounts: [Int: Int], activeSegmentIndex: Int = 0) {
         let ids = segmentCounts.keys.sorted()
         let slot = { (index: Int) in index < ids.count ? ids[index] : 0 }
         bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
@@ -29,7 +29,7 @@ final class PumpProfileReadoutTests: XCTestCase {
             idpSlot3Id: slot(3),
             idpSlot4Id: slot(4),
             idpSlot5Id: slot(5),
-            activeSegmentIndex: 0
+            activeSegmentIndex: activeSegmentIndex
         ))
         bluetooth.stub(IDPSettingsRequest.self) { request in
             let idpId = (request as! IDPSettingsRequest).idpId
@@ -81,6 +81,21 @@ final class PumpProfileReadoutTests: XCTestCase {
                 "IDPSettingsRequest 07",
                 "IDPSegmentRequest 0700"
             ]
+        )
+    }
+
+    func testSlotZeroIsTheActiveProfileAndActiveSegmentIndexIsOnlyItsSegment() throws {
+        stubProfiles(segmentCounts: [3: 2, 7: 2], activeSegmentIndex: 1)
+
+        let readout = read()
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(readout.jsonData(exportedAt: Date()))) as? [String: Any])
+        let profiles = try XCTUnwrap(json["profiles"] as? [[String: Any]])
+
+        XCTAssertEqual(readout.profiles.map(readout.isActive), [true, false])
+        XCTAssertEqual(profiles.map { $0["active"] as? Bool }, [true, false])
+        XCTAssertEqual(
+            profiles.map { ($0["segments"] as? [[String: Any]])?.map { $0["active"] as? Bool } },
+            [[false, true], [false, false]]
         )
     }
 

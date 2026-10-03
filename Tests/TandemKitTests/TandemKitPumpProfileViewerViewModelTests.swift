@@ -36,8 +36,8 @@ import XCTest
         readToCompletion(viewModel)
 
         XCTAssertNotNil(viewModel.statusRow?.exchange.response as? ProfileStatusResponse)
-        XCTAssertEqual(viewModel.profileSections.map(\.title), ["IDP 4: Test"])
-        XCTAssertEqual(viewModel.profileSections.first?.rows.map(\.title), ["Settings", "Segment 0", "Segment 1"])
+        XCTAssertEqual(viewModel.profileSections.map(\.title), ["IDP 4: Test (active)"])
+        XCTAssertEqual(viewModel.profileSections.first?.rows.map(\.title), ["Settings", "Segment 0 (active)", "Segment 1"])
         XCTAssertNil(viewModel.readout?.failure)
     }
 

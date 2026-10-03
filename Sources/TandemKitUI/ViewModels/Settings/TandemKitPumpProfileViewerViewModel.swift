@@ -36,7 +36,8 @@ final class TandemKitPumpProfileViewerViewModel: ObservableObject {
     }
 
     var profileSections: [ProfileSection] {
-        (readout?.profiles ?? []).map { profile in
+        guard let readout else { return [] }
+        return readout.profiles.map { profile in
             let settings = ExchangeRow(
                 id: "\(profile.idpId)-settings",
                 title: String(localized: "Settings", comment: "Pump profile viewer row for a profile's settings response"),
@@ -45,11 +46,18 @@ final class TandemKitPumpProfileViewerViewModel: ObservableObject {
             let segments = profile.segments.enumerated().map { index, segment in
                 ExchangeRow(
                     id: "\(profile.idpId)-segment-\(index)",
-                    title: String(localized: "Segment \(index)", comment: "Pump profile viewer row for one profile segment response"),
+                    title: Self.markedActive(
+                        String(localized: "Segment \(index)", comment: "Pump profile viewer row for one profile segment response"),
+                        if: readout.isActive(segment: index, of: profile)
+                    ),
                     exchange: segment
                 )
             }
-            return ProfileSection(idpId: profile.idpId, title: Self.title(of: profile), rows: [settings] + segments)
+            return ProfileSection(
+                idpId: profile.idpId,
+                title: Self.markedActive(Self.title(of: profile), if: readout.isActive(profile)),
+                rows: [settings] + segments
+            )
         }
     }
 
@@ -58,6 +66,11 @@ final class TandemKitPumpProfileViewerViewModel: ObservableObject {
             return String(localized: "IDP \(profile.idpId)", comment: "Pump profile viewer header for a profile whose name was not read")
         }
         return String(localized: "IDP \(profile.idpId): \(name)", comment: "Pump profile viewer header: profile id and name")
+    }
+
+    private static func markedActive(_ title: String, if active: Bool) -> String {
+        guard active else { return title }
+        return String(localized: "\(title) (active)", comment: "Pump profile viewer: marks the active profile or segment")
     }
 
     func readIfNeeded() {
