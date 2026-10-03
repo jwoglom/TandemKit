@@ -106,4 +106,4 @@ pieces fit together. Paths are relative to the repository root.
 | `scripts/test-local.sh`, `scripts/integration-test.sh` | Local unit and integration test runs. |
 | `scripts/check_xcodeproj_source_membership.rb` | Checks that every test file is in `TandemKitTests` (`--check`, `--fix`). |
 | `scripts/claude-web-setup.sh` | Toolchain setup for Linux agent sessions. |
-| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux plain, virtual-pump and integration jobs; macOS unit and integration jobs. |
+| `.github/workflows/linux.yml`, `macos.yml` | CI: Linux plain, virtual-pump, faketandem and two integration jobs; macOS unit and integration jobs. |
