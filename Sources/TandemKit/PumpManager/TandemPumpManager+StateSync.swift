@@ -823,8 +823,8 @@ extension TandemPumpManager {
             return
         }
 
-        // Look the schedule up at the pump's time of day. Use the offset, not `currentPumpTime`:
-        // that was read at the previous sync, because `fetchTimeSinceReset` runs after this.
+        // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
+        // is a snapshot from the last clock read.
         let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.

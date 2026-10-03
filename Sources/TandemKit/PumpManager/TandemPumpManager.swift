@@ -505,13 +505,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.enforceQuickBolusDisabled()
 
+            // Ahead of the basal read, which looks segments up on the pump's clock.
+            self.fetchTimeSinceReset()
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
             self.fetchBasalStatus()
             self.fetchNotifications()
-            self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()
 
             // A connected link is not a working one: a session can stay up while every read times

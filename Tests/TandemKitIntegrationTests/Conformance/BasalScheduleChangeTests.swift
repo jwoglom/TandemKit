@@ -303,26 +303,79 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
 
     // MARK: - S6
 
-    /// The pump applies the temp percent to its own profile, which differs from the schedule the
-    /// percent came from before the mismatch is confirmed. The driver reads the rate back, stops a
-    /// temp basal it would misreport, and reports none.
-    func testS6_aTempBasalThePumpRunsAtADifferentRateIsStoppedAndNotReported() throws {
+    /// The pump's profile differs from the schedule before the mismatch is confirmed. The percent is
+    /// worked out against the pump's own rate, so the temp runs at the rate the host is told.
+    func testS6_aTempBasalOnAProfileThatDiffersRunsAtTheRequestedRate() throws {
         let driver = try stageDriver()
         try harness.client.setState(["basal_rate": 0.8])
         let start = allPumpEventBatches.count
-        let mark = try logMark()
 
-        let error = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
 
-        guard case let .deviceState(underlying?) = error else {
-            return XCTFail("expected a device state error, got \(String(describing: error))")
-        }
-        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .tempBasalRateMismatch(expected: 1.5, actual: 1.2))
-        let sent = try harness.requestsSeen(since: mark).map(\.message).filter { $0.contains("TempRate") }
-        XCTAssertEqual(sent, ["SetTempRateRequest", "StopTempRateRequest"])
-        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the pump runs no temp basal")
-        let reported = tempBasalsReported(since: start)
-        XCTAssertTrue(reported.isEmpty, "no temp basal reaches the host: \(reported)")
-        XCTAssertEqual(driver.manager.state.basalDose.type, .basal)
+        let pump = try harness.client.snapshot().basal
+        XCTAssertTrue(pump.tempActive)
+        XCTAssertEqual(pump.tempPercent, 188)
+        let reported = try XCTUnwrap(tempBasalsReported(since: start).last?.dose)
+        XCTAssertEqual(reported.unitsPerHour, pump.tempRate, accuracy: 0.01, "the host is told the rate the pump runs")
+        XCTAssertEqual(driver.manager.state.basalDose.tempPercent, 188)
+    }
+
+    // MARK: - S7
+
+    /// 0% of any profile is 0, so a zero temp goes out on a zero-rate profile, before any schedule sync.
+    func testS7_aZeroTempGoesOutOnAZeroRateProfileBeforeAnySync() throws {
+        let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: 0)])
+        try harness.client.setState(["basal_rate": 0.0])
+        driver.manager.state.hasSyncedBasalRateSchedule = false
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0, duration: .minutes(30)))
+
+        let pump = try harness.client.snapshot().basal
+        XCTAssertTrue(pump.tempActive)
+        XCTAssertEqual(pump.tempPercent, 0)
+        XCTAssertEqual(pump.tempRate, 0)
+    }
+
+    // MARK: - S8
+
+    /// The pump's clock runs 11 minutes ahead, already in a 2.0 U/hr segment the phone reaches at
+    /// 14:00. The host counts its own 1.0 meanwhile, so the pump runs 50 % until the phone catches
+    /// up, and the user is alerted until the clock is synced.
+    func testS8_aSkewedPumpClockRunsTheHostsScheduledRateAndAlertsUntilSynced() throws {
+        let phoneStart = Calendar.current.startOfDay(for: Date()).addingTimeInterval(.hours(14) - .minutes(5))
+        try clock.start(at: phoneStart, skewSeconds: 660)
+        try harness.client.setState(["basal_rate": 2.0])
+        var state = TandemPumpManagerState(basalRateSchedule: try XCTUnwrap(BasalRateSchedule(
+            dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0), RepeatingScheduleValue(startTime: .hours(14), value: 2.0)],
+            timeZone: .current
+        )))
+        state.insulinType = .novolog
+        let driver = startDriver(state: state)
+        try harness.pair(driver)
+        _ = try sync()
+
+        XCTAssertTrue(driver.manager.state.isPumpClockSkewed)
+        let skewTemp = try harness.client.snapshot().basal
+        XCTAssertTrue(skewTemp.tempActive, "the pump runs the host's 1.0 U/hr")
+        XCTAssertEqual(skewTemp.tempPercent, 50)
+        XCTAssertEqual(skewTemp.tempRate, 1.0, accuracy: 0.001)
+        XCTAssertTrue(tempBasalsReported(since: 0).isEmpty, "the host counts its own scheduled rate")
+        XCTAssertEqual(
+            driver.delegate.issuedAlerts.map(\.identifier.alertIdentifier),
+            [TandemPumpManager.pumpClockSkewAlertIdentifier]
+        )
+
+        try clock.advanceBoth(seconds: .minutes(6), ticks: 6)
+        _ = try sync()
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the phone reached the pump's segment")
+
+        let box = ResultBox<PumpManagerError?>()
+        driver.manager.writePumpTime { box.set($0) }
+        XCTAssertNil(try box.wait("writePumpTime", timeout: syncTimeout))
+        _ = try sync()
+        drainDelegate()
+        XCTAssertFalse(driver.manager.state.isPumpClockSkewed)
+        XCTAssertEqual(driver.delegate.retractedAlerts.map(\.alertIdentifier), [TandemPumpManager.pumpClockSkewAlertIdentifier])
     }
 }
