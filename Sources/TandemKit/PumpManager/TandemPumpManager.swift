@@ -912,27 +912,96 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            self.settleDeliveryTransition()
-            let dose = UnfinalizedDose(
-                tempRate: absoluteRate,
-                duration: duration,
-                automatic: true,
-                insulinType: self.state.insulinType,
-                startDate: self.now,
-                tempRateId: response.tempRateId
-            )
-            var events = self.getActivePumpEvents(endDate: dose.startDate)
-            events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
+            // The percent came from the host's schedule; the pump applies it to its own profile.
+            if let readback = self.bluetooth.write(CurrentBasalStatusRequest()) {
+                guard Self.tempBasalReadbackMatches(
+                    readback,
+                    reportedRate: absoluteRate,
+                    exactRate: baselineRate * Double(percent) / 100
+                ) else {
+                    self.rejectMismatchedTempBasal(
+                        readback,
+                        expectedRate: absoluteRate,
+                        duration: duration,
+                        tempRateId: response.tempRateId,
+                        completion: completion
+                    )
+                    return
+                }
+            } else {
+                self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
+            }
 
-            self.state.basalDose = dose
-            self.state.lastReconciliation = dose.startDate
-
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(events)
-
+            self.recordTempBasal(rate: absoluteRate, duration: duration, tempRateId: response.tempRateId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
+    }
+
+    private func recordTempBasal(rate: Double, duration: TimeInterval, tempRateId: Int) {
+        settleDeliveryTransition()
+        let dose = UnfinalizedDose(
+            tempRate: rate,
+            duration: duration,
+            automatic: true,
+            insulinType: state.insulinType,
+            startDate: now,
+            tempRateId: tempRateId
+        )
+        var events = getActivePumpEvents(endDate: dose.startDate)
+        events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
+
+        state.basalDose = dose
+        state.lastReconciliation = dose.startDate
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
+    /// Within one 0.01 U/hr step of the rate reported to the host, or of the unrounded percent of
+    /// the schedule: the pump's own rounding of a temp rate is not known.
+    static func tempBasalReadbackMatches(
+        _ readback: CurrentBasalStatusResponse,
+        reportedRate: Double,
+        exactRate: Double
+    ) -> Bool {
+        guard readback.basalType == .tempBasal else { return false }
+        let actual = Int((readback.currentBasalRate * 1000).rounded())
+        return [reportedRate, exactRate].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
+    }
+
+    /// Stops the temp basal so the host is not told a rate the pump isn't running. If it can't be
+    /// stopped, it is reported at the rate the pump read back, so the host counts what goes in.
+    private func rejectMismatchedTempBasal(
+        _ readback: CurrentBasalStatusResponse,
+        expectedRate: Double,
+        duration: TimeInterval,
+        tempRateId: Int,
+        completion: @escaping (PumpManagerError?) -> Void
+    ) {
+        logger.error(
+            "Pump reads back \(readback.currentBasalRate) U/hr (\(readback.basalType)) after a temp basal of \(expectedRate) U/hr"
+        )
+        let error = TandemPumpManagerValidationError.tempBasalRateMismatch(
+            expected: expectedRate,
+            actual: readback.currentBasalRate
+        )
+
+        switch readback.basalType {
+        case .tempBasal:
+            guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
+                logger.error("Could not stop the mismatched temp basal; reporting it at the pump's rate")
+                recordTempBasal(rate: readback.currentBasalRate, duration: duration, tempRateId: tempRateId)
+                completion(.deviceState(error))
+                return
+            }
+            startScheduledBasalDose()
+        case .suspend:
+            observeDeliveryState(.suspend)
+        default:
+            startScheduledBasalDose()
+        }
+        completion(.deviceState(error))
     }
 
     public func suspendDelivery(completion: @escaping (_ error: Error?) -> Void) {

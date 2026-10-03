@@ -285,6 +285,12 @@ edit instead of at the next sync.
   pump's `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp
   basal. The percent is computed from the host's schedule, so the host would otherwise be told
   a rate the pump delivers none of; a Mobi ran a 0 U/hr profile this way for a day.
+- After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp basal
+  within one 0.01 U/hr step of the rate it reports, or of the unrounded percent of the schedule
+  (the pump's rounding is unknown; 10% of 0.15 U/hr is reported as 0). Otherwise it stops the
+  temp basal, reports none and fails with `tempBasalRateMismatch`; one it can't stop is reported
+  at the pump's rate. No answer to the read reports it as commanded. Field logs show the temp in
+  the first status read, within a second, every time.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

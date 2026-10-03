@@ -64,6 +64,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case bolusIsRunning
     case basalScheduleNotSynced
     case pumpProfileBasalRateIsZero
+    case tempBasalRateMismatch(expected: Double, actual: Double)
 
     public var errorDescription: String? {
         switch self {
@@ -104,6 +105,15 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 localized: "The pump's basal rate is 0 U/hr",
                 comment: "Error when a temp basal is blocked because the pump's active profile has a basal rate of zero"
             )
+        case let .tempBasalRateMismatch(expected, actual):
+            return String(
+                format: String(
+                    localized: "The pump ran a temporary basal rate of %.2f U/hr instead of %.2f U/hr",
+                    comment: "Error when the pump reads back a different temp basal rate than the one commanded"
+                ),
+                actual,
+                expected
+            )
         }
     }
 
@@ -134,6 +144,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "A temporary basal rate is a percentage of the pump's basal rate, so it would deliver no insulin. Check the active profile on the pump, or save your basal rates in the app's settings.",
                 comment: "Recovery suggestion when a temp basal is blocked because the pump's active profile has a basal rate of zero"
+            )
+        case .tempBasalRateMismatch:
+            return String(
+                localized: "A temporary basal rate is a percentage of the pump's basal rate. Check that the pump's active profile matches the basal rates in the app's settings.",
+                comment: "Recovery suggestion when the pump reads back a different temp basal rate than the one commanded"
             )
         }
     }

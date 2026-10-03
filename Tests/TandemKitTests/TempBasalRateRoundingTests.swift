@@ -28,17 +28,8 @@ import XCTest
         return TandemPumpManager(state: state, bluetooth: bluetooth)
     }
 
-    /// Stubs the pump traffic `enactTempBasal` needs: the pump running `baseline` with no temp rate,
-    /// and accepting whatever percent it is given.
     private func stubHappyPump(baseline: Double) {
-        let milliunits = UInt32((baseline * 1000).rounded())
-        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
-            profileBasalRate: milliunits,
-            currentBasalRate: milliunits,
-            basalModifiedBitmask: 0
-        ))
-        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
-        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 42))
+        bluetooth.stubBasalPump(profileMilliunits: UInt32((baseline * 1000).rounded()))
     }
 
     private func enact(

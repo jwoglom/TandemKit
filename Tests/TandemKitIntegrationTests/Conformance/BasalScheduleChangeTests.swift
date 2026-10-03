@@ -300,4 +300,29 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "the matching profile was adopted")
         XCTAssertTrue(try harness.client.snapshot().basal.tempActive)
     }
+
+    // MARK: - S6
+
+    /// The pump applies the temp percent to its own profile, which differs from the schedule the
+    /// percent came from before the mismatch is confirmed. The driver reads the rate back, stops a
+    /// temp basal it would misreport, and reports none.
+    func testS6_aTempBasalThePumpRunsAtADifferentRateIsStoppedAndNotReported() throws {
+        let driver = try stageDriver()
+        try harness.client.setState(["basal_rate": 0.8])
+        let start = allPumpEventBatches.count
+        let mark = try logMark()
+
+        let error = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
+
+        guard case let .deviceState(underlying?) = error else {
+            return XCTFail("expected a device state error, got \(String(describing: error))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .tempBasalRateMismatch(expected: 1.5, actual: 1.2))
+        let sent = try harness.requestsSeen(since: mark).map(\.message).filter { $0.contains("TempRate") }
+        XCTAssertEqual(sent, ["SetTempRateRequest", "StopTempRateRequest"])
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the pump runs no temp basal")
+        let reported = tempBasalsReported(since: start)
+        XCTAssertTrue(reported.isEmpty, "no temp basal reaches the host: \(reported)")
+        XCTAssertEqual(driver.manager.state.basalDose.type, .basal)
+    }
 }

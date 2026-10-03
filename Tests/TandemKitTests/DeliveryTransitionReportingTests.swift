@@ -176,10 +176,8 @@ import XCTest
         delegateQueue.sync {}
     }
 
-    private func appTempBasal(_ rate: Double, pumpShows bitmask: Int) {
-        stubBasalStatus(bitmask)
-        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
-        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 50))
+    private func appTempBasal(_ rate: Double) {
+        bluetooth.stubBasalPump(profileMilliunits: UInt32(Self.scheduledRate * 1000), tempRateId: 50)
         let done = expectation(description: "enactTempBasal")
         manager.enactTempBasal(unitsPerHour: rate, for: .minutes(30)) { error in
             XCTAssertNil(error)
@@ -511,7 +509,7 @@ import XCTest
         observe(0)
         let before = batches.count
 
-        appTempBasal(2.0, pumpShows: 0)
+        appTempBasal(2.0)
 
         let after = Array(batches.dropFirst(before)).flatMap(\.events)
         XCTAssertEqual(after.map(\.dose?.type), [.resume, .tempBasal], "Loop closes an open suspend at the temp basal for good (#354)")
@@ -553,7 +551,7 @@ import XCTest
         observe(1)
         advance(to: minutes(30))
         observe(0)
-        appTempBasal(2.0, pumpShows: 0)
+        appTempBasal(2.0)
         let reported = events.count
 
         pass([suspendRecord, resumed(at: minutes(12))])
@@ -567,7 +565,7 @@ import XCTest
         observe(2)
         advance(to: minutes(20))
 
-        appTempBasal(2.0, pumpShows: 0)
+        appTempBasal(2.0)
 
         let finished = try XCTUnwrap(events(.tempBasal).first { $0.dose?.isMutable == false })
         XCTAssertEqual(finished.dose?.endDate, minutes(10), "a temp basal below the schedule is ended as early as it can have ended")
