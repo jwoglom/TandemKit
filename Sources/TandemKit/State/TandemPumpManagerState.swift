@@ -155,6 +155,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// currently issued as LoopKit alerts. Persisted so alerts issued before an app restart
     /// are retracted (not re-issued) once the pump reports them cleared.
     public var issuedAlertIdentifiers: Set<String> = []
+    /// Persisted, like `issuedAlertIdentifiers`, so a relaunch retracts the alert rather than re-issuing it.
+    public var pumpClockSkewAlertIssued = false
     /// Whether CGM alerts are forwarded as LoopKit alerts in addition to alerts, alarms,
     /// and malfunctions. Off by default: users running their CGM vendor's app already
     /// receive these and duplicates are noisy.
@@ -230,6 +232,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.notificationCount == rhs.notificationCount,
               lhs.lastNotificationUpdate == rhs.lastNotificationUpdate,
               lhs.issuedAlertIdentifiers == rhs.issuedAlertIdentifiers,
+              lhs.pumpClockSkewAlertIssued == rhs.pumpClockSkewAlertIssued,
               lhs.forwardCGMAlerts == rhs.forwardCGMAlerts,
               lhs.lastSiteChangeDate == rhs.lastSiteChangeDate,
               lhs.lastCartridgeChangeDate == rhs.lastCartridgeChangeDate,
@@ -278,6 +281,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         alertSnoozeDuration = rawValue["alertSnoozeDuration"] as? TimeInterval ?? .minutes(10)
         notificationCount = rawValue["notificationCount"] as? Int
         issuedAlertIdentifiers = Set(rawValue["issuedAlertIdentifiers"] as? [String] ?? [])
+        pumpClockSkewAlertIssued = rawValue["pumpClockSkewAlertIssued"] as? Bool ?? false
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
@@ -511,6 +515,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["notificationCount"] = notificationCount
         raw["lastNotificationUpdate"] = lastNotificationUpdate?.timeIntervalSinceReferenceDate
         raw["issuedAlertIdentifiers"] = Array(issuedAlertIdentifiers).sorted()
+        raw["pumpClockSkewAlertIssued"] = pumpClockSkewAlertIssued
         raw["forwardCGMAlerts"] = forwardCGMAlerts
         raw["lastSiteChangeDate"] = lastSiteChangeDate
         raw["lastCartridgeChangeDate"] = lastCartridgeChangeDate
@@ -577,6 +582,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate)
     }
 
+    /// Past this the pump's segments sit a host loop cycle or more from the host's, so temp basals
+    /// are worked out against the pump's own and the user is told to sync its clock.
+    public static let pumpClockSkewThreshold: TimeInterval = .minutes(5)
+
+    public var isPumpClockSkewed: Bool {
+        currentPumpTime != nil && abs(pumpClockOffset) > Self.pumpClockSkewThreshold
+    }
+
     public var showPumpTimeSyncWarning: Bool {
         // Allow 10s time drift
         abs(pumpClockOffset) > .seconds(10)
@@ -624,6 +637,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* notificationCount: \(String(describing: notificationCount))",
             "* lastNotificationUpdate: \(String(describing: lastNotificationUpdate))",
             "* issuedAlertIdentifiers: \(issuedAlertIdentifiers.sorted())",
+            "* pumpClockSkewAlertIssued: \(pumpClockSkewAlertIssued)",
             "* forwardCGMAlerts: \(forwardCGMAlerts)",
             "* lastSiteChangeDate: \(String(describing: lastSiteChangeDate))",
             "* lastCartridgeChangeDate: \(String(describing: lastCartridgeChangeDate))",

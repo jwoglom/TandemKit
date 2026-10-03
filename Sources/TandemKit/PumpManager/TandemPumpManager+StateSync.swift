@@ -17,6 +17,7 @@ extension TandemPumpManager {
         state.lastPumpTimeCheckDate = checkedAt
 
         notifyDelegateStateUpdated()
+        reconcilePumpClockSkewAlert()
     }
 
     func fetchControlIQStatus() {
@@ -154,6 +155,8 @@ extension TandemPumpManager {
             reportTempBasalSegmentChanges()
             stopTempBasalOnConfirmedMismatch()
         }
+
+        maintainPumpClockSkewCompensation(response)
     }
 
     /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs
@@ -861,5 +864,107 @@ extension TandemPumpManager {
         state.basalRateMismatchConfirmed = true
         state.hasSyncedBasalRateSchedule = false
         notifyDelegateStateUpdated()
+    }
+}
+
+extension TandemPumpManager {
+    static let pumpClockSkewAlertIdentifier = "pump-clock-skew"
+    static let skewCompensationDuration: TimeInterval = .minutes(30)
+
+    func reconcilePumpClockSkewAlert() {
+        let skewed = state.isPumpClockSkewed
+        guard skewed != state.pumpClockSkewAlertIssued else { return }
+
+        let minutes = max(1, Int((abs(state.pumpClockOffset) / 60).rounded()))
+        let identifier = LoopKit.Alert.Identifier(
+            managerIdentifier: TandemPumpManager.managerIdentifier,
+            alertIdentifier: Self.pumpClockSkewAlertIdentifier
+        )
+        pumpDelegate.notify { delegate in
+            guard let delegate, skewed != self.state.pumpClockSkewAlertIssued else { return }
+
+            if skewed {
+                let content = LoopKit.Alert.Content(
+                    title: String(localized: "Pump Time Is Off", comment: "Title of the alert that the pump's clock differs from the phone's"),
+                    body: String(
+                        format: String(
+                            localized: "Your pump's clock is %d minutes different from your phone's, which affects temporary basal rates. Open the pump's settings in the app to sync its time.",
+                            comment: "Body of the alert that the pump's clock differs from the phone's (minutes)"
+                        ),
+                        minutes
+                    ),
+                    acknowledgeActionButtonLabel: String(localized: "OK", comment: "Acknowledges the pump time alert")
+                )
+                self.logger.warning("Pump clock is \(minutes) min off the phone's; issuing an alert")
+                delegate.issueAlert(LoopKit.Alert(
+                    identifier: identifier,
+                    foregroundContent: content,
+                    backgroundContent: content,
+                    trigger: .immediate,
+                    interruptionLevel: .timeSensitive
+                ))
+            } else {
+                self.logger.info("Pump clock agrees with the phone's again; retracting the alert")
+                delegate.retractAlert(identifier: identifier)
+            }
+            self.state.pumpClockSkewAlertIssued = skewed
+            self.notifyDelegateStateUpdated()
+        }
+    }
+
+    /// While the pump's clock is skewed its segments sit apart from the host's, and the host counts
+    /// its own scheduled rate whenever no temp runs. So wherever it would, the pump runs a temp at
+    /// the percent of its own rate that delivers the host's.
+    func maintainPumpClockSkewCompensation(_ status: CurrentBasalStatusResponse) {
+        if status.basalType != .tempBasal {
+            skewCompensationTemp = nil
+        }
+
+        let wanted: Int? = {
+            guard state.isPumpClockSkewed, !state.useControlIQ, state.hasSyncedBasalRateSchedule,
+                  state.basalDose.type == .basal, state.deliveryTransitions.pending == nil,
+                  status.basalType != .suspend, status.profileBasalRate > 0,
+                  bolusProgressReport?.isUnfinalized() != true
+            else {
+                return nil
+            }
+            let percent = tempBasalPercentAndRate(
+                requestedRate: getScheduledBasalRate(),
+                baseline: status.profileBasalRate
+            ).percent
+            return percent == 100 ? nil : percent
+        }()
+
+        if let running = skewCompensationTemp {
+            if running.percent == wanted, running.endsAt.timeIntervalSince(now) > .minutes(10) {
+                return
+            }
+            guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
+                logger.error("Could not stop the pump clock skew temp")
+                return
+            }
+            skewCompensationTemp = nil
+        } else if status.basalType == .tempBasal {
+            return
+        }
+
+        guard let wanted else { return }
+        guard let response = bluetooth.write(SetTempRateRequest(minutes: Int(Self.skewCompensationDuration.minutes), percent: wanted)),
+              response.isStatusOK
+        else {
+            logger.error("Could not set the pump clock skew temp at \(wanted)%")
+            return
+        }
+        skewCompensationTemp = (wanted, now.addingTimeInterval(Self.skewCompensationDuration))
+        logger.info("Pump clock is skewed; running \(wanted)% of the pump's \(status.profileBasalRate) U/hr to deliver the host's \(self.getScheduledBasalRate()) U/hr")
+
+        if let readback = bluetooth.write(CurrentBasalStatusRequest()),
+           !Self.tempBasalReadbackMatches(readback, percent: wanted)
+        {
+            logger.error("Pump reads back \(readback.currentBasalRate) U/hr for the clock skew temp; stopping it")
+            if bluetooth.write(StopTempRateRequest())?.isStatusOK == true {
+                skewCompensationTemp = nil
+            }
+        }
     }
 }

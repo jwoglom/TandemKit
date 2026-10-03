@@ -129,6 +129,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("notificationCount", { $0.notificationCount = nil }),
             ("lastNotificationUpdate", { $0.lastNotificationUpdate = nil }),
             ("issuedAlertIdentifiers", { $0.issuedAlertIdentifiers.remove("alert-7") }),
+            ("pumpClockSkewAlertIssued", { $0.pumpClockSkewAlertIssued = false }),
             ("forwardCGMAlerts", { $0.forwardCGMAlerts = false }),
             ("lastSiteChangeDate", { $0.lastSiteChangeDate = nil }),
             ("lastCartridgeChangeDate", { $0.lastCartridgeChangeDate = nil }),
@@ -255,6 +256,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.notificationCount = 3
         state.lastNotificationUpdate = t0
         state.issuedAlertIdentifiers = ["alarm-2", "alert-7"]
+        state.pumpClockSkewAlertIssued = true
         state.forwardCGMAlerts = true
         state.lastSiteChangeDate = t0.addingTimeInterval(-.hours(50))
         state.lastCartridgeChangeDate = t0.addingTimeInterval(-.hours(26))

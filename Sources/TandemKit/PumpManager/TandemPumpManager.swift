@@ -151,6 +151,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let syncStateLock = NSLock()
     private var inFlightSyncs = 0
 
+    /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
+    var skewCompensationTemp: (percent: Int, endsAt: Date)?
+
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -885,6 +888,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 self.logger.info("Current temp basal cancelled!")
+                self.skewCompensationTemp = nil
             }
 
             let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
@@ -895,6 +899,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if percent == 100 {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
+                if self.state.isPumpClockSkewed, let status = self.bluetooth.write(CurrentBasalStatusRequest()) {
+                    self.maintainPumpClockSkewCompensation(status)
+                }
                 completion(nil)
                 return
             }
@@ -1037,6 +1044,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if currentTempResponse.active {
                 let stopResponse = self.bluetooth.write(StopTempRateRequest())
                 if let stopResponse, stopResponse.isStatusOK {
+                    self.skewCompensationTemp = nil
                     self.logger.info("Current temp basal cancelled!")
                 } else {
                     self.logger
