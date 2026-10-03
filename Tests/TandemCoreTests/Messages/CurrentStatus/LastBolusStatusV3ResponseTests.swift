@@ -12,6 +12,12 @@ final class LastBolusStatusV3ResponseTests: XCTestCase {
         return LastBolusStatusV3Response(cargo: Data(cargo.prefix(Int(LastBolusStatusV3Response.props.size))))
     }
 
+    func testStandardSectionBolusTypesUseHistoryLogMapping() throws {
+        let section = try XCTUnwrap(mobiStandardBolus.standardSection)
+
+        XCTAssertEqual([.now, .correction], section.bolusTypes)
+    }
+
     func testMobiStandardBolusCapture() {
         let parsed = mobiStandardBolus
 

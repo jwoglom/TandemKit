@@ -179,6 +179,22 @@ import XCTest
         XCTAssertEqual(manager.state.settings.maxBolus, 9.5)
     }
 
+    func testSyncDeliveryLimitsRejectsOutOfRangeLimitBeforeSendingAnything() {
+        let limits = DeliveryLimits(
+            maximumBasalRate: HKQuantity(
+                unit: HKUnit.internationalUnit().unitDivided(by: .hour()),
+                doubleValue: 4.2
+            ),
+            maximumBolus: HKQuantity(unit: .internationalUnit(), doubleValue: 30)
+        )
+
+        guard case .failure = syncLimits(limits) else {
+            return XCTFail("Expected a bolus limit above 25 U to fail the sync")
+        }
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertNotEqual(manager.state.settings.maxBolus, 30)
+    }
+
     /// The stored maxBolus is what `enactBolus` validates against, so a pump rejection must not
     /// leave the driver believing a limit it never accepted is in force.
     func testSyncDeliveryLimitsFailsWhenPumpRejectsBolusLimit() {

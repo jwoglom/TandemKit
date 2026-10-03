@@ -86,8 +86,8 @@ public class CurrentBolusStatusResponse: Message {
         BolusSource.fromId(bolusSourceId)
     }
 
-    public var bolusTypes: Set<BolusType> {
-        BolusType.fromBitmask(bolusTypeBitmask)
+    public var bolusTypes: Set<BolusDeliveryHistoryLog.BolusType> {
+        BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeBitmask)
     }
 
     public var timestampDate: Date {

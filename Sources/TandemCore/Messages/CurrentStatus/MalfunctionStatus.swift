@@ -64,34 +64,34 @@ public class MalfunctionBitmaskStatusResponse: Message, NotificationMessage {
 
     /// Malfunction subsystem types encoded as bit positions in the bitmask.
     public enum MalfunctionType: Int, CaseIterable, Comparable, NotificationEnum {
-        case software = 1
-        case cpuCore = 2
-        case armMspCom = 4
-        case sensor = 8
-        case lipo = 16
-        case touchscreen = 32
-        case nvm = 64
-        case display = 128
-        case msp = 256
-        case motor = 512
-        case externalBins = 1024
-        case swInit = 2048
-        case vibe = 4096
-        case periphPower = 8192
-        case p2 = 16384
-        case datalog = 32768
-        case speaker = 65536
-        case mspSupply = 131_072
-        case calData = 262_144
-        case btle = 524_288
-        case ap = 1_048_576
-        case rtc = 2_097_152
-        case armBleCom = 4_194_304
-        case overtravelStall = 8_388_608
-        case undertravelStall = 16_777_216
-        case pushoffStall = 33_554_432
+        case software = 0
+        case cpuCore = 1
+        case armMspCom = 2
+        case sensor = 3
+        case lipo = 4
+        case touchscreen = 5
+        case nvm = 6
+        case display = 7
+        case msp = 8
+        case motor = 9
+        case externalBins = 10
+        case swInit = 11
+        case vibe = 12
+        case periphPower = 13
+        case p2 = 14
+        case datalog = 15
+        case speaker = 16
+        case mspSupply = 17
+        case calData = 18
+        case btle = 19
+        case ap = 20
+        case rtc = 21
+        case armBleCom = 22
+        case overtravelStall = 23
+        case undertravelStall = 24
+        case pushoffStall = 25
         /// Tandem firmware name: Malf_HW_CRYPTO_FAIL
-        case hwCryptoFail = 67_108_864
+        case hwCryptoFail = 26
         
         public static func < (lhs: MalfunctionType, rhs: MalfunctionType) -> Bool {
             lhs.rawValue < rhs.rawValue

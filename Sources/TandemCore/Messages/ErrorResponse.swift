@@ -12,6 +12,7 @@ public final class ErrorResponse: Message {
     )
 
     public var cargo: Data
+    /// Unsigned, unlike pumpX2's signed byte, so it compares directly with `MessageProps.opCode`.
     public let requestCodeId: Int
     public let errorCodeId: Int
     public let remainingBytes: Data

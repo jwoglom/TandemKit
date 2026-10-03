@@ -262,7 +262,7 @@ public struct LastBolusStatusV3Section: Equatable {
     }
 
     public var bolusSource: BolusSource? { BolusSource.fromId(bolusSourceId) }
-    public var bolusTypes: Set<BolusType> { BolusType.fromBitmask(bolusTypeBitmask) }
+    public var bolusTypes: Set<BolusDeliveryHistoryLog.BolusType> { BolusDeliveryHistoryLog.BolusType.fromBitmask(bolusTypeBitmask) }
     public var timestampDate: Date { Dates.fromJan12008EpochSecondsToDate(TimeInterval(timestamp)) }
 }
 
