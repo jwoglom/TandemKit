@@ -845,8 +845,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            let isCancel = duration <= 0
             // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-            if duration >= .ulpOfOne {
+            if !isCancel {
                 self.adoptMatchingPumpProfile()
                 guard self.state.hasSyncedBasalRateSchedule else {
                     self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
@@ -881,7 +882,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let (percent, absoluteRate) = self
                 .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
 
-            if duration < .ulpOfOne || percent == 100 {
+            if isCancel || percent == 100 {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
                 completion(nil)

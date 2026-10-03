@@ -86,6 +86,31 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertNil(try enactTempBasal(driver))
     }
 
+    // MARK: - State saved before the sync flag existed
+
+    func testTempBasalGoesOutWhenThePumpAlreadyHoldsTheSchedule() throws {
+        let driver = try pairedUnsyncedDriver(pump: [Self.twoSegmentProfile], schedule: [(0, 0.8), (12, 0.6)])
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+
+        XCTAssertNil(try enactTempBasal(driver))
+
+        let seen = try harness.requestsSeen(since: logStart).map(\.message)
+        XCTAssertTrue(seen.contains("SetTempRateRequest"), "pump saw \(seen)")
+        try assertNoProfileWrites(since: logStart)
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testTempBasalStaysRefusedWhenThePumpHoldsADifferentProfile() throws {
+        let driver = try pairedUnsyncedDriver(pump: [Self.twoSegmentProfile], schedule: [(0, 0.8), (12, 0.65)])
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+
+        try assertTempBasalRefused(driver)
+
+        try assertNoProfileWrites(since: logStart)
+        XCTAssertEqual(try harness.client.snapshot().idpProfiles, [Self.twoSegmentProfile])
+        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
+    }
+
     // MARK: - Cases
 
     private func assertSynced(
