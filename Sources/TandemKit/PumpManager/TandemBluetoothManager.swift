@@ -76,6 +76,14 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // lists as connected) before they are discarded and the pump is rediscovered by scanning.
     // Two, so a single dropout that resolves itself does not pay for a rescan.
     private let staleFastPathThreshold = 2
+    // CoreBluetooth says nothing when a pump that refused a connect comes back into range, and the
+    // host's sync is throttled for minutes after the last one, so a failed connect on a paired pump
+    // is retried on this schedule until a session lands (jwoglom/tandemkit-stress#4).
+    static let reconnectRetryDelays: [TimeInterval] = [5, 10, 20, 40, 60]
+    // Guarded by connectStateLock: scheduled from command jobs, cancelled from managerQueue
+    // (Bluetooth off) and from deactivate().
+    private var reconnectRetry: DispatchWorkItem?
+    private var reconnectRetryCount = 0
 
     private var isActive: Bool {
         connectStateLock.lock()
@@ -249,9 +257,50 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             // reports as a disconnect. A session that landed since the attempt gave up is live.
             if error != nil, !self.hasLiveSession {
                 self.markLinkDown()
+                self.scheduleReconnectRetry()
             }
             completion(error)
         }
+    }
+
+    /// Arms the next background connect attempt, unless one is already pending. Only for a pump
+    /// that has been paired: a retry firing mid-pairing would take over that connect's completion.
+    private func scheduleReconnectRetry() {
+        guard isActive, manager?.state == .poweredOn, pumpManager?.isOnboarded == true else {
+            return
+        }
+
+        connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        if let pending = reconnectRetry, !pending.isCancelled {
+            return
+        }
+        let delays = Self.reconnectRetryDelays
+        let delay = delays[min(reconnectRetryCount, delays.count - 1)]
+        reconnectRetryCount += 1
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.isActive else { return }
+            self.connectStateLock.lock()
+            self.reconnectRetry = nil
+            self.connectStateLock.unlock()
+            self.logger.info("Retrying the reconnect")
+            self.ensureConnected { error in
+                if error == nil {
+                    self.logger.info("Reconnect retry completed!")
+                }
+            }
+        }
+        reconnectRetry = item
+        logger.info("Retrying the reconnect in \(delay) s")
+        managerQueue.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func cancelReconnectRetry() {
+        connectStateLock.lock()
+        reconnectRetry?.cancel()
+        reconnectRetry = nil
+        reconnectRetryCount = 0
+        connectStateLock.unlock()
     }
 
     /// Establishes a connection to the pump if one is not already up. MUST be called on
@@ -269,6 +318,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
 
         if hasLiveSession {
             consecutiveConnectFailures = 0
+            cancelReconnectRetry()
             return nil
         }
 
@@ -353,6 +403,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
                 return error
             }
             consecutiveConnectFailures = 0
+            cancelReconnectRetry()
             return nil
         }
     }
@@ -414,6 +465,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         isDeactivated = true
         connectStateLock.unlock()
 
+        cancelReconnectRetry()
         disconnect()
         pumpManager = nil
     }
@@ -441,6 +493,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             // won't fire, so cancel in-flight command waits to release any held
             // locks instead of waiting for the stack to come back.
             logger.info("Bluetooth not powered on; cancelling pending operations")
+            cancelReconnectRetry()
             cancelInFlightConnect()
             peripheralManager?.cancelPendingOperations()
             // No didDisconnectPeripheral arrives for those, so this is the only notice.

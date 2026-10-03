@@ -672,6 +672,7 @@ import XCTest
     func testTheSyncThrottleIsNotPreAgedByAnOldManager() {
         advance(.hours(6))
         manager.state.lastReconciliation = clock.now
+        manager.state.isConnected = true
         clock.advance(by: .minutes(4))
 
         let done = expectation(description: "ensureCurrentPumpData")

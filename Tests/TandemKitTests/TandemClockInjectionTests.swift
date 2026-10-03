@@ -130,6 +130,7 @@ import XCTest
 
     func testEnsureCurrentPumpDataSkipsTheSyncWhileTheClockIsInsideTheThrottle() {
         manager.state.lastReconciliation = clock.now
+        manager.state.isConnected = true
 
         clock.advance(by: .minutes(4))
         let done = expectation(description: "ensureCurrentPumpData")
@@ -140,6 +141,18 @@ import XCTest
         wait(for: [done], timeout: 5.0)
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 0, "Throttled: the pump must not be contacted")
+    }
+
+    func testEnsureCurrentPumpDataSyncsInsideTheThrottleWhileTheLinkIsDown() {
+        manager.state.lastReconciliation = clock.now
+        manager.state.isConnected = false
+
+        clock.advance(by: .minutes(1))
+        let done = expectation(description: "ensureCurrentPumpData")
+        manager.ensureCurrentPumpData { _ in done.fulfill() }
+        wait(for: [done], timeout: 5.0)
+
+        XCTAssertGreaterThan(bluetooth.ensureConnectedCount, 0, "A disconnected pump is reconnected by the sync")
     }
 
     func testEnsureCurrentPumpDataSyncsOnceTheClockPassesTheThrottle() {

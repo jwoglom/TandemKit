@@ -237,6 +237,7 @@ import XCTest
     func testEnsureCurrentPumpDataSkipsRecentSync() {
         let recentSync = Date().addingTimeInterval(-60)
         manager.state.lastReconciliation = recentSync
+        manager.state.isConnected = true
 
         let expectation = expectation(description: "ensureCurrentPumpData completes")
         var reportedLastSync: Date?
