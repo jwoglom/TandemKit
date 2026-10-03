@@ -748,13 +748,7 @@ import XCTest
     }
 
     func testATempBasalIsDatedAtTheClocksCurrentReading() throws {
-        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
-            profileBasalRate: 1000,
-            currentBasalRate: 1000,
-            basalModifiedBitmask: 0
-        ))
-        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
-        bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 42))
+        bluetooth.stubBasalPump(profileMilliunits: 1000)
         advance()
 
         let done = expectation(description: "enactTempBasal")

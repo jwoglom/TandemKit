@@ -151,9 +151,10 @@ edit instead of at the next sync.
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
   `profileBasalRate` during a temp basal and skipping suspend and Control-IQ. A mismatch that
-  outlives `basalMismatchConfirmationInterval` shows a critical status highlight. Nothing
-  auto-corrects. A schedule change that alters the rate in force stops a running temp basal,
-  since the pump rescales it, and restarts the scheduled basal dose at the new rate.
+  outlives `basalMismatchConfirmationInterval` shows a critical status highlight and clears
+  `hasSyncedBasalRateSchedule`, so temp basals stop (see Therapy command validation). Nothing
+  rewrites the pump's profile. A schedule change that alters the rate in force stops a running
+  temp basal, since the pump rescales it, and restarts the scheduled basal dose at the new rate.
 
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
@@ -276,6 +277,20 @@ edit instead of at the next sync.
   State saved before the flag existed reads false, and Loop and Trio only sync the schedule
   when the user saves it, so while it is false `enactTempBasal` reads the pump's profile
   (`adoptMatchingPumpProfile`) and sets the flag if it already matches the host's schedule.
+- A confirmed basal rate mismatch clears `hasSyncedBasalRateSchedule` on every reading that
+  still differs, a sync's included, and `adoptMatchingPumpProfile` skips while it stands: a
+  matching profile does not explain a live rate that differs. Temp basals resume after a
+  reading that matches, through adoption or a sync.
+- `enactTempBasal` refuses everything but a cancel with `pumpProfileBasalRateIsZero` when the
+  pump's `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp
+  basal. The percent is computed from the host's schedule, so the host would otherwise be told
+  a rate the pump delivers none of; a Mobi ran a 0 U/hr profile this way for a day.
+- After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp basal
+  within one 0.01 U/hr step of the rate it reports, or of the unrounded percent of the schedule
+  (the pump's rounding is unknown; 10% of 0.15 U/hr is reported as 0). Otherwise it stops the
+  temp basal, reports none and fails with `tempBasalRateMismatch`; one it can't stop is reported
+  at the pump's rate. No answer to the read reports it as commanded. Field logs show the temp in
+  the first status read, within a second, every time.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

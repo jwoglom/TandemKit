@@ -781,8 +781,9 @@ extension TandemPumpManager {
     /// syncs. A second read seconds later, triggered by a qualifying event, doesn't count.
     static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
 
-    /// Reports only. It never rewrites the pump's profile, which the user may have changed on the
-    /// pump on purpose.
+    /// Never rewrites the pump's profile, which the user may have changed on the pump on purpose.
+    /// A confirmed mismatch clears `hasSyncedBasalRateSchedule` instead, so `enactTempBasal`
+    /// refuses until a sync, or a matching reading lets `adoptMatchingPumpProfile` set it again.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
         // Control-IQ changes the delivered rate itself, so it won't match the schedule.
         guard !state.useControlIQ else {
@@ -823,13 +824,23 @@ extension TandemPumpManager {
             return
         }
 
-        guard !state.basalRateMismatchConfirmed,
-              now.timeIntervalSince(since) >= Self.basalMismatchConfirmationInterval
+        guard state.basalRateMismatchConfirmed
+            || now.timeIntervalSince(since) >= Self.basalMismatchConfirmationInterval
         else {
             return
         }
 
+        // Also after confirmation: a sync that verified the profile sets the flag again even
+        // though the rate in force still differs, e.g. on a pump clock hours off.
+        guard !state.basalRateMismatchConfirmed || state.hasSyncedBasalRateSchedule else {
+            return
+        }
+
+        if state.hasSyncedBasalRateSchedule {
+            logger.error("Refusing temp basals until the pump's basal rate matches the schedule again")
+        }
         state.basalRateMismatchConfirmed = true
+        state.hasSyncedBasalRateSchedule = false
         notifyDelegateStateUpdated()
     }
 }

@@ -234,6 +234,97 @@ import XCTest
         XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
     }
 
+    func testUnconfirmedMismatchLeavesTheBasalScheduleSynced() {
+        setSchedule([(0, 0.65)])
+        manager.state.hasSyncedBasalRateSchedule = true
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testConfirmedMismatchMarksTheBasalScheduleUnsynced() {
+        setSchedule([(0, 0.65)])
+        manager.state.hasSyncedBasalRateSchedule = true
+        manager.clock = ManualClock(Self.referenceDate)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    /// The field report: a temp basal running on a 0 U/hr profile, read on two syncs five minutes apart.
+    func testTempBasalOnAZeroProfileMarksTheBasalScheduleUnsyncedOnceConfirmed() {
+        setSchedule([(0, 1.1)])
+        manager.state.hasSyncedBasalRateSchedule = true
+        manager.clock = ManualClock(Self.referenceDate)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0x02, profileRate: 0))
+
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0x02, profileRate: 0))
+
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testMismatchStillStandingAfterASyncMarksTheScheduleUnsyncedAgain() {
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
+        // What a successful syncBasalRateSchedule leaves.
+        manager.state.hasSyncedBasalRateSchedule = true
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.9, type: 0))
+
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+    }
+
+    func testRatesAgreeingAgainLeaveTheScheduleUnsyncedForAdoption() {
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
+        manager.state.hasSyncedBasalRateSchedule = false
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
+
+        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testMismatchReadingsAfterConfirmationDoNotNotifyTheDelegateAgain() {
+        let delegate = MockPumpManagerDelegate()
+        let delegateQueue = DispatchQueue(label: "basal-verification-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+        delegateQueue.sync {}
+
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
+        manager.state.hasSyncedBasalRateSchedule = false
+        let updatesBefore = delegate.didUpdateStateCount
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore)
+    }
+
+    func testAMatchingProfileIsNotAdoptedWhileAMismatchIsConfirmed() {
+        stubProfile([.init(startTime: 0, basalRate: 650)])
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalRateMismatchConfirmed = true
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertFalse(bluetooth.didSend(IDPSegmentRequest.self))
+    }
+
     func testTempBasalIsCheckedAgainstTheProfileRate() {
         setSchedule([(0, 0.65)])
 

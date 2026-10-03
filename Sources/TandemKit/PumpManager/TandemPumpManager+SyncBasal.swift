@@ -375,9 +375,13 @@ extension TandemPumpManager {
 
     /// State saved before `hasSyncedBasalRateSchedule` existed reads false on a pump that was looping,
     /// and hosts sync only on a save. A profile already matching is what a successful sync leaves.
+    /// Not while a confirmed basal rate mismatch stands: a matching profile does not explain it.
     func adoptMatchingPumpProfile() {
         let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
-        guard !state.hasSyncedBasalRateSchedule, items.contains(where: { $0.value > 0 }) else {
+        guard !state.hasSyncedBasalRateSchedule,
+              !state.basalRateMismatchConfirmed,
+              items.contains(where: { $0.value > 0 })
+        else {
             return
         }
 

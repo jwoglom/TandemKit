@@ -59,6 +59,21 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         lock.unlock()
     }
 
+    /// A pump running `profileMilliunits` whose basal status follows the temp rates it is sent,
+    /// applying each percent to its own profile as a pump does.
+    func stubBasalPump(profileMilliunits: UInt32, runningTempPercent: Int? = nil, tempRateId: Int = 42) {
+        let pump = StubBasalPump(profileMilliunits: profileMilliunits, tempPercent: runningTempPercent)
+        stub(SetTempRateRequest.self) { request in
+            pump.setTempPercent((request as? SetTempRateRequest)?.percent)
+            return SetTempRateResponse(status: 0, tempRateId: tempRateId)
+        }
+        stub(StopTempRateRequest.self) { _ in
+            pump.setTempPercent(nil)
+            return StopTempRateResponse(status: 0, tempRateId: tempRateId)
+        }
+        stub(CurrentBasalStatusRequest.self) { _ in pump.status() }
+    }
+
     // MARK: - Assertions
 
     /// Forget the traffic recorded so far, so a later phase of a test can assert on its own
@@ -151,5 +166,39 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         lock.unlock()
         disconnect()
         pumpManager = nil
+    }
+}
+
+private final class StubBasalPump {
+    private let lock = NSLock()
+    private let profileMilliunits: UInt32
+    private var tempPercent: Int?
+
+    init(profileMilliunits: UInt32, tempPercent: Int?) {
+        self.profileMilliunits = profileMilliunits
+        self.tempPercent = tempPercent
+    }
+
+    func setTempPercent(_ percent: Int?) {
+        lock.lock()
+        tempPercent = percent
+        lock.unlock()
+    }
+
+    func status() -> CurrentBasalStatusResponse {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let tempPercent else {
+            return CurrentBasalStatusResponse(
+                profileBasalRate: profileMilliunits,
+                currentBasalRate: profileMilliunits,
+                basalModifiedBitmask: 0
+            )
+        }
+        return CurrentBasalStatusResponse(
+            profileBasalRate: profileMilliunits,
+            currentBasalRate: profileMilliunits * UInt32(tempPercent) / 100,
+            basalModifiedBitmask: 0x02
+        )
     }
 }
