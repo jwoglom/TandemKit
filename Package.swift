@@ -119,7 +119,8 @@ let package = Package(
                 "TandemKitTests/TandemKitG6SetupViewModelTests.swift",
                 "TandemKitTests/TandemKitG7SetupViewModelTests.swift",
                 "TandemKitTests/TandemKitCGMSettingsViewModelTests.swift",
-                "TandemKitTests/TandemKitTroubleshootConnectionViewModelTests.swift"
+                "TandemKitTests/TandemKitTroubleshootConnectionViewModelTests.swift",
+                "TandemKitTests/TandemKitPumpProfileViewerViewModelTests.swift"
             ],
             sources: ["TandemKitTests", "TandemKitIntegrationTests/Conformance/Oracles"]
         )

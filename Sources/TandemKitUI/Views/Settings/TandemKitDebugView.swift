@@ -68,6 +68,15 @@ struct TandemKitDebugView: View {
                 .disabled(viewModel.openHistoryLogViewer == nil)
             }
 
+            Section(header: Text("Profiles")) {
+                Button {
+                    viewModel.openPumpProfileViewer?()
+                } label: {
+                    Label("Pump Profile Viewer", systemImage: "list.bullet.indent")
+                }
+                .disabled(viewModel.openPumpProfileViewer == nil)
+            }
+
             Section(header: Text("PumpState")) {
                 Button("View PumpState") {
                     showingPumpState = true
