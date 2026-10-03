@@ -102,8 +102,8 @@ public class IDPManager {
             )
         }
 
-        /// `changedFields` is the request's status mask. Tandem's app flags only the fields it changes,
-        /// and a Mobi rejected every segment-0 modify flagging all five, start time included.
+        /// `changedFields` is the request's status mask. Tandem's app flags only the fields it changes;
+        /// a Mobi refused a segment-0 modify flagging all five, its midnight start time included.
         public func modifySegmentMessage(
             segment: IDPSegmentResponse,
             changedFields: Set<IDPSegmentResponse.IDPSegmentStatus>

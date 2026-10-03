@@ -3,7 +3,7 @@ import Foundation
 
 /// In-memory stand-in for the pump's insulin delivery profile: answers the IDP read walk and
 /// applies segment writes the way the pump does, rejecting one that would collide on a start time
-/// or flags a start time on segment 0, which a Mobi refused.
+/// or flags the start time of segment 0, which is always midnight; a Mobi refused even an unchanged one.
 final class StubIDPPump {
     struct Segment: Equatable, CustomStringConvertible {
         var startTime: Int

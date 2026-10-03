@@ -2,9 +2,9 @@ import LoopKit
 @testable import TandemKit
 import XCTest
 
-/// Drives `syncBasalRateSchedule` against a pump model of Tandem firmware: no two segments share a
-/// start time, a modify changes only the fields its status mask flags, and one flagging a start
-/// time on segment 0 is refused (inferred from a Mobi's refusals, not confirmed on firmware).
+/// Drives `syncBasalRateSchedule` against a pump model of Tandem firmware: segment 0 always starts at
+/// midnight, no two segments share a start time, and a modify changes only the fields its status
+/// mask flags. A modify flagging segment 0's start time is refused even unchanged, as a Mobi did.
 ///
 /// Each case states the profile the pump starts with, the schedule to sync, the exact commands the
 /// driver should send, with the fields each modify flags, and the profile those commands produce.
@@ -402,6 +402,24 @@ import XCTest
             return XCTFail("Expected a failure, got \(result)")
         }
         XCTAssertEqual(error as? BasalScheduleSyncError, .tooManyEntries(count: 17, maximum: 16))
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testScheduleNotStartingAtMidnightIsRejectedWithoutTouchingThePump() {
+        let bluetooth = makeStub(profile: StubIDPPump([
+            .init(startTime: 0, basalRate: 1000),
+            .init(startTime: 180, basalRate: 900),
+            .init(startTime: 480, basalRate: 800)
+        ]))
+        let manager = makeManager(bluetooth: bluetooth)
+
+        let result = runSync(manager, schedule: [(6, 0.8), (1, 1.0)])
+
+        guard case let .failure(error) = result else {
+            return XCTFail("Expected a failure, got \(result)")
+        }
+        XCTAssertEqual(error as? BasalScheduleSyncError, .firstEntryNotAtMidnight)
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
         XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
     }
