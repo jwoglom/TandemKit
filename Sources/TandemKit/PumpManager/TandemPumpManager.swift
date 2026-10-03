@@ -831,13 +831,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-        guard duration < .ulpOfOne || state.hasSyncedBasalRateSchedule else {
-            logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
-            completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
-            return
-        }
-
         let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
@@ -850,6 +843,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
                 completion(.connection(PumpCommError.pumpNotConnected))
                 return
+            }
+
+            let isCancel = duration <= 0
+            // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
+            if !isCancel {
+                self.adoptMatchingPumpProfile()
+                guard self.state.hasSyncedBasalRateSchedule else {
+                    self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
+                    completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
+                    return
+                }
             }
 
             guard let currentBasal = self.bluetooth.write(CurrentBasalStatusRequest()) else {
@@ -878,7 +882,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let (percent, absoluteRate) = self
                 .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
 
-            if duration < .ulpOfOne || percent == 100 {
+            if isCancel || percent == 100 {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
                 completion(nil)
