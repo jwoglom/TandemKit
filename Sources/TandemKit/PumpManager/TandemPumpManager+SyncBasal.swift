@@ -348,4 +348,32 @@ extension TandemPumpManager {
         return nil
     }
 
+    /// State saved before `hasSyncedBasalRateSchedule` existed reads false on a pump that was looping.
+    /// A profile already matching the host's schedule is what a successful sync leaves, so it counts.
+    func adoptMatchingPumpProfile() {
+        let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
+        guard !state.hasSyncedBasalRateSchedule, !checkedPumpProfileForAdoption,
+              items.contains(where: { $0.value > 0 })
+        else {
+            return
+        }
+
+        guard let segments = loadIDPProfiles()?.getActiveProfile()?.getSegments() else {
+            logger.error("Could not read the basal profile to check it against the app's schedule")
+            return
+        }
+        checkedPumpProfileForAdoption = true
+
+        guard segments.count == items.count,
+              Self.pendingSegmentWrites(items: items, retainedSegments: segments).isEmpty
+        else {
+            logger.warning(
+                "Basal schedule not yet synced, and the pump's profile differs: \(PumpCommError.basalProfileDifference(pump: segments, app: items))"
+            )
+            return
+        }
+
+        logger.info("Pump's basal profile matches the app's schedule; treating it as synced")
+        state.hasSyncedBasalRateSchedule = true
+    }
 }

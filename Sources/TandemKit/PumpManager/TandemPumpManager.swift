@@ -151,6 +151,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let syncStateLock = NSLock()
     private var inFlightSyncs = 0
 
+    /// Command queue only. Set once the pump's profile has been read for `adoptMatchingPumpProfile`.
+    var checkedPumpProfileForAdoption = false
+
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -507,6 +510,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
             self.fetchBasalStatus()
+            self.adoptMatchingPumpProfile()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()

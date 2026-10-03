@@ -57,6 +57,58 @@ import XCTest
         return result
     }
 
+    // MARK: - State saved before the sync flag existed
+
+    func testUnsyncedStateAdoptsAPumpProfileMatchingTheSchedule() {
+        stubProfile([.init(startTime: 0, basalRate: 1000), .init(startTime: 360, basalRate: 800)])
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: 1.0),
+            RepeatingScheduleValue(startTime: .hours(6), value: 0.8)
+        ])!
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertTrue(bluetooth.sent(SetIDPSegmentRequest.self).isEmpty)
+    }
+
+    func testUnsyncedStateIsNotAdoptedWhenThePumpProfileDiffers() {
+        stubProfile([.init(startTime: 0, basalRate: 1000)])
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: 0.9)
+        ])!
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testPumpProfileIsReadForAdoptionOnlyOnce() {
+        stubProfile([.init(startTime: 0, basalRate: 1000)])
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: 0.9)
+        ])!
+
+        manager.adoptMatchingPumpProfile()
+        let readsAfterFirstCheck = bluetooth.sentMessages.count
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertGreaterThan(readsAfterFirstCheck, 0)
+        XCTAssertEqual(bluetooth.sentMessages.count, readsAfterFirstCheck)
+    }
+
+    func testSyncedStateDoesNotReadThePumpProfile() {
+        stubProfile([.init(startTime: 0, basalRate: 1000)])
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [
+            RepeatingScheduleValue(startTime: 0, value: 1.0)
+        ])!
+        manager.state.hasSyncedBasalRateSchedule = true
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+    }
+
     // MARK: - Read-back after a write
 
     func testSyncReadsTheProfileBackAndSucceedsWhenItMatches() {
