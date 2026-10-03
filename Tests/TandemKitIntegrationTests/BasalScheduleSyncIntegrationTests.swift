@@ -90,6 +90,8 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
 
     func testTempBasalGoesOutWhenThePumpAlreadyHoldsTheSchedule() throws {
         let driver = try pairedUnsyncedDriver(pump: [Self.twoSegmentProfile], schedule: [(0, 0.8), (12, 0.6)])
+        // Staging profiles leaves the emulator's rate in force at its default; a write would move it.
+        try harness.client.setState(["basal_rate": driver.manager.getScheduledBasalRate()])
         let logStart = try harness.client.snapshot().requestLog.lastSeq
 
         XCTAssertNil(try enactTempBasal(driver))
