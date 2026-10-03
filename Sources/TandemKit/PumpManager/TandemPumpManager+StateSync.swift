@@ -149,6 +149,10 @@ extension TandemPumpManager {
         verifyDeliveredBasalRate(response)
 
         observeDeliveryState(response.basalType)
+
+        if response.basalType == .tempBasal {
+            reportTempBasalSegmentChanges()
+        }
     }
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)

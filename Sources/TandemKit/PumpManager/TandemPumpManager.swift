@@ -2076,8 +2076,14 @@ extension TandemPumpManager {
             return []
         }
 
+        let (finished, running) = splitAtSegmentChanges(state.basalDose, through: endDate ?? now)
+        if !finished.isEmpty {
+            state.basalDose = running
+            notifyDelegateStateUpdated()
+        }
+
         let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? now, now: now)
-        var events = [
+        var events = finished + [
             NewPumpEvent.tempBasal(
                 dose: basalEntry,
                 date: basalEntry.startDate
@@ -2225,6 +2231,51 @@ extension TandemPumpManager {
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
         return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+    }
+
+    /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
+    /// it is reported finished, so every path that finishes one cuts it here first: the parts
+    /// finished at changes before `end`, and the part running at `end` at `tempPercent` of its rate.
+    func splitAtSegmentChanges(
+        _ dose: UnfinalizedDose,
+        through end: Date
+    ) -> (finished: [NewPumpEvent], running: UnfinalizedDose) {
+        guard dose.type == .tempBasal, let percent = dose.tempPercent, percent > 0 else {
+            return ([], dose)
+        }
+
+        var running = dose
+        var finished: [NewPumpEvent] = []
+        for change in pumpSegmentChanges(after: dose.startDate, through: min(end, dose.estimatedEndDate))
+            where change.date < dose.estimatedEndDate
+        {
+            let rate = roundToSupportedBasalRate(unitsPerHour: change.rate * Double(percent) / 100)
+            guard Int((rate * 1000).rounded()) != Int((running.value * 1000).rounded()) else { continue }
+
+            let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
+            finished.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
+            running = UnfinalizedDose(
+                tempRate: rate,
+                duration: dose.estimatedEndDate.timeIntervalSince(change.date),
+                automatic: dose.automatic,
+                insulinType: dose.insulinType,
+                startDate: change.date,
+                tempRateId: dose.tempRateId,
+                tempPercent: percent
+            )
+        }
+        if !finished.isEmpty {
+            logger.info("Temp basal at \(percent)% crossed \(finished.count) pump segment change(s); now \(running.value) U/hr")
+        }
+        return (finished, running)
+    }
+
+    /// Reports the cut as soon as a reading sees the temp still running past a change.
+    func reportTempBasalSegmentChanges() {
+        guard state.basalDose.type == .tempBasal else { return }
+        let events = getActivePumpEvents()
+        guard events.count > 1 else { return }
+        emitPumpEvents(events)
     }
 
     /// Where the pump's rate changes after `start` through `end`, dated on the phone's clock. Reads

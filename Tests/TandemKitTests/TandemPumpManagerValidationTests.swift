@@ -565,6 +565,117 @@ import XCTest
         XCTAssertEqual(changes.map(\.rate), [2.0, 1.0])
     }
 
+    // MARK: - Temp basal across a pump segment change
+
+    private func attachDelegate(_ manager: TandemPumpManager) -> (MockPumpManagerDelegate, DispatchQueue) {
+        let delegate = MockPumpManagerDelegate()
+        let queue = DispatchQueue(label: "segment-change-test")
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = queue
+        queue.sync {}
+        return (delegate, queue)
+    }
+
+    private func at(_ time: TimeInterval) -> Date {
+        Self.referenceDay.addingTimeInterval(time)
+    }
+
+    private func tempBasals(_ delegate: MockPumpManagerDelegate, _ queue: DispatchQueue) -> [DoseEntry] {
+        queue.sync {}
+        return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .tempBasal }
+    }
+
+    func testATempCrossingARiseIsCutAtTheChangeOnTheNextReading() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
+        manager.fetchBasalStatus()
+
+        let doses = tempBasals(delegate, queue).suffix(2)
+        XCTAssertEqual(doses.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
+        XCTAssertEqual(doses.map(\.unitsPerHour), [1.5, 3.0])
+        XCTAssertEqual(doses.map(\.isMutable), [false, true])
+        XCTAssertEqual(doses.first?.endDate, at(.hours(14)))
+        XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(14)))
+        XCTAssertEqual(manager.state.basalDose.estimatedEndDate, at(.hours(14) + .minutes(10)))
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 150)
+    }
+
+    func testATempCrossingAFallIsCutAtTheChangeOnTheNextReading() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(24) - .minutes(20), pumpMilliunits: 2000, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+
+        manager.clock = ManualClock(at(.hours(24) + .minutes(3)))
+        manager.fetchBasalStatus()
+
+        XCTAssertEqual(tempBasals(delegate, queue).suffix(2).map(\.unitsPerHour), [1.5, 0.75])
+        XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(24)))
+    }
+
+    /// Set four minutes before the rise at 75%, so it already runs the 1.5 recorded once the rate rises.
+    func testATempSetWithinFiveMinutesOfARiseIsNotCutAtIt() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(4), pumpMilliunits: 1000, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+        let reported = tempBasals(delegate, queue).count
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(1)))
+        manager.fetchBasalStatus()
+
+        XCTAssertEqual(tempBasals(delegate, queue).count, reported)
+        XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(14) - .minutes(4)))
+    }
+
+    func testAZeroTempIsNeverCut() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: .minutes(30)))
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
+        manager.fetchBasalStatus()
+
+        XCTAssertEqual(manager.state.basalDose.startDate, at(.hours(14) - .minutes(20)))
+        XCTAssertEqual(manager.state.basalDose.value, 0)
+    }
+
+    func testATempReplacedAfterCrossingAChangeIsReportedInTwoParts() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.2, for: .minutes(30)))
+
+        let finished = tempBasals(delegate, queue).filter { !$0.isMutable }
+        XCTAssertEqual(finished.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
+        XCTAssertEqual(finished.map(\.endDate), [at(.hours(14)), at(.hours(14) + .minutes(3))])
+        XCTAssertEqual(finished.map(\.unitsPerHour), [1.5, 3.0])
+    }
+
+    func testATempThePumpEndsAfterCrossingAChangeIsReportedInTwoParts() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
+        manager.state.featureFlags[.historyBackfill] = false
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(3)))
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: status(profile: 2000, current: 2000, bitmask: 0))
+        manager.fetchBasalStatus()
+
+        let finished = tempBasals(delegate, queue).filter { !$0.isMutable }
+        XCTAssertEqual(finished.map(\.startDate), [at(.hours(14) - .minutes(20)), at(.hours(14))])
+        XCTAssertEqual(finished.map(\.unitsPerHour), [1.5, 3.0])
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
     func testDeletingSavedPumpStateForgetsTheBasalScheduleSync() {
         var state = TandemPumpManagerState(rawValue: [:])
         state.hasSyncedBasalRateSchedule = true
