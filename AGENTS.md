@@ -271,7 +271,9 @@ edit instead of at the next sync.
   via `SetMaxBolusLimitRequest`.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
-- `enactTempBasal` refuses everything but a cancel until the first successful
+- A zero temp basal is always allowed for the duration asked, whatever the profile, sync or
+  mismatch state below, since 0% of any profile is 0. Control-IQ and a running bolus still refuse it.
+- `enactTempBasal` refuses every other temp but a cancel until the first successful
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
   pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
   State saved before the flag existed reads false, and Loop and Trio only sync the schedule
@@ -280,17 +282,39 @@ edit instead of at the next sync.
 - A confirmed basal rate mismatch clears `hasSyncedBasalRateSchedule` on every reading that
   still differs, a sync's included, and `adoptMatchingPumpProfile` skips while it stands: a
   matching profile does not explain a live rate that differs. Temp basals resume after a
-  reading that matches, through adoption or a sync.
-- `enactTempBasal` refuses everything but a cancel with `pumpProfileBasalRateIsZero` when the
-  pump's `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp
-  basal. The percent is computed from the host's schedule, so the host would otherwise be told
-  a rate the pump delivers none of; a Mobi ran a 0 U/hr profile this way for a day.
-- After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp basal
-  within one 0.01 U/hr step of the rate it reports, or of the unrounded percent of the schedule
-  (the pump's rounding is unknown; 10% of 0.15 U/hr is reported as 0). Otherwise it stops the
-  temp basal, reports none and fails with `tempBasalRateMismatch`; one it can't stop is reported
-  at the pump's rate. No answer to the read reports it as commanded. Field logs show the temp in
-  the first status read, within a second, every time.
+  reading that matches, through adoption or a sync. A non-zero temp already running when the
+  mismatch is confirmed is stopped.
+- `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
+  `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
+  Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).
+- The percent is worked out against the pump's own rate in force, `profileBasalRate` from that
+  same read, and the temp is reported at that percent of it. Within `segmentChangeWindow`
+  (5 min) of the pump's next segment change it is worked out against the larger of the two
+  rates and reported at the request: delivery never exceeds the request on either side, and the
+  host can only over-count, until the change. Segment changes come from the host's schedule on
+  the pump's clock (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps
+  are allowed.
+- The pump rescales a running temp at each segment change, so `splitAtSegmentChanges` cuts its
+  record there: finished at the change, and a new mutable part at `tempPercent` of the new rate.
+  The first basal read after a change reports the cut; every path that finishes a temp
+  (`getActivePumpEvents`, `reportTransition`) cuts it first, since neither host revises a temp
+  basal once told it finished. Hosts sync before they dose, so no dosing decision sees the
+  uncut record; while disconnected it stays uncut until the next reading.
+- After `SetTempRate`, `enactTempBasal` reads `CurrentBasalStatus` back and needs a temp within
+  one 0.01 U/hr step of the percent of the pump's own rate (its rounding is unknown; 10% of
+  0.15 U/hr is reported as 0). Otherwise it stops the temp, reports none and fails with
+  `tempBasalRateMismatch`, as when the pump's max basal limit caps it; one it can't stop is
+  reported at the pump's rate. No answer to the read reports it as commanded. Field logs show
+  the temp in the first status read, within a second, every time.
+- A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
+  raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
+  and a status highlight; the settings screen syncs the clock. While skewed, wherever the host
+  counts its own scheduled rate the pump runs a temp at the percent of its own rate that delivers
+  it (`maintainPumpClockSkewCompensation`, every basal read and after a cancel). The host is not
+  told of it: what it counts is what runs. A temp the driver did not set is left alone. A request
+  equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
+  firmware accepts 100% is unconfirmed, and a refusal fails the command.
+  `syncPumpData` reads the pump's clock before its basal status for this.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

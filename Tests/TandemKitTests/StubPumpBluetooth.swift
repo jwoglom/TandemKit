@@ -61,8 +61,18 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 
     /// A pump running `profileMilliunits` whose basal status follows the temp rates it is sent,
     /// applying each percent to its own profile as a pump does.
-    func stubBasalPump(profileMilliunits: UInt32, runningTempPercent: Int? = nil, tempRateId: Int = 42) {
-        let pump = StubBasalPump(profileMilliunits: profileMilliunits, tempPercent: runningTempPercent)
+    /// `capMilliunits` limits the temp rate, as the pump's max basal limit does.
+    func stubBasalPump(
+        profileMilliunits: UInt32,
+        runningTempPercent: Int? = nil,
+        capMilliunits: UInt32? = nil,
+        tempRateId: Int = 42
+    ) {
+        let pump = StubBasalPump(
+            profileMilliunits: profileMilliunits,
+            tempPercent: runningTempPercent,
+            capMilliunits: capMilliunits
+        )
         stub(SetTempRateRequest.self) { request in
             pump.setTempPercent((request as? SetTempRateRequest)?.percent)
             return SetTempRateResponse(status: 0, tempRateId: tempRateId)
@@ -172,11 +182,13 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
 private final class StubBasalPump {
     private let lock = NSLock()
     private let profileMilliunits: UInt32
+    private let capMilliunits: UInt32?
     private var tempPercent: Int?
 
-    init(profileMilliunits: UInt32, tempPercent: Int?) {
+    init(profileMilliunits: UInt32, tempPercent: Int?, capMilliunits: UInt32?) {
         self.profileMilliunits = profileMilliunits
         self.tempPercent = tempPercent
+        self.capMilliunits = capMilliunits
     }
 
     func setTempPercent(_ percent: Int?) {
@@ -197,7 +209,7 @@ private final class StubBasalPump {
         }
         return CurrentBasalStatusResponse(
             profileBasalRate: profileMilliunits,
-            currentBasalRate: profileMilliunits * UInt32(tempPercent) / 100,
+            currentBasalRate: min(profileMilliunits * UInt32(tempPercent) / 100, capMilliunits ?? .max),
             basalModifiedBitmask: 0x02
         )
     }

@@ -153,6 +153,17 @@ extension TandemPumpManager {
             )
         }
 
+        if state.isPumpClockSkewed {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Pump Time Is Off",
+                    comment: "Status highlight that the pump's clock differs from the phone's by more than a few minutes."
+                ),
+                imageName: "clock.fill",
+                state: .warning
+            )
+        }
+
         // Control-IQ owning delivery is a standing condition, not a one-off failure: while it is on
         // the driver refuses every automatic bolus and temp basal, so without this the only trace of
         // it in the host app is a loop failure once a cycle, worded by the host rather than by us.

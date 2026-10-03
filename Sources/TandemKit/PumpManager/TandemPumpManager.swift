@@ -151,6 +151,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let syncStateLock = NSLock()
     private var inFlightSyncs = 0
 
+    /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
+    var skewCompensationTemp: (percent: Int, endsAt: Date)?
+
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -502,13 +505,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             self.enforceQuickBolusDisabled()
 
+            // Ahead of the basal read, which looks segments up on the pump's clock.
+            self.fetchTimeSinceReset()
             self.fetchReservoirStatus()
             self.fetchBatteryStatus()
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
             self.fetchBasalStatus()
             self.fetchNotifications()
-            self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()
 
             // A connected link is not a working one: a session can stay up while every read times
@@ -831,8 +835,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        let baselineRate = getScheduledBasalRate()
-        guard baselineRate > 0 else {
+        let isCancel = duration <= 0
+        // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
+        let isZeroTemp = !isCancel && unitsPerHour == 0
+
+        guard isZeroTemp || getScheduledBasalRate() > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
             completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
             return
@@ -845,9 +852,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let isCancel = duration <= 0
             // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-            if !isCancel {
+            if !isCancel, !isZeroTemp {
                 self.adoptMatchingPumpProfile()
                 guard self.state.hasSyncedBasalRateSchedule else {
                     self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
@@ -863,8 +869,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
             self.observeDeliveryState(currentBasal.basalType)
 
-            // Every percent of 0 U/hr is 0, while the host would be told the requested rate runs.
-            if !isCancel, currentBasal.profileBasalRate == 0 {
+            if !isCancel, !isZeroTemp, currentBasal.profileBasalRate == 0 {
                 self.logger.error("[enactTempBasal] Blocked: the pump's profile basal rate is 0 U/hr")
                 completion(.deviceState(TandemPumpManagerValidationError.pumpProfileBasalRateIsZero))
                 return
@@ -884,14 +889,23 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
 
                 self.logger.info("Current temp basal cancelled!")
+                self.skewCompensationTemp = nil
             }
 
-            let (percent, absoluteRate) = self
-                .tempBasalPercentAndRate(requestedRate: unitsPerHour, baseline: baselineRate)
+            let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
+                requestedRate: unitsPerHour,
+                baseline: self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
+            )
 
-            if isCancel || percent == 100 {
+            // Skewed, the host counts its own schedule rather than the pump's rate when no temp runs.
+            let hostCountsThePumpsRate = !self.state.isPumpClockSkewed
+                || Int((absoluteRate * 1000).rounded()) == Int((self.getScheduledBasalRate() * 1000).rounded())
+            if percent == 100, isCancel || hostCountsThePumpsRate {
                 self.logger.info("Enact completed! (no basal rate change)")
                 self.startScheduledBasalDose()
+                if self.state.isPumpClockSkewed, let status = self.bluetooth.write(CurrentBasalStatusRequest()) {
+                    self.maintainPumpClockSkewCompensation(status)
+                }
                 completion(nil)
                 return
             }
@@ -912,16 +926,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            // The percent came from the host's schedule; the pump applies it to its own profile.
             if let readback = self.bluetooth.write(CurrentBasalStatusRequest()) {
-                guard Self.tempBasalReadbackMatches(
-                    readback,
-                    reportedRate: absoluteRate,
-                    exactRate: baselineRate * Double(percent) / 100
-                ) else {
+                guard Self.tempBasalReadbackMatches(readback, percent: percent) else {
                     self.rejectMismatchedTempBasal(
                         readback,
                         expectedRate: absoluteRate,
+                        percent: percent,
                         duration: duration,
                         tempRateId: response.tempRateId,
                         completion: completion
@@ -932,13 +942,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, duration: duration, tempRateId: response.tempRateId)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: duration, tempRateId: response.tempRateId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
     }
 
-    private func recordTempBasal(rate: Double, duration: TimeInterval, tempRateId: Int) {
+    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,
@@ -946,7 +956,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             automatic: true,
             insulinType: state.insulinType,
             startDate: now,
-            tempRateId: tempRateId
+            tempRateId: tempRateId,
+            tempPercent: percent
         )
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
@@ -958,16 +969,29 @@ public class TandemPumpManager: PumpManager, Pluggable {
         emitPumpEvents(events)
     }
 
-    /// Within one 0.01 U/hr step of the rate reported to the host, or of the unrounded percent of
-    /// the schedule: the pump's own rounding of a temp rate is not known.
-    static func tempBasalReadbackMatches(
-        _ readback: CurrentBasalStatusResponse,
-        reportedRate: Double,
-        exactRate: Double
-    ) -> Bool {
+    /// How long before the pump's rate changes a temp basal is worked out against the larger of the
+    /// two rates, about one host loop cycle.
+    static let segmentChangeWindow: TimeInterval = .minutes(5)
+
+    /// `pumpRate` is the rate the pump has in force. Within `segmentChangeWindow` of a change, the
+    /// larger of it and the next: the temp then runs at most the request on either side, and the
+    /// host, told the request, can only over-count until the change.
+    func tempBasalBaseline(pumpRate: Double) -> Double {
+        guard let change = pumpSegmentChanges(after: now, through: now.addingTimeInterval(Self.segmentChangeWindow)).first
+        else {
+            return pumpRate
+        }
+        return max(pumpRate, change.rate)
+    }
+
+    /// The pump runs a temp at `percent` of its own rate in force. Within one 0.01 U/hr step of
+    /// that, unrounded or floored onto the reported grid: the pump's own rounding is not known.
+    static func tempBasalReadbackMatches(_ readback: CurrentBasalStatusResponse, percent: Int) -> Bool {
         guard readback.basalType == .tempBasal else { return false }
+        let exact = readback.profileBasalRate * Double(percent) / 100
+        let floored = TandemPumpCapabilities.supportedBasalRates.last { $0 <= exact } ?? 0
         let actual = Int((readback.currentBasalRate * 1000).rounded())
-        return [reportedRate, exactRate].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
+        return [exact, floored].contains { abs(actual - Int(($0 * 1000).rounded())) <= 10 }
     }
 
     /// Stops the temp basal so the host is not told a rate the pump isn't running. If it can't be
@@ -975,6 +999,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func rejectMismatchedTempBasal(
         _ readback: CurrentBasalStatusResponse,
         expectedRate: Double,
+        percent: Int,
         duration: TimeInterval,
         tempRateId: Int,
         completion: @escaping (PumpManagerError?) -> Void
@@ -991,7 +1016,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         case .tempBasal:
             guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
                 logger.error("Could not stop the mismatched temp basal; reporting it at the pump's rate")
-                recordTempBasal(rate: readback.currentBasalRate, duration: duration, tempRateId: tempRateId)
+                recordTempBasal(rate: readback.currentBasalRate, percent: percent, duration: duration, tempRateId: tempRateId)
                 completion(.deviceState(error))
                 return
             }
@@ -1023,6 +1048,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             if currentTempResponse.active {
                 let stopResponse = self.bluetooth.write(StopTempRateRequest())
                 if let stopResponse, stopResponse.isStatusOK {
+                    self.skewCompensationTemp = nil
                     self.logger.info("Current temp basal cancelled!")
                 } else {
                     self.logger
@@ -2062,8 +2088,14 @@ extension TandemPumpManager {
             return []
         }
 
+        let (finished, running) = splitAtSegmentChanges(state.basalDose, through: endDate ?? now)
+        if !finished.isEmpty {
+            state.basalDose = running
+            notifyDelegateStateUpdated()
+        }
+
         let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? now, now: now)
-        var events = [
+        var events = finished + [
             NewPumpEvent.tempBasal(
                 dose: basalEntry,
                 date: basalEntry.startDate
@@ -2211,6 +2243,79 @@ extension TandemPumpManager {
         let nowTimeInterval = now.timeIntervalSince(startOfDay)
 
         return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+    }
+
+    /// The pump rescales a temp at each segment change, and neither host revises a temp basal once
+    /// it is reported finished, so every path that finishes one cuts it here first: the parts
+    /// finished at changes before `end`, and the part running at `end` at `tempPercent` of its rate.
+    func splitAtSegmentChanges(
+        _ dose: UnfinalizedDose,
+        through end: Date
+    ) -> (finished: [NewPumpEvent], running: UnfinalizedDose) {
+        guard dose.type == .tempBasal, let percent = dose.tempPercent, percent > 0 else {
+            return ([], dose)
+        }
+
+        var running = dose
+        var finished: [NewPumpEvent] = []
+        for change in pumpSegmentChanges(after: dose.startDate, through: min(end, dose.estimatedEndDate))
+            where change.date < dose.estimatedEndDate
+        {
+            let rate = roundToSupportedBasalRate(unitsPerHour: change.rate * Double(percent) / 100)
+            guard Int((rate * 1000).rounded()) != Int((running.value * 1000).rounded()) else { continue }
+
+            let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
+            finished.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
+            running = UnfinalizedDose(
+                tempRate: rate,
+                duration: dose.estimatedEndDate.timeIntervalSince(change.date),
+                automatic: dose.automatic,
+                insulinType: dose.insulinType,
+                startDate: change.date,
+                tempRateId: dose.tempRateId,
+                tempPercent: percent
+            )
+        }
+        if !finished.isEmpty {
+            logger.info("Temp basal at \(percent)% crossed \(finished.count) pump segment change(s); now \(running.value) U/hr")
+        }
+        return (finished, running)
+    }
+
+    /// Reports the cut as soon as a reading sees the temp still running past a change.
+    func reportTempBasalSegmentChanges() {
+        guard state.basalDose.type == .tempBasal else { return }
+        let events = getActivePumpEvents()
+        guard events.count > 1 else { return }
+        emitPumpEvents(events)
+    }
+
+    /// Where the pump's rate changes after `start` through `end`, dated on the phone's clock. Reads
+    /// the host's schedule on the pump's clock, which is the pump's profile whenever temp basals are
+    /// allowed at all.
+    func pumpSegmentChanges(after start: Date, through end: Date) -> [(date: Date, rate: Double)] {
+        let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
+        guard items.count > 1, end > start else { return [] }
+
+        let offset = state.pumpClockOffset
+        let pumpStart = start.addingTimeInterval(offset)
+        let startOfDay = Calendar.current.startOfDay(for: pumpStart)
+        var rate = getScheduledBasalRate(at: pumpStart)
+        var changes: [(date: Date, rate: Double)] = []
+
+        for day in 0 ... Int(end.timeIntervalSince(start) / .days(1)) + 1 {
+            for item in items {
+                let pumpDate = startOfDay.addingTimeInterval(.days(Double(day)) + item.startTime)
+                let date = pumpDate.addingTimeInterval(-offset)
+                guard date > start else { continue }
+                guard date <= end else { return changes }
+                if Int((item.value * 1000).rounded()) != Int((rate * 1000).rounded()) {
+                    changes.append((date, item.value))
+                    rate = item.value
+                }
+            }
+        }
+        return changes
     }
 }
 

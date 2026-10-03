@@ -479,30 +479,45 @@ final class PumpSideConformanceTests: ConformanceTestCase {
             "the dose ends when the pump's record says, in phone time"
         )
 
-        // Temp basal: 1.5 U/h asked for, so the driver sends 150 % of the phone's segment; the pump
-        // applies it to the segment it is in, reads back the wrong rate and is stopped (#498).
+        // Temp basal: 1.5 U/h asked for; the driver works the percent out against the segment the
+        // pump is in.
         let tbrBatchesBefore = allPumpEventBatches.count
-        let tbrMark = try harness.client.snapshot().requestLog.lastSeq
-        let error = try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30))
-        guard case let .deviceState(underlying?) = error else {
-            return XCTFail("expected a device state error, got \(String(describing: error))")
+        let tbrStart = clock.now
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
+        let running = try harness.client.snapshot().basal
+        XCTAssertTrue(running.tempActive)
+        XCTAssertEqual(running.tempPercent, 75)
+        XCTAssertEqual(running.tempRate, 1.5, accuracy: 0.0005, "75 % of the pump's 2.0 U/h segment")
+        let tbrEvent = try XCTUnwrap(eventsSince(tbrBatchesBefore).first { $0.dose?.type == .tempBasal })
+        let tbrRaw = tbrEvent.raw
+        XCTAssertEqual(tbrEvent.dose?.isMutable, true)
+        XCTAssertEqual(tbrEvent.dose?.unitsPerHour ?? -1, running.tempRate, accuracy: 0.005, "value must be the rate the pump is running")
+
+        // Let it expire on the pump and be finalized.
+        try clock.advanceBoth(seconds: .minutes(31), ticks: 31)
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive)
+        _ = try sync()
+        let finalizedTBR = try IntegrationWait.value("finalized temp basal report", timeout: 30) {
+            self.eventsSince(tbrBatchesBefore).first { $0.raw == tbrRaw && $0.dose?.isMutable == false }
         }
-        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .tempBasalRateMismatch(expected: 1.5, actual: pumpSegmentRate * 1.5))
-        let sent = try harness.requestsSeen(since: tbrMark).map(\.message).filter { $0.contains("TempRate") }
-        XCTAssertEqual(sent, ["SetTempRateRequest", "StopTempRateRequest"])
-        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the pump runs no temp basal")
-        let tempBasals = eventsSince(tbrBatchesBefore).filter { $0.dose?.type == .tempBasal }
-        XCTAssertTrue(tempBasals.isEmpty, "no temp basal reaches the host: \(tempBasals)")
-        XCTAssertEqual(driver.manager.state.basalDose.type, .basal)
+        XCTAssertEqual(finalizedTBR.dose?.endDate.timeIntervalSince(tbrStart) ?? 0, .minutes(30), accuracy: 2, "finalized at the scheduled end")
+        assertFieldSemantics(finalizedTBR, programmed: nil, automatic: true)
+
+        let timeline = try timeline()
+        let pumpTBR = try XCTUnwrap(timeline.tempRates.first { $0.percent == 75 }, "timeline: \(timeline)")
+        XCTAssertTrue(pumpTBR.isFinished)
+        XCTAssertEqual(finalizedTBR.dose?.deliveredUnits ?? -1, pumpTBR.deliveredUnits ?? -2, accuracy: 0.005, "delivered units follow the pump's rate")
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
         loop.assertPermanent(raw: bolusRaw)
+        loop.assertPermanent(raw: tbrRaw)
         XCTAssertEqual(trio.boluses.count, 1)
-        XCTAssertTrue(trio.tempBasals.isEmpty)
-        // Read before the temp basal: the one stopped within a second is on the pump's record, never the host's.
-        bolusTimeline.assertMatches(loop)
+        XCTAssertEqual(trio.tempBasals.count, 1)
+        try expectDefect("the clock skew temp the pump runs while the phone's segment lags is on its record and, by design, not the host's; and #339's end-date clamp above") {
+            timeline.assertMatches(loop)
+        }
     }
 
     // MARK: - D6

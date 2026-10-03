@@ -140,9 +140,13 @@ extension TandemPumpManager {
 
         var tempBasalEnd: Date?
         if prior.type == .tempBasal {
+            let lastSeen = splitAtSegmentChanges(prior, through: pending.lastConfirmed).running
             // Against the schedule the host counts after it, on the phone's clock.
-            let end = tempRateEnd ?? (prior.value < getScheduledBasalRate(at: prior.startDate) ? pending.lastConfirmed : pending.detectedAt)
-            let entry = prior.toDoseEntry(isMutable: false, endDate: max(min(end, pending.detectedAt), prior.startDate), now: now)
+            let end = tempRateEnd ?? (lastSeen.value < getScheduledBasalRate(at: lastSeen.startDate) ? pending.lastConfirmed : pending.detectedAt)
+            let endDate = max(min(end, pending.detectedAt), prior.startDate)
+            let (finished, last) = splitAtSegmentChanges(prior, through: endDate)
+            let entry = last.toDoseEntry(isMutable: false, endDate: max(endDate, last.startDate), now: now)
+            events += finished
             events.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
             tempBasalEnd = entry.endDate
         }
