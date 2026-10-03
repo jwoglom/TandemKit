@@ -226,7 +226,7 @@ final class HistoryBackfillPlannerTests: XCTestCase {
         )
         XCTAssertEqual(
             HistoryBackfillPlanner.emitFloor(bookkeeping: nil, trackingSince: .distantPast, now: now),
-            now.addingTimeInterval(-BolusReportLedger.retention)
+            now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
         )
     }
 

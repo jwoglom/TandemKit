@@ -57,14 +57,20 @@ extension TandemPumpManager {
         )
 
         var reports: [NewPumpEvent] = []
+        var finalizesHeldDose = false
         for event in events {
-            guard let dose = event.dose, dose.type == .bolus, dose.startDate >= floor,
+            // Only once its completion is read: reported while it ran, a pump bolus would have to
+            // ride every replacing batch until then, or the host deletes it (#452).
+            guard let dose = event.dose, dose.type == .bolus, !dose.isMutable, dose.startDate >= floor,
                   let decoded = HistoryLogSyncIdentifier.decode(event.raw), decoded.scheme == .bolus
             else {
                 continue
             }
-            if let report = historyBolusReport(event, dose: dose, bolusId: Int(decoded.identifier), serial: serial) {
+            let bolusId = Int(decoded.identifier)
+            let isHeld = state.bolusReportLedger.entry(bolusId: bolusId, pumpSerial: serial.rawValue) != nil
+            if let report = historyBolusReport(event, dose: dose, bolusId: bolusId, serial: serial) {
                 reports.append(report)
+                finalizesHeldDose = finalizesHeldDose || isHeld
             }
         }
 
@@ -73,7 +79,14 @@ extension TandemPumpManager {
         }
 
         logger.info("Reporting \(reports.count) bolus event(s) from pump history")
-        emitPumpEvents(reports.sorted { $0.date < $1.date }, replacePendingEvents: false)
+        let sorted = reports.sorted { $0.date < $1.date }
+        // Loop keeps a stored PumpEvent row over a non-replacing report with its raw, so finalizing
+        // a dose the host holds as mutable takes a replacing batch (#452).
+        if finalizesHeldDose {
+            emitPumpEvents(getActivePumpEvents() + sorted)
+        } else {
+            emitPumpEvents(sorted, replacePendingEvents: false)
+        }
         notifyDelegateStateUpdated()
     }
 
@@ -107,7 +120,7 @@ extension TandemPumpManager {
             return event
         }
 
-        guard !entry.isFinalized, !dose.isMutable else {
+        guard !entry.isFinalized else {
             return nil
         }
 

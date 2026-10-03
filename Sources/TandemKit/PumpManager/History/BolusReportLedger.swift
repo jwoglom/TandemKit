@@ -38,7 +38,10 @@ public struct BolusReportLedger: Equatable {
         }
     }
 
-    public static let retention: TimeInterval = .hours(24)
+    public static let reportingHorizon: TimeInterval = .hours(24)
+    /// Past the horizon: history dates an app bolus at activation on the pump's clock, which can be
+    /// after its entry, and one pruned too soon is reported again as a pump-UI bolus.
+    public static let retention: TimeInterval = reportingHorizon + .hours(12)
 
     /// When this build started recording commanded boluses.
     public let trackingSince: Date

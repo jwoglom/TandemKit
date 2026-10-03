@@ -623,20 +623,15 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         _ = try enactTempBasal(unitsPerHour: Self.tempBasalRate, duration: .minutes(30))
         XCTAssertTrue(try harness.client.snapshot().bolus.active, "the pump was still delivering when the temp basal went out")
 
-        // Refusing the temp basal and carrying the bolus in its batch both satisfy this.
-        XCTExpectFailure(
-            "jwoglom/TandemKit#347 (and #330): the bolus guard is the driver's own estimate, which reaches the programmed "
-                + "amount while this slower pump is still delivering; the temp basal it lets through goes out in a "
-                + "replacing batch without the bolus, and the host deletes a bolus that is still running"
-        ) {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(omissions.isEmpty, "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
-            let held = feedOracles().loop
-            XCTAssertEqual(
-                held.mutableDoses.filter { $0.dose.type == .bolus }.count, 1,
-                "the running bolus is still held: \(held.doses.map(LoopDoseStoreOracle.describe))"
-            )
-        }
+        // Refusing the temp basal and carrying the bolus in its batch both satisfy this; the guard
+        // is still the driver's own estimate (#347), so it is the carry that does.
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
+        let held = feedOracles().loop
+        XCTAssertEqual(
+            held.mutableDoses.filter { $0.dose.type == .bolus }.count, 1,
+            "the running bolus is still held: \(held.doses.map(LoopDoseStoreOracle.describe))"
+        )
 
         let lastBolus = try advanceUntilBolusFinishes(bolusId: bolusId)
         try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(2))
@@ -650,15 +645,9 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
         let timeline = try timeline()
-        XCTExpectFailure(
-            "jwoglom/TandemKit#347 (and #330): the deletion outlives the delivery — InsulinDeliveryStore keeps the "
-                + "soft-deleted row and, unique on syncIdentifier, drops the finalized report instead of reviving it, "
-                + "so the host has no dose for insulin the pump delivered"
-        ) {
-            let stored = loop.assertPermanent(raw: bolusRaw, "once the pump has finished")
-            XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
-            timeline.assertMatches(loop, "a temp basal enacted while the bolus outlived its estimate")
-        }
+        let stored = loop.assertPermanent(raw: bolusRaw, "once the pump has finished")
+        XCTAssertEqual(stored?.dose.deliveredUnits ?? -1, lastBolus.deliveredUnits, accuracy: 0.0005)
+        timeline.assertMatches(loop, "a temp basal enacted while the bolus outlived its estimate")
     }
 
     // MARK: - C9 (§4, §8: raw is the identity; #352)

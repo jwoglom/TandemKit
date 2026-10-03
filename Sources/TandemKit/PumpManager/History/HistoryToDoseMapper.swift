@@ -114,10 +114,7 @@ final class HistoryToDoseMapper {
         }
 
         // Activations with no completion in the window are in flight (or their completion sits
-        // in a chunk not fetched yet). They are reported as MUTABLE doses under the same
-        // pump-assigned identity their completion will carry, so the finalized dose replaces
-        // them in place. Reporting them immutable would be wrong the other way: a finalized row
-        // is never revised, so the completion's actual delivered amount would be dropped.
+        // in a chunk not fetched yet): mutable, under the identity their completion will carry.
         for activation in bolusActivations.values {
             events.append(inFlightBolusEvent(
                 activation,

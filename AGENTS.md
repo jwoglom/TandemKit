@@ -150,6 +150,16 @@ edit instead of at the next sync.
   auto-corrects. A schedule change that alters the rate in force stops a running temp basal,
   since the pump rescales it, and restarts the scheduled basal dose at the new rate.
 
+### Pump event batches
+- A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
+  and Loop never revives a deleted one. `emitPumpEvents` appends the boluses the host holds as
+  mutable, `bolusDose` and `pendingBolusFinalization`, to each one (#330). The temp basal is still
+  each call site's job, via `getActivePumpEvents`.
+- Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
+  `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
+- Still open: a sync re-sends nothing while a dose runs, since its boundary batch is empty and
+  non-replacing (#330, #450).
+
 ### History backfill and dose reporting
 - History streaming runs through `HistoryLogFetcher`, and `HistoryBackfillCoordinator` keeps
   the session store caught up from every `syncPumpData` pass: an incremental read from the
@@ -176,9 +186,9 @@ edit instead of at the next sync.
   `lastEventDate - 15min` and drops nothing itself, so it would bound the walk minutes into
   the past and drop a pump-UI bolus found one sync late.
 - Reporting (`TandemPumpManager+HistoryDoseReporting.swift`) runs as a command job after every
-  tick. Boluses need `historyDoseReporting` as well; their batches are
-  `replacePendingEvents: false`, ascending, through `emitPumpEvents`. App-commanded temp
-  basals stay with the live path.
+  tick. Boluses need `historyDoseReporting` as well; their batches go out ascending through
+  `emitPumpEvents`, and replace only when they finalize a bolus already reported.
+  App-commanded temp basals stay with the live path.
 - Suspends, resumes and temp basal ends the pump made on its own
   (`TandemPumpManager+DeliveryTransitions.swift`, #333, #331). Neither host revises one once
   told: Trio keeps a row per (timestamp, type) and Loop never counts a non-bolus dose older than
@@ -224,16 +234,20 @@ edit instead of at the next sync.
   - Scenarios: conformance group F, `OutageConformanceTests`; unit tests in
     `DeliveryTransitionReportingTests`.
 - The live path and history identify one bolus differently (#344), so `BolusReportLedger`
-  (persisted, 24 h) records each app bolus's `bolusId`, live `raw` and event date at
-  `InitiateBolus`, and `emitPumpEvents` marks it finalized when an immutable report with that
-  `raw` goes out. A history bolus the ledger:
+  (persisted) records each app bolus's `bolusId`, live `raw` and event date at `InitiateBolus`,
+  and `emitPumpEvents` marks it finalized when an immutable report with that `raw` goes out. It
+  keeps entries 12 h past the 24 h reporting horizon, since history dates an app bolus at
+  activation on the pump's clock, which can be later than its entry. A history bolus the ledger:
   - has finalized — is skipped;
   - holds as an unfinalized app bolus — is finalized under the live `raw`/date once the live
     path is no longer tracking it (relaunch mid-bolus, unknown delivered volume), releasing
     `pendingBolusFinalization`/`bolusDose`;
   - doesn't hold — is a pump-UI, Control-IQ or lost-acknowledgement bolus, reported under
-    `HistoryLogSyncIdentifier.bolus`, dated at activation, mutable while in flight, with
-    `automatic` from the bolus source and `wasProgrammedByPumpUI` set.
+    `HistoryLogSyncIdentifier.bolus`, dated at activation, with `automatic` from the bolus
+    source and `wasProgrammedByPumpUI` set. It is reported once, finalized, when its
+    `BolusCompleted` is read, and not while it runs (#452): a mutable report would have to ride
+    every replacing batch until then. Its insulin is missing from IOB for that long, roughly the
+    delivery time, since the pump's `.bolusChange` at completion kicks a tick.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.

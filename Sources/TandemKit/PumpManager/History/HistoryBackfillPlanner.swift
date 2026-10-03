@@ -89,7 +89,7 @@ enum HistoryBackfillPlanner {
         max(
             bookkeeping?.firstSeenFloor ?? .distantPast,
             trackingSince,
-            now.addingTimeInterval(-BolusReportLedger.retention)
+            now.addingTimeInterval(-BolusReportLedger.reportingHorizon)
         )
     }
 

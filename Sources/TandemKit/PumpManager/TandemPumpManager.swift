@@ -1996,7 +1996,23 @@ extension TandemPumpManager {
         return events
     }
 
+    /// Every bolus the host holds as mutable, as it was last reported: a replacing batch that
+    /// leaves one out deletes it, and Loop never revives a deleted dose (#330).
+    func inProgressBolusEvents() -> [NewPumpEvent] {
+        let events = [state.bolusDose, state.pendingBolusFinalization].compactMap { dose in
+            dose.map { NewPumpEvent.bolus(dose: $0.toDoseEntry(isMutable: true), date: $0.startDate) }
+        }
+        var seen = Set<Data>()
+        return events.filter { seen.insert($0.raw).inserted }
+    }
+
     func emitPumpEvents(_ events: [NewPumpEvent], replacePendingEvents: Bool = true) {
+        var events = events
+        if replacePendingEvents {
+            let reported = Set(events.map(\.raw))
+            events += inProgressBolusEvents().filter { !reported.contains($0.raw) }
+        }
+
         for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false {
             state.bolusReportLedger.markFinalized(raw: event.raw)
         }
@@ -2008,8 +2024,7 @@ extension TandemPumpManager {
         ))
     }
 
-    /// Empty and non-replacing: the active event set is only the temp basal, so a replacing batch
-    /// would purge a running bolus the host holds as a mutable dose.
+    /// Carries only the boundary; re-sending the pending set on every sync is #450.
     func reportReconciliationBoundary() {
         emitPumpEvents([], replacePendingEvents: false)
     }

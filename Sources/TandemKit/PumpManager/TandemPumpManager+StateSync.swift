@@ -565,7 +565,15 @@ extension TandemPumpManager {
     /// records `fallbackUnits` as what it is finalized with if neither ever does (#448).
     func holdForFinalization(_ dose: UnfinalizedDose, fallbackUnits: Double, now: Date? = nil) {
         let now = now ?? self.now
-        if let stale = state.pendingBolusFinalization, stale.bolusId != dose.bolusId {
+        let previouslyHeld = state.pendingBolusFinalization
+
+        dose.deliveredUnits = fallbackUnits
+        // Delivery has stopped; also the start of the retry window.
+        dose.estimatedEndDate = now
+        // Before the stale one is finalized, so that replacing batch carries this one.
+        state.pendingBolusFinalization = dose
+
+        if let stale = previouslyHeld, stale.bolusId != dose.bolusId {
             // Only one is held at a time, so the older settles now rather than staying mutable
             // forever. Not from LastBolusStatus: that describes the newer bolus.
             let record = stale.bolusId.flatMap { historyBolusReport(bolusId: $0, startedAt: stale.startDate) }
@@ -574,11 +582,6 @@ extension TandemPumpManager {
             }
             finalize(stale, pumpTimestamp: record?.pumpTimestamp, now: now)
         }
-
-        dose.deliveredUnits = fallbackUnits
-        // Delivery has stopped; also the start of the retry window.
-        dose.estimatedEndDate = now
-        state.pendingBolusFinalization = dose
     }
 
     /// Closes out a bolus left mutable because its delivered volume was unknown, with the pump's
@@ -653,7 +656,9 @@ extension TandemPumpManager {
             now: now
         )
 
-        state.pendingBolusFinalization = nil
+        if state.pendingBolusFinalization === pending {
+            state.pendingBolusFinalization = nil
+        }
 
         var events = getActivePumpEvents()
         events.append(NewPumpEvent.bolus(dose: finalizedDose, date: pending.startDate))
