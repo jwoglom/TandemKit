@@ -236,6 +236,18 @@ import XCTest
         }
     }
 
+    func testModifyFlagsOnlyTheFieldsItChanges() {
+        let profile = StubIDPPump([.init(startTime: 0, basalRate: 1100), .init(startTime: 480, basalRate: 1100)])
+        let bluetooth = makeStub(profile: profile)
+
+        guard case .success = runSync(bluetooth: bluetooth, schedule: [(0, 1.2), (6, 1.1)]) else {
+            return XCTFail("Expected success")
+        }
+
+        let flagged = bluetooth.sent(SetIDPSegmentRequest.self).map { [$0.segmentIndex: $0.idpStatus] }
+        XCTAssertEqual(flagged, [[0: [.BASAL_RATE]], [1: [.START_TIME]]])
+    }
+
     func testEmptyScheduleIsRejectedWithoutTouchingThePump() {
         let bluetooth = makeStub(profile: StubIDPPump([.init(startTime: 0, basalRate: 1000)]))
 

@@ -2,7 +2,8 @@ import Foundation
 @testable import TandemKit
 
 /// In-memory stand-in for the pump's insulin delivery profile: answers the IDP read walk and
-/// applies segment writes the way the pump does, rejecting one that would collide on a start time.
+/// applies segment writes the way the pump does, rejecting one that would collide on a start time
+/// or flags a start time on segment 0, which a Mobi refused.
 final class StubIDPPump {
     struct Segment: Equatable, CustomStringConvertible {
         var startTime: Int
@@ -53,15 +54,27 @@ final class StubIDPPump {
         self.idpId = idpId
     }
 
-    @discardableResult func apply(_ command: Command) -> Int {
+    /// A modify changes only the fields `changedFields` flags; nil flags the ones that differ.
+    @discardableResult func apply(
+        _ command: Command,
+        changedFields: Set<IDPSegmentResponse.IDPSegmentStatus>? = nil
+    ) -> Int {
         guard appliesWrites else {
             return 0
         }
 
         switch command {
         case let .modify(index, startTime, basalRate):
-            guard index < segments.count, !collides(startTime: startTime, excluding: index) else { return 1 }
-            segments[index] = Segment(startTime: startTime, basalRate: basalRate)
+            guard index < segments.count else { return 1 }
+            let current = segments[index]
+            let changedFields = changedFields ?? Self.differingFields(current, startTime: startTime, basalRate: basalRate)
+            guard index != 0 || !changedFields.contains(.START_TIME) else { return 1 }
+            let updated = Segment(
+                startTime: changedFields.contains(.START_TIME) ? startTime : current.startTime,
+                basalRate: changedFields.contains(.BASAL_RATE) ? basalRate : current.basalRate
+            )
+            guard !collides(startTime: updated.startTime, excluding: index) else { return 1 }
+            segments[index] = updated
             return 0
         case let .create(startTime, basalRate):
             guard !collides(startTime: startTime, excluding: nil) else { return 1 }
@@ -72,6 +85,17 @@ final class StubIDPPump {
             segments.remove(at: index)
             return 0
         }
+    }
+
+    private static func differingFields(
+        _ segment: Segment,
+        startTime: Int,
+        basalRate: Int
+    ) -> Set<IDPSegmentResponse.IDPSegmentStatus> {
+        var fields: Set<IDPSegmentResponse.IDPSegmentStatus> = []
+        if segment.startTime != startTime { fields.insert(.START_TIME) }
+        if segment.basalRate != basalRate { fields.insert(.BASAL_RATE) }
+        return fields
     }
 
     private func collides(startTime: Int, excluding index: Int?) -> Bool {
@@ -122,7 +146,7 @@ final class StubIDPPump {
 
         bluetooth.stub(SetIDPSegmentRequest.self) { request in
             guard let request = request as? SetIDPSegmentRequest, let command = Command(request) else { return nil }
-            return SetIDPSegmentResponse(status: self.apply(command), unknown: 0)
+            return SetIDPSegmentResponse(status: self.apply(command, changedFields: request.idpStatus), unknown: 0)
         }
     }
 }

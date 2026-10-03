@@ -158,34 +158,21 @@ final class IDPManagerTests: XCTestCase {
 
     // MARK: - Modify Segment Tests
 
-    func testModifySegmentMessageIncludesAllFields() throws {
+    func testModifySegmentMessageFlagsOnlyTheChangedFields() throws {
         let manager = IDPManager()
-
-        // Setup complete manager
         setupCompleteManager(manager)
 
         let profile = try XCTUnwrap(manager.getActiveProfile())
-        let segments = profile.getSegments()
-        let segment = try XCTUnwrap(segments.first)
+        let segment = try XCTUnwrap(profile.getSegments().first)
+        segment.profileBasalRate = 1500
 
-        // Modify the segment
-        var modifiedSegment = segment
-        modifiedSegment.profileBasalRate = 1500
-
-        let request = profile.modifySegmentMessage(segment: modifiedSegment)
+        let request = profile.modifySegmentMessage(segment: segment, changedFields: [.BASAL_RATE])
 
         XCTAssertEqual(request.idpId, profile.idpId)
         XCTAssertEqual(request.segmentIndex, segment.segmentIndex)
         XCTAssertEqual(request.operation, .modifySegmentId)
-        XCTAssertEqual(request.idpStatusId, 31, "Must include all 5 fields")
-
-        // Verify all 5 flags are set
-        let flags = IDPSegmentResponse.IDPSegmentStatus.fromBitmask(request.idpStatusId)
-        XCTAssertTrue(flags.contains(.BASAL_RATE))
-        XCTAssertTrue(flags.contains(.CARB_RATIO))
-        XCTAssertTrue(flags.contains(.TARGET_BG))
-        XCTAssertTrue(flags.contains(.CORRECTION_FACTOR))
-        XCTAssertTrue(flags.contains(.START_TIME))
+        XCTAssertEqual(request.profileBasalRate, 1500)
+        XCTAssertEqual(request.idpStatusId, 1)
     }
 
     // MARK: - Create Segment Tests

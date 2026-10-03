@@ -176,9 +176,16 @@ public extension TandemPumpManager {
                 let write = pendingWrites.remove(at: applicable)
 
                 if let segment = write.segment {
+                    var changedFields: Set<IDPSegmentResponse.IDPSegmentStatus> = []
+                    if segment.profileStartTime != write.startTime {
+                        changedFields.insert(.START_TIME)
+                    }
+                    if segment.profileBasalRate != write.basalRate {
+                        changedFields.insert(.BASAL_RATE)
+                    }
                     segment.profileStartTime = write.startTime
                     segment.profileBasalRate = write.basalRate
-                    requests.append(activeProfile.modifySegmentMessage(segment: segment))
+                    requests.append(activeProfile.modifySegmentMessage(segment: segment, changedFields: changedFields))
                     occupiedStartTimes[segment.segmentIndex] = write.startTime
                 } else {
                     let firstSegment = currentSegments.first!

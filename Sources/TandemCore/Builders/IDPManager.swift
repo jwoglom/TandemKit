@@ -102,15 +102,15 @@ public class IDPManager {
             )
         }
 
-        /// Generate a request to modify an existing segment.
-        ///
-        /// - Parameter segment: The segment with updated values
-        /// - Returns: Request to send to the pump
-        public func modifySegmentMessage(segment: IDPSegmentResponse) -> SetIDPSegmentRequest {
+        /// `changedFields` is the request's status mask. Tandem's app flags only the fields it changes,
+        /// and a Mobi rejected every segment-0 modify flagging all five, start time included.
+        public func modifySegmentMessage(
+            segment: IDPSegmentResponse,
+            changedFields: Set<IDPSegmentResponse.IDPSegmentStatus>
+        ) -> SetIDPSegmentRequest {
             precondition(segment.idpId == idpId, "Segment does not belong to this profile")
 
-            // Per pumpX2 IDPManager.modifySegmentMessage: must include all 5 fields
-            let statusMask = IDPSegmentResponse.IDPSegmentStatus.allFieldsMask()
+            let statusMask = changedFields.reduce(0) { $0 | $1.rawValue }
 
             return SetIDPSegmentRequest(
                 idpId: idpId,
