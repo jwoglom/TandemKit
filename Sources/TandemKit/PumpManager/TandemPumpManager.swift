@@ -151,9 +151,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private let syncStateLock = NSLock()
     private var inFlightSyncs = 0
 
-    /// Command queue only. Set once the pump's profile has been read for `adoptMatchingPumpProfile`.
-    var checkedPumpProfileForAdoption = false
-
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -510,7 +507,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
             self.fetchBasalStatus()
-            self.adoptMatchingPumpProfile()
             self.fetchNotifications()
             self.fetchTimeSinceReset()
             self.fetchCGMSessionStatus()
@@ -835,13 +831,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
-        // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
-        guard duration < .ulpOfOne || state.hasSyncedBasalRateSchedule else {
-            logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
-            completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
-            return
-        }
-
         let baselineRate = getScheduledBasalRate()
         guard baselineRate > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
@@ -854,6 +843,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.error("Failed to connect for temp basal: \(error.localizedDescription)")
                 completion(.connection(PumpCommError.pumpNotConnected))
                 return
+            }
+
+            // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
+            if duration >= .ulpOfOne {
+                self.adoptMatchingPumpProfile()
+                guard self.state.hasSyncedBasalRateSchedule else {
+                    self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
+                    completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
+                    return
+                }
             }
 
             guard let currentBasal = self.bluetooth.write(CurrentBasalStatusRequest()) else {

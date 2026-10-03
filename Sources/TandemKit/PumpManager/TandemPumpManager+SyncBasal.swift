@@ -348,13 +348,11 @@ extension TandemPumpManager {
         return nil
     }
 
-    /// State saved before `hasSyncedBasalRateSchedule` existed reads false on a pump that was looping.
-    /// A profile already matching the host's schedule is what a successful sync leaves, so it counts.
+    /// State saved before `hasSyncedBasalRateSchedule` existed reads false on a pump that was looping,
+    /// and hosts sync only on a save. A profile already matching is what a successful sync leaves.
     func adoptMatchingPumpProfile() {
         let items = state.basalRateSchedule.items.sorted { $0.startTime < $1.startTime }
-        guard !state.hasSyncedBasalRateSchedule, !checkedPumpProfileForAdoption,
-              items.contains(where: { $0.value > 0 })
-        else {
+        guard !state.hasSyncedBasalRateSchedule, items.contains(where: { $0.value > 0 }) else {
             return
         }
 
@@ -362,7 +360,6 @@ extension TandemPumpManager {
             logger.error("Could not read the basal profile to check it against the app's schedule")
             return
         }
-        checkedPumpProfileForAdoption = true
 
         guard segments.count == items.count,
               Self.pendingSegmentWrites(items: items, retainedSegments: segments).isEmpty

@@ -133,7 +133,39 @@ import XCTest
             return XCTFail("Expected a configuration error, got \(String(describing: error))")
         }
         XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .basalScheduleNotSynced)
-        XCTAssertTrue(bluetooth.sentMessages.isEmpty)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testTempBasalIsBlockedWhenThePumpProfileDiffersFromTheSchedule() {
+        let bluetooth = StubPumpBluetooth()
+        StubIDPPump([.init(startTime: 0, basalRate: 900)]).install(on: bluetooth)
+        let manager = makeUnsyncedManager(bluetooth: bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30))
+
+        guard case let .configuration(underlying?) = error else {
+            return XCTFail("Expected a configuration error, got \(String(describing: error))")
+        }
+        XCTAssertEqual(underlying as? TandemPumpManagerValidationError, .basalScheduleNotSynced)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testTempBasalGoesOutWhenThePumpProfileAlreadyMatchesTheSchedule() {
+        let bluetooth = StubPumpBluetooth()
+        StubIDPPump([.init(startTime: 0, basalRate: 1000)]).install(on: bluetooth)
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 1000,
+            currentBasalRate: 1000,
+            basalModifiedBitmask: 0
+        ))
+        bluetooth.stub(SetTempRateRequest.self, with: SetTempRateResponse(status: 0, tempRateId: 42))
+        let manager = makeUnsyncedManager(bluetooth: bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(30)))
+        XCTAssertTrue(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetIDPSegmentRequest.self))
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
     }
 
     func testTempBasalCancelIsAllowedBeforeTheBasalScheduleHasSynced() {

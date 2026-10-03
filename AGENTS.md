@@ -269,8 +269,8 @@ edit instead of at the next sync.
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
   pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
   State saved before the flag existed reads false, and Loop and Trio only sync the schedule
-  when the user saves it, so `adoptMatchingPumpProfile` reads the pump's profile on the first
-  sync of a launch and sets the flag if it already matches the host's schedule.
+  when the user saves it, so while it is false `enactTempBasal` reads the pump's profile
+  (`adoptMatchingPumpProfile`) and sets the flag if it already matches the host's schedule.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.
