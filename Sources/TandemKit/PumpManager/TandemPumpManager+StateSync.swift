@@ -4,7 +4,7 @@ import LoopKit
 extension TandemPumpManager {
     func fetchTimeSinceReset() {
         guard let response = bluetooth.write(TimeSinceResetRequest()) else {
-            logger.error("Failed to fetch ControlIQ info: \(type(of: TimeSinceResetRequest.self))")
+            logger.error("Failed to fetch time since reset")
             return
         }
 
@@ -125,7 +125,7 @@ extension TandemPumpManager {
             }
 
             guard let response = self.bluetooth.write(CurrentBasalStatusRequest()) else {
-                self.logger.error("Failed to fetch basal Status for suspend: \(type(of: HomeScreenMirrorRequest.self))")
+                self.logger.error("Failed to fetch suspend status: \(String(describing: CurrentBasalStatusRequest.self))")
                 completion(nil)
                 return
             }
@@ -143,7 +143,7 @@ extension TandemPumpManager {
 
     func fetchBasalStatus() {
         guard let response = bluetooth.write(CurrentBasalStatusRequest()) else {
-            logger.error("Failed to fetch basal Status: \(type(of: HomeScreenMirrorRequest.self))")
+            logger.error("Failed to fetch basal status: \(String(describing: CurrentBasalStatusRequest.self))")
             return
         }
 
