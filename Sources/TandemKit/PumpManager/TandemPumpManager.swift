@@ -2548,7 +2548,7 @@ final class CommandWatchdog<Outcome> {
             self?.deliver(timeoutResult())
         }
         timeoutItem = item
-        queue.asyncAfter(deadline: .now() + timeout, execute: item)
+        queue.asyncAfter(wallInterval: timeout, execute: item)
     }
 
     /// Delivers `result` if nothing has been delivered yet. Safe to call any number of times and

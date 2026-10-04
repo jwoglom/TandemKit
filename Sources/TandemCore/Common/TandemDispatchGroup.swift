@@ -79,7 +79,8 @@ final class TandemDispatchGroup {
         case timedOut
     }
 
-    @discardableResult func wait(timeout: DispatchTime) -> Data? {
+    /// Timeouts are wall-clock; see `WallClockDispatch.swift`.
+    @discardableResult func wait(timeout: DispatchTimeInterval) -> Data? {
         switch waitForOutcome(timeout: timeout) {
         case let .completed(payload):
             return payload
@@ -88,17 +89,8 @@ final class TandemDispatchGroup {
         }
     }
 
-    func waitForOutcome(timeout: DispatchTime) -> WaitOutcome {
-        outcome(after: semaphore.wait(timeout: timeout))
-    }
-
-    /// `DispatchTime` stops while the device sleeps, so a deadline on it can run minutes past its
-    /// wall-clock length (#506); use this where the deadline is real time.
-    func waitForOutcome(wallTimeout: DispatchWallTime) -> WaitOutcome {
-        outcome(after: semaphore.wait(wallTimeout: wallTimeout))
-    }
-
-    private func outcome(after result: DispatchTimeoutResult) -> WaitOutcome {
+    func waitForOutcome(timeout: DispatchTimeInterval) -> WaitOutcome {
+        let result = semaphore.wait(wallTimeout: timeout)
         lock.lock()
         defer { lock.unlock() }
         if result == .timedOut {

@@ -155,8 +155,8 @@ public final class HistoryLogFetcher {
         // Wait for connect + request acknowledgement, then for the streamed entry itself. The
         // stream can arrive before the ack returns; the pre-installed subscription captures it
         // either way, so the second wait returns immediately in that case.
-        _ = sendSemaphore.wait(timeout: .now() + Self.sendTimeout)
-        _ = streamSemaphore.wait(timeout: .now() + timeout)
+        _ = sendSemaphore.wait(wallTimeout: Self.sendTimeout)
+        _ = streamSemaphore.wait(wallTimeout: .now() + timeout)
 
         captureLock.lock()
         defer { captureLock.unlock() }
@@ -455,7 +455,7 @@ public final class HistoryLogFetcher {
             }
             response = pumpManager.bluetooth.write(request)
         }
-        _ = semaphore.wait(timeout: .now() + Self.sendTimeout)
+        _ = semaphore.wait(wallTimeout: Self.sendTimeout)
         return response
     }
 
