@@ -209,6 +209,15 @@ import XCTest
         XCTAssertLessThanOrEqual(rate, 12.0)
     }
 
+    func testCeilingDetectionFollowsTheRoundedPercent() {
+        XCTAssertTrue(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 3.0, baseline: 1.0))
+        XCTAssertTrue(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 2.51, baseline: 1.0))
+        XCTAssertFalse(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 2.5, baseline: 1.0))
+        XCTAssertFalse(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 2.504, baseline: 1.0))
+        XCTAssertFalse(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 3.0, baseline: 0))
+        XCTAssertFalse(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 0, baseline: 1.0))
+    }
+
     /// Baselines below 1 U/h quantise finer than the 0.01 U/h grid, so several percents share a
     /// rate. The resolved rate must still never exceed the request.
     func testSubUnitBaselineStillRespectsTheRequest() {
