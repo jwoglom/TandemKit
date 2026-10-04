@@ -79,7 +79,8 @@ final class TandemDispatchGroup {
         case timedOut
     }
 
-    @discardableResult func wait(timeout: DispatchTime) -> Data? {
+    /// Timeouts are wall-clock; see `WallClockDispatch.swift`.
+    @discardableResult func wait(timeout: DispatchTimeInterval) -> Data? {
         switch waitForOutcome(timeout: timeout) {
         case let .completed(payload):
             return payload
@@ -88,8 +89,8 @@ final class TandemDispatchGroup {
         }
     }
 
-    func waitForOutcome(timeout: DispatchTime) -> WaitOutcome {
-        let result = semaphore.wait(timeout: timeout)
+    func waitForOutcome(timeout: DispatchTimeInterval) -> WaitOutcome {
+        let result = semaphore.wait(wallTimeout: timeout)
         lock.lock()
         defer { lock.unlock() }
         if result == .timedOut {

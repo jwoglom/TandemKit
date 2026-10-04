@@ -71,7 +71,7 @@ final class PumpTelemetryScheduler {
             let timer = DispatchSource.makeTimerSource(queue: queue)
             let leewayNanoseconds = DispatchTimeInterval.milliseconds(Int(leeway * 1000))
             timer.schedule(
-                deadline: .now() + interval,
+                wallDeadline: .now() + interval,
                 repeating: interval,
                 leeway: leewayNanoseconds
             )

@@ -12,7 +12,7 @@ final class TandemDispatchGroupTests: XCTestCase {
             group.leave(payload)
         }
 
-        let result = group.wait(timeout: .now() + 2.0)
+        let result = group.wait(timeout: .seconds(2))
         XCTAssertEqual(result, payload)
     }
 
@@ -21,7 +21,7 @@ final class TandemDispatchGroupTests: XCTestCase {
         group.enter()
 
         // No leave/cancel: must time out and report nil.
-        let result = group.wait(timeout: .now() + 0.05)
+        let result = group.wait(timeout: .milliseconds(50))
         XCTAssertNil(result)
     }
 
@@ -33,7 +33,7 @@ final class TandemDispatchGroupTests: XCTestCase {
         group.enter()
         group.leave(Data())
 
-        let result = group.wait(timeout: .now() + 2.0)
+        let result = group.wait(timeout: .seconds(2))
         XCTAssertNotNil(result, "empty-Data completion must not look like a timeout")
         XCTAssertEqual(result, Data())
     }
@@ -46,7 +46,7 @@ final class TandemDispatchGroupTests: XCTestCase {
             group.cancel()
         }
 
-        let result = group.wait(timeout: .now() + 2.0)
+        let result = group.wait(timeout: .seconds(2))
         XCTAssertNil(result, "cancel must unblock the waiter with no payload")
     }
 
@@ -58,14 +58,14 @@ final class TandemDispatchGroupTests: XCTestCase {
         group.leave(first)
         group.leave(Data([0xBB])) // must be a no-op, must not crash
 
-        XCTAssertEqual(group.wait(timeout: .now() + 2.0), first)
+        XCTAssertEqual(group.wait(timeout: .seconds(2)), first)
     }
 
     func testLateLeaveAfterTimeoutIsNoOp() {
         let group = TandemDispatchGroup()
         group.enter()
 
-        XCTAssertNil(group.wait(timeout: .now() + 0.05)) // times out
+        XCTAssertNil(group.wait(timeout: .milliseconds(50))) // times out
 
         // A delegate callback arriving after the timeout must not crash or strand a signal.
         group.leave(Data([0x09]))
@@ -87,7 +87,7 @@ final class TandemDispatchGroupTests: XCTestCase {
         for _ in 0 ..< iterations { start.signal() }
 
         // Exactly one of the concurrent leaves wins; wait must return some payload, never hang/crash.
-        XCTAssertNotNil(group.wait(timeout: .now() + 2.0))
+        XCTAssertNotNil(group.wait(timeout: .seconds(2)))
     }
 
     // MARK: - waitForOutcome
@@ -98,11 +98,11 @@ final class TandemDispatchGroupTests: XCTestCase {
         let cancelled = TandemDispatchGroup()
         cancelled.enter()
         cancelled.cancel()
-        XCTAssertEqual(cancelled.waitForOutcome(timeout: .now() + 2.0), .cancelled)
+        XCTAssertEqual(cancelled.waitForOutcome(timeout: .seconds(2)), .cancelled)
 
         let timedOut = TandemDispatchGroup()
         timedOut.enter()
-        XCTAssertEqual(timedOut.waitForOutcome(timeout: .now() + 0.05), .timedOut)
+        XCTAssertEqual(timedOut.waitForOutcome(timeout: .milliseconds(50)), .timedOut)
     }
 
     func testOutcomeReportsCompletionPayload() {
@@ -111,7 +111,7 @@ final class TandemDispatchGroupTests: XCTestCase {
         let payload = Data([0x11, 0x22])
         group.leave(payload)
 
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .completed(payload))
+        XCTAssertEqual(group.waitForOutcome(timeout: .seconds(2)), .completed(payload))
     }
 
     func testOutcomeReportsEmptyCompletionAsCompleted() {
@@ -121,7 +121,7 @@ final class TandemDispatchGroupTests: XCTestCase {
         group.enter()
         group.leave(Data())
 
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .completed(Data()))
+        XCTAssertEqual(group.waitForOutcome(timeout: .seconds(2)), .completed(Data()))
     }
 
     func testCancelRaceStillReportsCancelled() {
@@ -132,7 +132,7 @@ final class TandemDispatchGroupTests: XCTestCase {
             group.cancel()
         }
 
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .cancelled)
+        XCTAssertEqual(group.waitForOutcome(timeout: .seconds(2)), .cancelled)
     }
 
     func testLateCancelAfterTimeoutDoesNotRewriteOutcome() {
@@ -141,20 +141,20 @@ final class TandemDispatchGroupTests: XCTestCase {
         let group = TandemDispatchGroup()
         group.enter()
 
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 0.05), .timedOut)
+        XCTAssertEqual(group.waitForOutcome(timeout: .milliseconds(50)), .timedOut)
         group.cancel() // no-op
 
-        XCTAssertNil(group.wait(timeout: .now() + 0.05))
+        XCTAssertNil(group.wait(timeout: .milliseconds(50)))
     }
 
     func testReenterClearsPriorCancellation() {
         let group = TandemDispatchGroup()
         group.enter()
         group.cancel()
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .cancelled)
+        XCTAssertEqual(group.waitForOutcome(timeout: .seconds(2)), .cancelled)
 
         group.enter()
         group.leave(Data([0x07]))
-        XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .completed(Data([0x07])))
+        XCTAssertEqual(group.waitForOutcome(timeout: .seconds(2)), .completed(Data([0x07])))
     }
 }

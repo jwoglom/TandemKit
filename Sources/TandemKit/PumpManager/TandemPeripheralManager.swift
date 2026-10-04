@@ -233,7 +233,7 @@ class TandemPeripheralManager: NSObject {
         commandLock?.enter()
         peripheral.readValue(for: characteristic)
 
-        return readQ.wait(timeout: .now() + .seconds(10))
+        return readQ.wait(timeout: .seconds(10))
     }
 
     func write<R: PumpRequest>(_ request: R, maxChunkSize: Int? = nil) -> R.Response? {
@@ -255,7 +255,7 @@ class TandemPeripheralManager: NSObject {
         // unbounded wait that used to live here was a primary cause of the connection hang).
         // On the success path the matching signal() is registered immediately via defer; on the
         // timeout path we never acquired the lock, so we must not signal.
-        guard writeSemaphore.wait(timeout: .now() + Self.writeLockTimeout) == .success else {
+        guard writeSemaphore.wait(wallTimeout: Self.writeLockTimeout) == .success else {
             logger.error("Timed out acquiring write lock; pump I/O unexpectedly contended")
             return nil
         }
@@ -304,18 +304,23 @@ class TandemPeripheralManager: NSObject {
             commandLock?.enter()
 
             peripheral.writeValue(item.build(), for: characteristic, type: .withResponse)
-            commandLock?.wait(timeout: .now() + .seconds(2))
+            commandLock?.wait(timeout: .seconds(2))
         }
 
         currentTxId = currentTxId &+ 1
         // Released by PendingWrite.append once the last packet has been reassembled.
-        let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout)
+        let wallStart = Date()
+        let uptimeStart = DispatchTime.now().uptimeNanoseconds
+        let outcome = writeQ.waitForOutcome(timeout: Self.responseTimeout)
+        let wallElapsed = Date().timeIntervalSince(wallStart)
+        let uptimeElapsed = Double(DispatchTime.now().uptimeNanoseconds &- uptimeStart) / 1e9
+        let waited = String(format: "waited %.1fs wall, %.1fs uptime", wallElapsed, uptimeElapsed)
         guard case .completed = outcome else {
             if outcome == .cancelled {
                 // Torn down by cancelPendingOperations, not the pump going quiet.
                 logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
             } else {
-                logger.error("Timeout hit, no response from pump...")
+                logger.error("Timeout hit, no response from pump... (\(waited))")
             }
             return nil
         }
@@ -328,7 +333,7 @@ class TandemPeripheralManager: NSObject {
         }
 
         let message = pending.message
-        logger.info("Received message: \(message?.description ?? "nil")")
+        logger.info("Received message: \(message?.description ?? "nil") (\(waited))")
         return message
     }
 
@@ -357,7 +362,7 @@ class TandemPeripheralManager: NSObject {
         commandLock?.enter()
 
         peripheral.setNotifyValue(true, for: characteristic)
-        commandLock?.wait(timeout: .now() + .seconds(2))
+        commandLock?.wait(timeout: .seconds(2))
     }
 
     private func getCharacteristic(serviceUUID: CBUUID, characteristicUUID: CBUUID) -> CBCharacteristic? {

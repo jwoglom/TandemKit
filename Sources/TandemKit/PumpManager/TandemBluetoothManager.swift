@@ -292,7 +292,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         }
         reconnectRetry = item
         logger.info("Retrying the reconnect in \(delay) s")
-        managerQueue.asyncAfter(deadline: .now() + delay, execute: item)
+        managerQueue.asyncAfter(wallInterval: .milliseconds(Int(delay * 1000)), execute: item)
     }
 
     private func cancelReconnectRetry() {
@@ -307,7 +307,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// `commandQueue`. Blocks (bounded by `connectTimeout`) until the connection is ready or the
     /// attempt fails/times out, returning nil on success and an error otherwise.
     ///
-    /// The bounded wait is a `DispatchSemaphore.wait(timeout:)` (via TandemDispatchGroup): the
+    /// The bounded wait is a wall-clock `DispatchSemaphore.wait` (via TandemDispatchGroup): the
     /// timeout is intrinsic to the wait and needs no separate timer, so it cannot be starved by
     /// this queue being blocked — which is exactly the failure mode of the previous design.
     private func connectIfNeeded() -> Error? {
@@ -383,7 +383,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         }
 
         // Cancelled by cancelInFlightConnect() on disconnect/Bluetooth-off, or times out on its own.
-        switch group.waitForOutcome(timeout: .now() + connectTimeout) {
+        switch group.waitForOutcome(timeout: connectTimeout) {
         case .timedOut:
             logger.error("Connect attempt did not complete within \(connectTimeout)")
             abandonConnectAttempt(on: manager)
