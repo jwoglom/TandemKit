@@ -915,7 +915,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
             if !isCancel, Self.tempBasalExceedsCeiling(requestedRate: unitsPerHour, baseline: baseline) {
                 self.logger.warning(
-                    "Clamped temp basal \(unitsPerHour) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile) (#505)"
+                    "Clamped temp basal \(unitsPerHour) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile)"
                 )
             }
 
