@@ -3527,7 +3527,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "commit=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo unknown)\nif ! git -C \"$SRCROOT\" diff --quiet HEAD 2>/dev/null; then commit=\"$commit-dirty\"; fi\nplist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :TandemKitGitCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :TandemKitGitCommit string $commit\" \"$plist\"\n";
+			shellScript = "commit=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo unknown)\nif ! git -C \"$SRCROOT\" diff --quiet HEAD 2>/dev/null; then commit=\"$commit-dirty\"; fi\nplist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\ncurrent=$(/usr/libexec/PlistBuddy -c \"Print :TandemKitGitCommit\" \"$plist\" 2>/dev/null || true)\n[ \"$current\" = \"$commit\" ] && exit 0\n/usr/libexec/PlistBuddy -c \"Delete :TandemKitGitCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :TandemKitGitCommit string $commit\" \"$plist\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
