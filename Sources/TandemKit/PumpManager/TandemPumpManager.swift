@@ -380,6 +380,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
         return (percent, rate)
     }
 
+    internal static func tempBasalExceedsCeiling(requestedRate: Double, baseline: Double) -> Bool {
+        guard baseline > 0, requestedRate > 0 else { return false }
+        return Int((requestedRate / baseline * 100.0).rounded()) > maximumTempBasalPercent
+    }
+
     // MARK: - Basic Pump Manager Interface
 
     public var pumpManagerDelegate: PumpManagerDelegate? {
@@ -902,10 +907,17 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.skewCompensationTemp = nil
             }
 
+            let baseline = self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
             let (percent, absoluteRate) = isCancel ? (100, 0) : self.tempBasalPercentAndRate(
                 requestedRate: unitsPerHour,
-                baseline: self.tempBasalBaseline(pumpRate: currentBasal.profileBasalRate)
+                baseline: baseline
             )
+
+            if !isCancel, Self.tempBasalExceedsCeiling(requestedRate: unitsPerHour, baseline: baseline) {
+                self.logger.warning(
+                    "Clamped temp basal \(unitsPerHour) → \(absoluteRate) U/hr (\(percent)% of \(baseline) U/hr profile) (#505)"
+                )
+            }
 
             // Skewed, the host counts its own schedule rather than the pump's rate when no temp runs.
             let hostCountsThePumpsRate = !self.state.isPumpClockSkewed
