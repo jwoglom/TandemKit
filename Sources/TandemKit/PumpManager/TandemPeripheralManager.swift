@@ -309,13 +309,18 @@ class TandemPeripheralManager: NSObject {
 
         currentTxId = currentTxId &+ 1
         // Released by PendingWrite.append once the last packet has been reassembled.
-        let outcome = writeQ.waitForOutcome(timeout: .now() + Self.responseTimeout)
+        let wallStart = Date()
+        let uptimeStart = DispatchTime.now().uptimeNanoseconds
+        let outcome = writeQ.waitForOutcome(wallTimeout: .now() + Self.responseTimeout)
+        let wallElapsed = Date().timeIntervalSince(wallStart)
+        let uptimeElapsed = Double(DispatchTime.now().uptimeNanoseconds &- uptimeStart) / 1e9
+        let waited = String(format: "waited %.1fs wall, %.1fs uptime", wallElapsed, uptimeElapsed)
         guard case .completed = outcome else {
             if outcome == .cancelled {
                 // Torn down by cancelPendingOperations, not the pump going quiet.
                 logger.error("Write cancelled before a response arrived; link or Bluetooth went away")
             } else {
-                logger.error("Timeout hit, no response from pump...")
+                logger.error("Timeout hit, no response from pump... (\(waited))")
             }
             return nil
         }
@@ -328,7 +333,7 @@ class TandemPeripheralManager: NSObject {
         }
 
         let message = pending.message
-        logger.info("Received message: \(message?.description ?? "nil")")
+        logger.info("Received message: \(message?.description ?? "nil") (\(waited))")
         return message
     }
 

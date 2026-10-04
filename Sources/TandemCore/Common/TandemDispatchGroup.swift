@@ -89,7 +89,16 @@ final class TandemDispatchGroup {
     }
 
     func waitForOutcome(timeout: DispatchTime) -> WaitOutcome {
-        let result = semaphore.wait(timeout: timeout)
+        outcome(after: semaphore.wait(timeout: timeout))
+    }
+
+    /// `DispatchTime` stops while the device sleeps, so a deadline on it can run minutes past its
+    /// wall-clock length (#506); use this where the deadline is real time.
+    func waitForOutcome(wallTimeout: DispatchWallTime) -> WaitOutcome {
+        outcome(after: semaphore.wait(wallTimeout: wallTimeout))
+    }
+
+    private func outcome(after result: DispatchTimeoutResult) -> WaitOutcome {
         lock.lock()
         defer { lock.unlock() }
         if result == .timedOut {

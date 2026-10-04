@@ -157,4 +157,22 @@ final class TandemDispatchGroupTests: XCTestCase {
         group.leave(Data([0x07]))
         XCTAssertEqual(group.waitForOutcome(timeout: .now() + 2.0), .completed(Data([0x07])))
     }
+
+    func testWallTimeoutReportsTimedOut() {
+        let group = TandemDispatchGroup()
+        group.enter()
+        XCTAssertEqual(group.waitForOutcome(wallTimeout: .now() + 0.05), .timedOut)
+    }
+
+    func testWallTimeoutReportsCompletionAndCancel() {
+        let completed = TandemDispatchGroup()
+        completed.enter()
+        completed.leave(Data([0x01]))
+        XCTAssertEqual(completed.waitForOutcome(wallTimeout: .now() + 2.0), .completed(Data([0x01])))
+
+        let cancelled = TandemDispatchGroup()
+        cancelled.enter()
+        cancelled.cancel()
+        XCTAssertEqual(cancelled.waitForOutcome(wallTimeout: .now() + 2.0), .cancelled)
+    }
 }
