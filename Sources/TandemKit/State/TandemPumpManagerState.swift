@@ -586,6 +586,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// are worked out against the pump's own and the user is told to sync its clock.
     public static let pumpClockSkewThreshold: TimeInterval = .minutes(5)
 
+    public static let pumpClockOffsetTrustLimit: TimeInterval = .hours(24)
+
     public var isPumpClockSkewed: Bool {
         currentPumpTime != nil && abs(pumpClockOffset) > Self.pumpClockSkewThreshold
     }
