@@ -19,10 +19,10 @@ Comment-worthy, in one line where possible:
 - The safety direction of a fallback — which way it biases IOB, and why that way.
 - Units, resolution, and whose clock a timestamp is on.
 - A non-obvious ordering or a rejected alternative that looks better than it is.
-- An issue number, when the motivation lives there. Often the issue number alone is the comment.
 
 Tests: the test name carries the behaviour. Comment only a setup line whose purpose is opaque
-(why *this* stub value, why state is poked directly).
+(why *this* stub value, why state is poked directly). A test that pins a fix may cite its issue
+number; no other code, comment or log message does.
 
 When editing existing code, delete comments that the edit made redundant. Leaving them is how they
 rot into lies.
