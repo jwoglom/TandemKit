@@ -3513,6 +3513,24 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		7A1C0DE02F5B3A9100C0FFEE /* Stamp Git Commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp Git Commit";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "commit=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo unknown)\nif ! git -C \"$SRCROOT\" diff --quiet HEAD 2>/dev/null; then commit=\"$commit-dirty\"; fi\nplist=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\ncurrent=$(/usr/libexec/PlistBuddy -c \"Print :TandemKitGitCommit\" \"$plist\" 2>/dev/null || true)\n[ \"$current\" = \"$commit\" ] && exit 0\n/usr/libexec/PlistBuddy -c \"Delete :TandemKitGitCommit\" \"$plist\" 2>/dev/null || true\n/usr/libexec/PlistBuddy -c \"Add :TandemKitGitCommit string $commit\" \"$plist\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		1AAA186A2D2B1E060061C043 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
