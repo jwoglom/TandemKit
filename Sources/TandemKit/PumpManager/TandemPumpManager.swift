@@ -25,7 +25,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var now: Date { clock.now }
 
     func hostDate(forPumpDate date: Date) -> Date {
-        date.addingTimeInterval(-state.pumpClockOffset)
+        let offset = state.pumpClockOffset
+        // An offset this large is a bogus clock read (#503, ~2^32 ms), not a skew; the date stays as the pump sent it.
+        guard abs(offset) <= TandemPumpManagerState.pumpClockOffsetTrustLimit else { return date }
+        return date.addingTimeInterval(-offset)
     }
 
     // Tandem Mobi and t:slim X2: max 16 basal segments within a profile

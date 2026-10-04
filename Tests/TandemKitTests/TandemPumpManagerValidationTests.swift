@@ -553,6 +553,22 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.value, 1.5, accuracy: 0.0001)
     }
 
+    func testHostDateAppliesAnOffsetUpToADay() {
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: StubPumpBluetooth())
+        manager.state.lastPumpTimeCheckDate = manager.now
+        manager.state.currentPumpTime = manager.now.addingTimeInterval(.hours(3))
+
+        XCTAssertEqual(manager.hostDate(forPumpDate: manager.now), manager.now.addingTimeInterval(-.hours(3)))
+    }
+
+    func testHostDateIgnoresAnOffsetOverADay() {
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: StubPumpBluetooth())
+        manager.state.lastPumpTimeCheckDate = manager.now
+        manager.state.currentPumpTime = manager.now.addingTimeInterval(-4_294_967)
+
+        XCTAssertEqual(manager.hostDate(forPumpDate: manager.now), manager.now)
+    }
+
     func testPumpSegmentChangesAreDatedOnThePhonesClock() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
