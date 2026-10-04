@@ -35,59 +35,13 @@ public final class TandemLogger {
     }
 
     private func writeToFile(_ msg: String, _ type: OSLogEntryLog.Level) {
-        if !fileManager.fileExists(atPath: logDir) {
-            try? fileManager.createDirectory(
-                atPath: logDir,
-                withIntermediateDirectories: false,
-                attributes: nil
-            )
-        }
-
-        if !fileManager.fileExists(atPath: logFile) {
-            createFile(at: startOfDay)
-        } else if let attributes = try? fileManager.attributesOfItem(atPath: logFile),
-                  let creationDate = attributes[.creationDate] as? Date, creationDate < startOfDay
-        {
-            try? fileManager.removeItem(atPath: logFilePrev)
-            try? fileManager.moveItem(atPath: logFile, toPath: logFilePrev)
-            createFile(at: startOfDay)
-        }
-
-        let logEntry = "[\(dateFormatter.string(from: Date())) \(getLevel(type))] \(msg)\n"
-        let data = logEntry.data(using: .utf8)!
-        try? data.append(fileURL: URL(fileURLWithPath: logFile))
-    }
-
-    private var logFile: String {
-        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log.txt").path
-    }
-
-    private var logDir: String {
-        getDocumentsDirectory().appendingPathComponent("tandem").path
-    }
-
-    private var logFilePrev: String {
-        getDocumentsDirectory().appendingPathComponent("tandem/tandem_log_prev.txt").path
-    }
-
-    private var startOfDay: Date {
-        Calendar.current.startOfDay(for: Date())
-    }
-
-    private func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let documentsDirectory = paths[0]
-        return documentsDirectory
+        TandemLogFileWriter.shared.append("[\(dateFormatter.string(from: Date())) \(getLevel(type))] \(msg)\n")
     }
 
     private var dateFormatter: DateFormatter {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
         return dateFormatter
-    }
-
-    private func createFile(at date: Date) {
-        fileManager.createFile(atPath: logFile, contents: nil, attributes: [.creationDate: date])
     }
 
     private func getLevel(_ type: OSLogEntryLog.Level) -> String {
@@ -108,31 +62,8 @@ public final class TandemLogger {
     }
 
     func getDebugLogs() -> [URL] {
-        var items: [URL] = []
-
-        if fileManager.fileExists(atPath: logFile) {
-            items.append(URL(fileURLWithPath: logFile))
-        }
-
-        if fileManager.fileExists(atPath: logFilePrev) {
-            items.append(URL(fileURLWithPath: logFilePrev))
-        }
-
-        return items
-    }
-}
-
-private extension Data {
-    func append(fileURL: URL) throws {
-        if let fileHandle = FileHandle(forWritingAtPath: fileURL.path) {
-            defer {
-                fileHandle.closeFile()
-            }
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(self)
-        } else {
-            try write(to: fileURL, options: .atomic)
-        }
+        let writer = TandemLogFileWriter.shared
+        return [writer.logFile, writer.logFilePrev].filter { fileManager.fileExists(atPath: $0.path) }
     }
 }
 
