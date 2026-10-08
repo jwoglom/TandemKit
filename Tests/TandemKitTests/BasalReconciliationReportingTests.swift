@@ -226,6 +226,32 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
+    /// #353 G07: Control-IQ turned on at the pump ends the app's temp, which the driver still holds.
+    func testAnAppTempHeldWhenControlIQStartsOnThePumpEndsAtItsCompletion() throws {
+        enableReporting()
+        holdTemp(percent: 150, id: 5)
+        manager.state.useControlIQ = true
+        var log = PumpBasalHistory()
+        log.tempStarted(0, percent: 150, minutes: 30, id: 5)
+        log.delivery(10, source: 2, rate: 1500)
+        log.tempEnded(200, id: 5, timeLeft: 1_600_000)
+        log.pcm(200, .closedLoop)
+        log.delivery(310, source: 3, rate: 2200)
+        log.delivery(610, source: 3, rate: 400)
+
+        pass(log)
+
+        XCTAssertEqual(batches.count, 1)
+        XCTAssertEqual(batches.first?.replacePendingEvents, true)
+        let ended = try XCTUnwrap(events.first?.dose)
+        XCTAssertEqual(ended.endDate, at(200))
+        XCTAssertFalse(ended.isMutable)
+        let corrections = events.filter { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
+        XCTAssertEqual(corrections.map(\.date), [at(310), at(610)])
+        XCTAssertTrue(corrections.allSatisfy { $0.dose?.automatic == true })
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
     func testAHeldTempThePumpRunsAtAnotherRateIsRestated() throws {
         enableReporting()
         holdTemp(percent: 150, id: 5)
