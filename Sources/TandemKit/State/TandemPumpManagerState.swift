@@ -111,6 +111,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
     // Control-IQ state
     public var useControlIQ: Bool = false
+    /// When `useControlIQ` last went off; cleared once history has reported Control-IQ's basal up to it.
+    public var controlIQEndedAt: Date?
     public var pendingEnableClosedLoop: Bool = false
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
@@ -223,6 +225,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.maxBolusLimitMilliunits == rhs.maxBolusLimitMilliunits,
               lhs.maxBolusLimitDefaultMilliunits == rhs.maxBolusLimitDefaultMilliunits,
               lhs.useControlIQ == rhs.useControlIQ,
+              lhs.controlIQEndedAt == rhs.controlIQEndedAt,
               lhs.pendingEnableClosedLoop == rhs.pendingEnableClosedLoop,
               lhs.controlIQEnabled == rhs.controlIQEnabled,
               lhs.controlIQUserMode == rhs.controlIQUserMode,
@@ -272,6 +275,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         // mandatory may hold `false`, and those pumps should migrate on, not stay off.
         autoAcknowledgeBasalAlerts = true
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
+        controlIQEndedAt = rawValue["controlIQEndedAt"] as? Date
         hasSyncedBasalRateSchedule = rawValue["hasSyncedBasalRateSchedule"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
@@ -512,6 +516,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
         raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["useControlIQ"] = useControlIQ
+        raw["controlIQEndedAt"] = controlIQEndedAt
         raw["hasSyncedBasalRateSchedule"] = hasSyncedBasalRateSchedule
         raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
         raw["basalDose"] = basalDose.rawValue
@@ -644,6 +649,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* generalAnnun: \(String(describing: generalAnnun))",
             "* pumpSoundsAwaitingWrite: \(pumpSoundsAwaitingWrite)",
             "* useControlIQ: \(useControlIQ)",
+            "* controlIQEndedAt: \(String(describing: controlIQEndedAt))",
             "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",

@@ -50,8 +50,15 @@ struct PumpBasalTimeline: Equatable {
         var units: Double { unitsPerHour * end.timeIntervalSince(start) / .hours(1) }
     }
 
+    /// A 279 whose chunk is not closed yet.
+    struct OpenChunk: Equatable {
+        let sequenceNum: UInt32
+        let start: Date
+    }
+
     /// Closed chunks, ascending.
     private(set) var chunks: [Chunk] = []
+    private(set) var openChunks: [OpenChunk] = []
     /// Why a chunk is untrusted, for the log.
     private(set) var problems: [String] = []
 
@@ -126,7 +133,10 @@ struct PumpBasalTimeline: Equatable {
                 }
             }
             if !isClosed {
-                guard previous == last.sequenceNum, let readThrough, readThrough >= end else { continue }
+                guard previous == last.sequenceNum, let readThrough, readThrough >= end else {
+                    openChunks.append(OpenChunk(sequenceNum: log.sequenceNum, start: start))
+                    continue
+                }
             }
             chunks.append(Chunk(
                 sequenceNum: log.sequenceNum,

@@ -16,8 +16,9 @@ extension TandemPumpManager {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
                 return
             }
-            self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
-            self.reconcileBasalHistory(after: outcome, pumpSerial: serial)
+            var batch = self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            self.reconcileBasalHistory(after: outcome, pumpSerial: serial, into: &batch)
+            self.emitHistoryReports(batch)
             if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }

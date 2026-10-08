@@ -92,6 +92,7 @@ final class PumpBasalTimelineTests: XCTestCase {
 
         XCTAssertEqual(spans(timeline(log, readThrough: nil)), ["0-300 profile 1000"])
         XCTAssertEqual(spans(timeline(log, readThrough: Self.date(599))), ["0-300 profile 1000"])
+        XCTAssertEqual(timeline(log, readThrough: Self.date(599)).openChunks, [.init(sequenceNum: 1002, start: Self.date(300))])
         XCTAssertEqual(spans(timeline(log, readThrough: Self.date(600))), ["0-300 profile 1000", "300-600 profile 1000"])
     }
 

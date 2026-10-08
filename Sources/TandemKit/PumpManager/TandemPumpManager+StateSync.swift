@@ -36,6 +36,9 @@ extension TandemPumpManager {
         // (jwoglom/tandemkit-stress#4).
         if closedLoopEnabled != state.useControlIQ {
             logger.warning("Pump reports Control-IQ \(closedLoopEnabled ? "on" : "off") but useControlIQ was \(state.useControlIQ); syncing")
+            if !closedLoopEnabled {
+                state.controlIQEndedAt = now
+            }
             state.useControlIQ = closedLoopEnabled
         }
 
@@ -137,7 +140,7 @@ extension TandemPumpManager {
                 completion(isSuspended)
                 return
             }
-            self.afterDeliveryTransitionIsReported { completion(isSuspended) }
+            self.afterHistoryIsReported { completion(isSuspended) }
             self.historyBackfillCoordinator.runTick()
         }
     }
@@ -808,17 +811,12 @@ extension TandemPumpManager {
     /// A confirmed mismatch clears `hasSyncedBasalRateSchedule` instead, so `enactTempBasal`
     /// refuses until a sync, or a matching reading lets `adoptMatchingPumpProfile` set it again.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
-        // Control-IQ changes the delivered rate itself, so it won't match the schedule.
-        guard !state.useControlIQ else {
-            return
-        }
-
         let pumpRate: Double
         switch response.basalType {
-        case .basal:
+        case .basal where !state.useControlIQ:
             pumpRate = response.currentBasalRate
-        case .tempBasal:
-            // `currentBasalRate` is the temp rate here; `profileBasalRate` is the scheduled rate.
+        case .basal, .tempBasal:
+            // `currentBasalRate` is the temp's or Control-IQ's; `profileBasalRate` is the profile's.
             pumpRate = response.profileBasalRate
         default:
             return

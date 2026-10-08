@@ -126,7 +126,7 @@ import XCTest
         manager.storeHistoryLogs(logs, now: clock.now)
         let sequences = storedSequenceNums()
         guard let first = sequences.min(), let last = sequences.max() else { return }
-        manager.reportHistoryDeliveryTransitions(
+        let batch = manager.reportHistoryDeliveryTransitions(
             after: HistoryBackfillCoordinator.TickOutcome(
                 bookkeeping: HistoryBackfillState(pumpSerial: Self.pumpSerial, watermark: last),
                 rangesRead: [first ... last],
@@ -138,6 +138,7 @@ import XCTest
             ),
             pumpSerial: serial
         )
+        manager.emitHistoryReports(batch)
         delegateQueue.sync {}
     }
 
@@ -849,7 +850,7 @@ import XCTest
 
     func testTrackingStartsFromTheStatusOfATickWhoseReadFailed() {
         manager.state.deliveryTransitions = DeliveryTransitionLedger()
-        manager.reportHistoryDeliveryTransitions(
+        _ = manager.reportHistoryDeliveryTransitions(
             after: HistoryBackfillCoordinator.TickOutcome(
                 bookkeeping: HistoryBackfillState(pumpSerial: Self.pumpSerial),
                 rangesRead: [],

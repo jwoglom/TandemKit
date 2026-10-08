@@ -27,6 +27,13 @@ enum BasalReconciler {
         var residualByDay: [Date: Double] = [:]
     }
 
+    enum Verdict: Equatable {
+        /// With the host's insulin against the pump's over the chunk, in units.
+        case matches(residual: Double)
+        case differs(ReportedBasalLedger.HostBasal)
+        case skipped
+    }
+
     /// - Parameters:
     ///   - floor: Nothing starting earlier is compared.
     ///   - isExempt: A chunk the driver over-reports on purpose (a temp worked out against the next
@@ -41,28 +48,40 @@ enum BasalReconciler {
         isExempt: (PumpBasalTimeline.Chunk) -> Bool = { _ in false }
     ) -> Result {
         var result = Result()
-        let floor = max(floor, ledger.trackingSince)
         for chunk in timeline.chunks {
-            guard chunk.kind != .suspended, chunk.start >= floor, chunk.end <= now, !isExempt(chunk) else {
-                result.skipped += 1
-                continue
-            }
-            let host = ledger.hostBasal(at: chunk.start, schedule: schedule)
-            guard host.source != .suspended else {
-                result.skipped += 1
-                continue
-            }
-
-            if matches(chunk, ledger: ledger, schedule: schedule) {
+            switch verdict(for: chunk, against: ledger, schedule: schedule, floor: floor, now: now, isExempt: isExempt) {
+            case let .matches(residual):
                 result.matched += 1
-                let interval = DateInterval(start: chunk.start, end: chunk.end)
-                let residual = abs(ledger.hostUnits(in: interval, schedule: schedule) - chunk.units)
                 result.residualByDay[calendar.startOfDay(for: chunk.start), default: 0] += residual
-            } else {
+            case let .differs(host):
                 result.differences.append(Difference(chunk: chunk, host: host))
+            case .skipped:
+                result.skipped += 1
             }
         }
         return result
+    }
+
+    static func verdict(
+        for chunk: PumpBasalTimeline.Chunk,
+        against ledger: ReportedBasalLedger,
+        schedule: HostBasalSchedule,
+        floor: Date,
+        now: Date,
+        isExempt: (PumpBasalTimeline.Chunk) -> Bool = { _ in false }
+    ) -> Verdict {
+        guard chunk.kind != .suspended, chunk.start >= max(floor, ledger.trackingSince), chunk.end <= now, !isExempt(chunk) else {
+            return .skipped
+        }
+        let host = ledger.hostBasal(at: chunk.start, schedule: schedule)
+        guard host.source != .suspended else {
+            return .skipped
+        }
+        guard matches(chunk, ledger: ledger, schedule: schedule) else {
+            return .differs(host)
+        }
+        let interval = DateInterval(start: chunk.start, end: chunk.end)
+        return .matches(residual: abs(ledger.hostUnits(in: interval, schedule: schedule) - chunk.units))
     }
 
     /// The host's rate anywhere within `transitionMatchTolerance` of the chunk's start. A temp runs

@@ -20,6 +20,17 @@ import XCTest
         XCTAssertTrue(flags.historyBackfill)
         XCTAssertFalse(flags.isOverridden(.historyBackfill))
         XCTAssertFalse(flags.historyDoseReporting)
+        XCTAssertFalse(flags.basalHistoryReporting)
+    }
+
+    func testHistoryBasalReportingNeedsTheBackfill() {
+        var flags = TandemFeatureFlags.default
+        flags[.basalHistoryReporting] = true
+        flags[.historyBackfill] = false
+        XCTAssertFalse(flags.basalHistoryReporting)
+
+        flags[.historyBackfill] = true
+        XCTAssertTrue(flags.basalHistoryReporting)
     }
 
     func testTurningHistoryBackfillOffSurvivesTheRawStateRoundTrip() throws {

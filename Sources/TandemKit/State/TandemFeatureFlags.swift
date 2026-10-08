@@ -27,6 +27,10 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
         /// any effect while `historyBackfill` is on — there is nothing to report otherwise.
         case historyDoseReporting
 
+        /// Lets the basal the pump delivered, read from its history log, correct what the app was
+        /// told. While off the comparison still runs, with `historyBackfill`, and only logs.
+        case basalHistoryReporting
+
         public var id: String { rawValue }
 
         public var defaultValue: Bool {
@@ -35,7 +39,8 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 return true
             case .controlIQSupport,
                  .quickBolusButtonSupport,
-                 .historyDoseReporting:
+                 .historyDoseReporting,
+                 .basalHistoryReporting:
                 return false
             }
         }
@@ -62,6 +67,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                     localized: "History Dose Reporting",
                     comment: "Title of the history dose reporting feature flag"
                 )
+            case .basalHistoryReporting:
+                return String(
+                    localized: "History Basal Reporting",
+                    comment: "Title of the history basal reporting feature flag"
+                )
             }
         }
 
@@ -86,6 +96,11 @@ public struct TandemFeatureFlags: RawRepresentable, Equatable {
                 return String(
                     localized: "Adds boluses found in the pump's history log to the app's insulin history, so boluses delivered from the pump itself are counted. Needs History Backfill to be on. While off, pump history is read but never changes the app's insulin history.",
                     comment: "Description of the history dose reporting feature flag"
+                )
+            case .basalHistoryReporting:
+                return String(
+                    localized: "Checks the basal rates the pump delivered, from its history log, against what the app was told, and reports the difference to the app's insulin history: Control-IQ's basal changes, temp rates the app did not set or lost track of, and a pump profile that differs from the app's schedule. Only has any effect while History Backfill is on.",
+                    comment: "Description of the history basal reporting feature flag"
                 )
             }
         }
@@ -172,6 +187,10 @@ public extension TandemFeatureFlags {
     /// Gated on `historyBackfill` as well: there is nothing to report from a log never read.
     var historyDoseReporting: Bool {
         self[.historyBackfill] && self[.historyDoseReporting]
+    }
+
+    var basalHistoryReporting: Bool {
+        self[.historyBackfill] && self[.basalHistoryReporting]
     }
 }
 

@@ -82,6 +82,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
             ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
+            ("reportedBasal.reconciledThrough", { $0.reportedBasal.reconcile(through: 5000) }),
             ("deliveryTransitions", { $0.deliveryTransitions.lastConfirmedObservation = later }),
             ("bolusState", { $0.bolusState = .noBolus }),
             ("insulinType", { $0.insulinType = .humalog }),
@@ -117,6 +118,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("maxBolusLimitMilliunits", { $0.maxBolusLimitMilliunits = nil }),
             ("maxBolusLimitDefaultMilliunits", { $0.maxBolusLimitDefaultMilliunits = nil }),
             ("useControlIQ", { $0.useControlIQ = false }),
+            ("controlIQEndedAt", { $0.controlIQEndedAt = nil }),
             ("pendingEnableClosedLoop", { $0.pendingEnableClosedLoop = false }),
             ("controlIQEnabled", { $0.controlIQEnabled = nil }),
             ("controlIQUserMode", { $0.controlIQUserMode = .exercise }),
@@ -210,6 +212,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
                 .init(kind: .tempBasal, raw: Data([0x31]), date: t0, end: t0.addingTimeInterval(.minutes(30)), rate: 1.75, isMutable: true, tempRateId: 17)
             ]
         )
+        state.reportedBasal.track(pumpSerial: pumpSerial, after: 4000)
+        state.reportedBasal.reconcile(through: 4300)
         state.bolusState = .inProgress(bolusDose.toDoseEntry(isMutable: true, now: t0))
         state.insulinType = .novolog
         state.bolusDose = bolusDose
@@ -252,6 +256,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.maxBolusLimitMilliunits = 9500
         state.maxBolusLimitDefaultMilliunits = 10000
         state.useControlIQ = true
+        state.controlIQEndedAt = t0.addingTimeInterval(-.hours(2))
         state.pendingEnableClosedLoop = true
         state.controlIQEnabled = true
         state.controlIQUserMode = .sleep

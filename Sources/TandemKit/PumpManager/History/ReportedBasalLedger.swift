@@ -55,10 +55,30 @@ public struct ReportedBasalLedger: Equatable {
     /// When this build started recording what it reports; nothing before it is compared.
     public let trackingSince: Date
     public private(set) var rows: [Row]
+    /// The pump `reconciledThrough` counts on.
+    public private(set) var pumpSerial: UInt32?
+    /// The last 279 a reporting pass is done with; later passes start after it.
+    public private(set) var reconciledThrough: UInt32?
 
-    public init(trackingSince: Date, rows: [Row] = []) {
+    public init(trackingSince: Date, rows: [Row] = [], pumpSerial: UInt32? = nil, reconciledThrough: UInt32? = nil) {
         self.trackingSince = trackingSince
         self.rows = rows
+        self.pumpSerial = pumpSerial
+        self.reconciledThrough = reconciledThrough
+    }
+
+    /// On first sight, a replacement pump, or a log the pump erased, which numbers from scratch.
+    public mutating func track(pumpSerial: UInt32, after lastSequenceNum: UInt32?) {
+        self.pumpSerial = pumpSerial
+        reconciledThrough = lastSequenceNum
+    }
+
+    public func isTracking(pumpSerial: UInt32, lastSequenceNum: UInt32) -> Bool {
+        self.pumpSerial == pumpSerial && (reconciledThrough ?? 0) <= lastSequenceNum
+    }
+
+    public mutating func reconcile(through sequenceNum: UInt32) {
+        reconciledThrough = max(reconciledThrough ?? sequenceNum, sequenceNum)
     }
 
     /// One `hasNewPumpEvents` batch. Matched by `raw`, then by date and kind; a matched row
@@ -193,15 +213,20 @@ extension ReportedBasalLedger: RawRepresentable {
         }
         self.init(
             trackingSince: Date(timeIntervalSinceReferenceDate: trackingSince),
-            rows: (rawValue["rows"] as? [[String: Any]] ?? []).compactMap(Row.init(rawValue:))
+            rows: (rawValue["rows"] as? [[String: Any]] ?? []).compactMap(Row.init(rawValue:)),
+            pumpSerial: rawValue["pumpSerial"] as? UInt32,
+            reconciledThrough: rawValue["reconciledThrough"] as? UInt32
         )
     }
 
     public var rawValue: RawValue {
-        [
+        var raw: RawValue = [
             "trackingSince": trackingSince.timeIntervalSinceReferenceDate,
             "rows": rows.map(\.rawValue)
         ]
+        raw["pumpSerial"] = pumpSerial
+        raw["reconciledThrough"] = reconciledThrough
+        return raw
     }
 }
 

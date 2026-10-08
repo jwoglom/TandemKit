@@ -97,7 +97,9 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
     }
 
-    func testS1_aRateOffTheScheduleIsNotFlaggedUnderControlIQ() throws {
+    /// Control-IQ sets the rate it runs, but hands back to the pump's profile, which is what is
+    /// checked against the schedule.
+    func testS1_aProfileOffTheScheduleIsFlaggedUnderControlIQ() throws {
         let driver = try stageDriver()
         try harness.client.setState(["closed_loop_enabled": true])
         try pumpAnnounces(.controlIQInfo)
@@ -112,8 +114,8 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         }
         _ = try sync()
 
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince, "Control-IQ sets the rate itself")
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertNotNil(driver.manager.state.basalRateMismatchSince)
+        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed)
     }
 
     // MARK: - S2

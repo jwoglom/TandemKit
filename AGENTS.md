@@ -150,7 +150,7 @@ edit instead of at the next sync.
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
-  `profileBasalRate` during a temp basal and skipping suspend and Control-IQ. A mismatch that
+  `profileBasalRate` during a temp basal and under Control-IQ, and skipping suspend. A mismatch that
   outlives `basalMismatchConfirmationInterval` shows a critical status highlight and clears
   `hasSyncedBasalRateSchedule`, so temp basals stop (see Therapy command validation). Nothing
   rewrites the pump's profile. A schedule change that alters the rate in force stops a running
@@ -163,6 +163,13 @@ edit instead of at the next sync.
   each call site's job, via `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
+- A history pass sends all its non-bolus reports (suspends, resumes, temp basal ends, basal
+  corrections) as one batch, ascending (`HistoryReportBatch`, `emitHistoryReports`). It replaces
+  only when it ends or re-states the temp basal the host holds as mutable, and then carries
+  `getActivePumpEvents()`. Nothing may be reported to start after a mutable temp basal's start while
+  the host holds it open, and no report starts in the same second as a row the host holds: Trio
+  orders two rows at one timestamp arbitrarily and leaves one zero-length, so an override starts a
+  second later.
 - Still open: a sync re-sends nothing while a dose runs, since its boundary batch is empty and
   non-replacing (#330, #450).
 
@@ -174,14 +181,15 @@ edit instead of at the next sync.
   `HistoryBackfillPlanner` holds that decision as pure arithmetic. A `.bolusChange` qualifying
   event kicks a tick as well; one requested while a tick runs (the pump sends `.bolusChange`
   at both activation and completion) runs straight after it instead of being dropped.
-- Two feature flags: `historyBackfill` is on by default, `historyDoseReporting` is off. The
-  flags screen reveals itself when any flag is off its default, so a user who turned the backfill
-  off can still find it. `historyBackfill` runs the whole thing: while off,
-  `runTick` returns immediately and the pump's history log is never read. `historyDoseReporting`
-  decides whether boluses found in that history reach the app's insulin history; it is `&&`-ed
-  with `historyBackfill`, since there is nothing to report from a log never read. Neither is a
-  dry run — a watermark written for entries that were never read would mark them read and
-  suppress them once the flag goes on.
+- Three feature flags: `historyBackfill` is on by default, `historyDoseReporting` and
+  `basalHistoryReporting` are off. The flags screen reveals itself when any flag is off its
+  default, so a user who turned the backfill off can still find it. `historyBackfill` runs the
+  whole thing: while off, `runTick` returns immediately and the pump's history log is never read.
+  `historyDoseReporting` decides whether boluses found in that history reach the app's insulin
+  history, and `basalHistoryReporting` whether basal corrections do; both are `&&`-ed with
+  `historyBackfill`, since there is nothing to report from a log never read. None is a dry run — a
+  watermark written for entries that were never read would mark them read and suppress them once
+  the flag goes on, so `reconciledThrough` only moves while basal reporting is on.
 - The walk is sliced at one `HistoryLogRequest` (255 entries) so dosing interleaves with it,
   but is not paced one slice per sync: a tick keeps stepping until it reaches
   `deepFetchTarget`, bounded by `maxDeepSlicesPerTick`.
@@ -271,7 +279,29 @@ edit instead of at the next sync.
     `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on
     purpose.
-  - Each difference is logged once a session, with the action it calls for; nothing is reported.
+  - Each difference is logged once a session, with the action it calls for. Only with
+    `basalHistoryReporting`, and only for a trusted chunk, is anything reported:
+    - H from the host's schedule: a correction, an immutable `.tempBasal` at the pump's rate over
+      the chunk (cut at the host's next row inside it), with `deliveredUnits` to 0.001 U, under
+      `HistoryLogSyncIdentifier.logSequence` of the 279, so at most one per 279. `automatic` for
+      Control-IQ chunks and temps with a `SetTempRateResponse` (309) record;
+      `wasProgrammedByPumpUI` for Control-IQ chunks and temps without one.
+    - H from the temp basal the driver holds: ended at its `TempRateCompleted` through
+      `closeTransition`, or, if the pump runs it at another rate, re-stated as at a segment
+      change: finished at the old rate, a mutable continuation at the pump's.
+    - H from a finalized temp basal, or a suspend: nothing.
+  - A chunk waits, with everything after it, behind an open chunk, a store gap for
+    `basalGapPatience` (2) passes (then the gap is skipped, with a warning), a pending delivery
+    change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted,
+    reset on a new serial or an erased log) is the last 279 a pass is done with.
+  - Control-IQ hand-back: when `useControlIQ` goes off (`configureControlIQMode`,
+    `fetchControlIQStatus`) `controlIQEndedAt` is persisted. While it is set, with reporting on,
+    `isAwaitingHistory` holds: `ensureCurrentPumpData` does not throttle and `syncPumpData` waits
+    for a history pass (`afterHistoryIsReported`, `transitionHistoryWait`), as for a pending
+    delivery change. A pass that started after it, read to the pump's end and left nothing open
+    before it clears it. A pass that sees Control-IQ in the 279s while `useControlIQ` is off, or
+    PCM 1 while it is on, reads the Control-IQ status.
+  - Scenarios: unit tests in `BasalReconciliationReportingTests`; conformance group H.
 - Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`:
   past the pump's own clock changes (`HistoryTimestampReconciler`), then the pump clock offset
   (`hostDate(forPumpDate:)`), so boluses, transitions and the emit floor compare on the phone's
@@ -280,8 +310,9 @@ edit instead of at the next sync.
   (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
 - Still open: gap-aware `lastReconciliation` (#353) and extended boluses (Bolex records are only
   logged; #424). `UnfinalizedDose.tempRateId` matches a live temp basal to its
-  `TempRateCompleted`; re-keying live temp basals on it is still open (#344). Temp rates the app
-  did not set are still not reported.
+  `TempRateCompleted`; re-keying live temp basals on it is still open (#344). A temp rate the app
+  did not set reaches the host only through basal reconciliation, after the fact; the live path
+  still ignores it.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and

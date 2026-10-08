@@ -349,13 +349,15 @@ import XCTest
         XCTAssertNil(manager.state.basalRateMismatchSince)
     }
 
-    func testControlIQSuppressesTheCheck() {
+    func testUnderControlIQTheProfileIsCheckedNotControlIQsRate() {
         setSchedule([(0, 0.65)])
         manager.state.useControlIQ = true
 
-        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0, profileRate: 0.65))
         XCTAssertNil(manager.state.basalRateMismatchSince)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0, profileRate: 0.8))
+        XCTAssertNotNil(manager.state.basalRateMismatchSince)
     }
 
     /// Phone at 06:02 (schedule says 0.85), pump four minutes behind at 05:58 (says 0.65).

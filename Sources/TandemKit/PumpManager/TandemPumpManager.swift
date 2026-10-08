@@ -59,9 +59,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
 
-    /// Run once the pending delivery change has been reported.
-    private var deliveryTransitionWaiters: [() -> Void] = []
-    private let deliveryTransitionWaiterLock = NSLock()
+    /// Run once history has reported what `isAwaitingHistory` waits for.
+    private var historyWaiters: [() -> Void] = []
+    private let historyWaiterLock = NSLock()
 
     private static let maximumHeldPumpEventBatches = 64
 
@@ -159,6 +159,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
+    /// How many history passes each store gap has held basal reconciliation back. Command queue only.
+    var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
 
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
@@ -451,7 +453,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         // Not while the link is down: this sync is the host's one periodic chance to reconnect.
         if let lastSync = state.lastReconciliation, now.timeIntervalSince(lastSync) < .minutes(4.5),
-           state.deliveryTransitions.pending == nil, state.isConnected
+           !isAwaitingHistory, state.isConnected
         {
             logger.warning("State already in sync: \(now.timeIntervalSince(lastSync)) sec")
             completion?(lastSync)
@@ -552,24 +554,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
             // and the loop is waiting on `completion` for the status reads above, not on
             // history. Overlapping ticks are dropped by the coordinator.
-            guard self.state.deliveryTransitions.pending != nil else {
+            guard self.isAwaitingHistory else {
                 self.historyBackfillCoordinator.runTick()
                 completion(self.state.lastReconciliation)
                 return
             }
 
-            // Except when the reads saw a change history has to date: the host doses on this
-            // result, and whatever it commands next must reach it after the change.
-            self.afterDeliveryTransitionIsReported {
+            // Except when the reads saw a change history has to date, or Control-IQ has handed
+            // back: the host doses on this result, and needs what the pump did first.
+            self.afterHistoryIsReported {
                 completion(self.state.lastReconciliation)
             }
             self.historyBackfillCoordinator.runTick()
         }
     }
 
-    /// Runs `completion` once the pending delivery change is reported: by a history pass, or at
-    /// detection when none has within `transitionHistoryWait`.
-    func afterDeliveryTransitionIsReported(_ completion: @escaping () -> Void) {
+    /// Runs `completion` once a history pass has reported what `isAwaitingHistory` waits for, or
+    /// after `transitionHistoryWait`, a pending delivery change then reported at detection.
+    func afterHistoryIsReported(_ completion: @escaping () -> Void) {
         let finish = watchdogged(timeoutResult: false, timeout: transitionHistoryWait) { reported in
             guard !reported else {
                 completion()
@@ -580,16 +582,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion()
             }
         }
-        deliveryTransitionWaiterLock.lock()
-        deliveryTransitionWaiters.append { finish(true) }
-        deliveryTransitionWaiterLock.unlock()
+        historyWaiterLock.lock()
+        historyWaiters.append { finish(true) }
+        historyWaiterLock.unlock()
     }
 
-    func deliveryTransitionReported() {
-        deliveryTransitionWaiterLock.lock()
-        let waiters = deliveryTransitionWaiters
-        deliveryTransitionWaiters = []
-        deliveryTransitionWaiterLock.unlock()
+    func releaseHistoryWaiters() {
+        historyWaiterLock.lock()
+        let waiters = historyWaiters
+        historyWaiters = []
+        historyWaiterLock.unlock()
         waiters.forEach { $0() }
     }
 
@@ -1739,6 +1741,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
             }
 
             // Pump accepted -- update local preference
+            if !request.enabled, self.state.useControlIQ {
+                self.state.controlIQEndedAt = self.now
+            }
             self.state.useControlIQ = request.enabled
             self.state.controlIQWeightLbs = request.weightLbs
             self.state.controlIQTotalDailyInsulin = request.totalDailyInsulinUnits
