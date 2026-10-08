@@ -63,6 +63,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case controlIQModeActive
     case bolusIsRunning
     case basalScheduleNotSynced
+    case failedUpdatePumpProfile
     case pumpProfileBasalRateIsZero
     case tempBasalRateMismatch(expected: Double, actual: Double)
 
@@ -99,6 +100,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "The pump's basal rates are not confirmed to match the app's",
                 comment: "Error when a temp basal is blocked because the basal schedule has not been synced to the pump, or the pump's rate stopped matching it"
+            )
+        case .failedUpdatePumpProfile:
+            return String(
+                localized: "Failed to update pump basal profile",
+                comment: "Error when a temp basal is blocked because the driver could not write the app's basal schedule to the pump"
             )
         case .pumpProfileBasalRateIsZero:
             return String(
@@ -137,8 +143,18 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             )
         case .basalScheduleNotSynced:
             return String(
-                localized: "Save your basal rates in the app's settings. Temporary basal rates start once the pump has them.",
+                localized: "The pump's basal rates are being updated to match. Temporary basal rates start once the pump has them.",
                 comment: "Recovery suggestion when a temp basal is blocked because the basal schedule has not been synced to the pump"
+            )
+        case .failedUpdatePumpProfile:
+            let appName = HostApp.current.settingsName
+            return String(
+                format: String(
+                    localized: "Could not update the pump's basal rates to match your current %1$@ configuration. Check your %2$@ defined basal rates. Until this is resolved you will be in open loop.",
+                    comment: "Explanation when the driver could not write the app's basal schedule to the pump (1: app name, 2: app name)"
+                ),
+                appName,
+                appName
             )
         case .pumpProfileBasalRateIsZero:
             return String(

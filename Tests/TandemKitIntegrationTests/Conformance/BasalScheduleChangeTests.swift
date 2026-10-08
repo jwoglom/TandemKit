@@ -8,10 +8,10 @@ import LoopKit
 import XCTest
 
 /// The pump's basal rate against the app's schedule (AGENTS.md "Onboarding and the basal
-/// schedule"): a rate the schedule doesn't have is flagged only once it outlasts
-/// `basalMismatchConfirmationInterval`, a confirmed one stops temp basals until the rates agree, and a
-/// schedule change that alters the rate in force stops a running temp basal instead of leaving the
-/// pump to rescale it.
+/// schedule"): a rate the schedule doesn't have starts an update that writes the schedule to the
+/// pump, one still read after `basalProfileUpdateTimeout` fails it and stops temp basals until the
+/// profile reads back matching, and a schedule change that alters the rate in force stops a running
+/// temp basal instead of leaving the pump to rescale it.
 final class BasalScheduleChangeTests: ConformanceTestCase {
     private static let scheduledRate = 1.0
     /// Not on the schedule: what a profile edited on the pump's own screen leaves running.
@@ -36,8 +36,19 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         let driver = startDriver(state: state)
         try harness.pair(driver)
         _ = try sync()
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince, "the pump runs the schedule at the start")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "the pump runs the schedule at the start")
         return driver
+    }
+
+    /// The update is queued behind the sync that started it, so it has not necessarily run when
+    /// `sync()` returns.
+    private func waitForUpdate(
+        _ status: TandemPumpManagerState.BasalProfileUpdateStatus,
+        _ driver: FaketandemHarness.Driver
+    ) throws {
+        try IntegrationWait.until("the basal profile update to be \(status)", timeout: 30) {
+            driver.manager.state.basalProfileUpdateStatus == status
+        }
     }
 
     private func pumpRunsARateOffTheSchedule() throws {
@@ -58,27 +69,46 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
 
     // MARK: - S1
 
-    func testS1_aRateOffTheScheduleIsFlaggedOnlyOnceItOutlastsTheConfirmationInterval() throws {
+    func testS1_aProfileOffTheScheduleIsWrittenOverOnTheFirstReading() throws {
         let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: Self.pumpRate)])
+        try pumpRunsARateOffTheSchedule()
+        let mark = try logMark()
+
+        _ = try sync()
+        try waitForUpdate(.none, driver)
+
+        XCTAssertTrue(try harness.requestsSeen(since: mark).contains { $0.message == "SetIDPSegmentRequest" })
+        let pump = try harness.client.snapshot().basal
+        XCTAssertEqual(pump.profileRate, Self.scheduledRate, accuracy: 0.001, "the pump runs the schedule")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt)
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    /// The profile already matches, so the write changes nothing and the rate in force still differs.
+    func testS1_aRateOffAMatchingProfileFailsTheUpdateOnceItOutlastsTheTimeout() throws {
+        let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: Self.scheduledRate)])
         try pumpRunsARateOffTheSchedule()
 
         _ = try sync()
-        let since = try XCTUnwrap(driver.manager.state.basalRateMismatchSince, "the first sync that reads it notes the mismatch")
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed, "one reading is not enough")
+        let detectedAt = try XCTUnwrap(driver.manager.state.basalRateMismatchDetectedAt, "the first sync that reads it notes the mismatch")
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .updating)
 
-        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval - .minutes(1), ticks: 3)
+        try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout - .minutes(1), ticks: 3)
         _ = try sync()
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed, "still inside the confirmation interval")
-        XCTAssertEqual(driver.manager.state.basalRateMismatchSince, since)
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .updating, "still inside the timeout")
+        XCTAssertEqual(driver.manager.state.basalRateMismatchDetectedAt, detectedAt)
 
         try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
         _ = try sync()
-        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed, "the mismatch outlasted the interval")
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .failed, "the mismatch outlasted the timeout")
 
         try harness.client.setState(["basal_rate": Self.scheduledRate])
+        try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateRetryInterval, ticks: 1)
         _ = try sync()
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince)
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed, "cleared once the pump runs the schedule again")
+        try waitForUpdate(.none, driver)
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "cleared once the profile reads back and the pump runs it")
     }
 
     func testS1_aRateOffTheScheduleIsNotFlaggedWhileThePumpIsSuspended() throws {
@@ -88,13 +118,13 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
 
         for _ in 0..<3 {
             _ = try sync()
-            try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval / 2, ticks: 2)
+            try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout / 2, ticks: 2)
         }
         _ = try sync()
 
         XCTAssertEqual(driver.manager.state.basalDose.type, .suspend, "the driver follows the pump's suspend")
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince, "a suspended pump delivers no rate to compare")
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "a suspended pump delivers no rate to compare")
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .none)
     }
 
     func testS1_aRateOffTheScheduleIsNotFlaggedUnderControlIQ() throws {
@@ -108,12 +138,12 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
 
         for _ in 0..<3 {
             _ = try sync()
-            try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval / 2, ticks: 2)
+            try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout / 2, ticks: 2)
         }
         _ = try sync()
 
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince, "Control-IQ sets the rate itself")
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "Control-IQ sets the rate itself")
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .none)
     }
 
     // MARK: - S2
@@ -182,7 +212,7 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         timeline.assertMatches(loop, "schedule change")
 
         _ = try sync()
-        XCTAssertNil(driver.manager.state.basalRateMismatchSince, "the pump's rate matches the new schedule")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "the pump's rate matches the new schedule")
     }
 
     // MARK: - S3
@@ -191,21 +221,20 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
     /// edited on the pump is checked without waiting for the host's next sync.
     func testS3_aProfileChangeEventRunsTheMismatchCheckWithoutASync() throws {
         let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: Self.scheduledRate)])
         let mark = try logMark()
         try pumpRunsARateOffTheSchedule()
 
         try pumpAnnounces(.profileChange)
         try IntegrationWait.until("the driver to read the basal status on the event", timeout: 30) {
-            driver.manager.state.basalRateMismatchSince != nil
+            driver.manager.state.basalRateMismatchDetectedAt != nil
         }
         XCTAssertGreaterThan(try basalStatusReads(since: mark), 0)
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+        XCTAssertNotEqual(driver.manager.state.basalProfileUpdateStatus, .failed)
 
-        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval + .minutes(1), ticks: 5)
+        try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout + .minutes(1), ticks: 5)
         try pumpAnnounces(.activeProfileSegmentChange)
-        try IntegrationWait.until("the second event to confirm the mismatch", timeout: 30) {
-            driver.manager.state.basalRateMismatchConfirmed
-        }
+        try waitForUpdate(.failed, driver)
     }
 
     // MARK: - S4
@@ -242,33 +271,20 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
     }
 
     /// The field report: a Mobi whose active profile reads 0 U/hr under a driver that holds the
-    /// schedule as synced. Every temp rate is a percent of 0, so none goes out: first because the
-    /// rate is 0, then because the confirmed mismatch unsyncs the schedule, until the host's schedule
-    /// is written to the pump.
-    func testS4_aZeroRateProfileRefusesTempBasalsUntilTheScheduleIsWrittenToThePump() throws {
+    /// schedule as synced. Every temp rate is a percent of 0, so none goes out until the next sync
+    /// writes the host's schedule over the profile.
+    func testS4_aZeroRateProfileRefusesTempBasalsUntilASyncWritesTheSchedule() throws {
         let driver = try stageDriver()
         try harness.client.setIDPProfiles([profile(rate: 0)])
         try harness.client.setState(["basal_rate": 0.0])
 
         try assertTempBasalRefused(.pumpProfileBasalRateIsZero)
-        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "one reading does not unsync the schedule")
 
         _ = try sync()
-        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval + .minutes(1), ticks: 5)
-        _ = try sync()
-        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed)
-        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule, "a confirmed mismatch unsyncs the schedule")
-        try assertTempBasalRefused(.basalScheduleNotSynced)
-
-        let box = ResultBox<Result<BasalRateSchedule, Error>>()
-        driver.manager.syncBasalRateSchedule(items: [RepeatingScheduleValue(startTime: 0, value: Self.scheduledRate)]) { box.set($0) }
-        if case let .failure(error) = try box.wait("syncBasalRateSchedule", timeout: syncTimeout) {
-            return XCTFail("the schedule sync failed: \(error)")
-        }
+        try waitForUpdate(.none, driver)
         XCTAssertEqual(try harness.client.snapshot().basal.profileRate, Self.scheduledRate, accuracy: 0.001)
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
 
-        _ = try sync()
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed, "the pump runs the schedule again")
         let tempRate = Self.scheduledRate * 1.5
         XCTAssertNil(try enactTempBasal(unitsPerHour: tempRate, duration: .minutes(30)))
         let pump = try harness.client.snapshot().basal
@@ -278,46 +294,54 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
 
     // MARK: - S5
 
-    /// A matching profile does not explain a live rate that differs, so it is not adopted while the
-    /// mismatch stands; once the pump runs the schedule again, it is, and temp basals resume.
-    func testS5_aConfirmedMismatchRefusesTempBasalsUntilThePumpRunsTheScheduleAgain() throws {
+    /// A matching profile does not explain a live rate that differs, so the update does not end
+    /// while the rate does; once the pump runs the schedule again it does, and temp basals resume.
+    func testS5_aFailedUpdateRefusesTempBasalsUntilThePumpRunsTheScheduleAgain() throws {
         let driver = try stageDriver()
         try harness.client.setIDPProfiles([profile(rate: Self.scheduledRate)])
         try pumpRunsARateOffTheSchedule()
 
         _ = try sync()
-        try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval + .minutes(1), ticks: 5)
+        try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout + .minutes(1), ticks: 5)
         _ = try sync()
-        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed)
-        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
-        try assertTempBasalRefused(.basalScheduleNotSynced)
+        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .failed)
+        try assertTempBasalRefused(.failedUpdatePumpProfile)
+        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule, "the retry the failing reading queued read the rate off again")
 
         try harness.client.setState(["basal_rate": Self.scheduledRate])
+        try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateRetryInterval, ticks: 1)
         _ = try sync()
-        XCTAssertFalse(driver.manager.state.basalRateMismatchConfirmed)
+        try waitForUpdate(.none, driver)
 
         XCTAssertNil(try enactTempBasal(unitsPerHour: Self.scheduledRate * 1.5, duration: .minutes(30)))
-        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "the matching profile was adopted")
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule, "the profile read back matching")
         XCTAssertTrue(try harness.client.snapshot().basal.tempActive)
     }
 
     // MARK: - S6
 
-    /// The pump's profile differs from the schedule before the mismatch is confirmed. The percent is
-    /// worked out against the pump's own rate, so the temp runs at the rate the host is told.
+    /// The pump runs a rate off the schedule before any reading has started an update. The percent
+    /// is worked out against the pump's own rate, so the temp runs at the rate the host is told. The
+    /// reading its `basalChange` event triggers then writes the schedule, and the temp the new
+    /// profile would rescale is stopped.
     func testS6_aTempBasalOnAProfileThatDiffersRunsAtTheRequestedRate() throws {
         let driver = try stageDriver()
+        try harness.client.setIDPProfiles([profile(rate: 0.8)])
         try harness.client.setState(["basal_rate": 0.8])
         let start = allPumpEventBatches.count
 
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
 
-        let pump = try harness.client.snapshot().basal
-        XCTAssertTrue(pump.tempActive)
-        XCTAssertEqual(pump.tempPercent, 188)
-        let reported = try XCTUnwrap(tempBasalsReported(since: start).last?.dose)
-        XCTAssertEqual(reported.unitsPerHour, pump.tempRate, accuracy: 0.01, "the host is told the rate the pump runs")
-        XCTAssertEqual(driver.manager.state.basalDose.tempPercent, 188)
+        let pumpTemp = try XCTUnwrap(try timeline().tempRates.first, "the pump recorded the temp rate")
+        XCTAssertEqual(pumpTemp.percent, 188)
+        let reported = try XCTUnwrap(tempBasalsReported(since: start).first?.dose)
+        XCTAssertEqual(reported.unitsPerHour, try XCTUnwrap(pumpTemp.rate), accuracy: 0.01, "the host is told the rate the pump runs")
+
+        try IntegrationWait.until("the schedule to be written over the profile", timeout: 30) {
+            (try? self.harness.client.snapshot().basal.profileRate) == Self.scheduledRate
+        }
+        try waitForUpdate(.none, driver)
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the temp the new profile would rescale was stopped")
     }
 
     // MARK: - S7

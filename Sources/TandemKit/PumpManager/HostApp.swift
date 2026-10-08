@@ -31,6 +31,20 @@ public enum HostApp {
         }
     }
 
+    /// Names the app's settings in a sentence ("your current Trio configuration"): "Trio", "Loop",
+    /// or "app" as fallback, where `appName`'s "this app" would not read.
+    public var settingsName: String {
+        switch self {
+        case .trio: return "Trio"
+        case .loop: return "Loop"
+        case .unknown:
+            return String(
+                localized: "app",
+                comment: "Stands in for the host app's name before a noun (\"your app configuration\") when the app is neither Trio nor Loop"
+            )
+        }
+    }
+
     /// Name used in place of "DIY": "Trio", "Loop", or fallback "DIY".
     public var diyAlgorithmName: String {
         switch self {

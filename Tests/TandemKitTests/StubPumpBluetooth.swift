@@ -10,7 +10,8 @@ import Foundation
 ///
 /// `ensureConnected` runs its completion synchronously on the caller's thread, which keeps the
 /// driver's blocking write sequences inline and makes the tests deterministic. Production
-/// serializes them onto a command queue instead.
+/// serializes them onto a command queue instead, so a job queued from inside another one runs
+/// once that one returns, here as there.
 final class StubPumpBluetooth: PumpBluetoothConnection {
     /// Set to make `ensureConnected` report a failure instead of running the command job.
     var connectError: Error?
@@ -28,6 +29,9 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     private(set) var disconnectCount = 0
     private(set) var deactivateCount = 0
     private(set) var unhandledRequests: [Message] = []
+
+    private var jobThread: Thread?
+    private var queuedJobs: [() -> Void] = []
 
     private var fixedResponses: [ObjectIdentifier: (Message) -> Message?] = [:]
     private var queuedResponses: [ObjectIdentifier: [(Message) -> Message?]] = [:]
@@ -123,8 +127,33 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
         lock.lock()
         ensureConnectedCount += 1
         let error = connectError
+        if jobThread == Thread.current {
+            queuedJobs.append { completion(error) }
+            lock.unlock()
+            return
+        }
+        let outermost = jobThread == nil
+        if outermost {
+            jobThread = Thread.current
+        }
         lock.unlock()
+
         completion(error)
+
+        guard outermost else {
+            return
+        }
+        while true {
+            lock.lock()
+            guard !queuedJobs.isEmpty else {
+                jobThread = nil
+                lock.unlock()
+                return
+            }
+            let job = queuedJobs.removeFirst()
+            lock.unlock()
+            job()
+        }
     }
 
     func write<R: PumpRequest>(_ request: R, maxChunkSize _: Int?) -> R.Response? {

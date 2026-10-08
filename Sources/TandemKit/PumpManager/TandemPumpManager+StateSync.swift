@@ -153,7 +153,7 @@ extension TandemPumpManager {
 
         if response.basalType == .tempBasal {
             reportTempBasalSegmentChanges()
-            stopTempBasalOnConfirmedMismatch()
+            stopTempBasalOnFailedProfileUpdate()
         }
 
         maintainPumpClockSkewCompensation(response)
@@ -161,8 +161,8 @@ extension TandemPumpManager {
 
     /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs
     /// other than what the host was told. A zero temp is 0% of any profile and keeps running.
-    func stopTempBasalOnConfirmedMismatch() {
-        guard state.basalRateMismatchConfirmed, state.basalDose.type == .tempBasal, state.basalDose.value > 0 else {
+    func stopTempBasalOnFailedProfileUpdate() {
+        guard state.basalProfileUpdateFailed, state.basalDose.type == .tempBasal, state.basalDose.value > 0 else {
             return
         }
         guard let stop = bluetooth.write(StopTempRateRequest()), stop.isStatusOK else {
@@ -799,17 +799,30 @@ extension TandemPumpManager {
 }
 
 extension TandemPumpManager {
-    /// Just under Loop's 5-minute sync interval, so a mismatch must show up on two separate
-    /// syncs. A second read seconds later, triggered by a qualifying event, doesn't count.
-    static let basalMismatchConfirmationInterval: TimeInterval = .minutes(4)
+    /// Time for the write started at the first mismatching reading to land, and to be retried, before
+    /// a mismatch still read is a failure.
+    static let basalProfileUpdateTimeout: TimeInterval = .minutes(5)
 
-    /// Never rewrites the pump's profile, which the user may have changed on the pump on purpose.
-    /// A confirmed mismatch clears `hasSyncedBasalRateSchedule` instead, so `enactTempBasal`
-    /// refuses until a sync, or a matching reading lets `adoptMatchingPumpProfile` set it again.
+    /// Writes the host's schedule over a mismatch rather than leaving the pump's profile: hosts take
+    /// the pump to hold what they last saved, as Trio keeps a basal profile only once a sync takes.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
+        guard let mismatch = deliveredBasalRateMismatch(response) else {
+            // One matching segment is not the whole profile; only a read-back ends an update.
+            if state.basalProfileUpdateStatus != .none {
+                updatePumpBasalProfile()
+            }
+            return
+        }
+
+        logger.error("Pump basal profile is \(mismatch.pump) U/hr where the schedule says \(mismatch.expected) U/hr")
+        noteBasalProfileMismatch()
+    }
+
+    /// Nil when the rates agree, or when the reading says nothing about the profile.
+    func deliveredBasalRateMismatch(_ response: CurrentBasalStatusResponse) -> (pump: Double, expected: Double)? {
         // Control-IQ changes the delivered rate itself, so it won't match the schedule.
         guard !state.useControlIQ else {
-            return
+            return nil
         }
 
         let pumpRate: Double
@@ -820,7 +833,7 @@ extension TandemPumpManager {
             // `currentBasalRate` is the temp rate here; `profileBasalRate` is the scheduled rate.
             pumpRate = response.profileBasalRate
         default:
-            return
+            return nil
         }
 
         // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
@@ -829,41 +842,35 @@ extension TandemPumpManager {
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
         guard Int((pumpRate * 1000).rounded()) != Int((expected * 1000).rounded()) else {
-            if state.basalRateMismatchSince != nil {
-                logger.info("Pump basal rate matches the schedule again")
-                state.basalRateMismatchSince = nil
-                state.basalRateMismatchConfirmed = false
-                notifyDelegateStateUpdated()
-            }
-            return
+            return nil
         }
+        return (pumpRate, expected)
+    }
 
-        logger.error("Pump basal profile is \(pumpRate) U/hr where the schedule says \(expected) U/hr")
-
-        guard let since = state.basalRateMismatchSince else {
-            state.basalRateMismatchSince = now
+    /// From a basal reading or a profile read that differs from the schedule.
+    func noteBasalProfileMismatch() {
+        guard let detectedAt = state.basalRateMismatchDetectedAt else {
+            logger.warning("Updating the pump's basal profile to match the schedule")
+            state.basalRateMismatchDetectedAt = now
             notifyDelegateStateUpdated()
+            updatePumpBasalProfile()
             return
         }
 
-        guard state.basalRateMismatchConfirmed
-            || now.timeIntervalSince(since) >= Self.basalMismatchConfirmationInterval
-        else {
-            return
+        // Also once failed: a retry that verified the profile sets the flag again even though the
+        // rate in force still differs.
+        if now.timeIntervalSince(detectedAt) >= Self.basalProfileUpdateTimeout,
+           !state.basalProfileUpdateFailed || state.hasSyncedBasalRateSchedule
+        {
+            if !state.basalProfileUpdateFailed {
+                logger.error("Could not update the pump's basal profile to match the schedule; refusing temp basals")
+            }
+            state.basalProfileUpdateFailed = true
+            state.hasSyncedBasalRateSchedule = false
+            notifyDelegateStateUpdated()
         }
 
-        // Also after confirmation: a sync that verified the profile sets the flag again even
-        // though the rate in force still differs, e.g. on a pump clock hours off.
-        guard !state.basalRateMismatchConfirmed || state.hasSyncedBasalRateSchedule else {
-            return
-        }
-
-        if state.hasSyncedBasalRateSchedule {
-            logger.error("Refusing temp basals until the pump's basal rate matches the schedule again")
-        }
-        state.basalRateMismatchConfirmed = true
-        state.hasSyncedBasalRateSchedule = false
-        notifyDelegateStateUpdated()
+        updatePumpBasalProfile()
     }
 }
 

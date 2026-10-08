@@ -162,48 +162,142 @@ import XCTest
         )!
     }
 
+    /// A single-segment pump whose scheduled basal follows whatever its profile holds.
+    @discardableResult
+    private func stubPumpDeliveringItsProfile(basalMilliunits: Int, appliesWrites: Bool = true) -> StubIDPPump {
+        let pump = stubProfile([.init(startTime: 0, basalRate: basalMilliunits)], appliesWrites: appliesWrites)
+        bluetooth.stub(CurrentBasalStatusRequest.self) { _ in
+            let rate = UInt32(pump.segments[0].basalRate)
+            return CurrentBasalStatusResponse(profileBasalRate: rate, currentBasalRate: rate, basalModifiedBitmask: 0)
+        }
+        return pump
+    }
+
+    private func profileWrites() -> Int {
+        bluetooth.sent(ProfileStatusRequest.self).count
+    }
+
     func testNoMismatchWhenTheDeliveredRateMatchesTheSchedule() {
         setSchedule([(0, 0.65)])
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+        XCTAssertFalse(bluetooth.didSend(ProfileStatusRequest.self))
     }
 
-    func testFirstMismatchIsRecordedButNotConfirmed() {
+    func testFirstMismatchIsRecorded() {
         setSchedule([(0, 0.65)])
         manager.clock = ManualClock(Self.referenceDate)
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.referenceDate)
-        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
+        XCTAssertEqual(manager.state.basalRateMismatchDetectedAt, Self.referenceDate)
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .updating)
     }
 
-    func testMismatchConfirmsOnAReadingAfterTheInterval() {
+    func testFirstMismatchWritesTheScheduleToThePump() {
+        setSchedule([(0, 0.65)])
+        let pump = stubPumpDeliveringItsProfile(basalMilliunits: 400)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [650])
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testUpdateGoesOnWhileThePumpDoesNotApplyTheWrite() {
+        setSchedule([(0, 0.65)])
+        stubPumpDeliveringItsProfile(basalMilliunits: 400, appliesWrites: false)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .updating)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testUpdateGoesOnWhileThePumpRunsAnotherRateOnAMatchingProfile() {
+        setSchedule([(0, 0.65)])
+        let pump = stubProfile([.init(startTime: 0, basalRate: 400)])
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: basalStatus(rate: 0.4, type: 0))
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [650])
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .updating)
+    }
+
+    func testAllZeroScheduleIsNotWrittenToThePump() {
+        setSchedule([(0, 0)])
+        let pump = stubPumpDeliveringItsProfile(basalMilliunits: 400)
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [400])
+        XCTAssertFalse(bluetooth.didSend(SetIDPSegmentRequest.self))
+    }
+
+    func testUpdateRetriesAreSpacedByTheRetryInterval() {
         setSchedule([(0, 0.65)])
         manager.clock = ManualClock(Self.referenceDate)
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-
-        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
-        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
-
-        XCTAssertEqual(manager.state.basalRateMismatchSince, Self.referenceDate)
-        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
-    }
-
-    func testSecondReadingInsideTheIntervalDoesNotConfirm() {
-        setSchedule([(0, 0.65)])
-        manager.clock = ManualClock(Self.referenceDate)
-        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        XCTAssertEqual(profileWrites(), 1)
 
         manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.seconds(30)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        XCTAssertEqual(profileWrites(), 1)
 
-        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(TandemPumpManager.basalProfileUpdateRetryInterval))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+        XCTAssertEqual(profileWrites(), 2)
     }
 
-    func testConfirmationNotifiesTheDelegate() {
+    func testMatchingReadingDoesNotEndAnUnverifiedUpdate() {
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchDetectedAt = Self.referenceDate
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
+
+        XCTAssertEqual(manager.state.basalRateMismatchDetectedAt, Self.referenceDate)
+    }
+
+    func testMatchingReadingEndsTheUpdateOnceTheProfileReadsBackMatching() {
+        setSchedule([(0, 0.65)])
+        stubPumpDeliveringItsProfile(basalMilliunits: 650)
+        manager.state.basalRateMismatchDetectedAt = Self.referenceDate
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
+
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+        XCTAssertFalse(bluetooth.didSend(SetIDPSegmentRequest.self))
+    }
+
+    func testMismatchOutlastingTheTimeoutFailsTheUpdate() {
+        setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.referenceDate)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(TandemPumpManager.basalProfileUpdateTimeout))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertEqual(manager.state.basalRateMismatchDetectedAt, Self.referenceDate)
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .failed)
+    }
+
+    func testMismatchInsideTheTimeoutDoesNotFailTheUpdate() {
+        setSchedule([(0, 0.65)])
+        manager.clock = ManualClock(Self.referenceDate)
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(4)))
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
+
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .updating)
+    }
+
+    func testFailureNotifiesTheDelegate() {
         let delegate = MockPumpManagerDelegate()
         let delegateQueue = DispatchQueue(label: "basal-verification-test")
         manager.pumpManagerDelegate = delegate
@@ -223,18 +317,7 @@ import XCTest
         XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore + 1)
     }
 
-    func testMismatchClearsWhenTheRatesAgreeAgain() {
-        setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
-        manager.state.basalRateMismatchConfirmed = true
-
-        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
-
-        XCTAssertNil(manager.state.basalRateMismatchSince)
-        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
-    }
-
-    func testUnconfirmedMismatchLeavesTheBasalScheduleSynced() {
+    func testUnfailedMismatchLeavesTheBasalScheduleSynced() {
         setSchedule([(0, 0.65)])
         manager.state.hasSyncedBasalRateSchedule = true
 
@@ -243,7 +326,7 @@ import XCTest
         XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
     }
 
-    func testConfirmedMismatchMarksTheBasalScheduleUnsynced() {
+    func testFailedUpdateMarksTheBasalScheduleUnsynced() {
         setSchedule([(0, 0.65)])
         manager.state.hasSyncedBasalRateSchedule = true
         manager.clock = ManualClock(Self.referenceDate)
@@ -252,12 +335,12 @@ import XCTest
         manager.clock = ManualClock(Self.referenceDate.addingTimeInterval(.minutes(5)))
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertTrue(manager.state.basalProfileUpdateFailed)
         XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
     }
 
     /// The field report: a temp basal running on a 0 U/hr profile, read on two syncs five minutes apart.
-    func testTempBasalOnAZeroProfileMarksTheBasalScheduleUnsyncedOnceConfirmed() {
+    func testTempBasalOnAZeroProfileMarksTheBasalScheduleUnsyncedOnceTheUpdateFails() {
         setSchedule([(0, 1.1)])
         manager.state.hasSyncedBasalRateSchedule = true
         manager.clock = ManualClock(Self.referenceDate)
@@ -269,32 +352,20 @@ import XCTest
         XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
     }
 
-    func testMismatchStillStandingAfterASyncMarksTheScheduleUnsyncedAgain() {
+    func testMismatchStillStandingAfterAVerifiedRetryMarksTheScheduleUnsyncedAgain() {
         setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
-        manager.state.basalRateMismatchConfirmed = true
-        // What a successful syncBasalRateSchedule leaves.
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
+        // What a retry whose write read back matching leaves.
         manager.state.hasSyncedBasalRateSchedule = true
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.9, type: 0))
 
         XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
-        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertTrue(manager.state.basalProfileUpdateFailed)
     }
 
-    func testRatesAgreeingAgainLeaveTheScheduleUnsyncedForAdoption() {
-        setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
-        manager.state.basalRateMismatchConfirmed = true
-        manager.state.hasSyncedBasalRateSchedule = false
-
-        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
-
-        XCTAssertFalse(manager.state.basalRateMismatchConfirmed)
-        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
-    }
-
-    func testMismatchReadingsAfterConfirmationDoNotNotifyTheDelegateAgain() {
+    func testMismatchReadingsAfterFailureDoNotNotifyTheDelegateAgain() {
         let delegate = MockPumpManagerDelegate()
         let delegateQueue = DispatchQueue(label: "basal-verification-test")
         manager.pumpManagerDelegate = delegate
@@ -302,8 +373,8 @@ import XCTest
         delegateQueue.sync {}
 
         setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
-        manager.state.basalRateMismatchConfirmed = true
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
         manager.state.hasSyncedBasalRateSchedule = false
         let updatesBefore = delegate.didUpdateStateCount
 
@@ -313,11 +384,50 @@ import XCTest
         XCTAssertEqual(delegate.didUpdateStateCount, updatesBefore)
     }
 
-    func testAMatchingProfileIsNotAdoptedWhileAMismatchIsConfirmed() {
+    func testFailedUpdateEndsOnceARetryReadsBackMatching() {
+        setSchedule([(0, 0.65)])
+        let pump = stubPumpDeliveringItsProfile(basalMilliunits: 400)
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [650])
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testRetryAfterAFailureThatStillReadsAnotherRateKeepsTheScheduleUnsynced() {
+        setSchedule([(0, 0.65)])
+        let pump = stubProfile([.init(startTime: 0, basalRate: 400)])
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: basalStatus(rate: 0.4, type: 0))
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [650])
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .failed)
+        XCTAssertFalse(manager.state.hasSyncedBasalRateSchedule)
+    }
+
+    func testSuccessfulSyncFromTheAppEndsAFailedUpdate() {
+        stubProfile([.init(startTime: 0, basalRate: 400)])
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
+
+        guard case .success = syncBasal([RepeatingScheduleValue(startTime: 0, value: 0.65)]) else {
+            return XCTFail("Expected the sync to succeed")
+        }
+
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
+    }
+
+    func testAMatchingProfileIsNotAdoptedAfterAFailedUpdate() {
         stubProfile([.init(startTime: 0, basalRate: 650)])
         setSchedule([(0, 0.65)])
-        manager.state.basalRateMismatchSince = Date(timeIntervalSinceNow: -.hours(1))
-        manager.state.basalRateMismatchConfirmed = true
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.hours(1))
+        manager.state.basalProfileUpdateFailed = true
 
         manager.adoptMatchingPumpProfile()
 
@@ -325,12 +435,44 @@ import XCTest
         XCTAssertFalse(bluetooth.didSend(IDPSegmentRequest.self))
     }
 
+    func testAdoptingAMatchingProfileEndsAnUpdate() {
+        stubProfile([.init(startTime: 0, basalRate: 650)])
+        setSchedule([(0, 0.65)])
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.minutes(1))
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
+    }
+
+    func testAProfileThatDiffersWhenAdoptingIsUpdated() {
+        setSchedule([(0, 0.65)])
+        let pump = stubPumpDeliveringItsProfile(basalMilliunits: 400)
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertEqual(pump.segments.map(\.basalRate), [650])
+        XCTAssertTrue(manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
+    }
+
+    func testAProfileThatDiffersWhenAdoptingOutlastingTheTimeoutFailsTheUpdate() {
+        setSchedule([(0, 0.65)])
+        stubPumpDeliveringItsProfile(basalMilliunits: 400, appliesWrites: false)
+        manager.state.basalRateMismatchDetectedAt = Date(timeIntervalSinceNow: -.minutes(10))
+
+        manager.adoptMatchingPumpProfile()
+
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .failed)
+    }
+
     func testTempBasalIsCheckedAgainstTheProfileRate() {
         setSchedule([(0, 0.65)])
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 1.3, type: 0x02, profileRate: 0.65))
 
-        XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     func testTempBasalOnAWrongProfileIsAMismatch() {
@@ -338,7 +480,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0x02, profileRate: 0))
 
-        XCTAssertNotNil(manager.state.basalRateMismatchSince)
+        XCTAssertNotNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     func testSuspendIsNotAMismatch() {
@@ -346,7 +488,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0x01))
 
-        XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     func testControlIQSuppressesTheCheck() {
@@ -355,7 +497,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     /// Phone at 06:02 (schedule says 0.85), pump four minutes behind at 05:58 (says 0.65).
@@ -366,7 +508,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNil(manager.state.basalRateMismatchSince)
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     func testPhoneClockIsUsedWhenThePumpOffsetIsUnknown() {
@@ -377,7 +519,7 @@ import XCTest
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.65, type: 0))
 
-        XCTAssertNotNil(manager.state.basalRateMismatchSince)
+        XCTAssertNotNil(manager.state.basalRateMismatchDetectedAt)
     }
 
     // MARK: - Running temp on a mismatched profile
@@ -404,20 +546,20 @@ import XCTest
         bluetooth.stub(StopTempRateRequest.self, with: StopTempRateResponse(status: 0, tempRateId: 7))
     }
 
-    func testAConfirmedMismatchStopsARunningTemp() {
+    func testAFailedUpdateStopsARunningTemp() {
         setSchedule([(0, 0.65)])
         runTempBasal(value: 1.3, percent: 200)
         pumpRunsTempOnAWrongProfile(percent: 200)
-        manager.state.basalRateMismatchSince = manager.now.addingTimeInterval(-.hours(1))
+        manager.state.basalRateMismatchDetectedAt = manager.now.addingTimeInterval(-.hours(1))
 
         manager.fetchBasalStatus()
 
-        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertTrue(manager.state.basalProfileUpdateFailed)
         XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
         XCTAssertEqual(manager.state.basalDose.type, .basal)
     }
 
-    func testAnUnconfirmedMismatchLeavesTheTempRunning() {
+    func testAMismatchInsideTheTimeoutLeavesTheTempRunning() {
         setSchedule([(0, 0.65)])
         runTempBasal(value: 1.3, percent: 200)
         pumpRunsTempOnAWrongProfile(percent: 200)
@@ -428,17 +570,32 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
     }
 
-    func testAZeroTempKeepsRunningThroughAConfirmedMismatch() {
+    func testAZeroTempKeepsRunningThroughAFailedUpdate() {
         setSchedule([(0, 0.65)])
         runTempBasal(value: 0, percent: 0)
         pumpRunsTempOnAWrongProfile(percent: 0)
-        manager.state.basalRateMismatchSince = manager.now.addingTimeInterval(-.hours(1))
+        manager.state.basalRateMismatchDetectedAt = manager.now.addingTimeInterval(-.hours(1))
 
         manager.fetchBasalStatus()
 
-        XCTAssertTrue(manager.state.basalRateMismatchConfirmed)
+        XCTAssertTrue(manager.state.basalProfileUpdateFailed)
         XCTAssertFalse(bluetooth.didSend(StopTempRateRequest.self))
         XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+    }
+
+    /// The update is queued behind the sync's own command job, so the reading it starts from is
+    /// fully applied before the profile changes under it.
+    func testUpdateStartedByASyncRunsAfterIt() {
+        setSchedule([(0, 0.65)])
+        stubPumpDeliveringItsProfile(basalMilliunits: 400)
+
+        bluetooth.ensureConnected { _ in
+            self.manager.fetchBasalStatus()
+            XCTAssertFalse(self.bluetooth.didSend(SetIDPSegmentRequest.self))
+        }
+
+        XCTAssertTrue(bluetooth.didSend(SetIDPSegmentRequest.self))
+        XCTAssertEqual(manager.state.basalProfileUpdateStatus, .none)
     }
 
     // MARK: - Event-driven trigger

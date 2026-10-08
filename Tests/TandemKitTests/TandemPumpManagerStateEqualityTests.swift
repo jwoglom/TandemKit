@@ -46,11 +46,9 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
 
     func testRawValueRoundTripRestoresAnEqualState() {
         var state = Self.populatedState()
-        // Not persisted: a relaunch starts disconnected, rechecks the basal rate, re-reads the pump's settings
-        // and restarts an unfinished setup.
+        // Not persisted: a relaunch starts disconnected, re-reads the pump's settings and restarts an
+        // unfinished setup.
         state.isConnected = false
-        state.basalRateMismatchSince = nil
-        state.basalRateMismatchConfirmed = false
         state.lastSettingsCheckedAt = nil
         state.pumpSoundsAwaitingWrite = false
 
@@ -77,8 +75,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("lastReservoirReadingNeedsReport", { $0.lastReservoirReadingNeedsReport = false }),
             ("lastBatteryReading", { $0.lastBatteryReading = nil }),
             ("lastBasalStatusDate", { $0.lastBasalStatusDate = nil }),
-            ("basalRateMismatchSince", { $0.basalRateMismatchSince = nil }),
-            ("basalRateMismatchConfirmed", { $0.basalRateMismatchConfirmed = false }),
+            ("basalRateMismatchDetectedAt", { $0.basalRateMismatchDetectedAt = nil }),
+            ("basalProfileUpdateFailed", { $0.basalProfileUpdateFailed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
             ("deliveryTransitions", { $0.deliveryTransitions.lastConfirmedObservation = later }),
@@ -180,8 +178,8 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.lastReservoirReadingNeedsReport = true
         state.lastBatteryReading = .init(date: t0.addingTimeInterval(-120), chargeRemaining: 0.65, isCharging: true)
         state.lastBasalStatusDate = t0
-        state.basalRateMismatchSince = t0
-        state.basalRateMismatchConfirmed = true
+        state.basalRateMismatchDetectedAt = t0
+        state.basalProfileUpdateFailed = true
         state.historyBackfill = HistoryBackfillState(
             pumpSerial: pumpSerial,
             watermark: 4321,
