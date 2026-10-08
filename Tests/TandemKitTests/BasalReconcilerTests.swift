@@ -34,8 +34,25 @@ final class BasalReconcilerTests: XCTestCase {
         NewPumpEvent.resume(dose: UnfinalizedDose(resumeStartTime: at(start), insulinType: .novolog).toDoseEntry(), date: at(start))
     }
 
+    private static let serial = HistoryLogSyncIdentifier.PumpSerial(123_456)!
+
+    /// A basal correction for the 279 `sequenceNum`, as the driver reports one.
+    private func correction(for sequenceNum: UInt32, _ rate: Double, from start: TimeInterval, to end: TimeInterval) -> NewPumpEvent {
+        let entry = DoseEntry(
+            type: .tempBasal,
+            startDate: at(start),
+            endDate: at(end),
+            value: rate,
+            unit: .unitsPerHour,
+            deliveredUnits: rate * (end - start) / .hours(1)
+        )
+        let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: Self.serial, sequenceNum: sequenceNum)
+        return NewPumpEvent(date: at(start), dose: entry, raw: raw, title: "Control-IQ Basal")
+    }
+
     private func told(_ batches: [NewPumpEvent]...) -> ReportedBasalLedger {
         var ledger = ReportedBasalLedger(trackingSince: .distantPast)
+        ledger.track(pumpSerial: Self.serial.rawValue, after: nil)
         for batch in batches {
             ledger.record(batch, replacePendingEvents: false)
         }
@@ -127,6 +144,16 @@ final class BasalReconcilerTests: XCTestCase {
         XCTAssertEqual(differing(reconcile(log, told([temp(1.5, at: 370)]))), ["300 1500 1.0"])
     }
 
+    func testACommandJustBeforeThe279MatchesTheCorrectionBeforeIt() {
+        var log = PumpLog()
+        let first = log.delivery(0, source: 3, rate: 600)
+        log.delivery(300, source: 3, rate: 600)
+
+        let ledger = told([correction(for: first, 0.6, from: 0, to: 280), temp(2.0, at: 280)])
+
+        XCTAssertEqual(differing(reconcile(log, ledger)), [])
+    }
+
     func testARateWithin10mUPerHourMatches() {
         var close = PumpLog()
         close.profile(0, rate: 1009)
@@ -170,6 +197,17 @@ final class BasalReconcilerTests: XCTestCase {
         let result = reconcile(log, told())
         XCTAssertEqual(differing(result), ["300 2200 1.0", "600 0 1.0"])
         XCTAssertTrue(result.differences.allSatisfy { $0.host.source == .schedule })
+    }
+
+    func testACycleAfterACorrectionAtTheSameRateStillDiffers() {
+        var log = PumpLog()
+        let first = log.delivery(0, source: 3, rate: 2200)
+        log.delivery(300, source: 3, rate: 2200)
+        log.delivery(600, source: 3, rate: 2200)
+
+        let ledger = told([correction(for: first, 2.2, from: 0, to: 300)])
+
+        XCTAssertEqual(differing(reconcile(log, ledger)), ["300 2200 1.0", "600 2200 1.0"])
     }
 
     func testATempTheHostWasNeverToldOfDiffers() {
@@ -247,6 +285,17 @@ final class BasalReconcilerTests: XCTestCase {
         let result = reconcile(log, ledger, floor: at(600), now: at(1200))
         XCTAssertEqual(differing(result), ["600 2000 1.0", "900 2000 1.0"])
         XCTAssertEqual(result.skipped, 3)
+    }
+
+    func testA279WithACorrectionNeverDiffers() {
+        var log = PumpLog()
+        log.delivery(0, source: 3, rate: 1000)
+        let corrected = log.delivery(300, source: 3, rate: 2200)
+
+        // The host's marker in the 279's second put the correction a second after it.
+        let ledger = told([marker(at: 300)], [correction(for: corrected, 2.2, from: 301, to: 600)])
+
+        XCTAssertEqual(differing(reconcile(log, ledger)), [])
     }
 
     func testOnceCorrectedASecondRunFindsNothing() {

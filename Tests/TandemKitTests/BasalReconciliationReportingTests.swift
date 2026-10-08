@@ -162,6 +162,20 @@ import XCTest
         XCTAssertEqual(events.count, 6, "a second pass reports nothing")
     }
 
+    func testConsecutiveCyclesAtOneRateAreEachCorrected() {
+        enableReporting()
+        var log = PumpBasalHistory()
+        log.pcm(0, .closedLoop)
+        for cycle in 0 ..< 4 {
+            log.delivery(10 + cycle * 300, source: 3, rate: 2200)
+        }
+
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), (0 ..< 4).map { at(Double(10 + $0 * 300)) })
+        XCTAssertEqual(events.map { $0.dose?.endDate }, (1 ... 4).map { at(Double(10 + $0 * 300)) })
+    }
+
     func testNothingIsReportedTwiceAcrossARelaunch() {
         enableReporting()
         let log = controlIQHour()

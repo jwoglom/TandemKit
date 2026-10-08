@@ -84,20 +84,28 @@ enum BasalReconciler {
         return .matches(residual: abs(ledger.hostUnits(in: interval, schedule: schedule) - chunk.units))
     }
 
-    /// The host's rate anywhere within `transitionMatchTolerance` of the chunk's start. A temp runs
-    /// a whole percent of the profile, so the driver can only ask for a temp within one percent of
-    /// the rate it wants, as it does to make up for a skewed pump clock.
+    /// The host's rate at the chunk's start, or either side of a change it was commanded to make
+    /// within `transitionMatchTolerance`, which the pump may take up at the 279 either side. Not a
+    /// correction's edge: that is the pump's own cycle, and the rate before it the previous chunk's.
     private static func matches(
         _ chunk: PumpBasalTimeline.Chunk,
         ledger: ReportedBasalLedger,
         schedule: HostBasalSchedule
     ) -> Bool {
+        if ledger.rows.contains(where: { ledger.correctedSequenceNum(of: $0) == chunk.sequenceNum }) {
+            return true
+        }
+        // A temp runs a whole percent of the profile, as the driver's skewed-clock temps do.
         let tolerance = rateTolerance + (chunk.kind == .temp ? chunk.profileBasalRate / 100 : 0)
         let window = DateInterval(
             start: chunk.start.addingTimeInterval(-TandemPumpManager.transitionMatchTolerance),
             end: chunk.start.addingTimeInterval(TandemPumpManager.transitionMatchTolerance)
         )
-        let instants = [window.start] + ledger.changes(in: window, schedule: schedule) + [window.end]
+        let commands = Set(ledger.changes(in: window, schedule: schedule, includingCorrections: false))
+        let points = [window.start] + ledger.changes(in: window, schedule: schedule)
+        let instants = [chunk.start] + points.indices.dropFirst()
+            .filter { commands.contains(points[$0]) }
+            .flatMap { [points[$0 - 1], points[$0]] }
         return instants.contains { instant in
             let rate = Int((ledger.hostBasal(at: instant, schedule: schedule).rate * 1000).rounded())
             return abs(rate - chunk.commandedRate) <= tolerance

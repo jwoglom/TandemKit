@@ -271,10 +271,13 @@ edit instead of at the next sync.
   instant wins, a temp basal until its end, a suspend until its resume, otherwise the host's
   schedule). `trackingSince` is stamped on the first decode; rows are kept 36 hours.
   - A chunk differs when H at its 279 is more than 10 mU/h off its `commandedRate` (plus 1% of the
-    profile for a temp chunk, which runs a whole percent) and no H within
-    `transitionMatchTolerance` of the 279 matches. A matching chunk never differs, whatever H does
-    later inside it: the host counts a change from its command, the pump from its next cycle, and
-    that residual is only logged, per day.
+    profile for a temp chunk, which runs a whole percent), H either side of a change the host was
+    commanded to make within `transitionMatchTolerance` of the 279 doesn't match either, and no
+    correction carries its 279. A correction's own edges don't count as changes: they are the
+    pump's cycles, and H before one is the previous chunk's, so a run of cycles at one rate would
+    otherwise get only its first corrected. A matching chunk never differs, whatever H does later
+    inside it: the host counts a change from its command, the pump from its next cycle, and that
+    residual is only logged, per day.
   - Skipped: suspended time (the pump's or the host's), chunks before the latest of
     `firstSeenFloor`, 24 hours ago and `trackingSince`, chunks still running, and temp chunks within
     `segmentChangeWindow` before a segment change, which the driver reports at the request on

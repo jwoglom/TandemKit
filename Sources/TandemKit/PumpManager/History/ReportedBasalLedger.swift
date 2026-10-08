@@ -154,9 +154,21 @@ public struct ReportedBasalLedger: Equatable {
     }
 
     /// Where what the host counts may change inside `interval`: row edges and schedule changes.
-    public func changes(in interval: DateInterval, schedule: HostBasalSchedule) -> [Date] {
-        let edges = rows.flatMap { [$0.date, $0.end] } + schedule.changes(in: interval)
+    public func changes(in interval: DateInterval, schedule: HostBasalSchedule, includingCorrections: Bool = true) -> [Date] {
+        let edges = rows
+            .filter { includingCorrections || correctedSequenceNum(of: $0) == nil }
+            .flatMap { [$0.date, $0.end] } + schedule.changes(in: interval)
         return Set(edges.filter { interval.start < $0 && $0 < interval.end }).sorted()
+    }
+
+    /// The 279 a basal correction on the tracked pump was reported for.
+    public func correctedSequenceNum(of row: Row) -> UInt32? {
+        guard let identifier = HistoryLogSyncIdentifier.decode(row.raw), identifier.scheme == .logSequence,
+              identifier.pumpSerial.rawValue == pumpSerial
+        else {
+            return nil
+        }
+        return identifier.identifier
     }
 
     /// Units the host counts over `interval`.
