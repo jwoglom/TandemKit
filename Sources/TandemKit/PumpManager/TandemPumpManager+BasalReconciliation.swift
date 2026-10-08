@@ -95,6 +95,8 @@ extension TandemPumpManager {
             ledger: state.reportedBasal,
             logs: logs,
             dates: dates,
+            timeline: timeline,
+            stop: stop,
             serial: serial,
             floor: floor,
             now: now
@@ -171,6 +173,9 @@ extension TandemPumpManager {
         var ledger: ReportedBasalLedger
         let logs: [HistoryLog]
         let dates: HistoryRecordDates
+        let timeline: PumpBasalTimeline
+        /// No chunk past this sequence number may be reported yet.
+        let stop: UInt32?
         let serial: HistoryLogSyncIdentifier.PumpSerial
         let floor: Date
         let now: Date
@@ -221,9 +226,8 @@ extension TandemPumpManager {
             }
             return restate(held, at: chunk, pass: &pass, batch: &batch) ? .done : .wait
 
-        case .tempBasal:
-            logger.info("Not correcting the finalized temp basal under the basal difference at \(chunk.start)")
-            return .done
+        case let .tempBasal(row):
+            return correctFinalized(row, from: chunk, pass: &pass, batch: &batch) ? .done : .wait
 
         case .suspended:
             return .done
@@ -276,6 +280,38 @@ extension TandemPumpManager {
         return true
     }
 
+    /// The host never revises a finalized temp basal, but Trio's IOB cuts it at the next row and does
+    /// not resume it, so from `chunk` through its end every chunk is reported in its place. Loop
+    /// counts no basal older than its last finished one, and ignores them.
+    private func correctFinalized(
+        _ row: ReportedBasalLedger.Row,
+        from chunk: PumpBasalTimeline.Chunk,
+        pass: inout BasalReportingPass,
+        batch: inout HistoryReportBatch
+    ) -> Bool {
+        let end = pass.ledger.rows.map(\.date).filter { chunk.start < $0 && $0 < row.end }.min() ?? row.end
+        let span = pass.timeline.chunks.filter { $0.sequenceNum >= chunk.sequenceNum && $0.start < end }
+        guard !pass.timeline.openChunks.contains(where: { $0.sequenceNum > chunk.sequenceNum && $0.start < end }),
+              span.allSatisfy({ part in pass.stop.map { part.sequenceNum < $0 } ?? true }),
+              (span.last?.end ?? .distantPast) >= end || pass.timeline.chunks.contains(where: { $0.start >= end })
+        else {
+            logger.info("Waiting for the pump's chunks through the end of the temp basal from \(row.date)")
+            return false
+        }
+        guard span.allSatisfy(\.isTrusted) else {
+            logger.warning("Not correcting the temp basal from \(row.date): its chunks fail the pump history's checks")
+            return true
+        }
+        logger.info("Reporting the pump's basal over the finalized temp basal from \(row.date) to \(end)")
+        for part in span {
+            let start = max(correctionStart(for: part, ledger: pass.ledger), row.date.addingTimeInterval(1))
+            guard let correction = correction(for: part, from: start, until: end, pass: pass) else { continue }
+            pass.add([correction], to: &batch)
+            pass.corrections += 1
+        }
+        return true
+    }
+
     /// Never in the same second as a row the host holds, whose order against it Trio leaves open.
     private func correctionStart(for chunk: PumpBasalTimeline.Chunk, ledger: ReportedBasalLedger) -> Date {
         let second = { (date: Date) in date.timeIntervalSinceReferenceDate.rounded(.down) }
@@ -285,8 +321,13 @@ extension TandemPumpManager {
             .reduce(chunk.start, max)
     }
 
-    private func correction(for chunk: PumpBasalTimeline.Chunk, from start: Date, pass: BasalReportingPass) -> NewPumpEvent? {
-        let end = pass.ledger.rows.map(\.date).filter { start < $0 && $0 < chunk.end }.min() ?? chunk.end
+    private func correction(
+        for chunk: PumpBasalTimeline.Chunk,
+        from start: Date,
+        until limit: Date = .distantFuture,
+        pass: BasalReportingPass
+    ) -> NewPumpEvent? {
+        let end = pass.ledger.rows.map(\.date).filter { start < $0 && $0 < chunk.end }.min().map { min($0, limit) } ?? min(chunk.end, limit)
         guard end > start else { return nil }
 
         if let limit = state.maxBasalLimitMilliunits, chunk.commandedRate > limit {
@@ -364,7 +405,7 @@ extension TandemPumpManager {
         case let .tempBasal(row) where row.isMutable:
             action = "ending or re-stating the held temp basal"
         case .tempBasal:
-            action = "none over a finalized temp basal"
+            action = "the pump's basal in place of a finalized temp basal"
         case .suspended:
             action = "none; the transitions pass owns it"
         }

@@ -368,4 +368,73 @@ import XCTest
 
         XCTAssertTrue(bluetooth.sentMessages.contains { String(describing: type(of: $0)).hasPrefix("ControlIQInfo") })
     }
+
+    // MARK: - Over a finalized temp basal
+
+    /// The host told of a temp basal at `rate` U/hr from `start` to `end` seconds, finished, and the
+    /// schedule after it.
+    private func toldFinishedTemp(_ rate: Double, from start: TimeInterval, to end: TimeInterval) {
+        let dose = UnfinalizedDose(tempRate: rate, duration: .minutes(30), automatic: true, insulinType: .novolog, startDate: at(start))
+        let entry = dose.toDoseEntry(isMutable: false, endDate: at(end), now: at(end))
+        let marker = UnfinalizedDose(basalRate: 1, insulinType: .novolog, startDate: at(end))
+        manager.emitPumpEvents([
+            NewPumpEvent.tempBasal(dose: entry, date: at(start)),
+            NewPumpEvent.basal(dose: marker.toDoseEntry(), date: at(end))
+        ], replacePendingEvents: false)
+        delegateQueue.sync {}
+        setupBatches = delegate.pumpEventBatches.count
+    }
+
+    func testAFinishedTempThePumpEndedEarlierIsReportedOverFromItsDifference() throws {
+        enableReporting()
+        toldFinishedTemp(1.5, from: 0, to: 900)
+        var log = PumpBasalHistory()
+        log.tempStarted(0, percent: 150, minutes: 15, id: 6)
+        log.delivery(10, source: 2, rate: 1500)
+        log.delivery(310, source: 2, rate: 1500)
+        log.tempEnded(500, id: 6, timeLeft: 400_000)
+        log.profile(610)
+        log.profile(910)
+
+        pass(log)
+
+        XCTAssertEqual(events.count, 1)
+        let correction = try XCTUnwrap(events.first?.dose)
+        XCTAssertEqual(correction.startDate, at(610))
+        XCTAssertEqual(correction.endDate, at(900), "through the finished temp basal's end")
+        XCTAssertEqual(correction.unitsPerHour, 1.0)
+
+        pass(log)
+        XCTAssertEqual(events.count, 1, "a second pass reports nothing")
+    }
+
+    func testOverAFinishedTempEveryChunkThroughItsEndIsReported() {
+        enableReporting()
+        toldFinishedTemp(1.5, from: 10, to: 910)
+        var log = PumpBasalHistory()
+        log.delivery(10, source: 3, rate: 2200)
+        log.delivery(310, source: 3, rate: 1500)
+        log.delivery(610, source: 3, rate: 400)
+        log.delivery(910, source: 3, rate: 1000)
+
+        pass(log)
+
+        XCTAssertEqual(events.map(\.date), [at(11), at(310), at(610)], "the first a second after the temp basal it replaces")
+        XCTAssertEqual(events.map { $0.dose?.unitsPerHour }, [2.2, 1.5, 0.4])
+        XCTAssertEqual(events.last?.dose?.endDate, at(910))
+    }
+
+    func testOverAFinishedTempNothingIsReportedUntilItsChunksAreAllRead() {
+        enableReporting()
+        toldFinishedTemp(1.5, from: 10, to: 910)
+        clock.set(at(700))
+        var log = PumpBasalHistory()
+        log.delivery(10, source: 3, rate: 2200)
+        log.delivery(310, source: 3, rate: 1500)
+        log.delivery(610, source: 3, rate: 400)
+
+        pass(log)
+
+        XCTAssertTrue(events.isEmpty)
+    }
 }

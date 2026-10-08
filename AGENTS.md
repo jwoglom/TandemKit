@@ -289,7 +289,12 @@ edit instead of at the next sync.
     - H from the temp basal the driver holds: ended at its `TempRateCompleted` through
       `closeTransition`, or, if the pump runs it at another rate, re-stated as at a segment
       change: finished at the old rate, a mutable continuation at the pump's.
-    - H from a finalized temp basal, or a suspend: nothing.
+    - H from a finalized temp basal: the pump's chunks reported in its place, from the
+      difference through its end, the first a second after its start. Neither host revises a
+      finalized row, but Trio's IOB cuts one at the next row and does not resume it; Loop counts no
+      basal older than its last finished one and ignores them. Every chunk through its end has to
+      be read and trusted first.
+    - H from a suspend: nothing.
   - A chunk waits, with everything after it, behind an open chunk, a store gap for
     `basalGapPatience` (2) passes (then the gap is skipped, with a warning), a pending delivery
     change, or a temp basal the host still holds open before it. `reconciledThrough` (persisted,
