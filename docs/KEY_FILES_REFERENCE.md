@@ -36,7 +36,8 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryBackfillState.swift` | The persisted watermark and `firstSeenFloor`. |
 | `HistoryFetchGate.swift` | Lets one history reader at a time hold the pump's history stream. |
 | `HistoryLogStore.swift`, `InMemoryHistoryLogStore.swift`, `StoredHistoryLog.swift` | The session-scoped raw history store. It is not persisted (#232). |
-| `HistoryToDoseMapper.swift` | History records → `NewPumpEvent`s. |
+| `HistoryToDoseMapper.swift` | Bolus history records → `NewPumpEvent`s. |
+| `PumpBasalTimeline.swift` | `BasalDelivery` (279) records → the basal the pump delivered, in checked 5-minute chunks. |
 | `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log; `HistoryRecordDates` adds the pump clock offset, for every date a history pass takes. |
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
 | `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time. |

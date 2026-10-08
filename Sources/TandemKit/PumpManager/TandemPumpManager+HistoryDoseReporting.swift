@@ -50,8 +50,6 @@ extension TandemPumpManager {
             dates: historyRecordDates(logs),
             pumpSerial: serial,
             insulinType: state.insulinType,
-            scheduledBasalRate: { _ in 0 },
-            roundBasalRate: { $0 },
             isCommandedBolus: { ledger.entry(bolusId: $0, pumpSerial: serial.rawValue)?.origin == .commanded }
         )
 

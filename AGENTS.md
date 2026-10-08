@@ -268,6 +268,13 @@ edit instead of at the next sync.
   did not set are still not reported.
 
 ### Therapy command validation
+- The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and
+  delivers 300 s at its `commandedRate`. A change of rate (a temp's start or end, a profile
+  segment, Control-IQ) takes effect at the next 279, 0–5 minutes after the command, and a temp set
+  and replaced between two 279s is never delivered. A late or missing 279, or a resume inside the
+  suspend's own cycle, delivers nothing until the next. `PumpBasalTimeline` reads this back: one
+  chunk per 279, used once closed, and trusted only if it, the chunks either side, and its
+  `DailyBasal` stretch agree with the pump's other records.
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`
   (seeded from `PumpManagerSetupSettings` at setup, then whatever the host app last synced).
   The pump enforces the same ceiling in firmware, because `syncDeliveryLimits` pushes it down

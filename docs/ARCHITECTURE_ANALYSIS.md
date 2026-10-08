@@ -297,9 +297,10 @@ zero temp basals routinely and the pump would otherwise alert on each one.
   time (the backfill and the log viewer).
 - `HistoryBackfillCoordinator` keeps the store caught up with the pump using
   `HistoryBackfillPlanner`, which is pure arithmetic, and the persisted `HistoryBackfillState`
-  watermark. `HistoryToDoseMapper` and `HistoryTimestampReconciler` turn records into
-  `NewPumpEvent`s, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
-  reported by the live path.
+  watermark. `HistoryToDoseMapper` turns bolus records into `NewPumpEvent`s, dated through
+  `HistoryRecordDates`, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
+  reported by the live path. `PumpBasalTimeline` reads the basal the pump delivered from its
+  `BasalDelivery` (279) records, one 5-minute chunk per record.
 - The backfill and the dose reporting are behind the `historyBackfill` and `historyDoseReporting`
   feature flags; the backfill is on by default, dose reporting is off. AGENTS.md has the full
   rules.

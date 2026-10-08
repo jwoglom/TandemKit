@@ -12,8 +12,6 @@ final class HistoryToDoseMapperTests: XCTestCase {
     private func map(
         _ logs: [HistoryLog],
         insulinType: InsulinType? = nil,
-        scheduledBasalRate: @escaping (Date) -> Double = { _ in 1.0 },
-        roundBasalRate: @escaping (Double) -> Double = { ($0 * 100).rounded() / 100 },
         isCommandedBolus: @escaping (Int) -> Bool = { _ in false },
         hostDate: @escaping (Date) -> Date = { $0 }
     ) -> [NewPumpEvent] {
@@ -22,8 +20,6 @@ final class HistoryToDoseMapperTests: XCTestCase {
             dates: HistoryRecordDates(logs, hostDate: hostDate),
             pumpSerial: serial,
             insulinType: insulinType,
-            scheduledBasalRate: scheduledBasalRate,
-            roundBasalRate: roundBasalRate,
             isCommandedBolus: isCommandedBolus
         )
     }
@@ -182,143 +178,25 @@ final class HistoryToDoseMapperTests: XCTestCase {
         XCTAssertFalse(dose.isMutable)
     }
 
-    // MARK: - Temp basals
-
-    func testMatchedTempBasalConvertsPercentToAbsoluteRate() throws {
-        let events = map(
-            [
-                TempRateActivatedHistoryLog(
-                    pumpTimeSec: 1000,
-                    sequenceNum: 1,
-                    percent: 150,
-                    durationMilliseconds: 1_800_000,
-                    tempRateId: 11
-                ),
-                // Completion stamped a few seconds after the programmed end; delivery cannot
-                // outlive the programmed window.
-                TempRateCompletedHistoryLog(pumpTimeSec: 2803, sequenceNum: 2, tempRateId: 11, timeLeft: 0)
-            ],
-            scheduledBasalRate: { _ in 0.8 }
-        )
-
-        XCTAssertEqual(events.count, 1)
-        let event = events[0]
-        XCTAssertEqual(event.type, .tempBasal)
-        XCTAssertEqual(event.raw, HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: 11))
-
-        let dose = try XCTUnwrap(event.dose)
-        XCTAssertEqual(dose.type, .tempBasal)
-        XCTAssertEqual(dose.unit, .unitsPerHour)
-        XCTAssertEqual(dose.unitsPerHour, 1.2, accuracy: 1e-9)
-        XCTAssertEqual(dose.startDate, pumpDate(1000))
-        XCTAssertEqual(dose.endDate, pumpDate(1000 + 1800))
-        XCTAssertFalse(dose.isMutable)
-        XCTAssertEqual(dose.syncIdentifier, event.raw.hexadecimalString)
-    }
-
-    func testEarlyCancelledTempBasalEndsAtCompletion() throws {
+    func testBasalSuspendResumeAndAlarmRecordsAreNotMapped() {
         let events = map([
-            TempRateActivatedHistoryLog(
-                pumpTimeSec: 1000,
-                sequenceNum: 1,
-                percent: 50,
-                durationMilliseconds: 1_800_000,
-                tempRateId: 12
-            ),
-            TempRateCompletedHistoryLog(pumpTimeSec: 1600, sequenceNum: 2, tempRateId: 12, timeLeft: 1200)
-        ])
-
-        let dose = try XCTUnwrap(events.first?.dose)
-        XCTAssertEqual(dose.endDate, pumpDate(1600))
-    }
-
-    func testTempBasalActivationWithoutCompletionIsMutable() throws {
-        let events = map([
-            TempRateActivatedHistoryLog(
-                pumpTimeSec: 1000,
-                sequenceNum: 1,
-                percent: 200,
-                durationMilliseconds: 3_600_000,
-                tempRateId: 13
-            )
-        ])
-
-        let dose = try XCTUnwrap(events.first?.dose)
-        XCTAssertTrue(dose.isMutable)
-        XCTAssertEqual(dose.endDate, pumpDate(1000 + 3600))
-    }
-
-    func testTempBasalCompletionWithoutActivationIsDropped() {
-        // The percent, duration and start time all live on the activation record, so a
-        // completion alone cannot be mapped.
-        let events = map([
-            TempRateCompletedHistoryLog(pumpTimeSec: 1600, sequenceNum: 2, tempRateId: 14, timeLeft: 0)
-        ])
-
-        XCTAssertTrue(events.isEmpty)
-    }
-
-    // MARK: - Basal changes, suspend/resume, alarms
-
-    func testBasalRateChangeMapsToBasalEvent() throws {
-        let events = map([
+            TempRateActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 10, percent: 150, durationMilliseconds: 1_800_000, tempRateId: 4),
+            TempRateCompletedHistoryLog(pumpTimeSec: 1600, sequenceNum: 11, tempRateId: 4, timeLeft: 1_200_000),
             BasalRateChangeHistoryLog(
-                pumpTimeSec: 2000,
-                sequenceNum: 8,
-                commandBasalRate: 1.15,
-                baseBasalRate: 1.15,
+                pumpTimeSec: 1700,
+                sequenceNum: 12,
+                commandBasalRate: 1,
+                baseBasalRate: 1,
                 maxBasalRate: 3,
                 insulinDeliveryProfile: 1,
                 changeTypeId: 1
-            )
+            ),
+            PumpingSuspendedHistoryLog(pumpTimeSec: 1800, sequenceNum: 13, preSuspendState: 0, insulinAmount: 0, reasonId: 0, rpaTimeout: 0),
+            PumpingResumedHistoryLog(pumpTimeSec: 1900, sequenceNum: 14, preResumeState: 0, insulinAmount: 0),
+            AlarmActivatedHistoryLog(pumpTimeSec: 2000, sequenceNum: 15, alarmId: 2)
         ])
 
-        XCTAssertEqual(events.count, 1)
-        let event = events[0]
-        XCTAssertEqual(event.type, .basal)
-        XCTAssertEqual(event.raw, HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 8))
-
-        let dose = try XCTUnwrap(event.dose)
-        XCTAssertEqual(dose.type, .basal)
-        XCTAssertEqual(dose.startDate, pumpDate(2000))
-        XCTAssertEqual(dose.unitsPerHour, 1.15, accuracy: 1e-6)
-        XCTAssertEqual(dose.unit, .unitsPerHour)
-    }
-
-    func testSuspendAndResumeMapToLedgerEvents() throws {
-        let events = map([
-            PumpingSuspendedHistoryLog(pumpTimeSec: 3000, sequenceNum: 20, preSuspendState: 0, insulinAmount: 100, reasonId: 0, rpaTimeout: 0),
-            PumpingResumedHistoryLog(pumpTimeSec: 3600, sequenceNum: 21, preResumeState: 0, insulinAmount: 100)
-        ])
-
-        XCTAssertEqual(events.count, 2)
-
-        let suspend = events[0]
-        XCTAssertEqual(suspend.type, .suspend)
-        XCTAssertEqual(suspend.date, pumpDate(3000))
-        XCTAssertEqual(suspend.raw, HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 20))
-        XCTAssertEqual(try XCTUnwrap(suspend.dose).type, .suspend)
-
-        let resume = events[1]
-        XCTAssertEqual(resume.type, .resume)
-        XCTAssertEqual(resume.date, pumpDate(3600))
-        XCTAssertEqual(resume.raw, HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 21))
-        XCTAssertEqual(try XCTUnwrap(resume.dose).type, .resume)
-    }
-
-    func testAlarmAndAlertMapToDoselessAlarmEvents() {
-        let events = map([
-            AlarmActivatedHistoryLog(pumpTimeSec: 4000, sequenceNum: 30, alarmId: 5),
-            AlertActivatedHistoryLog(pumpTimeSec: 4100, sequenceNum: 31, alertId: 2)
-        ])
-
-        XCTAssertEqual(events.count, 2)
-        for event in events {
-            XCTAssertEqual(event.type, .alarm)
-            XCTAssertNil(event.dose)
-        }
-        XCTAssertEqual(events[0].raw, HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 30))
-        XCTAssertEqual(events[1].raw, HistoryLogSyncIdentifier.logSequence(pumpSerial: serial, sequenceNum: 31))
+        XCTAssertTrue(events.isEmpty)
     }
 
     // MARK: - Cross-cutting behaviour
@@ -372,16 +250,24 @@ final class HistoryToDoseMapperTests: XCTestCase {
         // Feed the window out of order, with the in-flight bolus (appended after the main loop)
         // dated earliest, to pin the final sort.
         let events = map([
-            PumpingSuspendedHistoryLog(pumpTimeSec: 9000, sequenceNum: 40, preSuspendState: 0, insulinAmount: 0, reasonId: 0, rpaTimeout: 0),
+            BolusCompletedHistoryLog(
+                pumpTimeSec: 9000,
+                sequenceNum: 40,
+                completionStatusId: 0,
+                bolusId: 8,
+                iob: 1,
+                insulinDelivered: 1,
+                insulinRequested: 1
+            ),
             BolusActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 1, bolusId: 6, selectedIob: 0, iob: 0, bolusSize: 1.0),
-            BasalRateChangeHistoryLog(
+            BolusCompletedHistoryLog(
                 pumpTimeSec: 5000,
                 sequenceNum: 20,
-                commandBasalRate: 1,
-                baseBasalRate: 1,
-                maxBasalRate: 3,
-                insulinDeliveryProfile: 1,
-                changeTypeId: 1
+                completionStatusId: 0,
+                bolusId: 7,
+                iob: 1,
+                insulinDelivered: 1,
+                insulinRequested: 1
             )
         ])
 
