@@ -153,8 +153,9 @@ reports it at the pump's time before the sync that saw it completes
 
 A Tandem pump holds a date and time with no zone and only moves when someone sets it; the driver
 decodes pump timestamps with the phone's current UTC offset and takes out the pump clock offset it
-last measured (`hostDate(forPumpDate:)`), and `HistoryTimestampReconciler` moves records written
-before a pump clock change onto the clock now in force. Each scenario changes one side's clock,
+last measured, moved by any change in the phone's offset since (`hostDate(forPumpDate:)`), and
+`HistoryTimestampReconciler` moves records written before a pump clock change onto the clock now in
+force. Every history date goes through both (`HistoryRecordDates`). Each scenario changes one side's clock,
 with and without the pump being told, and asserts every dose at the instant the pump delivered it.
 Phone and pump start on the same fixed-offset zone; the phone's zone is moved with `PhoneTimeZone`.
 Both history flags are on. `TimeChangeConformanceTests`.
@@ -164,7 +165,7 @@ Both history flags are on. `TimeChangeConformanceTests`.
 | G1 | The phone changes zone, the pump is not told | phone UTC-4 → UTC-7; sync; app bolus; `radio_off`; pump `suspend`, 10 min, `resume`; pump-programmed bolus; `radio_on`; sync | `pumpClockOffset` +3 h and the time-sync warning shown; the app bolus, the suspend and the resume at their instants; the pump bolus at its instant (#482) |
 | G2 | The phone changes zone, the app sets the pump | app temp basal 60 min; `radio_off`; pump-programmed bolus; phone UTC-4 → UTC-7; `radio_on`; `syncPumpTime`; temp basal runs out; pump `suspend`/`resume` | `ChangeTimeDateRequest` sent, pump reads UTC-7, one `TimeChanged`; offset ~0, warning cleared; the bolus logged before the change at its instant; the temp basal finalized at its programmed end and full volume; the later suspend at its instant |
 | G3 | The user sets the pump's clock on the pump | `radio_off`; pump `suspend`; pump clock +1 h on the pump; `resume`; pump-programmed bolus; `radio_on`; sync; `syncPumpTime`; app bolus | `pumpClockOffset` +1 h and the warning; the suspend (before the change) and the resume (after it) at their instants; the pump bolus at its instant (#482); after `syncPumpTime` a second `TimeChanged`, offset ~0, warning cleared, the app bolus at its instant |
-| G4 | The phone's offset drops an hour between syncs (DST), the pump is not told | a pump-programmed bolus logged 50 min before tracking began, so it decodes past the reporting floor and has ended before the hosts are compared; phone UTC-4 → UTC-5, no sync; pump `suspend` in range; `radio_off`; `resume`; `radio_on`; sync | the suspend from the qualifying event and the resume from history at their instants, with the offset the driver holds an hour stale until the sync measures it again; the old bolus is never reported, though it decodes an hour later and moves past the reporting floor (#482) |
+| G4 | The phone's offset drops an hour between syncs (DST), the pump is not told | a pump-programmed bolus logged 50 min before tracking began, so it decodes past the reporting floor and has ended before the hosts are compared; phone UTC-4 → UTC-5, no sync; pump `suspend` in range; `radio_off`; `resume`; `radio_on`; sync | the suspend from the qualifying event and the resume from history at their instants; the offset moves an hour with the phone's before the sync measures it again; the old bolus is never reported, though it decodes an hour later and moves past the reporting floor (#482) |
 
 ## Execution order
 

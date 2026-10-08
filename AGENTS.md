@@ -234,7 +234,6 @@ edit instead of at the next sync.
     Only the same-second pair is marked handled; the others are reconsidered next pass, since
     the other half may be in a gap the next tick fills. The host's view falls back to the dose
     it holds when the ledger has no entry (a suspend from before the ledger, or pruned).
-  - History dates are moved onto the phone's clock with `hostDate(forPumpDate:)`.
   - Loop still stores but does not count a gap-contained pair it hears about after a later
     finished basal (#354). Trio counts it either way.
   - Scenarios: conformance group F, `OutageConformanceTests`; unit tests in
@@ -257,12 +256,16 @@ edit instead of at the next sync.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
-- Still open: gap-aware `lastReconciliation` (#353), extended boluses (Bolex records are only
-  logged; #424), and a pump clock offset from the phone's for boluses (bolus history dates use
-  the phone's UTC offset, not `pumpClockOffset`, so after a trip or a pump clock change they
-  land hours off; #482, conformance group G). `UnfinalizedDose.tempRateId` matches a live
-  temp basal to its `TempRateCompleted`; re-keying live temp basals on it is still open (#344).
-  Temp rates the app did not set are still not reported.
+- Every date a history pass takes from a record goes through `HistoryRecordDates.phoneDate(of:)`:
+  past the pump's own clock changes (`HistoryTimestampReconciler`), then the pump clock offset
+  (`hostDate(forPumpDate:)`), so boluses, transitions and the emit floor compare on the phone's
+  clock. Build one per pass from the records it reads. Pump dates decode with the phone's current
+  UTC offset, so `pumpClockOffset` moves by any change in it since the clock was read
+  (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
+- Still open: gap-aware `lastReconciliation` (#353) and extended boluses (Bolex records are only
+  logged; #424). `UnfinalizedDose.tempRateId` matches a live temp basal to its
+  `TempRateCompleted`; re-keying live temp basals on it is still open (#344). Temp rates the app
+  did not set are still not reported.
 
 ### Therapy command validation
 - `enactBolus` rejects non-positive amounts and anything above `state.settings.maxBolus`

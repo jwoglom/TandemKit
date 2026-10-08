@@ -15,6 +15,7 @@ extension TandemPumpManager {
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
+        state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()

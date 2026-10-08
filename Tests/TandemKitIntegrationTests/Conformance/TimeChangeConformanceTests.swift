@@ -155,13 +155,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         XCTAssertTrue(eventsSince(0).filter { $0.dose?.type == .bolus }.isEmpty, "a bolus from before the driver tracked the pump is not reported")
     }
 
-    private func expectDefect(_ reason: String, _ body: () throws -> Void) rethrows {
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = true
-        try XCTExpectFailure(reason, options: options, failingBlock: body)
-    }
-
-    private func assertHostsMatchThePump(defect: String? = nil, file: StaticString = #filePath, line: UInt = #line) throws {
+    private func assertHostsMatchThePump(file: StaticString = #filePath, line: UInt = #line) throws {
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
@@ -174,15 +168,10 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
             log: try harness.requestLog(since: logStartSequence),
             afterSequence: historyStartSequence
         )
-        guard let defect else {
-            timeline.assertMatches(loop, file: file, line: line)
-            return
-        }
-        expectDefect(defect) { timeline.assertMatches(loop, file: file, line: line) }
+        timeline.assertMatches(loop, file: file, line: line)
     }
 
     private static let untrackedBolusId = 4242
-    private static let historyBolusDefect = "jwoglom/TandemKit#482: a bolus reported from the pump's history is dated without the pump clock offset"
 
     // MARK: - G1
 
@@ -223,11 +212,9 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let pumpReport = try waitForEvent("the pump's bolus from its history", since: batchesBefore) {
             $0.dose?.type == .bolus && $0.dose?.wasProgrammedByPumpUI == true
         }
-        try expectDefect(Self.historyBolusDefect) {
-            XCTAssertEqual(try XCTUnwrap(pumpReport.dose?.startDate).timeIntervalSince(pump.start), 0, accuracy: 2, "the pump's bolus at the instant it started")
-        }
+        XCTAssertEqual(try XCTUnwrap(pumpReport.dose?.startDate).timeIntervalSince(pump.start), 0, accuracy: 2, "the pump's bolus at the instant it started")
 
-        try assertHostsMatchThePump(defect: Self.historyBolusDefect)
+        try assertHostsMatchThePump()
     }
 
     // MARK: - G2
@@ -324,9 +311,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let pumpReport = try waitForEvent("the pump's bolus from its history", since: batchesBefore) {
             $0.dose?.type == .bolus && $0.dose?.wasProgrammedByPumpUI == true
         }
-        try expectDefect(Self.historyBolusDefect) {
-            XCTAssertEqual(try XCTUnwrap(pumpReport.dose?.startDate).timeIntervalSince(pump.start), 0, accuracy: 2, "logged after the change")
-        }
+        XCTAssertEqual(try XCTUnwrap(pumpReport.dose?.startDate).timeIntervalSince(pump.start), 0, accuracy: 2, "logged after the change")
 
         XCTAssertNoThrow(try syncPumpTime().get())
         XCTAssertEqual(try pumpRecords("TimeChanged").count, 2, "the user's change and the app's")
@@ -337,7 +322,7 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         let appReport = try XCTUnwrap(eventsSince(batchesBefore).last { $0.raw == app.raw && $0.dose?.isMutable == false })
         XCTAssertEqual(try XCTUnwrap(appReport.dose?.startDate).timeIntervalSince(app.start), 0, accuracy: 2)
 
-        try assertHostsMatchThePump(defect: Self.historyBolusDefect)
+        try assertHostsMatchThePump()
     }
 
     // MARK: - G4
@@ -377,10 +362,8 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         XCTAssertEqual(resume.date.timeIntervalSince(resumedAt), 0, accuracy: 1)
         XCTAssertEqual(driver.manager.state.pumpClockOffset, .hours(1), accuracy: 2, "the pump still reads daylight time")
 
-        try expectDefect("\(Self.historyBolusDefect); a bolus from before tracking began decodes an hour later and is reported as new") {
-            let boluses = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
-            XCTAssertTrue(boluses.isEmpty, "a bolus from before the driver tracked the pump was reported after the offset change: \(boluses)")
-        }
-        try assertHostsMatchThePump(defect: Self.historyBolusDefect)
+        let boluses = eventsSince(batchesBefore).filter { $0.dose?.type == .bolus }
+        XCTAssertTrue(boluses.isEmpty, "a bolus from before the driver tracked the pump was reported after the offset change: \(boluses)")
+        try assertHostsMatchThePump()
     }
 }

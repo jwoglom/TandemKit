@@ -98,6 +98,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("useSilentTones", { $0.useSilentTones = false }),
             ("currentPumpTime", { $0.currentPumpTime = nil }),
             ("lastPumpTimeCheckDate", { $0.lastPumpTimeCheckDate = nil }),
+            ("pumpTimeCheckUTCOffset", { $0.pumpTimeCheckUTCOffset = nil }),
             ("lastSettingsCheckedAt", { $0.lastSettingsCheckedAt = nil }),
             ("quickBolusAnnun", { $0.quickBolusAnnun = nil }),
             ("reminderAnnun", { $0.reminderAnnun = nil }),
@@ -225,6 +226,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.useSilentTones = true
         state.currentPumpTime = t0.addingTimeInterval(30)
         state.lastPumpTimeCheckDate = t0
+        state.pumpTimeCheckUTCOffset = -4 * 3600
         state.lastSettingsCheckedAt = t0
         state.quickBolusAnnun = .audioHigh
         state.reminderAnnun = .audioMedium

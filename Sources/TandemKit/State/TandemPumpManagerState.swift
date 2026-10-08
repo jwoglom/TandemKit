@@ -80,6 +80,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     // Pump time
     public var currentPumpTime: Date?
     public var lastPumpTimeCheckDate: Date?
+    /// The phone's UTC offset in seconds when `currentPumpTime` was decoded.
+    public var pumpTimeCheckUTCOffset: Int?
 
     // Pump global settings
     /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
@@ -201,6 +203,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.useSilentTones == rhs.useSilentTones,
               lhs.currentPumpTime == rhs.currentPumpTime,
               lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
+              lhs.pumpTimeCheckUTCOffset == rhs.pumpTimeCheckUTCOffset,
               lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
               lhs.quickBolusAnnun == rhs.quickBolusAnnun,
               lhs.reminderAnnun == rhs.reminderAnnun,
@@ -285,6 +288,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
+        pumpTimeCheckUTCOffset = rawValue["pumpTimeCheckUTCOffset"] as? Int
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -484,6 +488,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
+        raw["pumpTimeCheckUTCOffset"] = pumpTimeCheckUTCOffset
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -574,12 +579,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     }
 
     /// Seconds the pump's clock is ahead of the phone's (negative if behind), as of the last
-    /// `fetchTimeSinceReset`.
+    /// `fetchTimeSinceReset`. Pump dates decode with the phone's current UTC offset, so a zone
+    /// change since that read moves every one of them, and the offset with them.
     public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
             return 0
         }
-        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate)
+        let zoneChange = pumpTimeCheckUTCOffset.map { $0 - TimeZone.current.secondsFromGMT() } ?? 0
+        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate) + TimeInterval(zoneChange)
     }
 
     /// Past this the pump's segments sit a host loop cycle or more from the host's, so temp basals
@@ -619,6 +626,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* useSilentTones: \(useSilentTones)",
             "* currentPumpTime: \(String(describing: currentPumpTime))",
             "* lastPumpTimeCheckDate: \(String(describing: lastPumpTimeCheckDate))",
+            "* pumpTimeCheckUTCOffset: \(String(describing: pumpTimeCheckUTCOffset))",
             "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
             "* reminderAnnun: \(String(describing: reminderAnnun))",
             "* alertAnnun: \(String(describing: alertAnnun))",

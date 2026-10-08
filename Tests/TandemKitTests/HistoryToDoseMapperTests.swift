@@ -14,11 +14,12 @@ final class HistoryToDoseMapperTests: XCTestCase {
         insulinType: InsulinType? = nil,
         scheduledBasalRate: @escaping (Date) -> Double = { _ in 1.0 },
         roundBasalRate: @escaping (Double) -> Double = { ($0 * 100).rounded() / 100 },
-        isCommandedBolus: @escaping (Int) -> Bool = { _ in false }
+        isCommandedBolus: @escaping (Int) -> Bool = { _ in false },
+        hostDate: @escaping (Date) -> Date = { $0 }
     ) -> [NewPumpEvent] {
         HistoryToDoseMapper().mapToEvents(
             logs,
-            reconciler: HistoryTimestampReconciler(),
+            dates: HistoryRecordDates(logs, hostDate: hostDate),
             pumpSerial: serial,
             insulinType: insulinType,
             scheduledBasalRate: scheduledBasalRate,
@@ -342,6 +343,29 @@ final class HistoryToDoseMapperTests: XCTestCase {
         let dose = try XCTUnwrap(events.first?.dose)
         XCTAssertEqual(dose.startDate, pumpDate(1000 + 3600))
         XCTAssertEqual(dose.endDate, pumpDate(1300 + 3600))
+    }
+
+    func testDatesAreOnThePhonesClock() throws {
+        let events = map(
+            [
+                BolusActivatedHistoryLog(pumpTimeSec: 1000, sequenceNum: 1, bolusId: 3, selectedIob: 0, iob: 0, bolusSize: 1.0),
+                BolusCompletedHistoryLog(
+                    pumpTimeSec: 1300,
+                    sequenceNum: 2,
+                    completionStatusId: 0,
+                    bolusId: 3,
+                    iob: 1,
+                    insulinDelivered: 1,
+                    insulinRequested: 1
+                ),
+                TimeChangedHistoryLog(pumpTimeSec: 5000, sequenceNum: 3, timePrior: 0, timeAfter: 3_600_000, rawRTC: 0)
+            ],
+            hostDate: { $0.addingTimeInterval(-.hours(3)) }
+        )
+
+        let event = try XCTUnwrap(events.first)
+        XCTAssertEqual(event.date, pumpDate(1000 + 3600 - 3 * 3600))
+        XCTAssertEqual(event.dose?.endDate, pumpDate(1300 + 3600 - 3 * 3600))
     }
 
     func testEventsAreSortedAscendingByDate() {

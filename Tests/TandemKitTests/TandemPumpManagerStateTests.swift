@@ -237,4 +237,24 @@ final class TandemPumpManagerStateTests: XCTestCase {
 
         XCTAssertTrue(TandemPumpManagerState(rawValue: raw).autoAcknowledgeBasalAlerts)
     }
+
+    func testAPhoneZoneChangeSinceThePumpClockWasReadMovesTheOffset() {
+        var state = TandemPumpManagerState(rawValue: [:])
+        let checkedAt = Date()
+        state.lastPumpTimeCheckDate = checkedAt
+        state.currentPumpTime = checkedAt
+        // The phone was an hour further west when the pump clock was read; the pump kept that zone.
+        state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT() - 3600
+
+        XCTAssertEqual(state.pumpClockOffset, -3600)
+    }
+
+    func testAPumpClockReadWithoutItsZoneIsTakenAsIs() {
+        var state = TandemPumpManagerState(rawValue: [:])
+        let checkedAt = Date()
+        state.lastPumpTimeCheckDate = checkedAt
+        state.currentPumpTime = checkedAt.addingTimeInterval(90)
+
+        XCTAssertEqual(state.pumpClockOffset, 90)
+    }
 }

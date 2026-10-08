@@ -224,11 +224,7 @@ extension TandemPumpManager {
             return
         }
 
-        let reconciler = HistoryTimestampReconciler()
-        reconciler.recordClockChanges(in: stored)
-        func phoneDate(of log: HistoryLog) -> Date {
-            hostDate(forPumpDate: reconciler.utcDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum))
-        }
+        let dates = historyRecordDates(stored)
 
         let now = self.now
         let floor = now.addingTimeInterval(-DeliveryTransitionLedger.retention)
@@ -241,7 +237,7 @@ extension TandemPumpManager {
                 return
             }
             let reachesBack = outcome.isDeepBackfillComplete || outcome.reachesPumpStart
-                || stored.first.map { phoneDate(of: $0) <= pending.lastConfirmed } == true
+                || stored.first.map { dates.phoneDate(of: $0) <= pending.lastConfirmed } == true
             guard outcome.readsThroughPumpEnd, reachesBack else {
                 logger.warning("Pump history does not cover the \(pending.observed) seen at \(pending.detectedAt); reporting it at detection")
                 reportTransition(pending)
@@ -254,11 +250,11 @@ extension TandemPumpManager {
         for log in stored {
             switch log {
             case is PumpingSuspendedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .suspend, date: phoneDate(of: log)))
+                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .suspend, date: dates.phoneDate(of: log)))
             case is PumpingResumedHistoryLog where log.sequenceNum > trackedAfter:
-                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .resume, date: phoneDate(of: log)))
+                records.append(PumpTransition(sequenceNum: log.sequenceNum, kind: .resume, date: dates.phoneDate(of: log)))
             case let completed as TempRateCompletedHistoryLog:
-                tempRateEnds[completed.tempRateId] = (phoneDate(of: completed), completed.timeLeft == 0)
+                tempRateEnds[completed.tempRateId] = (dates.phoneDate(of: completed), completed.timeLeft == 0)
             default:
                 continue
             }

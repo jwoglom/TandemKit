@@ -12,7 +12,9 @@ import XCTest
     private var delegateQueue: DispatchQueue!
 
     private let now = Date()
-    private lazy var nowPumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(now))
+    private lazy var phoneNowPumpTimeSec = UInt32(Dates.fromInstantToJan12008EpochSeconds(now))
+    private var pumpClockAhead: UInt32 = 0
+    private var nowPumpTimeSec: UInt32 { phoneNowPumpTimeSec + pumpClockAhead }
 
     override func setUp() {
         super.setUp()
@@ -408,6 +410,37 @@ import XCTest
         manager.emitPumpEvents([finalized])
 
         XCTAssertEqual(manager.state.bolusReportLedger.entry(bolusId: 54, pumpSerial: Self.pumpSerial)?.isFinalized, true)
+    }
+
+    // MARK: - Pump clock
+
+    private func setPumpClock(ahead offset: UInt32) {
+        pumpClockAhead = offset
+        manager.state.lastPumpTimeCheckDate = now
+        manager.state.currentPumpTime = now.addingTimeInterval(TimeInterval(offset))
+    }
+
+    func testAPumpBolusIsDatedOnThePhonesClock() throws {
+        setPumpClock(ahead: 3 * 3600)
+        let start = quickBolusStart(bolusId: 44, units: 1.0, firstSequenceNum: 300, secondsAgo: 300)
+        let completion = bolusCompletion(bolusId: 44, delivered: 1.0, requested: 1.0, sequenceNum: 303, secondsAgo: 240)
+
+        report(start + [completion])
+
+        let event = try XCTUnwrap(reportedBoluses.first)
+        XCTAssertEqual(event.date, pumpDate(start[1]).addingTimeInterval(-.hours(3)))
+        XCTAssertEqual(event.dose?.endDate, pumpDate(completion).addingTimeInterval(-.hours(3)))
+    }
+
+    func testAPumpBolusIsFlooredOnThePhonesClock() {
+        setPumpClock(ahead: 3600)
+        let secondsAgo = UInt32(2.5 * 3600)
+        let logs = quickBolusStart(bolusId: 45, units: 1.0, firstSequenceNum: 400, secondsAgo: secondsAgo)
+            + [bolusCompletion(bolusId: 45, delivered: 1.0, requested: 1.0, sequenceNum: 403, secondsAgo: secondsAgo - 60)]
+
+        report(logs, floor: now.addingTimeInterval(-.hours(2)))
+
+        XCTAssertTrue(delegate.pumpEventBatches.isEmpty, "Its pump stamp is past the floor; the instant it was given is not")
     }
 
     // MARK: - Floors and gating

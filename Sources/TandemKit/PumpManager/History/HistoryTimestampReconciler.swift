@@ -61,3 +61,26 @@ final class HistoryTimestampReconciler {
             .reduce(Int(pumpTimeSec)) { $0 + $1.deltaSec }
     }
 }
+
+/// Every date a history pass takes from a record, on the phone's clock: past the pump clock changes
+/// among `logs`, then by the pump clock offset (`TandemPumpManager.hostDate(forPumpDate:)`). One per
+/// pass; a reconciler shared across passes would apply each clock change once per pass.
+struct HistoryRecordDates {
+    private let reconciler = HistoryTimestampReconciler()
+    private let hostDate: (Date) -> Date
+
+    init(_ logs: [HistoryLog], hostDate: @escaping (Date) -> Date) {
+        reconciler.recordClockChanges(in: logs)
+        self.hostDate = hostDate
+    }
+
+    func phoneDate(of log: HistoryLog) -> Date {
+        hostDate(reconciler.utcDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum))
+    }
+}
+
+extension TandemPumpManager {
+    func historyRecordDates(_ logs: [HistoryLog]) -> HistoryRecordDates {
+        HistoryRecordDates(logs) { [weak self] in self?.hostDate(forPumpDate: $0) ?? $0 }
+    }
+}

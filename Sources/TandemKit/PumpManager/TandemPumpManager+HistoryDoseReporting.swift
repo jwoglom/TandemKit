@@ -45,10 +45,9 @@ extension TandemPumpManager {
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
-        // Fresh each pass: a shared one would apply each clock change once per pass.
         let events = HistoryToDoseMapper().mapToEvents(
             logs,
-            reconciler: HistoryTimestampReconciler(),
+            dates: historyRecordDates(logs),
             pumpSerial: serial,
             insulinType: state.insulinType,
             scheduledBasalRate: { _ in 0 },
