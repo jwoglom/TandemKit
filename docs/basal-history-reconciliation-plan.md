@@ -23,26 +23,28 @@ Decided by the maintainer:
 
 ### 1.1 What the pump writes
 
-"The Mobi exports" below are two consecutive pump history exports from one Mobi, 10,000 records
-(43 hours) and the 30,000 after them (6 days), with Control-IQ off and Trio closed-looping,
-analysed in §7.1.
+"The Mobi exports" below are three pump history exports, analysed in §7.1: two consecutive ones
+from a Mobi on Control-IQ+ 7.9.0.1 with Control-IQ off and Trio closed-looping (10,000 records over
+43 hours, then 30,000 over 6 days), and an older one from a Mobi on Control-IQ 7.7.0.1 running
+Control-IQ (24,864 records over 8 days).
 
 | Record | Fields used | When it is written | How sure we are |
 | --- | --- | --- | --- |
-| `BasalDelivery` (279) | `commandedRateSource`, `commandedRate`, `profileBasalRate`, `algorithmRate`, `tempRate`, all mU/h; 0xFFFF means n/a | At each 5-minute delivery cycle, Control-IQ on or off, usually 30 s after the cycle's `ControlIQCycle` (227). About 1% come up to 4 minutes late, and once in six days a cycle had none. Also at a resume after a suspend that lasted through a cycle, and the cadence restarts from it (11 of 11). Not at a suspend the app makes | The pump's basal total follows it (below). Sources 0, 1 and 2 confirmed on a Mobi with Control-IQ off; 3 seen in X2 and Mobi Control-IQ captures; 4 (temp rate and algorithm) never seen |
+| `BasalDelivery` (279) | `commandedRateSource`, `commandedRate`, `profileBasalRate`, `algorithmRate`, `tempRate`, all mU/h; 0xFFFF means n/a | At each 5-minute delivery cycle, Control-IQ on or off, usually 30 s after the cycle's `ControlIQCycle` (227). About 1% come up to 4 minutes late, and once in 16 days of exports a cycle had none. Also at every resume after a suspend that lasted through a cycle (18 of 18), and the cadence restarts from it. Not at a suspend the app makes | The pump's basal total follows it (below). Sources 0, 1 and 2 confirmed with Control-IQ off; 0, 1 and 3 with it on, 1 while the CGM is unavailable; 4 (temp rate and algorithm) never seen |
 | `TempRateActivated` (2), `TempRateCompleted` (15) | `percent`, `durationMilliseconds`, `tempRateId`; `tempRateId`, `timeLeft` | When the temp is commanded, and when it ends, is stopped or is replaced. Delivery follows at the next cycle (below) | Used today. `timeLeft` is in milliseconds and always a whole number of minutes (every completion in both exports) |
 | `PumpingSuspended` (11), `PumpingResumed` (12) | `reasonId` | When delivery stops and restarts. Reason 1 at an alarm, 0 for the app's suspends | Used today. The temp running at an alarm suspend resumed with delivery (2 of 2, cartridge alarms): no `TempRateCompleted` at the suspend, and the first 279 after the resume showed it. The app stops its temp before it suspends, so its suspends cannot show this |
 | `SetTempRateResponse` (309), `ControlRequest` (290) | `tempRateId`, `status`; `requestOpCode` (164 `SetTempRate`, 166 `StopTempRate`) | As the pump answers each control request it is sent | Both exports: one 309 with status 0 for every `TempRateActivated`, with the same `tempRateId`; the only others were two refusals (status 1, `tempRateId` 0). Logged by the pump as it answers, so it should survive an answer lost on the way (to confirm) |
-| `ControlIQPcmChange` (230), `AaEnableSettingChange` (244) | `currentPcm`; `enabled` | 230 at every suspend and resume (PCM 1 → 0 → 1 with Control-IQ off). Presumably 230 or 244 when Control-IQ is switched on or off | The switch is unconfirmed (Q2). 230 has a serialization test; 244 has none and pumpX2 has no vector for it |
-| `DailyBasal` (81) | `dailyTotalBasal` (U), `lastBasalRate` (U/h) | Every 10 min, at each bolus's completion, and at other events | The pump's basal total for the day. It grows by one cycle's insulin per 279, about 10 s after the record, and `lastBasalRate` is the latest 279's `commandedRate` (1,694 of 1,695 records) |
-| `BasalRateChange` (3) | — | **Not written by a Mobi**: none in either export, across 1,439 temps and every profile segment boundary in 7½ days | Only pumpX2's X2 fixtures have it; Tidepool's Tandem uploader builds X2 basal from it. Not used |
+| `ControlIQPcmChange` (230), `AaEnableSettingChange` (244) | `currentPcm`; `enabled` | 230 at every suspend and resume (PCM 1 → 0 → 1 with Control-IQ off, 3 → 0 → 3 with it on), and at the cycle where Control-IQ loses the CGM or gets it back (3 ↔ 2). Presumably 230 or 244 when Control-IQ is switched on or off | Under Control-IQ the PCM in force predicts every 279's source: 3 in PCM 3, 1 in PCM 2, 0 in PCM 0 (2,155 of 2,155). The switch is unconfirmed (Q2). 230 has a serialization test; 244 has none and pumpX2 has no vector for it |
+| `DailyBasal` (81) | `dailyTotalBasal` (U), `lastBasalRate` (U/h) | Every 10 min, at each bolus's completion, and at other events | The pump's basal total for the day. It grows by one cycle's insulin per 279, about 10 s after the record, and `lastBasalRate` is the latest 279's `commandedRate` (2,731 of 2,734 records) |
+| `BasalRateChange` (3) | — | On 7.7 with Control-IQ on: at every rate change, within a second before the cycle's 279, and at each suspend and resume. On 7.9 with Control-IQ off: never, across 1,439 temps, every profile segment boundary and 12 suspends | Where it exists it repeats the 279: its `commandedbasalrate` and `basebasalrate` matched the next 279's `commandedRate` and `profileBasalRate` every time (1,011 of 1,011). Tidepool's Tandem uploader builds X2 basal from it. Not used |
 
 **The pump applies a rate at its next 5-minute cycle, not when it is set.** At each 279 it delivers
 5 minutes of the rate in force and records it there; the exact-time records say when the command
 changed. In both exports, one 300-second chunk at each 279's `commandedRate` reproduced the change in
 `dailyTotalBasal` exactly (within 0.002 U) in 97–98% of the intervals between `DailyBasal` records,
 and nearly all the rest was credit timing that the next interval cancels. A model that switches rate
-at the temp records matched under half. So:
+at the temp records matched under half. Under Control-IQ (7.7) the chunks matched the pump's total to
+the last digit over every stretch of an hour or more (785 of 785). So:
 
 - a temp delivers from the first 279 after its `TempRateActivated`, 0–5 minutes later (over a
   minute for 9 in 10 of Trio's temps), until the first 279 after it ends;
@@ -55,7 +57,9 @@ at the temp records matched under half. So:
 
 While a temp runs, `commandedRate` is exactly `percent × profileBasalRate` in mU/h, with no rounding
 to 0.01 U/h: all 2,218 samples, 70 of them at rates that such rounding would change. 104% of a
-0.6 U/h profile runs at 0.624 U/h, not 0.62. Control-IQ's rates exist only in 279. The
+0.6 U/h profile runs at 0.624 U/h, not 0.62. Control-IQ's rates exist only in 279 (and, on 7.7, in
+its `BasalRateChange` copy). Control-IQ's own changes of state follow the cycle too: it notes a lost
+or regained CGM in a 230 at the cycle, and that cycle's 279, 30 s later, carries the new rate. The
 `ControlIQCycle` record (227) is not used.
 
 ### 1.2 What the hosts do with a basal report
@@ -143,9 +147,11 @@ P is a sequence of chunks, one per 279 record (§1.1). Every record is dated thr
 - **The exact-time records cross-check P.** Read in sequence order (a 279 can fall between a stop
   and the next set in the same second), records 2, 15, 11 and 12 predict every 279's source and rate,
   using the record's own `profileBasalRate` and letting a temp running at an alarm suspend resume
-  with delivery: 2,279 of 2,279 in the Mobi exports. Outside Control-IQ, a 279 they do not predict is
-  logged and the chunks around it are not corrected, since one of the records is being misread. They
-  also give a temp chunk its `tempRateId`, for §2.6.
+  with delivery: 2,279 of 2,279 in the 7.9 exports. Under Control-IQ the PCM in force (230)
+  predicts the source instead: 3 in closed loop, 1 while the CGM is unavailable, 0 while suspended
+  (2,155 of 2,155 in the 7.7 export). A 279 they do not predict is logged and the chunks around it
+  are not corrected, since one of the records is being misread. They also give a temp chunk its
+  `tempRateId`, for §2.6.
 - **Closed chunks only.** A chunk is used once the record after it (a 279 or a suspend) has been
   read, or the log has been read 300 s past it, and nothing between is missing from the store
   (`HistoryLogStore.missingRanges`). The chunk at the top of the log waits for the next pass (§2.8).
@@ -203,11 +209,12 @@ twice. This also replaces the temp ledger keyed by `tempRateId` that #514 propos
   an hour or more passed: 1,170 of 1,182 within 0.01 U, and the other 12 each held one or more of
   those short cycles.
 
-What should show up as a difference: Control-IQ (most cycles); a temp the driver lost (#340); a
-temp set on the pump's screen; a temp resumed after an alarm suspend (§7.1); a pump profile that is
-not the app's schedule (#400); the pump clock's segments around a host segment change; a held temp
-the pump ended without any reading noticing. Normal operation should produce none, and phase 2
-checks exactly that in the field before anything is reported.
+What should show up as a difference: Control-IQ (48% of its cycles in the 7.7 export; it ran the
+profile rate in the rest); a temp the driver lost (#340); a temp set on the pump's screen; a temp
+resumed after an alarm suspend (§7.1); a pump profile that is not the app's schedule (#400); the
+pump clock's segments around a host segment change; a held temp the pump ended without any reading
+noticing. Normal operation should produce none, and phase 2 checks exactly that in the field before
+anything is reported.
 
 **Cycle timing is not a difference.** The host counts a temp from when it was set. The pump delivers
 it from its next cycle until the cycle after it ends, and never delivers one replaced within a
@@ -269,7 +276,7 @@ deliverable.
   after newer ones and Loop would drop them. A gap the coordinator has not healed within two ticks
   is skipped and logged.
 - A correction above the pump's max basal limit (`maxBasalLimitMilliunits`) is logged as an error,
-  since Trio drops it (Q5).
+  since Trio drops anything above its `maxBasal`. Control-IQ stayed under the limit (Q5, §7.1).
 - A persisted `reconciledThrough` sequence number only bounds the work per pass. Correctness comes
   from H (§2.3). It resets on a new serial or an erased log, like `DeliveryTransitionLedger.track`.
 
@@ -315,7 +322,8 @@ after the app's first temp. For Loop that loses them for good.
   `transitionHistoryWait`, 30 s).
   - It is cleared by a pass that started after it, read to the pump's end and reconciled through
     it. The last algorithm chunk is closed once the record after it is read, like any other.
-    Whether switching Control-IQ off cuts its cycle short is Q2; the app's first temp is reported
+    Control-IQ's own changes of state take effect at a cycle (§1.1), so the last chunk presumably
+    runs its 300 s; a switch-off from the app is unobserved (Q2). The app's first temp is reported
     from its command, and the correction stops there (§2.6).
   - If the wait times out, the sync completes anyway, as it does for a pending transition, and the
     corrections go out with a later pass.
@@ -358,7 +366,7 @@ goes in with a faketandem branch of the same name when it needs one.
 | **0c** | faketandem branch, §5 | Emulator only | Group H can stage a Control-IQ session |
 | **1** | `PumpBasalTimeline` (chunks, and the cross-check against the exact-time records); `HistoryToDoseMapper` made bolus-only (its temp, `BasalRateChange`, suspend, resume and alarm branches go, with `scheduledBasalRate: { _ in 0 }`) | None | Unit tests |
 | **2** | `ReportedBasalLedger`, H, `BasalReconciler`; differences and the cycle residual logged on every pass while `historyBackfill` is on | None | Unit tests. Then field logs from testers: no differences in normal operation, the expected ones under Control-IQ, and the cycle residual's size (Q9) |
-| **3** | `basalHistoryReporting`; corrections where the host assumes its schedule; the held-temp actions; one batch per pass; hand-back; `useControlIQ` from history; `verifyDeliveredBasalRate` under Control-IQ | Behind the flag. **Fixes #213**, the #340 backstop, temps set on the pump's screen and resumed after an alarm suspend, IOB under a profile mismatch | Unit and manager tests; conformance H1–H9 |
+| **3** | `basalHistoryReporting`; corrections where the host assumes its schedule; the held-temp actions; one batch per pass; hand-back; `useControlIQ` from history; `verifyDeliveredBasalRate` under Control-IQ | Behind the flag. **Fixes #213**, the #340 backstop, temps set on the pump's screen and resumed after an alarm suspend, IOB under a profile mismatch | Unit and manager tests; conformance H1–H10 |
 | **4** | Corrections of rows the host already finalized (Trio) | Behind the flag | Manager tests; H5 extended |
 | **5** (#340) | After an unanswered `SetTempRate`, read `CurrentBasalStatus` and `TempRateRequest` and record the temp if the pump runs it. On a `tempBasal` reading while a temp is held, a `TempRateResponse.startTime` that is not the held temp's start makes a pending transition: history ends the held temp and adopts the new one into `basalDose` | A live-path fix, not behind the flag | A5's #340 marker flips. Needs Q8 |
 
@@ -377,7 +385,8 @@ The flag:
 - **`PumpBasalTimelineTests`.** Fixtures are built with each record's `buildCargo`, shaped like the
   capture hex already in `ControlIQCycleHistoryLogTests` and `BasalDeliveryHistoryLogTests`, and
   like the Mobi exports' patterns (§7.1): a temp replaced every cycle, 0% and 250% temps, a temp
-  across a segment boundary, a suspend and resume. Cases:
+  across a segment boundary, a suspend and resume, and under Control-IQ a CGM dropout (PCM 3 → 2 →
+  3) and a suspend. Cases:
   - a chunk per 279 record, 300 s at `commandedRate`, with its kind;
   - a late record, a cycle without one, and a resume without one leave uncovered time; a resume
     with one starts a chunk;
@@ -385,8 +394,8 @@ The flag:
     open;
   - a suspend ends a chunk;
   - the cross-check: a temp at exactly `percent ×` the record's `profileBasalRate`, a stop and set
-    in a record's second, a temp resumed after an alarm suspend; a record it does not predict stops
-    corrections around it;
+    in a record's second, a temp resumed after an alarm suspend, the source the PCM in force gives
+    under Control-IQ; a record it does not predict stops corrections around it;
   - P's insulin against `DailyBasal` totals: exact, a short cycle after a temp change, and a failing
     stretch;
   - a clock change and a pump clock offset move chunks onto the phone's clock;
@@ -400,7 +409,7 @@ The flag:
     the residual is measured;
   - the one-minute window around a record and the rate tolerance;
   - the `segmentChangeWindow` exemption;
-  - Control-IQ differs in most cycles;
+  - Control-IQ cycles at the schedule's rate produce nothing, and the others differ;
   - a lost temp, a temp resumed after an alarm suspend, a pump profile off the schedule, and a held
     temp the pump ended;
   - a refused set after a stop produces nothing once the transitions pass has reported the stop;
@@ -436,6 +445,7 @@ The flag:
 | H7 | A temp set on the pump's screen (an X2) | Reported once its chunks close, with `wasProgrammedByPumpUI` |
 | H8 | The pump's profile is not the app's schedule (#400) | Corrections at the pump's profile rate; IOB matches `PumpTimeline`; the existing mismatch alert still shows |
 | H9 | An alarm suspend while an app temp runs, then a resume, with the temp resuming (§5) | The temp's chunks after the resume are reported, at its rate, until the app's next temp |
+| H10 | A CGM dropout during Control-IQ (PCM 3 → 2 → 3) | The pump runs its profile while it lasts; nothing is reported for those chunks when the profile is the app's schedule |
 
 `PumpTimeline` gains basal chunks built from the feed's `BasalDelivery` records, and its diff
 compares the host's rows with them at each record, as §2.4 does.
@@ -449,8 +459,9 @@ compares the host's rows with them at each record, as §2.4 does.
 2. Delivery on that cycle (§1.1): each cycle delivers 5 minutes at the rate in force at its record,
    and the reservoir follows it, while `CurrentBasalStatus` shows a new command at once.
 3. A Control-IQ basal driver while `closed_loop_enabled` is set: algorithm rates scripted through
-   the API, delivery arithmetic and `CurrentBasalStatus.currentBasalRate` following them, and the
-   switch-on/switch-off records once Q2 settles which they are.
+   the API, delivery arithmetic and `CurrentBasalStatus.currentBasalRate` following them, a 230 at
+   the cycle where the CGM drops out (PCM 3 → 2, profile rate with source 1) or comes back, 3 → 0 →
+   3 around a suspend, and the switch-on/switch-off records once Q2 settles which they are.
 4. `DailyBasal` (81) records whose `dailyTotalBasal` grows by each cycle's insulin and whose
    `lastBasalRate` is the latest 279's rate, so the check in §2.4 runs in the harness.
 5. The records the Mobi writes around app commands: `SetTempRateResponse` (309) with the temp's id,
@@ -484,10 +495,10 @@ until then.
 
 ### 7.1 What the Mobi exports showed
 
-Two consecutive exports from one Mobi with Control-IQ off and Trio closed-looping: 10,000 records
-over 43 hours, then 30,000 over 6 days, with one record missing. Trio replaced its temp in
-most 5-minute intervals. They hold 1,439 temps, 12 suspends (10 by the app, 2 by cartridge alarms)
-and one change of the pump's clock.
+**On 7.9.0.1, Control-IQ off.** Two consecutive exports from one Mobi with Trio closed-looping:
+10,000 records over 43 hours, then 30,000 over 6 days, with one record missing. Trio replaced its
+temp in most 5-minute intervals. They hold 1,439 temps, 12 suspends (10 by the app, 2 by cartridge
+alarms) and one change of the pump's clock.
 
 - **The pump delivers on a 5-minute cycle** (§1.1). One 300 s chunk at each 279's `commandedRate`
   reproduced `dailyTotalBasal` exactly in 97–98% of the intervals between `DailyBasal` records, and
@@ -510,8 +521,8 @@ and one change of the pump's clock.
   wrote a `TempRateCompleted`, and the first 279 after each resume showed the temp running; the app
   replaced it within 2½ minutes. The app stops its own temp before it suspends (10 of 10), so its
   suspends cannot show this. See §7.3.
-- **Q3, answered: no.** No `BasalRateChange` in either export. A segment boundary leaves no record,
-  and the next 279 shows the new rate.
+- **Q3.** No `BasalRateChange` at all on 7.9. A segment boundary leaves no record, and the next 279
+  shows the new rate.
 - **`timeLeft`** is milliseconds, always whole minutes. No temp ran to its end, so `timeLeft` 0 at
   a natural end is still unobserved.
 - **`SetTempRateResponse` (309)** is logged for every app temp: one per activation, with the same id
@@ -520,27 +531,49 @@ and one change of the pump's clock.
   app's stop had ended the running temp, and ran its profile until the app's next temp. The driver
   holds the stopped temp until its next reading, which the transitions pass then dates from history.
 - **`ControlIQPcmChange` (230)** is written at every suspend (PCM 1 → 0) and resume (0 → 1).
-- **Not answerable from these exports.** Control-IQ was off throughout, so Q2 and Q4–Q7 need an
-  export that includes a Control-IQ session.
+
+**On 7.7.0.1, Control-IQ on.** An older export from a Mobi running Tandem's Control-IQ with a CGM:
+24,864 consecutive records over 8 days, with no temps and 7 suspends, all with reason 0.
+
+- **The same 5-minute cycle.** The chunks matched `dailyTotalBasal` to the last digit over every
+  stretch of an hour or more (785 of 785), and exactly in 98% of the intervals between `DailyBasal`
+  records, the rest being credit timing. `lastBasalRate` was the latest 279's rate in 1,037 of
+  1,039 records. 279 came about 30 s after its cycle's 227, 1% of them late, none missing.
+- **Q7, answered.** In closed loop (PCM 3) the source is 3, with `algorithmRate` equal to
+  `commandedRate`. When the CGM is unavailable Control-IQ moves to PCM 2 and the pump runs its
+  profile, source 1 at `profileBasalRate` (19 times, from 5 minutes to over an hour). Suspended is
+  PCM 0 and source 0. Each change is a 230 in the same second as the cycle's 227, and that cycle's
+  279, 30 s later, carries the new rate.
+- **Q5, answered for this pump.** The highest algorithm rate was 90% of the pump's max basal limit
+  (the `maxbasalrate` that `BasalRateChange` carries).
+- **Q6, answered for history.** Under Control-IQ, 279's `profileBasalRate` follows the profile
+  schedule (one value per 10-minute slot of the day across all 8 days), and `BasalRateChange`'s
+  `basebasalrate` matches it. `CurrentBasalStatus` was not captured.
+- **Control-IQ ran exactly the profile rate in 52% of its cycles,** so the comparison would correct
+  about half of them: about 130 a day here.
+- **`BasalRateChange` (3) is written on this firmware:** changetype 1 at every rate change (1,004),
+  within a second before that cycle's 279 and with the same rates; 16 at a suspend; 32 or 33 at a
+  resume. Where 7.9 wrote none, 7.7 repeats the 279.
+- **At a resume** (7 of 7) the pump writes the resume, a 230 (PCM 0 → 3), a `BasalRateChange` and a
+  279 in the same second.
+- **Not answerable here:** nobody switched Control-IQ on or off (no 244 record), and no temp ran
+  (Q4).
 
 ### 7.2 Still open
 
 - **Q2.** When Control-IQ is switched on or off, what does the pump write, and when does the rate
-  change? The likeliest record is a 230 going between PCM 1 and 3; a 244 or an immediate 279 are the
-  alternatives. A temp waits for the next cycle (§1.1); if a switch does too, the last algorithm
-  chunk runs its 300 s like any other. The record matters most for knowing when Control-IQ ended
-  (§2.9).
+  change? Its own changes of state are written at the cycle and take effect at that cycle's 279
+  (§7.1), so a switch likely does the same. The record is likely a 230 between PCM 1 and 3, or a
+  244. It matters most for knowing when Control-IQ ended (§2.9).
 - **Q4.** Can a temp rate run under Control-IQ (source 4)? If so, what do 2, 15 and 279 show?
-- **Q5.** Does Control-IQ stay within the pump's max basal limit? Trio drops anything above its
-  `maxBasal`.
-- **Q6.** Under Control-IQ, is `CurrentBasalStatus.profileBasalRate` still the profile rate?
-- **Q7.** With no CGM, which 279 source does Control-IQ write?
+- **Q6.** Under Control-IQ, is `CurrentBasalStatus.profileBasalRate` the profile rate, as 279's is
+  (§7.1)?
 - **Q8** (phase 5). What unit is `TempRateResponse.duration`? faketandem guesses seconds.
 - **Q9** (the maintainer, after phase 2). Should Trio be sent the cycle timing (§2.4)?
-- **Q10.** Does an X2 deliver on the same 5-minute cycle? Only a Mobi has been observed, and pumpX2's
-  X2 fixtures carry `BasalRateChange` records, which a Mobi never writes.
-- **Q11.** Which other suspends leave the running temp in force: an occlusion, a suspend from the
-  pump's screen, other alarms? Only cartridge alarms during a 0% temp have been seen.
+- **Q10.** Does an X2 deliver on the same 5-minute cycle? Only Mobis, on 7.7 and 7.9, have been
+  observed.
+- **Q11.** Which other suspends leave the running temp in force: an occlusion, one from Tandem's
+  app or an X2's screen, other alarms? Only cartridge alarms during a 0% temp have been seen.
 
 Pump logs stay out of the repository. Fixtures are rebuilt with `buildCargo` from what the logs
 show, with no capture copied in, except for a single record a serialization test needs, and then
@@ -577,5 +610,5 @@ revisit conformance F4 and faketandem item 7 (§5).
   for Trio's own temps.
 - **Loop's IDS window.** R1–R3 and hand-back cover the driver's side. A gap given up on, and a #340
   temp reported after the next app temp is finalized, are the known residuals.
-- **Event volume** is up to 288 corrections a day under Control-IQ, about what Trio's own loop
-  writes.
+- **Event volume** under Control-IQ is one correction per cycle off the schedule: about 130 a day
+  in the 7.7 export, at most 288, about what Trio's own loop writes.
