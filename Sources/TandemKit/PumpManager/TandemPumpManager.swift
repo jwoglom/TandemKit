@@ -943,6 +943,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
+                self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: duration)
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
@@ -978,7 +979,24 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int) {
+    /// A `SetTempRate` whose answer was lost may still have reached the pump, after the stop of the
+    /// temp it replaces did.
+    private func adoptUnansweredTempBasal(rate: Double, percent: Int, duration: TimeInterval) {
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.warning("No basal status after an unanswered SetTempRate; the next reading settles it")
+            return
+        }
+        guard Self.tempBasalReadbackMatches(status, percent: percent),
+              let temp = bluetooth.write(TempRateRequest()), temp.active, temp.percentage == percent
+        else {
+            observeDeliveryState(status.basalType)
+            return
+        }
+        logger.warning("The pump runs the \(percent)% temp basal whose SetTempRate answer was lost; reporting it")
+        recordTempBasal(rate: rate, percent: percent, duration: duration, tempRateId: nil)
+    }
+
+    private func recordTempBasal(rate: Double, percent: Int, duration: TimeInterval, tempRateId: Int?) {
         settleDeliveryTransition()
         let dose = UnfinalizedDose(
             tempRate: rate,

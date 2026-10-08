@@ -371,6 +371,12 @@ edit instead of at the next sync.
   `tempBasalRateMismatch`, as when the pump's max basal limit caps it; one it can't stop is
   reported at the pump's rate. No answer to the read reports it as commanded. Field logs show
   the temp in the first status read, within a second, every time.
+- A `SetTempRate` whose answer is lost may still have reached the pump, after the stop of the temp
+  it replaces did (#340). `enactTempBasal` then reads `CurrentBasalStatus` and `TempRateRequest`
+  and, if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`), ending
+  the one it replaced; the command still fails. Otherwise the reading goes to
+  `observeDeliveryState`. A temp the driver never sees this way reaches the host after the fact,
+  through basal reconciliation.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

@@ -607,21 +607,25 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let pumpSecond = timeline.tempRates.first { abs($0.start.timeIntervalSince(pumpSecondStart)) <= 2 }
         XCTAssertNotNil(pumpSecond, "the pump recorded the second temp rate's activation: \(timeline)")
 
-        XCTExpectFailure("jwoglom/TandemKit#340: after a lost SetTempRate response the driver keeps reporting the stopped temp rate and never notices the one the pump is running") {
-            let liveTemps = loop.mutableDoses.filter { $0.dose.type == .tempBasal }
-            XCTAssertEqual(liveTemps.count, 1, "exactly one temp basal is live, the one the pump runs: \(loop.doses.map(LoopDoseStoreOracle.describe))")
-            let live = liveTemps.first
-            XCTAssertEqual(live.map { abs($0.dose.startDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "the live temp basal starts when the pump's does")
-            XCTAssertEqual(live?.dose.unitsPerHour ?? 0, secondRate, accuracy: 0.0001, "at the pump's rate")
+        let liveTemps = loop.mutableDoses.filter { $0.dose.type == .tempBasal }
+        XCTAssertEqual(liveTemps.count, 1, "exactly one temp basal is live, the one the pump runs: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        let live = liveTemps.first
+        XCTAssertEqual(live.map { abs($0.dose.startDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "the live temp basal starts when the pump's does")
+        XCTAssertEqual(live?.dose.unitsPerHour ?? 0, secondRate, accuracy: 0.0001, "at the pump's rate")
 
-            let previous = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
-            XCTAssertEqual(previous?.dose.startDate, firstStart)
-            XCTAssertEqual(previous.map { abs($0.dose.endDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "finalized at its true end, the stop")
-            XCTAssertEqual(trio.tempBasals.count, 2, "Trio holds both temp basals: \(trio.tempBasals)")
-
-            let diff = timeline.diff(against: loop)
-            XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+        let previous = loop.doses.filter { $0.dose.type == .tempBasal && $0.dose.startDate == firstStart && !$0.isMutable }
+        XCTAssertEqual(previous.count, 1, "the replaced temp basal is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(previous.first.map { abs($0.dose.endDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "finalized at its true end, the stop")
+        XCTExpectFailure(
+            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so finalizing the replaced temp basal at 5 of its 30 minutes re-keys it",
+            strict: true
+        ) {
+            _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
         }
+        XCTAssertEqual(trio.tempBasals.count, 2, "Trio holds both temp basals: \(trio.tempBasals)")
+
+        let diff = timeline.diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
     }
 
     // MARK: - A6
