@@ -23,19 +23,27 @@ Decided by the maintainer:
 
 ### 1.1 What the pump writes
 
+"The Mobi export" below is a 43-hour pump history export from a Mobi (10,000 consecutive records,
+Control-IQ off, Trio closed-looping), analysed in §7.1.
+
 | Record | Fields used | When it is written | How sure we are |
 | --- | --- | --- | --- |
-| `BasalDelivery` (279) | `commandedRateSource`, `commandedRate`, `profileBasalRate`, `algorithmRate`, `tempRate`, all mU/h; 0xFFFF means n/a | Every 5 min, Control-IQ on or off | Sources 0, 1 and 2 confirmed on a Mobi with Control-IQ off; 3 seen in X2 and Mobi Control-IQ captures; 4 (temp rate and algorithm) never seen |
-| `TempRateActivated` (2), `TempRateCompleted` (15) | `percent`, `durationMilliseconds`, `tempRateId`; `tempRateId`, `timeLeft` | When the temp starts, and when it ends, is stopped or is replaced | Used today by `reportHistoryDeliveryTransitions` |
-| `BasalRateChange` (3) | `commandBasalRate`, `baseBasalRate` (U/h floats), `changeTypeId` | When a timed segment starts, a profile changes, a temp starts or ends, or the pump suspends or resumes | Only pumpX2's X2 fixtures. Tidepool's Tandem uploader builds its basal records from it ("used to create all other basals", its checklist says). Not confirmed on a Mobi (Q3) |
+| `BasalDelivery` (279) | `commandedRateSource`, `commandedRate`, `profileBasalRate`, `algorithmRate`, `tempRate`, all mU/h; 0xFFFF means n/a | Every 300 s, Control-IQ on or off. The Mobi export: 291–309 s apart, except three that came 432–444 s after the previous one; never written at an event | Sources 0, 1 and 2 confirmed on a Mobi with Control-IQ off; 3 seen in X2 and Mobi Control-IQ captures; 4 (temp rate and algorithm) never seen |
+| `TempRateActivated` (2), `TempRateCompleted` (15) | `percent`, `durationMilliseconds`, `tempRateId`; `tempRateId`, `timeLeft` | When the temp starts, and when it ends, is stopped or is replaced | Used today. `timeLeft` is in milliseconds and always a whole number of minutes (every completion in the export) |
 | `PumpingSuspended` (11), `PumpingResumed` (12) | — | When delivery stops and restarts | Used today |
-| `AaEnableSettingChange` (244), `ControlIQPcmChange` (230) | `enabled`; `currentPcm` | Presumably when Control-IQ is switched on or off | Unconfirmed (Q2). 244 has no serialization test and pumpX2 has no vector for it |
+| `SetTempRateResponse` (309), `ControlRequest` (290) | `tempRateId`, `status`; `requestOpCode` (164 `SetTempRate`, 166 `StopTempRate`) | As the pump answers each control request it is sent | The Mobi export: one 309 per `TempRateActivated`, with the same `tempRateId`. Logged by the pump as it answers, so it should survive an answer lost on the way (to confirm) |
+| `ControlIQPcmChange` (230), `AaEnableSettingChange` (244) | `currentPcm`; `enabled` | 230 at every suspend and resume (PCM 1 → 0 → 1 with Control-IQ off). Presumably 230 or 244 when Control-IQ is switched on or off | The switch is unconfirmed (Q2). 230 has a serialization test; 244 has none and pumpX2 has no vector for it |
+| `DailyBasal` (81) | `dailyTotalBasal` (U) | Every 1–10 min | The pump's running basal total for the day. It moves in whole pulses, so the change between two neighbouring records can be 0.2 U off what was delivered in between, but over the export it matched the timeline in §2.2 to within 0.2% |
+| `BasalRateChange` (3) | — | **Not written by a Mobi**: none in the export, across hundreds of temps and four profile segment boundaries | Only pumpX2's X2 fixtures have it; Tidepool's Tandem uploader builds X2 basal from it. Not used |
 
-Control-IQ's rate changes exist only in 279, which is a 5-minute sample of the commanded rate, so a
-Control-IQ interval runs from one record to the next. The `ControlIQCycle` record (227) that comes
-before each one is not used. For temp rates, the pump's own absolute numbers (279's `tempRate`, 3's
-`commandBasalRate`) beat `percent × a profile rate`, because the pump's rounding is unknown
-(`TandemPumpManager.tempBasalReadbackMatches`).
+Control-IQ's rate changes exist only in 279, a 5-minute sample of the commanded rate, so a
+Control-IQ interval runs from one record to the next. The `ControlIQCycle` record (227) is not
+used. Outside Control-IQ, 279 adds nothing the exact-time records do not already say. In the Mobi
+export, a timeline built from records 2, 15, 11 and 12 plus the profile schedule predicted all 510
+279 samples after the window's first. While a temp runs, the pump's rate is exactly
+`percent × profileBasalRate` in mU/h, with no rounding to 0.01 U/h, in all 509 samples taken
+during one: 104% of a 0.6 U/h profile runs at 0.624 U/h, not 0.62. A profile segment boundary
+leaves no record; the 279 after it shows the new profile rate.
 
 ### 1.2 What the hosts do with a basal report
 
@@ -109,24 +117,29 @@ shared `phoneDate(of:)` from phase 0a (`HistoryTimestampReconciler.utcDate`, the
 | Change point | Rate from there |
 | --- | --- |
 | 279 | `commandedRate`. Its source gives the kind: algorithm (3, 4), temp (2), profile (1), suspended (0). 0xFFFF: unknown, no piece |
-| `TempRateActivated` | The temp's absolute rate: `BasalRateChange` `commandBasalRate` at the same time (Q3); else the next 279's `tempRate`, if nothing changes in between; else `percent ×` the last 279's `profileBasalRate` |
-| `TempRateCompleted` | The profile rate (the last 279's `profileBasalRate`) |
-| `PumpingSuspended` / `PumpingResumed` | 0 / the profile rate |
-| `BasalRateChange` (if the pump writes it) | `commandBasalRate`, at its exact time |
-| The record that ends Control-IQ, if there is one (Q2) | The profile rate |
+| `TempRateActivated` | `percent ×` the profile rate in force, exactly, in mU/h |
+| `TempRateCompleted` | The profile rate in force |
+| `PumpingSuspended` / `PumpingResumed` | 0 / the profile rate in force |
+| A profile segment boundary | The new profile rate, or `percent ×` it while a temp runs |
+| The record that ends Control-IQ, if there is one (Q2) | The profile rate in force |
 
-- **Profile segment boundaries** go where the pump's profile changes. That is the host schedule on
-  the pump's clock (`pumpSegmentChanges`) while the profile is verified (`hasSyncedBasalRateSchedule`
-  and no confirmed mismatch); otherwise a `BasalRateChange` timed-segment record (Q3); otherwise
-  the next 279, at most a cycle late. A temp running across a boundary is rescaled there, as the
-  pump does.
-- **One piece per 279 record.** Under Control-IQ every record starts its own piece, identified by
-  its own sequence number. Merging equal-rate records would make a piece's identity depend on the
+- **The profile rate in force, and its boundaries,** come from the host's schedule on the pump's
+  clock (`pumpSegmentChanges`) while the profile is verified (`hasSyncedBasalRateSchedule` and no
+  confirmed mismatch). Otherwise they come from the last 279's `profileBasalRate`, with a boundary
+  showing up at the next 279, at most a cycle late. The pump writes no record at a boundary.
+- **Outside Control-IQ, 279 is a check.** The rate follows from the exact-time records and the
+  profile. A 279 sample that disagrees with them (beyond the tolerance in §2.4) is logged, and the
+  stretch around it is not corrected.
+- **One piece per 279 record.** Every 279 record starts a piece, identified by its own sequence
+  number, and exact-time records and boundaries split pieces further (§2.6). Under Control-IQ that
+  is one piece per cycle. Merging equal-rate records would make a piece's identity depend on the
   record before the run (the backward walk may not have read it yet) and on its last record (not
   known until the rate changes), so it would change identity or stay open indefinitely.
 - **Closed pieces only.** A piece is used once the change point that ends it has been read and
   nothing between the two is missing from the store (`HistoryLogStore.missingRanges`). The open
-  piece at the top of the log waits for the next pass (§2.8).
+  piece at the top of the log waits for the next pass (§2.8). No piece runs more than 8 minutes
+  past its record; the Mobi export's longest gap between 279 records was 444 s. Past that the
+  stretch counts as a gap.
 
 ### 2.3 H: what the host was told
 
@@ -170,6 +183,10 @@ twice. This also replaces the temp ledger keyed by `tempRateId` that #514 propos
     phone.
 - Exempt: the over-count the driver makes on purpose inside `segmentChangeWindow` (#500). There the
   host is told the request while the pump runs the lower rate until the change.
+- **P is checked against the pump's own total first.** Between two `DailyBasal` records at least an
+  hour apart, P's insulin must match the change in `dailyTotalBasal` to within a few pulses. A
+  stretch that fails is logged and not corrected, so a misread record cannot reach the host. In the
+  Mobi export P matched that total to within 0.2% over 43 hours.
 
 What should show up as a difference: Control-IQ (every cycle); a temp the driver lost (#340); a temp
 set on the pump's screen; a pump profile that is not the app's schedule (#400); the pump clock's
@@ -201,6 +218,9 @@ deliverable.
   algorithm pieces and the app's own temps, and false otherwise. `wasProgrammedByPumpUI` is true
   for algorithm pieces (as history boluses do) and for temps the app did not set. The title is
   "Control-IQ Basal" for algorithm pieces and "Temp Basal" otherwise.
+- **Who set a temp:** a temp whose `tempRateId` has a `SetTempRateResponse` (309) record was set
+  over Bluetooth, by the app. One without was set on the pump's screen. That needs no bookkeeping
+  of the app's own commands, and covers a command whose answer was lost (#340).
 
 ### 2.7 Emission
 
@@ -313,13 +333,17 @@ The flag:
 ### 4.1 Unit (`TandemKitTests`)
 
 - **`PumpBasalTimelineTests`.** Fixtures are built with each record's `buildCargo`, shaped like the
-  capture hex already in `ControlIQCycleHistoryLogTests` and `BasalDeliveryHistoryLogTests`. Cases:
+  capture hex already in `ControlIQCycleHistoryLogTests` and `BasalDeliveryHistoryLogTests`, and
+  like the Mobi export's patterns (§7.1): a temp replaced every cycle, 0% and 250% temps, a temp
+  across a segment boundary, a suspend and resume. Cases:
   - a piece per 279 record, at `commandedRate`, with its kind;
   - the top piece stays open;
-  - a store gap keeps pieces open;
+  - a store gap, or more than 8 minutes between records, keeps pieces open;
   - a suspend ends a piece;
-  - the temp rate source order;
+  - a temp runs at exactly `percent ×` the profile rate, in mU/h;
   - segment boundaries with and without a verified profile;
+  - a 279 sample that disagrees with the exact-time records stops corrections around it;
+  - P's insulin against `DailyBasal` totals, passing and failing;
   - a clock change and a pump clock offset move pieces onto the phone's clock;
   - 0xFFFF gives no piece.
 - **`ReportedBasalLedgerTests`.** The fold matches Trio: a later row cuts off an earlier one;
@@ -345,9 +369,9 @@ The flag:
 - **State.** `TandemPumpManagerStateEqualityTests` and the raw-value round trip for the new fields
   (Harmonize's `EqualityComparesEveryStoredProperty` and `StateTypesAreEquatable`); feature flag
   tests; new strings through `String(localized:)`.
-- **Harmonize `DriverMessagesHaveSerializationTests`.** 279, 3, 230, 2, 15 and `TempRateRequest`
-  already have tests. Reading 244 needs `AaEnableSettingChangeHistoryLogTests` from a capture first,
-  since the baseline takes no additions.
+- **Harmonize `DriverMessagesHaveSerializationTests`.** 279, 2, 15, 11, 12, 81, 230, 309 and
+  `TempRateRequest` already have tests. Reading 244 needs `AaEnableSettingChangeHistoryLogTests`
+  from a capture first, since the baseline takes no additions.
 
 ### 4.2 Conformance group H, "Basal reconciliation" (`docs/conformance-test-plan.md`)
 
@@ -367,14 +391,20 @@ matches host temp rows against them.
 
 ## 5. faketandem companion work
 
-1. `BasalDelivery` (279) records every 5 minutes of pump time, for every kind of delivery: source 0
-   while suspended, 1 on profile, 2 during a temp (with `tempRate`), 3 under Control-IQ.
+1. `BasalDelivery` (279) records every 300 s of pump time, for every kind of delivery: source 0
+   while suspended, 1 on profile, 2 during a temp (with `tempRate` = `percent × profileBasalRate`,
+   exactly), 3 under Control-IQ.
 2. A Control-IQ basal driver while `closed_loop_enabled` is set: algorithm rates scripted through
    the API, delivery arithmetic and `CurrentBasalStatus.currentBasalRate` following them, and the
    switch-on/switch-off records once Q2 settles which they are.
-3. `BasalRateChange` (3) records at temp start and end, segment changes, suspend and resume, once Q3
-   is confirmed.
-4. Nothing for phase 5. It reads `TempRateRequest`, which faketandem answers from state. It avoids
+3. `DailyBasal` (81) records carrying a running `dailyTotalBasal`, so the check in §2.4 runs in
+   the harness.
+4. The records the Mobi writes around app commands: `SetTempRateResponse` (309) with the temp's id,
+   and `ControlIQPcmChange` (230) at suspend and resume.
+5. `TempRateCompleted.timeLeft` in milliseconds, rounded to whole minutes, as the Mobi writes it.
+   faketandem writes seconds today. The driver only tests it against 0, so nothing breaks, but the
+   emulator should match.
+6. Nothing for phase 5. It reads `TempRateRequest`, which faketandem answers from state. It avoids
    `TempRateStatusRequest`, which would give the temp's id, because faketandem answers it with
    zeroes and there is no captured vector for its serialization test.
 
@@ -394,16 +424,37 @@ until then.
 
 ## 7. Open questions
 
-To answer from the maintainer's pump history exports:
+### 7.1 What the Mobi export showed
 
-- **Q1.** Is 279 written on a fixed 5-minute cadence, or also at events? This sets how far apart two
-  records can be before the piece between them counts as a gap.
-- **Q2.** When Control-IQ is switched on or off, does the pump write a record at that moment (244,
-  230, or a 279 straight away)? If so, the last algorithm piece ends exactly there. If not, it ends
-  at the next 5-minute record, up to 5 minutes late, unless the app made the switch and so knows the
-  time.
-- **Q3.** On a Mobi, does every temp start and end, and every segment boundary during a temp, write
-  a `BasalRateChange` carrying the absolute rate?
+The export: 10,000 consecutive records (no sequence gaps) covering 43 hours, from a Mobi with
+Control-IQ off and Trio closed-looping. Trio replaced its temp in most five-minute intervals. The
+window crosses four profile segment boundaries and holds one suspend and resume.
+
+- **Q1, answered.** 279 is written every 300 s (291–309 s), never at an event. Three times it came
+  432–444 s after the previous one, each time 162–175 s after its `ControlIQCycle` instead of the
+  usual 30 s. Hence the 8-minute limit in §2.2.
+- **Q3, answered: no.** The Mobi writes no `BasalRateChange` at all: none across hundreds of temps
+  and four segment boundaries. Boundaries leave no record of any kind.
+- **The pump's rounding of a temp.** In every 279 sample during a temp, the rate is `percent ×`
+  `profileBasalRate`, exact to the milliunit (509 of 509).
+- **The model works.** Records 2, 15, 11 and 12 plus the profile schedule predicted
+  all 510 279 samples after the window's first, and reproduced `DailyBasal`'s running total to
+  within 0.2% over the window.
+- **`timeLeft`** is milliseconds, always whole minutes. No temp ran out in the window, so
+  `timeLeft` 0 at a natural end is still unobserved.
+- **`SetTempRateResponse` (309)** is logged for every app temp: one per activation, with the same
+  id, all status 0. Each comes right after a `ControlRequest` (290) for `SetTempRate`
+  (opcode 164); a stop shows as a 290 with opcode 166.
+- **`ControlIQPcmChange` (230)** is written at a suspend (PCM 1 → 0) and at the resume (0 → 1).
+- **Not answerable from this export.** Control-IQ was off throughout, so Q2 and Q4–Q7 need an
+  export that includes a Control-IQ session.
+
+### 7.2 Still open
+
+- **Q2.** When Control-IQ is switched on or off, does the pump write a record at that moment? The
+  likeliest is a 230 going between PCM 1 and 3; a 244 or an immediate 279 are the alternatives. If
+  so, the last algorithm piece ends exactly there. If not, it ends at the next 5-minute record, up
+  to 5 minutes late, unless the app made the switch and so knows the time.
 - **Q4.** Can a temp rate run under Control-IQ (source 4)? If so, what do 2, 15 and 279 show?
 - **Q5.** Does Control-IQ stay within the pump's max basal limit? Trio drops anything above its
   `maxBasal`.
@@ -418,9 +469,11 @@ only with the maintainer's agreement and its time and sequence number changed.
 ## 8. Risks
 
 - **Misreading the pump's records gives wrong IOB.** Phase 2 runs the comparison in the field,
-  logging only, before any correction reaches a host, and Q1–Q7 are settled from real exports.
-- **Segment boundaries are a cycle late without a verified profile or `BasalRateChange` records.**
-  Around each boundary that produces a small correction, which is wrong by up to one cycle × Δrate.
+  logging only, before any correction reaches a host. The open questions are settled from real
+  exports. P is checked against the pump's own `DailyBasal` total before a stretch is corrected.
+- **Segment boundaries are a cycle late without a verified profile,** since the Mobi writes no
+  record at one. Around each boundary that produces a small correction, which is wrong by up to one
+  cycle × Δrate.
 - **H models Trio.** Loop may have dropped a row the driver counts as told (IDS window), and that is
   never corrected for Loop. A batch held for a missing delegate and later dropped (#342) is also
   counted as told.
