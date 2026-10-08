@@ -352,7 +352,10 @@ extension TandemPumpManager {
             isMutable: false,
             wasProgrammedByPumpUI: isAlgorithm || (chunk.kind == .temp && !setByTheApp)
         )
-        return NewPumpEvent(date: start, dose: dose, raw: raw, title: isAlgorithm ? "Control-IQ Basal" : "Temp Basal", type: .tempBasal)
+        let title = isAlgorithm
+            ? String(localized: "Control-IQ Basal", comment: "Pump Event title for basal Control-IQ delivered, read from pump history")
+            : String(localized: "Temp Basal", comment: "Pump Event title for UnfinalizedDose with doseType of .tempBasal")
+        return NewPumpEvent(date: start, dose: dose, raw: raw, title: title, type: .tempBasal)
     }
 
     // MARK: - Gaps
