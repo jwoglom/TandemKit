@@ -229,9 +229,19 @@ import XCTest
         XCTAssertEqual(manager.state.basalProfileUpdateStatus, .updating)
     }
 
+    func testNoScheduleFromTheAppIsNotAMismatch() {
+        setSchedule([(0, 0)])
+
+        manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
+
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+    }
+
     func testAllZeroScheduleIsNotWrittenToThePump() {
         setSchedule([(0, 0)])
         let pump = stubPumpDeliveringItsProfile(basalMilliunits: 400)
+        // An update opened before the host's schedule was cleared.
+        manager.state.basalRateMismatchDetectedAt = Self.referenceDate
 
         manager.verifyDeliveredBasalRate(basalStatus(rate: 0.4, type: 0))
 

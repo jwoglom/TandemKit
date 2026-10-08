@@ -825,6 +825,11 @@ extension TandemPumpManager {
             return nil
         }
 
+        // An all-zero schedule is the placeholder for one the host never gave, not a rate to hold.
+        guard state.basalRateSchedule.items.contains(where: { $0.value > 0 }) else {
+            return nil
+        }
+
         let pumpRate: Double
         switch response.basalType {
         case .basal:

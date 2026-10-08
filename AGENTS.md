@@ -150,7 +150,8 @@ edit instead of at the next sync.
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
-  `profileBasalRate` during a temp basal and skipping suspend and Control-IQ.
+  `profileBasalRate` during a temp basal and skipping suspend, Control-IQ and an all-zero
+  schedule, the placeholder for one the host never gave.
 - The driver writes the host's schedule over a pump profile that differs, since hosts take the
   pump to hold what they last saved (Trio keeps a profile only once the sync takes). A rate read
   off the schedule, or a profile `adoptMatchingPumpProfile` finds different, stamps
