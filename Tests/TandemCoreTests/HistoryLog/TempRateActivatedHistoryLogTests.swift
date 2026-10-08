@@ -17,7 +17,16 @@ final class TempRateActivatedHistoryLogTests: XCTestCase {
             expected
         )
         // no cargo round-trip: bytes 18-19 carry unparsed data (0x0002 LE) that buildCargo does
-        // not reproduce; buildCargo also writes tempRateId at offset 18 rather than offset 20,
-        // where parse() actually reads it
+        // not reproduce
+    }
+
+    func testABuiltRecordParsesBackToItsFields() {
+        let built = TempRateActivatedHistoryLog(pumpTimeSec: 579777478, sequenceNum: 449311, percent: 150, durationMilliseconds: 1_800_000, tempRateId: 21)
+
+        let parsed = TempRateActivatedHistoryLog(cargo: built.cargo)
+
+        XCTAssertEqual(parsed.tempRateId, 21)
+        XCTAssertEqual(parsed.percent, 150)
+        XCTAssertEqual(parsed.durationMilliseconds, 1_800_000)
     }
 }
