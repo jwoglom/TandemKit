@@ -166,15 +166,10 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         loop.assertNoDuplicates("schedule change")
         trio.assertNoDuplicates("schedule change")
         XCTAssertEqual(loop.doses.filter { $0.dose.type == .tempBasal }.count, 1, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTExpectFailure(
-            "jwoglom/TandemKit#329: Trio skips a temp basal carrying deliveredUnits and ignores .basal, so ending a temp basal without a replacement never truncates its stored temp basal (true of the oracle's older Trio; #454)",
-            strict: true
-        ) {
-            let truncating = trio.tempBasals.contains { row in
-                row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
-            } || trio.tempBasals.contains { $0.timestamp >= changeAt.addingTimeInterval(-1) }
-            XCTAssertTrue(truncating, "Trio holds no truncating record; its temp basals are \(trio.tempBasals)")
-        }
+        let truncating = trio.tempBasals.contains { row in
+            row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
+        } || trio.tempBasals.contains { $0.timestamp >= changeAt.addingTimeInterval(-1) }
+        XCTAssertTrue(truncating, "Trio holds no truncating record; its temp basals are \(trio.tempBasals)")
 
         let timeline = try timeline()
         let pumpTemp = try XCTUnwrap(timeline.tempRates.last, "timeline \(timeline)")

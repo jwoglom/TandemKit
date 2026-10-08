@@ -461,18 +461,13 @@ final class CancelConformanceTests: ConformanceTestCase {
 
         // Trio: the stored temp basal must be truncated, or oref keeps counting the old rate for
         // the remaining 48 minutes.
-        XCTExpectFailure(
-            "jwoglom/TandemKit#329: Trio skips a temp basal carrying deliveredUnits and ignores .basal, so ending a temp basal without a replacement never truncates its stored temp basal (true of the oracle's older Trio; #454)",
-            strict: true
-        ) {
-            let truncating = trio.tempBasals.contains { row in
-                row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
-            } || trio.tempBasals.contains { $0.timestamp >= cancelAt.addingTimeInterval(-1) }
-            XCTAssertTrue(
-                truncating,
-                "Trio holds no truncating record; its temp basals are \(trio.tempBasals) and it skipped \(trio.skipped.map(\.reason))"
-            )
-        }
+        let truncating = trio.tempBasals.contains { row in
+            row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
+        } || trio.tempBasals.contains { $0.timestamp >= cancelAt.addingTimeInterval(-1) }
+        XCTAssertTrue(
+            truncating,
+            "Trio holds no truncating record; its temp basals are \(trio.tempBasals) and it skipped \(trio.skipped.map(\.reason))"
+        )
 
         // Pump side. The driver's stop now ends the temp rate through one writer, which records
         // exactly one TempRateCompleted at the true end instant, so the whole diff closes.
@@ -646,18 +641,13 @@ final class CancelConformanceTests: ConformanceTestCase {
         )
         try XCTUnwrap(loop.assertPermanent(raw: finalized.raw, "neutral over a running temp"))
 
-        XCTExpectFailure(
-            "jwoglom/TandemKit#329: a neutral temp is the routine case of ending a temp basal without a replacement, and Trio stores no truncating record for it (true of the oracle's older Trio; #454)",
-            strict: true
-        ) {
-            let truncating = trio.tempBasals.contains { row in
-                row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
-            } || trio.tempBasals.contains { $0.timestamp >= neutralAt.addingTimeInterval(-1) }
-            XCTAssertTrue(
-                truncating,
-                "Trio holds no truncating record; its temp basals are \(trio.tempBasals) and it skipped \(trio.skipped.map(\.reason))"
-            )
-        }
+        let truncating = trio.tempBasals.contains { row in
+            row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
+        } || trio.tempBasals.contains { $0.timestamp >= neutralAt.addingTimeInterval(-1) }
+        XCTAssertTrue(
+            truncating,
+            "Trio holds no truncating record; its temp basals are \(trio.tempBasals) and it skipped \(trio.skipped.map(\.reason))"
+        )
 
         let timeline = try timeline()
         XCTAssertEqual(timeline.tempRates.count, 1, "only the real temp rate reached the pump: \(timeline)")

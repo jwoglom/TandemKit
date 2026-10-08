@@ -25,14 +25,18 @@ pure-Swift folds live in `Conformance/Oracles/`:
   `isMutable == false` makes a dose permanent, `lastReconciliation` is set on every call including
   empty batches. Exposes `doses`, `deletedDoses`, `lastReconciliation`, and `iob(at:)` using a simple
   linear model good enough to detect drift.
-- **`TrioDoseStoreOracle`** — replays the same batches the way Trio consumes them (audit G01):
-  `lastReconciliation` and `replacePendingEvents` ignored, dedup by `(date, type)`; `raw`,
-  `syncIdentifier` and `isMutable` are never read, a re-reported bolus only ever lowers the stored
-  amount, and a temp basal carrying `deliveredUnits` is skipped. Used to catch reports that are
-  correct for Loop and wrong for Trio.
+- **`TrioDoseStoreOracle`** — replays the same batches the way Trio consumes them since
+  nightscout/Trio#1300: a temp basal above `maxBasal` dropped, `lastReconciliation` ignored, rows
+  matched by `syncIdentifier` then `(timestamp, type, isScheduledBasal)`, a matched mutable row
+  updated and a finalized one never changed, `.basal` stored as a zero-length scheduled temp basal
+  row, and every mutable row a replacing batch leaves out deleted. `basalSegments(clock:)`,
+  `netBasalUnits` and `iob(at:)` read the rows as oref's `IobHistory` does: each temp basal row cut
+  at the next row's timestamp, suspends at zero. Used to catch reports that are correct for Loop and
+  wrong for Trio.
 
 Both oracles are unit-tested on their own (`Tests/TandemKitTests/DoseOracleTests.swift`), the Loop
-oracle against the guide's three transitions (still delivering, finished, never happened).
+oracle against the guide's three transitions (still delivering, finished, never happened), the Trio
+oracle one rule at a time.
 
 ## Fixtures and helpers
 
