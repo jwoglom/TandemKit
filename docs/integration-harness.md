@@ -305,11 +305,15 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 - **No `BasalDelivery` (279) cycle.** faketandem delivers basal continuously and writes no 279s,
   no `DailyBasal` growth, no `ControlIQPcmChange` and no `SetTempRateResponse` records, and runs no
-  Control-IQ basal of its own. Conformance group H (`BasalHistoryConformanceTests`) appends the
-  pump's records for the stretch each scenario stages (`appendHistory(records:)`), without PCM
-  records, whose payload the history API cannot carry. Until faketandem writes them, H1, H5, H6
-  and H9, which need the emulator's own cycle, Control-IQ driver and alarm suspend that keeps a
-  temp running, are covered by unit tests only (`BasalReconciliationReportingTests`,
+  Control-IQ basal of its own; its Control-IQ switch is `closed_loop_enabled`, which a
+  `ChangeControlIQSettingsRequest` does not move. Conformance group H (`BasalHistoryConformanceTests`)
+  appends the pump's records (`appendHistory(records:)`): a stretch staged in the past, or, where
+  the app's commands run, one 279 at each five-minute step at what the emulator's snapshot runs or
+  at a scripted Control-IQ rate. Appended records take the next sequence numbers, so a 279 cannot
+  be added behind records the emulator already wrote. No PCM records, whose payload the history
+  API cannot carry. H9 needs an alarm suspend that keeps a temp running, and the emulator ends the
+  temp, with its `TempRateCompleted`, at every suspend; it and H6's segment change and skew
+  compensation are covered by unit tests only (`BasalReconciliationReportingTests`,
   `BasalReconcilerTests`).
 
 Everything else the harness found has been fixed in faketandem. What was fixed, because the

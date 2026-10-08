@@ -389,7 +389,7 @@ final class TrioDoseStoreOracle: DoseOracle {
 
     /// A schedule changes at most every 30 minutes, so one-second steps are exact for a step
     /// function and close enough for the decay kernel.
-    private static func integrate(from start: Date, to end: Date, _ f: (Date) -> Double) -> Double {
+    static func integrate(from start: Date, to end: Date, _ f: (Date) -> Double) -> Double {
         let span = end.timeIntervalSince(start)
         let steps = max(1, Int(span.rounded(.up)))
         let step = span / Double(steps)
