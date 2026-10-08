@@ -125,6 +125,7 @@
 		2D6FF798CDA51CA0DA93B401 /* AlarmAckHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C2A562BC9EEABF875E62028 /* AlarmAckHistoryLogTests.swift */; };
 		2E22290A6DCC52032CC16C75 /* SyncDoseStartHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FE5B7A5D0FAE037334FCBB2 /* SyncDoseStartHistoryLog.swift */; };
 		2E22655D51CFD04FBC22A61E /* SetSensorTypeResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D1E016D4EBCD6803C58840 /* SetSensorTypeResponseTests.swift */; };
+		2E81EEA754E0A56E341B71E2 /* BasalHistoryConformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 652A78E202B22D33174A299A /* BasalHistoryConformanceTests.swift */; };
 		2F943CEB4D3206C9E46B6861 /* ControlRequestCountersHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84F43617CE29F9BAF1C21BAD /* ControlRequestCountersHistoryLog.swift */; };
 		2F9C32134705329473E6A2F1 /* BatteryHourlyHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE12CA459D566532C4E16CE /* BatteryHourlyHistoryLogTests.swift */; };
 		2FA7F3B5375351EC944F7534 /* BasalReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D0713232EC33BBEE0728D4B /* BasalReconciler.swift */; };
@@ -1496,6 +1497,7 @@
 		63D703A48070E2CEAF3C7D09 /* AntDailyStatus2HistoryLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntDailyStatus2HistoryLog.swift; sourceTree = "<group>"; };
 		645D14FEF568BF6EAFCB9E20 /* ParamChangeRemSettingsHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ParamChangeRemSettingsHistoryLogTests.swift; sourceTree = "<group>"; };
 		64B7858C7311E6F724FBD910 /* BleLinkStatsHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BleLinkStatsHistoryLogTests.swift; sourceTree = "<group>"; };
+		652A78E202B22D33174A299A /* BasalHistoryConformanceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BasalHistoryConformanceTests.swift; sourceTree = "<group>"; };
 		6532417AB6422A32942EE85F /* Jpake3SessionKeyResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Jpake3SessionKeyResponseTests.swift; sourceTree = "<group>"; };
 		6585C8FC6C57879C0217AD1B /* CgmBleCalibrationEvtG7HistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmBleCalibrationEvtG7HistoryLog.swift; sourceTree = "<group>"; };
 		677DC67227D04673334D9A0D /* DoseOracle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DoseOracle.swift; sourceTree = "<group>"; };
@@ -3137,6 +3139,7 @@
 				5B91683A0C175F04B8CC4B09 /* PhoneTimeZone.swift */,
 				DA082307135C1ABC348B3259 /* TimeChangeConformanceTests.swift */,
 				28F0AFDD6861D905C6EE18F7 /* BasalScheduleChangeTests.swift */,
+				652A78E202B22D33174A299A /* BasalHistoryConformanceTests.swift */,
 			);
 			name = Conformance;
 			path = Conformance;
@@ -4499,6 +4502,7 @@
 				C7DAA2A1107321B2166A1499 /* OnboardingIntegrationTests.swift in Sources */,
 				83190ADB4442B63991B87665 /* BasalScheduleChangeTests.swift in Sources */,
 				0D3F9D78B0D226D9D735D17C /* ResponseTimeoutIntegrationTests.swift in Sources */,
+				2E81EEA754E0A56E341B71E2 /* BasalHistoryConformanceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
