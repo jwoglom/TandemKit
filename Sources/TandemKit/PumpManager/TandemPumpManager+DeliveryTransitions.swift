@@ -87,6 +87,68 @@ extension TandemPumpManager {
         return true
     }
 
+    /// A temp the pump runs in place of the one the host holds: one whose set the app lost the
+    /// answer to, or one set on the pump. History ends the held temp and adopts the pump's.
+    func observeReplacedTempBasal(_ status: CurrentBasalStatusResponse) {
+        let held = state.basalDose
+        guard status.basalType == .tempBasal, held.type == .tempBasal, state.deliveryTransitions.pending == nil,
+              datesTransitionsFromHistory
+        else {
+            return
+        }
+        guard let temp = bluetooth.write(TempRateRequest()) else {
+            logger.warning("No temp rate status; taking the temp basal the pump runs as the one reported")
+            return
+        }
+        guard temp.active else { return }
+        let start = hostDate(forPumpDate: temp.startTime)
+        let otherPercent = held.tempPercent.map { $0 != temp.percentage } ?? false
+        // A held temp cut at a segment change starts there, after the pump's record of its start.
+        guard otherPercent || start > held.startDate.addingTimeInterval(Self.transitionMatchTolerance) else {
+            return
+        }
+
+        logger.warning("The pump runs a \(temp.percentage)% temp basal from \(start) in place of the one reported at \(held.startDate); dating the change from pump history")
+        let lastSeen = state.deliveryTransitions.lastConfirmedObservation ?? held.startDate
+        state.deliveryTransitions.pending = PendingTransition(
+            prior: held,
+            observed: .tempBasal,
+            detectedAt: now,
+            lastConfirmed: max(held.startDate, min(lastSeen, start)),
+            replacement: PendingTransition.ReplacingTemp(
+                start: start,
+                percent: temp.percentage,
+                rate: roundToSupportedBasalRate(unitsPerHour: status.profileBasalRate * Double(temp.percentage) / 100)
+            )
+        )
+        notifyDelegateStateUpdated()
+    }
+
+    /// The temp that replaced `pending.prior` from its start, at its percent of the pump's rate:
+    /// the one read at detection, or the schedule's on the pump's clock across a segment change since.
+    private func replacingDose(
+        _ replacement: PendingTransition.ReplacingTemp,
+        detectedAt: Date,
+        start: Date,
+        duration: TimeInterval,
+        automatic: Bool,
+        tempRateId: Int? = nil
+    ) -> UnfinalizedDose {
+        let crossedAChange = !pumpSegmentChanges(after: start, through: detectedAt).isEmpty
+        let rate = crossedAChange
+            ? roundToSupportedBasalRate(unitsPerHour: getScheduledBasalRate(at: start.addingTimeInterval(state.pumpClockOffset)) * Double(replacement.percent) / 100)
+            : replacement.rate
+        return UnfinalizedDose(
+            tempRate: rate,
+            duration: duration,
+            automatic: automatic,
+            insulinType: state.insulinType,
+            startDate: start,
+            tempRateId: tempRateId,
+            tempPercent: replacement.percent
+        )
+    }
+
     func historyTickFailed(startedAt: Date) {
         bluetooth.ensureConnected { _ in
             guard let pending = self.state.deliveryTransitions.pending, startedAt >= pending.detectedAt else { return }
@@ -142,9 +204,20 @@ extension TandemPumpManager {
         emitHistoryReports(batch)
     }
 
+    /// The temp that replaced a held one, from its `TempRateActivated`, and its end if it has one.
+    struct AdoptedTemp {
+        let dose: UnfinalizedDose
+        let end: Date?
+    }
+
     /// Adds what `pending` leaves unsaid after the batch's other reports. Without the pump's record
     /// each end is dated the way that counts more insulin.
-    func closeTransition(_ pending: PendingTransition, tempRateEnd: Date? = nil, into batch: inout HistoryReportBatch) {
+    func closeTransition(
+        _ pending: PendingTransition,
+        tempRateEnd: Date? = nil,
+        adopting adopted: AdoptedTemp? = nil,
+        into batch: inout HistoryReportBatch
+    ) {
         let prior = pending.prior
         let tolerance = Self.transitionMatchTolerance
         let earliest = pending.lastConfirmed.addingTimeInterval(-tolerance)
@@ -155,7 +228,8 @@ extension TandemPumpManager {
         if prior.type == .tempBasal {
             let lastSeen = splitAtSegmentChanges(prior, through: pending.lastConfirmed).running
             // Against the schedule the host counts after it, on the phone's clock.
-            let end = tempRateEnd ?? (lastSeen.value < getScheduledBasalRate(at: lastSeen.startDate) ? pending.lastConfirmed : pending.detectedAt)
+            let end = tempRateEnd ?? adopted?.dose.startDate ?? pending.replacement?.start
+                ?? (lastSeen.value < getScheduledBasalRate(at: lastSeen.startDate) ? pending.lastConfirmed : pending.detectedAt)
             let endDate = max(min(end, pending.detectedAt), prior.startDate)
             let (finished, last) = splitAtSegmentChanges(prior, through: endDate)
             let entry = last.toDoseEntry(isMutable: false, endDate: max(endDate, last.startDate), now: now)
@@ -168,6 +242,15 @@ extension TandemPumpManager {
         }
 
         let final: UnfinalizedDose
+        if let replacement = pending.replacement {
+            final = closeReplacement(replacement, of: pending, adopted: adopted, after: tempBasalEnd, into: &events)
+            logger.info("Reporting the temp basal that replaced the one reported at \(prior.startDate): \(events.count) event(s)")
+            state.deliveryTransitions.pending = nil
+            state.basalDose = final
+            state.lastReconciliation = now
+            batch.events += events
+            return
+        }
         switch (pending.observed == .suspend, hostTransition(before: .distantFuture)) {
         case let (true, host?) where host.kind == .suspend:
             final = UnfinalizedDose(suspendStartTime: host.date)
@@ -192,6 +275,46 @@ extension TandemPumpManager {
         state.basalDose = final
         state.lastReconciliation = now
         batch.events += events
+    }
+
+    /// The temp the pump runs after `pending.prior`. From history it is held as reported, until its
+    /// completion; at detection its duration is unknown, so it is reported finished at the reading
+    /// that counts more insulin, and the scheduled basal after it.
+    private func closeReplacement(
+        _ replacement: PendingTransition.ReplacingTemp,
+        of pending: PendingTransition,
+        adopted: AdoptedTemp?,
+        after priorEnd: Date?,
+        into events: inout [NewPumpEvent]
+    ) -> UnfinalizedDose {
+        let end: Date?
+        let dose: UnfinalizedDose
+        if let adopted {
+            dose = adopted.dose
+            end = adopted.end
+        } else {
+            let start = max(replacement.start, priorEnd ?? replacement.start)
+            dose = replacingDose(replacement, detectedAt: pending.detectedAt, start: start, duration: now.timeIntervalSince(start), automatic: false)
+            let lastSeen = max(pending.detectedAt, state.deliveryTransitions.lastConfirmedObservation ?? pending.detectedAt)
+            end = dose.value > getScheduledBasalRate(at: dose.startDate) ? lastSeen : pending.detectedAt
+        }
+
+        guard let end else {
+            let (finished, running) = splitAtSegmentChanges(dose, through: now)
+            events += finished
+            events.append(NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: true, now: now), date: running.startDate))
+            return running
+        }
+        let (finished, last) = splitAtSegmentChanges(dose, through: end)
+        let entry = last.toDoseEntry(isMutable: false, endDate: max(end, last.startDate), now: now)
+        events += finished
+        events.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
+        let scheduled = UnfinalizedDose(basalRate: getScheduledBasalRate(at: entry.endDate), insulinType: state.insulinType, startDate: entry.endDate)
+        // Seen by a command's own reading, the command reports in this second; Trio orders two rows in one arbitrarily.
+        if now.timeIntervalSince(entry.endDate) >= 1 {
+            events.append(NewPumpEvent.basal(dose: scheduled.toDoseEntry(), date: scheduled.startDate))
+        }
+        return scheduled
     }
 
     func emitHistoryReports(_ batch: HistoryReportBatch) {
@@ -339,6 +462,35 @@ extension TandemPumpManager {
         }
         batch.events += events
         guard let pending = state.deliveryTransitions.pending else {
+            return batch
+        }
+
+        if let replacement = pending.replacement {
+            let activation = stored.last { log in
+                guard let activated = log as? TempRateActivatedHistoryLog else { return false }
+                return Int(activated.percent.rounded()) == replacement.percent
+                    && abs(dates.phoneDate(of: activated).timeIntervalSince(replacement.start)) <= tolerance
+            } as? TempRateActivatedHistoryLog
+            if let activation, activation.tempRateId == pending.prior.tempRateId {
+                logger.info("The temp basal the pump runs is the one reported at \(pending.prior.startDate)")
+                state.deliveryTransitions.pending = nil
+                return batch
+            }
+            let adopted = activation.map { activation in
+                let dose = replacingDose(
+                    replacement,
+                    detectedAt: pending.detectedAt,
+                    start: dates.phoneDate(of: activation),
+                    duration: TimeInterval(activation.durationMilliseconds) / 1000,
+                    automatic: stored.contains { ($0 as? SetTempRateResponseHistoryLog)?.tempRateId == activation.tempRateId },
+                    tempRateId: activation.tempRateId
+                )
+                return AdoptedTemp(dose: dose, end: tempRateEnd(of: dose, in: stored, dates: dates))
+            }
+            if adopted == nil {
+                logger.warning("Pump history has no record of the temp basal seen at \(pending.detectedAt); reporting it at detection")
+            }
+            closeTransition(pending, tempRateEnd: tempRateEnd(of: pending.prior, in: stored, dates: dates), adopting: adopted, into: &batch)
             return batch
         }
 

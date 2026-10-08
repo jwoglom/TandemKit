@@ -375,8 +375,22 @@ edit instead of at the next sync.
   it replaces did (#340). `enactTempBasal` then reads `CurrentBasalStatus` and `TempRateRequest`
   and, if the pump runs a temp at that percent, reports it (`adoptUnansweredTempBasal`), ending
   the one it replaced; the command still fails. Otherwise the reading goes to
-  `observeDeliveryState`. A temp the driver never sees this way reaches the host after the fact,
-  through basal reconciliation.
+  `observeDeliveryState`.
+- When those reads fail too (the link dropped with the answer), or a temp is set on the pump, the
+  next sync sees it: with `historyBackfill` on, a `fetchBasalStatus` reading of a temp while the
+  driver holds one also reads `TempRateRequest` (`observeReplacedTempBasal`). A temp at another
+  percent, or one the pump started more than `transitionMatchTolerance` after the held dose's start
+  (a held temp cut at a segment change starts at the cut, after the pump's record), is a
+  `PendingTransition` with a `replacement`; `basalDose` keeps the held temp, and nothing cuts it at
+  a segment change meanwhile. History ends the held temp at its `TempRateCompleted` and adopts the
+  pump's from its `TempRateActivated` (start, duration, `tempRateId`; `automatic` if a 309 has its
+  id), at its percent of the pump's rate, mutable until its completion. If that activation is the
+  held temp's own, nothing replaced it and the pending change is dropped. At detection the held
+  temp ends at the pump's record of the new one's start, and the new one, whose duration only
+  history gives (`TempRateResponse.duration`'s unit is unknown), is reported finished: at the last
+  reading that saw it when above the schedule, at detection when below. The `.basal` marker after
+  it is left out when a command reports in that same second. A temp the driver never sees reaches
+  the host after the fact, through basal reconciliation.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

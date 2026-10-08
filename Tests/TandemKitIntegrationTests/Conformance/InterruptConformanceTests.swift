@@ -628,6 +628,68 @@ final class InterruptConformanceTests: ConformanceTestCase {
         XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
     }
 
+    // MARK: - A5b
+
+    /// A5 with the link dropping in place of the `SetTempRate` answer, so the driver cannot read the
+    /// pump straight after: the next sync finds the pump's temp and history dates both ends (#340).
+    func testA5b_linkDropInPlaceOfTheSetTempRateAnswerIsFoundByTheNextSync() throws {
+        try stageDriver()
+        let batchesBefore = allPumpEventBatches.count
+        let firstRate = 1.2
+        let secondRate = 1.5
+        let duration: TimeInterval = .minutes(30)
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: firstRate, duration: duration))
+        let firstEvent = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .tempBasal }
+        )
+        let firstRaw = firstEvent.raw
+        let firstStart = try XCTUnwrap(firstEvent.dose?.startDate)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+
+        try harness.client.armFault(FaketandemFaultSpec(.disconnect, message: "SetTempRateRequest"))
+        let error = try enactTempBasal(unitsPerHour: secondRate, duration: duration, timeout: 90)
+        guard case .communication? = error else {
+            return XCTFail("a link lost in place of the SetTempRate answer is a communication error, got \(String(describing: error))")
+        }
+        let pumpBasal = try harness.client.snapshot().basal
+        XCTAssertTrue(pumpBasal.tempActive)
+        XCTAssertEqual(pumpBasal.tempRate, secondRate, accuracy: 0.0001, "the pump applied the set before the link went")
+        let pumpSecondStart = try XCTUnwrap(pumpBasal.tempStart?.date)
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        let liveTemps = loop.mutableDoses.filter { $0.dose.type == .tempBasal }
+        XCTAssertEqual(liveTemps.count, 1, "exactly one temp basal is live, the one the pump runs: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        let live = liveTemps.first
+        XCTAssertEqual(live.map { abs($0.dose.startDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "from the pump's start")
+        XCTAssertEqual(live?.dose.unitsPerHour ?? 0, secondRate, accuracy: 0.0001, "at the pump's rate")
+        XCTAssertEqual(
+            live.map { $0.dose.endDate.timeIntervalSince($0.dose.startDate) } ?? 0,
+            duration,
+            accuracy: 2,
+            "for the duration the pump recorded"
+        )
+
+        let previous = loop.doses.filter { $0.dose.type == .tempBasal && $0.dose.startDate == firstStart && !$0.isMutable }
+        XCTAssertEqual(previous.count, 1, "the replaced temp basal is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
+        XCTAssertEqual(previous.first.map { abs($0.dose.endDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "at its true end, the stop")
+        XCTExpectFailure(
+            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so finalizing the replaced temp basal at 5 of its 30 minutes re-keys it",
+            strict: true
+        ) {
+            _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
+        }
+        XCTAssertEqual(trio.tempBasals.count, 2, "Trio holds both temp basals: \(trio.tempBasals)")
+
+        let diff = try timeline().diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
     // MARK: - A6
 
     /// The link drops after the first fragment of a multi-fragment response during a sync.

@@ -2332,9 +2332,10 @@ extension TandemPumpManager {
         return (finished, running)
     }
 
-    /// Reports the cut as soon as a reading sees the temp still running past a change.
+    /// Reports the cut as soon as a reading sees the temp still running past a change. Not one the
+    /// pump has replaced, which history ends before the change.
     func reportTempBasalSegmentChanges() {
-        guard state.basalDose.type == .tempBasal else { return }
+        guard state.basalDose.type == .tempBasal, state.deliveryTransitions.pending?.replacement == nil else { return }
         let events = getActivePumpEvents()
         guard events.count > 1 else { return }
         emitPumpEvents(events)

@@ -188,15 +188,41 @@ import XCTest
         delegateQueue.sync {}
     }
 
-    private func runningTempBasal(_ rate: Double, tempRateId: Int? = 7) {
+    private func runningTempBasal(_ rate: Double, tempRateId: Int? = 7, percent: Int? = nil, from startDate: Date? = nil) {
         manager.state.basalDose = UnfinalizedDose(
             tempRate: rate,
             duration: .minutes(30),
             automatic: true,
             insulinType: .novolog,
-            startDate: start,
+            startDate: startDate ?? start,
+            tempRateId: tempRateId,
+            tempPercent: percent
+        )
+    }
+
+    private func tempRateActivated(_ tempRateId: Int, at date: Date, percent: Float, minutes: Float = 30) -> HistoryLog {
+        TempRateActivatedHistoryLog(
+            pumpTimeSec: pumpTimeSec(date),
+            sequenceNum: takeSequenceNum(),
+            percent: percent,
+            durationMilliseconds: minutes * 60000,
             tempRateId: tempRateId
         )
+    }
+
+    private func setOverBluetooth(_ tempRateId: Int, at date: Date) -> HistoryLog {
+        SetTempRateResponseHistoryLog(pumpTimeSec: pumpTimeSec(date), sequenceNum: takeSequenceNum(), status: 0, unknown11: 0, tempRateId: tempRateId)
+    }
+
+    /// A reading of a temp at `percent` of the pump's 1 U/hr, which the pump started at `pumpStart`.
+    private func observeTemp(percent: Int, from pumpStart: Date) {
+        bluetooth.stub(TempRateRequest.self, with: TempRateResponse(
+            active: true,
+            percentage: percent,
+            startTimeRaw: pumpTimeSec(pumpStart),
+            duration: 0
+        ))
+        observe(2)
     }
 
     // MARK: - Dated from history
@@ -387,6 +413,173 @@ import XCTest
         pass([suspended(at: minutes(10))])
 
         XCTAssertEqual(events(.suspend).map(\.date), [minutes(10)])
+    }
+
+    // MARK: - A temp the pump runs in place of the held one (#340)
+
+    func testATempThePumpRunsInPlaceOfTheHeldOneIsAdoptedFromHistory() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+        XCTAssertTrue(batches.isEmpty)
+        XCTAssertTrue(manager.isAwaitingHistory, "the sync waits for history")
+
+        pass([
+            tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60),
+            tempRateActivated(8, at: minutes(5), percent: 120),
+            setOverBluetooth(8, at: minutes(5))
+        ])
+
+        let batch = try XCTUnwrap(batches.last)
+        XCTAssertTrue(batch.replacePendingEvents)
+        let temps = batch.events.compactMap(\.dose).filter { $0.type == .tempBasal }
+        XCTAssertEqual(temps.map(\.startDate), [start, minutes(5)])
+        XCTAssertEqual(temps.first?.endDate, minutes(5), "the held temp ends at its completion")
+        XCTAssertEqual(temps.first?.isMutable, false)
+        XCTAssertEqual(temps.last?.unitsPerHour, 1.2)
+        XCTAssertEqual(temps.last?.isMutable, true)
+        XCTAssertEqual(temps.last?.endDate, minutes(35), "for the duration the pump recorded")
+        XCTAssertEqual(temps.last?.automatic, true, "set over Bluetooth")
+        XCTAssertFalse(batch.events.contains { $0.dose?.type == .basal })
+        XCTAssertEqual(manager.state.basalDose.tempRateId, 8)
+        XCTAssertEqual(manager.state.basalDose.tempPercent, 120)
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testATempSetOnThePumpInPlaceOfTheHeldOneIsNotAutomatic() {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+
+        pass([tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60), tempRateActivated(8, at: minutes(5), percent: 120)])
+
+        XCTAssertEqual(events(.tempBasal).last?.dose?.automatic, false)
+    }
+
+    func testAReplacingTempThatHasRunOutIsReportedFinished() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+        advance(to: minutes(40))
+
+        pass([
+            tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60),
+            tempRateActivated(8, at: minutes(5), percent: 120),
+            tempRateCompleted(8, at: minutes(35), timeLeft: 0)
+        ])
+
+        let replacing = try XCTUnwrap(events(.tempBasal).last?.dose)
+        XCTAssertEqual(replacing.startDate, minutes(5))
+        XCTAssertEqual(replacing.endDate, minutes(35))
+        XCTAssertFalse(replacing.isMutable)
+        XCTAssertEqual(events(.basal).map(\.date), [minutes(35)])
+        XCTAssertEqual(manager.state.basalDose.type, .basal)
+    }
+
+    func testTheHeldTempIsNotTakenForAReplacement() {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 150, from: start.addingTimeInterval(2))
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAHeldTempCutAtASegmentChangeIsNotTakenForAReplacement() {
+        // The running part of a temp cut at a change starts there, after the pump's record of its start.
+        runningTempBasal(1.5, percent: 150, from: minutes(10))
+        advance(to: minutes(12))
+        observeTemp(percent: 150, from: start)
+
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+    }
+
+    func testAReplacementHistoryShowsToBeTheHeldTempIsDropped() {
+        runningTempBasal(1.5, tempRateId: 7, percent: 150)
+        advance(to: minutes(12))
+        // The pump's clock puts the held temp's start three minutes late.
+        observeTemp(percent: 150, from: minutes(3))
+        XCTAssertNotNil(manager.state.deliveryTransitions.pending)
+
+        pass([tempRateActivated(7, at: minutes(3), percent: 150)])
+
+        XCTAssertTrue(batches.isEmpty)
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
+        XCTAssertEqual(manager.state.basalDose.tempRateId, 7)
+    }
+
+    func testAReplacementHistoryDoesNotCoverIsReportedAtDetection() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+        advance(to: minutes(13))
+
+        pass([tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60)], pumpLast: nextSequenceNum + 5)
+
+        let temps = events(.tempBasal).compactMap(\.dose)
+        XCTAssertEqual(temps.first?.endDate, minutes(5), "the held temp ends at the pump's record of the new one's start")
+        let replacing = try XCTUnwrap(temps.last)
+        XCTAssertEqual(replacing.startDate, minutes(5))
+        XCTAssertEqual(replacing.unitsPerHour, 1.2)
+        XCTAssertEqual(replacing.endDate, minutes(12), "above the schedule, at the last reading that saw it")
+        XCTAssertFalse(replacing.isMutable)
+        XCTAssertEqual(events(.basal).map(\.date), [minutes(12)])
+    }
+
+    func testAReplacementBelowTheScheduleIsReportedAtDetectionUntilTheFirstReadingThatSawIt() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 50, from: minutes(5))
+        advance(to: minutes(17))
+        observeTemp(percent: 50, from: minutes(5))
+
+        manager.historyTickFailed(startedAt: minutes(17))
+        delegateQueue.sync {}
+
+        XCTAssertEqual(events(.tempBasal).last?.dose?.endDate, minutes(12))
+    }
+
+    func testAnAppTempWhileAReplacementIsPendingReportsItFirstAndNotInTheCommandsSecond() throws {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+        advance(to: minutes(14))
+
+        bluetooth.stubBasalPump(profileMilliunits: 1000, runningTempPercent: 120, tempRateId: 50)
+        let done = expectation(description: "enactTempBasal")
+        manager.enactTempBasal(unitsPerHour: 2.0, for: .minutes(30)) { error in
+            XCTAssertNil(error)
+            done.fulfill()
+        }
+        wait(for: [done], timeout: 5)
+        delegateQueue.sync {}
+
+        let temps = events(.tempBasal).compactMap(\.dose)
+        XCTAssertEqual(temps.map(\.startDate), [start, minutes(5), minutes(14)])
+        XCTAssertEqual(temps[1].endDate, minutes(14), "the command's own reading saw it running")
+        XCTAssertTrue(events(.basal).isEmpty, "nothing in the second the app's temp starts")
+    }
+
+    func testAPendingReplacementSurvivesARelaunch() {
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+        observeTemp(percent: 120, from: minutes(5))
+
+        manager = makeManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue))
+        pass([tempRateCompleted(7, at: minutes(5), timeLeft: 25 * 60), tempRateActivated(8, at: minutes(5), percent: 120)])
+
+        XCTAssertEqual(manager.state.basalDose.tempRateId, 8)
+        XCTAssertEqual(manager.state.basalDose.value, 1.2)
+    }
+
+    func testWithTheFlagOffTheTempRateIsNotRead() {
+        manager.state.featureFlags[.historyBackfill] = false
+        runningTempBasal(1.5, percent: 150)
+        advance(to: minutes(12))
+
+        observeTemp(percent: 120, from: minutes(5))
+
+        XCTAssertFalse(bluetooth.didSend(TempRateRequest.self))
+        XCTAssertNil(manager.state.deliveryTransitions.pending)
     }
 
     // MARK: - Reported at detection
@@ -893,9 +1086,10 @@ import XCTest
             trackedAfter: 41,
             pending: DeliveryTransitionLedger.PendingTransition(
                 prior: UnfinalizedDose(tempRate: 1.5, duration: 1800, automatic: true, insulinType: .novolog, startDate: start, tempRateId: 3),
-                observed: .suspend,
+                observed: .tempBasal,
                 detectedAt: minutes(20),
-                lastConfirmed: minutes(2)
+                lastConfirmed: minutes(2),
+                replacement: DeliveryTransitionLedger.PendingTransition.ReplacingTemp(start: minutes(5), percent: 120, rate: 1.2)
             ),
             lastConfirmedObservation: minutes(2)
         )
