@@ -2,7 +2,8 @@ import Foundation
 import LoopKit
 
 /// Reports history boluses the live path didn't report or couldn't finish (#354), and the pump's
-/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`).
+/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`), and compares the basal it
+/// delivered with what the host was told (`TandemPumpManager+BasalReconciliation`).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
         guard state.featureFlags.historyBackfill, let serial = historyLogStoreSerial else {
@@ -16,6 +17,7 @@ extension TandemPumpManager {
                 return
             }
             self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            self.reconcileBasalHistory(after: outcome, pumpSerial: serial)
             if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }

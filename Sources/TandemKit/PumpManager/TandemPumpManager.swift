@@ -157,6 +157,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
 
+    /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
+    var loggedBasalDifferences = Set<UInt32>()
+
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
         if state.useSilentTones {
@@ -2165,6 +2168,10 @@ extension TandemPumpManager {
         for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false {
             state.bolusReportLedger.markFinalized(raw: event.raw)
         }
+        let heldTemp = state.basalDose
+        state.reportedBasal.record(events, replacePendingEvents: replacePendingEvents) { dose in
+            heldTemp.type == .tempBasal && dose.startDate >= heldTemp.startDate ? heldTemp.tempRateId : nil
+        }
 
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
@@ -2258,16 +2265,11 @@ extension TandemPumpManager {
     }
 
     func getScheduledBasalRate(at date: Date? = nil) -> Double {
-        let schedule = state.basalRateSchedule
-        guard !schedule.items.isEmpty else {
-            return 0
-        }
+        hostBasalSchedule.rate(at: date ?? now)
+    }
 
-        let now = date ?? self.now
-        let startOfDay = Calendar.current.startOfDay(for: now)
-        let nowTimeInterval = now.timeIntervalSince(startOfDay)
-
-        return schedule.items.last(where: { $0.startTime < nowTimeInterval })?.value ?? schedule.items[0].value
+    var hostBasalSchedule: HostBasalSchedule {
+        HostBasalSchedule(state.basalRateSchedule)
     }
 
     /// The pump rescales a temp at each segment change, and neither host revises a temp basal once

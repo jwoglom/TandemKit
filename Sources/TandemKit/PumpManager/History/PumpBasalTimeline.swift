@@ -36,6 +36,8 @@ struct PumpBasalTimeline: Equatable {
         let end: Date
         /// Milliunits per hour.
         let commandedRate: Int
+        /// The pump's profile rate in force, milliunits per hour.
+        let profileBasalRate: Int
         let kind: Kind
         /// The temp in force, for a temp chunk or a temp under Control-IQ.
         let tempRateId: Int?
@@ -131,6 +133,7 @@ struct PumpBasalTimeline: Equatable {
                 start: start,
                 end: end,
                 commandedRate: log.commandedRate,
+                profileBasalRate: log.profileBasalRate,
                 kind: kind,
                 tempRateId: kind == .temp || log.commandedRateSourceEnum == .tempRateAndAlgorithm ? delivery.tempRateId : nil,
                 endsAtSuspend: endsAtSuspend,

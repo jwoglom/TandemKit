@@ -81,6 +81,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("basalRateMismatchConfirmed", { $0.basalRateMismatchConfirmed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
+            ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
             ("deliveryTransitions", { $0.deliveryTransitions.lastConfirmedObservation = later }),
             ("bolusState", { $0.bolusState = .noBolus }),
             ("insulinType", { $0.insulinType = .humalog }),
@@ -200,6 +201,13 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
                     automatic: false,
                     isFinalized: false
                 )
+            ]
+        )
+        state.reportedBasal = ReportedBasalLedger(
+            trackingSince: t0.addingTimeInterval(-.hours(48)),
+            rows: [
+                .init(kind: .basal, raw: Data([0x30]), date: t0.addingTimeInterval(-.hours(1)), end: t0.addingTimeInterval(-.hours(1)), rate: 0.8, isMutable: false),
+                .init(kind: .tempBasal, raw: Data([0x31]), date: t0, end: t0.addingTimeInterval(.minutes(30)), rate: 1.75, isMutable: true, tempRateId: 17)
             ]
         )
         state.bolusState = .inProgress(bolusDose.toDoseEntry(isMutable: true, now: t0))
