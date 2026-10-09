@@ -297,26 +297,13 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-- **A segment change never rescales a running temp rate.** faketandem puts a profile's rate in
-  force only when the profile is written, not when its clock passes a segment's start, so the
-  driver's cut of a temp basal at a segment change (`splitAtSegmentChanges`) is covered by unit
-  tests in `TandemPumpManagerValidationTests` only. Staging `basal_rate` moves the profile rate
-  but leaves a running temp's rate as it was.
+None open. One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
+profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").
+Conformance group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()`
+turns it off; every other scenario runs with basal delivered continuously and no 279s, and stages
+the rate in force with `basal_rate`.
 
-- **No `BasalDelivery` (279) cycle.** faketandem delivers basal continuously and writes no 279s,
-  no `DailyBasal` growth, no `ControlIQPcmChange` and no `SetTempRateResponse` records, and runs no
-  Control-IQ basal of its own; its Control-IQ switch is `closed_loop_enabled`, which a
-  `ChangeControlIQSettingsRequest` does not move. Conformance group H (`BasalHistoryConformanceTests`)
-  appends the pump's records (`appendHistory(records:)`): a stretch staged in the past, or, where
-  the app's commands run, one 279 at each five-minute step at what the emulator's snapshot runs or
-  at a scripted Control-IQ rate. Appended records take the next sequence numbers, so a 279 cannot
-  be added behind records the emulator already wrote. No PCM records, whose payload the history
-  API cannot carry. H9 needs an alarm suspend that keeps a temp running, and the emulator ends the
-  temp, with its `TempRateCompleted`, at every suspend; it and H6's segment change and skew
-  compensation are covered by unit tests only (`BasalReconciliationReportingTests`,
-  `BasalReconcilerTests`).
-
-Everything else the harness found has been fixed in faketandem. What was fixed, because the
+Everything the harness found has been fixed in faketandem. What was fixed, because the
 shape of it explains what the harness is for:
 
 - **A driver-commanded temp-rate stop wrote no `TempRateCompleted` record.** The handler
@@ -362,8 +349,8 @@ shape of it explains what the harness is for:
   shared start time, segment 0 fixed at midnight.
 - **A write to the active profile left the rate in force alone**, so a driver that changed the
   schedule saw the old rate and reported a mismatch. The write sets `basal_rate` to the new
-  segment in force and rescales a running temp rate, as the pump does; the emulator still does
-  not follow later segment boundaries.
+  segment in force and rescales a running temp rate, as the pump does; with the basal cycle on it
+  also follows later segment boundaries.
 - **The pump's clock followed the time zone database.** It moved at every DST transition, and
   `ChangeTimeDateRequest` was answered OK without changing anything. A pump holds a date and
   time someone set; the emulator now does too, and setting it writes `TimeChanged`/`DateChange`.
@@ -384,6 +371,14 @@ shape of it explains what the harness is for:
 - **An `error_response` fault named the replaced response's opcode as `requestCodeId`**, where
   a real pump names the refused request, so the driver could not match it to its pending write
   and D3 waited out the response timeout. It names the request now (jwoglom/faketandem#35).
+- **There was no basal cycle.** faketandem delivered basal continuously and wrote no
+  `BasalDelivery` (279), `DailyBasal`, `ControlIQPcmChange` or `SetTempRateResponse` records, ran
+  no Control-IQ basal, ended a temp at every suspend, and `ChangeControlIQSettingsRequest` did not
+  switch Control-IQ, so group H appended the pump's records itself and H9, H6's segment change
+  and skew compensation were unit tests only. With `basal_cycle_enabled` the emulator writes a 279
+  every five minutes at the rate and source in force, with the pump's resume rules, Control-IQ at a
+  scripted rate (`controliq_algorithm_rate`, `cgm_available`) and an alarm suspend that keeps the
+  temp (`keep_temp`); `TempRateCompleted.timeLeft` is in milliseconds, as a pump writes it.
 
 Not gaps, but worth knowing when reading timings: `FaketandemHarness.makeDriver` shortens the
 driver's response timeout to 5 s and its connect timeout to 15 s (`VirtualPump.responseTimeout`,

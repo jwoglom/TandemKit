@@ -12,9 +12,9 @@ import XCTest
 /// differ the driver reports a correction at the pump's rate, one per 279, and a second pass
 /// reports nothing.
 ///
-/// faketandem writes no 279s of its own yet, so each scenario appends the pump's records, as
-/// `HistoryBackfillIntegrationTests` does: for a stretch it stages, or one each cycle at what the
-/// emulator runs while the app's commands do (`docs/integration-harness.md`).
+/// faketandem runs the pump's 5-minute cycle (`basal_cycle_enabled`) from the end of
+/// `stageDriver()`, so every 279 lands on a five-minute step from there: its rate and source, the
+/// `DailyBasal` totals, the Control-IQ PCM changes and the resume rules are the emulator's own.
 final class BasalHistoryConformanceTests: ConformanceTestCase {
     private static let profileRate = 1.0
     private static let cycle: TimeInterval = 300
@@ -27,6 +27,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     override func tearDownWithError() throws {
         if let harness {
             do {
+                try harness.client.setState(["basal_cycle_enabled": false])
                 try harness.client.armFault(FaketandemFaultSpec(.radioOn))
                 try harness.client.setState(["basal_rate": Self.profileRate])
                 let snapshot = try harness.client.snapshot()
@@ -40,10 +41,17 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
     // MARK: - Staging
 
-    /// A paired driver with history backfill and basal reporting on, from an empty pump log.
+    /// A paired driver with history backfill and basal reporting on, from an empty pump log, and the
+    /// pump's cycle running from now: a 279 now and every five minutes after.
     @discardableResult
-    private func stageDriver() throws -> FaketandemHarness.Driver {
+    private func stageDriver(schedule: [RepeatingScheduleValue<Double>]? = nil) throws -> FaketandemHarness.Driver {
         try eraseHistory()
+        let items = schedule ?? [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]
+        if schedule != nil {
+            try harness.client.setIDPProfiles([FaketandemIDPProfile(id: 1, segments: items.map {
+                .init(startTime: Int($0.startTime.minutes), basalRate: Int(($0.value * 1000).rounded()))
+            })])
+        }
         try harness.client.setState(["basal_rate": Self.profileRate])
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
@@ -51,16 +59,44 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now)
         state.reportedBasal = ReportedBasalLedger(trackingSince: clock.now)
         state.insulinType = .novolog
-        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]))
+        state.basalRateSchedule = try XCTUnwrap(BasalRateSchedule(dailyItems: items, timeZone: .current))
         let driver = startDriver(state: state)
         try harness.pair(driver)
         _ = try sync()
         try waitForBackfill(driver)
+        try harness.client.setState(["basal_cycle_enabled": true])
         return driver
     }
 
+    /// Starts both clocks on a whole minute and returns a profile segment change 18 minutes on,
+    /// which falls mid-cycle on the cadence `stageDriver()` starts. Past 23:00 the clocks start
+    /// just after midnight instead, so the scenario and a pump running ahead stay in one day.
+    private func startClocksBeforeASegmentChange(skewSeconds: Double = 0) throws -> Date {
+        let calendar = Calendar.current
+        var start = try XCTUnwrap(calendar.nextDate(after: clock.now, matching: DateComponents(second: 0), matchingPolicy: .nextTime))
+        if calendar.component(.hour, from: start) == 23 {
+            start = try XCTUnwrap(calendar.nextDate(after: start, matching: DateComponents(hour: 0, minute: 10), matchingPolicy: .nextTime))
+        }
+        try clock.start(at: start, skewSeconds: skewSeconds)
+        return start.addingTimeInterval(.minutes(18))
+    }
+
+    /// The schedule, and the pump's profile, with `rate` from `change` to midnight.
+    private func schedule(changingTo rate: Double, at change: Date) -> [RepeatingScheduleValue<Double>] {
+        let midnight = Calendar.current.startOfDay(for: change)
+        return [
+            RepeatingScheduleValue(startTime: 0, value: Self.profileRate),
+            RepeatingScheduleValue(startTime: change.timeIntervalSince(midnight), value: rate),
+        ]
+    }
+
+    private func advance(to date: Date) throws {
+        let seconds = date.timeIntervalSince(clock.now)
+        try clock.advanceBoth(seconds: seconds, ticks: max(1, Int(seconds / 60)))
+    }
+
     private func waitForBackfill(_ driver: FaketandemHarness.Driver, timeout: TimeInterval = 180) throws {
-        let last = try harness.client.snapshot().history.lastSequence
+        let last = try lastSequence()
         try IntegrationWait.until("the driver to read the pump's history through \(last)", timeout: timeout) {
             (driver.manager.state.historyBackfill?.watermark).map { Int($0) >= last } == true
                 && !driver.manager.historyFetchGate.isBusy
@@ -88,42 +124,34 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         _ = try sync()
     }
 
-    /// A 279 as the pump writes it. Rates in milliunits per hour.
-    private struct Delivery {
-        var secondsAgo: TimeInterval
-        var source: Int
-        var rate: Int
-        var profile = 1000
-
-        static func controlIQ(_ secondsAgo: TimeInterval, _ rate: Int) -> Delivery {
-            Delivery(secondsAgo: secondsAgo, source: 3, rate: rate)
-        }
-
-        var record: [String: Any] {
-            [
-                "type": "BasalDelivery",
-                "seconds_ago": secondsAgo,
-                "data": [
-                    "commandedRateSource": source,
-                    "commandedRate": rate,
-                    "profileBasalRate": profile,
-                    "algorithmRate": source >= 3 ? rate : 0,
-                    "tempRate": source == 2 || source == 4 ? rate : 0,
-                ] as [String: Any],
-            ]
-        }
+    private func lastSequence() throws -> Int {
+        try harness.client.snapshot().history.lastSequence
     }
 
-    /// Control-IQ cycles ending one cycle before now, oldest first, at `rates`.
-    private func controlIQCycles(_ rates: [Int], endingSecondsAgo end: TimeInterval = cycle + 30) -> [Delivery] {
-        rates.enumerated().map { index, rate in
-            .controlIQ(end + Double(rates.count - 1 - index) * Self.cycle, rate)
-        }
+    /// The latest 279's sequence.
+    private func lastCycle() throws -> Int {
+        try XCTUnwrap(try harness.client.history(since: historyStartSequence).last { $0.type == "BasalDelivery" }, "no 279 yet").sequence
     }
 
+    /// The rate Control-IQ runs from the next 279, in milliunits per hour.
+    private func setControlIQRate(_ rate: Int) throws {
+        try harness.client.setState(["controliq_algorithm_rate": Double(rate) / 1000])
+    }
+
+    /// Control-IQ switched on at the pump for a 279 at each of `rates`, then off, and a cycle on the
+    /// profile that closes the last. Starts on a 279; returns the records it wrote.
     @discardableResult
-    private func append(_ records: [[String: Any]]) throws -> ClosedRange<Int> {
-        try harness.client.appendHistory(records: records)
+    private func controlIQOnThePump(_ rates: [Int]) throws -> ClosedRange<Int> {
+        XCTAssertEqual(try harness.client.snapshot().basalCycle?.nextCycle?.date, clock.now.addingTimeInterval(Self.cycle), "starts on a 279")
+        let first = try lastSequence() + 1
+        try harness.client.setState(["closed_loop_enabled": true])
+        for rate in rates {
+            try setControlIQRate(rate)
+            try clock.advanceBoth(seconds: Self.cycle, ticks: 1)
+        }
+        try harness.client.setState(["closed_loop_enabled": false])
+        try clock.advanceBoth(seconds: Self.cycle, ticks: 1)
+        return first ... (try lastSequence())
     }
 
     private func eventsSince(_ count: Int) -> [NewPumpEvent] {
@@ -141,35 +169,32 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         }
     }
 
-    /// The instant a staged record's `seconds_ago` stands for.
-    private func instant(_ secondsAgo: TimeInterval, from now: Date) -> Date {
-        now.addingTimeInterval(-secondsAgo)
-    }
-
-    private func assertCorrections(
-        _ corrections: [NewPumpEvent],
-        match deliveries: [Delivery],
-        stagedAt now: Date,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        let differing = deliveries.filter { abs($0.rate - Int(Self.profileRate * 1000)) > 10 }
-        XCTAssertEqual(corrections.count, differing.count, "one correction per 279 off the schedule: \(corrections)", file: file, line: line)
-        XCTAssertEqual(corrections.map(\.date), corrections.map(\.date).sorted(), "ascending", file: file, line: line)
-        for (correction, delivery) in zip(corrections, differing) {
-            XCTAssertEqual(correction.dose?.type, .tempBasal, file: file, line: line)
-            XCTAssertEqual(correction.dose?.isMutable, false, file: file, line: line)
-            XCTAssertEqual(correction.dose?.unitsPerHour ?? -1, Double(delivery.rate) / 1000, accuracy: 0.0005, file: file, line: line)
-            XCTAssertEqual(correction.date.timeIntervalSince(instant(delivery.secondsAgo, from: now)), 0, accuracy: 2, file: file, line: line)
+    /// The closed 279s in `sequences` that delivered off the schedule.
+    private func cyclesOffTheSchedule(in sequences: ClosedRange<Int>) throws -> [PumpTimeline.BasalCycle] {
+        try timeline().basalCycles.filter {
+            sequences.contains($0.sequence) && $0.end <= clock.now && $0.source != 0 && abs($0.rate - Self.profileRate) > 0.01
         }
     }
 
-    /// Both hosts count the basal the 279s in `sequences` delivered: over all of them, and each.
+    /// One correction per closed 279 in `sequences` off the schedule, ascending, at its rate and start.
+    private func assertCorrections(_ corrections: [NewPumpEvent], match sequences: ClosedRange<Int>, file: StaticString = #filePath, line: UInt = #line) throws {
+        let differing = try cyclesOffTheSchedule(in: sequences)
+        XCTAssertEqual(corrections.count, differing.count, "one correction per 279 off the schedule: \(corrections)", file: file, line: line)
+        XCTAssertEqual(corrections.map(\.date), corrections.map(\.date).sorted(), "ascending", file: file, line: line)
+        for (correction, cycle) in zip(corrections, differing) {
+            XCTAssertEqual(correction.dose?.type, .tempBasal, file: file, line: line)
+            XCTAssertEqual(correction.dose?.isMutable, false, file: file, line: line)
+            XCTAssertEqual(correction.dose?.unitsPerHour ?? -1, cycle.rate, accuracy: 0.0005, file: file, line: line)
+            XCTAssertEqual(correction.date.timeIntervalSince(cycle.start), 0, accuracy: 2, file: file, line: line)
+        }
+    }
+
+    /// Both hosts count the basal the closed 279s in `sequences` delivered: over all of them, and each.
     private func assertHostsCountThePumpsBasal(over sequences: ClosedRange<Int>, file: StaticString = #filePath, line: UInt = #line) throws {
         let timeline = try timeline()
-        let cycles = timeline.basalCycles.filter { sequences.contains($0.sequence) }
+        let cycles = timeline.basalCycles.filter { sequences.contains($0.sequence) && $0.end <= clock.now }
         guard let first = cycles.first, let last = cycles.last else {
-            return XCTFail("no 279s in \(sequences)", file: file, line: line)
+            return XCTFail("no closed 279s in \(sequences)", file: file, line: line)
         }
         let (loop, trio) = feedOracles()
         let scheduled: (Date) -> Double = { _ in Self.profileRate }
@@ -199,23 +224,6 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         }
     }
 
-    /// The 279 the pump writes now: at what the emulator runs, or at Control-IQ's `rate`.
-    @discardableResult
-    private func cycle(controlIQ rate: Int? = nil) throws -> Int {
-        let basal = try harness.client.snapshot().basal
-        let profile = Int((basal.profileRate * 1000).rounded())
-        let delivery: Delivery = if let rate {
-            Delivery(secondsAgo: 0, source: 3, rate: rate, profile: profile)
-        } else if basal.suspended {
-            Delivery(secondsAgo: 0, source: 0, rate: 0, profile: profile)
-        } else if basal.tempActive {
-            Delivery(secondsAgo: 0, source: 2, rate: Int((basal.tempRate * 1000).rounded()), profile: profile)
-        } else {
-            Delivery(secondsAgo: 0, source: 1, rate: profile, profile: profile)
-        }
-        return try append([delivery.record]).lowerBound
-    }
-
     private func configureControlIQ(_ enabled: Bool) throws {
         let manager = try XCTUnwrap(driver, "no driver").manager
         let done = expectation(description: "configureControlIQMode")
@@ -231,39 +239,35 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     // MARK: - H1
 
     /// The app's temp runs, Control-IQ takes over for an hour with a sync every cycle, then hands
-    /// back: the temp ends where the driver stopped it, every 279 off the schedule is corrected by
+    /// back: the temp ends where Control-IQ stopped it, every 279 off the schedule is corrected by
     /// the time the sync after the hand-back returns, and the app's next temp follows them.
     func testH1_aControlIQHourBetweenAppTempsIsCorrectedAndHandedBack() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
-        try cycle()
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
         try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
-        try cycle()
         _ = try sync()
 
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
-        try harness.client.setState(["closed_loop_enabled": true])
         try configureControlIQ(true)
         XCTAssertTrue(driver.manager.state.useControlIQ)
+        XCTAssertEqual(try harness.client.snapshot().basalCycle?.pcm, 3, "the pump runs closed loop")
         let appTempEnd = clock.now
 
         let rates = [1400, 600, 1000, 2200, 400, 1000, 1800, 1800, 300, 1000, 1200, 700]
         var controlIQ: [Int] = []
-        try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
         for (index, rate) in rates.enumerated() {
-            if index > 0 { try clock.advanceBoth(seconds: .minutes(5), ticks: 5) }
-            controlIQ.append(try cycle(controlIQ: rate))
+            try setControlIQRate(rate)
+            try clock.advanceBoth(seconds: .minutes(index == 0 ? 4 : 5), ticks: 5)
+            controlIQ.append(try lastCycle())
             _ = try sync()
         }
         try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
-        try harness.client.setState(["closed_loop_enabled": false])
         try configureControlIQ(false)
         XCTAssertFalse(driver.manager.state.useControlIQ)
 
         try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
-        try cycle()
         _ = try sync()
         let offSchedule = rates.filter { abs($0 - Int(Self.profileRate * 1000)) > 10 }.count
         let found = corrections(since: before)
@@ -274,6 +278,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
         let timeline = try timeline()
         let cycles = timeline.basalCycles.filter { controlIQ.contains($0.sequence) && abs(Int(($0.rate * 1000).rounded()) - 1000) > 10 }
+        XCTAssertTrue(timeline.basalCycles.filter { controlIQ.contains($0.sequence) }.allSatisfy { $0.source == 3 }, "the pump's own Control-IQ cycles")
         XCTAssertEqual(found.map(\.date), found.map(\.date).sorted(), "ascending")
         for (correction, cycle) in zip(found, cycles) {
             XCTAssertEqual(correction.dose?.unitsPerHour ?? -1, cycle.rate, accuracy: 0.0005)
@@ -307,15 +312,12 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
         try radioOff(driver)
-        try clock.advanceBoth(seconds: .hours(2), ticks: 24)
-        let stagedAt = clock.now
-        let deliveries = controlIQCycles((0 ..< 22).map { [1000, 2200, 400][$0 % 3] })
-        let staged = try append(deliveries.map(\.record))
+        let outage = try controlIQOnThePump((0 ..< 22).map { [1000, 2200, 400][$0 % 3] })
 
         try radioOnAndSync()
         let found = try waitForCorrections(14, since: before)
 
-        assertCorrections(found, match: deliveries, stagedAt: stagedAt)
+        try assertCorrections(found, match: outage)
         let carrying = allPumpEventBatches.dropFirst(before).filter { batch in
             batch.events.contains { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
         }
@@ -330,7 +332,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
             XCTAssertNotNil(trio.event(syncIdentifier: correction.raw.hexadecimalString), "Trio stores every correction")
         }
         trio.assertNoSameSecondBasalRows()
-        try assertHostsCountThePumpsBasal(over: staged)
+        try assertHostsCountThePumpsBasal(over: outage)
 
         _ = try sync()
         try waitForBackfill(driver)
@@ -343,13 +345,10 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     func testH3_aRelaunchReportsNothingTwice() throws {
         try stageDriver()
         let before = allPumpEventBatches.count
-        try clock.advanceBoth(seconds: .hours(1), ticks: 12)
-        let firstAt = clock.now
-        let first = controlIQCycles([2200, 1000, 400, 2200, 1000, 400, 2200, 1000, 400, 2200])
-        let firstStaged = try append(first.map(\.record))
+        let first = try controlIQOnThePump([2200, 1000, 400, 2200, 1000, 400, 2200, 1000, 400, 2200])
         _ = try sync()
         let found = try waitForCorrections(7, since: before)
-        assertCorrections(found, match: first, stagedAt: firstAt)
+        try assertCorrections(found, match: first)
 
         let relaunched = try relaunch()
         _ = try sync()
@@ -357,19 +356,17 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         XCTAssertEqual(corrections(since: before).count, found.count, "nothing reported again after the relaunch")
 
         try clock.advanceBoth(seconds: .minutes(30), ticks: 6)
-        let secondAt = clock.now
-        let second = controlIQCycles([600, 600, 1000, 1500, 1500])
-        let secondStaged = try append(second.map(\.record))
+        let second = try controlIQOnThePump([600, 600, 1000, 1500, 1500])
         _ = try sync()
         let all = try waitForCorrections(found.count + 4, since: before)
-        assertCorrections(Array(all.dropFirst(found.count)), match: second, stagedAt: secondAt)
+        try assertCorrections(Array(all.dropFirst(found.count)), match: second)
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("relaunch")
         trio.assertNoDuplicates("relaunch")
         XCTAssertEqual(Set(all.map(\.raw)).count, all.count, "one correction per 279")
-        try assertHostsCountThePumpsBasal(over: firstStaged)
-        try assertHostsCountThePumpsBasal(over: secondStaged)
+        try assertHostsCountThePumpsBasal(over: first)
+        try assertHostsCountThePumpsBasal(over: second)
     }
 
     // MARK: - H4
@@ -380,26 +377,33 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
         try radioOff(driver)
-        try clock.advanceBoth(seconds: .hours(1), ticks: 12)
-        let stagedAt = clock.now
-        let staged = try append([
-            Delivery.controlIQ(3000, 2200).record,
-            Delivery.controlIQ(2700, 2200).record,
-            ["type": "PumpingSuspended", "seconds_ago": 2600.0, "data": ["reasonId": 0] as [String: Any]],
-            Delivery(secondsAgo: 2400, source: 0, rate: 0).record,
-            Delivery(secondsAgo: 2100, source: 0, rate: 0).record,
-            ["type": "PumpingResumed", "seconds_ago": 2000.0, "data": [:] as [String: Any]],
-            Delivery.controlIQ(2000, 400).record,
-            Delivery.controlIQ(1700, 400).record,
-            Delivery.controlIQ(1400, 1000).record,
-        ])
+        let first = try lastSequence() + 1
+        try harness.client.setState(["closed_loop_enabled": true])
+        try setControlIQRate(2200)
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 2)
+        try clock.advanceBoth(seconds: 100, ticks: 1)
+        let suspendedAt = clock.now
+        try harness.client.suspend(reason: "user")
+        try clock.advanceBoth(seconds: .minutes(10), ticks: 2)
+        try setControlIQRate(400)
+        let resumedAt = clock.now
+        try harness.client.resume()
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        try setControlIQRate(1000)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        try harness.client.setState(["closed_loop_enabled": false])
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        let outage = first ... (try lastSequence())
+        let cycles = try timeline().basalCycles.filter { outage.contains($0.sequence) }
+        XCTAssertEqual(cycles.map(\.source), [3, 3, 0, 0, 3, 3, 3, 1], "suspended 279s, and one at the resume")
+        XCTAssertEqual(cycles.first { $0.start >= resumedAt }?.start, resumedAt, "the resume restarts the cadence")
 
         try radioOnAndSync()
         let found = try waitForCorrections(4, since: before)
 
         XCTAssertEqual(found.map(\.dose?.unitsPerHour), [2.2, 2.2, 0.4, 0.4])
-        XCTAssertEqual(found[1].dose?.endDate.timeIntervalSince(instant(2600, from: stagedAt)) ?? -1, 0, accuracy: 1, "the chunk under way ends at the stop")
-        XCTAssertGreaterThan(try XCTUnwrap(found[2].dose?.startDate), instant(2000, from: stagedAt), "never in the resume's second")
+        XCTAssertEqual(found[1].dose?.endDate.timeIntervalSince(suspendedAt) ?? -1, 0, accuracy: 1, "the chunk under way ends at the stop")
+        XCTAssertGreaterThan(try XCTUnwrap(found[2].dose?.startDate), resumedAt, "never in the resume's second")
         let batch = try XCTUnwrap(allPumpEventBatches.dropFirst(before).first { batch in
             batch.events.contains { HistoryLogSyncIdentifier.decode($0.raw)?.scheme == .logSequence }
         })
@@ -410,84 +414,7 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates("suspend during Control-IQ")
         trio.assertNoDuplicates("suspend during Control-IQ")
         XCTAssertNoThrow(try trio.basalSegments(clock: clock.now), "Trio's IOB runs")
-        try assertHostsCountThePumpsBasal(over: staged)
-    }
-
-    // MARK: - H7
-
-    /// A temp basal set on the pump's own screen is reported as its chunks close.
-    func testH7_aTempSetOnThePumpIsReportedFromItsChunks() throws {
-        try stageDriver()
-        let before = allPumpEventBatches.count
-        try clock.advanceBoth(seconds: .hours(1), ticks: 12)
-        let stagedAt = clock.now
-        let deliveries = [1800.0, 1500, 1200, 900, 600].map { Delivery(secondsAgo: $0 - 10, source: 2, rate: 1500) }
-        let staged = try append(
-            [["type": "TempRateActivated", "seconds_ago": 1800.0, "data": ["percent": 150, "durationMilliseconds": 1_800_000, "tempRateId": 77] as [String: Any]]]
-                + deliveries.map(\.record)
-                + [["type": "TempRateCompleted", "seconds_ago": 0.0, "data": ["tempRateId": 77, "timeLeft": 0] as [String: Any]]]
-        )
-
-        _ = try sync()
-        let found = try waitForCorrections(5, since: before)
-
-        assertCorrections(found, match: deliveries, stagedAt: stagedAt)
-        for correction in found {
-            XCTAssertEqual(correction.dose?.wasProgrammedByPumpUI, true)
-            XCTAssertEqual(correction.dose?.automatic, false)
-            XCTAssertEqual(correction.title, "Temp Basal")
-        }
-        try assertHostsCountThePumpsBasal(over: staged)
-    }
-
-    // MARK: - H8
-
-    /// The pump's profile is not the app's schedule: its chunks are corrected at the pump's rate,
-    /// and the mismatch is still flagged.
-    func testH8_aPumpProfileOffTheScheduleIsCorrectedAndFlagged() throws {
-        let driver = try stageDriver()
-        let before = allPumpEventBatches.count
-        try harness.client.setState(["basal_rate": 1.2])
-        try clock.advanceBoth(seconds: .minutes(30), ticks: 6)
-        let stagedAt = clock.now
-        let deliveries = [1500.0, 1200, 900, 600].map { Delivery(secondsAgo: $0, source: 1, rate: 1200, profile: 1200) }
-        let staged = try append(deliveries.map(\.record))
-
-        for _ in 0 ..< 3 {
-            _ = try sync()
-            try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval / 2, ticks: 2)
-        }
-        _ = try sync()
-        let found = try waitForCorrections(4, since: before)
-
-        assertCorrections(Array(found.prefix(4)), match: deliveries, stagedAt: stagedAt)
-        XCTAssertTrue(found.prefix(4).allSatisfy { $0.dose?.automatic == false && $0.dose?.wasProgrammedByPumpUI == false })
-        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed, "the mismatch still shows")
-        try assertHostsCountThePumpsBasal(over: staged)
-    }
-
-    // MARK: - H10
-
-    /// The CGM drops out under Control-IQ and the pump runs its profile, which is the app's
-    /// schedule: only the Control-IQ chunks off it are corrected.
-    func testH10_aCGMDropoutRunsTheProfileAndReportsNothingForIt() throws {
-        try stageDriver()
-        let before = allPumpEventBatches.count
-        try clock.advanceBoth(seconds: .hours(1), ticks: 12)
-        let stagedAt = clock.now
-        let deliveries = [
-            Delivery.controlIQ(1830, 2200),
-            Delivery(secondsAgo: 1530, source: 1, rate: 1000),
-            Delivery(secondsAgo: 1230, source: 1, rate: 1000),
-            Delivery(secondsAgo: 930, source: 1, rate: 1000),
-            Delivery.controlIQ(630, 400),
-        ]
-        let staged = try append(deliveries.map(\.record))
-
-        _ = try sync()
-        let found = try waitForCorrections(2, since: before)
-        assertCorrections(found, match: deliveries, stagedAt: stagedAt)
-        try assertHostsCountThePumpsBasal(over: staged)
+        try assertHostsCountThePumpsBasal(over: outage)
     }
 
     // MARK: - H5
@@ -497,11 +424,9 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     func testH5_aLostSetTempRateIsReportedLiveAndLeavesNothingToCorrect() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
-        try cycle()
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.2, duration: .minutes(30)))
         try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
-        try cycle()
         _ = try sync()
 
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
@@ -511,10 +436,9 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         }
         let pumpStart = try XCTUnwrap(try harness.client.snapshot().basal.tempStart?.date)
         try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
-        let lastClosed = try cycle()
+        let lastClosed = try lastCycle()
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
-        try cycle()
         _ = try sync()
         try waitForBackfill(driver)
         try waitForReconciliation(driver, through: lastClosed)
@@ -534,41 +458,246 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
     // MARK: - H6
 
-    /// App temps, a cancel, and a temp replaced within one cycle, with a 279 every five minutes:
-    /// the host counts each change from its command and the pump from its next 279, so nothing
-    /// differs and nothing is reported.
+    /// App temps, a cancel, and a temp replaced within one cycle: the host counts each change from
+    /// its command and the pump from its next 279, so nothing differs and nothing is reported.
     func testH6_appTempsAndACancelReportNothing() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
-        try cycle()
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
         try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
-        try cycle()
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 0, duration: 0), "cancel")
         try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
-        try cycle()
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 2.0, duration: .minutes(30)))
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
         XCTAssertNil(try enactTempBasal(unitsPerHour: 0.5, duration: .minutes(30)), "replaces the last before the pump's next 279")
         try clock.advanceBoth(seconds: .minutes(3), ticks: 3)
-        try cycle()
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
-        let lastClosed = try cycle()
+        let lastClosed = try lastCycle()
         _ = try sync()
         try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
-        try cycle()
         _ = try sync()
         try waitForBackfill(driver)
         try waitForReconciliation(driver, through: lastClosed)
 
         XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
         XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
-        XCTAssertGreaterThanOrEqual(try timeline().basalCycles.count, 6)
+        let rates = try timeline().basalCycles.map { Int(($0.rate * 1000).rounded()) }
+        XCTAssertEqual(rates, [1000, 1500, 1000, 500, 500, 500], "the 2.0 U/hr temp was replaced before a 279 ran it")
+    }
+
+    /// An app temp across a profile segment change: the pump rescales it at the change and runs the
+    /// new rate from its next 279, the driver cuts the temp there, and nothing differs.
+    func testH6_aTempAcrossASegmentChangeReportsNothing() throws {
+        let change = try startClocksBeforeASegmentChange()
+        let driver = try stageDriver(schedule: schedule(changingTo: 0.8, at: change))
+        let before = allPumpEventBatches.count
+        try advance(to: change - .minutes(17))
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(30)))
+        for minutes in [13.0, 8, 3] {
+            try advance(to: change - .minutes(minutes))
+            _ = try sync()
+        }
+        try advance(to: change + 30)
+        _ = try sync()
+        XCTAssertEqual(try harness.client.snapshot().basal.tempRate, 1.2, accuracy: 0.001, "the pump rescaled the temp at its segment change")
+        try advance(to: change + .minutes(2))
+        _ = try sync()
+        try advance(to: change + .minutes(7))
+        let lastClosed = try lastCycle()
+        _ = try sync()
+        try advance(to: change + .minutes(12))
+        _ = try sync()
+        try waitForBackfill(driver)
+        try waitForReconciliation(driver, through: lastClosed)
+
+        XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        let rates = try timeline().basalCycles.map { Int(($0.rate * 1000).rounded()) }
+        XCTAssertEqual(rates, [1000, 1500, 1500, 1500, 1200, 1200, 1200], "1.2 U/hr from the first 279 after the change")
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates("segment change")
+        trio.assertNoDuplicates("segment change")
+        trio.assertNoSameSecondBasalRows()
+        let temps = loop.doses.filter { $0.dose.type == .tempBasal }.sorted { $0.dose.startDate < $1.dose.startDate }
+        XCTAssertEqual(temps.map(\.dose.unitsPerHour), [1.5, 1.2], "cut at the change, at the rescaled rate after it")
+        XCTAssertEqual(temps.first.map { $0.dose.endDate.timeIntervalSince(change) } ?? .infinity, 0, accuracy: 2)
+        XCTAssertEqual(temps.last.map { $0.dose.startDate.timeIntervalSince(change) } ?? .infinity, 0, accuracy: 2)
+    }
+
+    /// The pump's clock runs 11 minutes ahead, so it reaches its 2.0 U/hr segment 11 minutes before
+    /// the phone does. The driver runs a temp that delivers the host's 1.0 until the phone gets
+    /// there, and the host, never told of it, counts what the pump's 279s ran: nothing differs.
+    func testH6_aSkewedPumpClocksCompensationReportsNothing() throws {
+        let change = try startClocksBeforeASegmentChange(skewSeconds: 660)
+        let driver = try stageDriver(schedule: schedule(changingTo: 2.0, at: change))
+        XCTAssertTrue(driver.manager.state.isPumpClockSkewed)
+        let before = allPumpEventBatches.count
+        try advance(to: change - .minutes(11) + 30)
+        _ = try sync()
+        let compensating = try harness.client.snapshot().basal
+        XCTAssertTrue(compensating.tempActive, "the pump runs the host's 1.0 U/hr")
+        XCTAssertEqual(compensating.tempRate, 1.0, accuracy: 0.001)
+        for minutes in [8.0, 3] {
+            try advance(to: change - .minutes(minutes))
+            _ = try sync()
+        }
+        try advance(to: change + 30)
+        _ = try sync()
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive, "the phone reached the pump's segment")
+        try advance(to: change + .minutes(7))
+        let lastClosed = try lastCycle()
+        _ = try sync()
+        try advance(to: change + .minutes(12))
+        _ = try sync()
+        try waitForBackfill(driver)
+        try waitForReconciliation(driver, through: lastClosed)
+
+        XCTAssertTrue(corrections(since: before).isEmpty, "nothing reported: \(corrections(since: before))")
+        XCTAssertTrue(driver.manager.loggedBasalDifferences.isEmpty, "no 279 differs from what the host was told")
+        let cycles = try timeline().basalCycles
+        XCTAssertEqual(cycles.map { Int(($0.rate * 1000).rounded()) }, [1000, 1000, 1000, 1000, 2000, 2000, 2000])
+        XCTAssertEqual(cycles.map(\.source), [1, 1, 2, 2, 1, 1, 1], "the compensation ran as a temp")
+        let (loop, _) = feedOracles()
+        XCTAssertTrue(loop.doses.filter { $0.dose.type == .tempBasal }.isEmpty, "the host counts its own scheduled rate")
+    }
+
+    // MARK: - H7
+
+    /// A temp basal set on the pump's own screen is reported as its chunks close.
+    func testH7_aTempSetOnThePumpIsReportedFromItsChunks() throws {
+        try stageDriver()
+        let before = allPumpEventBatches.count
+        let first = try lastSequence() + 1
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        try harness.client.startTempBasal(percent: 150, durationMinutes: 30)
+        try clock.advanceBoth(seconds: .minutes(35), ticks: 7)
+        let staged = first ... (try lastSequence())
+
+        _ = try sync()
+        let found = try waitForCorrections(6, since: before)
+
+        try assertCorrections(found, match: staged)
+        for correction in found {
+            XCTAssertEqual(correction.dose?.wasProgrammedByPumpUI, true)
+            XCTAssertEqual(correction.dose?.automatic, false)
+            XCTAssertEqual(correction.title, "Temp Basal")
+        }
+        try assertHostsCountThePumpsBasal(over: staged)
+    }
+
+    // MARK: - H8
+
+    /// The pump's profile is not the app's schedule: its chunks are corrected at the pump's rate,
+    /// and the mismatch is still flagged.
+    func testH8_aPumpProfileOffTheScheduleIsCorrectedAndFlagged() throws {
+        let driver = try stageDriver()
+        let before = allPumpEventBatches.count
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        try harness.client.setState(["basal_rate": 1.2])
+        let first = try lastSequence() + 1
+
+        for _ in 0 ..< 3 {
+            _ = try sync()
+            try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval / 2, ticks: 2)
+        }
+        _ = try sync()
+        try clock.advanceBoth(seconds: .minutes(18), ticks: 4)
+        _ = try sync()
+        let found = try waitForCorrections(4, since: before)
+        let staged = first ... (try lastSequence())
+
+        try assertCorrections(found, match: staged)
+        XCTAssertTrue(found.allSatisfy { $0.dose?.automatic == false && $0.dose?.wasProgrammedByPumpUI == false })
+        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed, "the mismatch still shows")
+        try assertHostsCountThePumpsBasal(over: staged)
+    }
+
+    // MARK: - H9
+
+    /// An alarm stops delivery during the app's temp and the pump keeps the temp: it ends for the
+    /// host at the stop, runs again from the resume, and its chunks are reported until the app's
+    /// next temp.
+    func testH9_aTempAnAlarmSuspendKeptIsReportedAfterTheResume() throws {
+        let driver = try stageDriver()
+        let before = allPumpEventBatches.count
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.5, duration: .minutes(60)))
+        try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
+        _ = try sync()
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        let suspendedAt = clock.now
+        try harness.client.suspend(reason: "alarm", keepTemp: true)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try clock.advanceBoth(seconds: .minutes(2), ticks: 2)
+        let resumedAt = clock.now
+        let resumeCycle = try lastSequence() + 1
+        try harness.client.resume(clearAlarms: true)
+        XCTAssertTrue(try harness.client.snapshot().basal.tempActive, "the temp runs again")
+        _ = try sync()
+        for _ in 0 ..< 3 {
+            try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+            _ = try sync()
+        }
+        let lastResumed = try lastCycle()
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 0.8, duration: .minutes(30)))
+        let nextTemp = clock.now
+        try clock.advanceBoth(seconds: .minutes(4), ticks: 4)
+        let lastClosed = try lastCycle()
+        _ = try sync()
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        _ = try sync()
+        try waitForBackfill(driver)
+        try waitForReconciliation(driver, through: lastClosed)
+
+        let found = corrections(since: before)
+        XCTAssertEqual(found.map(\.dose?.unitsPerHour), [1.5, 1.5, 1.5, 1.5], "the four chunks the temp ran after the resume")
+        XCTAssertGreaterThan(try XCTUnwrap(found.first?.dose?.startDate), resumedAt, "never in the resume's second")
+        XCTAssertEqual(found.last?.dose?.endDate.timeIntervalSince(nextTemp) ?? .infinity, 0, accuracy: 2, "the last ends at the app's next temp")
+        XCTAssertTrue(found.allSatisfy { $0.dose?.automatic == true }, "the app set the temp")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates("alarm suspend keeping the temp")
+        trio.assertNoDuplicates("alarm suspend keeping the temp")
+        trio.assertNoSameSecondBasalRows()
+        let correctionIds = Set(found.map(\.raw.hexadecimalString))
+        let appTemp = loop.permanentDoses.first { $0.dose.type == .tempBasal && !correctionIds.contains($0.syncIdentifier) }
+        XCTAssertEqual(appTemp.map { $0.dose.endDate.timeIntervalSince(suspendedAt) } ?? .infinity, 0, accuracy: 2, "the app's temp ends at the stop")
+        try assertHostsCountThePumpsBasal(over: resumeCycle ... lastResumed - 1)
+    }
+
+    // MARK: - H10
+
+    /// The CGM drops out under Control-IQ and the pump runs its profile, which is the app's
+    /// schedule: only the Control-IQ chunks off it are corrected.
+    func testH10_aCGMDropoutRunsTheProfileAndReportsNothingForIt() throws {
+        try stageDriver()
+        let before = allPumpEventBatches.count
+        let first = try lastSequence() + 1
+        try harness.client.setState(["closed_loop_enabled": true])
+        try setControlIQRate(2200)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        try harness.client.setState(["cgm_available": false])
+        try clock.advanceBoth(seconds: .minutes(15), ticks: 3)
+        try harness.client.setState(["cgm_available": true])
+        try setControlIQRate(400)
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        try harness.client.setState(["closed_loop_enabled": false])
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        let staged = first ... (try lastSequence())
+        let cycles = try timeline().basalCycles.filter { staged.contains($0.sequence) }
+        XCTAssertEqual(cycles.map(\.source), [3, 1, 1, 1, 3, 1], "the profile while the CGM is gone")
+
+        _ = try sync()
+        let found = try waitForCorrections(2, since: before)
+        try assertCorrections(found, match: staged)
+        try assertHostsCountThePumpsBasal(over: staged)
     }
 }

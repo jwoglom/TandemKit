@@ -176,10 +176,11 @@ Both history flags are on. `TimeChangeConformanceTests`.
 
 The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record each. With
 `basalHistoryReporting` on, the driver compares each closed cycle with what the host counts and
-reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). faketandem
-writes no 279s yet, so each scenario appends the pump's records: for a stretch staged while the
-radio is off or in the past, or, where the app's own commands run, one 279 at each five-minute step
-at what the emulator runs (`docs/integration-harness.md`). History backfill and basal reporting are
+reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
+scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
+paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
+`ControlIQPcmChange` records, and Control-IQ switched on the pump (`closed_loop_enabled`) or by the
+app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal reporting are
 on. Every scenario that corrects also checks, over its 279s and over each, that Loop's and Trio's
 net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a
 suspend cuts short: Loop rebuilds the temp basal before a suspend without its `deliveredUnits` and
@@ -192,10 +193,10 @@ counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 | H3 | Relaunch from `rawValue` during Control-IQ | Nothing reported twice; corrections continue |
 | H4 | A suspend and resume during Control-IQ | The chunk under way ends at the suspend; no correction in the resume's second; the suspend, resume and corrections in one batch |
 | H5 | A5b with reporting on (#340), a 279 every 5 minutes | The pump's temp reported live at its pump start and rate; no 279 differs and nothing is corrected; Trio's IOB runs |
-| H6 | App temps, a cancel and a temp replaced within one cycle, a 279 every 5 minutes | No difference, nothing reported. A temp across a segment change and skew compensation (D5) need the emulator's profile segments and cycle; unit tests (`BasalReconcilerTests`) until then |
+| H6 | App temps, a cancel and a temp replaced within one cycle; an app temp across a profile segment change; a pump clock 11 minutes ahead across its segment change, with the skew compensation temp (D5) | No difference, nothing reported. The replaced temp is never delivered; the pump rescales the temp at the change and the driver cuts it there; the host is never told of the compensation temp |
 | H7 | A temp set on the pump's screen | Reported as its chunks close, with `wasProgrammedByPumpUI` |
 | H8 | The pump's profile is not the app's schedule (#400) | Corrections at the pump's rate; the mismatch is still flagged |
-| H9 | An alarm suspend during an app temp; the temp resumes with delivery | The temp's chunks after the resume reported until the app's next temp. Needs faketandem's alarm suspend that keeps a temp; unit tests until then |
+| H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
 
 ## Execution order

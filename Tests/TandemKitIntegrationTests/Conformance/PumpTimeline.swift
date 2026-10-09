@@ -78,8 +78,9 @@ struct PumpTimeline {
         /// When it actually ended (expiry, stop, replacement, or suspend); nil while running.
         let end: Date?
         let endPumpSeconds: Int?
-        /// How much of the programmed duration was still to run when it ended, in seconds: zero for
-        /// one that expired on its own, positive for one cut short (`TempRateCompleted.timeLeft`).
+        /// How much of the programmed duration was still to run when it ended, in milliseconds of whole
+        /// minutes: zero for one that expired on its own, positive for one cut short
+        /// (`TempRateCompleted.timeLeft`).
         let timeLeft: Int?
         var isFinished: Bool { end != nil }
         /// rate × actual (or scheduled) duration, what a finalized `deliveredUnits` should read.
