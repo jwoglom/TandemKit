@@ -199,6 +199,14 @@ import XCTest
         )
     }
 
+    func testInsulinOnBoardIsReadOnlyUnderTheControlIQOpcode() {
+        XCTAssertEqual(
+            QualifyingEventFetch.fetches(for: [.iobChange], context: QualifyingEventContext(controlIQSupported: true)),
+            [.insulinOnBoard]
+        )
+        XCTAssertEqual(QualifyingEventFetch.fetches(for: [.iobChange], context: legacyContext), [])
+    }
+
     /// The alarm bundle still reloads on a pump too old for the AAM-bits request, because the
     /// alarm status request that survives the API filter maps to the same fetch.
     func testNotificationFetchSurvivesApiVersionFiltering() {

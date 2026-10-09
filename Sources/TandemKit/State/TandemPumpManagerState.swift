@@ -44,6 +44,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
     public var featureFlags: TandemFeatureFlags = .default
+    /// The pump's own IOB in units, as its screen shows it: bolus insulin only, or under
+    /// Control-IQ basal above and below the profile too. Nothing doses on it.
     public var latestInsulinOnBoard: Double?
     public var lastReservoirReading: ReservoirValue?
     /// Cleared once `lastReservoirReading` has reached the delegate. Persisted so a reading taken

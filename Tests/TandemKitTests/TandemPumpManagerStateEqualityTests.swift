@@ -78,7 +78,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("basalRateMismatchDetectedAt", { $0.basalRateMismatchDetectedAt = nil }),
             ("basalProfileUpdateFailed", { $0.basalProfileUpdateFailed = false }),
             ("historyBackfill", { $0.historyBackfill?.advanceWatermark(through: 5000) }),
-            ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
+            ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04]), units: 1) }),
             ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
             ("reportedBasal.reconciledThrough", { $0.reportedBasal.reconcile(through: 5000) }),
             ("lastTempRateEventRaw", { $0.lastTempRateEventRaw = nil }),
