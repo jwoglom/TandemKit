@@ -120,11 +120,11 @@ extension TandemPumpManager {
 
         // Before the suspend, reservoir and Control-IQ highlights, because it means the basal rates
         // the app shows are not what the pump is running.
-        if state.basalRateMismatchConfirmed {
+        if state.basalProfileUpdateStatus == .failed {
             return PumpStatusHighlight(
                 localizedMessage: String(
-                    localized: "Basal Rate Mismatch",
-                    comment: "Status highlight that the pump is delivering a basal rate other than the scheduled one."
+                    localized: "Basal Profile Not Updated",
+                    comment: "Status highlight that the driver could not write the app's basal rates to the pump."
                 ),
                 imageName: "exclamationmark.circle.fill",
                 state: .critical
@@ -150,6 +150,17 @@ extension TandemPumpManager {
                 ),
                 imageName: "exclamationmark.circle.fill",
                 state: .critical
+            )
+        }
+
+        if state.basalProfileUpdateStatus == .updating {
+            return PumpStatusHighlight(
+                localizedMessage: String(
+                    localized: "Syncing Basal Profiles",
+                    comment: "Status highlight that the pump's basal rates are being updated to match the app's."
+                ),
+                imageName: "arrow.triangle.2.circlepath",
+                state: .warning
             )
         }
 

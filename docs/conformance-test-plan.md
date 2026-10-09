@@ -195,7 +195,7 @@ counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 | H5 | A5b with reporting on (#340), a 279 every 5 minutes | The pump's temp reported live at its pump start and rate; no 279 differs and nothing is corrected; Trio's IOB runs |
 | H6 | App temps, a cancel and a temp replaced within one cycle; an app temp across a profile segment change; a pump clock 11 minutes ahead across its segment change, with the skew compensation temp (D5) | No difference, nothing reported. The replaced temp is never delivered; the pump rescales the temp at the change and the driver cuts it there; the host is never told of the compensation temp |
 | H7 | A temp set on the pump's screen | Reported as its chunks close, with `wasProgrammedByPumpUI` |
-| H8 | The pump's profile is not the app's schedule (#400) | Corrections at the pump's rate; the mismatch is still flagged |
+| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next 279 |
 | H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
 

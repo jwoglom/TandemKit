@@ -47,11 +47,9 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
     private func stageDriver(schedule: [RepeatingScheduleValue<Double>]? = nil) throws -> FaketandemHarness.Driver {
         try eraseHistory()
         let items = schedule ?? [RepeatingScheduleValue(startTime: 0, value: Self.profileRate)]
-        if schedule != nil {
-            try harness.client.setIDPProfiles([FaketandemIDPProfile(id: 1, segments: items.map {
-                .init(startTime: Int($0.startTime.minutes), basalRate: Int(($0.value * 1000).rounded()))
-            })])
-        }
+        try harness.client.setIDPProfiles([FaketandemIDPProfile(id: 1, segments: items.map {
+            .init(startTime: Int($0.startTime.minutes), basalRate: Int(($0.value * 1000).rounded()))
+        })])
         try harness.client.setState(["basal_rate": Self.profileRate])
         var state = TandemPumpManagerState(rawValue: [:])
         state.featureFlags[.historyBackfill] = true
@@ -593,29 +591,38 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
 
     // MARK: - H8
 
-    /// The pump's profile is not the app's schedule: its chunks are corrected at the pump's rate,
-    /// and the mismatch is still flagged.
-    func testH8_aPumpProfileOffTheScheduleIsCorrectedAndFlagged() throws {
+    /// The pump runs a profile off the app's schedule while out of range: its chunks are corrected
+    /// at the pump's rate, and the driver writes the schedule back. The cycle under way when the
+    /// write lands runs on at the old rate, which, as for any command, is left to the residual.
+    func testH8_aPumpProfileOffTheScheduleIsCorrectedAndWrittenOver() throws {
         let driver = try stageDriver()
         let before = allPumpEventBatches.count
+        try radioOff(driver)
         try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        try harness.client.setIDPProfiles([FaketandemIDPProfile(id: 1, segments: [.init(startTime: 0, basalRate: 1200)])])
         try harness.client.setState(["basal_rate": 1.2])
         let first = try lastSequence() + 1
+        try clock.advanceBoth(seconds: .minutes(19), ticks: 4)
+        let outage = first ... (try lastSequence())
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
+        let underWay = try lastCycle()
 
-        for _ in 0 ..< 3 {
-            _ = try sync()
-            try clock.advanceBoth(seconds: TandemPumpManager.basalMismatchConfirmationInterval / 2, ticks: 2)
+        try radioOnAndSync()
+        try IntegrationWait.until("the driver to write the schedule over the pump's profile", timeout: 60) {
+            try driver.manager.state.basalProfileUpdateStatus == .none
+                && abs(self.harness.client.snapshot().basal.profileRate - Self.profileRate) < 0.001
         }
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 1)
         _ = try sync()
-        try clock.advanceBoth(seconds: .minutes(18), ticks: 4)
-        _ = try sync()
-        let found = try waitForCorrections(4, since: before)
-        let staged = first ... (try lastSequence())
+        try waitForBackfill(driver)
+        try waitForReconciliation(driver, through: underWay)
 
-        try assertCorrections(found, match: staged)
+        let found = corrections(since: before)
+        try assertCorrections(found, match: outage)
         XCTAssertTrue(found.allSatisfy { $0.dose?.automatic == false && $0.dose?.wasProgrammedByPumpUI == false })
-        XCTAssertTrue(driver.manager.state.basalRateMismatchConfirmed, "the mismatch still shows")
-        try assertHostsCountThePumpsBasal(over: staged)
+        XCTAssertEqual(try timeline().basalCycles.last?.rate, Self.profileRate, "the pump runs the schedule from its next 279")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt)
+        try assertHostsCountThePumpsBasal(over: outage)
     }
 
     // MARK: - H9

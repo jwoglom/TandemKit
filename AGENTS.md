@@ -150,11 +150,23 @@ edit instead of at the next sync.
 - `syncBasalRateSchedule` reads the profile back and fails with `basalProfileSyncMismatch`
   unless `pendingSegmentWrites` finds nothing left to write. `fetchBasalStatus` compares the
   pump's rate against the schedule every sync, on the pump's clock via `pumpClockOffset`, using
-  `profileBasalRate` during a temp basal and under Control-IQ, and skipping suspend. A mismatch that
-  outlives `basalMismatchConfirmationInterval` shows a critical status highlight and clears
-  `hasSyncedBasalRateSchedule`, so temp basals stop (see Therapy command validation). Nothing
-  rewrites the pump's profile. A schedule change that alters the rate in force stops a running
-  temp basal, since the pump rescales it, and restarts the scheduled basal dose at the new rate.
+  `profileBasalRate` during a temp basal and under Control-IQ, and skipping suspend and an
+  all-zero schedule, the placeholder for one the host never gave.
+- The driver writes the host's schedule over a pump profile that differs, under Control-IQ too,
+  since hosts take the pump to hold what they last saved (Trio keeps a profile only once the sync
+  takes). A rate read off the schedule, or a profile `adoptMatchingPumpProfile` finds different,
+  stamps `basalRateMismatchDetectedAt` (persisted) and starts `updatePumpBasalProfile`, a command
+  job queued behind the one that saw it: "Syncing Basal Profiles" in the status highlight and
+  settings, with no LoopKit alert. The update ends, clearing the stamp, only when the profile
+  reads back matching and the rate in force agrees; any successful `syncBasalRateSchedule` or
+  adoption ends it too. Until then every reading retries it, at most once per
+  `basalProfileUpdateRetryInterval`. A mismatch read `basalProfileUpdateTimeout` (5 min) after
+  the stamp sets `basalProfileUpdateFailed`, clears `hasSyncedBasalRateSchedule` and refuses
+  temp basals with `failedUpdatePumpProfile` (see Therapy command validation). An all-zero
+  schedule, or one `syncBasalRateSchedule` would refuse, is never written, so it fails this way.
+- A schedule change that alters the rate in force (the pump's profile before the write against
+  the schedule after) stops a running non-zero temp basal, since the pump rescales it, and
+  restarts the scheduled basal dose at the new rate. A zero temp keeps running.
 
 ### Pump event batches
 - A `replacePendingEvents: true` batch makes both hosts delete every mutable dose it leaves out,
@@ -337,18 +349,19 @@ edit instead of at the next sync.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
 - A zero temp basal is always allowed for the duration asked, whatever the profile, sync or
-  mismatch state below, since 0% of any profile is 0. Control-IQ and a running bolus still refuse it.
+  update state below, since 0% of any profile is 0. Control-IQ and a running bolus still refuse it.
 - `enactTempBasal` refuses every other temp but a cancel until the first successful
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
   pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
   State saved before the flag existed reads false, and Loop and Trio only sync the schedule
   when the user saves it, so while it is false `enactTempBasal` reads the pump's profile
-  (`adoptMatchingPumpProfile`) and sets the flag if it already matches the host's schedule.
-- A confirmed basal rate mismatch clears `hasSyncedBasalRateSchedule` on every reading that
-  still differs, a sync's included, and `adoptMatchingPumpProfile` skips while it stands: a
-  matching profile does not explain a live rate that differs. Temp basals resume after a
-  reading that matches, through adoption or a sync. A non-zero temp already running when the
-  mismatch is confirmed is stopped.
+  (`adoptMatchingPumpProfile`) and sets the flag if it already matches the host's schedule. If
+  it differs, that temp is refused and the queued update writes the schedule for the next one.
+- A failed profile update clears `hasSyncedBasalRateSchedule` on every reading that still
+  differs, a retry's included, and `adoptMatchingPumpProfile` skips while it stands: a matching
+  profile does not explain a live rate that differs. Temp basals resume once a retry or a host
+  sync reads the profile back matching. A non-zero temp already running when the update fails
+  is stopped.
 - `enactTempBasal` refuses a non-zero temp with `pumpProfileBasalRateIsZero` when the pump's
   `CurrentBasalStatus` reads a profile rate of 0 U/hr, before stopping a running temp basal; a
   Mobi ran a 0 U/hr profile for a day while the host was told its temp rates ran (#335, #343).

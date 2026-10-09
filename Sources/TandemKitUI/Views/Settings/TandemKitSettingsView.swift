@@ -317,6 +317,8 @@ struct TandemKitSettingsView: View {
                         .font(Font.footnote.weight(.semibold))
                     }.padding(.vertical, 8)
                 }
+
+                basalProfileUpdateNotice
             }
 
             Section(header: SectionHeader(label: String(
@@ -747,6 +749,37 @@ struct TandemKitSettingsView: View {
     private var doneButton: some View {
         Button(String(localized: "Done", comment: "button text")) {
             dismiss()
+        }
+    }
+
+    @ViewBuilder private var basalProfileUpdateNotice: some View {
+        let appName = HostApp.current.settingsName
+        switch viewModel.basalProfileUpdateStatus {
+        case .none:
+            EmptyView()
+        case .updating:
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Syncing Basal Profiles", comment: "title for the notice that the pump's basal profile is being updated")
+                    .font(Font.subheadline.weight(.bold))
+                Text(String(
+                    format: String(
+                        localized: "Your Tandem Mobi's basal profile is out of sync with your current %1$@ configuration. Your pump is being updated to match the %2$@ configuration which should complete shortly.",
+                        comment: "description for the notice that the pump's basal profile is being updated (1: app name, 2: app name)"
+                    ),
+                    appName,
+                    appName
+                ))
+                    .font(Font.footnote.weight(.semibold))
+            }.padding(.vertical, 8)
+        case .failed:
+            let error = TandemPumpManagerValidationError.failedUpdatePumpProfile
+            VStack(alignment: .leading, spacing: 4) {
+                Text(error.errorDescription ?? "")
+                    .font(Font.subheadline.weight(.bold))
+                    .foregroundColor(guidanceColors.critical)
+                Text(error.recoverySuggestion ?? "")
+                    .font(Font.footnote.weight(.semibold))
+            }.padding(.vertical, 8)
         }
     }
 

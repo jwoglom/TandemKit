@@ -51,10 +51,13 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var lastReservoirReadingNeedsReport: Bool = false
     public var lastBatteryReading: BatteryReading?
     public var lastBasalStatusDate: Date?
-    /// In memory only, not saved with the state. After a relaunch the next sync rechecks; a saved
-    /// value could show a mismatch warning for a pump that has since been fixed.
-    public var basalRateMismatchSince: Date?
-    public var basalRateMismatchConfirmed = false
+    /// When the pump's basal rate was first seen to differ from the schedule, since when the driver
+    /// has been writing the schedule to the pump. Cleared once the pump's profile is read back
+    /// matching. Persisted so relaunches don't restart `basalProfileUpdateTimeout`.
+    public var basalRateMismatchDetectedAt: Date?
+    /// Set once a mismatch outlives `basalProfileUpdateTimeout`; temp basals are refused until a
+    /// matching read-back clears it.
+    public var basalProfileUpdateFailed = false
     /// How far the driver has read this pump's history log, and the earliest date it may report
     /// events for. Persisted so a relaunch resumes an incremental read instead of re-walking the
     /// pump's whole history into an empty session store.
@@ -190,8 +193,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.lastReservoirReadingNeedsReport == rhs.lastReservoirReadingNeedsReport,
               lhs.lastBatteryReading == rhs.lastBatteryReading,
               lhs.lastBasalStatusDate == rhs.lastBasalStatusDate,
-              lhs.basalRateMismatchSince == rhs.basalRateMismatchSince,
-              lhs.basalRateMismatchConfirmed == rhs.basalRateMismatchConfirmed,
+              lhs.basalRateMismatchDetectedAt == rhs.basalRateMismatchDetectedAt,
+              lhs.basalProfileUpdateFailed == rhs.basalProfileUpdateFailed,
               lhs.historyBackfill == rhs.historyBackfill,
               lhs.bolusReportLedger == rhs.bolusReportLedger,
               lhs.reportedBasal == rhs.reportedBasal,
@@ -277,6 +280,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
         controlIQEndedAt = rawValue["controlIQEndedAt"] as? Date
         hasSyncedBasalRateSchedule = rawValue["hasSyncedBasalRateSchedule"] as? Bool ?? false
+        basalRateMismatchDetectedAt = rawValue["basalRateMismatchDetectedAt"] as? Date
+        basalProfileUpdateFailed = rawValue["basalProfileUpdateFailed"] as? Bool ?? false
         pendingEnableClosedLoop = rawValue["pendingEnableClosedLoop"] as? Bool ?? false
         controlIQEnabled = rawValue["controlIQEnabled"] as? Bool
         // The legacy "controlIQWeight" key is deliberately not read: it stored whatever unit the
@@ -518,6 +523,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["useControlIQ"] = useControlIQ
         raw["controlIQEndedAt"] = controlIQEndedAt
         raw["hasSyncedBasalRateSchedule"] = hasSyncedBasalRateSchedule
+        raw["basalRateMismatchDetectedAt"] = basalRateMismatchDetectedAt
+        raw["basalProfileUpdateFailed"] = basalProfileUpdateFailed
         raw["pendingEnableClosedLoop"] = pendingEnableClosedLoop
         raw["basalDose"] = basalDose.rawValue
         raw["controlIQEnabled"] = controlIQEnabled
@@ -613,6 +620,19 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         currentPumpTime != nil && abs(pumpClockOffset) > Self.pumpClockSkewThreshold
     }
 
+    public enum BasalProfileUpdateStatus: Equatable {
+        case none
+        case updating
+        case failed
+    }
+
+    public var basalProfileUpdateStatus: BasalProfileUpdateStatus {
+        if basalProfileUpdateFailed {
+            return .failed
+        }
+        return basalRateMismatchDetectedAt == nil ? .none : .updating
+    }
+
     public var showPumpTimeSyncWarning: Bool {
         // Allow 10s time drift
         abs(pumpClockOffset) > .seconds(10)
@@ -651,6 +671,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* useControlIQ: \(useControlIQ)",
             "* controlIQEndedAt: \(String(describing: controlIQEndedAt))",
             "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
+            "* basalRateMismatchDetectedAt: \(String(describing: basalRateMismatchDetectedAt))",
+            "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",
             "* pendingEnableClosedLoop: \(pendingEnableClosedLoop)",
             "* controlIQEnabled: \(String(describing: controlIQEnabled))",
             "* controlIQUserMode: \(String(describing: controlIQUserMode))",

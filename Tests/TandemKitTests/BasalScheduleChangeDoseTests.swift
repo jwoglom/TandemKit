@@ -136,6 +136,41 @@ import XCTest
         XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
     }
 
+    func testKeepsARunningZeroTemp() {
+        start(schedule: [(0, 0.75)], pumpReports: tempBasal)
+        bluetooth.stub(CurrentBasalStatusRequest.self, with: CurrentBasalStatusResponse(
+            profileBasalRate: 750,
+            currentBasalRate: 0,
+            basalModifiedBitmask: tempBasal
+        ))
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 0,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: nil,
+            startDate: sixAM.addingTimeInterval(-.minutes(2))
+        )
+
+        guard case .success = sync([(0, 0.5)]) else { return XCTFail("Expected the sync to succeed") }
+
+        XCTAssertTrue(bluetooth.sent(StopTempRateRequest.self).isEmpty)
+        XCTAssertEqual(manager.state.basalDose.type, .tempBasal)
+        XCTAssertEqual(manager.state.basalDose.value, 0)
+    }
+
+    /// The pump ran its own 0.75 profile under an app schedule of 0.5, so writing that same 0.5
+    /// changes the rate in force.
+    func testStopsATempBasalWhenThePumpsOwnProfileHeldAnotherRate() {
+        start(schedule: [(0, 0.75)], pumpReports: tempBasal)
+        manager.state.basalRateSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 0.5)])!
+        manager.state.basalDose = runningTempBasal()
+
+        guard case .success = sync([(0, 0.5)]) else { return XCTFail("Expected the sync to succeed") }
+
+        XCTAssertEqual(bluetooth.sent(StopTempRateRequest.self).count, 1)
+        XCTAssertEqual(manager.state.basalDose.value, 0.5)
+    }
+
     func testControlIQKeepsItsOwnTempBasal() {
         start(schedule: [(0, 0.75)], pumpReports: tempBasal)
         manager.state.useControlIQ = true

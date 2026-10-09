@@ -161,6 +161,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
     var loggedBasalDifferences = Set<UInt32>()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
     var basalGapPasses: [ClosedRange<UInt32>: Int] = [:]
+    /// Paces `updatePumpBasalProfile`: one write in flight, the next no sooner than
+    /// `basalProfileUpdateRetryInterval`, however many basal readings arrive meanwhile.
+    let basalProfileUpdateLock = NSLock()
+    var basalProfileUpdateInFlight = false
+    var lastBasalProfileUpdateAttempt: Date?
 
     #if canImport(UIKit)
     @objc func appMovedToBackground() {
@@ -878,6 +883,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // A cancel still goes through: it returns the pump to its own profile, whatever that holds.
             if !isCancel, !isZeroTemp {
                 self.adoptMatchingPumpProfile()
+                guard !self.state.basalProfileUpdateFailed else {
+                    self.logger.warning("[enactTempBasal] Blocked: the pump's basal profile could not be updated to match the schedule")
+                    completion(.configuration(TandemPumpManagerValidationError.failedUpdatePumpProfile))
+                    return
+                }
                 guard self.state.hasSyncedBasalRateSchedule else {
                     self.logger.warning("[enactTempBasal] Blocked: the basal schedule has never been synced to the pump")
                     completion(.configuration(TandemPumpManagerValidationError.basalScheduleNotSynced))
@@ -1488,6 +1498,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         logger.debug("Deleting saved pump state for re-setup")
         state.pumpState = PumpState()
         state.hasSyncedBasalRateSchedule = false
+        state.basalRateMismatchDetectedAt = nil
+        state.basalProfileUpdateFailed = false
         notifyDelegateStateUpdated()
     }
 

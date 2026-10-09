@@ -60,6 +60,7 @@ class TandemKitSettingsViewModel: ObservableObject {
     @Published var controlIqModeText: String = ""
     @Published var isUpdatingPumpState = false
     @Published var showPumpTimeSyncWarning = false
+    @Published var basalProfileUpdateStatus: TandemPumpManagerState.BasalProfileUpdateStatus = .none
     @Published var isUpdatingTime = false
     @Published var showingTimeSyncConfirmation = false
     @Published var commandFailure: CommandFailure?
@@ -148,6 +149,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         reservoirValue = pumpManager?.reservoirLevel
         connectionIssue = pumpManager?.connectionIssue
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
+        basalProfileUpdateStatus = pumpManager?.state.basalProfileUpdateStatus ?? .none
         basalDose = pumpManager?.state.basalDose
 
         if let pumpManager {
@@ -438,6 +440,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.connectionIssue = pumpManager.connectionIssue
             self.reservoirValue = pumpManager.reservoirLevel
             self.showPumpTimeSyncWarning = pumpManager.state.showPumpTimeSyncWarning
+            self.basalProfileUpdateStatus = pumpManager.state.basalProfileUpdateStatus
             self.useControlIQ = pumpManager.state.useControlIQ
             self.controlIQSupportEnabled = pumpManager.state.featureFlags.controlIQSupport
             self.quickBolusButtonSupportEnabled = pumpManager.state.featureFlags.quickBolusButtonSupport
