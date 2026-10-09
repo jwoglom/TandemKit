@@ -102,15 +102,23 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
     }
 
-    func testTempBasalStaysRefusedWhenThePumpHoldsADifferentProfile() throws {
-        let driver = try pairedUnsyncedDriver(pump: [Self.twoSegmentProfile], schedule: [(0, 0.8), (12, 0.65)])
-        let logStart = try harness.client.snapshot().requestLog.lastSeq
+    /// The update the refusal starts is queued behind it, so the next temp basal finds the schedule
+    /// on the pump.
+    func testTempBasalIsRefusedWhileTheScheduleIsWrittenOverADifferentProfile() throws {
+        let schedule: Schedule = [(0, 0.8), (12, 0.65)]
+        let driver = try pairedUnsyncedDriver(pump: [Self.twoSegmentProfile], schedule: schedule)
 
         try assertTempBasalRefused(driver)
 
-        try assertNoProfileWrites(since: logStart)
-        XCTAssertEqual(try harness.client.snapshot().idpProfiles, [Self.twoSegmentProfile])
-        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
+        try IntegrationWait.until("the schedule to reach the pump", timeout: 30) {
+            driver.manager.state.hasSyncedBasalRateSchedule
+        }
+        let profiles = try XCTUnwrap(try harness.client.snapshot().idpProfiles)
+        XCTAssertEqual(
+            profiles.first?.segments.map { [$0.startTime, $0.basalRate] },
+            schedule.map { [Int(($0.hour * 60).rounded()), Int(($0.rate * 1000).rounded())] }
+        )
+        XCTAssertNil(try enactTempBasal(driver))
     }
 
     // MARK: - Cases
@@ -185,6 +193,8 @@ final class BasalScheduleSyncIntegrationTests: FaketandemIntegrationTestCase {
             stageBasalScheduleSync: false
         )
         try harness.pair(driver)
+        // A rate in force off the schedule would have this sync write the schedule itself.
+        try harness.client.setState(["basal_rate": driver.manager.getScheduledBasalRate()])
         _ = try harness.sync(driver)
         XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
         return driver
