@@ -14,6 +14,7 @@ pieces fit together. Paths are relative to the repository root.
 | `TandemPumpManager+Alerts.swift` | Maps pump notifications to LoopKit `Alert`s and reconciles them. |
 | `TandemPumpManager+HistoryStore.swift` | Stores and prunes streamed history logs in the session store. |
 | `TandemPumpManager+HistoryDoseReporting.swift` | Reports boluses found in pump history that the live path missed. |
+| `TandemPumpManager+BasalReconciliation.swift` | Compares the basal in pump history with what the host was told, and logs the differences. |
 | `QualifyingEventFetch.swift` | Maps pumpX2's suggested handlers for each qualifying event onto the manager's fetches. |
 | `PumpBluetoothConnection.swift` | The protocol everything above the BLE layer talks through. |
 | `TandemBluetoothManager.swift` | `CBCentralManager`, the serial command queue (`ensureConnected`), connect, reconnect and scan. |
@@ -36,8 +37,11 @@ pieces fit together. Paths are relative to the repository root.
 | `HistoryBackfillState.swift` | The persisted watermark and `firstSeenFloor`. |
 | `HistoryFetchGate.swift` | Lets one history reader at a time hold the pump's history stream. |
 | `HistoryLogStore.swift`, `InMemoryHistoryLogStore.swift`, `StoredHistoryLog.swift` | The session-scoped raw history store. It is not persisted (#232). |
-| `HistoryToDoseMapper.swift` | History records → `NewPumpEvent`s. |
-| `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log. |
+| `HistoryToDoseMapper.swift` | Bolus history records → `NewPumpEvent`s. |
+| `PumpBasalTimeline.swift` | `BasalDelivery` (279) records → the basal the pump delivered, in checked 5-minute chunks. |
+| `ReportedBasalLedger.swift` | Every non-bolus row reported to the host, folded as Trio folds them; `HostBasalSchedule`. |
+| `BasalReconciler.swift` | Pump basal chunks against what the host counts. |
+| `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log; `HistoryRecordDates` adds the pump clock offset, for every date a history pass takes. |
 | `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
 | `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time. |
 

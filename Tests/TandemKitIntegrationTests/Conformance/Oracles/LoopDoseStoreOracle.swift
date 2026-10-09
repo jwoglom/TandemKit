@@ -441,6 +441,21 @@ final class LoopDoseStoreOracle: DoseOracle {
         doses.reduce(0) { total, stored in total + Self.linearIOB(of: stored.dose, at: time, duration: insulinActionDuration) }
     }
 
+    /// Basal Loop counts from `start` to `end` above (or, negative, below) `scheduledRate`: each live
+    /// temp basal at its stored units spread over its span, each suspend at zero, the schedule elsewhere.
+    func netBasalUnits(from start: Date, to end: Date, scheduledRate: (Date) -> Double) -> Double {
+        doses.reduce(0) { total, stored in
+            let dose = stored.dose
+            guard dose.type == .tempBasal || dose.type == .suspend else { return total }
+            let lo = max(dose.startDate, start)
+            let hi = min(dose.endDate, end)
+            let span = dose.endDate.timeIntervalSince(dose.startDate)
+            guard hi > lo, span > 0 else { return total }
+            let rate = dose.type == .tempBasal ? stored.value / (span / .hours(1)) : 0
+            return total + TrioDoseStoreOracle.integrate(from: lo, to: hi) { rate - scheduledRate($0) }
+        }
+    }
+
     static func linearIOB(of dose: DoseEntry, at time: Date, duration: TimeInterval) -> Double {
         let units: Double
         switch dose.type {

@@ -15,6 +15,7 @@ extension TandemPumpManager {
         state.pumpState.timeSinceReset = timeSinceReset
         state.currentPumpTime = currentPumpTime
         state.lastPumpTimeCheckDate = checkedAt
+        state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
@@ -35,6 +36,9 @@ extension TandemPumpManager {
         // (jwoglom/tandemkit-stress#4).
         if closedLoopEnabled != state.useControlIQ {
             logger.warning("Pump reports Control-IQ \(closedLoopEnabled ? "on" : "off") but useControlIQ was \(state.useControlIQ); syncing")
+            if !closedLoopEnabled {
+                state.controlIQEndedAt = now
+            }
             state.useControlIQ = closedLoopEnabled
         }
 
@@ -136,7 +140,7 @@ extension TandemPumpManager {
                 completion(isSuspended)
                 return
             }
-            self.afterDeliveryTransitionIsReported { completion(isSuspended) }
+            self.afterHistoryIsReported { completion(isSuspended) }
             self.historyBackfillCoordinator.runTick()
         }
     }
@@ -149,6 +153,7 @@ extension TandemPumpManager {
 
         verifyDeliveredBasalRate(response)
 
+        observeReplacedTempBasal(response)
         observeDeliveryState(response.basalType)
 
         if response.basalType == .tempBasal {
@@ -820,11 +825,6 @@ extension TandemPumpManager {
 
     /// Nil when the rates agree, or when the reading says nothing about the profile.
     func deliveredBasalRateMismatch(_ response: CurrentBasalStatusResponse) -> (pump: Double, expected: Double)? {
-        // Control-IQ changes the delivered rate itself, so it won't match the schedule.
-        guard !state.useControlIQ else {
-            return nil
-        }
-
         // An all-zero schedule is the placeholder for one the host never gave, not a rate to hold.
         guard state.basalRateSchedule.items.contains(where: { $0.value > 0 }) else {
             return nil
@@ -832,10 +832,10 @@ extension TandemPumpManager {
 
         let pumpRate: Double
         switch response.basalType {
-        case .basal:
+        case .basal where !state.useControlIQ:
             pumpRate = response.currentBasalRate
-        case .tempBasal:
-            // `currentBasalRate` is the temp rate here; `profileBasalRate` is the scheduled rate.
+        case .basal, .tempBasal:
+            // `currentBasalRate` is the temp's or Control-IQ's; `profileBasalRate` is the profile's.
             pumpRate = response.profileBasalRate
         default:
             return nil

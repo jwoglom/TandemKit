@@ -51,6 +51,8 @@ public class TempRateActivatedHistoryLog: HistoryLog {
                 Bytes.toUint32(sequenceNum),
                 Bytes.toFloat(percent),
                 Bytes.toFloat(durationMilliseconds),
+                // Unparsed; `init(cargo:)` reads tempRateId after it, at 20.
+                Data([0, 0]),
                 Bytes.firstTwoBytesLittleEndian(tempRateId)
             )
         )

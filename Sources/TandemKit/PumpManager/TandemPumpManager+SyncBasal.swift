@@ -437,10 +437,6 @@ extension TandemPumpManager {
     /// back matching and the pump's rate in force agrees with it: a profile that matches while the
     /// rate still differs would otherwise end and restart the update at every reading.
     func updatePumpBasalProfile() {
-        guard !state.useControlIQ else {
-            return
-        }
-
         basalProfileUpdateLock.lock()
         let tooSoon = lastBasalProfileUpdateAttempt.map { now.timeIntervalSince($0) < Self.basalProfileUpdateRetryInterval } ?? false
         guard !basalProfileUpdateInFlight, !tooSoon else {

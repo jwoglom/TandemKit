@@ -63,6 +63,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// pump's whole history into an empty session store.
     public var historyBackfill: HistoryBackfillState?
     public var bolusReportLedger = BolusReportLedger(trackingSince: Date())
+    public var reportedBasal = ReportedBasalLedger(trackingSince: Date())
     public var deliveryTransitions = DeliveryTransitionLedger()
     public var bolusState: PumpManagerStatus.BolusState = .noBolus
     public var insulinType: InsulinType?
@@ -83,6 +84,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     // Pump time
     public var currentPumpTime: Date?
     public var lastPumpTimeCheckDate: Date?
+    /// The phone's UTC offset in seconds when `currentPumpTime` was decoded.
+    public var pumpTimeCheckUTCOffset: Int?
 
     // Pump global settings
     /// In memory only, not saved with the state, so a relaunch re-reads the pump's settings at its first sync.
@@ -111,6 +114,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
 
     // Control-IQ state
     public var useControlIQ: Bool = false
+    /// When `useControlIQ` last went off; cleared once history has reported Control-IQ's basal up to it.
+    public var controlIQEndedAt: Date?
     public var pendingEnableClosedLoop: Bool = false
     public var controlIQEnabled: Bool?
     public var controlIQUserMode: ControlIQUserMode?
@@ -192,6 +197,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.basalProfileUpdateFailed == rhs.basalProfileUpdateFailed,
               lhs.historyBackfill == rhs.historyBackfill,
               lhs.bolusReportLedger == rhs.bolusReportLedger,
+              lhs.reportedBasal == rhs.reportedBasal,
               lhs.deliveryTransitions == rhs.deliveryTransitions,
               lhs.bolusState == rhs.bolusState,
               lhs.insulinType == rhs.insulinType,
@@ -204,6 +210,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.useSilentTones == rhs.useSilentTones,
               lhs.currentPumpTime == rhs.currentPumpTime,
               lhs.lastPumpTimeCheckDate == rhs.lastPumpTimeCheckDate,
+              lhs.pumpTimeCheckUTCOffset == rhs.pumpTimeCheckUTCOffset,
               lhs.lastSettingsCheckedAt == rhs.lastSettingsCheckedAt,
               lhs.quickBolusAnnun == rhs.quickBolusAnnun,
               lhs.reminderAnnun == rhs.reminderAnnun,
@@ -221,6 +228,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.maxBolusLimitMilliunits == rhs.maxBolusLimitMilliunits,
               lhs.maxBolusLimitDefaultMilliunits == rhs.maxBolusLimitDefaultMilliunits,
               lhs.useControlIQ == rhs.useControlIQ,
+              lhs.controlIQEndedAt == rhs.controlIQEndedAt,
               lhs.pendingEnableClosedLoop == rhs.pendingEnableClosedLoop,
               lhs.controlIQEnabled == rhs.controlIQEnabled,
               lhs.controlIQUserMode == rhs.controlIQUserMode,
@@ -270,6 +278,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         // mandatory may hold `false`, and those pumps should migrate on, not stay off.
         autoAcknowledgeBasalAlerts = true
         useControlIQ = rawValue["useControlIQ"] as? Bool ?? false
+        controlIQEndedAt = rawValue["controlIQEndedAt"] as? Date
         hasSyncedBasalRateSchedule = rawValue["hasSyncedBasalRateSchedule"] as? Bool ?? false
         basalRateMismatchDetectedAt = rawValue["basalRateMismatchDetectedAt"] as? Date
         basalProfileUpdateFailed = rawValue["basalProfileUpdateFailed"] as? Bool ?? false
@@ -290,6 +299,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         forwardCGMAlerts = rawValue["forwardCGMAlerts"] as? Bool ?? false
         currentPumpTime = rawValue["currentPumpTime"] as? Date
         lastPumpTimeCheckDate = rawValue["lastPumpTimeCheckDate"] as? Date
+        pumpTimeCheckUTCOffset = rawValue["pumpTimeCheckUTCOffset"] as? Int
 
         if let pumpStateRaw = rawValue["pumpState"] as? PumpState.RawValue {
             pumpState = PumpState(rawValue: pumpStateRaw)
@@ -349,6 +359,12 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
            let ledger = BolusReportLedger(rawValue: ledgerRaw)
         {
             bolusReportLedger = ledger
+        }
+
+        if let ledgerRaw = rawValue["reportedBasal"] as? ReportedBasalLedger.RawValue,
+           let ledger = ReportedBasalLedger(rawValue: ledgerRaw)
+        {
+            reportedBasal = ledger
         }
 
         if let ledgerRaw = rawValue["deliveryTransitions"] as? DeliveryTransitionLedger.RawValue,
@@ -489,6 +505,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
+        raw["pumpTimeCheckUTCOffset"] = pumpTimeCheckUTCOffset
         raw["quickBolusAnnun"] = quickBolusAnnun?.rawValue
         raw["reminderAnnun"] = reminderAnnun?.rawValue
         raw["alertAnnun"] = alertAnnun?.rawValue
@@ -504,6 +521,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["maxBolusLimitMilliunits"] = maxBolusLimitMilliunits
         raw["maxBolusLimitDefaultMilliunits"] = maxBolusLimitDefaultMilliunits
         raw["useControlIQ"] = useControlIQ
+        raw["controlIQEndedAt"] = controlIQEndedAt
         raw["hasSyncedBasalRateSchedule"] = hasSyncedBasalRateSchedule
         raw["basalRateMismatchDetectedAt"] = basalRateMismatchDetectedAt
         raw["basalProfileUpdateFailed"] = basalProfileUpdateFailed
@@ -563,6 +581,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         }
 
         raw["bolusReportLedger"] = bolusReportLedger.rawValue
+        raw["reportedBasal"] = reportedBasal.rawValue
         raw["deliveryTransitions"] = deliveryTransitions.rawValue
 
         if let encodedBolusState = TandemPumpManagerState.encodeBolusState(bolusState) {
@@ -581,12 +600,14 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     }
 
     /// Seconds the pump's clock is ahead of the phone's (negative if behind), as of the last
-    /// `fetchTimeSinceReset`.
+    /// `fetchTimeSinceReset`. Pump dates decode with the phone's current UTC offset, so a zone
+    /// change since that read moves every one of them, and the offset with them.
     public var pumpClockOffset: TimeInterval {
         guard let currentPumpTime, let lastPumpTimeCheckDate else {
             return 0
         }
-        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate)
+        let zoneChange = pumpTimeCheckUTCOffset.map { $0 - TimeZone.current.secondsFromGMT() } ?? 0
+        return currentPumpTime.timeIntervalSince(lastPumpTimeCheckDate) + TimeInterval(zoneChange)
     }
 
     /// Past this the pump's segments sit a host loop cycle or more from the host's, so temp basals
@@ -632,6 +653,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* lastBasalStatusDate: \(String(describing: lastBasalStatusDate))",
             "* historyBackfill: \(String(describing: historyBackfill))",
             "* bolusReportLedger: \(bolusReportLedger)",
+            "* reportedBasal: \(reportedBasal.rows.count) row(s) since \(reportedBasal.trackingSince)",
             "* deliveryTransitions: \(deliveryTransitions)",
             "* bolusState: \(bolusState)",
             "* basalRateSchedule: \(String(describing: basalRateSchedule))",
@@ -639,6 +661,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* useSilentTones: \(useSilentTones)",
             "* currentPumpTime: \(String(describing: currentPumpTime))",
             "* lastPumpTimeCheckDate: \(String(describing: lastPumpTimeCheckDate))",
+            "* pumpTimeCheckUTCOffset: \(String(describing: pumpTimeCheckUTCOffset))",
             "* quickBolusAnnun: \(String(describing: quickBolusAnnun))",
             "* reminderAnnun: \(String(describing: reminderAnnun))",
             "* alertAnnun: \(String(describing: alertAnnun))",
@@ -646,6 +669,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* generalAnnun: \(String(describing: generalAnnun))",
             "* pumpSoundsAwaitingWrite: \(pumpSoundsAwaitingWrite)",
             "* useControlIQ: \(useControlIQ)",
+            "* controlIQEndedAt: \(String(describing: controlIQEndedAt))",
             "* hasSyncedBasalRateSchedule: \(hasSyncedBasalRateSchedule)",
             "* basalRateMismatchDetectedAt: \(String(describing: basalRateMismatchDetectedAt))",
             "* basalProfileUpdateFailed: \(basalProfileUpdateFailed)",

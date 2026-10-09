@@ -297,12 +297,18 @@ zero temp basals routinely and the pump would otherwise alert on each one.
   time (the backfill and the log viewer).
 - `HistoryBackfillCoordinator` keeps the store caught up with the pump using
   `HistoryBackfillPlanner`, which is pure arithmetic, and the persisted `HistoryBackfillState`
-  watermark. `HistoryToDoseMapper` and `HistoryTimestampReconciler` turn records into
-  `NewPumpEvent`s, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
-  reported by the live path.
-- The backfill and the dose reporting are behind the `historyBackfill` and `historyDoseReporting`
-  feature flags; the backfill is on by default, dose reporting is off. AGENTS.md has the full
-  rules.
+  watermark. `HistoryToDoseMapper` turns bolus records into `NewPumpEvent`s, dated through
+  `HistoryRecordDates`, and `TandemPumpManager+HistoryDoseReporting` reports boluses not already
+  reported by the live path. `PumpBasalTimeline` reads the basal the pump delivered from its
+  `BasalDelivery` (279) records, one 5-minute chunk per record, and `BasalReconciler` compares it
+  with `ReportedBasalLedger`, every non-bolus row the host was told, folded as Trio folds them.
+  `TandemPumpManager+BasalReconciliation` logs the differences and, behind
+  `basalHistoryReporting`, reports corrections: Control-IQ's basal, temp rates the app did not set
+  or lost track of, and a pump profile that is not the app's schedule. A history pass sends its
+  transitions and corrections as one batch.
+- The backfill and the dose reporting are behind the `historyBackfill`, `historyDoseReporting`
+  and `basalHistoryReporting` feature flags; the backfill is on by default, both kinds of reporting
+  are off. AGENTS.md has the full rules.
 
 ### Reporting to the host
 

@@ -78,8 +78,9 @@ struct PumpTimeline {
         /// When it actually ended (expiry, stop, replacement, or suspend); nil while running.
         let end: Date?
         let endPumpSeconds: Int?
-        /// How much of the programmed duration was still to run when it ended, in seconds: zero for
-        /// one that expired on its own, positive for one cut short (`TempRateCompleted.timeLeft`).
+        /// How much of the programmed duration was still to run when it ended, in milliseconds of whole
+        /// minutes: zero for one that expired on its own, positive for one cut short
+        /// (`TempRateCompleted.timeLeft`).
         let timeLeft: Int?
         var isFinished: Bool { end != nil }
         /// rate × actual (or scheduled) duration, what a finalized `deliveredUnits` should read.
@@ -129,9 +130,24 @@ struct PumpTimeline {
         let note: String
     }
 
+    /// One `BasalDelivery` (279) record: the pump delivers `rate` from it for one cycle, until the
+    /// next 279 or a suspend.
+    struct BasalCycle: Equatable {
+        let sequence: Int
+        let start: Date
+        let end: Date
+        /// Units per hour.
+        let rate: Double
+        /// `commandedRateSource`: 0 suspended, 1 profile, 2 temp, 3 Control-IQ, 4 temp under Control-IQ.
+        let source: Int
+    }
+
+    static let basalCycle: TimeInterval = 300
+
     let boluses: [Bolus]
     let tempRates: [TempRate]
     let suspends: [Suspend]
+    let basalCycles: [BasalCycle]
     let alarms: [Alarm]
     let connections: [Connection]
     let unplaced: [Unplaced]
@@ -169,6 +185,12 @@ struct PumpTimeline {
         var suspends: [Suspend] = []
         var alarms: [Alarm] = []
         var unplaced: [Unplaced] = []
+        var basalCycles: [BasalCycle] = []
+        // A cycle ends at the next 279 or suspend, or runs its full length.
+        func endLastCycle(at date: Date) {
+            guard let last = basalCycles.last, date < last.end else { return }
+            basalCycles[basalCycles.count - 1] = BasalCycle(sequence: last.sequence, start: last.start, end: max(date, last.start), rate: last.rate, source: last.source)
+        }
 
         for entry in entries {
             let data = entry.data ?? [:]
@@ -265,9 +287,27 @@ struct PumpTimeline {
                     timeLeft: data["timeLeft"]?.intValue
                 )
 
+            case "BasalDelivery":
+                // Wire fields, in milliunits per hour: commandedRateSource, commandedRate,
+                // profileBasalRate, algorithmRate, tempRate; 0xFFFF is no rate.
+                guard let source = data["commandedRateSource"]?.intValue, let rate = data["commandedRate"]?.intValue, rate != 0xFFFF else {
+                    unplaced.append(Unplaced(sequence: entry.sequence, type: entry.type, note: "no commanded rate"))
+                    continue
+                }
+                let start = instant(entry)
+                endLastCycle(at: start)
+                basalCycles.append(BasalCycle(
+                    sequence: entry.sequence,
+                    start: start,
+                    end: start.addingTimeInterval(Self.basalCycle),
+                    rate: Double(rate) / 1000,
+                    source: source
+                ))
+
             case "PumpingSuspended":
                 // Wire fields: preSuspendState, insulinAmount, reasonId, rpaTimeout. The string the
                 // emulator suspended for is context.
+                endLastCycle(at: instant(entry))
                 let reasonId = data["reasonId"]?.intValue
                 suspends.append(Suspend(
                     reason: extra["reason"]?.stringValue ?? reasonId.map(Self.suspendReasonName),
@@ -408,6 +448,7 @@ struct PumpTimeline {
             boluses: bolusOrder.compactMap { boluses[$0] },
             tempRates: tempRates,
             suspends: suspends,
+            basalCycles: basalCycles,
             alarms: alarms,
             connections: connections,
             unplaced: unplaced,
@@ -424,6 +465,19 @@ struct PumpTimeline {
         case 6: return "plgs"
         default: return "reasonId \(reasonId)"
         }
+    }
+
+    // MARK: - Basal
+
+    /// Basal the pump delivered from `start` to `end` above (or, negative, below) `scheduledRate`,
+    /// from its 279s. Time no 279 covers delivered nothing, so a window should lie inside them.
+    func netBasalUnits(from start: Date, to end: Date, scheduledRate: (Date) -> Double) -> Double {
+        let delivered = basalCycles.reduce(0.0) { total, cycle in
+            let lo = max(cycle.start, start)
+            let hi = min(cycle.end, end)
+            return hi > lo ? total + cycle.rate * hi.timeIntervalSince(lo) / .hours(1) : total
+        }
+        return delivered - TrioDoseStoreOracle.integrate(from: start, to: end, scheduledRate)
     }
 
     // MARK: - Diff against a Loop oracle

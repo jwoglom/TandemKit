@@ -1,43 +1,33 @@
 import Foundation
 import LoopKit
 
-/// Maps Tandem history log records to the LoopKit `NewPumpEvent`s that report them to the host
-/// app.
+/// Maps Tandem history log records to the LoopKit `NewPumpEvent`s that report the boluses in them
+/// to the host app. Basal comes from `PumpBasalTimeline`.
 ///
 /// Pure: emitting and reconciling against live reports are the caller's job. Every `raw` is a
 /// `HistoryLogSyncIdentifier`, stable however often the window is re-fetched.
 final class HistoryToDoseMapper {
-    /// Maps one fetched window of history logs to pump events, in ascending date order.
+    /// Maps one fetched window of history logs to bolus events, in ascending date order.
     ///
     /// - Parameters:
-    ///   - reconciler: Carries clock-change corrections. The window's own clock-change records
-    ///     are recorded into it before any timestamp is converted, and it accumulates across
-    ///     calls so corrections seen in one window apply to earlier windows fetched later.
+    ///   - dates: Dates each record on the phone's clock, built from the same window.
     ///   - pumpSerial: Serial of the pump the logs came from; part of every identity because
-    ///     `bolusId`/`tempRateId` are small counters that repeat across pumps. Requiring the
-    ///     validated wrapper means no mapping can happen until the serial is actually known.
-    ///   - scheduledBasalRate: The scheduled (profile) basal rate at a given date. Used to
-    ///     convert a temp basal's pump-stored *percent* into an absolute U/hr rate, exactly as
-    ///     the set path does (`scheduledRate × percent/100`).
-    ///   - roundBasalRate: Rounds a rate to a pump-supported value (mirrors the set path).
+    ///     `bolusId` is a small counter that repeats across pumps. Requiring the validated wrapper
+    ///     means no mapping can happen until the serial is actually known.
     ///   - isCommandedBolus: Whether a `bolusId` corresponds to a bolus the controlling app
     ///     commanded (vs a pump-UI Quick Bolus / Control-IQ bolus). Drives
     ///     `DoseEntry.wasProgrammedByPumpUI`.
     func mapToEvents(
         _ logs: [HistoryLog],
-        reconciler: HistoryTimestampReconciler,
+        dates: HistoryRecordDates,
         pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
         insulinType: InsulinType?,
-        scheduledBasalRate: (Date) -> Double,
-        roundBasalRate: (Double) -> Double,
         isCommandedBolus: (Int) -> Bool
     ) -> [NewPumpEvent] {
         let sortedLogs = logs.sorted { $0.sequenceNum < $1.sequenceNum }
-        reconciler.recordClockChanges(in: sortedLogs)
 
         let controlIqTriggeredBolusIds = Self.controlIqTriggeredBolusIds(in: sortedLogs)
         var bolusActivations: [Int: BolusActivatedHistoryLog] = [:]
-        var tempBasalActivations: [Int: TempRateActivatedHistoryLog] = [:]
         var events: [NewPumpEvent] = []
 
         for log in sortedLogs {
@@ -48,66 +38,12 @@ final class HistoryToDoseMapper {
                 events.append(completedBolusEvent(
                     activation: bolusActivations.removeValue(forKey: completion.bolusId),
                     completion: completion,
-                    reconciler: reconciler,
+                    dates: dates,
                     pumpSerial: pumpSerial,
                     insulinType: insulinType,
                     isControlIqTriggered: controlIqTriggeredBolusIds.contains(completion.bolusId),
                     isCommandedBolus: isCommandedBolus
                 ))
-            case let activation as TempRateActivatedHistoryLog:
-                tempBasalActivations[activation.tempRateId] = activation
-            case let completion as TempRateCompletedHistoryLog:
-                // A completion whose activation is outside the window can't be mapped: the
-                // percent, duration and start time all live on the activation record.
-                if let activation = tempBasalActivations.removeValue(forKey: completion.tempRateId) {
-                    events.append(tempBasalEvent(
-                        activation: activation,
-                        completion: completion,
-                        reconciler: reconciler,
-                        pumpSerial: pumpSerial,
-                        insulinType: insulinType,
-                        scheduledBasalRate: scheduledBasalRate,
-                        roundBasalRate: roundBasalRate
-                    ))
-                }
-            case let basalChange as BasalRateChangeHistoryLog:
-                events.append(basalChangeEvent(
-                    basalChange,
-                    reconciler: reconciler,
-                    pumpSerial: pumpSerial,
-                    insulinType: insulinType
-                ))
-            case let alarm as AlarmActivatedHistoryLog:
-                events.append(alarmEvent(alarm, reconciler: reconciler, pumpSerial: pumpSerial))
-            case let alert as AlertActivatedHistoryLog:
-                events.append(alarmEvent(alert, reconciler: reconciler, pumpSerial: pumpSerial))
-            case let suspend as PumpingSuspendedHistoryLog:
-                // Source the suspend from the pump's own ledger so it can't be missed even when
-                // it happened while the app wasn't connected.
-                let date = reconciler.utcDate(pumpTimeSec: suspend.pumpTimeSec, sequenceNum: suspend.sequenceNum)
-                let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: suspend.sequenceNum)
-                // Built with the full initializer rather than DoseEntry(suspendDate:) so the
-                // syncIdentifier can be stamped to match `raw`.
-                let dose = DoseEntry(
-                    type: .suspend,
-                    startDate: date,
-                    value: 0,
-                    unit: .units,
-                    syncIdentifier: raw.hexadecimalString
-                )
-                events.append(NewPumpEvent(date: date, dose: dose, raw: raw, title: "Suspend", type: .suspend))
-            case let resume as PumpingResumedHistoryLog:
-                let date = reconciler.utcDate(pumpTimeSec: resume.pumpTimeSec, sequenceNum: resume.sequenceNum)
-                let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: resume.sequenceNum)
-                let dose = DoseEntry(
-                    type: .resume,
-                    startDate: date,
-                    value: 0,
-                    unit: .units,
-                    syncIdentifier: raw.hexadecimalString,
-                    insulinType: insulinType
-                )
-                events.append(NewPumpEvent(date: date, dose: dose, raw: raw, title: "Resume", type: .resume))
             default:
                 continue
             }
@@ -118,23 +54,11 @@ final class HistoryToDoseMapper {
         for activation in bolusActivations.values {
             events.append(inFlightBolusEvent(
                 activation,
-                reconciler: reconciler,
+                dates: dates,
                 pumpSerial: pumpSerial,
                 insulinType: insulinType,
                 isControlIqTriggered: controlIqTriggeredBolusIds.contains(activation.bolusId),
                 isCommandedBolus: isCommandedBolus
-            ))
-        }
-
-        for activation in tempBasalActivations.values {
-            events.append(tempBasalEvent(
-                activation: activation,
-                completion: nil,
-                reconciler: reconciler,
-                pumpSerial: pumpSerial,
-                insulinType: insulinType,
-                scheduledBasalRate: scheduledBasalRate,
-                roundBasalRate: roundBasalRate
             ))
         }
 
@@ -175,16 +99,16 @@ final class HistoryToDoseMapper {
     private func completedBolusEvent(
         activation: BolusActivatedHistoryLog?,
         completion: BolusCompletedHistoryLog,
-        reconciler: HistoryTimestampReconciler,
+        dates: HistoryRecordDates,
         pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
         insulinType: InsulinType?,
         isControlIqTriggered: Bool,
         isCommandedBolus: (Int) -> Bool
     ) -> NewPumpEvent {
-        let endDate = reconciler.utcDate(pumpTimeSec: completion.pumpTimeSec, sequenceNum: completion.sequenceNum)
+        let endDate = dates.phoneDate(of: completion)
         let startDate: Date
         if let activation {
-            startDate = reconciler.utcDate(pumpTimeSec: activation.pumpTimeSec, sequenceNum: activation.sequenceNum)
+            startDate = dates.phoneDate(of: activation)
         } else {
             startDate = endDate
         }
@@ -209,13 +133,13 @@ final class HistoryToDoseMapper {
 
     private func inFlightBolusEvent(
         _ activation: BolusActivatedHistoryLog,
-        reconciler: HistoryTimestampReconciler,
+        dates: HistoryRecordDates,
         pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
         insulinType: InsulinType?,
         isControlIqTriggered: Bool,
         isCommandedBolus: (Int) -> Bool
     ) -> NewPumpEvent {
-        let startDate = reconciler.utcDate(pumpTimeSec: activation.pumpTimeSec, sequenceNum: activation.sequenceNum)
+        let startDate = dates.phoneDate(of: activation)
         let raw = HistoryLogSyncIdentifier.bolus(pumpSerial: pumpSerial, bolusId: activation.bolusId)
         let dose = DoseEntry(
             type: .bolus,
@@ -230,83 +154,5 @@ final class HistoryToDoseMapper {
             wasProgrammedByPumpUI: !isCommandedBolus(activation.bolusId)
         )
         return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Bolus", type: .bolus)
-    }
-
-    private func tempBasalEvent(
-        activation: TempRateActivatedHistoryLog,
-        completion: TempRateCompletedHistoryLog?,
-        reconciler: HistoryTimestampReconciler,
-        pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
-        insulinType: InsulinType?,
-        scheduledBasalRate: (Date) -> Double,
-        roundBasalRate: (Double) -> Double
-    ) -> NewPumpEvent {
-        let startDate = reconciler.utcDate(pumpTimeSec: activation.pumpTimeSec, sequenceNum: activation.sequenceNum)
-        let programmedEndDate = startDate.addingTimeInterval(TimeInterval(activation.durationMilliseconds / 1000))
-
-        // An early cancel writes the completion before the programmed end; a temp rate that ran
-        // its course can write it slightly after. The delivery never extends past the programmed
-        // end, so take the earlier of the two.
-        let endDate: Date
-        if let completion {
-            let completionDate = reconciler.utcDate(pumpTimeSec: completion.pumpTimeSec, sequenceNum: completion.sequenceNum)
-            endDate = min(programmedEndDate, completionDate)
-        } else {
-            endDate = programmedEndDate
-        }
-
-        // A Tandem temp basal is stored in history as a *percent* of the active profile basal,
-        // not an absolute rate. Convert to an absolute U/hr rate exactly as the set path does:
-        // round(scheduledBasalRate(at: start) × percent/100). Recording the bare percent/100
-        // would only be correct when the scheduled basal is 1.0 U/hr.
-        let absoluteRate = roundBasalRate(scheduledBasalRate(startDate) * Double(activation.percent) / 100.0)
-
-        let raw = HistoryLogSyncIdentifier.tempRate(pumpSerial: pumpSerial, tempRateId: activation.tempRateId)
-        let dose = DoseEntry(
-            type: .tempBasal,
-            startDate: startDate,
-            endDate: endDate,
-            value: absoluteRate,
-            unit: .unitsPerHour,
-            description: "Temp basal #\(activation.tempRateId) at \(activation.percent)%",
-            syncIdentifier: raw.hexadecimalString,
-            insulinType: insulinType,
-            isMutable: completion == nil
-        )
-        return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Temp Basal", type: .tempBasal)
-    }
-
-    private func basalChangeEvent(
-        _ basalChange: BasalRateChangeHistoryLog,
-        reconciler: HistoryTimestampReconciler,
-        pumpSerial: HistoryLogSyncIdentifier.PumpSerial,
-        insulinType: InsulinType?
-    ) -> NewPumpEvent {
-        let startDate = reconciler.utcDate(pumpTimeSec: basalChange.pumpTimeSec, sequenceNum: basalChange.sequenceNum)
-        let raw = HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: basalChange.sequenceNum)
-        let dose = DoseEntry(
-            type: .basal,
-            startDate: startDate,
-            value: Double(basalChange.commandBasalRate),
-            unit: .unitsPerHour,
-            description: "Basal profile \(basalChange.insulinDeliveryProfile)",
-            syncIdentifier: raw.hexadecimalString,
-            insulinType: insulinType
-        )
-        return NewPumpEvent(date: dose.startDate, dose: dose, raw: raw, title: "Basal", type: .basal)
-    }
-
-    private func alarmEvent(
-        _ log: HistoryLog,
-        reconciler: HistoryTimestampReconciler,
-        pumpSerial: HistoryLogSyncIdentifier.PumpSerial
-    ) -> NewPumpEvent {
-        NewPumpEvent(
-            date: reconciler.utcDate(pumpTimeSec: log.pumpTimeSec, sequenceNum: log.sequenceNum),
-            dose: nil,
-            raw: HistoryLogSyncIdentifier.logSequence(pumpSerial: pumpSerial, sequenceNum: log.sequenceNum),
-            title: "Alarm",
-            type: .alarm
-        )
     }
 }

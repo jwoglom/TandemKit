@@ -17,11 +17,11 @@ import Foundation
 ///   reported bolus finalizes in place.
 /// * **Temp rates** — `tempRateId`, carried by `TempRateActivatedHistoryLog` and
 ///   `TempRateCompletedHistoryLog`.
-/// * **Everything else** — the pump assigns no id (notably `BasalRateChangeHistoryLog` and
-///   `BasalDeliveryHistoryLog`, which describe scheduled-basal changes), so the log's own
-///   `sequenceNum` is the only stable handle. Use `logSequence` only for events that are reported
-///   once, already final: a sequence number is not knowable before the pump writes the record, so it
-///   cannot bridge an optimistic report to its confirmation.
+/// * **Everything else** — the pump assigns no id, so the log's own `sequenceNum` is the only
+///   stable handle. Use `logSequence` only for events that are reported once, already final: a
+///   sequence number is not knowable before the pump writes the record, so it cannot bridge an
+///   optimistic report to its confirmation. Its one use is a basal correction, keyed on the
+///   `BasalDeliveryHistoryLog` (279) whose cycle it reports, so there is at most one per 279.
 ///
 /// `bolusId` and `tempRateId` are small pump-assigned counters that are eventually reused, so the
 /// pump serial is part of every identifier, and callers must not treat an id as unique across the

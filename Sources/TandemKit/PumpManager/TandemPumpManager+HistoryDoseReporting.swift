@@ -2,7 +2,8 @@ import Foundation
 import LoopKit
 
 /// Reports history boluses the live path didn't report or couldn't finish (#354), and the pump's
-/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`).
+/// own suspends and resumes (`TandemPumpManager+DeliveryTransitions`), and compares the basal it
+/// delivered with what the host was told (`TandemPumpManager+BasalReconciliation`).
 extension TandemPumpManager {
     func reportHistoryDoses(after outcome: HistoryBackfillCoordinator.TickOutcome, now: Date) {
         guard state.featureFlags.historyBackfill, let serial = historyLogStoreSerial else {
@@ -15,7 +16,9 @@ extension TandemPumpManager {
                 self.logger.warning("Deferring history dose reporting to the next tick: \(error.localizedDescription)")
                 return
             }
-            self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            var batch = self.reportHistoryDeliveryTransitions(after: outcome, pumpSerial: serial)
+            self.reconcileBasalHistory(after: outcome, pumpSerial: serial, into: &batch)
+            self.emitHistoryReports(batch)
             if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
@@ -45,14 +48,11 @@ extension TandemPumpManager {
         state.bolusReportLedger.prune(now: now)
         let ledger = state.bolusReportLedger
 
-        // Fresh each pass: a shared one would apply each clock change once per pass.
         let events = HistoryToDoseMapper().mapToEvents(
             logs,
-            reconciler: HistoryTimestampReconciler(),
+            dates: historyRecordDates(logs),
             pumpSerial: serial,
             insulinType: state.insulinType,
-            scheduledBasalRate: { _ in 0 },
-            roundBasalRate: { $0 },
             isCommandedBolus: { ledger.entry(bolusId: $0, pumpSerial: serial.rawValue)?.origin == .commanded }
         )
 

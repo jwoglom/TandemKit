@@ -262,7 +262,30 @@ final class DoseOracleTests: XCTestCase {
 
     // MARK: - Trio
 
-    func testTrioCollapsesTheThreeBolusReportsOntoOneRowCorrectedDownward() {
+    private func scheduledBasal(rate: Double, at date: Date) -> NewPumpEvent {
+        NewPumpEvent.basal(
+            dose: DoseEntry(type: .basal, startDate: date, endDate: date, value: rate, unit: .unitsPerHour, insulinType: .novolog),
+            date: date
+        )
+    }
+
+    private func suspend(at date: Date) -> NewPumpEvent {
+        NewPumpEvent.suspend(dose: DoseEntry(suspendDate: date), date: date)
+    }
+
+    private func resume(at date: Date) -> NewPumpEvent {
+        NewPumpEvent.resume(dose: DoseEntry(resumeDate: date, insulinType: .novolog), date: date)
+    }
+
+    private func trio(_ batches: [NewPumpEvent]..., replacing: Bool = false, now: Date? = nil) -> TrioDoseStoreOracle {
+        let oracle = TrioDoseStoreOracle()
+        for batch in batches {
+            oracle.addPumpEvents(batch, lastReconciliation: nil, replacePendingEvents: replacing, now: now ?? t0.addingTimeInterval(.hours(3)))
+        }
+        return oracle
+    }
+
+    func testTrioUpdatesAMutableBolusUntilItIsFinalized() {
         let oracle = TrioDoseStoreOracle()
         oracle.addPumpEvents([bolus(units: 2, start: t0, mutable: true)], lastReconciliation: t0, replacePendingEvents: true, now: t0)
         oracle.addPumpEvents([bolus(units: 2, start: t0, mutable: true)], lastReconciliation: t0, replacePendingEvents: true, now: t0)
@@ -275,37 +298,84 @@ final class DoseOracleTests: XCTestCase {
         )
 
         let row = oracle.assertSingleBolus(at: t0, amount: 1.2)
-        XCTAssertEqual(row?.downwardUpdates, 1)
-        XCTAssertEqual(oracle.skipped.filter { $0.reason == .duplicate(.bolus) }.count, 2)
+        XCTAssertEqual(row?.updateCount, 2)
+        XCTAssertEqual(row?.isMutable, false)
+        XCTAssertEqual(row?.programmedAmount, 2)
+        XCTAssertTrue(oracle.skipped.isEmpty)
         XCTAssertEqual(oracle.lastEventDate, t0)
     }
 
-    func testTrioNeverCorrectsABolusUpward() {
-        let oracle = TrioDoseStoreOracle()
-        oracle.addPumpEvents([bolus(units: 2, start: t0, delivered: 0, end: t0, mutable: false)], lastReconciliation: t0, replacePendingEvents: true, now: t0)
-        oracle.addPumpEvents([bolus(units: 2, start: t0, delivered: 2, end: t0, mutable: false)], lastReconciliation: t0, replacePendingEvents: true, now: t0)
+    func testTrioNeverChangesAFinalizedRow() {
+        let oracle = trio(
+            [bolus(units: 2, start: t0, delivered: 0, end: t0, mutable: false)],
+            [bolus(units: 2, start: t0, delivered: 2, end: t0, mutable: false)]
+        )
         oracle.assertSingleBolus(at: t0, amount: 0, "a 0 U placeholder sticks (audit G01-2)")
+        XCTAssertEqual(oracle.skipped.map(\.reason), [.duplicate(.bolus)])
     }
 
-    func testTrioIgnoresReplaceAndReconciliationAndSkipsFinalizedTempBasals() {
-        let oracle = TrioDoseStoreOracle()
-        let running = tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: true)
-        oracle.addPumpEvents([running], lastReconciliation: nil, replacePendingEvents: false, now: t0)
-        XCTAssertEqual(oracle.tempBasals.count, 1)
-        XCTAssertEqual(oracle.tempBasals.first?.tempBasalDurationMinutes, 30)
-        XCTAssertEqual(oracle.tempBasals.first?.tempBasalRate, 1.5)
-
+    func testTrioFinalizesATempBasalAtItsDeliveredSpan() {
         let cancelAt = t0.addingTimeInterval(.minutes(12))
-        let finalized = tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: false, end: cancelAt)
-        oracle.addPumpEvents([finalized], lastReconciliation: cancelAt, replacePendingEvents: true, now: cancelAt)
+        let oracle = trio(
+            [tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: true)],
+            [tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: false, end: cancelAt)]
+        )
 
         XCTAssertEqual(oracle.tempBasals.count, 1)
-        XCTAssertEqual(oracle.tempBasals.first?.tempBasalDurationMinutes, 30, "Trio keeps the programmed duration (audit G01-4)")
-        XCTAssertEqual(oracle.skipped.last?.reason, .tempBasalWithDeliveredUnits)
+        let row = oracle.tempBasals.first
+        XCTAssertEqual(row?.tempBasalDurationMinutes, 12)
+        XCTAssertEqual(row?.deliveredUnits, Decimal(0.3))
+        XCTAssertEqual(row?.isMutable, false)
+    }
 
-        oracle.addPumpEvents([], lastReconciliation: cancelAt, replacePendingEvents: true, now: cancelAt)
-        XCTAssertEqual(oracle.tempBasals.count, 1, "an empty replacing batch changes nothing in Trio")
-        XCTAssertEqual(oracle.callCount, 3)
+    func testTrioMatchesAReKeyedReportOnTimestampAndType() {
+        let running = tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: true)
+        let cancelAt = t0.addingTimeInterval(.minutes(12))
+        let finished = NewPumpEvent(
+            date: t0,
+            dose: tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: false, end: cancelAt).dose,
+            raw: Data("re-keyed".utf8),
+            title: "Temp Basal"
+        )
+
+        let oracle = trio([running], [finished], replacing: true)
+
+        XCTAssertEqual(oracle.tempBasals.count, 1, "\(oracle.events)")
+        XCTAssertEqual(oracle.tempBasals.first?.syncIdentifier, running.dose?.syncIdentifier)
+        XCTAssertEqual(oracle.tempBasals.first?.tempBasalDurationMinutes, 12)
+        XCTAssertTrue(oracle.purged.isEmpty, "the re-keyed report asserted the row it matched")
+    }
+
+    func testTrioKeepsAScheduledBasalApartFromATempBasalInTheSameSecond() {
+        let oracle = trio([
+            tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: false, end: t0),
+            scheduledBasal(rate: 0.8, at: t0)
+        ])
+
+        XCTAssertEqual(oracle.tempBasals.count, 1)
+        XCTAssertEqual(oracle.scheduledBasals.count, 1)
+        XCTAssertEqual(oracle.scheduledBasals.first?.tempBasalDurationMinutes, 0)
+        XCTAssertEqual(oracle.scheduledBasals.first?.tempBasalRate, 0.8)
+    }
+
+    func testTrioPurgesTheMutableRowsAReplacingBatchLeavesOut() {
+        let running = tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: true)
+        let other = bolus(units: 1, start: t0.addingTimeInterval(60), delivered: 1, mutable: false)
+
+        let kept = trio([running], [other])
+        XCTAssertEqual(kept.tempBasals.count, 1, "a non-replacing batch leaves it")
+
+        let purged = trio([running], [other], replacing: true)
+        XCTAssertTrue(purged.tempBasals.isEmpty)
+        XCTAssertEqual(purged.purged.map(\.row.syncIdentifier), [running.dose?.syncIdentifier])
+    }
+
+    func testAnEmptyReplacingBatchPurgesEveryMutableRow() {
+        let oracle = trio([tempBasal(rate: 1.5, start: t0, duration: .minutes(30), mutable: true)], [], replacing: true)
+
+        XCTAssertTrue(oracle.tempBasals.isEmpty)
+        XCTAssertNil(oracle.lastEventDate)
+        XCTAssertEqual(oracle.callCount, 2)
     }
 
     func testTrioDropsTempBasalsAboveMaxBasal() {
@@ -313,6 +383,104 @@ final class DoseOracleTests: XCTestCase {
         oracle.addPumpEvents([tempBasal(rate: 3.04, start: t0, duration: .minutes(30), mutable: true)], lastReconciliation: t0, replacePendingEvents: true, now: t0)
         XCTAssertTrue(oracle.tempBasals.isEmpty)
         XCTAssertEqual(oracle.skipped.first?.reason, .tempBasalAboveMaxBasal(unitsPerHour: 3.04))
+    }
+
+    func testTrioDatesARowFromTheFutureNow() {
+        let oracle = trio([bolus(units: 1, start: t0.addingTimeInterval(120), delivered: 1, mutable: false)], now: t0)
+        XCTAssertEqual(oracle.boluses.first?.timestamp, t0)
+    }
+
+    // MARK: - Trio IOB
+
+    private let schedule: (Date) -> Double = { _ in 1.0 }
+
+    func testTrioCutsEachBasalRowAtTheNextWhateverTheOrderItArrivedIn() throws {
+        let temp = tempBasal(rate: 2, start: t0, duration: .minutes(60), mutable: false)
+        let correction = tempBasal(rate: 3, start: t0.addingTimeInterval(.minutes(30)), duration: .minutes(5), mutable: false)
+        let clock = t0.addingTimeInterval(.hours(2))
+
+        for oracle in [trio([temp], [correction]), trio([correction], [temp])] {
+            XCTAssertEqual(try oracle.basalSegments(clock: clock).filter { $0.rate > 0 }, [
+                .init(start: t0, end: t0.addingTimeInterval(.minutes(30)), rate: 2),
+                .init(start: t0.addingTimeInterval(.minutes(30)), end: t0.addingTimeInterval(.minutes(35)), rate: 3)
+            ])
+            XCTAssertEqual(try oracle.netBasalUnits(from: t0, to: clock, clock: clock, scheduledRate: schedule), 0.5 + 2.0 / 12, accuracy: 1e-6)
+        }
+    }
+
+    func testATempBasalReportedAtAnotherTempsTimestampLandsOnItsRow() {
+        let oracle = trio([
+            tempBasal(rate: 2, start: t0, duration: .minutes(30), mutable: false),
+            NewPumpEvent(date: t0, dose: tempBasal(rate: 3, start: t0, duration: .minutes(30), mutable: false).dose, raw: Data("other".utf8), title: "Temp Basal")
+        ])
+
+        XCTAssertEqual(oracle.tempBasals.map(\.tempBasalRate), [2])
+        XCTAssertEqual(oracle.skipped.map(\.reason), [.duplicate(.tempBasal)])
+    }
+
+    func testTwoBasalRowsAtOneTimestampLeaveOneZeroLength() throws {
+        let oracle = trio([
+            tempBasal(rate: 2, start: t0, duration: .minutes(30), mutable: false),
+            scheduledBasal(rate: 1, at: t0)
+        ])
+
+        XCTAssertEqual(try oracle.basalSegments(clock: t0.addingTimeInterval(.hours(1))).filter { $0.rate > 0 }, [])
+    }
+
+    func testAScheduledBasalRowEndsATempBasalForIOB() throws {
+        let oracle = trio(
+            [tempBasal(rate: 2, start: t0, duration: .minutes(30), mutable: true)],
+            [scheduledBasal(rate: 1, at: t0.addingTimeInterval(.minutes(10)))]
+        )
+        let clock = t0.addingTimeInterval(.hours(1))
+
+        XCTAssertEqual(try oracle.netBasalUnits(from: t0, to: clock, clock: clock, scheduledRate: schedule), 1.0 / 6, accuracy: 1e-6)
+    }
+
+    func testTrioIOBReadsTheRateAndDurationNotTheDeliveredUnits() throws {
+        let entry = DoseEntry(
+            type: .tempBasal,
+            startDate: t0,
+            endDate: t0.addingTimeInterval(.minutes(30)),
+            value: 2,
+            unit: .unitsPerHour,
+            deliveredUnits: 5,
+            insulinType: .novolog
+        )
+        let oracle = trio([NewPumpEvent(date: t0, dose: entry, raw: Data("t".utf8), title: "Temp Basal")])
+        let clock = t0.addingTimeInterval(.hours(1))
+
+        XCTAssertEqual(try oracle.netBasalUnits(from: t0, to: clock, clock: clock, scheduledRate: schedule), 0.5, accuracy: 1e-6)
+    }
+
+    func testASuspendCutsATempBasalAndRunsAtZero() throws {
+        let oracle = trio([
+            tempBasal(rate: 2, start: t0, duration: .minutes(60), mutable: false),
+            suspend(at: t0.addingTimeInterval(.minutes(10))),
+            resume(at: t0.addingTimeInterval(.minutes(20)))
+        ])
+        let clock = t0.addingTimeInterval(.hours(2))
+
+        // Above the schedule for 10 + 40 minutes (oref resumes the temp after the suspend), below it for 10.
+        XCTAssertEqual(try oracle.netBasalUnits(from: t0, to: clock, clock: clock, scheduledRate: schedule), 50.0 / 60 - 10.0 / 60, accuracy: 1e-6)
+    }
+
+    func testASuspendAndResumeInOneSecondFailTrioIOB() {
+        let oracle = trio([suspend(at: t0), resume(at: t0)])
+        XCTAssertThrowsError(try oracle.basalSegments(clock: t0.addingTimeInterval(60)))
+    }
+
+    func testTrioIOBDecaysBolusesAndNetBasal() throws {
+        let oracle = trio([
+            bolus(units: 2, start: t0, delivered: 2, mutable: false),
+            tempBasal(rate: 3, start: t0, duration: .minutes(30), mutable: false)
+        ])
+        let probe = t0.addingTimeInterval(.minutes(30))
+
+        let expectedBolus = 2 * (1 - 0.5 / 5)
+        // 1 U net delivered evenly over 30 minutes, each part decayed from its delivery.
+        let expectedBasal = 1 * (1 - 0.25 / 5)
+        XCTAssertEqual(try oracle.iob(at: probe, scheduledRate: schedule), expectedBolus + expectedBasal, accuracy: 1e-4)
     }
 
     // MARK: - Journal replay

@@ -25,14 +25,18 @@ pure-Swift folds live in `Conformance/Oracles/`:
   `isMutable == false` makes a dose permanent, `lastReconciliation` is set on every call including
   empty batches. Exposes `doses`, `deletedDoses`, `lastReconciliation`, and `iob(at:)` using a simple
   linear model good enough to detect drift.
-- **`TrioDoseStoreOracle`** — replays the same batches the way Trio consumes them (audit G01):
-  `lastReconciliation` and `replacePendingEvents` ignored, dedup by `(date, type)`; `raw`,
-  `syncIdentifier` and `isMutable` are never read, a re-reported bolus only ever lowers the stored
-  amount, and a temp basal carrying `deliveredUnits` is skipped. Used to catch reports that are
-  correct for Loop and wrong for Trio.
+- **`TrioDoseStoreOracle`** — replays the same batches the way Trio consumes them since
+  nightscout/Trio#1300: a temp basal above `maxBasal` dropped, `lastReconciliation` ignored, rows
+  matched by `syncIdentifier` then `(timestamp, type, isScheduledBasal)`, a matched mutable row
+  updated and a finalized one never changed, `.basal` stored as a zero-length scheduled temp basal
+  row, and every mutable row a replacing batch leaves out deleted. `basalSegments(clock:)`,
+  `netBasalUnits` and `iob(at:)` read the rows as oref's `IobHistory` does: each temp basal row cut
+  at the next row's timestamp, suspends at zero. Used to catch reports that are correct for Loop and
+  wrong for Trio.
 
 Both oracles are unit-tested on their own (`Tests/TandemKitTests/DoseOracleTests.swift`), the Loop
-oracle against the guide's three transitions (still delivering, finished, never happened).
+oracle against the guide's three transitions (still delivering, finished, never happened), the Trio
+oracle one rule at a time.
 
 ## Fixtures and helpers
 
@@ -72,6 +76,7 @@ oracle against the guide's three transitions (still delivering, finished, never 
 | A3d | Stopped bolus recovered from history after a relaunch (#448) | shut down after enact; drop every `LastBolusStatus`; the pump stops the bolus short; relaunch; sync | finalized before the window ends from the `BolusCompleted` record backfill reads: the pump's volume and end, not the programmed fallback |
 | A4 | BLE drop mid-temp-basal (P11) | enact 45 min TBR; pump drops the link after the `SetTempRate` ack; advance 10 min; reconnect; sync | TBR reported mutable before the drop; after reconnect same `raw`, still mutable, `endDate` = scheduled end; when it expires on the pump it is finalized (not dropped) with `deliveredUnits` rounded to 0.001 U |
 | A5 | Lost `SetTempRate` response after the irreversible stop step (#340, G02) | fault `drop_response` scoped to `SetTempRateRequest`; enact TBR | driver does not report a TBR the pump is not running; the pump's `CurrentBasalStatus` on the next sync wins; the previous TBR is finalized at its true end |
+| A5b | The link drops in place of the `SetTempRate` response (#340) | fault `disconnect` scoped to `SetTempRateRequest`; enact TBR; sync | the next sync reads `TempRateRequest`, history ends the previous TBR at its completion and adopts the pump's from its activation: one live TBR at the pump's start, rate and duration |
 | A6 | Link drops inside a multi-fragment response | fault `disconnect` with `after: partial_response, fragments_sent: 1` on `PumpVersionBRequest` during sync | no dose is emitted or duplicated, `lastReconciliation` does not advance, next sync succeeds |
 | A7 | Radio off during a running bolus, on again later | `radio_off` after enact; advance past pump completion; `radio_on`; sync | same as A1; additionally `connectionIssue` surfaced and cleared |
 | A8 | Link down across completion, then a pump-programmed bolus runs | `radio_off` after enact; pump completes ours; start a bolus on the pump (`source: pump`); advance past our estimate; `radio_on`; sync | the other bolus id delivering finishes ours: finalized from its own `LastBolusStatus` record under the original `raw`, with its own start and end, never the pump bolus's; `bolusDose` cleared; the pump's bolus is not reported as ours |
@@ -153,8 +158,9 @@ reports it at the pump's time before the sync that saw it completes
 
 A Tandem pump holds a date and time with no zone and only moves when someone sets it; the driver
 decodes pump timestamps with the phone's current UTC offset and takes out the pump clock offset it
-last measured (`hostDate(forPumpDate:)`), and `HistoryTimestampReconciler` moves records written
-before a pump clock change onto the clock now in force. Each scenario changes one side's clock,
+last measured, moved by any change in the phone's offset since (`hostDate(forPumpDate:)`), and
+`HistoryTimestampReconciler` moves records written before a pump clock change onto the clock now in
+force. Every history date goes through both (`HistoryRecordDates`). Each scenario changes one side's clock,
 with and without the pump being told, and asserts every dose at the instant the pump delivered it.
 Phone and pump start on the same fixed-offset zone; the phone's zone is moved with `PhoneTimeZone`.
 Both history flags are on. `TimeChangeConformanceTests`.
@@ -164,7 +170,34 @@ Both history flags are on. `TimeChangeConformanceTests`.
 | G1 | The phone changes zone, the pump is not told | phone UTC-4 → UTC-7; sync; app bolus; `radio_off`; pump `suspend`, 10 min, `resume`; pump-programmed bolus; `radio_on`; sync | `pumpClockOffset` +3 h and the time-sync warning shown; the app bolus, the suspend and the resume at their instants; the pump bolus at its instant (#482) |
 | G2 | The phone changes zone, the app sets the pump | app temp basal 60 min; `radio_off`; pump-programmed bolus; phone UTC-4 → UTC-7; `radio_on`; `syncPumpTime`; temp basal runs out; pump `suspend`/`resume` | `ChangeTimeDateRequest` sent, pump reads UTC-7, one `TimeChanged`; offset ~0, warning cleared; the bolus logged before the change at its instant; the temp basal finalized at its programmed end and full volume; the later suspend at its instant |
 | G3 | The user sets the pump's clock on the pump | `radio_off`; pump `suspend`; pump clock +1 h on the pump; `resume`; pump-programmed bolus; `radio_on`; sync; `syncPumpTime`; app bolus | `pumpClockOffset` +1 h and the warning; the suspend (before the change) and the resume (after it) at their instants; the pump bolus at its instant (#482); after `syncPumpTime` a second `TimeChanged`, offset ~0, warning cleared, the app bolus at its instant |
-| G4 | The phone's offset drops an hour between syncs (DST), the pump is not told | a pump-programmed bolus logged 50 min before tracking began, so it decodes past the reporting floor and has ended before the hosts are compared; phone UTC-4 → UTC-5, no sync; pump `suspend` in range; `radio_off`; `resume`; `radio_on`; sync | the suspend from the qualifying event and the resume from history at their instants, with the offset the driver holds an hour stale until the sync measures it again; the old bolus is never reported, though it decodes an hour later and moves past the reporting floor (#482) |
+| G4 | The phone's offset drops an hour between syncs (DST), the pump is not told | a pump-programmed bolus logged 50 min before tracking began, so it decodes past the reporting floor and has ended before the hosts are compared; phone UTC-4 → UTC-5, no sync; pump `suspend` in range; `radio_off`; `resume`; `radio_on`; sync | the suspend from the qualifying event and the resume from history at their instants; the offset moves an hour with the phone's before the sync measures it again; the old bolus is never reported, though it decodes an hour later and moves past the reporting floor (#482) |
+
+## H. Basal from the pump's history (#514, #213, #340)
+
+The pump delivers basal in 5-minute cycles, one `BasalDelivery` (279) record each. With
+`basalHistoryReporting` on, the driver compares each closed cycle with what the host counts and
+reports a correction where they differ (AGENTS.md "History backfill and dose reporting"). Each
+scenario runs faketandem's own basal cycle (`basal_cycle_enabled`), started once the driver is
+paired: a 279 every five minutes at the rate and source in force, `DailyBasal` totals,
+`ControlIQPcmChange` records, and Control-IQ switched on the pump (`closed_loop_enabled`) or by the
+app (`ChangeControlIQSettingsRequest`) at a scripted rate. History backfill and basal reporting are
+on. Every scenario that corrects also checks, over its 279s and over each, that Loop's and Trio's
+net basal equals the pump's (`PumpTimeline.basalCycles`). Loop's may be 0.025 U off for a cycle a
+suspend cuts short: Loop rebuilds the temp basal before a suspend without its `deliveredUnits` and
+counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| H1 | An app temp runs; Control-IQ switched on by the app for an hour with rates either side of the profile, a 279 and a sync every 5 minutes; Control-IQ off; an app temp | The app temp ends at its completion record; one correction per 279 off the schedule, at its rate and start, the last before the app's next temp; the sync after the switch-off returns with all of them and the hand-back cleared; Loop keeps every correction, Trio stores every one, and both count the pump's basal |
+| H2 | The radio is off for 2 h during Control-IQ, then a sync | One ascending batch of corrections at the pump's rates, one per 279 off the schedule; Loop keeps every one, Trio stores every one and its IOB counts the pump's basal; a second pass reports nothing |
+| H3 | Relaunch from `rawValue` during Control-IQ | Nothing reported twice; corrections continue |
+| H4 | A suspend and resume during Control-IQ | The chunk under way ends at the suspend; no correction in the resume's second; the suspend, resume and corrections in one batch |
+| H5 | A5b with reporting on (#340), a 279 every 5 minutes | The pump's temp reported live at its pump start and rate; no 279 differs and nothing is corrected; Trio's IOB runs |
+| H6 | App temps, a cancel and a temp replaced within one cycle; an app temp across a profile segment change; a pump clock 11 minutes ahead across its segment change, with the skew compensation temp (D5) | No difference, nothing reported. The replaced temp is never delivered; the pump rescales the temp at the change and the driver cuts it there; the host is never told of the compensation temp |
+| H7 | A temp set on the pump's screen | Reported as its chunks close, with `wasProgrammedByPumpUI` |
+| H8 | The pump runs a profile off the app's schedule while out of range (#400) | Corrections at the pump's rate for the cycles before the driver writes the schedule back; the cycle the write lands in is residual; the pump runs the schedule from its next 279 |
+| H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
+| H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
 
 ## Execution order
 

@@ -32,20 +32,38 @@ public struct DeliveryTransitionLedger: Equatable {
     }
 
     /// A delivery change the live path saw on the pump and left for history to date. While it is
-    /// pending `basalDose` holds a placeholder for status and `prior` is what the host holds.
+    /// pending `basalDose` holds a placeholder for status, or `prior` while a temp replaces it, and
+    /// `prior` is what the host holds.
     public struct PendingTransition: Equatable {
+        /// A temp the pump runs in place of the temp `prior`, as `TempRateRequest` reads it.
+        public struct ReplacingTemp: Equatable {
+            /// The pump's own record of its start, on the phone's clock.
+            public let start: Date
+            public let percent: Int
+            /// Units per hour: `percent` of the pump's profile rate at detection.
+            public let rate: Double
+
+            public init(start: Date, percent: Int, rate: Double) {
+                self.start = start
+                self.percent = percent
+                self.rate = rate
+            }
+        }
+
         /// A temp basal here is still open in the host.
         public let prior: UnfinalizedDose
         public let observed: DoseType
         public let detectedAt: Date
         /// The last reading that saw the pump in `prior`'s state. The change happened after this.
         public let lastConfirmed: Date
+        public let replacement: ReplacingTemp?
 
-        public init(prior: UnfinalizedDose, observed: DoseType, detectedAt: Date, lastConfirmed: Date) {
+        public init(prior: UnfinalizedDose, observed: DoseType, detectedAt: Date, lastConfirmed: Date, replacement: ReplacingTemp? = nil) {
             self.prior = prior
             self.observed = observed
             self.detectedAt = detectedAt
             self.lastConfirmed = lastConfirmed
+            self.replacement = replacement
         }
     }
 
@@ -197,20 +215,31 @@ extension DeliveryTransitionLedger.PendingTransition: RawRepresentable {
         else {
             return nil
         }
+        let replacement = (rawValue["replacement"] as? [String: Any]).flatMap { raw -> ReplacingTemp? in
+            guard let start = raw["start"] as? TimeInterval, let percent = raw["percent"] as? Int, let rate = raw["rate"] as? Double else {
+                return nil
+            }
+            return ReplacingTemp(start: Date(timeIntervalSinceReferenceDate: start), percent: percent, rate: rate)
+        }
         self.init(
             prior: prior,
             observed: observed,
             detectedAt: Date(timeIntervalSinceReferenceDate: detectedAt),
-            lastConfirmed: Date(timeIntervalSinceReferenceDate: lastConfirmed)
+            lastConfirmed: Date(timeIntervalSinceReferenceDate: lastConfirmed),
+            replacement: replacement
         )
     }
 
     public var rawValue: RawValue {
-        [
+        var raw: RawValue = [
             "prior": prior.rawValue,
             "observed": observed.rawValue,
             "detectedAt": detectedAt.timeIntervalSinceReferenceDate,
             "lastConfirmed": lastConfirmed.timeIntervalSinceReferenceDate
         ]
+        raw["replacement"] = replacement.map { replacement -> [String: Any] in
+            ["start": replacement.start.timeIntervalSinceReferenceDate, "percent": replacement.percent, "rate": replacement.rate]
+        }
+        return raw
     }
 }

@@ -208,6 +208,14 @@ struct FaketandemSnapshot: Decodable {
         let clearedPumpSeconds: Int
     }
 
+    /// The pump's 5-minute basal cycle (`basal_cycle_enabled`).
+    struct BasalCycle: Decodable {
+        let enabled: Bool
+        /// When the next 279 is due; nil while the cycle is off.
+        let nextCycle: FaketandemOptionalTime?
+        let pcm: Int
+    }
+
     typealias HistoryEntry = FaketandemHistoryEntry
 
     /// The tail of the history log (the emulator's `historySnapshotLimit`, 50 records). A scenario
@@ -240,6 +248,8 @@ struct FaketandemSnapshot: Decodable {
     let workflowMode: String?
     /// nil from an emulator that predates profile modelling.
     let idpProfiles: [FaketandemIDPProfile]?
+    /// nil from an emulator that predates the basal cycle.
+    let basalCycle: BasalCycle?
     let history: History
     let requestLog: RequestLog
 }
@@ -647,10 +657,13 @@ final class FaketandemClient {
     @discardableResult
     func stopTempBasal() throws -> FaketandemSnapshot { try action("/api/state/tempbasal/stop") }
 
-    /// `reason` is `user`, `occlusion` or `alarm`.
+    /// `reason` is `user`, `occlusion` or `alarm`. `keepTemp`, for an alarm only, leaves a running
+    /// temp rate in force: no `TempRateCompleted`, and it runs again after the resume.
     @discardableResult
-    func suspend(reason: String = "user") throws -> FaketandemSnapshot {
-        try action("/api/state/suspend", ["reason": reason])
+    func suspend(reason: String = "user", keepTemp: Bool = false) throws -> FaketandemSnapshot {
+        var body: [String: Any] = ["reason": reason]
+        if keepTemp { body["keep_temp"] = true }
+        return try action("/api/state/suspend", body)
     }
 
     @discardableResult

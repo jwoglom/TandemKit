@@ -127,23 +127,25 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .none)
     }
 
-    func testS1_aRateOffTheScheduleIsNotFlaggedUnderControlIQ() throws {
+    /// Control-IQ sets the rate it runs, but hands back to the pump's profile, which is what is
+    /// checked against the schedule and written over.
+    func testS1_aProfileOffTheScheduleIsWrittenOverUnderControlIQ() throws {
         let driver = try stageDriver()
         try harness.client.setState(["closed_loop_enabled": true])
         try pumpAnnounces(.controlIQInfo)
         try IntegrationWait.until("the driver to follow the pump into Control-IQ", timeout: 30) {
             driver.manager.state.useControlIQ
         }
+        try harness.client.setIDPProfiles([profile(rate: Self.pumpRate)])
         try pumpRunsARateOffTheSchedule()
+        let mark = try logMark()
 
-        for _ in 0..<3 {
-            _ = try sync()
-            try clock.advanceBoth(seconds: TandemPumpManager.basalProfileUpdateTimeout / 2, ticks: 2)
-        }
         _ = try sync()
+        try waitForUpdate(.none, driver)
 
-        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt, "Control-IQ sets the rate itself")
-        XCTAssertEqual(driver.manager.state.basalProfileUpdateStatus, .none)
+        XCTAssertTrue(try harness.requestsSeen(since: mark).contains { $0.message == "SetIDPSegmentRequest" })
+        XCTAssertEqual(try harness.client.snapshot().basal.profileRate, Self.scheduledRate, accuracy: 0.001, "the pump's profile is the schedule")
+        XCTAssertNil(driver.manager.state.basalRateMismatchDetectedAt)
     }
 
     // MARK: - S2
@@ -196,15 +198,10 @@ final class BasalScheduleChangeTests: ConformanceTestCase {
         loop.assertNoDuplicates("schedule change")
         trio.assertNoDuplicates("schedule change")
         XCTAssertEqual(loop.doses.filter { $0.dose.type == .tempBasal }.count, 1, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
-        XCTExpectFailure(
-            "jwoglom/TandemKit#329: Trio skips a temp basal carrying deliveredUnits and ignores .basal, so ending a temp basal without a replacement never truncates its stored temp basal (true of the oracle's older Trio; #454)",
-            strict: true
-        ) {
-            let truncating = trio.tempBasals.contains { row in
-                row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
-            } || trio.tempBasals.contains { $0.timestamp >= changeAt.addingTimeInterval(-1) }
-            XCTAssertTrue(truncating, "Trio holds no truncating record; its temp basals are \(trio.tempBasals)")
-        }
+        let truncating = trio.tempBasals.contains { row in
+            row.timestamp == tempStart && row.tempBasalDurationMinutes == Int(ranFor / 60)
+        } || trio.tempBasals.contains { $0.timestamp >= changeAt.addingTimeInterval(-1) }
+        XCTAssertTrue(truncating, "Trio holds no truncating record; its temp basals are \(trio.tempBasals)")
 
         let timeline = try timeline()
         let pumpTemp = try XCTUnwrap(timeline.tempRates.last, "timeline \(timeline)")
