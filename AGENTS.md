@@ -484,6 +484,9 @@ edit instead of at the next sync.
   `ProfileStatusRequest` (`profileChange`, `activeProfileSegmentChange`, `pumpResume`). Nothing is
   compared until it is known. Whether the pump moves boluses already given to a shortened duration
   is unknown, so the longer one stays the window until that long after the change.
+- Scenarios: conformance group I, `InsulinOnBoardConformanceTests`, with the IOB set on the emulator
+  before each read (integration-harness.md "Known emulator gaps"); unit tests in
+  `UnreportedInsulinOnBoardTests`.
 - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)

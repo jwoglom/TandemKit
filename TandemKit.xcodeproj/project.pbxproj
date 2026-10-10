@@ -640,6 +640,7 @@
 		7251F30D881D8F6C8CD505E4 /* MalfunctionBitmaskStatusResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443DF4B92741FBC71FBC6DA9 /* MalfunctionBitmaskStatusResponseTests.swift */; };
 		72AD83EF5CCD2798379FDAB3 /* FakeVirtualPumpServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22292DAC91AAFF56476E33A /* FakeVirtualPumpServer.swift */; };
 		73463FA4D487BC727C911CBA /* SyncDoseStartHistoryLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D369704A8634A8693D863661 /* SyncDoseStartHistoryLogTests.swift */; };
+		73757FD27C065056E2EB8C14 /* InsulinOnBoardConformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05046FF261E466DA02D076EC /* InsulinOnBoardConformanceTests.swift */; };
 		73ACAB8C57063B22C8CF25B6 /* ControlIQSleepScheduleResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D099BDB74E0E4A2CC4E0C0D /* ControlIQSleepScheduleResponseTests.swift */; };
 		73D16B78164E2981E87EDE61 /* InitiateBolusRequestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14B39C7C1F2A70EB4AD283BC /* InitiateBolusRequestTests.swift */; };
 		73F4D988A95F6D4C0CFF3C60 /* BatteryEstimateUpdateHistoryLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9910276CF2AA3ADD4D6AA12C /* BatteryEstimateUpdateHistoryLog.swift */; };
@@ -1008,6 +1009,7 @@
 		0285725C1CCC62600819B327 /* SimpleReservoirValue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SimpleReservoirValue.swift; sourceTree = "<group>"; };
 		02E22B4B835D4CAEA8D70CB2 /* TandemKitFillCannulaViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TandemKitFillCannulaViewModel.swift; sourceTree = "<group>"; };
 		034EDBABB27E13A25C32A2A0 /* InitiateBolusResponseHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InitiateBolusResponseHistoryLog.swift; sourceTree = "<group>"; };
+		05046FF261E466DA02D076EC /* InsulinOnBoardConformanceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InsulinOnBoardConformanceTests.swift; sourceTree = "<group>"; };
 		054A7A4422328EEC0156ABEF /* ControlResponseHistoryLogTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControlResponseHistoryLogTests.swift; sourceTree = "<group>"; };
 		0614C8E018C9C9D48ED473EB /* CgmRejoinSessionHistoryLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CgmRejoinSessionHistoryLog.swift; sourceTree = "<group>"; };
 		0620E509A7FDF7EE28D7F0C3 /* IDPSegmentResponseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = IDPSegmentResponseTests.swift; sourceTree = "<group>"; };
@@ -3161,6 +3163,7 @@
 				DA082307135C1ABC348B3259 /* TimeChangeConformanceTests.swift */,
 				28F0AFDD6861D905C6EE18F7 /* BasalScheduleChangeTests.swift */,
 				652A78E202B22D33174A299A /* BasalHistoryConformanceTests.swift */,
+				05046FF261E466DA02D076EC /* InsulinOnBoardConformanceTests.swift */,
 			);
 			name = Conformance;
 			path = Conformance;
@@ -4531,6 +4534,7 @@
 				83190ADB4442B63991B87665 /* BasalScheduleChangeTests.swift in Sources */,
 				0D3F9D78B0D226D9D735D17C /* ResponseTimeoutIntegrationTests.swift in Sources */,
 				2E81EEA754E0A56E341B71E2 /* BasalHistoryConformanceTests.swift in Sources */,
+				73757FD27C065056E2EB8C14 /* InsulinOnBoardConformanceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

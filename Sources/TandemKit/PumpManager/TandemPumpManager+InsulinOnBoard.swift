@@ -18,27 +18,28 @@ struct UnreportedInsulinOnBoardMonitor {
         case resolved
     }
 
+    /// The excess warned about, until a reading falls back within the boluses reported.
+    private(set) var flagged: Double?
     private var excessSince: Date?
-    private var hasWarned = false
 
     mutating func observe(bolusOnBoard: Double, reported: Double, at now: Date) -> Finding {
         guard bolusOnBoard - reported > Self.tolerance else {
             defer { reset() }
-            return hasWarned ? .resolved : .silent
+            return flagged == nil ? .silent : .resolved
         }
 
         let since = excessSince ?? now
         excessSince = since
-        guard !hasWarned, now.timeIntervalSince(since) >= Self.persistence else {
+        guard flagged == nil, now.timeIntervalSince(since) >= Self.persistence else {
             return .silent
         }
-        hasWarned = true
+        flagged = bolusOnBoard - reported
         return .unreported(units: bolusOnBoard - reported)
     }
 
     mutating func reset() {
         excessSince = nil
-        hasWarned = false
+        flagged = nil
     }
 }
 

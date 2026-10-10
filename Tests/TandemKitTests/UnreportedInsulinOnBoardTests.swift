@@ -279,7 +279,9 @@ import XCTest
         _ = monitor.observe(bolusOnBoard: 3, reported: 1, at: now)
         XCTAssertEqual(monitor.observe(bolusOnBoard: 3, reported: 1, at: later), .unreported(units: 2))
         XCTAssertEqual(monitor.observe(bolusOnBoard: 3, reported: 1, at: later.addingTimeInterval(300)), .silent)
+        XCTAssertEqual(monitor.flagged, 2)
         XCTAssertEqual(monitor.observe(bolusOnBoard: 1, reported: 1, at: later.addingTimeInterval(600)), .resolved)
+        XCTAssertNil(monitor.flagged)
         XCTAssertEqual(monitor.observe(bolusOnBoard: 1, reported: 1, at: later.addingTimeInterval(900)), .silent)
     }
 

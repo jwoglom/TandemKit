@@ -201,6 +201,26 @@ counts it in 0.05 U steps. `BasalHistoryConformanceTests`.
 | H9 | An alarm suspend during an app temp; the temp resumes with delivery | The app's temp ends at the stop; the temp's chunks after the resume reported, the first after the resume's second and the last ending at the app's next temp, and both hosts count them |
 | H10 | A CGM dropout during Control-IQ: Control-IQ, then the profile, then Control-IQ | Profile chunks at the app's schedule report nothing; the Control-IQ chunks off it do |
 
+## I. The pump's IOB against the boluses reported (#354 P21-3)
+
+The driver reads the pump's IOB under the Control-IQ opcode and, with Control-IQ off, holds it
+against the full amounts of the boluses reported within the active profile's insulin duration,
+flagging a reading that stays above them for `UnreportedInsulinOnBoardMonitor.persistence` (AGENTS.md
+"Therapy command validation"). faketandem's own IOB adds delivered basal and decays on a fixed four
+hours, so each scenario sets `iob` to what a pump with Control-IQ off would hold right before the read
+that takes it, and starts the bolus ledger before the window. The verdict is read from
+`unreportedInsulinOnBoard.flagged`. `InsulinOnBoardConformanceTests`.
+
+| ID | Scenario | Assert |
+|---|---|---|
+| I1 | Control-IQ off on the pump; a sync, then an `iobChange` event | `ControlIQIOBRequest` for each, never `NonControlIQIOBRequest`; `latestInsulinOnBoard` at the pump's milliunits; the active profile's insulin duration read at the first sync |
+| I2 | An app bolus, delivered and finalized; the pump holds less than it for 30 minutes | The ledger counts it at its delivered amount; nothing flagged |
+| I3 | An app bolus, then a 3 U bolus on the pump with History Dose Reporting off; readings above the app's bolus for 30 minutes; then one below it | Not flagged at first sight nor at 15 minutes; flagged at 30 at the pump's reading less the app's bolus; the host never told of the pump's bolus; cleared by the reading below |
+| I4 | As I3's pump bolus with History Dose Reporting on | Reported from history; the ledger counts it; nothing flagged 30 minutes on, although the read before the report saw an excess |
+| I5 | A 2 h profile; a 4 U app bolus, 150 minutes, then a 2 U bolus on the pump | The app's bolus is past the window; the pump's reading flagged in full |
+| I6 | The profile's insulin duration shortened, then lengthened, each followed by a `profileChange` event | Each read without a sync; the shorter keeps the longer window until that long after the change; the longer applies at once |
+| I7 | Control-IQ on; a bolus on the pump the host never hears of | Nothing compared. faketandem answers `iobType` 0 under Control-IQ, so the assertion is a strict expected failure |
+
 ## Execution order
 
 1. Oracles + the delegate journal + `PumpTimeline` + `advanceBoth` (shared infrastructure; the oracles

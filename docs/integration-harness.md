@@ -231,7 +231,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
-| `Conformance/` | The dose-reporting conformance groups A–D, F, G and H (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes and basal read back from the pump's history, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
+| `Conformance/` | The dose-reporting conformance groups A–D and F–I (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes, basal read back from the pump's history and the pump's IOB against the boluses reported, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443); on a pump holding a different profile the refusal starts an update that writes the schedule, and the next temp basal goes out. |
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `HistoryBackfillIntegrationTests` | History backfill over logs thousands of records long, measured from the pump's request log: with the flag off no `HistoryLog*` request is ever sent; a pump first seen with two days of history has none of it read or reported; after a relaunch the walk re-reads the seven-hour lookback in 255-record slices across more than one tick, and stops within a slice of it; a bolus during the walk waits for the slice in flight at most; a record lost from a stream is asked for again in the same fetch; a relaunch reports no history bolus twice; an erased log is read from its new start. |
@@ -297,7 +297,13 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-None open. One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
+- **Insulin on board.** faketandem's IOB adds delivered basal, decays on a fixed four hours whatever
+  the profile's insulin duration, and is answered with `iobType` 0 (Mudaliar) under Control-IQ too. A
+  pump with Control-IQ off counts bolus insulin alone over the profile's duration, and under
+  Control-IQ answers 1 (Swan 6 h). Group I sets `iob` before each read, and I7's assertion is a strict
+  expected failure.
+
+One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
 profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").
 Conformance group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()`
 turns it off; every other scenario runs with basal delivered continuously and no 279s, and stages
