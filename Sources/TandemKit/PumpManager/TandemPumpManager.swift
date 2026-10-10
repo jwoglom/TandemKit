@@ -128,6 +128,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     lazy var historyBackfillCoordinator = HistoryBackfillCoordinator(pumpManager: self)
 
     internal var bolusProgressReport: TandemDoseProgressReporter?
+    internal var untrackedBolusProgress: UntrackedBolusProgress?
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
 
@@ -620,7 +621,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
 
     public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
-        bolusProgressReport
+        bolusProgressReport ?? untrackedBolusProgress?.reporter
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
@@ -730,6 +731,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 dose: doseEntry,
                 activationType: activationType
             )
+            self.untrackedBolusProgress = nil
 
             let event = NewPumpEvent.bolus(dose: doseEntry, date: dose.startDate)
             self.state.bolusReportLedger.prune(now: self.now)
@@ -757,6 +759,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
         logger.info("Cancelling bolus...")
 
         guard let bolusDose = state.bolusDose, let bolusId = bolusDose.bolusId else {
+            if let untracked = untrackedBolusProgress {
+                cancelUntrackedBolus(untracked.bolusId, completion: completion)
+                return
+            }
             logger.error("No active bolus...")
             completion(.failure(.communication(PumpCommError.noActiveBolus)))
             return
@@ -839,6 +845,37 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.emitPumpEvents(events)
 
             completion(.success(canceledDose))
+        }
+    }
+
+    /// No dose comes back: as for any bolus the app did not start, what went in reaches the host
+    /// from history.
+    private func cancelUntrackedBolus(_ bolusId: Int, completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.error("Failed to connect to cancel bolus \(bolusId): \(error.localizedDescription)")
+                completion(.failure(.communication(PumpCommError.pumpNotConnected)))
+                return
+            }
+
+            guard let response = self.bluetooth.write(CancelBolusRequest(bolusId: bolusId)) else {
+                self.logger.error("Failed to cancel bolus \(bolusId), which the app did not start")
+                completion(.failure(.communication(PumpCommError.noResponse)))
+                return
+            }
+
+            guard response.wasCancelled else {
+                self.logger.error("Pump refused to cancel bolus \(bolusId), which the app did not start: \(response)")
+                // It may have finished already; a fresh read clears it from the host.
+                self.fetchBolusStatus(fromSync: false)
+                completion(.failure(.communication(PumpCommError.invalidPacket)))
+                return
+            }
+
+            self.logger.info("Cancelled bolus \(bolusId), which the app did not start")
+            self.endUntrackedBolus()
+            self.historyBackfillCoordinator.runTick()
+            completion(.success(nil))
         }
     }
 

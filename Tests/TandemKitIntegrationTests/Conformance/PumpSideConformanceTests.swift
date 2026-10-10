@@ -907,6 +907,45 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         }
     }
 
+    // MARK: - D14
+
+    func testD14ABolusProgrammedOnThePumpCanBeStoppedFromTheHost() throws {
+        let driver = try startPairedDriverReportingHistory()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.01])
+        let batchesBefore = allPumpEventBatches.count
+
+        try harness.client.startBolus(units: Self.bolusUnits, source: "pump")
+        try clock.advanceBoth(seconds: 20, ticks: 4)
+        _ = try sync()
+        try IntegrationWait.until("the pump's bolus shown in progress", timeout: 60) {
+            if case .inProgress = driver.manager.state.bolusState { return true }
+            return false
+        }
+        XCTAssertNotNil(driver.manager.createBolusProgressReporter(reportingOn: .main), "the host's stop button needs a reporter")
+        XCTAssertFalse(eventsSince(batchesBefore).contains { $0.dose?.type == .bolus }, "a running pump bolus is not reported")
+
+        guard case let .success(dose) = try cancelBolus() else {
+            return XCTFail("the host could not stop the pump's bolus")
+        }
+        XCTAssertNil(dose, "what went in comes from history")
+        XCTAssertFalse(try harness.client.snapshot().bolus.active, "the pump stopped it")
+        XCTAssertEqual(driver.manager.state.bolusState, .noBolus)
+
+        try clock.advanceBoth(seconds: 30, ticks: 3)
+        _ = try sync()
+        let reported = try IntegrationWait.value("the stopped bolus reported from its history", timeout: 120) {
+            self.eventsSince(batchesBefore).first { $0.dose?.type == .bolus }
+        }
+        XCTAssertEqual(reported.dose?.isMutable, false)
+        XCTAssertEqual(reported.dose?.wasProgrammedByPumpUI, true)
+        XCTAssertLessThan(reported.dose?.deliveredUnits ?? .infinity, Self.bolusUnits, "stopped short")
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        _ = loop.assertPermanent(raw: reported.raw, "the stopped pump bolus")
+    }
+
     // MARK: - Helpers
 
     /// Waits out the first backfill tick, so anything the pump logs from here on is newer than the

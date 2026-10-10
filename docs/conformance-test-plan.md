@@ -130,6 +130,7 @@ oracle one rule at a time.
 | D11 | Resume over a TBR the driver still holds (#338) | enact TBR; radio off; pump `suspend`; radio on; `resumeDelivery`; sync | the resume's replacing batch does not drop the TBR; Loop holds it finalized, ended no later than the resume |
 | D12 | A bolus programmed on the pump (§7, §11 external doses; #452) | history flags on; pump-source bolus in flight; sync until the backfill has read it; enact TBR; pump completes; sync | nothing reported while it runs (a deliberate departure from §9 item 4, #452); then reported once from history, finalized at the pump's amount, `wasProgrammedByPumpUI`, dated at the pump's start; Loop holds it permanent |
 | D13 | A 100% extended bolus programmed on the pump (#424) | history flags on; append `BolexActivated`, 30 min, `BolexCompleted`; sync until the backfill has read them | a dose for the extended bolus at `BolexCompleted`'s delivered amount, spanning the two records. faketandem encodes the two records' payloads from jwoglom/faketandem#39 on; before that they decode as zeros, and the marker fires either way |
+| D14 | The host stops a bolus programmed on the pump (#353) | history flags on; pump-source bolus in flight; sync; `cancelBolus`; sync | `bolusState` is `.inProgress` with a progress reporter while it runs, and nothing is reported; the cancel stops it on the pump and returns no dose; history then reports it once, finalized, short of the programmed amount; Loop holds it permanent |
 
 ## E. Rounding and field semantics (§2, §9 item 7; P07, P19, P22) — folded into A–D
 

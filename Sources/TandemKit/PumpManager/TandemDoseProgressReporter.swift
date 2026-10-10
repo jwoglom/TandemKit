@@ -17,11 +17,12 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
     var programmedUnits: Double { total }
 
-    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType) {
+    public init(pumpManager: TandemPumpManager, dose: DoseEntry, activationType: BolusActivationType, deliveryStartedAt: Date? = nil) {
         self.pumpManager = pumpManager
         self.dose = dose
         self.activationType = activationType
         total = dose.programmedUnits
+        bolusStatedOn = deliveryStartedAt
     }
 
     func getPumpEvent(

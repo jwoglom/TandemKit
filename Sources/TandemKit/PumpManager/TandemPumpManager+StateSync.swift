@@ -225,6 +225,73 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
     }
 
+    struct UntrackedBolusProgress {
+        let bolusId: Int
+        let dose: DoseEntry
+        let reporter: TandemDoseProgressReporter
+    }
+
+    /// Hosts show a bolus, and the button that stops it, only while `bolusState` says it runs and
+    /// they can get a progress reporter for it. The dose itself still reaches them only from history.
+    private func showUntrackedBolus(_ response: CurrentBolusStatusResponse) -> Bool {
+        guard response.status == .delivering || response.status == .requesting, response.requestedVolume > 0 else {
+            endUntrackedBolus()
+            return false
+        }
+
+        if untrackedBolusProgress?.bolusId != response.bolusId {
+            let startDate = response.timestamp == 0 ? now : min(hostDate(forPumpDate: response.timestampDate), now)
+            let units = Double(response.requestedVolume) / 1000
+            let automatic = response.bolusSource == .controlIQAutoBolus
+            let dose = DoseEntry(
+                type: .bolus,
+                startDate: startDate,
+                endDate: startDate.addingTimeInterval(estimatedDuration(toBolus: units)),
+                value: units,
+                unit: .units,
+                description: "Bolus #\(response.bolusId)",
+                syncIdentifier: historyLogStoreSerial.map { HistoryLogSyncIdentifier.bolus(pumpSerial: $0, bolusId: response.bolusId).hexadecimalString },
+                insulinType: state.insulinType,
+                automatic: automatic,
+                isMutable: true,
+                wasProgrammedByPumpUI: response.bolusSource != .bluetoothRemoteBolus
+            )
+            untrackedBolusProgress = UntrackedBolusProgress(
+                bolusId: response.bolusId,
+                dose: dose,
+                reporter: TandemDoseProgressReporter(
+                    pumpManager: self,
+                    dose: dose,
+                    activationType: automatic ? .automatic : .manualNoRecommendation,
+                    deliveryStartedAt: response.status == .delivering ? startDate : nil
+                )
+            )
+            logger.info("Showing bolus \(response.bolusId), which the app did not start, as in progress")
+        }
+        guard let progress = untrackedBolusProgress else { return true }
+
+        let bolusState: PumpManagerStatus.BolusState = response.status == .delivering ? .inProgress(progress.dose) : .initiating
+        if state.bolusState != bolusState {
+            state.bolusState = bolusState
+            notifyDelegateStateUpdated()
+        }
+        if response.status == .delivering {
+            progress.reporter.notify()
+            telemetryScheduler.schedule(kind: .bolus, interval: .seconds(1), leeway: .milliseconds(100)) { [weak self] in
+                self?.untrackedBolusProgress?.reporter.notify()
+            }
+        }
+        return true
+    }
+
+    func endUntrackedBolus() {
+        guard untrackedBolusProgress != nil else { return }
+        untrackedBolusProgress = nil
+        telemetryScheduler.cancelAll()
+        state.bolusState = .noBolus
+        notifyDelegateStateUpdated()
+    }
+
     func fetchBolusStatus(fromSync: Bool) {
         if fromSync, shouldDeferBolusSync() {
             logger.warning("Skip bolus sync during bolus...")
@@ -241,6 +308,9 @@ extension TandemPumpManager {
         }
 
         noteUntrackedBolus(response)
+        if state.bolusDose == nil, bolusProgressReport == nil, showUntrackedBolus(response) {
+            return
+        }
 
         // The pump runs one bolus at a time: another id delivering means ours finished out of contact.
         let trackedBolusId = state.bolusDose?.bolusId
