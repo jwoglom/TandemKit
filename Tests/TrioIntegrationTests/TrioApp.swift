@@ -18,26 +18,31 @@ struct TrioApp {
     /// A host path the simulator's test process can read.
     let dataContainer: URL
 
-    /// A new install of Trio, seeded to start set up with an unpaired Tandem pump.
-    static func launchFresh(
+    /// A new install of Trio, seeded to start set up with an unpaired Tandem pump. `files`, keyed by
+    /// path in the data container, are written over the seed before Trio first launches.
+    static func launchNew(
         name: String,
+        files: [String: String],
+        arguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> TrioApp {
         guard let launcher = environment[launcherVariable].flatMap(URL.init(string:)) else {
             throw XCTSkip("\(launcherVariable) not set; run via scripts/trio-test.sh")
         }
-        var components = URLComponents(url: launcher.appendingPathComponent("fresh"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "name", value: name)]
-        return try launch(launcher, components.url!)
+        var install = URLComponents(url: launcher.appendingPathComponent("install"), resolvingAgainstBaseURL: false)!
+        install.queryItems = [URLQueryItem(name: "name", value: name)]
+        _ = try post(install.url!, ["files": files])
+        return try launch(launcher, "launch", ["arguments": arguments])
     }
 
-    /// Trio stopped and started again on the same data, as after the system ended it.
+    /// Trio stopped and started again on the same data, with the same launch arguments, as after
+    /// the system ended it.
     func relaunched() throws -> TrioApp {
-        try Self.launch(launcher, launcher.appendingPathComponent("relaunch"))
+        try Self.launch(launcher, "relaunch", [:])
     }
 
     func stop() throws {
-        _ = try Self.post(launcher.appendingPathComponent("stop"))
+        _ = try Self.post(launcher.appendingPathComponent("stop"), [:])
     }
 
     func connectControl() throws -> VirtualPumpControl.Client {
@@ -80,8 +85,8 @@ struct TrioApp {
         let dataContainer: String
     }
 
-    private static func launch(_ launcher: URL, _ url: URL) throws -> TrioApp {
-        let launched = try JSONDecoder().decode(Launched.self, from: post(url))
+    private static func launch(_ launcher: URL, _ path: String, _ body: [String: Any]) throws -> TrioApp {
+        let launched = try JSONDecoder().decode(Launched.self, from: post(launcher.appendingPathComponent(path), body))
         return TrioApp(
             launcher: launcher,
             controlPort: launched.controlPort,
@@ -94,9 +99,11 @@ struct TrioApp {
     }
 
     /// An install and a launch take a minute or two on a CI runner.
-    private static func post(_ url: URL) throws -> Data {
+    private static func post(_ url: URL, _ body: [String: Any]) throws -> Data {
         var request = URLRequest(url: url, timeoutInterval: 300)
         request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let box = ResultBox<Result<(Data, HTTPURLResponse), Error>>()
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error {

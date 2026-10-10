@@ -4,12 +4,14 @@
 scripts/trio-test.sh starts this and hands its URL to the tests, which run in the simulator and
 cannot reach simctl themselves. It serves HTTP on 127.0.0.1, which the simulator shares:
 
-  POST /fresh?name=<test>  stop Trio, install it anew, seed its data container, launch it
-  POST /relaunch           stop Trio and launch it again on the same data
-  POST /stop               stop Trio
+  POST /install?name=<test>  stop Trio, install it anew and seed its data container; a JSON body
+                             {"files": {path: text}} adds or replaces files in the container
+  POST /launch               launch it; a JSON body {"arguments": [...]} passes launch arguments
+  POST /relaunch             stop Trio and launch it again on the same data, with the same arguments
+  POST /stop                 stop Trio
 
-/fresh and /relaunch answer {"controlPort": n, "dataContainer": path} once TandemKit inside Trio
-accepts on its control port. Stopping an install copies its logs and store to LOG_DIR/<test>.
+/install answers {"dataContainer": path}; /launch and /relaunch add "controlPort" once TandemKit
+inside Trio accepts on it. Stopping an install copies its logs and store to LOG_DIR/<test>.
 """
 
 import argparse
@@ -52,11 +54,10 @@ def seed(container):
     """What Trio reads at launch to start set up, with an unpaired Tandem pump manager.
 
     Documents/<key>.plist holds each @PersistedProperty. Both telemetry streams are on unless
-    explicitly false. settings/settings.json pins the limits the tests read back, and
-    basal_profile.json the rate the tests sync to the pump.
+    explicitly false. Trio's own settings come from the test, with its other files.
     """
     documents = Path(container) / "Documents"
-    (documents / "settings").mkdir(parents=True, exist_ok=True)
+    documents.mkdir(parents=True, exist_ok=True)
     plists = {
         "onboardingCompleted": True,
         "hasSeenFatProteinOrderChange": True,
@@ -67,12 +68,16 @@ def seed(container):
     for key, value in plists.items():
         with open(documents / f"{key}.plist", "wb") as f:
             plistlib.dump(value, f)
-    (documents / "settings" / "settings.json").write_text(
-        json.dumps({"insulin_action_curve": 10, "maxBolus": 10, "maxBasal": 2}) + "\n"
-    )
-    (documents / "settings" / "basal_profile.json").write_text(
-        json.dumps([{"start": "00:00:00", "minutes": 0, "rate": 1.0}]) + "\n"
-    )
+
+
+def write_files(container, files):
+    root = Path(container).resolve()
+    for relative, text in files.items():
+        path = (root / relative).resolve()
+        if root not in path.parents:
+            raise ValueError(f"{relative} is outside the data container")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
 
 
 class Trio:
@@ -81,6 +86,7 @@ class Trio:
         self.log_dir = Path(log_dir)
         self.container = None
         self.name = None
+        self.arguments = []
         self.running = False
 
     def simctl(self, *args, check=True):
@@ -102,29 +108,31 @@ class Trio:
         for store in Path(self.container).rglob("TrioCoreDataPersistentContainer.sqlite*"):
             shutil.copy2(store, target)
 
-    def fresh(self, name):
+    def install(self, name, files):
         self.stop()
         self.simctl("uninstall", self.udid, self.bundle_id, check=False)
         self.simctl("install", self.udid, self.app)
         self.container = self.simctl("get_app_container", self.udid, self.bundle_id, "data").stdout.strip()
         self.name = name
+        self.arguments = []
         seed(self.container)
-        return self.launch()
+        write_files(self.container, files)
+        return {"dataContainer": self.container}
 
-    def relaunch(self):
+    def launch(self, arguments):
         if not self.container:
-            raise RuntimeError("no Trio installed; POST /fresh first")
+            raise RuntimeError("no Trio installed; POST /install first")
         self.stop()
-        return self.launch()
-
-    def launch(self):
+        self.arguments = arguments
         port = free_port()
         env = {
             "SIMCTL_CHILD_TANDEMKIT_VIRTUAL_PUMP": self.gatt,
             "SIMCTL_CHILD_TANDEMKIT_VIRTUAL_PUMP_CONTROL": str(port),
         }
-        print(f"launching {self.bundle_id} for {self.name}; control port {port}; data {self.container}", flush=True)
-        subprocess.run(["xcrun", "simctl", "launch", self.udid, self.bundle_id], check=True, env={**os.environ, **env})
+        print(f"launching {self.bundle_id} {arguments} for {self.name}; control port {port}; data {self.container}", flush=True)
+        subprocess.run(
+            ["xcrun", "simctl", "launch", self.udid, self.bundle_id, *arguments], check=True, env={**os.environ, **env}
+        )
         self.running = True
         wait_for_port(port, CONTROL_PORT_TIMEOUT)
         return {"controlPort": port, "dataContainer": self.container}
@@ -136,10 +144,14 @@ def serve(trio, port_file):
             url = urllib.parse.urlparse(self.path)
             query = urllib.parse.parse_qs(url.query)
             try:
-                if url.path == "/fresh":
-                    body = trio.fresh(query.get("name", ["trio"])[0])
+                length = int(self.headers.get("Content-Length") or 0)
+                request = json.loads(self.rfile.read(length) or b"{}")
+                if url.path == "/install":
+                    body = trio.install(query.get("name", ["trio"])[0], request.get("files", {}))
+                elif url.path == "/launch":
+                    body = trio.launch(request.get("arguments", []))
                 elif url.path == "/relaunch":
-                    body = trio.relaunch()
+                    body = trio.launch(trio.arguments)
                 elif url.path == "/stop":
                     trio.stop()
                     body = {}

@@ -291,24 +291,45 @@ Nothing in Trio changes for it:
   SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem and `scripts/trio-launcher.py`, and hands the
   launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
-  `TrioTestCase` asks the launcher for a new install of Trio before each test (`/fresh`), and a
-  test can stop and start it again on the same data (`/relaunch`). Each install's data container is
-  seeded with what a set-up install holds: `onboardingCompleted`, an unpaired Tandem pump manager
-  (`PumpManagerState.plist`: `managerIdentifier` `TandemPumpManager`, empty `state`), both telemetry
-  streams off (Trio's default is on), `settings/settings.json` and a 1 U/hr
-  `settings/basal_profile.json`. Trio is launched with `TANDEMKIT_VIRTUAL_PUMP` and
-  `TANDEMKIT_VIRTUAL_PUMP_CONTROL`, and the launcher answers once the control port accepts.
+  before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
+  (`/launch`, with any launch arguments), and a test can stop and start it again on the same data
+  and arguments (`/relaunch`). The launcher seeds the data container with what a set-up install
+  holds: `onboardingCompleted`, an unpaired Tandem pump manager (`PumpManagerState.plist`:
+  `managerIdentifier` `TandemPumpManager`, empty `state`) and both telemetry streams off (Trio's
+  default is on). The test writes Trio's own settings over that (`seededFiles`): Trio's default
+  limits in `settings/settings.json` and a 1 U/hr `settings/basal_profile.json`, plus whatever a
+  scenario needs. Trio is launched with `TANDEMKIT_VIRTUAL_PUMP` and `TANDEMKIT_VIRTUAL_PUMP_CONTROL`,
+  and the launcher answers once the control port accepts. Around each test faketandem's delivery,
+  profile and limits are put back, which `harness.reset()` leaves.
 - The tests reach the driver inside Trio through `VirtualPumpControl.Client`: `pair` (with a
-  long-term key the test also gives faketandem, so only the quick-reconnect rounds run), `bolus`,
-  `syncBasalSchedule`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`, `sync`, `status`,
-  and `pumpEventBatches`, every batch handed to Trio with Trio's completion. Trio completes a batch
-  once it has saved it, so a completed log is all in the store.
+  long-term key the test also gives faketandem, so only the quick-reconnect rounds run, or without
+  one through the whole JPAKE exchange), `applyOnboardingSettings`, `bolus`, `cancelBolus`,
+  `syncBasalSchedule`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`,
+  `recordCartridgeChange`, `recordSiteChange`, `setFeatureFlag`, `sync`, `status`, and
+  `pumpEventBatches`, every batch handed to Trio with Trio's completion. Trio completes a batch
+  once it has saved it, so a completed log is all in the store. What the pump does on its own
+  (a suspend, a bolus from its screen, a dropped link) goes through faketandem's API.
 - They read Trio's Core Data store (`TrioCoreDataPersistentContainer.sqlite`, WAL) read-only in
-  place (`TrioStore`), and compare its rows with `TrioDoseStoreOracle` fed the same batches, using
-  the `bolusIncrement` and `maxBasal` Trio itself reads.
+  place (`TrioStore`), between two reads of the batch log that agree, and compare its rows with
+  `TrioDoseStoreOracle` fed the same batches, using the `bolusIncrement` and `maxBasal` Trio itself
+  reads.
 
-The commands call the driver as Trio's code would, but not through Trio's own bolus or loop paths
-(`APSManager.enactBolus`, `determineBasal`), and Trio's loop does not run: it has no CGM.
+The commands call the driver as Trio's code would. `TrioClosedLoopTests` runs Trio's own loop
+instead: Trio's glucose simulator as the CGM (`cgm` `simulator`, held near 250 mg/dL through its
+`GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed,
+so `APSManager` enacts a temp basal and an SMB through the driver on the simulator's next reading,
+up to 5 minutes after launch. Trio's manual bolus path (`APSManager.enactBolus`, from its bolus
+screen) is not driven. The cartridge and fill cannula wizards wait for state-stream notifications
+faketandem does not send, so their scenario sends what they report once done, around a suspend.
+
+Journeys covered, each checked against the oracle: an app bolus, an automatic one (stored as an
+SMB), one cancelled part-way, one running across a relaunch of Trio, one through a dropped link, and
+one programmed on the pump (with `historyDoseReporting`); a temp basal and its cancel, one replaced
+by another, one above Trio's `maxBasal` (dropped), and one across a relaunch, after which Trio's
+limits reach the pump; an app suspend that stops a temp and its resume, and a suspend and resume
+on the pump; a basal profile edit while a temp runs; a cartridge and site change; pairing on the
+pump's code with Trio's settings applied; and Trio's closed loop.
+
 `trio.log` (the simulator's log stream, every launch) and `trio-launcher.log` land in `LOG_DIR`, and
 each test's Trio `Documents/logs` and store in `LOG_DIR/<test>`. The `trio` job in
 `.github/workflows/macos.yml` runs it on the self-hosted runners.
