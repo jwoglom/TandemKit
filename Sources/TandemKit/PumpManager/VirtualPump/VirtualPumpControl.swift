@@ -371,7 +371,7 @@ enum VirtualPumpControl {
             }
             let paired = Completion<Error?>()
             manager.pairPump(code: code, peripheral: found.peripheral) { paired.finish($0) }
-            if let error = try paired.wait("pairPump", timeout: 90) {
+            if let error = try paired.wait("pairPump", timeout: 180) {
                 throw error
             }
         }

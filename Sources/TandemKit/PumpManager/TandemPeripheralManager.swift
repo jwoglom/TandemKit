@@ -599,9 +599,9 @@ extension TandemPeripheralManager: CBPeripheralDelegate {
 extension TandemPeripheralManager {
     /// Runs off the command queue and writes to the peripheral directly, bypassing
     /// TandemBluetoothManager.write and its queue precondition. That is safe only because this runs
-    /// during connection setup, while connectIfNeeded is parked in its wait on the command queue —
+    /// during connection setup, while awaitConnect is parked in its wait on the command queue —
     /// no other command can be in flight. Keep it that way: setup must stay confined to the window
-    /// before connectIfNeeded returns.
+    /// before awaitConnect returns.
     func performInitialSetup() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -694,8 +694,8 @@ extension TandemPeripheralManager {
                     let secret = "serverNonce=\(authBuilder.getServerNonce() != nil)"
                     logger.error("JPAKE failed: \(done) \(invalid) \(derived) \(secret)")
 
-                    // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
-                    // full connectTimeout and stalls every queued command behind it.
+                    // Must complete the connect attempt, otherwise awaitConnect blocks for its
+                    // full timeout and stalls every queued command behind it.
                     failHandshake(isFirstPairing && authBuilder.rejectedAtKeyConfirmation()
                         ? PumpCommError.pairingCodeRejected
                         : PumpCommError.noResponse)
