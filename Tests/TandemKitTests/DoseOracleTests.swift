@@ -23,10 +23,7 @@ final class DoseOracleTests: XCTestCase {
         return NewPumpEvent.bolus(dose: dose, date: start)
     }
 
-    /// Keyed on rate and start, so the identity survives an early end. (TandemKit's own
-    /// `NewPumpEvent.tempBasal(dose:date:)` keys on `programmedUnits`, which for a temp basal is
-    /// rate × duration and therefore changes when the dose is finalized short — the emulator
-    /// scenarios cover that; these tests are about the oracle.)
+    /// Keyed on rate and start, so the identity survives an early end.
     private func tempBasal(rate: Double, start: Date, duration: TimeInterval, mutable: Bool, end: Date? = nil) -> NewPumpEvent {
         let actualEnd = end ?? start.addingTimeInterval(duration)
         let dose = DoseEntry(

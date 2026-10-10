@@ -108,6 +108,11 @@ what was held once the second one lands. `MockPumpManagerDelegate`
 fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
 attaches one queue for the manager's life, as hosts do.
 
+Bolus progress observers are called on the queue the host passed
+`createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
+state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every
+host queue, so its state stays behind its lock, as do the manager's references to it.
+
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
 suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /
@@ -178,6 +183,14 @@ edit instead of at the next sync.
   each call site's job, via `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
+- A temp basal keeps one `raw` from its first report to its last, however it ends (#344):
+  `NewPumpEvent.tempBasal(dose:of:)` takes it from the `UnfinalizedDose`, not the entry. A temp the
+  app set or history adopted carries `eventRaw` (persisted), `HistoryLogSyncIdentifier.tempRate`
+  of the pump's `tempRateId`, minted when it starts if the serial is known. Without one,
+  `tempBasalRaw` keys it on its programmed amount and start, as builds before `eventRaw` did while
+  it ran. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit counter may
+  restart, and a host still holding a row under the id's earlier use would swallow the new temp.
+  The part after a segment cut or a restatement is a dose of its own, keyed the second way.
 - A history pass sends all its non-bolus reports (suspends, resumes, temp basal ends, basal
   corrections) as one batch, ascending (`HistoryReportBatch`, `emitHistoryReports`). It replaces
   only when it ends or re-states the temp basal the host holds as mutable, and then carries
@@ -241,8 +254,8 @@ edit instead of at the next sync.
     ended at that reading and one above it at detection, against the host's schedule on the
     phone's clock. A pump-side resume is always a `.resume`, never a `.basal` marker. With the
     flag off everything is reported this way. A temp basal whose `TempRateCompleted` has
-    `timeLeft` 0, within a minute of its programmed end, ends exactly then, so it keeps the
-    identity it was reported under.
+    `timeLeft` 0, within a minute of its programmed end, ends exactly then: it ran its whole
+    programmed duration.
   - The history pass also reports suspend/resume pairs that fell inside an outage, which no
     reading can see. The ledger records every suspend and resume the driver reports with the
     span its pump record can fall in, so a record is matched rather than reported twice. It
@@ -353,10 +366,9 @@ edit instead of at the next sync.
   `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
   basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
   a boundary held behind the app's own finalized temp basals and then advanced by an empty batch
-  drops doses from IOB. Also open: extended boluses (Bolex records are only logged; #424).
-  `UnfinalizedDose.tempRateId` matches a live temp basal to its `TempRateCompleted`; re-keying live
-  temp basals on it is still open (#344). A temp rate the app did not set reaches the host only
-  through basal reconciliation, after the fact; the live path still ignores it.
+  drops doses from IOB. Also open: extended boluses (Bolex records are only logged; #424). A temp
+  rate the app did not set reaches the host only through basal reconciliation, after the fact; the
+  live path still ignores it.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and
@@ -372,8 +384,11 @@ edit instead of at the next sync.
   via `SetMaxBolusLimitRequest`.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
-- A zero temp basal is always allowed for the duration asked, whatever the profile, sync or
-  update state below, since 0% of any profile is 0. Control-IQ and a running bolus still refuse it.
+- A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
+  of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
+- `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)
+  before connecting: the pump refuses one too, but only after the running temp is stopped. It sends
+  whole minutes and reports the temp for the minutes sent.
 - `enactTempBasal` refuses every other temp but a cancel until the first successful
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
   pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
@@ -396,6 +411,13 @@ edit instead of at the next sync.
   host can only over-count, until the change. Segment changes come from the host's schedule on
   the pump's clock (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps
   are allowed.
+- A finalized temp basal's `deliveredUnits` is its rate times its run time, rounded to the pump's
+  0.001 U (`TandemPumpCapabilities.roundToReportingResolution`). It is computed: the pump reports no
+  volume for a temp.
+- A `.basal` marker carries the rate the pump runs with no temp (`scheduledBasalRateInForce`): the
+  `profileBasalRate` of a reading taken then, else the host's schedule on the pump's clock; while
+  skewed, the host's own, which the clock skew temp runs. Neither host counts a marker's rate (both
+  keep it zero-length), so it reaches only their records and the settings screen.
 - The pump rescales a running temp at each segment change, so `splitAtSegmentChanges` cuts its
   record there: finished at the change, and a new mutable part at `tempPercent` of the new rate.
   The first basal read after a change reports the cut; every path that finishes a temp
@@ -428,6 +450,11 @@ edit instead of at the next sync.
   reading that saw it when above the schedule, at detection when below. The `.basal` marker after
   it is left out when a command reports in that same second. A temp the driver never sees reaches
   the host after the fact, through basal reconciliation.
+- `suspendDelivery` stops a running temp, then sends `SuspendPumping`; `write` gives nil for a lost
+  answer and a refusal alike (#340). Unless the suspend is confirmed it reads `CurrentBasalStatus`.
+  Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
+  reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
+  command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host
@@ -437,6 +464,11 @@ edit instead of at the next sync.
   equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
   firmware accepts 100% is unconfirmed, and a refusal fails the command.
   `syncPumpData` reads the pump's clock before its basal status for this.
+- The driver sets the pump's clock only from the settings screen and at setup (`writePumpTime`),
+  never on its own. It reads the clock first and reports how far it moved through
+  `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the
+  other sign). Setup sets it before the host adopts the manager, so the report waits for the
+  delegate and its queue.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

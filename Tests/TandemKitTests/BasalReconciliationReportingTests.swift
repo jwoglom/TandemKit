@@ -129,7 +129,7 @@ import XCTest
             tempPercent: percent
         )
         manager.state.basalDose = dose
-        manager.emitPumpEvents([NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true, now: at(0)), date: at(0))])
+        manager.emitPumpEvents([NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true, now: at(0)), of: dose)])
         delegateQueue.sync {}
         setupBatches = delegate.pumpEventBatches.count
     }
@@ -418,7 +418,7 @@ import XCTest
         let entry = dose.toDoseEntry(isMutable: false, endDate: at(end), now: at(end))
         let marker = UnfinalizedDose(basalRate: 1, insulinType: .novolog, startDate: at(end))
         manager.emitPumpEvents([
-            NewPumpEvent.tempBasal(dose: entry, date: at(start)),
+            NewPumpEvent.tempBasal(dose: entry, of: dose),
             NewPumpEvent.basal(dose: marker.toDoseEntry(), date: at(end))
         ], replacePendingEvents: false)
         delegateQueue.sync {}

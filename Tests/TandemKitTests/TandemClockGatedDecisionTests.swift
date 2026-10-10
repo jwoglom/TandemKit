@@ -1171,7 +1171,7 @@ import XCTest
         clock.advance(by: 60)
         reporter.notify()
 
-        let expected = HistoryToDoseMapper.roundToReportingResolution(
+        let expected = TandemPumpCapabilities.roundToReportingResolution(
             min(60 * TandemPumpCapabilities.bolusSpeedUnder10U, Self.programmedUnits)
         )
         XCTAssertEqual(reporter.progress.deliveredUnits, expected, accuracy: 1e-9)

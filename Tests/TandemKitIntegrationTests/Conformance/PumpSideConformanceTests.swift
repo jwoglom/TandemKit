@@ -416,7 +416,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
 
     /// The pump's clock runs 15 minutes ahead of the phone's. Dose dates must come from the pump's
     /// ledger reconciled to phone time, a temp basal the pump runs at another rate is stopped and
-    /// never reported, and the measured offset must reach the host through `didAdjustPumpClockBy`.
+    /// never reported, and setting the pump's clock must tell the host through `didAdjustPumpClockBy`.
     func testD5PumpClockSkewIsMeasuredAndDosesFollowThePumpsLedger() throws {
         let skew: Double = 900
         // A minute behind the wall clock: #339's start-date clamp is to Date.now, so its error is
@@ -440,9 +440,6 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         // The driver measured the skew on the first sync.
         let pumpTime = try XCTUnwrap(driver.manager.state.currentPumpTime, "TimeSinceReset was read")
         XCTAssertEqual(pumpTime.timeIntervalSince(clock.now), skew, accuracy: 5, "the pump reads \(skew)s ahead")
-        try expectDefect("jwoglom/TandemKit#343 (G03): the measured pump clock offset is surfaced in settings but never reported through didAdjustPumpClockBy") {
-            XCTAssertFalse(driver.delegate.clockAdjustments.isEmpty, "didAdjustPumpClockBy after measuring a \(skew)s offset")
-        }
 
         // Bolus: programmed, observed delivering, completed on the pump, finalized.
         let batchesBefore = allPumpEventBatches.count
@@ -518,6 +515,12 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         try expectDefect("the clock skew temp the pump runs while the phone's segment lags is on its record and, by design, not the host's; and #339's end-date clamp above") {
             timeline.assertMatches(loop)
         }
+
+        XCTAssertEqual(driver.delegate.clockAdjustments, [], "measuring the skew does not move the pump's clock")
+        XCTAssertNoThrow(try syncPumpTime().get())
+        XCTAssertEqual(driver.delegate.clockAdjustments.count, 1)
+        XCTAssertEqual(driver.delegate.clockAdjustments.first ?? 0, -skew, accuracy: 5, "moved back by the skew")
+        XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 5)
     }
 
     // MARK: - D6
@@ -794,11 +797,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
 
-        expectDefect("jwoglom/TandemKit#344: finalizing a temp basal re-keys it, so the replacing batch omits the host's mutable row by raw") {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
-        }
-        // By start, not raw, for the same reason.
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
         let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
         XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
         XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")

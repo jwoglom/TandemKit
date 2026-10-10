@@ -279,17 +279,11 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         // rather than against one batch in isolation: replaying the journal in order, no batch that
         // claims to be the complete pending set may leave out a dose the host is still holding as
         // mutable — that is the deletion.
-        XCTExpectFailure(
-            "jwoglom/TandemKit#330 (the complete batch builder never returns state.bolusDose) and "
-                + "jwoglom/TandemKit#344 (the temp basal is re-keyed when it ends early, so finalizing it does not "
-                + "match the mutable row the host holds): a complete batch drops a live mutable dose"
-        ) {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(
-                omissions.isEmpty,
-                "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n")
-            )
-        }
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(
+            omissions.isEmpty,
+            "guide §3/§5: nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n")
+        )
 
         let (loop, trio) = feedOracles()
         loop.assertNoDuplicates("after a pump-side suspend during a bolus and a temp basal")
@@ -306,16 +300,11 @@ final class IdempotencyConformanceTests: ConformanceTestCase {
         for event in suspendBatches.flatMap(\.events) where event.dose?.type == .bolus {
             XCTAssertEqual(event.raw, bolusRaw, "the bolus changed identity when the pump stopped it")
         }
-        XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal's raw embeds its programmed units, so ending it early re-keys it "
-                + "instead of finalizing the dose the host already holds"
-        ) {
-            for event in suspendBatches.flatMap(\.events) where event.dose?.type == .tempBasal {
-                XCTAssertEqual(
-                    event.raw, tempRaw,
-                    "guide §4: a dose keeps one identity from first report to finalization"
-                )
-            }
+        for event in suspendBatches.flatMap(\.events) where event.dose?.type == .tempBasal {
+            XCTAssertEqual(
+                event.raw, tempRaw,
+                "guide §4: a dose keeps one identity from first report to finalization"
+            )
         }
 
         // Resume: the batch that reopens delivery must not purge anything still live either.

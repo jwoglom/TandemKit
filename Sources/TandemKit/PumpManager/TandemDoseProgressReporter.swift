@@ -3,17 +3,23 @@ import LoopKit
 
 class TandemDoseProgressReporter: DoseProgressReporter {
     var progress: DoseProgress {
-        DoseProgress(deliveredUnits: deliveredUnits, percentComplete: deliveredUnits / total)
+        let deliveredUnits = locked { _deliveredUnits }
+        return DoseProgress(deliveredUnits: deliveredUnits, percentComplete: deliveredUnits / total)
     }
 
-    private var observers = WeakSet<DoseProgressObserver>()
+    private let observers = WeakSynchronizedSet<DoseProgressObserver>()
 
     private let pumpManager: TandemPumpManager
     private let dose: DoseEntry
     private let activationType: BolusActivationType
     private let total: Double
-    public private(set) var bolusStatedOn: Date?
-    private var deliveredUnits: Double = 0
+
+    // notify() runs on the command and telemetry queues while hosts read progress on their own.
+    private let lock = NSLock()
+    private var _bolusStatedOn: Date?
+    private var _deliveredUnits: Double = 0
+
+    var bolusStatedOn: Date? { locked { _bolusStatedOn } }
 
     var programmedUnits: Double { total }
 
@@ -22,7 +28,12 @@ class TandemDoseProgressReporter: DoseProgressReporter {
         self.dose = dose
         self.activationType = activationType
         total = dose.programmedUnits
-        bolusStatedOn = deliveryStartedAt
+        _bolusStatedOn = deliveryStartedAt
+    }
+
+    /// This reporter, calling back the observers added through it on `queue`.
+    func reporting(on queue: DispatchQueue) -> DoseProgressReporter {
+        QueueBoundDoseProgressReporter(reporter: self, queue: queue)
     }
 
     func getPumpEvent(
@@ -57,41 +68,77 @@ class TandemDoseProgressReporter: DoseProgressReporter {
     }
 
     public func addObserver(_ observer: DoseProgressObserver) {
-        observers.insert(observer)
+        addObserver(observer, queue: .main)
+    }
+
+    func addObserver(_ observer: DoseProgressObserver, queue: DispatchQueue) {
+        observers.insert(observer, queue: queue)
     }
 
     public func removeObserver(_ observer: DoseProgressObserver) {
-        observers.remove(observer)
+        observers.removeElement(observer)
     }
 
     public func isUnfinalized() -> Bool {
-        deliveredUnits < total
+        locked { _deliveredUnits } < total
     }
 
     public func notify() {
-        guard let bolusStatedOn else {
-            // First time pump switched to delivering state
-            // Just record the timestamp for now
-            bolusStatedOn = pumpManager.now
-            return
-        }
-
-        let runningFor = TimeInterval(seconds: pumpManager.now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
-
+        let now = pumpManager.now
         let unitsDeliveredPerSec = if total < 10 {
             TandemPumpCapabilities.bolusSpeedUnder10U
         } else {
             TandemPumpCapabilities.bolusSpeedOver10U
         }
 
-        // Nearest milliunit, not the 0.05 U command grid: this estimate can end up as a dose's
-        // delivered amount, and flooring it understates IOB.
-        deliveredUnits = HistoryToDoseMapper.roundToReportingResolution(min(runningFor * unitsDeliveredPerSec, total))
-
-        DispatchQueue.main.async {
-            for observer in self.observers {
-                observer.doseProgressReporterDidUpdate(self)
+        let measured: Bool = locked {
+            guard let bolusStatedOn = _bolusStatedOn else {
+                // The first delivering status only starts the clock.
+                _bolusStatedOn = now
+                return false
             }
+
+            let runningFor = TimeInterval(seconds: now.timeIntervalSince1970 - bolusStatedOn.timeIntervalSince1970)
+
+            // Nearest milliunit, not the 0.05 U command grid: this estimate can end up as a dose's
+            // delivered amount, and flooring it understates IOB.
+            _deliveredUnits = TandemPumpCapabilities.roundToReportingResolution(min(runningFor * unitsDeliveredPerSec, total))
+            return true
         }
+
+        guard measured else {
+            return
+        }
+
+        observers.forEach { observer in
+            observer.doseProgressReporterDidUpdate(self)
+        }
+    }
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+}
+
+/// LoopKit's contract: a host's observers are called on the queue it passed `createBolusProgressReporter(reportingOn:)`.
+private final class QueueBoundDoseProgressReporter: DoseProgressReporter {
+    private let reporter: TandemDoseProgressReporter
+    private let queue: DispatchQueue
+
+    init(reporter: TandemDoseProgressReporter, queue: DispatchQueue) {
+        self.reporter = reporter
+        self.queue = queue
+    }
+
+    var progress: DoseProgress { reporter.progress }
+
+    func addObserver(_ observer: DoseProgressObserver) {
+        reporter.addObserver(observer, queue: queue)
+    }
+
+    func removeObserver(_ observer: DoseProgressObserver) {
+        reporter.removeObserver(observer)
     }
 }

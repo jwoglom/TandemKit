@@ -116,7 +116,7 @@ import XCTest
 
         let delivered = try XCTUnwrap(manager.queryLastBolusDeliveredVolume(bolusId: Self.bolusId))
 
-        XCTAssertEqual(delivered, HistoryToDoseMapper.roundToReportingResolution(1.041), accuracy: 1e-12)
+        XCTAssertEqual(delivered, TandemPumpCapabilities.roundToReportingResolution(1.041), accuracy: 1e-12)
     }
 
     func testDeliveredVolumeIsNilWhenThePumpReportsADifferentBolus() {

@@ -350,7 +350,8 @@ extension TandemPumpManager {
             break
         }
 
-        // Even with no temp to stop: `basalDose` is what the Profile Basal row shows.
+        // Even with no temp to stop: `basalDose` is what the Profile Basal row shows. Not `status`'s
+        // rate: whether it reads the segment just written is unknown, and the write was read back.
         startScheduledBasalDose()
     }
 

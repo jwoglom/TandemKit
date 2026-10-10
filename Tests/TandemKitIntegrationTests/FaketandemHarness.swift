@@ -168,10 +168,13 @@ final class FaketandemHarness {
 
     /// `clock` defaults to a ManualClock starting now, so a test can jump the driver's idea of time
     /// (bolus estimated end, sync throttles) without waiting; the emulator stays on its own clock.
+    /// `poweredOnBeforeAttach` lands Bluetooth's poweredOn, and the connect attempts it queues, before the
+    /// manager is attached to the Bluetooth manager, the order a relaunch on a phone can take.
     func makeDriver(
         state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
         clock: TandemClock = ManualClock(Date()),
-        attachDelegate: Bool = true
+        attachDelegate: Bool = true,
+        poweredOnBeforeAttach: Bool = false
     ) -> Driver {
         VirtualPump.endpoint = endpoint
         VirtualPump.scanInterval = 0.5
@@ -179,6 +182,13 @@ final class FaketandemHarness {
         VirtualPump.connectTimeout = .seconds(15)
         let bluetooth = TandemBluetoothManager()
         let central = bluetooth.manager!
+        if poweredOnBeforeAttach {
+            bluetooth.handleBluetoothStateChange(.poweredOn)
+            // Queued behind any connect poweredOn started, so it returns once they have given up.
+            let drained = DispatchSemaphore(value: 0)
+            bluetooth.ensureConnected { _ in drained.signal() }
+            _ = drained.wait(timeout: .now() + 30)
+        }
         let manager = TandemPumpManager(state: state, bluetooth: bluetooth, clock: clock)
         let delegate = MockPumpManagerDelegate()
         // Before the delegate is attached: attaching fires the first callbacks synchronously, and

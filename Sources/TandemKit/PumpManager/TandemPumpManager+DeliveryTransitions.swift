@@ -145,7 +145,8 @@ extension TandemPumpManager {
             insulinType: state.insulinType,
             startDate: start,
             tempRateId: tempRateId,
-            tempPercent: replacement.percent
+            tempPercent: replacement.percent,
+            eventRaw: tempBasalEventRaw(tempRateId: tempRateId)
         )
     }
 
@@ -176,7 +177,7 @@ extension TandemPumpManager {
         if pending.prior.type == .suspend {
             return UnfinalizedDose(resumeStartTime: pending.detectedAt, insulinType: state.insulinType)
         }
-        return UnfinalizedDose(basalRate: getScheduledBasalRate(), insulinType: state.insulinType, startDate: pending.detectedAt)
+        return UnfinalizedDose(basalRate: scheduledBasalRateInForce(), insulinType: state.insulinType, startDate: pending.detectedAt)
     }
 
     /// The last suspend or resume the host holds before `date`. The ledger misses one reported
@@ -238,10 +239,9 @@ extension TandemPumpManager {
             let (finished, last) = splitAtSegmentChanges(prior, through: endDate)
             let entry = last.toDoseEntry(isMutable: false, endDate: max(endDate, last.startDate), now: now)
             events += finished
-            events.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
+            events.append(NewPumpEvent.tempBasal(dose: entry, of: last))
             tempBasalEnd = entry.endDate
-            // The finished temp basal is re-keyed (#344), so only a replacing batch retires the
-            // mutable row the host holds.
+            // Loop keeps the mutable row it holds over a non-replacing report with the same raw.
             batch.replacesHeldTemp = true
         }
 
@@ -270,7 +270,7 @@ extension TandemPumpManager {
             final = UnfinalizedDose(resumeStartTime: host.date, insulinType: state.insulinType)
         default:
             let start = tempBasalEnd ?? pending.detectedAt
-            final = UnfinalizedDose(basalRate: getScheduledBasalRate(at: start), insulinType: state.insulinType, startDate: start)
+            final = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: start), insulinType: state.insulinType, startDate: start)
             events.append(NewPumpEvent.basal(dose: final.toDoseEntry(), date: final.startDate))
         }
 
@@ -306,14 +306,14 @@ extension TandemPumpManager {
         guard let end else {
             let (finished, running) = splitAtSegmentChanges(dose, through: now)
             events += finished
-            events.append(NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: true, now: now), date: running.startDate))
+            events.append(NewPumpEvent.tempBasal(dose: running.toDoseEntry(isMutable: true, now: now), of: running))
             return running
         }
         let (finished, last) = splitAtSegmentChanges(dose, through: end)
         let entry = last.toDoseEntry(isMutable: false, endDate: max(end, last.startDate), now: now)
         events += finished
-        events.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
-        let scheduled = UnfinalizedDose(basalRate: getScheduledBasalRate(at: entry.endDate), insulinType: state.insulinType, startDate: entry.endDate)
+        events.append(NewPumpEvent.tempBasal(dose: entry, of: last))
+        let scheduled = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: entry.endDate), insulinType: state.insulinType, startDate: entry.endDate)
         // Seen by a command's own reading, the command reports in this second; Trio orders two rows in one arbitrarily.
         if now.timeIntervalSince(entry.endDate) >= 1 {
             events.append(NewPumpEvent.basal(dose: scheduled.toDoseEntry(), date: scheduled.startDate))
@@ -515,7 +515,7 @@ extension TandemPumpManager {
         }
         let date = dates.phoneDate(of: completed)
         let scheduledEnd = dose.estimatedEndDate
-        // One that ran out ends exactly when programmed, so it keeps the identity it was reported under (#344).
+        // One that ran out ran its whole programmed duration; its record is off that end only by clock error.
         let ranOut = completed.timeLeft == 0 && abs(date.timeIntervalSince(scheduledEnd)) <= Self.transitionMatchTolerance
         return ranOut ? scheduledEnd : date
     }
