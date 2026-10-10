@@ -61,6 +61,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
 
+    /// Setup sets the pump's clock before the host adopts the manager.
+    private var pendingPumpClockAdjustments: [TimeInterval] = []
+    private let pendingPumpClockAdjustmentLock = NSLock()
+
     /// Run once history has reported what `isAwaitingHistory` waits for.
     private var historyWaiters: [() -> Void] = []
     private let historyWaiterLock = NSLock()
@@ -421,6 +425,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
         flushPendingReservoirReading()
         flushPendingPumpEvents()
+        flushPendingPumpClockAdjustments()
     }
 
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
@@ -1483,6 +1488,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Read first: setup writes the clock before any sync has measured it.
+            let offset = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
+                ?? (self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset)
             let epoch = Dates.fromInstantToJan12008EpochSeconds(self.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
@@ -1505,6 +1513,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            if let offset {
+                self.reportPumpClockAdjustment(by: -offset)
+            } else {
+                self.logger.warning("Pump clock set without a reading of it; no adjustment to report")
+            }
             completion(nil)
         }
     }
@@ -2279,6 +2292,32 @@ extension TandemPumpManager {
         }
 
         deliverPumpEventBatches(takePendingPumpEventBatches() + [batch])
+    }
+
+    /// How far the driver moved the pump's clock, in seconds: negative when it ran ahead. MinimedKit
+    /// passes the drift, the other sign; Loop and Trio only log it.
+    func reportPumpClockAdjustment(by adjustment: TimeInterval) {
+        logger.info("Pump clock adjusted by \(adjustment) s")
+        pendingPumpClockAdjustmentLock.lock()
+        pendingPumpClockAdjustments.append(adjustment)
+        pendingPumpClockAdjustmentLock.unlock()
+        flushPendingPumpClockAdjustments()
+    }
+
+    private func flushPendingPumpClockAdjustments() {
+        guard canNotifyDelegate else { return }
+
+        pendingPumpClockAdjustmentLock.lock()
+        let adjustments = pendingPumpClockAdjustments
+        pendingPumpClockAdjustments = []
+        pendingPumpClockAdjustmentLock.unlock()
+        guard !adjustments.isEmpty else { return }
+
+        pumpDelegate.notify { delegate in
+            for adjustment in adjustments {
+                delegate?.pumpManager(self, didAdjustPumpClockBy: adjustment)
+            }
+        }
     }
 
     func flushPendingPumpEvents() {

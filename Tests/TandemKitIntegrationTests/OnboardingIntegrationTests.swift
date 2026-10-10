@@ -110,6 +110,9 @@ final class OnboardingIntegrationTests: FaketandemIntegrationTestCase {
         try assertPumpHoldsTheSchedule()
         try assertPumpHoldsTheSounds()
         XCTAssertEqual(try pumpClockError(), 0, accuracy: 5, "the pump reads the phone's local time")
+        driver.drainDelegate()
+        XCTAssertEqual(driver.delegate.clockAdjustments.count, 1)
+        XCTAssertEqual(driver.delegate.clockAdjustments.first ?? 0, -TimeInterval.hours(1), accuracy: 5, "moved back the hour it was fast")
         XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
         XCTAssertFalse(driver.manager.state.pumpSoundsAwaitingWrite)
 
@@ -167,6 +170,8 @@ final class OnboardingIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertNil(try applyOnboardingSettings(driver))
 
         XCTAssertEqual(try pumpClockError(), .hours(1), accuracy: 5, "the pump kept its own clock")
+        driver.drainDelegate()
+        XCTAssertEqual(driver.delegate.clockAdjustments, [])
         try assertPumpHoldsTheSchedule()
         _ = try harness.sync(driver)
         XCTAssertTrue(driver.manager.state.showPumpTimeSyncWarning)

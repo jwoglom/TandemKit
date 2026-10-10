@@ -445,6 +445,11 @@ edit instead of at the next sync.
   equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
   firmware accepts 100% is unconfirmed, and a refusal fails the command.
   `syncPumpData` reads the pump's clock before its basal status for this.
+- The driver sets the pump's clock only from the settings screen and at setup (`writePumpTime`),
+  never on its own. It reads the clock first and reports how far it moved through
+  `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the
+  other sign). Setup sets it before the host adopts the manager, so the report waits for the
+  delegate and its queue.
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.
