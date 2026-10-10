@@ -13,7 +13,7 @@ final class ReportedBasalLedgerTests: XCTestCase {
     private func temp(_ rate: Double, at start: TimeInterval, minutes: Double = 30, endingAt end: TimeInterval? = nil, raw: String? = nil) -> NewPumpEvent {
         let dose = UnfinalizedDose(tempRate: rate, duration: .minutes(minutes), automatic: true, insulinType: .novolog, startDate: at(start))
         let entry = dose.toDoseEntry(isMutable: end == nil, endDate: end.map(at), now: at(start))
-        let event = NewPumpEvent.tempBasal(dose: entry, date: entry.startDate)
+        let event = NewPumpEvent.tempBasal(dose: entry, of: dose)
         return raw.map { NewPumpEvent(date: event.date, dose: entry, raw: Data($0.utf8), title: event.title) } ?? event
     }
 
@@ -165,7 +165,7 @@ final class ReportedBasalLedgerTests: XCTestCase {
         state.basalDose = UnfinalizedDose(tempRate: 1.5, duration: .minutes(30), automatic: true, insulinType: .novolog, startDate: t0, tempRateId: 23)
         let manager = TandemPumpManager(state: state, bluetooth: StubPumpBluetooth())
 
-        manager.emitPumpEvents([NewPumpEvent.tempBasal(dose: state.basalDose.toDoseEntry(isMutable: true, now: t0), date: t0)])
+        manager.emitPumpEvents([NewPumpEvent.tempBasal(dose: state.basalDose.toDoseEntry(isMutable: true, now: t0), of: state.basalDose)])
 
         XCTAssertEqual(manager.state.reportedBasal.rows.map(\.tempRateId), [23])
         XCTAssertEqual(manager.state.reportedBasal.rows.first?.isMutable, true)

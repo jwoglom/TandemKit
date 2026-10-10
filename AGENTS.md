@@ -175,6 +175,14 @@ edit instead of at the next sync.
   each call site's job, via `getActivePumpEvents`.
 - Loop's `DoseStore` keeps a stored `PumpEvent` row over a non-replacing report with the same
   `raw`, so finalizing a dose the host holds as mutable takes a replacing batch (#452).
+- A temp basal keeps one `raw` from its first report to its last, however it ends (#344):
+  `NewPumpEvent.tempBasal(dose:of:)` takes it from the `UnfinalizedDose`, not the entry. A temp the
+  app set or history adopted carries `eventRaw` (persisted), `HistoryLogSyncIdentifier.tempRate`
+  of the pump's `tempRateId`, minted when it starts if the serial is known. Without one,
+  `tempBasalRaw` keys it on its programmed amount and start, as builds before `eventRaw` did while
+  it ran. An id not past `lastTempRateEventRaw` mints nothing: the pump's 16-bit counter may
+  restart, and a host still holding a row under the id's earlier use would swallow the new temp.
+  The part after a segment cut or a restatement is a dose of its own, keyed the second way.
 - A history pass sends all its non-bolus reports (suspends, resumes, temp basal ends, basal
   corrections) as one batch, ascending (`HistoryReportBatch`, `emitHistoryReports`). It replaces
   only when it ends or re-states the temp basal the host holds as mutable, and then carries
@@ -238,8 +246,8 @@ edit instead of at the next sync.
     ended at that reading and one above it at detection, against the host's schedule on the
     phone's clock. A pump-side resume is always a `.resume`, never a `.basal` marker. With the
     flag off everything is reported this way. A temp basal whose `TempRateCompleted` has
-    `timeLeft` 0, within a minute of its programmed end, ends exactly then, so it keeps the
-    identity it was reported under.
+    `timeLeft` 0, within a minute of its programmed end, ends exactly then: it ran its whole
+    programmed duration.
   - The history pass also reports suspend/resume pairs that fell inside an outage, which no
     reading can see. The ledger records every suspend and resume the driver reports with the
     span its pump record can fall in, so a record is matched rather than reported twice. It
@@ -329,10 +337,8 @@ edit instead of at the next sync.
   UTC offset, so `pumpClockOffset` moves by any change in it since the clock was read
   (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
 - Still open: gap-aware `lastReconciliation` (#353) and extended boluses (Bolex records are only
-  logged; #424). `UnfinalizedDose.tempRateId` matches a live temp basal to its
-  `TempRateCompleted`; re-keying live temp basals on it is still open (#344). A temp rate the app
-  did not set reaches the host only through basal reconciliation, after the fact; the live path
-  still ignores it.
+  logged; #424). A temp rate the app did not set reaches the host only through basal
+  reconciliation, after the fact; the live path still ignores it.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and

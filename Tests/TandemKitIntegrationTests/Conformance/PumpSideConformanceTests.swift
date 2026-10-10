@@ -794,11 +794,8 @@ final class PumpSideConformanceTests: ConformanceTestCase {
         loop.assertNoDuplicates()
         trio.assertNoDuplicates()
 
-        expectDefect("jwoglom/TandemKit#344: finalizing a temp basal re-keys it, so the replacing batch omits the host's mutable row by raw") {
-            let omissions = completeBatchOmissions()
-            XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
-        }
-        // By start, not raw, for the same reason.
+        let omissions = completeBatchOmissions()
+        XCTAssertTrue(omissions.isEmpty, "nothing live may be dropped by silence:\n" + omissions.joined(separator: "\n"))
         let finished = loop.permanentDoses.first { $0.dose.type == .tempBasal && abs($0.dose.startDate.timeIntervalSince(tempStart)) <= 1 }
         XCTAssertNotNil(finished, "the host holds the temp basal, finalized: \(loop.doses.map(LoopDoseStoreOracle.describe)); deleted: \(loop.deletedDoses.map(LoopDoseStoreOracle.describe))")
         XCTAssertLessThanOrEqual(finished?.dose.endDate ?? .distantFuture, resumedAt, "it ended no later than the resume")

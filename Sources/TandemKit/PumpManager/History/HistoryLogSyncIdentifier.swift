@@ -38,7 +38,8 @@ import Foundation
 /// ```
 ///
 /// **This encoding is frozen**: hosts persist it, so any change re-reports doses under new
-/// identities. The live path does not use it yet (#344).
+/// identities. The live path keys a temp basal the app set on its `tempRateId`; a bolus it keys on
+/// its own `raw`, which `BolusReportLedger` bridges to this one.
 public enum HistoryLogSyncIdentifier {
     /// Which pump-assigned counter the identifier is built from. Values are persisted indirectly by
     /// the host app; never renumber them.

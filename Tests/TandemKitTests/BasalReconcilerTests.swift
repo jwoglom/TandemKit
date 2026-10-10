@@ -18,7 +18,7 @@ final class BasalReconcilerTests: XCTestCase {
     private func temp(_ rate: Double, at start: TimeInterval, minutes: Double = 30, endingAt end: TimeInterval? = nil) -> NewPumpEvent {
         let dose = UnfinalizedDose(tempRate: rate, duration: .minutes(minutes), automatic: true, insulinType: .novolog, startDate: at(start))
         let entry = dose.toDoseEntry(isMutable: end == nil, endDate: end.map(at), now: at(start))
-        return NewPumpEvent.tempBasal(dose: entry, date: entry.startDate)
+        return NewPumpEvent.tempBasal(dose: entry, of: dose)
     }
 
     private func marker(_ rate: Double = 1.0, at start: TimeInterval) -> NewPumpEvent {

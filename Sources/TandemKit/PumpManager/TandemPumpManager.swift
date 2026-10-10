@@ -1015,16 +1015,34 @@ public class TandemPumpManager: PumpManager, Pluggable {
             insulinType: state.insulinType,
             startDate: now,
             tempRateId: tempRateId,
-            tempPercent: percent
+            tempPercent: percent,
+            eventRaw: tempBasalEventRaw(tempRateId: tempRateId)
         )
         var events = getActivePumpEvents(endDate: dose.startDate)
-        events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), date: dose.startDate))
+        events.append(NewPumpEvent.tempBasal(dose: dose.toDoseEntry(isMutable: true), of: dose))
 
         state.basalDose = dose
         state.lastReconciliation = dose.startDate
 
         notifyDelegateStateUpdated()
         emitPumpEvents(events)
+    }
+
+    /// Nil without the serial, or for an id not past the last minted: the pump's 16-bit counter may
+    /// restart, and a host still holding a row under an id's earlier use would swallow the new temp.
+    func tempBasalEventRaw(tempRateId: Int?) -> Data? {
+        guard let tempRateId, tempRateId > 0, let serial = historyLogStoreSerial else {
+            return nil
+        }
+        if let last = state.lastTempRateEventRaw.flatMap(HistoryLogSyncIdentifier.decode), last.pumpSerial == serial,
+           tempRateId <= last.identifier
+        {
+            logger.warning("Temp rate id \(tempRateId) is not past \(last.identifier); keying the temp basal on what was programmed")
+            return nil
+        }
+        let raw = HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: tempRateId)
+        state.lastTempRateEventRaw = raw
+        return raw
     }
 
     /// How long before the pump's rate changes a temp basal is worked out against the larger of the
@@ -2159,10 +2177,7 @@ extension TandemPumpManager {
 
         let basalEntry = state.basalDose.toDoseEntry(isMutable: endDate == nil, endDate: endDate ?? now, now: now)
         var events = finished + [
-            NewPumpEvent.tempBasal(
-                dose: basalEntry,
-                date: basalEntry.startDate
-            )
+            NewPumpEvent.tempBasal(dose: basalEntry, of: state.basalDose)
         ]
 
         if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
@@ -2327,7 +2342,7 @@ extension TandemPumpManager {
             guard Int((rate * 1000).rounded()) != Int((running.value * 1000).rounded()) else { continue }
 
             let entry = running.toDoseEntry(isMutable: false, endDate: change.date, now: now)
-            finished.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
+            finished.append(NewPumpEvent.tempBasal(dose: entry, of: running))
             running = UnfinalizedDose(
                 tempRate: rate,
                 duration: dose.estimatedEndDate.timeIntervalSince(change.date),
