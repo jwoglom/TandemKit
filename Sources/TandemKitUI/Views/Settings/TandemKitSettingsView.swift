@@ -319,17 +319,6 @@ struct TandemKitSettingsView: View {
                 }
 
                 basalProfileUpdateNotice
-
-                if let warning = viewModel.tempBasalCeilingWarning {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Temp Basals Capped", comment: "title for the notice that the maximum basal rate is above what the pump runs as a temp basal")
-                            .font(Font.subheadline.weight(.bold))
-                            .foregroundColor(guidanceColors.warning)
-                        Text(warning)
-                            .font(Font.footnote.weight(.semibold))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }.padding(.vertical, 8)
-                }
             }
 
             Section(header: SectionHeader(label: String(

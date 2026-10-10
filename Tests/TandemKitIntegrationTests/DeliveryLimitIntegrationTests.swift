@@ -228,9 +228,8 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
     /// The pump refuses a temp rate above 250% of its profile rate, so a max basal above that is cut
     /// to the ceiling: the pump runs it and the host is told the rate that runs.
     func testATempBasalAboveTheCeilingRunsAtTwoAndAHalfTimesTheProfileAndIsReportedSo() throws {
-        let driver = try startDriverWithSchedule()
+        try startDriverWithSchedule()
         XCTAssertNoThrow(try syncDeliveryLimits(maxBasal: 3.0, maxBolus: 8).get())
-        XCTAssertEqual(driver.manager.tempBasalCeiling?.cappedSegments.map(\.ceiling), [2.5])
         let batchesBefore = allPumpEventBatches.count
 
         XCTAssertNil(try enactTempBasal(unitsPerHour: 3.0, duration: .minutes(30)))
