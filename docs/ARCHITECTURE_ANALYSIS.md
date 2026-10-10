@@ -246,8 +246,12 @@ The host calls `ensureCurrentPumpData` about every 5 minutes. It returns immedia
 3. Every time: reservoir, battery, bolus status and pending-bolus finalization, basal status
    (including the basal rate check), notifications, time since reset, and CGM session.
 4. `lastReconciliation` advances only if the pump actually answered something during this sync
-   (`responseCount` rose). The boundary is reported even when there are no doses.
-5. `historyBackfillCoordinator.runTick()` is started and not awaited.
+   (`responseCount` rose). The boundary is reported even when there are no doses, held at a pump
+   bolus history has yet to report (`reconciliationBoundary`).
+5. `historyBackfillCoordinator.runTick()` is started. The sync completes without waiting for it
+   unless a delivery change is pending, Control-IQ has handed back, or the pump may bolus on its
+   own (`isAwaitingHistory`, `awaitsHistoryBoluses`); then it waits for the pass, at most
+   `transitionHistoryWait`.
 
 A sync that is already queued makes later automatic polls stand down. A sync the user asks for
 runs regardless.
@@ -259,7 +263,7 @@ runs regardless.
 | `enactBolus` | `BolusPermissionRequest`, `InitiateBolusRequest` | Rejects ≤ 0 U and anything over `settings.maxBolus`. Rejects automatic boluses while Control-IQ is on. Records the bolus in `BolusReportLedger`. Progress is polled every second through `PumpTelemetryScheduler` until the bolus finishes. |
 | `cancelBolus` | `CancelBolusRequest`, then after 2 s `LastBolusStatus*` for the delivered volume | |
 | `enactTempBasal` | `CurrentBasalStatusRequest`, `StopTempRateRequest` if a temp basal is running, `SetTempRateRequest` | Blocked while Control-IQ is on or a bolus is running. The percentage is computed against the app's schedule, not the pump's profile (#400). |
-| `suspendDelivery` / `resumeDelivery` | `TempRateRequest`, `StopTempRateRequest` if a temp basal is running, `SuspendPumpingRequest` / `ResumePumpingRequest` | The in-app resume button uses `resumeDeliveryAcknowledgingResumeAlarms`: if the pump refuses, it acknowledges the resume-pump alarms and retries once. |
+| `suspendDelivery` / `resumeDelivery` | `TempRateRequest`, `StopTempRateRequest` if a temp basal is running, `SuspendPumpingRequest` / `ResumePumpingRequest`; `CurrentBasalStatusRequest` after a suspend that is not confirmed | A suspend succeeds whenever the pump reads back suspended (#340). The in-app resume button uses `resumeDeliveryAcknowledgingResumeAlarms`: if the pump refuses, it acknowledges the resume-pump alarms and retries once. |
 | `syncDeliveryLimits` | `SetMaxBolusLimitRequest`, `SetMaxBasalLimitRequest` | |
 | `syncBasalRateSchedule` | IDP reads and `SetIDPSegmentRequest` via `IDPManager` | Reads the profile back afterwards and fails with `basalProfileSyncMismatch` if it differs. |
 | `syncPumpTime` | `ChangeTimeDateRequest` | |

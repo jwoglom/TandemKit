@@ -520,7 +520,207 @@ import XCTest
             isFinalized: false
         ))
 
+        ledger.noteUnreported(BolusReportLedger.UnreportedBolus(
+            bolusId: 72,
+            pumpSerial: Self.pumpSerial,
+            startDate: Date(timeIntervalSinceReferenceDate: 3000),
+            holdsBoundaryAt: Date(timeIntervalSinceReferenceDate: 3010)
+        ))
+
         XCTAssertEqual(BolusReportLedger(rawValue: ledger.rawValue), ledger)
+    }
+
+    // MARK: - The boundary at a pump bolus the app did not start
+
+    private func stubBolusDelivering(bolusId: Int, secondsAgo: UInt32) {
+        bluetooth.stub(CurrentBolusStatusRequest.self, with: CurrentBolusStatusResponse(
+            statusId: CurrentBolusStatusResponse.CurrentBolusStatus.delivering.rawValue,
+            bolusId: bolusId,
+            timestamp: nowPumpTimeSec - secondsAgo,
+            requestedVolume: 2000,
+            bolusSourceId: BolusSource.quickBolus.rawValue,
+            bolusTypeBitmask: 1
+        ))
+    }
+
+    private func pumpDate(secondsAgo: UInt32) -> Date {
+        Dates.fromJan12008EpochSecondsToDate(TimeInterval(nowPumpTimeSec - secondsAgo))
+    }
+
+    @discardableResult
+    private func reportBoundary() -> Date? {
+        manager.reportReconciliationBoundary()
+        delegateQueue.sync {}
+        return delegate.pumpEventBatches.last?.lastReconciliation
+    }
+
+    func testAPumpBolusSeenDeliveringHoldsTheBoundaryUntilHistoryReportsIt() throws {
+        manager.state.lastReconciliation = now.addingTimeInterval(-600)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+
+        manager.fetchBolusStatus(fromSync: false)
+        manager.state.lastReconciliation = now
+
+        XCTAssertEqual(manager.state.bolusReportLedger.boundaryHold(pumpSerial: Self.pumpSerial), pumpDate(secondsAgo: 20))
+        XCTAssertEqual(reportBoundary(), pumpDate(secondsAgo: 20))
+
+        let start = quickBolusStart(bolusId: 42, units: 2.0, firstSequenceNum: 100, secondsAgo: 34)
+        report(start + [bolusCompletion(bolusId: 42, delivered: 2.0, requested: 2.0, sequenceNum: 103, secondsAgo: 5)])
+
+        let batch = try XCTUnwrap(delegate.pumpEventBatches.last)
+        XCTAssertEqual(batch.events.map(\.raw), [HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 42)])
+        XCTAssertEqual(batch.lastReconciliation, now, "released by the batch that reports it")
+        XCTAssertNil(manager.state.bolusReportLedger.boundaryHold(pumpSerial: Self.pumpSerial))
+    }
+
+    func testAHeldBoundaryNeverMovesBackward() {
+        manager.state.lastReconciliation = now
+        stubBolusDelivering(bolusId: 42, secondsAgo: 120)
+
+        manager.fetchBolusStatus(fromSync: false)
+        manager.state.lastReconciliation = now.addingTimeInterval(300)
+
+        XCTAssertEqual(reportBoundary(), now)
+    }
+
+    func testAPumpBolusDoesNotHoldTheBoundaryWithHistoryDoseReportingOff() {
+        manager.state.featureFlags[.historyDoseReporting] = false
+        manager.state.lastReconciliation = now.addingTimeInterval(-600)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+
+        manager.fetchBolusStatus(fromSync: false)
+        manager.state.lastReconciliation = now
+
+        XCTAssertTrue(manager.state.bolusReportLedger.unreported.isEmpty)
+        XCTAssertEqual(reportBoundary(), now)
+    }
+
+    func testTheAppsOwnBolusDoesNotHoldTheBoundary() {
+        manager.state.bolusReportLedger.record(commandedEntry(bolusId: 42, isFinalized: false))
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+
+        manager.fetchBolusStatus(fromSync: false)
+
+        XCTAssertNil(manager.state.bolusReportLedger.boundaryHold(pumpSerial: Self.pumpSerial))
+    }
+
+    func testAPumpBolusFromBeforeTrackingBeganDoesNotHoldTheBoundary() {
+        manager.state.bolusReportLedger = BolusReportLedger(trackingSince: now)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+
+        manager.fetchBolusStatus(fromSync: false)
+
+        XCTAssertNil(manager.state.bolusReportLedger.boundaryHold(pumpSerial: Self.pumpSerial))
+    }
+
+    func testAHoldIsDroppedOncePastTheReportingHorizon() {
+        let start = now.addingTimeInterval(-BolusReportLedger.reportingHorizon - 60)
+        var ledger = BolusReportLedger(trackingSince: .distantPast)
+        ledger.noteUnreported(BolusReportLedger.UnreportedBolus(bolusId: 42, pumpSerial: Self.pumpSerial, startDate: start, holdsBoundaryAt: start))
+
+        ledger.prune(now: now)
+
+        XCTAssertNil(ledger.boundaryHold(pumpSerial: Self.pumpSerial))
+    }
+
+    func testABolusSeenOnAnotherPumpDoesNotHoldTheBoundary() {
+        manager.state.lastReconciliation = now.addingTimeInterval(-600)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+        manager.fetchBolusStatus(fromSync: false)
+
+        manager.state.pumpState.pumpSerial = Self.pumpSerial + 1
+        manager.state.lastReconciliation = now
+
+        XCTAssertEqual(reportBoundary(), now)
+    }
+
+    func testAHoldSurvivesARelaunch() {
+        manager.state.lastReconciliation = now.addingTimeInterval(-600)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+        manager.fetchBolusStatus(fromSync: false)
+
+        manager = makeManager(state: TandemPumpManagerState(rawValue: manager.state.rawValue))
+        manager.state.lastReconciliation = now
+
+        XCTAssertEqual(reportBoundary(), pumpDate(secondsAgo: 20))
+    }
+
+    func testLoopKeepsAPumpBolusTheBoundaryWasHeldFor() throws {
+        manager.state.lastReconciliation = now.addingTimeInterval(-600)
+        stubBolusDelivering(bolusId: 42, secondsAgo: 20)
+        manager.fetchBolusStatus(fromSync: false)
+        manager.state.lastReconciliation = now
+        reportBoundary()
+
+        let start = quickBolusStart(bolusId: 42, units: 2.0, firstSequenceNum: 100, secondsAgo: 34)
+        report(start + [bolusCompletion(bolusId: 42, delivered: 2.0, requested: 2.0, sequenceNum: 103, secondsAgo: 5)])
+
+        let loop = feedLoop()
+        let stored = try XCTUnwrap(loop.assertPermanent(raw: HistoryLogSyncIdentifier.bolus(pumpSerial: serial, bolusId: 42)))
+        XCTAssertEqual(stored.dose.deliveredUnits, 2.0)
+        XCTAssertEqual(loop.lastReconciliation, now)
+    }
+
+    // MARK: - A sync waits for history when the pump can bolus on its own
+
+    func testASyncWaitsForHistoryOnlyWhenThePumpCanBolusOnItsOwn() {
+        manager.state.quickBolusEnabled = false
+        XCTAssertFalse(manager.awaitsHistoryBoluses)
+
+        manager.state.useControlIQ = true
+        XCTAssertTrue(manager.awaitsHistoryBoluses)
+
+        manager.state.useControlIQ = false
+        manager.state.quickBolusEnabled = nil
+        XCTAssertTrue(manager.awaitsHistoryBoluses, "not yet read as off")
+
+        manager.state.featureFlags[.historyDoseReporting] = false
+        XCTAssertFalse(manager.awaitsHistoryBoluses)
+    }
+
+    private func sync(timeout: TimeInterval = 90, then check: @escaping () -> Void = {}) {
+        bluetooth.stub(InsulinStatusRequest.self, with: InsulinStatusResponse(currentInsulinAmount: 150, isEstimate: 0, insulinLowAmount: 20))
+        let synced = expectation(description: "syncPumpData completes")
+        manager.syncPumpData { _ in
+            check()
+            synced.fulfill()
+        }
+        wait(for: [synced], timeout: timeout)
+        delegateQueue.sync {}
+    }
+
+    func testASyncUnderControlIQCompletesOnlyOnceHistoryHasReportedAPumpBolus() {
+        manager.state.useControlIQ = true
+        manager.state.quickBolusEnabled = false
+        stubPump(serving: quickBolusStart(bolusId: 80, units: 2.0, firstSequenceNum: 1, secondsAgo: 300)
+            + [bolusCompletion(bolusId: 80, delivered: 2.0, requested: 2.0, sequenceNum: 4, secondsAgo: 240)])
+
+        var reportedFirst: Bool?
+        sync { reportedFirst = self.manager.state.bolusReportLedger.entry(bolusId: 80, pumpSerial: Self.pumpSerial)?.isFinalized }
+
+        XCTAssertEqual(reportedFirst, true)
+    }
+
+    func testASyncDoesNotWaitForHistoryWhenThePumpCannotBolusOnItsOwn() {
+        manager.state.quickBolusEnabled = false
+        // Acknowledges the read and never streams: a tick that cannot finish.
+        bluetooth.stub(HistoryLogStatusRequest.self, with: HistoryLogStatusResponse(numEntries: 4, firstSequenceNum: 1, lastSequenceNum: 4))
+        bluetooth.stub(HistoryLogRequest.self, with: HistoryLogResponse(status: 0, streamId: 7))
+
+        let began = Date()
+        sync()
+
+        XCTAssertLessThan(Date().timeIntervalSince(began), 1)
+    }
+
+    func testAFailedHistoryReadReleasesAWaitingSync() {
+        manager.state.quickBolusEnabled = true
+        manager.transitionHistoryWait = .seconds(30)
+
+        let began = Date()
+        sync()
+
+        XCTAssertLessThan(Date().timeIntervalSince(began), 10)
     }
 
     // MARK: - Through the backfill tick

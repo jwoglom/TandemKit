@@ -561,14 +561,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
             // and the loop is waiting on `completion` for the status reads above, not on
             // history. Overlapping ticks are dropped by the coordinator.
-            guard self.isAwaitingHistory else {
+            guard self.isAwaitingHistory || self.awaitsHistoryBoluses else {
                 self.historyBackfillCoordinator.runTick()
                 completion(self.state.lastReconciliation)
                 return
             }
 
-            // Except when the reads saw a change history has to date, or Control-IQ has handed
-            // back: the host doses on this result, and needs what the pump did first.
+            // Except when the reads saw a change history has to date, Control-IQ has handed back,
+            // or the pump may have bolused on its own: the host doses on this result, and needs
+            // what the pump did first.
             self.afterHistoryIsReported {
                 completion(self.state.lastReconciliation)
             }
@@ -1146,28 +1147,55 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             }
 
+            let sentAt = self.now
             let response = self.bluetooth.write(SuspendPumpingRequest())
             guard let response, response.status == 0 else {
                 self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
-                completion(PumpCommError.noResponse)
+                let isSuspended = self.readBackUnconfirmedSuspend(mayHaveApplied: response == nil, sentAt: sentAt)
+                completion(isSuspended ? nil : PumpCommError.noResponse)
                 return
             }
 
-            self.settleDeliveryTransition()
-            let suspendDose = UnfinalizedDose(suspendStartTime: self.now)
-            var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
-            events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
-
-            self.state.basalDose = suspendDose
-            self.state.lastReconciliation = self.now
-            self.recordReportedTransition(.suspend, at: suspendDose.startDate)
-
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(events)
-
+            self.recordSuspend(sentAt: sentAt)
             self.logger.info("Insulin Delivery Suspended!")
             completion(nil)
         }
+    }
+
+    /// Dated at the answer, or at the reading after a lost one: the later stop counts more insulin.
+    private func recordSuspend(sentAt: Date) {
+        settleDeliveryTransition()
+        let suspendDose = UnfinalizedDose(suspendStartTime: now)
+        var events = getActivePumpEvents(endDate: suspendDose.startDate)
+        events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
+
+        state.basalDose = suspendDose
+        state.lastReconciliation = now
+        recordReportedTransition(
+            .suspend,
+            at: suspendDose.startDate,
+            earliest: sentAt.addingTimeInterval(-Self.transitionMatchTolerance)
+        )
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
+    /// `write` gives nil for a lost answer and a refusal alike, so the suspend may have reached the
+    /// pump; so may the temp stop before it, whatever its answer. Returns whether the pump is suspended.
+    private func readBackUnconfirmedSuspend(mayHaveApplied: Bool, sentAt: Date) -> Bool {
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.warning("No basal status after an unconfirmed SuspendPumping; the next reading settles it")
+            return false
+        }
+        let held = state.deliveryTransitions.pending?.observed ?? state.basalDose.type
+        if mayHaveApplied, status.basalType == .suspend, held != .suspend {
+            logger.warning("The pump is suspended though the SuspendPumping answer was lost; reporting the suspend")
+            recordSuspend(sentAt: sentAt)
+        } else {
+            observeDeliveryState(status.basalType)
+        }
+        return status.basalType == .suspend
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {
@@ -2237,9 +2265,20 @@ extension TandemPumpManager {
 
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
-            lastReconciliation: state.lastReconciliation,
+            lastReconciliation: reconciliationBoundary,
             replacePendingEvents: replacePendingEvents
         ))
+    }
+
+    /// `lastReconciliation` as the host is given it. Loop takes delivery up to it as accounted for, so
+    /// it stops at a pump bolus history has yet to report; released by the batch that reports it.
+    var reconciliationBoundary: Date? {
+        guard state.featureFlags.historyDoseReporting,
+              let hold = state.bolusReportLedger.boundaryHold(pumpSerial: historyLogStoreSerial?.rawValue)
+        else {
+            return state.lastReconciliation
+        }
+        return state.lastReconciliation.map { min($0, hold) }
     }
 
     /// Carries only the boundary; re-sending the pending set on every sync is #450.

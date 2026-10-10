@@ -32,8 +32,18 @@ extension TandemPumpManager {
     /// Whether a sync waits for the next history pass before it completes. Not for a Control-IQ end
     /// past the reporting horizon, which nothing could correct any more.
     var isAwaitingHistory: Bool {
-        let handBack = state.controlIQEndedAt.map { now.timeIntervalSince($0) < BolusReportLedger.reportingHorizon } ?? false
-        return state.deliveryTransitions.pending != nil || (handBack && state.featureFlags.basalHistoryReporting)
+        state.deliveryTransitions.pending != nil || (isHandingBackFromControlIQ && state.featureFlags.basalHistoryReporting)
+    }
+
+    /// Whether a sync waits for its history pass before it completes, as the pump may deliver boluses
+    /// only history reports: Control-IQ's, or the quick bolus button's while it is not read as off.
+    var awaitsHistoryBoluses: Bool {
+        let possible = state.useControlIQ || isHandingBackFromControlIQ || state.quickBolusEnabled != false
+        return possible && state.featureFlags.historyDoseReporting && historyLogStoreSerial != nil
+    }
+
+    private var isHandingBackFromControlIQ: Bool {
+        state.controlIQEndedAt.map { now.timeIntervalSince($0) < BolusReportLedger.reportingHorizon } ?? false
     }
 
     func reconcileBasalHistory(

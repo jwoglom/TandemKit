@@ -38,6 +38,23 @@ public struct BolusReportLedger: Equatable {
         }
     }
 
+    /// A bolus seen on the pump, running, that the app did not start and history has not reported.
+    public struct UnreportedBolus: Equatable {
+        public let bolusId: Int
+        public let pumpSerial: UInt32
+        /// On the phone's clock.
+        public let startDate: Date
+        /// The host's boundary goes no further until history reports it.
+        public let holdsBoundaryAt: Date
+
+        public init(bolusId: Int, pumpSerial: UInt32, startDate: Date, holdsBoundaryAt: Date) {
+            self.bolusId = bolusId
+            self.pumpSerial = pumpSerial
+            self.startDate = startDate
+            self.holdsBoundaryAt = holdsBoundaryAt
+        }
+    }
+
     public static let reportingHorizon: TimeInterval = .hours(24)
     /// Past the horizon: history dates an app bolus at activation on the pump's clock, which can be
     /// after its entry, and one pruned too soon is reported again as a pump-UI bolus.
@@ -47,10 +64,12 @@ public struct BolusReportLedger: Equatable {
     public let trackingSince: Date
 
     public private(set) var entries: [Entry]
+    public private(set) var unreported: [UnreportedBolus]
 
-    public init(trackingSince: Date, entries: [Entry] = []) {
+    public init(trackingSince: Date, entries: [Entry] = [], unreported: [UnreportedBolus] = []) {
         self.trackingSince = trackingSince
         self.entries = entries
+        self.unreported = unreported
     }
 
     /// An entry recorded before the serial was known matches any serial.
@@ -58,9 +77,17 @@ public struct BolusReportLedger: Equatable {
         entries.last { $0.bolusId == bolusId && ($0.pumpSerial == nil || $0.pumpSerial == pumpSerial) }
     }
 
+    /// Only another pump's history could report a bolus seen on it.
+    public func boundaryHold(pumpSerial: UInt32?) -> Date? {
+        unreported.filter { $0.pumpSerial == pumpSerial }.map(\.holdsBoundaryAt).min()
+    }
+
     public mutating func record(_ entry: Entry) {
         entries.removeAll { $0.bolusId == entry.bolusId && $0.pumpSerial == entry.pumpSerial }
         entries.append(entry)
+        if entry.origin == .commanded {
+            dropUnreported(matching: entry)
+        }
     }
 
     public mutating func markFinalized(raw: Data) {
@@ -68,10 +95,27 @@ public struct BolusReportLedger: Equatable {
             return
         }
         entries[index].isFinalized = true
+        dropUnreported(matching: entries[index])
+    }
+
+    /// No-op for a bolus this ledger already has an entry for.
+    public mutating func noteUnreported(_ bolus: UnreportedBolus) {
+        guard entry(bolusId: bolus.bolusId, pumpSerial: bolus.pumpSerial) == nil,
+              !unreported.contains(where: { $0.bolusId == bolus.bolusId && $0.pumpSerial == bolus.pumpSerial })
+        else {
+            return
+        }
+        unreported.append(bolus)
     }
 
     public mutating func prune(now: Date) {
         entries.removeAll { now.timeIntervalSince($0.eventDate) > Self.retention }
+        // Past the horizon history no longer reports it, so nothing else would release the hold.
+        unreported.removeAll { now.timeIntervalSince($0.startDate) > Self.reportingHorizon }
+    }
+
+    private mutating func dropUnreported(matching entry: Entry) {
+        unreported.removeAll { $0.bolusId == entry.bolusId && (entry.pumpSerial == nil || entry.pumpSerial == $0.pumpSerial) }
     }
 }
 
@@ -85,13 +129,44 @@ extension BolusReportLedger: RawRepresentable {
             return nil
         }
         let entries = (rawValue["entries"] as? [[String: Any]] ?? []).compactMap(Entry.init(rawValue:))
-        self.init(trackingSince: Date(timeIntervalSinceReferenceDate: trackingSince), entries: entries)
+        let unreported = (rawValue["unreported"] as? [[String: Any]] ?? []).compactMap(UnreportedBolus.init(rawValue:))
+        self.init(trackingSince: Date(timeIntervalSinceReferenceDate: trackingSince), entries: entries, unreported: unreported)
     }
 
     public var rawValue: RawValue {
         [
             "trackingSince": trackingSince.timeIntervalSinceReferenceDate,
-            "entries": entries.map(\.rawValue)
+            "entries": entries.map(\.rawValue),
+            "unreported": unreported.map(\.rawValue)
+        ]
+    }
+}
+
+extension BolusReportLedger.UnreportedBolus: RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        guard let bolusId = rawValue["bolusId"] as? Int,
+              let pumpSerial = rawValue["pumpSerial"] as? UInt32,
+              let startDate = rawValue["startDate"] as? TimeInterval,
+              let holdsBoundaryAt = rawValue["holdsBoundaryAt"] as? TimeInterval
+        else {
+            return nil
+        }
+        self.init(
+            bolusId: bolusId,
+            pumpSerial: pumpSerial,
+            startDate: Date(timeIntervalSinceReferenceDate: startDate),
+            holdsBoundaryAt: Date(timeIntervalSinceReferenceDate: holdsBoundaryAt)
+        )
+    }
+
+    public var rawValue: RawValue {
+        [
+            "bolusId": bolusId,
+            "pumpSerial": pumpSerial,
+            "startDate": startDate.timeIntervalSinceReferenceDate,
+            "holdsBoundaryAt": holdsBoundaryAt.timeIntervalSinceReferenceDate
         ]
     }
 }
