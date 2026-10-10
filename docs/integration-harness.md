@@ -311,16 +311,18 @@ Nothing in Trio changes for it:
   (a suspend, a bolus from its screen, a dropped link) goes through faketandem's API.
 - They read Trio's Core Data store (`TrioCoreDataPersistentContainer.sqlite`, WAL) read-only in
   place (`TrioStore`), between two reads of the batch log that agree, and compare its rows with
-  `TrioDoseStoreOracle` fed the same batches, using the `bolusIncrement` and `maxBasal` Trio itself
-  reads.
+  `TrioDoseStoreOracle` fed the same batches, using Trio's `maxBasal` and the bolus increment it
+  rounds to, seeded as the pump's 0.05 U (see below).
 
 The commands call the driver as Trio's code would. `TrioClosedLoopTests` runs Trio's own loop
 instead: Trio's glucose simulator as the CGM (`cgm` `simulator`, held near 250 mg/dL through its
 `GlucoseSimulator_*` defaults passed as launch arguments), closed loop, a max IOB and SMBs allowed,
 so `APSManager` enacts a temp basal and an SMB through the driver on the simulator's next reading,
 up to 5 minutes after launch. Trio's manual bolus path (`APSManager.enactBolus`, from its bolus
-screen) is not driven. The cartridge and fill cannula wizards wait for state-stream notifications
-faketandem does not send, so their scenario sends what they report once done, around a suspend.
+screen) is not driven, nor is its pump setup flow, which hands Trio the manager only once paired:
+every scenario pairs a manager Trio holds from launch, as when re-pairing. The cartridge and fill
+cannula wizards wait for state-stream notifications faketandem does not send, so their scenario
+sends what they report once done, around a suspend.
 
 Journeys covered, each checked against the oracle: an app bolus, an automatic one (stored as an
 SMB), one cancelled part-way, one running across a relaunch of Trio, one through a dropped link, and
@@ -349,6 +351,24 @@ tests in `TandemKitTests` (`VirtualCoreBluetoothTests`, `BTResponseParserTests`)
 Both were latent on real hardware because a Mobi negotiates a large MTU and most
 responses fit one notification; faketandem fragments every response into 20-byte
 notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
+
+Running Trio itself found a third, fixed with a regression test in `PairingIntegrationTests`:
+
+- Pairing connected outside the command queue. A command job that ran meanwhile, such as the
+  delivery limits sync Trio sends when it sets up the pump manager, connected again and took over
+  pairing's completion, so pairing never finished. Pairing's connect is now a command job, bounded
+  at 120 s, and a job queued behind it finds the session up.
+
+And two things in Trio that the scenarios step around:
+
+- Trio rounds the boluses it stores to the bolus increment it loaded at launch. `DeviceDataManager`
+  writes the pump's 0.05 U to `preferences.json` when it sets up the pump manager, but not to the
+  preferences Trio holds, so until the next launch a 0.35 U SMB is stored as 0.3 U and a 0.05 U one
+  as 0.1 U. The scenarios seed 0.05 U, as Trio holds it from that next launch.
+- Trio stores a row dated ahead of its clock at its clock (`PumpHistoryStorage`). The driver dates
+  a resume a second after a suspend in the same second, since Trio's IOB throws on that pair, but a
+  resume that reaches Trio within that second is pulled back into it. The scenarios wait a second
+  between such commands.
 
 ## When CI does not run
 

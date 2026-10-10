@@ -41,12 +41,11 @@ final class TrioBolusTests: TrioTestCase {
 
         try trioStored("the cancelled bolus", until: Self.hasFinalizedBolus)
         let delivered = try XCTUnwrap(harness.client.snapshot().lastBolus?.deliveredUnits)
-        let increment = try trio.bolusIncrement()
         let boluses = try assertTrioStoredWhatTheOracleExpects().stored.filter { $0.eventType == .bolus }
         XCTAssertEqual(boluses.count, 1, "one bolus row: \(boluses)")
         XCTAssertEqual(boluses.first?.isMutable, false)
         XCTAssertLessThan(delivered, 2.0)
-        XCTAssertEqual(boluses.first?.bolusAmount ?? -1, delivered, accuracy: increment)
+        XCTAssertEqual(boluses.first?.bolusAmount ?? -1, delivered, accuracy: Self.bolusIncrement)
     }
 
     func testABolusRunningAcrossARelaunchOfTrioIsStoredOnceFinished() throws {

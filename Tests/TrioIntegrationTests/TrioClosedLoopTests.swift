@@ -15,9 +15,12 @@ final class TrioClosedLoopTests: TrioTestCase {
     override func seededFiles() throws -> [String: String] {
         var files = try super.seededFiles()
         files["Documents/freeaps/freeaps_settings.json"] = try Self.json(["cgm": "simulator", "dosingMode": "closed"])
-        // Trio's default max IOB of 0 allows no insulin above the profile.
-        files["Documents/preferences.json"] = try Self.json(["max_iob": 5, "enableSMB_always": true])
         return files
+    }
+
+    /// Trio's default max IOB of 0 allows no insulin above the profile.
+    override var preferences: [String: Any] {
+        super.preferences.merging(["max_iob": 5, "enableSMB_always": true]) { _, new in new }
     }
 
     func testTrioLoopEnactsATempBasalAndAnSMBThatTrioStoresAsTheOracleExpects() throws {

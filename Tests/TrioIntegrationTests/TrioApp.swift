@@ -49,12 +49,6 @@ struct TrioApp {
         try VirtualPumpControl.Client(port: controlPort)
     }
 
-    /// `preferences.json`'s `bolus_increment`, which Trio sets to the pump's smallest bolus when the
-    /// pump manager loads, and rounds every stored bolus to.
-    func bolusIncrement() throws -> Double {
-        try XCTUnwrap(documentsJSON("preferences.json")["bolus_increment"] as? Double, "preferences.json has no bolus_increment")
-    }
-
     /// `settings/settings.json`'s `maxBasal`; Trio drops a reported temp basal above it.
     func maxBasal() throws -> Double {
         try XCTUnwrap(documentsJSON("settings/settings.json")["maxBasal"] as? Double, "settings/settings.json has no maxBasal")

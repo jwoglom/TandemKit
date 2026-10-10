@@ -12,6 +12,9 @@ class TrioTestCase: FaketandemIntegrationTestCase {
     static let maxBolus = 10.0
     /// Trio's basal profile, and the schedule the tests sync to the pump.
     static let scheduledBasalRate = 1.0
+    /// The pump's, which Trio rounds stored boluses to only from its second launch with the pump: it
+    /// saves it to disk, not to the preferences it loaded at launch.
+    static let bolusIncrement = 0.05
     /// The emulator's default (`bolus_rate_units_per_second`).
     static let defaultBolusRate = 0.05
 
@@ -32,7 +35,13 @@ class TrioTestCase: FaketandemIntegrationTestCase {
             "Documents/settings/basal_profile.json": Self.json([
                 ["start": "00:00:00", "minutes": 0, "rate": Self.scheduledBasalRate],
             ]),
+            "Documents/preferences.json": Self.json(preferences),
         ]
+    }
+
+    /// Trio's oref preferences; the rest take Trio's defaults.
+    var preferences: [String: Any] {
+        ["bolus_increment": Self.bolusIncrement]
     }
 
     var launchArguments: [String] {
@@ -185,7 +194,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         }
         XCTAssertEqual(batches.compactMap(\.delegateError), [], "Trio failed to store a batch", file: file, line: line)
 
-        let oracle = try TrioDoseStoreOracle(maxBasal: trio.maxBasal(), bolusIncrement: trio.bolusIncrement())
+        let oracle = try TrioDoseStoreOracle(maxBasal: trio.maxBasal(), bolusIncrement: Self.bolusIncrement)
         for batch in batches {
             oracle.addPumpEvents(
                 batch.pumpEvents,
