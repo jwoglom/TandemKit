@@ -99,8 +99,9 @@ final class FaketandemHarness {
         if snapshot.idpProfiles != nil {
             try client.setIDPProfiles([.emulatorDefault])
         }
-        // Tests stage the rate in force, and a profile write sets it too.
-        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate])
+        // Tests stage the rate in force, and a profile write sets it too. An earlier test's bolus
+        // is dated on that test's clock, which may be ahead of this one's, and would count in full.
+        try client.setState(["closed_loop_enabled": false, "basal_rate": Self.defaultBasalRate, "iob": 0])
         if let globals = Self.launchPumpGlobals {
             try client.setSettingsConfig(globals, for: "PumpGlobalsRequest")
         } else {

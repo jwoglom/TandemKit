@@ -125,12 +125,14 @@ by cargo) and drops requests whose `minApi` is newer than the pump's.
 onto the `TandemPumpManager` status fetch that both issues it and applies the response, so the
 ported catalog stays the single source of truth instead of a second event table that could drift.
 `handleQualifyingEvents` runs the deduped set on the command queue and acknowledges afterwards. A
-request that maps to no fetch is not sent: nothing in the driver consumes IOB, CGM/EGV, home
-screen mirror, profile status, Basal-IQ, temp rate, localization, load status or bolus permission
-change reason today, so `iobChange`, `bg`, `cgmChange`, `basalIQ`, `basalIQStatus`,
-`controlIQSleep`, `extendedBolusChange`, `pumpingStatus` and `bolusPermissionRevoked` currently
-fetch nothing. Two deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh the
-basal status, since that is what emits the suspend/resume dose to LoopKit, and
+request that maps to no fetch is not sent: nothing in the driver consumes CGM/EGV, home screen
+mirror, Basal-IQ, temp rate, localization, load status or bolus permission change reason today,
+so `bg`, `cgmChange`, `basalIQ`, `basalIQStatus`, `controlIQSleep`, `extendedBolusChange`,
+`pumpingStatus` and `bolusPermissionRevoked` currently fetch nothing.
+Control-IQ support in the context is whether the pump has answered a Control-IQ info read
+(`controlIQEnabled != nil`), so a pump with Control-IQ off is still asked for IOB under the
+Control-IQ opcode. Two deliberate additions to pumpX2's table: `pumpSuspend`/`pumpResume` refresh
+the basal status, since that is what emits the suspend/resume dose to LoopKit, and
 `profileChange`/`activeProfileSegmentChange` refresh it so the basal rate check runs on a profile
 edit instead of at the next sync.
 
@@ -462,9 +464,28 @@ edit instead of at the next sync.
   `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the
   other sign). Setup sets it before the host adopts the manager, so the report waits for the
   delegate and its queue.
-- There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
-  `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
-  IOB telemetry is a prerequisite for reinstating that check.
+- There is **no IOB ceiling**. The pump's IOB is read (`fetchInsulinOnBoard`) on every sync and on
+  the qualifying events pumpX2 reads it for, into `state.latestInsulinOnBoard`, but nothing doses
+  on it. Only `ControlIQIOBRequest` is sent, and only once the pump has answered a Control-IQ
+  info read: a pump with Control-IQ answers that opcode whether it is on or off, and a wrong
+  opcode waits out the 30 s response timeout. `NonControlIQIOBRequest` is never sent.
+- The pump's IOB is held against what the host was told (`UnreportedInsulinOnBoardMonitor`), one
+  way only, since the host's IOB is out of the driver's sight and runs on another insulin model
+  and duration. With Control-IQ off (`iobType` Mudaliar) the pump counts bolus insulin alone, and
+  what is left of a bolus never exceeds the bolus. So a reading more than 0.05 U above every bolus
+  `BolusReportLedger` reported within the pump's insulin duration, for 30 minutes, logs a warning:
+  a pump-UI or extended bolus the host never heard of, or one whose report was lost. The ledger's
+  `units` is what the host counts (programmed while mutable, delivered once finalized); the check
+  skips while the ledger is younger than the window or an entry in it has no amount. Under
+  Control-IQ the pump also counts basal above and below the profile, so nothing is compared.
+- The window is the active profile's insulin duration (`PumpInsulinDuration`, persisted), read by
+  `fetchInsulinDuration` (`ProfileStatusRequest`, then `IDPSettingsRequest` for slot 0) in the
+  daily settings read, on any sync while it is unknown, and on the qualifying events that suggest
+  `ProfileStatusRequest` (`profileChange`, `activeProfileSegmentChange`, `pumpResume`). Nothing is
+  compared until it is known. Whether the pump moves boluses already given to a shortened duration
+  is unknown, so the longer one stays the window until that long after the change.
+- Scenarios: conformance group I, `InsulinOnBoardConformanceTests`, against faketandem's model of
+  both IOB figures; unit tests in `UnreportedInsulinOnBoardTests`.
 - There is **no app-side temp basal rate check**; the pump's own max basal limit is the
   only ceiling. (`maximumTempBasalRateExceeded` was never wired up in any revision and has
   been removed rather than left as a dead enum case.)

@@ -167,7 +167,11 @@ struct FaketandemSnapshot: Decodable {
 
     struct Insulin: Decodable {
         let reservoirUnits: Double
+        /// The one the pump shows: `mudaliarIob` with `iobType` 0 (Control-IQ off), `swanIob` with 1.
         let iob: Double
+        let iobType: Int?
+        let mudaliarIob: Double?
+        let swanIob: Double?
     }
 
     struct Battery: Decodable {
