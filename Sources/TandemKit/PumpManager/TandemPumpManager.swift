@@ -1128,28 +1128,55 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 }
             }
 
+            let sentAt = self.now
             let response = self.bluetooth.write(SuspendPumpingRequest())
             guard let response, response.status == 0 else {
                 self.logger.error("Failed to Suspend delivery - Status: \(response?.status ?? -1)")
-                completion(PumpCommError.noResponse)
+                let isSuspended = self.readBackUnconfirmedSuspend(mayHaveApplied: response == nil, sentAt: sentAt)
+                completion(isSuspended ? nil : PumpCommError.noResponse)
                 return
             }
 
-            self.settleDeliveryTransition()
-            let suspendDose = UnfinalizedDose(suspendStartTime: self.now)
-            var events = self.getActivePumpEvents(endDate: suspendDose.startDate)
-            events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
-
-            self.state.basalDose = suspendDose
-            self.state.lastReconciliation = self.now
-            self.recordReportedTransition(.suspend, at: suspendDose.startDate)
-
-            self.notifyDelegateStateUpdated()
-            self.emitPumpEvents(events)
-
+            self.recordSuspend(sentAt: sentAt)
             self.logger.info("Insulin Delivery Suspended!")
             completion(nil)
         }
+    }
+
+    /// Dated at the answer, or at the reading after a lost one: the later stop counts more insulin.
+    private func recordSuspend(sentAt: Date) {
+        settleDeliveryTransition()
+        let suspendDose = UnfinalizedDose(suspendStartTime: now)
+        var events = getActivePumpEvents(endDate: suspendDose.startDate)
+        events.append(NewPumpEvent.suspend(dose: suspendDose.toDoseEntry(), date: suspendDose.startDate))
+
+        state.basalDose = suspendDose
+        state.lastReconciliation = now
+        recordReportedTransition(
+            .suspend,
+            at: suspendDose.startDate,
+            earliest: sentAt.addingTimeInterval(-Self.transitionMatchTolerance)
+        )
+
+        notifyDelegateStateUpdated()
+        emitPumpEvents(events)
+    }
+
+    /// `write` gives nil for a lost answer and a refusal alike, so the suspend may have reached the
+    /// pump; so may the temp stop before it, whatever its answer. Returns whether the pump is suspended.
+    private func readBackUnconfirmedSuspend(mayHaveApplied: Bool, sentAt: Date) -> Bool {
+        guard let status = bluetooth.write(CurrentBasalStatusRequest()) else {
+            logger.warning("No basal status after an unconfirmed SuspendPumping; the next reading settles it")
+            return false
+        }
+        let held = state.deliveryTransitions.pending?.observed ?? state.basalDose.type
+        if mayHaveApplied, status.basalType == .suspend, held != .suspend {
+            logger.warning("The pump is suspended though the SuspendPumping answer was lost; reporting the suspend")
+            recordSuspend(sentAt: sentAt)
+        } else {
+            observeDeliveryState(status.basalType)
+        }
+        return status.basalType == .suspend
     }
 
     public func resumeDelivery(completion: @escaping (_ error: Error?) -> Void) {

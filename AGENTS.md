@@ -414,6 +414,11 @@ edit instead of at the next sync.
   reading that saw it when above the schedule, at detection when below. The `.basal` marker after
   it is left out when a command reports in that same second. A temp the driver never sees reaches
   the host after the fact, through basal reconciliation.
+- `suspendDelivery` stops a running temp, then sends `SuspendPumping`; `write` gives nil for a lost
+  answer and a refusal alike (#340). Unless the suspend is confirmed it reads `CurrentBasalStatus`.
+  Suspended after a nil, where the driver held no suspend, is the app's suspend, reported at the
+  reading; any other reading goes to `observeDeliveryState`, which ends a temp the stop ended. The
+  command succeeds whenever the pump reads suspended, so a cartridge wizard can go on.
 - A pump clock more than `pumpClockSkewThreshold` (5 min) off the phone's (`isPumpClockSkewed`)
   raises a LoopKit alert, retracted once the clock agrees (`pumpClockSkewAlertIssued`, persisted),
   and a status highlight; the settings screen syncs the clock. While skewed, wherever the host

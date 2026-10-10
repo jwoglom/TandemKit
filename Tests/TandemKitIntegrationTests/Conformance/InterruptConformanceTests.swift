@@ -18,7 +18,7 @@ import XCTest
 /// in a strict `XCTExpectFailure` naming the issue, so a fix flips them to "unexpected pass".
 ///
 /// Timing: both clocks are frozen and moved together with `advanceBoth`. The only real-time waits
-/// are the driver's own — its response timeout when a response is lost (A2, A5), shortened by the
+/// are the driver's own — its response timeout when a response is lost (A2, A5, A5c), shortened by the
 /// harness, and the seconds an auto-reconnect takes.
 final class InterruptConformanceTests: ConformanceTestCase {
     /// The pump's profile basal rate and the driver's scheduled rate, kept equal so a percent temp
@@ -686,6 +686,130 @@ final class InterruptConformanceTests: ConformanceTestCase {
 
         let diff = try timeline().diff(against: loop)
         XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
+    // MARK: - A5c, A5d
+
+    /// A5 for `suspendDelivery`: a temp rate runs, its stop is answered, and the suspend is applied
+    /// with its answer lost (#340). The driver reads the pump back and reports the suspend.
+    func testA5c_lostSuspendPumpingResponseAfterTheTempStop() throws {
+        try stageDriver()
+        let tempStart = try startTempBasalAndAdvance()
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+        let batchesBefore = allPumpEventBatches.count
+
+        try harness.client.armFault(FaketandemFaultSpec(.dropResponse, message: "SuspendPumpingRequest"))
+        let suspendedAt = clock.now
+        let suspended = try suspendDeliveryHolding(timeout: 90)
+        XCTAssertNil(suspended.error, "the pump reads back suspended")
+        XCTAssertEqual(suspended.held, .suspend, "the driver holds the suspend when the command returns")
+
+        let log = try harness.requestLog(since: logStart)
+        XCTAssertNil(log.first { $0.isResponse && $0.message == "StopTempRateResponse" }?.fault, "the stop was answered")
+        XCTAssertEqual(
+            log.last { $0.isResponse && $0.message == "SuspendPumpingResponse" }?.fault, "drop_response",
+            "the suspend was applied and its answer suppressed"
+        )
+        let pumpBasal = try harness.client.snapshot().basal
+        XCTAssertTrue(pumpBasal.suspended)
+        XCTAssertFalse(pumpBasal.tempActive)
+
+        let reported = Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events)
+        let suspend = try XCTUnwrap(
+            reported.first { $0.dose?.type == .suspend },
+            "the suspend is reported: \(reported.map { LoopDoseStoreOracle.describe($0.raw) })"
+        )
+        XCTAssertEqual(suspend.date.timeIntervalSince(suspendedAt), 0, accuracy: 2)
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertEqual(
+            loop.doses.filter { $0.dose.type == .suspend }.count, 1,
+            "history does not report the suspend again: \(loop.doses.map(LoopDoseStoreOracle.describe))"
+        )
+        try assertTempBasalFinalized(in: loop, startedAt: tempStart, endedAt: suspendedAt)
+        XCTAssertEqual(trio.suspends.count, 1)
+        XCTAssertEqual(trio.tempBasals.count, 1, "\(trio.tempBasals)")
+
+        let diff = try timeline().diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
+    /// The stop is answered and the suspend refused, so the pump runs its profile (#340). The driver
+    /// reads the pump back: the temp ends at the stop, and no suspend is reported.
+    func testA5d_refusedSuspendPumpingAfterTheTempStop() throws {
+        try stageDriver()
+        let tempStart = try startTempBasalAndAdvance()
+        let logStart = try harness.client.snapshot().requestLog.lastSeq
+
+        var fault = FaketandemFaultSpec(.errorResponse, message: "SuspendPumpingRequest")
+        fault.errorCode = 3
+        XCTAssertNotNil(try harness.client.armFault(fault))
+        let stoppedAt = clock.now
+        let refused = try suspendDeliveryHolding()
+        XCTAssertNotNil(refused.error, "a refused suspend fails")
+        XCTAssertEqual(refused.held, .basal, "the driver no longer holds the temp the pump stopped when the command returns")
+
+        XCTAssertTrue(try harness.requestLog(since: logStart).contains { $0.fault == "error_response" }, "the pump refused the suspend")
+        let pumpBasal = try harness.client.snapshot().basal
+        XCTAssertFalse(pumpBasal.suspended)
+        XCTAssertFalse(pumpBasal.tempActive, "the stop before the suspend went through")
+
+        try clock.advanceBoth(seconds: .minutes(1), ticks: 1)
+        _ = try sync()
+
+        let (loop, trio) = feedOracles()
+        loop.assertNoDuplicates()
+        trio.assertNoDuplicates()
+        XCTAssertFalse(loop.doses.contains { $0.dose.type == .suspend }, "\(loop.doses.map(LoopDoseStoreOracle.describe))")
+        try assertTempBasalFinalized(in: loop, startedAt: tempStart, endedAt: stoppedAt)
+        XCTAssertTrue(trio.suspends.isEmpty)
+        XCTAssertEqual(trio.tempBasals.count, 1, "\(trio.tempBasals)")
+
+        let diff = try timeline().diff(against: loop)
+        XCTAssertTrue(diff.isEmpty, "pump timeline and Loop oracle disagree:\n\(diff)")
+    }
+
+    /// `suspendDelivery`, and the delivery the driver holds as it completes: the completion runs in
+    /// the command, ahead of the basal read the pump's qualifying event queues behind it.
+    private func suspendDeliveryHolding(timeout: TimeInterval? = nil) throws -> (error: Error?, held: DoseType) {
+        let manager = try XCTUnwrap(driver, "no driver").manager
+        let box = ResultBox<(error: Error?, held: DoseType)>()
+        manager.suspendDelivery { box.set(($0, manager.state.basalDose.type)) }
+        let result = try box.wait("suspendDelivery completion", timeout: timeout ?? commandTimeout)
+        drainDelegate()
+        return result
+    }
+
+    /// A 1.2 U/h temp basal for 30 minutes, five minutes in. Returns its start.
+    private func startTempBasalAndAdvance() throws -> Date {
+        let batchesBefore = allPumpEventBatches.count
+        // 0.1 U by the stop: Loop counts a temp a suspend cuts short in 0.05 U steps.
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 1.2, duration: .minutes(30)))
+        let started = try XCTUnwrap(
+            Array(allPumpEventBatches.dropFirst(batchesBefore)).flatMap(\.events).first { $0.dose?.type == .tempBasal }?.dose?.startDate
+        )
+        try clock.advanceBoth(seconds: .minutes(5), ticks: 5)
+        return started
+    }
+
+    private func assertTempBasalFinalized(
+        in loop: LoopDoseStoreOracle,
+        startedAt start: Date,
+        endedAt end: Date,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let temps = loop.doses.filter { $0.dose.type == .tempBasal }
+        XCTAssertEqual(temps.count, 1, "one temp basal: \(loop.doses.map(LoopDoseStoreOracle.describe))", file: file, line: line)
+        let temp = try XCTUnwrap(temps.first, file: file, line: line)
+        XCTAssertFalse(temp.isMutable, "finalized", file: file, line: line)
+        XCTAssertEqual(temp.dose.startDate, start, file: file, line: line)
+        XCTAssertEqual(temp.dose.endDate.timeIntervalSince(end), 0, accuracy: 2, "at the pump's stop", file: file, line: line)
     }
 
     // MARK: - A6
