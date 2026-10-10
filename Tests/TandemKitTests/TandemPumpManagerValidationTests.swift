@@ -573,138 +573,126 @@ import XCTest
         XCTAssertEqual(manager.hostDate(forPumpDate: manager.now), manager.now)
     }
 
-    // MARK: - A pump clock read that can't be right
+    // MARK: - A pump clock more than a day off the phone's
 
+    /// #503: one read came 2^32 ms behind the phone.
     private static let twoToThe32MsShort: TimeInterval = -4_294_967
 
-    private func stubClockRead(
-        _ bluetooth: StubPumpBluetooth,
-        _ manager: TandemPumpManager,
-        offset: TimeInterval,
-        sinceReset: UInt32 = 300
-    ) {
+    private func setPumpClockOffset(_ manager: TandemPumpManager, _ offset: TimeInterval) {
+        manager.state.lastPumpTimeCheckDate = manager.now
+        manager.state.currentPumpTime = manager.now.addingTimeInterval(offset)
+    }
+
+    private func enactBolus(_ manager: TandemPumpManager, units: Double, _ activationType: BolusActivationType) -> PumpManagerError? {
+        let expectation = expectation(description: "Bolus completion")
+        var error: PumpManagerError?
+        manager.enactBolus(units: units, activationType: activationType) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return error
+    }
+
+    func testBolusesAreRefusedWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        for type in [BolusActivationType.manualNoRecommendation, .manualRecommendationAccepted, .automatic] {
+            XCTAssertEqual(validationError(from: enactBolus(manager, units: 1.0, type)), .pumpClockUntrusted, "\(type)")
+        }
+        XCTAssertFalse(bluetooth.didSend(BolusPermissionRequest.self))
+    }
+
+    func testTempBasalsAreRefusedWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))), .pumpClockUntrusted)
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 0.5, for: .minutes(30))), .pumpClockUntrusted)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testAZeroTempAndACancelStillGoOutWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: .minutes(30)))
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [0])
+    }
+
+    func testTempBasalsGoOutOnceAClockReadIsWithinADay() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))), .pumpClockUntrusted)
+
         bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
-            currentTime: UInt32(Dates.fromInstantToJan12008EpochSeconds(manager.now.addingTimeInterval(offset))),
-            pumpTimeSinceReset: sinceReset
+            currentTime: UInt32(Dates.fromInstantToJan12008EpochSeconds(manager.now)),
+            pumpTimeSinceReset: 600
         ))
+        manager.fetchTimeSinceReset()
+
+        XCTAssertFalse(manager.state.isPumpClockUntrusted)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
     }
 
-    /// #503: a read 2^32 ms behind the phone, taken right after a pump reset.
-    func testAClockReadOverADayOffMovesNothingAtFirst() {
+    func testAZoneSizedOffsetDoesNotBlockDosing() {
         let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 2)
-        let measuredAt = manager.state.lastPumpTimeCheckDate
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort, sinceReset: 310)
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
+        setPumpClockOffset(manager, .hours(3))
 
-        manager.fetchTimeSinceReset()
-
-        XCTAssertEqual(manager.state.pumpClockOffset, .minutes(2), accuracy: 1)
-        XCTAssertEqual(manager.state.lastPumpTimeCheckDate, measuredAt)
-        XCTAssertEqual(manager.state.pumpState.timeSinceReset, 310, "requests are signed with it")
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
     }
 
-    func testAHeldClockReadRaisesNoSkewAlert() {
+    func testNoClockSkewTempIsStartedOnAClockOverADayOff() {
         let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 0)
-        let (delegate, queue) = attachDelegate(manager)
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(5), pumpMilliunits: 2000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
 
-        manager.fetchTimeSinceReset()
-        queue.sync {}
+        manager.fetchBasalStatus()
 
-        XCTAssertEqual(delegate.issuedAlerts.count, 0)
-        XCTAssertFalse(manager.state.isPumpClockSkewed)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertNil(manager.skewCompensationTemp)
     }
 
-    func testAClockReadOverADayOffIsAppliedOnceASecondReadAgrees() {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 0)
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
-        manager.fetchTimeSinceReset()
-
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort + 20)
-        manager.fetchTimeSinceReset()
-
-        XCTAssertEqual(manager.state.pumpClockOffset, Self.twoToThe32MsShort + 20, accuracy: 1)
-        XCTAssertTrue(manager.state.isPumpClockSkewed)
-    }
-
-    func testTwoClockReadsOverADayOffThatDisagreeAreNeitherApplied() {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 0)
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
-        manager.fetchTimeSinceReset()
-
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort + .hours(2))
-        manager.fetchTimeSinceReset()
-
-        XCTAssertEqual(manager.state.pumpClockOffset, 0, accuracy: 1)
-    }
-
-    func testAnOrdinaryReadAfterAHeldOneIsAppliedAndForgetsTheHeldOne() {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 0)
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
-        manager.fetchTimeSinceReset()
-
-        stubClockRead(bluetooth, manager, offset: .minutes(1))
-        manager.fetchTimeSinceReset()
-        XCTAssertEqual(manager.state.pumpClockOffset, .minutes(1), accuracy: 1)
-
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
-        manager.fetchTimeSinceReset()
-        XCTAssertEqual(manager.state.pumpClockOffset, .minutes(1), accuracy: 1, "the first bad read was not left waiting to confirm this one")
-    }
-
-    func testTheFirstClockReadOverADayOffLeavesThePumpClockUnmeasured() {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        stubClockRead(bluetooth, manager, offset: Self.twoToThe32MsShort)
-
-        manager.fetchTimeSinceReset()
-
-        XCTAssertNil(manager.state.currentPumpTime)
-        XCTAssertEqual(manager.state.pumpClockOffset, 0)
-    }
-
-    func testAClockReadAZoneAwayIsAppliedAtOnce() {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 0)
-        stubClockRead(bluetooth, manager, offset: .hours(3))
-
-        manager.fetchTimeSinceReset()
-
-        XCTAssertEqual(manager.state.pumpClockOffset, .hours(3), accuracy: 1)
-    }
-
-    func testSettingTheClockDoesNotReportAReadOverADayOffAsAnAdjustment() {
+    func testAClockSkewTempRunningWhenTheClockGoesOverADayOffIsStopped() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeSkewedManager(bluetooth: bluetooth)
-        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(Self.twoToThe32MsShort))
-        let (delegate, queue) = attachDelegate(manager)
+        manager.fetchBasalStatus()
+        XCTAssertEqual(manager.skewCompensationTemp?.percent, 50)
 
-        XCTAssertNil(writePumpTime(manager))
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+        manager.fetchBasalStatus()
 
-        queue.sync {}
-        XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(11)], "the last measured offset stands in")
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertNil(manager.skewCompensationTemp)
     }
 
-    func testSettingAnUnmeasuredClockDoesNotReportAReadOverADayOffAsAnAdjustment() {
+    /// Phone 13:55 with the pump on the 1.0 U/hr segment; an offset of 49 days 17 h puts the schedule lookup in the 2.0 segment.
+    func testNoBasalRateMismatchIsNotedOnAClockOverADayOff() {
         let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
-        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(Self.twoToThe32MsShort))
-        let (delegate, queue) = attachDelegate(manager)
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(5), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
 
-        XCTAssertNil(writePumpTime(manager))
+        manager.fetchBasalStatus()
 
-        queue.sync {}
-        XCTAssertEqual(delegate.clockAdjustments, [])
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+    }
+
+    func testNoPumpSegmentChangesAreFoundOnAClockOverADayOff() {
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: StubPumpBluetooth())
+        let through = manager.now.addingTimeInterval(.hours(6))
+        setPumpClockOffset(manager, 0)
+        XCTAssertEqual(manager.pumpSegmentChanges(after: manager.now, through: through).count, 1)
+
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertEqual(manager.pumpSegmentChanges(after: manager.now, through: through).count, 0)
     }
 
     func testPumpSegmentChangesAreDatedOnThePhonesClock() {

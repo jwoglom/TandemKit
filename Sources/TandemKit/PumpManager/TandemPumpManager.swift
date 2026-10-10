@@ -176,9 +176,6 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
 
-    /// The last clock read `fetchTimeSinceReset` held back for a second opinion. Only touched from command queue jobs.
-    var unconfirmedPumpClockOffset: TimeInterval?
-
     /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
     /// How many history passes each store gap has held basal reconciliation back. Command queue only.
@@ -682,6 +679,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if state.isPumpClockUntrusted {
+            logger.warning("[enactBolus] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
+            completion(.deviceState(TandemPumpManagerValidationError.pumpClockUntrusted))
+            return
+        }
+
         // The pump enforces its own max bolus limit (pushed down by syncDeliveryLimits via
         // SetMaxBolusLimitRequest), but check here too so an out-of-range request fails fast with a
         // specific error instead of being rejected mid-handshake as a generic permission denial.
@@ -890,6 +893,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let isCancel = duration <= 0
         // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
         let isZeroTemp = !isCancel && unitsPerHour == 0
+
+        guard isCancel || isZeroTemp || !state.isPumpClockUntrusted else {
+            logger.warning("[enactTempBasal] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
+            completion(.deviceState(TandemPumpManagerValidationError.pumpClockUntrusted))
+            return
+        }
 
         // Refused before anything is sent: the pump would refuse it after the running temp was stopped.
         let minutes = Int(exactly: duration.minutes.rounded(.down)) ?? Int.max
@@ -1522,11 +1531,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            // Read first: setup writes the clock before any sync has measured it. An offset past the
-            // trust limit is not reported as how far the clock moved.
-            let reading = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
-            let lastMeasured = self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset
-            let offset = [reading, lastMeasured].compactMap { $0 }.first(where: TandemPumpManagerState.trustsPumpClockOffset)
+            // Read first: setup writes the clock before any sync has measured it.
+            let offset = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
+                ?? (self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset)
             let epoch = Dates.fromInstantToJan12008EpochSeconds(self.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
@@ -2497,6 +2504,8 @@ extension TandemPumpManager {
         guard items.count > 1, end > start else { return [] }
 
         let offset = state.pumpClockOffset
+        guard TandemPumpManagerState.trustsPumpClockOffset(offset) else { return [] }
+
         let pumpStart = start.addingTimeInterval(offset)
         let startOfDay = Calendar.current.startOfDay(for: pumpStart)
         var rate = getScheduledBasalRate(at: pumpStart)

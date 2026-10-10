@@ -257,4 +257,29 @@ final class TandemPumpManagerStateTests: XCTestCase {
 
         XCTAssertEqual(state.pumpClockOffset, 90)
     }
+
+    private func state(pumpClockOffset offset: TimeInterval?) -> TandemPumpManagerState {
+        var state = TandemPumpManagerState(rawValue: [:])
+        guard let offset else { return state }
+        let checkedAt = Date()
+        state.lastPumpTimeCheckDate = checkedAt
+        state.currentPumpTime = checkedAt.addingTimeInterval(offset)
+        return state
+    }
+
+    func testAnUnmeasuredPumpClockIsNotUntrusted() {
+        XCTAssertFalse(state(pumpClockOffset: nil).isPumpClockUntrusted)
+    }
+
+    func testPumpClocksWithinADayAreTrustedEitherWay() {
+        for offset in [0, 90, .hours(3), -.hours(3), .hours(24), -.hours(24)] as [TimeInterval] {
+            XCTAssertFalse(state(pumpClockOffset: offset).isPumpClockUntrusted, "\(offset)")
+        }
+    }
+
+    func testPumpClocksOverADayOffAreUntrustedEitherWay() {
+        for offset in [.hours(24) + 1, -.hours(24) - 1, -4_294_967, 4_294_967] as [TimeInterval] {
+            XCTAssertTrue(state(pumpClockOffset: offset).isPumpClockUntrusted, "\(offset)")
+        }
+    }
 }

@@ -8,41 +8,17 @@ extension TandemPumpManager {
             return
         }
 
+        let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
         let checkedAt = now
 
-        // Signs every request that follows, so it follows the pump even when its clock read is held.
-        state.pumpState.timeSinceReset = response.pumpTimeSinceReset
-        if confirmsPumpClockRead(offset: currentPumpTime.timeIntervalSince(checkedAt)) {
-            state.currentPumpTime = currentPumpTime
-            state.lastPumpTimeCheckDate = checkedAt
-            state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
-        }
+        state.pumpState.timeSinceReset = timeSinceReset
+        state.currentPumpTime = currentPumpTime
+        state.lastPumpTimeCheckDate = checkedAt
+        state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
-    }
-
-    /// A read past `pumpClockOffsetTrustLimit` moves nothing until a second one agrees with it, so a
-    /// single bad read right after a reset can't shift every pump date, schedule lookup and alert.
-    /// A read inside the limit is applied at once, which is also what discards a held one.
-    private func confirmsPumpClockRead(offset: TimeInterval) -> Bool {
-        guard !TandemPumpManagerState.trustsPumpClockOffset(offset) else {
-            unconfirmedPumpClockOffset = nil
-            return true
-        }
-
-        if let held = unconfirmedPumpClockOffset,
-           abs(offset - held) <= TandemPumpManagerState.pumpClockOffsetConfirmationTolerance
-        {
-            logger.warning("Pump clock read \(Int(offset)) s off the phone's confirmed by a second read; applying it")
-            unconfirmedPumpClockOffset = nil
-            return true
-        }
-
-        logger.warning("Holding a pump clock read \(Int(offset)) s off the phone's until a second read agrees; keeping \(Int(state.pumpClockOffset)) s")
-        unconfirmedPumpClockOffset = offset
-        return false
     }
 
     func fetchControlIQStatus() {
@@ -872,6 +848,10 @@ extension TandemPumpManager {
     /// Writes the host's schedule over a mismatch rather than leaving the pump's profile: hosts take
     /// the pump to hold what they last saved, as Trio keeps a basal profile only once a sync takes.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
+        // The schedule is looked up on the pump's clock, so an untrusted one would find a mismatch
+        // that isn't there and start rewriting a profile that is right.
+        guard !state.isPumpClockUntrusted else { return }
+
         guard let mismatch = deliveredBasalRateMismatch(response) else {
             // One matching segment is not the whole profile; only a read-back ends an update.
             if state.basalProfileUpdateStatus != .none {
@@ -994,7 +974,7 @@ extension TandemPumpManager {
         }
 
         let wanted: Int? = {
-            guard state.isPumpClockSkewed, !state.useControlIQ, state.hasSyncedBasalRateSchedule,
+            guard state.isPumpClockSkewed, !state.isPumpClockUntrusted, !state.useControlIQ, state.hasSyncedBasalRateSchedule,
                   state.basalDose.type == .basal, state.deliveryTransitions.pending == nil,
                   status.basalType != .suspend, status.profileBasalRate > 0,
                   bolusProgressReport?.isUnfinalized() != true
