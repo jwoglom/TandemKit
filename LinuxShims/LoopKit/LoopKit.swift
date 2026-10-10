@@ -223,8 +223,12 @@
         case failure(PumpManagerError)
     }
 
-    @available(macOS 13.0, iOS 14.0, *) public protocol DoseProgressReporter {
+    @available(macOS 13.0, iOS 14.0, *) public protocol DoseProgressReporter: AnyObject {
         var progress: DoseProgress { get }
+
+        func addObserver(_ observer: DoseProgressObserver)
+
+        func removeObserver(_ observer: DoseProgressObserver)
     }
 
     @available(macOS 13.0, iOS 14.0, *) public struct DoseProgress {
