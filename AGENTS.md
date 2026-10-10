@@ -108,6 +108,11 @@ what was held once the second one lands. `MockPumpManagerDelegate`
 fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
 attaches one queue for the manager's life, as hosts do.
 
+Bolus progress observers are called on the queue the host passed
+`createBolusProgressReporter(reportingOn:)`, which Trio relies on to serialize its own reporter
+state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every
+host queue, so its state stays behind its lock, as does the manager's reference to it.
+
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
 suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /

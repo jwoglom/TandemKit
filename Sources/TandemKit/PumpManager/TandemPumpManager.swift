@@ -133,7 +133,21 @@ public class TandemPumpManager: PumpManager, Pluggable {
     /// `syncPumpData` rather than `telemetryScheduler`, which the bolus path cancels wholesale.
     lazy var historyBackfillCoordinator = HistoryBackfillCoordinator(pumpManager: self)
 
-    internal var bolusProgressReport: TandemDoseProgressReporter?
+    // Set on the command queue, read on the telemetry queue and the host's.
+    private let bolusProgressReportLock = NSLock()
+    private var _bolusProgressReport: TandemDoseProgressReporter?
+    internal var bolusProgressReport: TandemDoseProgressReporter? {
+        get {
+            bolusProgressReportLock.lock()
+            defer { bolusProgressReportLock.unlock() }
+            return _bolusProgressReport
+        }
+        set {
+            bolusProgressReportLock.lock()
+            _bolusProgressReport = newValue
+            bolusProgressReportLock.unlock()
+        }
+    }
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
 
@@ -626,8 +640,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    public func createBolusProgressReporter(reportingOn _: DispatchQueue) -> DoseProgressReporter? {
-        bolusProgressReport
+    public func createBolusProgressReporter(reportingOn dispatchQueue: DispatchQueue) -> DoseProgressReporter? {
+        bolusProgressReport?.reporting(on: dispatchQueue)
     }
 
     public func estimatedDuration(toBolus units: Double) -> TimeInterval {
