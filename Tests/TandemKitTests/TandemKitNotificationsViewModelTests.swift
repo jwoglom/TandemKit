@@ -89,6 +89,52 @@ import XCTest
         XCTAssertFalse(orphaned.isRefreshing)
     }
 
+    func testADismissalRemovesTheItemEvenAfterARefreshReplacedIt() {
+        bluetooth.stub(
+            AlertStatusRequest.self,
+            with: AlertStatusResponse(intMap: UInt64(1) << UInt64(AlertStatusResponse.AlertResponseType.LOW_INSULIN_ALERT.rawValue))
+        )
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 0))
+        viewModel.refreshNotifications()
+        drainMainQueue()
+        let item = viewModel.notifications[0]
+
+        viewModel.refreshNotifications()
+        var dismissed: Bool?
+        viewModel.dismissNotification(item) { dismissed = $0 }
+        drainMainQueue()
+
+        XCTAssertEqual(dismissed, true)
+        XCTAssertTrue(viewModel.notifications.isEmpty)
+    }
+
+    func testARefusedDismissalKeepsTheItemAndSaysSo() {
+        bluetooth.stub(
+            AlertStatusRequest.self,
+            with: AlertStatusResponse(intMap: UInt64(1) << UInt64(AlertStatusResponse.AlertResponseType.LOW_INSULIN_ALERT.rawValue))
+        )
+        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 1))
+        viewModel.refreshNotifications()
+        drainMainQueue()
+
+        var dismissed: Bool?
+        viewModel.dismissNotification(viewModel.notifications[0]) { dismissed = $0 }
+        drainMainQueue()
+
+        XCTAssertEqual(dismissed, false)
+        XCTAssertEqual(viewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
+        XCTAssertNotNil(viewModel.errorMessage)
+    }
+
+    func testDismissingWithoutAPumpManagerStillCallsBack() {
+        let orphaned = TandemKitNotificationsViewModel(nil)
+
+        var dismissed: Bool?
+        orphaned.dismissNotification(NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT")) { dismissed = $0 }
+
+        XCTAssertEqual(dismissed, false)
+    }
+
     // MARK: - Helpers
 
     /// Every notification read sends exactly one `AlertStatusRequest`, so counting them counts reads.

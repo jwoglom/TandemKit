@@ -100,17 +100,27 @@ class TandemKitNotificationsViewModel: ObservableObject {
         }
     }
 
-    func dismissNotification(_ item: NotificationItem) {
-        pumpManager?.dismissNotification(notification: item) { success in
+    /// `completion` runs on the main queue once the pump has answered and the list is updated.
+    func dismissNotification(_ item: NotificationItem, completion: ((Bool) -> Void)? = nil) {
+        guard let pumpManager else {
+            completion?(false)
+            return
+        }
+
+        pumpManager.dismissNotification(notification: item) { success in
             guard success else {
                 DispatchQueue.main.async {
                     self.errorMessage = String(localized: "Failed to dismiss notification", comment: "dismiss notification error")
+                    completion?(false)
                 }
                 return
             }
 
+            // Matched by what it is, not by `id`: every read builds new items, so a refresh landing
+            // while the pump answers leaves `item` with an id nothing in the list carries.
             DispatchQueue.main.async {
-                self.notifications.removeAll { $0.id == item.id }
+                self.notifications.removeAll { $0.type == item.type && $0.notificationId == item.notificationId }
+                completion?(true)
             }
 
             // Refresh after a short delay to get updated pump state. This has to reflect the

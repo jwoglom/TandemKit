@@ -66,6 +66,19 @@ class TandemKitFillTubingViewModel: ObservableObject {
         !notificationsViewModel.notifications.isEmpty
     }
 
+    @Published var isShowingFillPausedPrompt = false
+    /// Keeps a poll that lands while the dismissal is in flight from bringing the prompt back.
+    private var isAcknowledgingFillPause = false
+
+    /// Everything but the fill pause, which the prompt handles.
+    var otherNotifications: [NotificationItem] {
+        notificationsViewModel.notifications.filter { !$0.isFillPause }
+    }
+
+    var hasOtherNotifications: Bool {
+        !otherNotifications.isEmpty
+    }
+
     /// Whether the user may finish the fill. Blocked while the pump has something outstanding for
     /// them to acknowledge, and while the post-release notification read is still in flight — until
     /// it returns we cannot tell those two cases apart.
@@ -87,6 +100,12 @@ class TandemKitFillTubingViewModel: ObservableObject {
         notificationsViewModel.objectWillChange
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        Publishers.CombineLatest($currentStep, notificationsViewModel.$notifications)
+            .sink { [weak self] step, notifications in
+                self?.updateFillPausedPrompt(step: step, notifications: notifications)
             }
             .store(in: &cancellables)
     }
@@ -231,6 +250,28 @@ class TandemKitFillTubingViewModel: ObservableObject {
         }
     }
 
+    private func updateFillPausedPrompt(step: TubingFillStep, notifications: [NotificationItem]) {
+        guard step == .filling, notifications.contains(where: \.isFillPause) else {
+            isShowingFillPausedPrompt = false
+            return
+        }
+        if !isAcknowledgingFillPause {
+            isShowingFillPausedPrompt = true
+        }
+    }
+
+    /// A refused dismissal leaves the alert outstanding, so the prompt comes back for another try.
+    func acknowledgeFillPause() {
+        guard let item = notificationsViewModel.notifications.first(where: \.isFillPause) else { return }
+
+        isAcknowledgingFillPause = true
+        notificationsViewModel.dismissNotification(item) { [weak self] _ in
+            guard let self else { return }
+            isAcknowledgingFillPause = false
+            updateFillPausedPrompt(step: currentStep, notifications: notificationsViewModel.notifications)
+        }
+    }
+
     func tubingFilled() {
         // Advance to exiting step to show loading screen
         currentStep = currentStep.nextStep() ?? .done
@@ -285,5 +326,11 @@ class TandemKitFillTubingViewModel: ObservableObject {
         {
             exitFillTubingMode()
         }
+    }
+}
+
+private extension NotificationItem {
+    var isFillPause: Bool {
+        type == .alert && notificationId == UInt32(AlertStatusResponse.AlertResponseType.FILL_TUBING_STILL_IN_PROGRESS.rawValue)
     }
 }

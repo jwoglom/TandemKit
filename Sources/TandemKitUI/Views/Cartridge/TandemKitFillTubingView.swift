@@ -311,7 +311,7 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(.secondary)
             }
 
-            if !viewModel.hasActiveNotifications {
+            if !viewModel.hasOtherNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(
                         "Press and hold the button on your pump to fill tubing.",
@@ -340,8 +340,7 @@ struct TandemKitFillTubingView: View {
                 .wizardCard(background: Color(.secondarySystemGroupedBackground))
             }
 
-            // Show active notifications warning during fill
-            if viewModel.hasActiveNotifications {
+            if viewModel.hasOtherNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Active Notifications", comment: "Notifications section header")
@@ -350,7 +349,7 @@ struct TandemKitFillTubingView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(viewModel.notificationsViewModel.notifications) { item in
+                        ForEach(viewModel.otherNotifications) { item in
                             NotificationRow(
                                 item: item,
                                 onDismiss: {
@@ -383,6 +382,19 @@ struct TandemKitFillTubingView: View {
                 .foregroundColor(guidanceColors.critical)
                 .wizardCard(background: guidanceColors.critical.opacity(0.1))
             }
+        }
+        .alert(
+            String(localized: "Release the Pump Button", comment: "Title of the prompt shown when the pump pauses a tubing fill"),
+            isPresented: $viewModel.isShowingFillPausedPrompt
+        ) {
+            Button(String(localized: "OK", comment: "OK button")) {
+                viewModel.acknowledgeFillPause()
+            }
+        } message: {
+            Text(
+                "Filling has been paused. Do you see insulin dripping from the cannula? Press OK to continue with or complete the fill.",
+                comment: "Message of the prompt shown when the pump pauses a tubing fill"
+            )
         }
         .task {
             // Start periodic notification checking when this step appears
