@@ -17,6 +17,10 @@ class TandemKitScanViewModel: ObservableObject {
     @Published var isConnectionError = false
     @Published var isSettingsError = false
     @Published var settingsErrorMessage: String?
+    @Published var connectionErrorTitle = String(
+        localized: "Error while connecting to device",
+        comment: "Connection error message"
+    )
     @Published var connectionErrorMessage: String?
     @Published var devicePinCode = ""
 
@@ -60,7 +64,6 @@ class TandemKitScanViewModel: ObservableObject {
         }
 
         isPromptingPincode = false
-        currentPhase = .pairing
 
         guard let pumpManager = pumpManager else {
             isConnectionError = true
@@ -80,9 +83,11 @@ class TandemKitScanViewModel: ObservableObject {
             return
         }
 
+        currentPhase = .pairing
+
         pumpManager.pairPump(code: devicePinCode, peripheral: peripheral) { error in
             if let error {
-                self.log.error("Error during pairing: \(error.localizedDescription)")
+                self.onPairFailure(error: error)
                 return
             }
 
@@ -165,14 +170,42 @@ class TandemKitScanViewModel: ObservableObject {
         return "\(summary)\n\n\(detail.localizedDescription)"
     }
 
+    /// Leaves the pairing step: the pump is not going to answer, and the scan has to run again for
+    /// the pairing code prompt (or the instructions before it) to come back.
     func onPairFailure(error: Error) {
         DispatchQueue.main.async {
             self.log.error("Pairing failed: \(error.localizedDescription)")
+            self.connectionErrorTitle = Self.pairingFailureTitle(for: error)
+            self.connectionErrorMessage = Self.pairingFailureMessage(for: error)
             self.isConnectionError = true
-            self.connectionErrorMessage = error.localizedDescription
             self.selectedPeripheral = nil
             self.devicePinCode = ""
+            self.currentPhase = .doubleTap
         }
+    }
+
+    /// Scanning waits for the alert to be dismissed: the pump may already be showing its pairing
+    /// state, and the code prompt is itself an alert.
+    func connectionErrorDismissed() {
+        startScan()
+    }
+
+    static func pairingFailureTitle(for error: Error) -> String {
+        if case PumpCommError.pairingCodeRejected = error {
+            return String(
+                localized: "Pairing Code Not Accepted",
+                comment: "Title of the error when the pump did not accept the pairing code"
+            )
+        }
+        return String(localized: "Pairing Failed", comment: "Title of the error when pairing with the pump did not complete")
+    }
+
+    static func pairingFailureMessage(for error: Error) -> String {
+        let description = error.localizedDescription
+        guard let suggestion = (error as? LocalizedError)?.recoverySuggestion, !suggestion.isEmpty else {
+            return description
+        }
+        return "\(description)\n\n\(suggestion)"
     }
 }
 

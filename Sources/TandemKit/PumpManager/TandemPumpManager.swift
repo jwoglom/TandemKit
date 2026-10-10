@@ -1587,7 +1587,13 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     func pairPump(code: String, peripheral: CBPeripheral, completion: @escaping (Error?) -> Void) {
         state.pumpState.pincode = code
-        bluetooth.connect(peripheral, completion: completion)
+        bluetooth.connect(peripheral) { [weak self] error in
+            // A code the pump refused is not kept for a later attempt to reuse, unless a newer attempt has replaced it.
+            if error != nil, self?.state.pumpState.pincode == code {
+                self?.state.pumpState.pincode = nil
+            }
+            completion(error)
+        }
     }
 
     public func prepareForDeactivation(_ completion: @escaping (Error?) -> Void) {

@@ -61,8 +61,11 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
 
         let error = try harness.pair(driver, with: scan, code: "654321")
 
-        XCTAssertNotNil(error, "a wrong pairing code must fail pairPump")
+        guard let error, case PumpCommError.pairingCodeRejected = error else {
+            return XCTFail("a wrong code must fail pairPump as pairingCodeRejected, got \(String(describing: error))")
+        }
         XCTAssertNil(driver.manager.state.pumpState.derivedSecret)
+        XCTAssertNil(driver.manager.state.pumpState.pincode, "a refused code is not kept")
         XCTAssertFalse(driver.manager.state.isConnected)
         let snapshot = try harness.client.snapshot()
         XCTAssertFalse(snapshot.auth.authenticated)
@@ -71,6 +74,14 @@ final class PairingIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertFalse(
             responses.isEmpty,
             "the refusal must come from the pump having run JPAKE, not from silence"
+        )
+
+        // The pump drops the link on a refused code; the driver must not reconnect and run JPAKE again with it.
+        Thread.sleep(forTimeInterval: 2)
+        XCTAssertEqual(
+            try authRequests.filter { $0.opcode == Int(Jpake1aRequest.props.opCode) }.count,
+            1,
+            "a refused code must not be retried on its own"
         )
     }
 

@@ -578,6 +578,17 @@
         }
       }
     },
+    "Check the 6-digit PIN printed inside the pump's cartridge area, then try pairing again." : {
+      "comment" : "Recovery suggestion when the pump did not accept the pairing code",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the 6-digit PIN printed inside the pump's cartridge area, then try pairing again."
+          }
+        }
+      }
+    },
     "Checked at" : {
       "comment" : "Text for pump time synced at",
       "localizations" : {
@@ -2175,6 +2186,28 @@
         }
       }
     },
+    "Pairing Code Not Accepted" : {
+      "comment" : "Title of the error when the pump did not accept the pairing code",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing Code Not Accepted"
+          }
+        }
+      }
+    },
+    "Pairing Failed" : {
+      "comment" : "Title of the error when pairing with the pump did not complete",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing Failed"
+          }
+        }
+      }
+    },
     "Pairing with " : {
       "comment" : "Pairing with device prefix text",
       "localizations" : {
@@ -3361,6 +3394,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The pairing code is located on the inside of the cartridge area labeled as 'PIN' and consists of six numbers."
+          }
+        }
+      }
+    },
+    "The pump did not accept the pairing code." : {
+      "comment" : "Error shown when the pump ends pairing at the key confirmation step, which is what a wrong pairing code looks like",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pump did not accept the pairing code."
           }
         }
       }

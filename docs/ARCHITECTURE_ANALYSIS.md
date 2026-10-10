@@ -135,6 +135,12 @@ A successful exchange yields `derivedSecret` and `serverNonce`, which are stored
 along with `peripheralUuid` and the pairing code. The signing key is
 `Hkdf.build(nonce: serverNonce, keyMaterial: derivedSecret)` (`PumpState.getAuthKey()`).
 
+The pump checks the code only at `Jpake4KeyConfirmation`, and a Mobi answers a wrong one by dropping
+the link. On a first pairing an unanswered round 4, or a digest that does not match, fails the connect
+with `PumpCommError.pairingCodeRejected`; every other failure is `noResponse`. `pairPump` forgets a code
+whose attempt failed, and `connectIfNeeded` refuses a pump with no derived secret, so nothing but
+`pairPump` runs a first pairing.
+
 The legacy 16-character pump-challenge pairing is not implemented. `CentralChallenge` and
 `PumpChallenge` exist as message types and have serialization tests, but no builder or flow uses
 them.

@@ -656,17 +656,29 @@ extension TandemPeripheralManager {
                 JpakeAuthBuilder.clearInstance()
 
                 let pincode = pumpManager.state.pumpState.pincode ?? self.fallbackPairingCode
+                let isFirstPairing = pumpManager.state.pumpState.derivedSecret == nil
                 if let derivedSecret = pumpManager.state.pumpState.derivedSecret {
                     authBuilder = JpakeAuthBuilder.initializeWithDerivedSecret(pairingCode: pincode, derivedSecret: derivedSecret)
                 } else {
                     authBuilder = JpakeAuthBuilder.initializeWithPairingCode(pincode)
                 }
 
+                // Only a paired pump's reconnects are limited; a first pairing is the user's own attempt.
+                func failHandshake(_ error: PumpCommError) {
+                    if !isFirstPairing {
+                        bluetoothManager.recordJpakeFailure()
+                    }
+                    failSetup(error)
+                }
+
                 while let request = authBuilder.nextRequest() {
                     guard let response = write(request) else {
-                        logger.error("Failed to send JPAKE confirm")
-                        bluetoothManager.recordJpakeFailure()
-                        failSetup(PumpCommError.noResponse)
+                        logger.error("No answer to \(type(of: request)) during JPAKE")
+                        // The pump checks the code only at key confirmation, and a Mobi answers a wrong
+                        // one by dropping the link.
+                        failHandshake(isFirstPairing && request is Jpake4KeyConfirmationRequest
+                            ? PumpCommError.pairingCodeRejected
+                            : PumpCommError.noResponse)
                         return
                     }
 
@@ -684,8 +696,9 @@ extension TandemPeripheralManager {
 
                     // Must complete the connect attempt, otherwise connectIfNeeded blocks for the
                     // full connectTimeout and stalls every queued command behind it.
-                    bluetoothManager.recordJpakeFailure()
-                    failSetup(PumpCommError.noResponse)
+                    failHandshake(isFirstPairing && authBuilder.rejectedAtKeyConfirmation()
+                        ? PumpCommError.pairingCodeRejected
+                        : PumpCommError.noResponse)
                     return
                 }
 

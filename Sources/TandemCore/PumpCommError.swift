@@ -9,6 +9,7 @@ public enum PumpCommError: Error {
     case pumpFault
     case notImplemented
     case pumpChallengeError
+    case pairingCodeRejected
     case invalidPacket
     case jpakeUnavailable
     case requestConstructionFailed(reason: String)
@@ -76,6 +77,11 @@ extension PumpCommError: LocalizedError {
             return String(
                 localized: "Pump challenge error",
                 comment: "Error shown when we cannot perform crypto challenge operations to pair"
+            )
+        case .pairingCodeRejected:
+            return String(
+                localized: "The pump did not accept the pairing code.",
+                comment: "Error shown when the pump ends pairing at the key confirmation step, which is what a wrong pairing code looks like"
             )
         case .jpakeUnavailable:
             return String(
@@ -168,6 +174,11 @@ extension PumpCommError: LocalizedError {
             return String(
                 localized: "This feature requires additional pump message implementation",
                 comment: "Recovery suggestion when a feature is not implemented"
+            )
+        case .pairingCodeRejected:
+            return String(
+                localized: "Check the 6-digit PIN printed inside the pump's cartridge area, then try pairing again.",
+                comment: "Recovery suggestion when the pump did not accept the pairing code"
             )
         case .jpakeUnavailable:
             return String(
