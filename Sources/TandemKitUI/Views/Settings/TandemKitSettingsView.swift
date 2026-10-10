@@ -390,6 +390,22 @@ struct TandemKitSettingsView: View {
                     action: { viewModel.openPumpInformation() }
                 )
 
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Temp basal limit", comment: "Label for the row showing the pump's highest temp basal")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(viewModel.tempBasalLimitText)
+                            .foregroundColor(.secondary)
+                    }
+                    if let warning = viewModel.tempBasalCeilingWarning {
+                        Text(warning)
+                            .font(.footnote)
+                            .foregroundColor(guidanceColors.warning)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
                 if viewModel.controlIQEnabled, let mode = viewModel.controlIQUserMode {
                     HStack {
                         Text("Control-IQ User mode", comment: "Text for Control-IQ user mode")

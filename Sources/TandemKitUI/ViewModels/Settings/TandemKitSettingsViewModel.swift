@@ -88,11 +88,45 @@ class TandemKitSettingsViewModel: ObservableObject {
     /// DIY algorithm is never gated, so a pump already running Control-IQ stays recoverable.
     @Published var controlIQSupportEnabled: Bool = false
     @Published var quickBolusButtonSupportEnabled: Bool = false
+    @Published var tempBasalCeiling: TempBasalCeiling?
 
     /// Whether to warn that Control-IQ is running open-loop for want of a CGM. Only a pump we know
     /// has no sensor session earns the warning; an unknown session state does not.
     var showsNoCGMConnectedBanner: Bool {
         useControlIQ && isCGMActiveOnPump == false
+    }
+
+    var tempBasalLimitText: String {
+        String(
+            localized: "Up to \(TempBasalCeiling.maximumPercent)% of scheduled basal",
+            comment: "Value of the temp basal limit row: the pump's highest temp basal, as a percent of the scheduled basal rate"
+        )
+    }
+
+    var tempBasalCeilingWarning: String? {
+        guard let ceiling = tempBasalCeiling else { return nil }
+        let segments = ceiling.cappedSegments.map { segment in
+            String(
+                localized: "\(Self.timeOfDay(segment.startTime))–\(Self.timeOfDay(segment.endTime)): \(Self.basalRate(segment.ceiling)) U/hr",
+                comment: "One time range of the basal schedule and the highest temp basal the pump runs in it"
+            )
+        }
+        return String(
+            localized: "Your maximum basal rate is \(Self.basalRate(ceiling.maxBasal)) U/hr, but the pump can't run a temp basal above \(TempBasalCeiling.maximumPercent)% of the scheduled rate. At these times, temp basals are capped:\n\(segments.joined(separator: "\n"))\nAsk your care team before changing your basal settings.",
+            comment: "Warning under the temp basal limit row when the maximum basal rate is above 250% of part of the basal schedule; ends with the capped time ranges, one per line"
+        )
+    }
+
+    private static func timeOfDay(_ secondsFromMidnight: TimeInterval) -> String {
+        let minutes = Int((secondsFromMidnight / 60).rounded())
+        return String(format: "%02d:%02d", minutes / 60, minutes % 60)
+    }
+
+    private static func basalRate(_ unitsPerHour: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: unitsPerHour as NSNumber) ?? String(format: "%.2f", unitsPerHour)
     }
 
     private var numberFormatter: NumberFormatter = {
@@ -151,6 +185,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         showPumpTimeSyncWarning = pumpManager?.state.showPumpTimeSyncWarning ?? false
         basalProfileUpdateStatus = pumpManager?.state.basalProfileUpdateStatus ?? .none
         basalDose = pumpManager?.state.basalDose
+        tempBasalCeiling = pumpManager?.tempBasalCeiling
 
         if let pumpManager {
             pumpManager.addStatusObserver(self, queue: .main)
@@ -454,6 +489,7 @@ extension TandemKitSettingsViewModel: PumpManagerStatusObserver {
             self.quickBolusEnabled = pumpManager.state.quickBolusEnabled
             self.algorithmModeText = self.useControlIQ ? "CIQ" : self.algorithmName
             self.basalDose = pumpManager.state.basalDose
+            self.tempBasalCeiling = pumpManager.tempBasalCeiling
 
             if pumpManager.state.basalDose.type == .suspend {
                 self.suspendResumeText = String(localized: "Resume Insulin Delivery", comment: "resume delivery")

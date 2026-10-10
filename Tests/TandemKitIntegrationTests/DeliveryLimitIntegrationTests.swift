@@ -222,4 +222,41 @@ final class DeliveryLimitIntegrationTests: ConformanceTestCase {
         }
         XCTAssertEqual(driver.manager.state.maxBolusLimitMilliunits, 8000)
     }
+
+    // MARK: - L7
+
+    /// The pump refuses a temp rate above 250% of its profile rate, so a max basal above that is cut
+    /// to the ceiling: the pump runs it and the host is told the rate that runs.
+    func testATempBasalAboveTheCeilingRunsAtTwoAndAHalfTimesTheProfileAndIsReportedSo() throws {
+        let driver = try startDriverWithSchedule()
+        XCTAssertNoThrow(try syncDeliveryLimits(maxBasal: 3.0, maxBolus: 8).get())
+        XCTAssertEqual(driver.manager.tempBasalCeiling?.cappedSegments.map(\.ceiling), [2.5])
+        let batchesBefore = allPumpEventBatches.count
+
+        XCTAssertNil(try enactTempBasal(unitsPerHour: 3.0, duration: .minutes(30)))
+
+        let basal = try harness.client.snapshot().basal
+        XCTAssertTrue(basal.tempActive)
+        XCTAssertEqual(basal.tempPercent, 250)
+        XCTAssertEqual(basal.tempRate, 2.5, accuracy: 1e-9)
+        let reported = eventsSince(batchesBefore).compactMap(\.dose).filter { $0.type == .tempBasal }
+        XCTAssertEqual(reported.map(\.unitsPerHour), [2.5], "\(reported)")
+        let (loop, trio) = feedOracles(trio: TrioDoseStoreOracle(maxBasal: 3.0))
+        XCTAssertEqual(loop.doses.filter { $0.dose.type == .tempBasal }.map(\.dose.unitsPerHour), [2.5])
+        XCTAssertEqual(trio.tempBasals.compactMap(\.tempBasalRate), [2.5])
+    }
+
+    /// pumpX2: the pump answers a SetTempRateRequest above 250% with an error.
+    func testThePumpRefusesATempRateAboveTwoAndAHalfTimesItsProfile() throws {
+        let driver = try startDriverWithSchedule()
+        let box = ResultBox<SetTempRateResponse?>()
+        driver.bluetooth.ensureConnected { _ in
+            box.set(driver.bluetooth.write(SetTempRateRequest(minutes: 30, percent: 251)))
+        }
+
+        let response = try XCTUnwrap(try box.wait("SetTempRateRequest", timeout: commandTimeout))
+
+        XCTAssertFalse(response.isStatusOK)
+        XCTAssertFalse(try harness.client.snapshot().basal.tempActive)
+    }
 }
