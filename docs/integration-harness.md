@@ -324,6 +324,17 @@ Both were latent on real hardware because a Mobi negotiates a large MTU and most
 responses fit one notification; faketandem fragments every response into 20-byte
 notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
+## When CI does not run
+
+Runner minutes, the macOS ones above all, are spent only on work that can still tell something new:
+
+- **Merged or closed pull request.** `cancel-on-close.yml` cancels whatever is queued or running for the pull request's head. The merge's own push run on `dev` is a different concurrency group and carries on, as the check of the merged state.
+- **Superseded commit.** Both workflows cancel an earlier run of the same pull request or of `dev` when a newer one starts (`concurrency`).
+- **Documentation only.** A change whose files are all `docs/**`, `*.md` or `LICENSE*` skips both workflows.
+- **Tree already passed.** Each workflow's `plan` job (`scripts/ci/plan.sh`) skips the run when this workflow already passed on the same tree and the same faketandem and Trio revisions: a `dev` push of a merge whose pull request was tested on the current `dev`, or a `dev` merge into a branch that changed nothing. The pass is the `ci-passed-<workflow>-<hash>` artifact the `passed` job uploads when every job succeeded; it lasts 14 days.
+
+A manual `workflow_dispatch` and a re-run always run, and a plan step that cannot decide runs everything. A skipped run shows its reason in the `plan` job's summary.
+
 ## Known emulator gaps
 
 None open. One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows

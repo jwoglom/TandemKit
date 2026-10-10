@@ -1,0 +1,23 @@
+name: Record that the workflow passed
+description: >-
+  Uploads the marker artifact whose name ci-plan looked for, so a later run on the same tree and
+  external checkouts is skipped. Call it from a job that runs only after every other job succeeded.
+
+inputs:
+  marker:
+    description: The ci-plan `marker` output.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Write the marker
+      shell: bash
+      run: echo "${GITHUB_SHA} ${GITHUB_RUN_ID}" > ci-passed.txt
+
+    - name: Upload the marker
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.marker }}
+        path: ci-passed.txt
+        retention-days: 14

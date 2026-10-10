@@ -1,0 +1,35 @@
+name: Cancel CI on close
+
+# A merge starts the push run for dev in a concurrency group of its own, so the pull request's runs
+# keep going, and on the macOS runners they can hold up the push run. Merged or abandoned, nothing
+# still running for the pull request's head can matter any more.
+#
+# pull_request_target so a fork's token can cancel too; it checks nothing out.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    name: cancel the pull request's runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel runs that have not finished
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          for status in queued in_progress waiting pending requested; do
+            gh api --paginate "repos/${REPO}/actions/runs?event=pull_request&head_sha=${HEAD_SHA}&status=${status}" \
+              --jq '.workflow_runs[].id'
+          done | sort -u | while read -r id; do
+            echo "Cancelling run ${id} of #${PR_NUMBER}"
+            gh api -X POST "repos/${REPO}/actions/runs/${id}/cancel" > /dev/null || echo "Run ${id} had already finished"
+          done
