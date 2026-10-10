@@ -148,61 +148,12 @@ jobs:
           TandemKit/scripts/ci/background.sh start build bash -c \
             'TandemKit/scripts/test-local.sh build -quiet && TandemKit/scripts/integration-test.sh build -quiet'
 
-      # A change that needs an emulator change pushes both under one branch name, so a pull request
-      # tests against it; without one, the emulator's default branch as before.
-      - name: Pick the faketandem ref
-        id: faketandem-ref
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          ref="${FAKETANDEM_REF}"
-          if [[ -z "${ref}" && -n "${HEAD_REF}" ]] \
-            && git ls-remote --exit-code --heads https://github.com/jwoglom/faketandem "refs/heads/${HEAD_REF}" > /dev/null; then
-            ref="${HEAD_REF}"
-          fi
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
-          echo "faketandem ref: ${ref:-<default branch>}"
-
-      - name: Checkout faketandem
-        uses: actions/checkout@v6
-        with:
-          repository: jwoglom/faketandem
-          ref: ${{ steps.faketandem-ref.outputs.ref }}
-          path: faketandem
-          fetch-depth: 1
-
-      # Before Go 1.24 the internal linker wrote no LC_UUID, and this macOS's dyld refuses such a
-      # binary at launch (golang/go#68678). faketandem vendors its modules: nothing to cache.
-      - name: Set up Go
-        uses: actions/setup-go@v7
-        with:
-          go-version: stable
-          cache: false
-
       # faketandem runs pumpX2's jpake-server from the cliparser jar for fresh pairings.
-      - name: Set up Java
-        uses: actions/setup-java@v6
+      - name: Build faketandem
+        uses: ./TandemKit/.github/actions/faketandem
         with:
-          distribution: temurin
-          java-version: '17'
-
-      # The Makefile pins the cliparser version, so it is the whole cache key.
-      - name: Cache the pumpX2 cliparser jar
-        uses: actions/cache@v6
-        with:
-          path: faketandem/third_party
-          key: pumpx2-cliparser-${{ hashFiles('faketandem/Makefile') }}
-
-      - name: Build faketandem and fetch the pumpX2 cliparser jar
-        working-directory: faketandem
-        run: |
-          set -euo pipefail
-          if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
-            make jar
-          fi
-          ls -l third_party
-          mkdir -p "$(dirname "${FAKETANDEM_BIN}")"
-          go build -o "${FAKETANDEM_BIN}" .
+          ref: ${{ env.FAKETANDEM_REF }}
+          binary: ${{ env.FAKETANDEM_BIN }}
 
       - name: Finish building TandemKit with the virtual pump
         run: TandemKit/scripts/ci/background.sh wait build
@@ -245,3 +196,82 @@ jobs:
             ${{ env.LOG_DIR }}/faketandem.log
             ${{ env.LOG_DIR }}/xcodebuild.log
             ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult
+
+  # Trio itself, built with this TandemKit on the virtual pump, in the simulator against faketandem.
+  # scripts/trio-test.sh seeds Trio with an unpaired Tandem pump and launches it with the address of
+  # TandemKit's control channel (VirtualPumpControl); TrioIntegrationTests drive the driver inside
+  # Trio through it and compare what Trio stored with TrioDoseStoreOracle's prediction.
+  trio:
+    name: Trio in the simulator (faketandem)
+    needs: unit
+    runs-on: [self-hosted, macOS]
+    # Trio, its LoopKit and the other kits build from source on every run.
+    timeout-minutes: 120
+    env:
+      FAKETANDEM_DIR: ${{ github.workspace }}/faketandem
+      FAKETANDEM_BIN: ${{ github.workspace }}/trio-logs/faketandem
+      FAKETANDEM_REF: ${{ github.event.inputs.faketandem_ref || '' }}
+      LOG_DIR: ${{ github.workspace }}/trio-logs
+      TRIO_DIR: ${{ github.workspace }}/trio
+      TRIO_DERIVED_DATA: ${{ github.workspace }}/TrioDerivedData
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          path: TandemKit
+          fetch-depth: 1
+
+      - name: Set up Xcode and a simulator
+        uses: ./TandemKit/.github/actions/setup-simulator
+
+      - name: Cache SwiftPM artifacts
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.DERIVED_DATA_PATH }}/SourcePackages
+            ~/.swiftpm
+          key: ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-${{ hashFiles('TandemKit/TandemKit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-${{ env.XCODE_VERSION }}-tandemkit-spm-
+
+      # For the TrioIntegrationTests bundle, which builds in TandemKit's own project like the
+      # integration tests; Trio builds its LoopKit from its submodule.
+      - name: Stage LoopKit frameworks
+        uses: ./TandemKit/.github/actions/loopkit-frameworks
+        with:
+          derived-data-path: ${{ env.DERIVED_DATA_PATH }}
+          destination: ${{ env.SIMULATOR_DESTINATION }}
+          xcode-version: ${{ env.XCODE_VERSION }}
+
+      - name: Check out Trio with this TandemKit
+        uses: ./TandemKit/.github/actions/checkout-trio
+        with:
+          tandemkit-ref: ${{ github.sha }}
+
+      - name: Build faketandem
+        uses: ./TandemKit/.github/actions/faketandem
+        with:
+          ref: ${{ env.FAKETANDEM_REF }}
+          binary: ${{ env.FAKETANDEM_BIN }}
+
+      - name: Build Trio and TrioIntegrationTests with the virtual pump
+        run: TandemKit/scripts/trio-test.sh build -quiet
+
+      - name: Wait for the simulator to finish booting
+        run: xcrun simctl bootstatus "${SIMULATOR_UDID}" -b || true
+
+      - name: Run TrioIntegrationTests against Trio and faketandem
+        run: TandemKit/scripts/trio-test.sh test -disableAutomaticPackageResolution
+
+      - name: Check that the Trio tests actually ran
+        run: TandemKit/scripts/ci/check-test-count.py "${LOG_DIR}/xcodebuild.log" --label TrioIntegrationTests --no-skips
+
+      - name: Upload logs, results and Trio's store (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-trio-test-artifacts
+          path: |
+            xcodebuild-loopkit.log
+            ${{ env.LOG_DIR }}
+            !${{ env.LOG_DIR }}/faketandem
