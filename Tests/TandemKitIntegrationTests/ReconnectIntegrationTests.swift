@@ -85,6 +85,20 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(try harness.requestLog(since: logStart).filter { $0.kind == "connection" }.count, 0)
     }
 
+    /// Nothing else asks for a connection until the host's next command (jwoglom/tandemkit-stress#4).
+    func testRelaunchedDriverReconnectsOnItsOwnWhenBluetoothWasOnBeforeItWasAttached() throws {
+        let first = makeDriver()
+        try harness.pair(first)
+        let persisted = first.manager.state.rawValue
+        try shutDownDriver()
+
+        let relaunched = makeDriver(state: TandemPumpManagerState(rawValue: persisted), poweredOnBeforeAttach: true)
+
+        try IntegrationWait.until("the relaunched driver to reconnect without a command", timeout: 30) {
+            try relaunched.manager.state.isConnected && harness.client.snapshot().auth.authenticated
+        }
+    }
+
     /// The host relaunches: a new manager built from the persisted rawState, with no pairing code
     /// re-entered, must reach the pump on its first command.
     func testRelaunchedDriverReconnectsFromPersistedStateOnTheNextCommand() throws {
