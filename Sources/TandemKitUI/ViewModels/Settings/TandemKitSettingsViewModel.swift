@@ -96,13 +96,6 @@ class TandemKitSettingsViewModel: ObservableObject {
         useControlIQ && isCGMActiveOnPump == false
     }
 
-    var tempBasalLimitText: String {
-        String(
-            localized: "Up to \(TempBasalCeiling.maximumPercent)% of scheduled basal",
-            comment: "Value of the temp basal limit row: the pump's highest temp basal, as a percent of the scheduled basal rate"
-        )
-    }
-
     var tempBasalCeilingWarning: String? {
         guard let ceiling = tempBasalCeiling else { return nil }
         let segments = ceiling.cappedSegments.map { segment in
@@ -113,7 +106,7 @@ class TandemKitSettingsViewModel: ObservableObject {
         }
         return String(
             localized: "Your maximum basal rate is \(Self.basalRate(ceiling.maxBasal)) U/hr, but the pump can't run a temp basal above \(TempBasalCeiling.maximumPercent)% of the scheduled rate. At these times, temp basals are capped:\n\(segments.joined(separator: "\n"))\nAsk your care team before changing your basal settings.",
-            comment: "Warning under the temp basal limit row when the maximum basal rate is above 250% of part of the basal schedule; ends with the capped time ranges, one per line"
+            comment: "Notice shown when the maximum basal rate is above 250% of part of the basal schedule; ends with the capped time ranges, one per line"
         )
     }
 

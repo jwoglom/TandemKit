@@ -319,6 +319,17 @@ struct TandemKitSettingsView: View {
                 }
 
                 basalProfileUpdateNotice
+
+                if let warning = viewModel.tempBasalCeilingWarning {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Temp Basals Capped", comment: "title for the notice that the maximum basal rate is above what the pump runs as a temp basal")
+                            .font(Font.subheadline.weight(.bold))
+                            .foregroundColor(guidanceColors.warning)
+                        Text(warning)
+                            .font(Font.footnote.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }.padding(.vertical, 8)
+                }
             }
 
             Section(header: SectionHeader(label: String(
@@ -389,22 +400,6 @@ struct TandemKitSettingsView: View {
                     label: Text("Pump Information", comment: "Title for pump information"),
                     action: { viewModel.openPumpInformation() }
                 )
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Temp basal limit", comment: "Label for the row showing the pump's highest temp basal")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text(viewModel.tempBasalLimitText)
-                            .foregroundColor(.secondary)
-                    }
-                    if let warning = viewModel.tempBasalCeilingWarning {
-                        Text(warning)
-                            .font(.footnote)
-                            .foregroundColor(guidanceColors.warning)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
 
                 if viewModel.controlIQEnabled, let mode = viewModel.controlIQUserMode {
                     HStack {
