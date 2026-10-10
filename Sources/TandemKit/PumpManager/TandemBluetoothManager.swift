@@ -14,7 +14,15 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // Weak: the pump manager owns this bluetooth manager, so a strong back-reference here forms a
     // retain cycle that keeps a deleted TandemPumpManager (and its auto-reconnecting BLE session)
     // alive forever. StubPumpBluetooth already models this as weak.
-    public weak var pumpManager: TandemPumpManager?
+    public weak var pumpManager: TandemPumpManager? {
+        didSet {
+            guard oldValue == nil, pumpManager != nil else { return }
+            managerQueue.async { [weak self] in
+                guard let self, self.manager?.state == .poweredOn else { return }
+                self.autoReconnect()
+            }
+        }
+    }
 
     private(set) var manager: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -504,8 +512,18 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // So the UI stops blaming Bluetooth before the reconnect has even been attempted.
         pumpManager?.notifyDelegateStateUpdated()
 
+        autoReconnect()
+    }
+
+    /// On managerQueue, once Bluetooth is on and again once the pump manager is attached: the central can report
+    /// poweredOn before the manager holding the pump's identifier is attached to it.
+    private func autoReconnect() {
         guard isActive else {
             logger.info("Pump deactivated; not auto-reconnecting")
+            return
+        }
+        guard pumpManager != nil else {
+            logger.info("No pump manager attached yet; connecting once it is")
             return
         }
 
