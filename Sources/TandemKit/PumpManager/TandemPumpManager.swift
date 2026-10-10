@@ -150,6 +150,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     }
     private let silentToneManager = TandemSilentToneManager()
     var notificationBundle = NotificationBundle()
+    var unreportedInsulinOnBoard = UnreportedInsulinOnBoardMonitor()
 
     // Independent queue on which command watchdog timeouts fire. It must NOT be the BLE command
     // queue (otherwise a wedged command could starve its own watchdog), so a dedicated queue is used.
@@ -544,6 +545,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchDeliveryLimits()
                 self.fetchGlobalPumpSettings()
                 self.fetchPumpInformation()
+                self.fetchInsulinDuration()
 
                 // Same reason as lastSync below: stamping this after a pump that answered nothing
                 // would suppress the next attempt for 24 hours.
@@ -555,6 +557,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchGlobalPumpSettings()
             }
 
+            if self.state.pumpInsulinDuration == nil {
+                self.fetchInsulinDuration()
+            }
             self.enforceQuickBolusDisabled()
 
             // Ahead of the basal read, which looks segments up on the pump's clock.
@@ -564,6 +569,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.fetchBolusStatus(fromSync: true)
             self.finalizePendingBolus()
             self.fetchBasalStatus()
+            self.fetchInsulinOnBoard()
             self.fetchNotifications()
             self.fetchCGMSessionStatus()
 
@@ -764,7 +770,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 raw: event.raw,
                 eventDate: event.date,
                 automatic: activationType.isAutomatic,
-                isFinalized: false
+                isFinalized: false,
+                units: doseEntry.programmedUnits
             ))
 
             self.state.bolusDose = dose
@@ -2152,7 +2159,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
         let fetches = QualifyingEventFetch.fetches(for: events, context: context)
         guard !fetches.isEmpty else {
-            // Nothing to fetch (e.g. iobChange only) — don't spin up a command job just to
+            // Nothing to fetch (e.g. bg only) — don't spin up a command job just to
             // acknowledge; ack immediately.
             completion()
             return
@@ -2189,7 +2196,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
         QualifyingEventContext(
             apiVersion: state.pumpState.apiVersion,
             pumpModel: state.pumpState.pumpModel,
-            controlIQSupported: state.controlIQEnabled ?? false,
+            // Only a pump with Control-IQ answers its info read, whether it is on or off.
+            controlIQSupported: state.controlIQEnabled != nil,
             inProgressBolusId: state.bolusDose?.bolusId
         )
     }
@@ -2204,6 +2212,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
             fetchBasalStatus()
         case .bolusStatus:
             fetchBolusStatus(fromSync: false)
+        case .insulinDuration:
+            fetchInsulinDuration()
+        case .insulinOnBoard:
+            fetchInsulinOnBoard()
         case .reservoirStatus:
             fetchReservoirStatus()
         case .batteryStatus:
@@ -2285,8 +2297,11 @@ extension TandemPumpManager {
             events += inProgressBolusEvents().filter { !reported.contains($0.raw) }
         }
 
-        for event in events where event.dose?.type == .bolus && event.dose?.isMutable == false {
-            state.bolusReportLedger.markFinalized(raw: event.raw)
+        for event in events {
+            guard let dose = event.dose, dose.type == .bolus, !dose.isMutable else {
+                continue
+            }
+            state.bolusReportLedger.markFinalized(raw: event.raw, units: dose.deliveredUnits ?? dose.programmedUnits)
         }
         let heldTemp = state.basalDose
         state.reportedBasal.record(events, replacePendingEvents: replacePendingEvents) { dose in
