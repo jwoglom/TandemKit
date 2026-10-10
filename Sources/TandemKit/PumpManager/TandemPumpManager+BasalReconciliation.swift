@@ -344,7 +344,7 @@ extension TandemPumpManager {
             endDate: end,
             value: chunk.unitsPerHour,
             unit: .unitsPerHour,
-            deliveredUnits: (chunk.unitsPerHour * end.timeIntervalSince(start) / .hours(1) * 1000).rounded() / 1000,
+            deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(chunk.unitsPerHour * end.timeIntervalSince(start) / .hours(1)),
             description: "Basal from pump record \(chunk.sequenceNum)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: state.insulinType,

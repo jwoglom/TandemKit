@@ -66,6 +66,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case failedUpdatePumpProfile
     case pumpProfileBasalRateIsZero
     case tempBasalRateMismatch(expected: Double, actual: Double)
+    case unsupportedTempBasalDuration(minutes: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -120,6 +121,14 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
                 actual,
                 expected
             )
+        case let .unsupportedTempBasalDuration(minutes):
+            return String(
+                format: String(
+                    localized: "The pump cannot run a temporary basal rate for %d minutes",
+                    comment: "Error when a temp basal is requested for a duration the pump does not accept (minutes)"
+                ),
+                minutes
+            )
         }
     }
 
@@ -165,6 +174,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "A temporary basal rate is a percentage of the pump's basal rate. Check that the pump's active profile matches the basal rates in the app's settings.",
                 comment: "Recovery suggestion when the pump reads back a different temp basal rate than the one commanded"
+            )
+        case .unsupportedTempBasalDuration:
+            return String(
+                localized: "The pump runs a temporary basal rate for 15 minutes to 72 hours. Choose a duration in that range.",
+                comment: "Recovery suggestion when a temp basal is requested for a duration the pump does not accept"
             )
         }
     }

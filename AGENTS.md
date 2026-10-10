@@ -348,8 +348,11 @@ edit instead of at the next sync.
   via `SetMaxBolusLimitRequest`.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
-- A zero temp basal is always allowed for the duration asked, whatever the profile, sync or
-  update state below, since 0% of any profile is 0. Control-IQ and a running bolus still refuse it.
+- A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
+  of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
+- `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)
+  before connecting: the pump refuses one too, but only after the running temp is stopped. It sends
+  whole minutes and reports the temp for the minutes sent.
 - `enactTempBasal` refuses every other temp but a cancel until the first successful
   `syncBasalRateSchedule` sets `hasSyncedBasalRateSchedule`: a temp rate is a percent of the
   pump's profile, which until then may not be the app's (#443). `deleteSavedPumpState` clears it.
@@ -372,6 +375,13 @@ edit instead of at the next sync.
   host can only over-count, until the change. Segment changes come from the host's schedule on
   the pump's clock (`pumpSegmentChanges`), which is the pump's profile whenever non-zero temps
   are allowed.
+- A finalized temp basal's `deliveredUnits` is its rate times its run time, rounded to the pump's
+  0.001 U (`TandemPumpCapabilities.roundToReportingResolution`). It is computed: the pump reports no
+  volume for a temp.
+- A `.basal` marker carries the rate the pump runs with no temp (`scheduledBasalRateInForce`): the
+  `profileBasalRate` of a reading taken then, else the host's schedule on the pump's clock; while
+  skewed, the host's own, which the clock skew temp runs. Neither host counts a marker's rate (both
+  keep it zero-length), so it reaches only their records and the settings screen.
 - The pump rescales a running temp at each segment change, so `splitAtSegmentChanges` cuts its
   record there: finished at the change, and a new mutable part at `tempPercent` of the new rate.
   The first basal read after a change reports the cut; every path that finishes a temp
@@ -418,10 +428,6 @@ edit instead of at the next sync.
   `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the
   other sign). Setup sets it before the host adopts the manager, so the report waits for the
   delegate and its queue.
-- A `.basal` marker, and the scheduled basal dose behind it, carries the schedule at its own date
-  on the pump's clock (`pumpScheduledBasalRate`): the pump's profile rate then. Neither host counts
-  a marker's rate. What the driver compares with the host's count, the skew temp's target
-  included, stays on the phone's clock (`getScheduledBasalRate`).
 - There is **no IOB ceiling**: nothing in the driver polls `ControlIQIOBRequest` /
   `NonControlIQIOBRequest`, so `state.latestInsulinOnBoard` is never assigned. Wiring up
   IOB telemetry is a prerequisite for reinstating that check.

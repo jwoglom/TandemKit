@@ -12,6 +12,15 @@ public enum TandemPumpCapabilities {
         return [0.0] + stride(from: start, through: end, by: step).map { Double($0) / multiplier }
     }()
 
+    /// Round an insulin amount to the pump's native milliunit reporting resolution, stripping
+    /// Float32 representation noise (e.g. `Float(0.9)` = 0.89999997) without distorting genuine
+    /// partial deliveries (e.g. a cancelled bolus of 1.041 U). Round-to-**nearest** — NOT the
+    /// floor-to-command-grid `roundToSupportedBolusVolume`, which combined with the Float
+    /// undershoot could drop a whole increment and understate delivered IOB (the unsafe direction).
+    public static func roundToReportingResolution(_ units: Double) -> Double {
+        (units * 1000).rounded() / 1000
+    }
+
     // MARK: - Bolus delivery timing
 
     // Larger deliveries are faster -- a 10.05u bolus is almost twice as fast as a 9.95u one.

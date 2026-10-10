@@ -44,6 +44,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     // Tandem Mobi and t:slim X2: a temp rate is a whole percent of the profile basal, 0 - 250%
     internal static let maximumTempBasalPercent: Int = 250
+    /// The pump refuses a temp rate outside 15 minutes to 72 hours (pumpX2 `SetTempRateRequest`).
+    internal static let supportedTempBasalMinutes = 15 ... 72 * 60
 
     internal let pumpDelegate = WeakSynchronizedDelegate<PumpManagerDelegate>()
 
@@ -792,7 +794,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // From programming when delivery start was never seen: over by the initiation delay,
             // never under. Not the progress reporter's estimate, which is 0 U until a second
             // delivering status (#448).
-            let estimatedDelivered = HistoryToDoseMapper.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(
+            let estimatedDelivered = TandemPumpCapabilities.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(
                 in: stoppedAt.timeIntervalSince(bolusDose.deliveryStartDate ?? bolusDose.startDate),
                 ofBolus: bolusDose.value
             ))
@@ -872,6 +874,16 @@ public class TandemPumpManager: PumpManager, Pluggable {
         // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
         let isZeroTemp = !isCancel && unitsPerHour == 0
 
+        // Refused before anything is sent: the pump would refuse it after the running temp was stopped.
+        let minutes = Int(exactly: duration.minutes.rounded(.down)) ?? Int.max
+        guard isCancel || Self.supportedTempBasalMinutes.contains(minutes) else {
+            logger.error("[enactTempBasal] Blocked: the pump does not accept a temp basal of \(duration.minutes) min")
+            completion(.configuration(TandemPumpManagerValidationError.unsupportedTempBasalDuration(minutes: minutes)))
+            return
+        }
+        // The pump takes whole minutes, so the temp is reported for what it was sent.
+        let programmedDuration = TimeInterval.minutes(Double(minutes))
+
         guard isZeroTemp || getScheduledBasalRate() > 0 else {
             logger.error("No scheduled basal rate present or is 0, cannot enact temp basal")
             completion(.deviceState(PumpCommError.invalidScheduledBasalRate))
@@ -947,7 +959,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 || Int((absoluteRate * 1000).rounded()) == Int((self.getScheduledBasalRate() * 1000).rounded())
             if percent == 100, isCancel || hostCountsThePumpsRate {
                 self.logger.info("Enact completed! (no basal rate change)")
-                self.startScheduledBasalDose()
+                self.startScheduledBasalDose(reading: currentBasal)
                 if self.state.isPumpClockSkewed, let status = self.bluetooth.write(CurrentBasalStatusRequest()) {
                     self.maintainPumpClockSkewCompensation(status)
                 }
@@ -955,10 +967,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            let request = SetTempRateRequest(minutes: Int(duration.minutes), percent: percent)
+            let request = SetTempRateRequest(minutes: minutes, percent: percent)
             guard let response = self.bluetooth.write(request) else {
                 self.logger.error("Failed to set temp rate")
-                self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: duration)
+                self.adoptUnansweredTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration)
                 completion(.communication(PumpCommError.noResponse))
                 return
             }
@@ -966,7 +978,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             guard response.isStatusOK else {
                 self.logger
                     .error(
-                        "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(duration.minutes)min"
+                        "Failed to set temp rate - Status: \(response.status), percent: \(percent), duration: \(minutes)min"
                     )
                 completion(.communication(PumpCommError.invalidPacket))
                 return
@@ -978,7 +990,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                         readback,
                         expectedRate: absoluteRate,
                         percent: percent,
-                        duration: duration,
+                        duration: programmedDuration,
                         tempRateId: response.tempRateId,
                         completion: completion
                     )
@@ -988,7 +1000,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.logger.warning("No basal status after setting the temp basal; reporting it as commanded")
             }
 
-            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: duration, tempRateId: response.tempRateId)
+            self.recordTempBasal(rate: absoluteRate, percent: percent, duration: programmedDuration, tempRateId: response.tempRateId)
             self.logger.info("Temp basal enacted!")
             completion(nil)
         }
@@ -1083,11 +1095,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 completion(.deviceState(error))
                 return
             }
-            startScheduledBasalDose()
+            startScheduledBasalDose(reading: readback)
         case .suspend:
             observeDeliveryState(.suspend)
         default:
-            startScheduledBasalDose()
+            startScheduledBasalDose(reading: readback)
         }
         completion(.deviceState(error))
     }
@@ -1752,7 +1764,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 _ = self.bluetooth.write(StopTempRateRequest())
 
                 let dose = UnfinalizedDose(
-                    basalRate: self.pumpScheduledBasalRate(),
+                    basalRate: self.scheduledBasalRateInForce(),
                     insulinType: self.state.insulinType,
                     startDate: self.now
                 )
@@ -2145,9 +2157,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
 extension TandemPumpManager {
     /// Closes out a running temp basal dose at `now` and records scheduled basal from `now`.
-    func startScheduledBasalDose() {
+    func startScheduledBasalDose(reading: CurrentBasalStatusResponse? = nil) {
         settleDeliveryTransition()
-        let dose = UnfinalizedDose(basalRate: pumpScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
+        let dose = UnfinalizedDose(basalRate: scheduledBasalRateInForce(reading: reading), insulinType: state.insulinType, startDate: now)
 
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
@@ -2180,7 +2192,7 @@ extension TandemPumpManager {
 
         if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
             let dose = UnfinalizedDose(
-                basalRate: pumpScheduledBasalRate(at: basalEntry.endDate),
+                basalRate: scheduledBasalRateInForce(at: basalEntry.endDate),
                 insulinType: state.insulinType,
                 startDate: basalEntry.endDate
             )
@@ -2342,11 +2354,17 @@ extension TandemPumpManager {
         hostBasalSchedule.rate(at: date ?? now)
     }
 
-    /// The schedule at `date` read on the pump's clock: the rate the pump's profile has in force
-    /// then, whenever it holds the host's. By the offset, not `currentPumpTime`, a snapshot from the
-    /// last clock read.
-    func pumpScheduledBasalRate(at date: Date? = nil) -> Double {
-        getScheduledBasalRate(at: (date ?? now).addingTimeInterval(state.pumpClockOffset))
+    /// A `.basal` marker's rate: a `reading`'s profile rate, else the host's schedule on the pump's
+    /// clock. Skewed, the host's own, which the clock skew temp runs.
+    func scheduledBasalRateInForce(at date: Date? = nil, reading: CurrentBasalStatusResponse? = nil) -> Double {
+        let date = date ?? now
+        if state.isPumpClockSkewed {
+            return getScheduledBasalRate(at: date)
+        }
+        if let reading, reading.basalType != .suspend {
+            return reading.profileBasalRate
+        }
+        return getScheduledBasalRate(at: date.addingTimeInterval(state.pumpClockOffset))
     }
 
     var hostBasalSchedule: HostBasalSchedule {

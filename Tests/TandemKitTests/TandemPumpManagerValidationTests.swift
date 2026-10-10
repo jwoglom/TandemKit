@@ -873,41 +873,6 @@ import XCTest
         XCTAssertEqual(delegate.issuedAlerts.count, 0)
     }
 
-    // MARK: - Scheduled basal on the pump's clock
-
-    /// Phone at 13:58, in the 1.0 segment; the pump 4 minutes ahead, in its 2.0 one.
-    func testACancelReportsTheScheduledRateOnThePumpsClock() throws {
-        let bluetooth = StubPumpBluetooth()
-        let manager = makeBaselineManager(at: .hours(14) - .minutes(2), pumpMilliunits: 2000, bluetooth: bluetooth)
-        skewPumpClock(manager, minutes: 4)
-        let (delegate, queue) = attachDelegate(manager)
-
-        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
-
-        queue.sync {}
-        let marker = try XCTUnwrap(delegate.pumpEvents.compactMap(\.dose).last { $0.type == .basal })
-        XCTAssertEqual(marker.unitsPerHour, 2.0)
-        XCTAssertEqual(manager.state.basalDose.value, 2.0)
-    }
-
-    /// Ran out at 13:59, before the change; read at 14:01, after it.
-    func testATempThatRanOutIsFollowedByTheScheduledRateAtItsEnd() throws {
-        let manager = makeBaselineManager(at: .hours(14) + .minutes(1), pumpMilliunits: 2000, bluetooth: StubPumpBluetooth())
-        manager.state.basalDose = UnfinalizedDose(
-            tempRate: 0,
-            duration: .minutes(30),
-            automatic: true,
-            insulinType: .novolog,
-            startDate: at(.hours(14) - .minutes(31))
-        )
-
-        let marker = try XCTUnwrap(manager.getActivePumpEvents(endDate: manager.now).last?.dose)
-
-        XCTAssertEqual(marker.type, .basal)
-        XCTAssertEqual(marker.startDate, at(.hours(14) - .minutes(1)))
-        XCTAssertEqual(marker.unitsPerHour, 1.0)
-    }
-
     // MARK: - Setting the pump's clock
 
     private func writePumpTime(_ manager: TandemPumpManager) -> PumpManagerError? {
@@ -989,6 +954,132 @@ import XCTest
         XCTAssertEqual(highlight.state, .warning)
     }
     #endif
+
+    // MARK: - Temp basal duration
+
+    private func configurationError(_ error: PumpManagerError?) -> TandemPumpManagerValidationError? {
+        guard case let .configuration(underlying?) = error else { return nil }
+        return underlying as? TandemPumpManagerValidationError
+    }
+
+    /// A temp runs on the pump: refused after its stop, the host would still count it.
+    func testATempBasalUnderFifteenMinutesIsRefusedBeforeAnythingIsSent() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+        bluetooth.stubBasalPump(profileMilliunits: 1000, runningTempPercent: 150)
+
+        let error = enactTempBasal(manager, unitsPerHour: 2.0, for: .minutes(15) - 1)
+
+        XCTAssertEqual(configurationError(error), .unsupportedTempBasalDuration(minutes: 14))
+        XCTAssertEqual(bluetooth.sentMessages.count, 0)
+        XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
+    }
+
+    func testAZeroTempBasalUnderFifteenMinutesIsRefusedToo() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 0, for: .minutes(10))
+
+        XCTAssertEqual(configurationError(error), .unsupportedTempBasalDuration(minutes: 10))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testATempBasalOverSeventyTwoHoursIsRefused() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+
+        let error = enactTempBasal(manager, unitsPerHour: 2.0, for: .hours(72) + .minutes(1))
+
+        XCTAssertEqual(configurationError(error), .unsupportedTempBasalDuration(minutes: 72 * 60 + 1))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testATempBasalOfANonFiniteDurationIsRefused() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+
+        XCTAssertNotNil(configurationError(enactTempBasal(manager, unitsPerHour: 2.0, for: .infinity)))
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testTempBasalsOfFifteenMinutesAndSeventyTwoHoursGoOut() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(15)))
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.2, for: .hours(72)))
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.minutes), [15, 72 * 60])
+    }
+
+    func testATempBasalIsReportedForTheWholeMinutesSentToThePump() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30) + 40))
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.minutes), [30])
+        XCTAssertEqual(tempBasals(delegate, queue).last?.endDate, at(.hours(10) + .minutes(30)))
+        XCTAssertEqual(manager.state.basalDose.estimatedEndDate, at(.hours(10) + .minutes(30)))
+    }
+
+    // MARK: - The scheduled basal after a temp
+
+    private func scheduledBasalRates(_ delegate: MockPumpManagerDelegate, _ queue: DispatchQueue) -> [Double] {
+        queue.sync {}
+        return delegate.pumpEvents.compactMap(\.dose).filter { $0.type == .basal }.map(\.unitsPerHour)
+    }
+
+    /// The host's schedule reads 1.0 U/hr; the pump runs 0.8.
+    func testACancelReportsTheScheduledBasalAtThePumpsProfileRate() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
+        let (delegate, queue) = attachDelegate(manager)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+
+        XCTAssertEqual(scheduledBasalRates(delegate, queue), [0.8])
+        XCTAssertEqual(manager.state.basalDose.value, 0.8, accuracy: 0.0001)
+    }
+
+    /// From 13:40 for 15 minutes, read at 14:10, after the rise to 2.0 U/hr.
+    func testATempThatRanOutIsFollowedByTheScheduledBasalInForceAtItsEnd() throws {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(20), pumpMilliunits: 1000, bluetooth: bluetooth)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(15)))
+
+        manager.clock = ManualClock(at(.hours(14) + .minutes(10)))
+        let marker = try XCTUnwrap(manager.getActivePumpEvents(endDate: manager.now).last?.dose)
+
+        XCTAssertEqual(marker.type, .basal)
+        XCTAssertEqual(marker.startDate, at(.hours(14) - .minutes(5)))
+        XCTAssertEqual(marker.unitsPerHour, 1.0, accuracy: 0.0001)
+    }
+
+    /// Phone 13:58, pump 14:02.
+    func testTheScheduledBasalRateInForceIsReadOnThePumpsClock() {
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(2), pumpMilliunits: 2000, bluetooth: StubPumpBluetooth())
+        skewPumpClock(manager, minutes: 4)
+
+        XCTAssertEqual(manager.scheduledBasalRateInForce(), 2.0, accuracy: 0.0001)
+    }
+
+    func testTheScheduledBasalRateInForceIsAReadingsProfileRate() {
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: StubPumpBluetooth())
+
+        XCTAssertEqual(manager.scheduledBasalRateInForce(reading: status(profile: 800, current: 1200, bitmask: 0x02)), 0.8, accuracy: 0.0001)
+        XCTAssertEqual(manager.scheduledBasalRateInForce(reading: status(profile: 800, current: 0, bitmask: 0x01)), 1.0, accuracy: 0.0001)
+    }
+
+    /// Phone 13:55, pump 14:06 at 2.0: the skew temp runs the host's 1.0.
+    func testWhileThePumpClockIsSkewedTheScheduledBasalRateInForceIsTheHosts() {
+        let manager = makeSkewedManager(bluetooth: StubPumpBluetooth())
+
+        XCTAssertEqual(manager.scheduledBasalRateInForce(reading: status(profile: 2000, current: 2000, bitmask: 0)), 1.0, accuracy: 0.0001)
+    }
 
     func testDeletingSavedPumpStateForgetsTheBasalScheduleSync() {
         var state = TandemPumpManagerState(rawValue: [:])

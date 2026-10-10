@@ -136,7 +136,7 @@ extension TandemPumpManager {
     ) -> UnfinalizedDose {
         let crossedAChange = !pumpSegmentChanges(after: start, through: detectedAt).isEmpty
         let rate = crossedAChange
-            ? roundToSupportedBasalRate(unitsPerHour: pumpScheduledBasalRate(at: start) * Double(replacement.percent) / 100)
+            ? roundToSupportedBasalRate(unitsPerHour: getScheduledBasalRate(at: start.addingTimeInterval(state.pumpClockOffset)) * Double(replacement.percent) / 100)
             : replacement.rate
         return UnfinalizedDose(
             tempRate: rate,
@@ -172,7 +172,7 @@ extension TandemPumpManager {
         if pending.prior.type == .suspend {
             return UnfinalizedDose(resumeStartTime: pending.detectedAt, insulinType: state.insulinType)
         }
-        return UnfinalizedDose(basalRate: pumpScheduledBasalRate(at: pending.detectedAt), insulinType: state.insulinType, startDate: pending.detectedAt)
+        return UnfinalizedDose(basalRate: scheduledBasalRateInForce(), insulinType: state.insulinType, startDate: pending.detectedAt)
     }
 
     /// The last suspend or resume the host holds before `date`. The ledger misses one reported
@@ -266,7 +266,7 @@ extension TandemPumpManager {
             final = UnfinalizedDose(resumeStartTime: host.date, insulinType: state.insulinType)
         default:
             let start = tempBasalEnd ?? pending.detectedAt
-            final = UnfinalizedDose(basalRate: pumpScheduledBasalRate(at: start), insulinType: state.insulinType, startDate: start)
+            final = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: start), insulinType: state.insulinType, startDate: start)
             events.append(NewPumpEvent.basal(dose: final.toDoseEntry(), date: final.startDate))
         }
 
@@ -309,7 +309,7 @@ extension TandemPumpManager {
         let entry = last.toDoseEntry(isMutable: false, endDate: max(end, last.startDate), now: now)
         events += finished
         events.append(NewPumpEvent.tempBasal(dose: entry, date: entry.startDate))
-        let scheduled = UnfinalizedDose(basalRate: pumpScheduledBasalRate(at: entry.endDate), insulinType: state.insulinType, startDate: entry.endDate)
+        let scheduled = UnfinalizedDose(basalRate: scheduledBasalRateInForce(at: entry.endDate), insulinType: state.insulinType, startDate: entry.endDate)
         // Seen by a command's own reading, the command reports in this second; Trio orders two rows in one arbitrarily.
         if now.timeIntervalSince(entry.endDate) >= 1 {
             events.append(NewPumpEvent.basal(dose: scheduled.toDoseEntry(), date: scheduled.startDate))

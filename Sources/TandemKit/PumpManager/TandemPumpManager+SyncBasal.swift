@@ -321,7 +321,7 @@ extension TandemPumpManager {
     /// A temp basal is a percent of the profile rate, so a profile change rescales it (on hardware
     /// a 184% temp fell from 1.38 to 0.92 U/hr). Stopped, as OmnipodKit cancels delivery first.
     func restartBasalDoseAfterScheduleChange(previousRate: Double) {
-        let newRate = pumpScheduledBasalRate()
+        let newRate = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
         guard !state.useControlIQ, Int((newRate * 1000).rounded()) != Int((previousRate * 1000).rounded()) else {
             return
         }
@@ -350,7 +350,8 @@ extension TandemPumpManager {
             break
         }
 
-        // Even with no temp to stop: `basalDose` is what the Profile Basal row shows.
+        // Even with no temp to stop: `basalDose` is what the Profile Basal row shows. Not `status`'s
+        // rate: whether it reads the segment just written is unknown, and the write was read back.
         startScheduledBasalDose()
     }
 
