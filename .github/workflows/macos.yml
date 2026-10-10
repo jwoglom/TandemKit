@@ -230,9 +230,10 @@ jobs:
             ${{ env.LOG_DIR }}/TandemKitIntegrationTests.xcresult
 
   # Trio itself, built with this TandemKit on the virtual pump, in the simulator against faketandem.
-  # scripts/trio-test.sh seeds Trio with an unpaired Tandem pump and launches it with the address of
-  # TandemKit's control channel (VirtualPumpControl); TrioIntegrationTests drive the driver inside
-  # Trio through it and compare what Trio stored with TrioDoseStoreOracle's prediction.
+  # scripts/trio-launcher.py installs Trio for each test, seeded with an unpaired Tandem pump, and
+  # launches it with the address of TandemKit's control channel (VirtualPumpControl);
+  # TrioIntegrationTests drive the driver inside Trio through it and compare what Trio stored with
+  # TrioDoseStoreOracle's prediction.
   trio:
     name: Trio in the simulator (faketandem)
     needs: unit

@@ -289,24 +289,29 @@ Nothing in Trio changes for it:
 - `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
   no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
   SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
-- `scripts/trio-test.sh test` starts faketandem, installs Trio fresh, and writes into its data
-  container what a set-up install holds: `onboardingCompleted`, an unpaired Tandem pump manager
+- `scripts/trio-test.sh test` starts faketandem and `scripts/trio-launcher.py`, and hands the
+  launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
+  `TrioTestCase` asks the launcher for a new install of Trio before each test (`/fresh`), and a
+  test can stop and start it again on the same data (`/relaunch`). Each install's data container is
+  seeded with what a set-up install holds: `onboardingCompleted`, an unpaired Tandem pump manager
   (`PumpManagerState.plist`: `managerIdentifier` `TandemPumpManager`, empty `state`), both telemetry
-  streams off (Trio's default is on), and `settings/settings.json`. It launches Trio with
-  `TANDEMKIT_VIRTUAL_PUMP` and `TANDEMKIT_VIRTUAL_PUMP_CONTROL`, waits for the control port, and
-  runs the bundle with the port and the container path.
+  streams off (Trio's default is on), `settings/settings.json` and a 1 U/hr
+  `settings/basal_profile.json`. Trio is launched with `TANDEMKIT_VIRTUAL_PUMP` and
+  `TANDEMKIT_VIRTUAL_PUMP_CONTROL`, and the launcher answers once the control port accepts.
 - The tests reach the driver inside Trio through `VirtualPumpControl.Client`: `pair` (with a
   long-term key the test also gives faketandem, so only the quick-reconnect rounds run), `bolus`,
-  `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's completion.
-  Trio completes a batch once it has saved it, so a completed log is all in the store.
+  `syncBasalSchedule`, `tempBasal` (a duration of 0 cancels), `suspend`, `resume`, `sync`, `status`,
+  and `pumpEventBatches`, every batch handed to Trio with Trio's completion. Trio completes a batch
+  once it has saved it, so a completed log is all in the store.
 - They read Trio's Core Data store (`TrioCoreDataPersistentContainer.sqlite`, WAL) read-only in
   place (`TrioStore`), and compare its rows with `TrioDoseStoreOracle` fed the same batches, using
   the `bolusIncrement` and `maxBasal` Trio itself reads.
 
 The commands call the driver as Trio's code would, but not through Trio's own bolus or loop paths
 (`APSManager.enactBolus`, `determineBasal`), and Trio's loop does not run: it has no CGM.
-Logs (`trio.log` from the simulator's log stream, Trio's own `Documents/logs`, its store) land in
-`LOG_DIR`. The `trio` job in `.github/workflows/macos.yml` runs it on the self-hosted runners.
+`trio.log` (the simulator's log stream, every launch) and `trio-launcher.log` land in `LOG_DIR`, and
+each test's Trio `Documents/logs` and store in `LOG_DIR/<test>`. The `trio` job in
+`.github/workflows/macos.yml` runs it on the self-hosted runners.
 
 ## What the harness found
 

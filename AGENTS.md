@@ -54,10 +54,11 @@ exists only in a flagged build, which the `integration` job in `.github/workflow
 the `virtual-pump` job in `.github/workflows/linux.yml` both run.
 
 The same build carries `VirtualPumpControl`: with `TANDEMKIT_VIRTUAL_PUMP_CONTROL=<port>` in the
-host app's environment, the driver listens on 127.0.0.1 for a test to pair, bolus and sync it, and
-logs every batch it hands the host's delegate with the host's completion. `TrioIntegrationTests`
-(macOS only; `scripts/trio-test.sh`, the `trio` job) use it to run Trio itself in the simulator and
-compare its stored pump history with `TrioDoseStoreOracle`
+host app's environment, the driver listens on 127.0.0.1 for a test to make the host's pump calls
+(pair, sync, bolus, basal schedule, temp basal, suspend, resume), and logs every batch it hands the
+host's delegate with the host's completion. `TrioIntegrationTests` (macOS only; `scripts/trio-test.sh`,
+the `trio` job) use it to run Trio itself in the simulator, a new install per test from
+`scripts/trio-launcher.py`, and compare its stored pump history with `TrioDoseStoreOracle`
 ([docs/integration-harness.md](docs/integration-harness.md#trio-in-the-simulator)).
 
 Coverage that was dropped along with the code it tested (`PumpComm` fault taxonomy and retry
