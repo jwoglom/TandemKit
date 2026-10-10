@@ -130,9 +130,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
             XCTAssertEqual(dose.unitsPerHour, programmed, accuracy: 0.0001, "value is the programmed rate", file: file, line: line)
             XCTAssertEqual(dose.automatic, true, "a loop-commanded temp basal is automatic", file: file, line: line)
             XCTAssertFalse(dose.manuallyEntered, file: file, line: line)
-            XCTExpectFailure("jwoglom/TandemKit#451: temp basal deliveredUnits is value × hours with no rounding to the 0.001 U increment (UnfinalizedDose.toDoseEntry)") {
-                XCTAssertTrue(isOnMilliunitGrid(delivered), "temp basal deliveredUnits \(delivered) is on the 0.001 U increment", file: file, line: line)
-            }
+            XCTAssertTrue(isOnMilliunitGrid(delivered), "temp basal deliveredUnits \(delivered) is on the 0.001 U increment", file: file, line: line)
         default:
             XCTFail("unexpected dose type \(dose.type) for a finalized dose check", file: file, line: line)
         }

@@ -31,11 +31,8 @@ final class CancelConformanceTests: ConformanceTestCase {
     /// `endDate` is the pump's completion second rather than "within a tolerance".
     private static let bolusDeliveryRate = TandemPumpCapabilities.bolusSpeedUnder10U
     private static let bolusUnits = 3.0
-    /// The pump's reporting increment for both volumes and rates (`HistoryToDoseMapper`).
+    /// The pump's reporting increment for both volumes and rates (`TandemPumpCapabilities.roundToReportingResolution`).
     private static let reportingIncrement = 0.001
-    private static let tempBasalRoundingDefect = "jwoglom/TandemKit#451: the finalized temp basal's deliveredUnits is "
-        + "rate × elapsed hours at full Double precision (UnfinalizedDose.toDoseEntry), never rounded to the pump's "
-        + "0.001 U reporting increment"
 
     private static func deliverySeconds(forUnits units: Double) -> TimeInterval {
         TandemPumpCapabilities.estimatedBolusDuration(toDeliver: units)
@@ -123,7 +120,6 @@ final class CancelConformanceTests: ConformanceTestCase {
         programmedValue: Double,
         expectedDelivered: Double,
         automatic: Bool,
-        incrementFailure: String? = nil,
         _ what: String,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -136,21 +132,14 @@ final class CancelConformanceTests: ConformanceTestCase {
 
         let delivered = try XCTUnwrap(dose.deliveredUnits, "\(what): a finalized dose must carry deliveredUnits", file: file, line: line)
         XCTAssertEqual(delivered, expectedDelivered, accuracy: Self.reportingIncrement, "\(what): deliveredUnits is the actual amount", file: file, line: line)
-        let onTheIncrement = {
-            XCTAssertEqual(
-                delivered,
-                (delivered / Self.reportingIncrement).rounded() * Self.reportingIncrement,
-                accuracy: 1e-9,
-                "\(what): deliveredUnits \(delivered) is not on the pump's \(Self.reportingIncrement) U increment",
-                file: file,
-                line: line
-            )
-        }
-        if let incrementFailure {
-            XCTExpectFailure(incrementFailure, strict: true) { onTheIncrement() }
-        } else {
-            onTheIncrement()
-        }
+        XCTAssertEqual(
+            delivered,
+            (delivered / Self.reportingIncrement).rounded() * Self.reportingIncrement,
+            accuracy: 1e-9,
+            "\(what): deliveredUnits \(delivered) is not on the pump's \(Self.reportingIncrement) U increment",
+            file: file,
+            line: line
+        )
 
         XCTAssertEqual(dose.automatic, automatic, "\(what): automatic reflects the activation type", file: file, line: line)
         XCTAssertNotNil(dose.insulinType, "\(what): insulinType is set", file: file, line: line)
@@ -520,7 +509,6 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.tempRate,
             expectedDelivered: deliveredA,
             automatic: true,
-            incrementFailure: Self.tempBasalRoundingDefect,
             "temp basal A"
         )
 
@@ -618,7 +606,6 @@ final class CancelConformanceTests: ConformanceTestCase {
             programmedValue: Self.tempRate,
             expectedDelivered: expectedDelivered,
             automatic: true,
-            incrementFailure: Self.tempBasalRoundingDefect,
             "neutral over a running temp"
         )
 
