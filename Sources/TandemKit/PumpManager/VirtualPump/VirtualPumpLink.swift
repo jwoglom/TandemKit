@@ -176,7 +176,12 @@ final class SocketLink {
     }
 
     func send(_ message: [String: Any]) throws {
-        var line = try JSONSerialization.data(withJSONObject: message)
+        try send(line: JSONSerialization.data(withJSONObject: message))
+    }
+
+    /// One already-encoded JSON value; the newline is added here.
+    func send(line: Data) throws {
+        var line = line
         line.append(UInt8(0x0A))
         writeLock.lock()
         defer { writeLock.unlock() }
@@ -197,6 +202,17 @@ final class SocketLink {
 
     /// Next JSON object, or nil at EOF. `timeout` nil blocks indefinitely.
     func readMessage(timeout: TimeInterval?) throws -> [String: Any]? {
+        guard let line = try readLine(timeout: timeout) else {
+            return nil
+        }
+        guard let object = try JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            throw SocketPumpError.protocolError("not a JSON object: \(String(decoding: line, as: UTF8.self))")
+        }
+        return object
+    }
+
+    /// Next non-empty line, without its newline, or nil at EOF. `timeout` nil blocks indefinitely.
+    func readLine(timeout: TimeInterval?) throws -> Data? {
         while true {
             if let newline = buffer.firstIndex(of: 0x0A) {
                 let line = Data(buffer[..<newline])
@@ -204,10 +220,7 @@ final class SocketLink {
                 if line.isEmpty {
                     continue
                 }
-                guard let object = try JSONSerialization.jsonObject(with: line) as? [String: Any] else {
-                    throw SocketPumpError.protocolError("not a JSON object: \(String(decoding: line, as: UTF8.self))")
-                }
-                return object
+                return line
             }
 
             if let timeout {
@@ -260,6 +273,84 @@ final class SocketLink {
 
     deinit {
         close()
+    }
+}
+
+/// A TCP listener on 127.0.0.1 only, handing each accepted connection to `onAccept` on its own thread.
+final class SocketListener {
+    let port: UInt16
+    private let lock = NSLock()
+    private var fd: Int32
+
+    /// `port` 0 takes an ephemeral one, read back from `port`.
+    init(port: UInt16 = 0, name: String, onAccept: @escaping (SocketLink) -> Void) throws {
+        #if canImport(Glibc)
+        let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
+        #else
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        #endif
+        guard fd >= 0 else {
+            throw SocketPumpError.connectFailed("socket: \(String(cString: strerror(errno)))")
+        }
+        var one: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
+
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0, listen(fd, 8) == 0 else {
+            let reason = String(cString: strerror(errno))
+            Glue.close(fd)
+            throw SocketPumpError.connectFailed("bind/listen 127.0.0.1:\(port): \(reason)")
+        }
+
+        var assigned = sockaddr_in()
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &assigned) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                getsockname(fd, $0, &length)
+            }
+        }
+        self.port = UInt16(bigEndian: assigned.sin_port)
+        self.fd = fd
+
+        let thread = Thread {
+            while true {
+                let client = accept(fd, nil, nil)
+                guard client >= 0 else {
+                    return
+                }
+                let link = SocketLink(fd: client)
+                let connection = Thread { onAccept(link) }
+                connection.name = "\(name).connection"
+                connection.start()
+            }
+        }
+        thread.name = "\(name).accept"
+        thread.start()
+    }
+
+    /// Stops accepting; connections already handed out stay open.
+    func stop() {
+        lock.lock()
+        let fd = self.fd
+        self.fd = -1
+        lock.unlock()
+        guard fd >= 0 else {
+            return
+        }
+        Glue.shutdown(fd, Int32(SHUT_RDWR))
+        Glue.close(fd)
+    }
+
+    deinit {
+        stop()
     }
 }
 

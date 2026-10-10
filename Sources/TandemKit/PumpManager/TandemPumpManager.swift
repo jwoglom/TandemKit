@@ -240,6 +240,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
         self.clock = clock
         bluetooth.pumpManager = self
         logInitialization()
+        #if TANDEMKIT_VIRTUAL_PUMP
+        VirtualPumpControl.attach(self)
+        #endif
 
         // Every history log that streams in — telemetry, viewer fetches, probes — lands in the
         // session store, so later readers within the session don't go back to the pump for it.
@@ -2374,12 +2377,25 @@ extension TandemPumpManager {
             }
 
             for batch in batches {
+                #if TANDEMKIT_VIRTUAL_PUMP
+                let logged = VirtualPumpControl.willDeliver(
+                    batch.events,
+                    lastReconciliation: batch.lastReconciliation,
+                    replacePendingEvents: batch.replacePendingEvents,
+                    hostNow: self.clock.now,
+                    from: self
+                )
+                let completion: (Error?) -> Void = { VirtualPumpControl.delegateDidFinish(logged, error: $0, from: self) }
+                #else
+                let completion: (Error?) -> Void = { _ in }
+                #endif
                 delegate.pumpManager(
                     self,
                     hasNewPumpEvents: batch.events,
                     lastReconciliation: batch.lastReconciliation,
-                    replacePendingEvents: batch.replacePendingEvents
-                ) { _ in }
+                    replacePendingEvents: batch.replacePendingEvents,
+                    completion: completion
+                )
             }
         }
     }

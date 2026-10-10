@@ -216,12 +216,13 @@ jobs:
           TandemKit/scripts/test-local.sh test \
             -resultBundlePath "TandemKitTests-virtual-pump.xcresult" \
             -only-testing:TandemKitTests/VirtualCoreBluetoothTests \
+            -only-testing:TandemKitTests/VirtualPumpControlTests \
             -disableAutomaticPackageResolution \
             2>&1 | tee "xcodebuild-test-virtual-pump.log"
 
       # The whole test file is behind the flag, so a flag that did not take would pass empty.
       - name: Check that the virtual CoreBluetooth tests actually ran
-        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test-virtual-pump.log --label VirtualCoreBluetoothTests
+        run: TandemKit/scripts/ci/check-test-count.py xcodebuild-test-virtual-pump.log --label "virtual pump tests"
 
       - name: Run TandemKitIntegrationTests against faketandem
         run: TandemKit/scripts/integration-test.sh test -disableAutomaticPackageResolution
