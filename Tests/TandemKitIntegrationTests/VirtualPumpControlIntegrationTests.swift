@@ -88,7 +88,8 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(oracle.boluses.map(\.isMutable), [false])
         let finalized = try XCTUnwrap(driver.delegate.pumpEventBatches.flatMap(\.events).last { $0.dose?.type == .bolus })
         XCTAssertEqual(finalized.dose?.isMutable, false)
-        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, delivered, accuracy: 0.0005)
+        // On the wall clock the pump stops between milliunits, and reports whole ones.
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, delivered, accuracy: 0.001)
     }
 
     // MARK: - Helpers
