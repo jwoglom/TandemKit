@@ -20,6 +20,7 @@ public extension TandemPumpManager {
         syncOnboardingDeliveryLimits { limitsError in
             self.syncOnboardingBasalSchedule { basalError in
                 self.writeOnboardingSounds {
+                    self.disableOnboardingQuickBolus()
                     self.writePumpTime { timeError in
                         if let timeError {
                             self.logger.warning("Pump clock not set during setup: \(timeError.localizedDescription)")
@@ -101,6 +102,24 @@ private extension TandemPumpManager {
                 self.logger.warning("Pump sounds not set during setup: status \(response.status)")
                 return
             }
+        }
+    }
+
+    /// Otherwise the button stays live until the first sync, and a bolus from it reaches the host
+    /// only from history.
+    func disableOnboardingQuickBolus() {
+        guard !state.featureFlags.quickBolusButtonSupport else { return }
+
+        bluetooth.ensureConnected { error in
+            if let error {
+                self.logger.warning("Quick bolus button not checked during setup: \(error.localizedDescription)")
+                return
+            }
+            guard self.fetchGlobalPumpSettings() != nil else {
+                self.logger.warning("Quick bolus button not checked during setup: no pump globals")
+                return
+            }
+            self.enforceQuickBolusDisabled()
         }
     }
 }

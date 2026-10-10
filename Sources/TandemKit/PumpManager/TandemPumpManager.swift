@@ -559,14 +559,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
             // Kicked off, not awaited: a backfill slice can take far longer than a sync cycle,
             // and the loop is waiting on `completion` for the status reads above, not on
             // history. Overlapping ticks are dropped by the coordinator.
-            guard self.isAwaitingHistory else {
+            guard self.isAwaitingHistory || self.awaitsHistoryBoluses else {
                 self.historyBackfillCoordinator.runTick()
                 completion(self.state.lastReconciliation)
                 return
             }
 
-            // Except when the reads saw a change history has to date, or Control-IQ has handed
-            // back: the host doses on this result, and needs what the pump did first.
+            // Except when the reads saw a change history has to date, Control-IQ has handed back,
+            // or the pump may have bolused on its own: the host doses on this result, and needs
+            // what the pump did first.
             self.afterHistoryIsReported {
                 completion(self.state.lastReconciliation)
             }
@@ -2210,9 +2211,20 @@ extension TandemPumpManager {
 
         emitPumpEvents(PendingPumpEventBatch(
             events: events,
-            lastReconciliation: state.lastReconciliation,
+            lastReconciliation: reconciliationBoundary,
             replacePendingEvents: replacePendingEvents
         ))
+    }
+
+    /// `lastReconciliation` as the host is given it. Loop takes delivery up to it as accounted for, so
+    /// it stops at a pump bolus history has yet to report; released by the batch that reports it.
+    var reconciliationBoundary: Date? {
+        guard state.featureFlags.historyDoseReporting,
+              let hold = state.bolusReportLedger.boundaryHold(pumpSerial: historyLogStoreSerial?.rawValue)
+        else {
+            return state.lastReconciliation
+        }
+        return state.lastReconciliation.map { min($0, hold) }
     }
 
     /// Carries only the boundary; re-sending the pending set on every sync is #450.

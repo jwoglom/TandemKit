@@ -151,9 +151,13 @@ extension TandemPumpManager {
 
     func historyTickFailed(startedAt: Date) {
         bluetooth.ensureConnected { _ in
-            guard let pending = self.state.deliveryTransitions.pending, startedAt >= pending.detectedAt else { return }
-            self.logger.warning("Pump history could not be read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
-            self.reportTransition(pending)
+            if let pending = self.state.deliveryTransitions.pending, startedAt >= pending.detectedAt {
+                self.logger.warning("Pump history could not be read; reporting the \(pending.observed) seen at \(pending.detectedAt) at detection")
+                self.reportTransition(pending)
+            }
+            if !self.isAwaitingHistory {
+                self.releaseHistoryWaiters()
+            }
         }
     }
 
@@ -328,7 +332,8 @@ extension TandemPumpManager {
             emitPumpEvents(events, replacePendingEvents: batch.replacesHeldTemp)
         }
         notifyDelegateStateUpdated()
-        if !isAwaitingHistory {
+        // A pass reports its boluses after this; `reportHistoryDoses` releases once it has.
+        if !isAwaitingHistory, !awaitsHistoryBoluses {
             releaseHistoryWaiters()
         }
     }

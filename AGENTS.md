@@ -139,6 +139,9 @@ edit instead of at the next sync.
   set. `pumpSoundsAwaitingWrite` stops a qualifying event's pump-globals read from replacing them
   before then. It clears once the write is tried, so a failed one is logged, doesn't stop setup and
   isn't retried, and the next read shows what the pump holds.
+- Then, with `quickBolusButtonSupport` off, it reads the pump globals and turns the quick bolus
+  button off, which otherwise stayed live until the first sync (#353 P20-1). A failed read or a
+  refused write is logged, doesn't stop setup, and is left to the first sync.
 - `syncBasalRateSchedule` fails with `BasalScheduleSyncError.tooManyEntries`, before connecting,
   when the schedule has more entries than `maximumBasalScheduleEntryCount` (16). Trio's editor
   doesn't enforce the limit, and a schedule migrated from another pump can exceed it (#443).
@@ -276,6 +279,17 @@ edit instead of at the next sync.
   `trackingSince` is stamped on the first decode by a build that has the ledger; nothing older
   is reported, because it cannot be told apart from an app bolus reported live without an
   entry.
+- A bolus the app did not start that the live bolus status sees running is recorded, with
+  `historyDoseReporting` on, as `BolusReportLedger.unreported` (#353). Until the batch that
+  reports it from history, the `lastReconciliation` the host is given (`reconciliationBoundary`)
+  stops at its start, or at the boundary already given if that is later. Loop takes delivery up to
+  the boundary as accounted for, and past it falls back to reservoir doses, which count the bolus.
+  Not for a bolus before the emit floor, which history never reports; dropped past the reporting
+  horizon. `state.lastReconciliation`, `lastSync` and the sync throttle are unaffected.
+- With `historyDoseReporting` on, while the pump may bolus on its own (Control-IQ on or handing
+  back, or the quick bolus button not read as off: `awaitsHistoryBoluses`), `syncPumpData` waits
+  for its history pass (`afterHistoryIsReported`), so the host doses after a pump bolus that
+  finished out of contact is reported. A failed tick releases it at once.
 - Basal reconciliation (`TandemPumpManager+BasalReconciliation.swift`) runs after the transitions
   pass on every history pass while `historyBackfill` is on. It compares what the pump delivered
   (`PumpBasalTimeline`, P) with what the host counts (`ReportedBasalLedger`, H): every non-bolus
@@ -328,11 +342,14 @@ edit instead of at the next sync.
   clock. Build one per pass from the records it reads. Pump dates decode with the phone's current
   UTC offset, so `pumpClockOffset` moves by any change in it since the clock was read
   (`pumpTimeCheckUTCOffset`): a phone zone change between syncs does not misdate history (#482).
-- Still open: gap-aware `lastReconciliation` (#353) and extended boluses (Bolex records are only
-  logged; #424). `UnfinalizedDose.tempRateId` matches a live temp basal to its
-  `TempRateCompleted`; re-keying live temp basals on it is still open (#344). A temp rate the app
-  did not set reaches the host only through basal reconciliation, after the fact; the live path
-  still ignores it.
+- Still open: a boundary that trails the live reads to the last history pass (#353). Loop's
+  `DoseStore` stores nothing while the boundary is at or behind the end of the newest finalized
+  basal it holds, and leaves out of IOB a dose that ended before the boundary and was not stored, so
+  a boundary held behind the app's own finalized temp basals and then advanced by an empty batch
+  drops doses from IOB. Also open: extended boluses (Bolex records are only logged; #424).
+  `UnfinalizedDose.tempRateId` matches a live temp basal to its `TempRateCompleted`; re-keying live
+  temp basals on it is still open (#344). A temp rate the app did not set reaches the host only
+  through basal reconciliation, after the fact; the live path still ignores it.
 
 ### Therapy command validation
 - The pump delivers basal in 5-minute cycles: at each it writes a `BasalDelivery` (279) record and

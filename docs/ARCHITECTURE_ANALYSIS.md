@@ -246,8 +246,12 @@ The host calls `ensureCurrentPumpData` about every 5 minutes. It returns immedia
 3. Every time: reservoir, battery, bolus status and pending-bolus finalization, basal status
    (including the basal rate check), notifications, time since reset, and CGM session.
 4. `lastReconciliation` advances only if the pump actually answered something during this sync
-   (`responseCount` rose). The boundary is reported even when there are no doses.
-5. `historyBackfillCoordinator.runTick()` is started and not awaited.
+   (`responseCount` rose). The boundary is reported even when there are no doses, held at a pump
+   bolus history has yet to report (`reconciliationBoundary`).
+5. `historyBackfillCoordinator.runTick()` is started. The sync completes without waiting for it
+   unless a delivery change is pending, Control-IQ has handed back, or the pump may bolus on its
+   own (`isAwaitingHistory`, `awaitsHistoryBoluses`); then it waits for the pass, at most
+   `transitionHistoryWait`.
 
 A sync that is already queued makes later automatic polls stand down. A sync the user asks for
 runs regardless.
