@@ -286,8 +286,9 @@ this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole 
 `DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
 Nothing in Trio changes for it:
 
-- `scripts/trio-test.sh build` builds Trio (unsigned, `CI=true` to skip its SwiftFormat and
-  Crashlytics phases, bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
+- `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
+  no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
+  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem, installs Trio fresh, and writes into its data
   container what a set-up install holds: `onboardingCompleted`, an unpaired Tandem pump manager
   (`PumpManagerState.plist`: `managerIdentifier` `TandemPumpManager`, empty `state`), both telemetry

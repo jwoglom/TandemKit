@@ -16,8 +16,8 @@
 # Environment:
 #   TRIO_DIR           Trio checkout with this TandemKit at TRIO_DIR/TandemKit (default ../trio).
 #   TRIO_DERIVED_DATA  Where Trio builds (default .derived-data-trio).
-#   TRIO_TEAM          Placeholder team for Trio's bundle id, org.nightscout.<team>.trio; nothing
-#                      is signed (default TANDEMKITCI).
+#   TRIO_TEAM          Placeholder team for Trio's bundle id, org.nightscout.<team>.trio; the build
+#                      is signed ad hoc, which needs no team (default TANDEMKITCI).
 #   SIMULATOR_UDID     Simulator to install into (default: the booted one).
 #   LOG_DIR            Default: $DERIVED_DATA/trio-logs.
 #   Everything scripts/faketandem.sh reads, and scripts/test-local.sh for the test bundle
@@ -46,6 +46,8 @@ RESULT_BUNDLE="$LOG_DIR/TrioIntegrationTests.xcresult"
 TRIO_APP="$TRIO_DERIVED_DATA/Build/Products/Debug-iphonesimulator/Trio.app"
 
 # CI=true skips Trio's SwiftFormat and Crashlytics build phases, which rewrite sources and upload.
+# Signed ad hoc, not left unsigned: an unsigned simulator build carries no entitlements, the
+# keychain then refuses every write, and Trio stops on its first one (BaseKeychain).
 build_trio() {
   if [[ ! -f "$TRIO_DIR/Trio.xcworkspace/contents.xcworkspacedata" || ! -d "$TRIO_DIR/TandemKit/Sources" ]]; then
     echo "No Trio checkout with TandemKit at $TRIO_DIR; set TRIO_DIR" >&2
@@ -54,7 +56,8 @@ build_trio() {
   xcodebuild build -workspace "$TRIO_DIR/Trio.xcworkspace" -scheme Trio -configuration Debug \
     -destination "${DESTINATION:-platform=iOS Simulator,id=$UDID}" -derivedDataPath "$TRIO_DERIVED_DATA" \
     -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation \
-    DEVELOPER_TEAM="$TRIO_TEAM" CODE_SIGNING_ALLOWED=NO CI=true "$@"
+    DEVELOPER_TEAM="$TRIO_TEAM" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
+    CI=true "$@"
 }
 
 if [[ "$mode" == "build" ]]; then
@@ -125,6 +128,7 @@ cleanup() {
     find "$CONTAINER" -name 'TrioCoreDataPersistentContainer.sqlite*' -exec cp {} "$LOG_DIR/" \; 2>/dev/null || true
   fi
   stop_faketandem
+  grep -h -E 'Fatal error|Terminating app|EXC_[A-Z]+' "$LOG_DIR/trio.log" 2>/dev/null | tail -n 5 | sed 's/^/Trio stopped: /' >&2 || true
   echo "Trio log: $LOG_DIR/trio.log"
   echo "test log: $TEST_LOG"
 }
@@ -138,7 +142,8 @@ CONTAINER="$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)"
 seed_trio "$CONTAINER"
 
 CONTROL_PORT="$(free_port)"
-xcrun simctl spawn "$UDID" log stream --style compact --level debug --predicate 'process == "Trio"' \
+xcrun simctl spawn "$UDID" log stream --style compact --level debug \
+  --predicate 'process == "Trio" AND NOT subsystem BEGINSWITH "com.apple."' \
   > "$LOG_DIR/trio.log" 2>&1 &
 LOG_STREAM_PID=$!
 echo "Launching $BUNDLE_ID; data container $CONTAINER; control port $CONTROL_PORT"
