@@ -8,17 +8,13 @@ import LoopKit
 import XCTest
 
 /// Group I (#354 P21-3): the pump's IOB against the boluses reported within the active profile's
-/// insulin duration. faketandem's own IOB adds delivered basal and decays on a fixed four hours, so
-/// each scenario sets what a pump with Control-IQ off would hold right before the read that takes it.
+/// insulin duration. faketandem shows bolus insulin alone with Control-IQ off, decaying linearly over
+/// that duration, and adds basal above and below the profile with it on.
 final class InsulinOnBoardConformanceTests: ConformanceTestCase {
     /// Delivery at the rate the driver's estimate assumes, as in the smoke test.
     private static let deliveryRate = 1.0 / TandemPumpCapabilities.estimatedBolusDuration(toDeliver: 1.0)
-
-    override func setUpWithError() throws {
-        try super.setUpWithError()
-        // I7 wraps an emulator gap in XCTExpectFailure, which would otherwise end it there.
-        continueAfterFailure = true
-    }
+    /// The wire carries milliunits; the snapshot is not rounded.
+    private static let readingAccuracy = 0.0006
 
     // MARK: - I1
 
@@ -28,14 +24,19 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         XCTAssertEqual(driver.manager.state.pumpInsulinDuration?.current, .minutes(300), "the active profile's insulin duration")
         let mark = try logMark()
 
-        try pumpHolds(1.25)
+        try pumpBolus(2.0)
         _ = try sync()
-        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, 1.25, accuracy: 0.0005)
+        let synced = try pumpShows()
+        XCTAssertEqual(synced.iobType, 0)
+        XCTAssertEqual(synced.iob, 2.0, accuracy: 0.05)
+        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, synced.iob, accuracy: Self.readingAccuracy)
 
-        try pumpHolds(0.75)
+        try clock.advanceBoth(seconds: .minutes(10))
+        let wornOff = try pumpShows().iob
+        XCTAssertLessThan(wornOff, synced.iob)
         try harness.client.raiseQualifyingEvent(bitmask: QualifyingEvent.iobChange.id)
         try IntegrationWait.until("the iobChange event's read", timeout: 30) {
-            abs((driver.manager.state.latestInsulinOnBoard ?? -1) - 0.75) < 0.0005
+            abs((driver.manager.state.latestInsulinOnBoard ?? -1) - wornOff) < Self.readingAccuracy
         }
 
         let requests = try harness.requestsSeen(since: mark).map(\.message)
@@ -50,13 +51,11 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         try appBolus(2.0, driver)
         XCTAssertEqual(try reportedUnits(driver) ?? -1, 2.0, accuracy: 0.0005, "the bolus at its delivered amount")
 
-        try pumpHolds(1.9)
-        _ = try sync()
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence)
-        try pumpHolds(1.7)
         _ = try sync()
 
-        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, 1.7, accuracy: 0.0005)
+        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, try pumpShows().iob, accuracy: Self.readingAccuracy)
+        XCTAssertGreaterThan(driver.manager.state.latestInsulinOnBoard ?? 0, 1.5, "most of the bolus still on board")
         XCTAssertNil(flagged(driver))
     }
 
@@ -68,28 +67,27 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         let batches = allPumpEventBatches.count
         try pumpBolus(3.0)
 
-        try pumpHolds(3.8)
         _ = try sync()
         XCTAssertNil(flagged(driver), "not at first sight: a pump bolus reaches the host from history once it completes")
 
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence / 2)
-        try pumpHolds(3.6)
         _ = try sync()
         XCTAssertNil(flagged(driver), "not before it has persisted")
 
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence / 2)
-        try pumpHolds(3.4)
         _ = try sync()
-        XCTAssertEqual(flagged(driver) ?? 0, 2.4, accuracy: 0.001, "what the pump holds beyond the 1 U the app was told of")
+        let shown = try pumpShows().iob
         XCTAssertEqual(try reportedUnits(driver) ?? -1, 1.0, accuracy: 0.0005)
+        XCTAssertEqual(flagged(driver) ?? 0, shown - 1.0, accuracy: 0.001, "what the pump holds beyond the 1 U the app was told of")
+        XCTAssertGreaterThan(shown - 1.0, 2.5, "most of the pump's 3 U")
         XCTAssertFalse(
             allPumpEventBatches.dropFirst(batches).flatMap(\.events).contains { $0.dose?.type == .bolus },
             "History Dose Reporting is off, so the host never hears of the pump's bolus"
         )
 
-        try clock.advanceBoth(seconds: .minutes(5))
-        try pumpHolds(0.9)
+        try clock.advanceBoth(seconds: .minutes(210), ticks: 42)
         _ = try sync()
+        XCTAssertLessThan(try pumpShows().iob, 1.0, "both boluses most of the way through the profile's five hours")
         XCTAssertNil(flagged(driver), "back within the 1 U reported")
     }
 
@@ -106,8 +104,7 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
 
         try pumpBolus(3.0)
         try clock.advanceBoth(seconds: 30, ticks: 3)
-        // Read before history has reported the bolus: an excess, but not yet a persistent one.
-        try pumpHolds(3.0)
+        // Reads the pump's IOB before history reports the bolus: an excess, not yet a persistent one.
         _ = try sync()
         _ = try IntegrationWait.value("the pump's bolus reported from its history", timeout: 120) {
             self.allPumpEventBatches.dropFirst(batches).flatMap(\.events)
@@ -116,8 +113,8 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         XCTAssertEqual(try reportedUnits(driver) ?? -1, 3.0, accuracy: 0.0005)
 
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence)
-        try pumpHolds(2.8)
         _ = try sync()
+        XCTAssertGreaterThan(driver.manager.state.latestInsulinOnBoard ?? 0, 2.5, "most of the bolus still on board")
         XCTAssertNil(flagged(driver))
     }
 
@@ -129,15 +126,14 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         try appBolus(4.0, driver)
 
         try clock.advanceBoth(seconds: .minutes(150), ticks: 30)
+        XCTAssertEqual(try pumpShows().iob, 0, accuracy: 0.0005, "the pump has stopped counting the app's 4 U too")
         try pumpBolus(2.0)
-        try pumpHolds(1.95)
         _ = try sync()
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence)
-        try pumpHolds(1.8)
         _ = try sync()
 
         XCTAssertEqual(try reportedUnits(driver) ?? -1, 0, accuracy: 0.0005, "the app's 4 U is past the profile's two hours")
-        XCTAssertEqual(flagged(driver) ?? 0, 1.8, accuracy: 0.001)
+        XCTAssertEqual(flagged(driver) ?? 0, try pumpShows().iob, accuracy: 0.001)
     }
 
     // MARK: - I6
@@ -169,16 +165,16 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         XCTAssertEqual(driver.manager.state.controlIQEnabled, true)
         try pumpBolus(3.0)
 
-        try pumpHolds(3.0)
         _ = try sync()
         try clock.advanceBoth(seconds: UnreportedInsulinOnBoardMonitor.persistence)
-        try pumpHolds(2.9)
         _ = try sync()
 
-        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, 2.9, accuracy: 0.0005)
-        XCTExpectFailure("faketandem answers ControlIQIOBRequest with iobType 0 (Mudaliar) under Control-IQ, where a pump answers 1 (Swan 6 h)") {
-            XCTAssertNil(flagged(driver), "the pump's IOB counts basal above and below the profile as well")
-        }
+        let shown = try pumpShows()
+        XCTAssertEqual(shown.iobType, 1, "Swan 6 h, which counts basal above and below the profile as well")
+        let swan = try XCTUnwrap(shown.swanIob)
+        XCTAssertGreaterThan(abs(swan - (shown.mudaliarIob ?? swan)), 0.01, "the two figures differ, so the reading says which was read")
+        XCTAssertEqual(driver.manager.state.latestInsulinOnBoard ?? -1, swan, accuracy: Self.readingAccuracy, "the IOB the pump shows")
+        XCTAssertNil(flagged(driver), "no bolus was reported, yet the pump's IOB is not held against them")
     }
 
     // MARK: - Helpers
@@ -198,7 +194,6 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         state.bolusReportLedger = BolusReportLedger(trackingSince: clock.now.addingTimeInterval(-.hours(9)))
         let driver = startDriver(state: state)
         try harness.pair(driver)
-        try pumpHolds(0)
         _ = try sync()
         return driver
     }
@@ -209,17 +204,16 @@ final class InsulinOnBoardConformanceTests: ConformanceTestCase {
         try harness.client.setIDPProfiles([profile])
     }
 
-    private func pumpHolds(_ units: Double) throws {
-        try harness.client.setState(["iob": units])
+    private func pumpShows() throws -> FaketandemSnapshot.Insulin {
+        try harness.client.snapshot().insulin
     }
 
-    /// Enacted, delivered and finalized from `LastBolusStatus`; the pump then holds the whole bolus.
+    /// Enacted, delivered and finalized from `LastBolusStatus`.
     private func appBolus(_ units: Double, _ driver: FaketandemHarness.Driver) throws {
         XCTAssertNil(try enactBolus(units: units))
         let bolusId = try XCTUnwrap(driver.manager.state.bolusDose?.bolusId)
         try advanceUntilBolusFinishes(bolusId: bolusId)
         try clock.advanceBoth(seconds: driver.manager.estimatedDuration(toBolus: units) + .minutes(2))
-        try pumpHolds(units)
         _ = try sync()
         try IntegrationWait.until("the app bolus finalized", timeout: 30) {
             driver.manager.state.bolusReportLedger.entries.contains { $0.bolusId == bolusId && $0.isFinalized }

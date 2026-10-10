@@ -297,13 +297,7 @@ notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
 
 ## Known emulator gaps
 
-- **Insulin on board.** faketandem's IOB adds delivered basal, decays on a fixed four hours whatever
-  the profile's insulin duration, and is answered with `iobType` 0 (Mudaliar) under Control-IQ too. A
-  pump with Control-IQ off counts bolus insulin alone over the profile's duration, and under
-  Control-IQ answers 1 (Swan 6 h). Group I sets `iob` before each read, and I7's assertion is a strict
-  expected failure.
-
-One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
+None open. One behaviour is opt-in: faketandem runs the pump's 5-minute basal cycle, and follows
 profile segment boundaries, only with `basal_cycle_enabled` (faketandem README "Basal cycle").
 Conformance group H (`BasalHistoryConformanceTests`) turns it on and `FaketandemHarness.reset()`
 turns it off; every other scenario runs with basal delivered continuously and no 279s, and stages
@@ -340,6 +334,12 @@ shape of it explains what the harness is for:
 - **The websocket handler kept one shared client** and cleared it on any close, so an older
   socket closing silenced a newer one. Concurrent clients are supported; the harness still
   keeps one socket per process (`FaketandemControlSocket.shared`) because one is enough.
+- **The pump's IOB was one number that added delivered basal and decayed on a fixed four
+  hours**, answered with `iobType` 0 under Control-IQ too. A pump with Control-IQ off counts
+  bolus insulin alone over the active profile's insulin duration, and under Control-IQ shows a
+  figure that adds basal above and below the profile (`iobType` 1). faketandem keeps both now
+  (faketandem README "Insulin on board"), so group I reads the pump's own IOB instead of
+  setting it before each read, and I7 passes outright.
 - **`PUT /api/state {"pairing_code": …}` did not reach the pumpX2 bridge.** Every pairing
   code change goes through one update path now; the harness still uses the websocket
   `setPairingCode`, which returns the resulting pairing status in the same round trip.
