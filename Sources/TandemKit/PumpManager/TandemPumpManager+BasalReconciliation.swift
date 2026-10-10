@@ -283,8 +283,8 @@ extension TandemPumpManager {
         logger.info("Pump history runs the temp basal from \(held.startDate) at \(chunk.unitsPerHour) U/hr from \(start)")
         state.basalDose = continuation
         pass.add(finished + [
-            NewPumpEvent.tempBasal(dose: entry, date: entry.startDate),
-            NewPumpEvent.tempBasal(dose: continuation.toDoseEntry(isMutable: true, now: pass.now), date: start)
+            NewPumpEvent.tempBasal(dose: entry, of: running),
+            NewPumpEvent.tempBasal(dose: continuation.toDoseEntry(isMutable: true, now: pass.now), of: continuation)
         ], to: &batch)
         batch.replacesHeldTemp = true
         return true

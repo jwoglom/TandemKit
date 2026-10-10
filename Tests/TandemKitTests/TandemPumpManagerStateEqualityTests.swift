@@ -81,6 +81,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("bolusReportLedger", { $0.bolusReportLedger.markFinalized(raw: Data([0x20, 0x04])) }),
             ("reportedBasal", { $0.reportedBasal.prune(now: later.addingTimeInterval(.days(3))) }),
             ("reportedBasal.reconciledThrough", { $0.reportedBasal.reconcile(through: 5000) }),
+            ("lastTempRateEventRaw", { $0.lastTempRateEventRaw = nil }),
             ("deliveryTransitions", { $0.deliveryTransitions.lastConfirmedObservation = later }),
             ("bolusState", { $0.bolusState = .noBolus }),
             ("insulinType", { $0.insulinType = .humalog }),
@@ -212,6 +213,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         )
         state.reportedBasal.track(pumpSerial: pumpSerial, after: 4000)
         state.reportedBasal.reconcile(through: 4300)
+        state.lastTempRateEventRaw = Data([0x01, 0x02, 0x40, 0xE2, 0x01, 0x00, 0x11, 0x00, 0x00, 0x00])
         state.bolusState = .inProgress(bolusDose.toDoseEntry(isMutable: true, now: t0))
         state.insulinType = .novolog
         state.bolusDose = bolusDose

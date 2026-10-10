@@ -324,7 +324,7 @@ import XCTest
 
     func testATempBasalThatRanOutIsFinishedUnderTheIdentityItWasReportedUnder() throws {
         runningTempBasal(2.0, tempRateId: 8)
-        let reported = NewPumpEvent.tempBasal(dose: manager.state.basalDose.toDoseEntry(isMutable: true), date: start)
+        let reported = NewPumpEvent.tempBasal(dose: manager.state.basalDose.toDoseEntry(isMutable: true), of: manager.state.basalDose)
         advance(to: minutes(50))
         observe(0)
 
@@ -332,7 +332,7 @@ import XCTest
 
         let finished = try XCTUnwrap(events(.tempBasal).first)
         XCTAssertEqual(finished.dose?.endDate, minutes(30))
-        XCTAssertEqual(finished.raw, reported.raw, "a second's difference in the pump's record would re-key it")
+        XCTAssertEqual(finished.raw, reported.raw)
     }
 
     func testATempBasalWhoseRecordSaysItRanOutButIsDatedEarlyEndsAtTheRecord() {
@@ -440,6 +440,7 @@ import XCTest
         XCTAssertEqual(temps.last?.isMutable, true)
         XCTAssertEqual(temps.last?.endDate, minutes(35), "for the duration the pump recorded")
         XCTAssertEqual(temps.last?.automatic, true, "set over Bluetooth")
+        XCTAssertEqual(batch.events.last { $0.dose?.type == .tempBasal }?.raw, HistoryLogSyncIdentifier.tempRate(pumpSerial: serial, tempRateId: 8))
         XCTAssertFalse(batch.events.contains { $0.dose?.type == .basal })
         XCTAssertEqual(manager.state.basalDose.tempRateId, 8)
         XCTAssertEqual(manager.state.basalDose.tempPercent, 120)

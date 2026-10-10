@@ -11,6 +11,8 @@ public class UnfinalizedDose: Equatable {
     public var tempRateId: Int?
     /// The percent of the pump's profile a temp rate the app set runs at.
     public var tempPercent: Int?
+    /// A temp basal's `raw` from the pump's `tempRateId`, minted when it started. See `tempBasalRaw`.
+    public var eventRaw: Data?
     public let type: DoseType
     /// When the driver programmed the dose. This is the dose's identity — the date every
     /// `NewPumpEvent` for it carries, which hosts dedupe on — so it never moves.
@@ -27,6 +29,7 @@ public class UnfinalizedDose: Equatable {
         lhs.bolusId == rhs.bolusId &&
             lhs.tempRateId == rhs.tempRateId &&
             lhs.tempPercent == rhs.tempPercent &&
+            lhs.eventRaw == rhs.eventRaw &&
             lhs.type == rhs.type &&
             lhs.startDate == rhs.startDate &&
             lhs.deliveryStartDate == rhs.deliveryStartDate &&
@@ -70,7 +73,8 @@ public class UnfinalizedDose: Equatable {
         insulinType: InsulinType?,
         startDate: Date = Date.now,
         tempRateId: Int? = nil,
-        tempPercent: Int? = nil
+        tempPercent: Int? = nil,
+        eventRaw: Data? = nil
     ) {
         type = .tempBasal
         value = tempRate
@@ -80,6 +84,7 @@ public class UnfinalizedDose: Equatable {
         self.automatic = automatic
         self.tempRateId = tempRateId
         self.tempPercent = tempPercent
+        self.eventRaw = eventRaw
     }
 
     public init(suspendStartTime: Date) {
@@ -175,6 +180,7 @@ public class UnfinalizedDose: Equatable {
 
         tempRateId = rawValue["tempRateId"] as? Int
         tempPercent = rawValue["tempPercent"] as? Int
+        eventRaw = rawValue["eventRaw"] as? Data
     }
 
     public var rawValue: RawValue {
@@ -191,6 +197,7 @@ public class UnfinalizedDose: Equatable {
         raw["bolusId"] = bolusId
         raw["tempRateId"] = tempRateId
         raw["tempPercent"] = tempPercent
+        raw["eventRaw"] = eventRaw
 
         return raw
     }
@@ -264,6 +271,18 @@ public class UnfinalizedDose: Equatable {
                 automatic: automatic
             )
         }
+    }
+
+    /// The `raw` every report of this temp basal carries, however it ends: hosts key the dose on
+    /// it, so finishing it early must not change it.
+    public var tempBasalRaw: Data {
+        if let eventRaw {
+            return eventRaw
+        }
+        // Its programmed amount and start, as builds before `eventRaw` keyed it while it ran.
+        let programmedUnits = toDoseEntry(isMutable: true).programmedUnits
+        return "\(DoseType.tempBasal.rawValue) \(programmedUnits) \(ISO8601DateFormatter().string(from: startDate))"
+            .data(using: .utf8) ?? Data([])
     }
 
     private func roundBasalRate(_ rate: Double) -> Double {

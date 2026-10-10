@@ -426,16 +426,11 @@ final class CancelConformanceTests: ConformanceTestCase {
             "temp basal cancel"
         )
 
-        XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so ending it early re-keys the dose mid-life",
-            strict: true
-        ) {
-            XCTAssertEqual(
-                finalized.raw,
-                rawA,
-                "raw changed over the dose's life: \(LoopDoseStoreOracle.describe(rawA)) -> \(LoopDoseStoreOracle.describe(finalized.raw))"
-            )
-        }
+        XCTAssertEqual(
+            finalized.raw,
+            rawA,
+            "raw changed over the dose's life: \(LoopDoseStoreOracle.describe(rawA)) -> \(LoopDoseStoreOracle.describe(finalized.raw))"
+        )
 
         // Loop: exactly one temp basal, permanent, at the truncated amount.
         let (loop, trio) = feedOracles()
@@ -523,16 +518,11 @@ final class CancelConformanceTests: ConformanceTestCase {
         XCTAssertEqual(mutableB.dose?.unitsPerHour ?? -1, rateB, accuracy: 0.005)
         XCTAssertNotEqual(rawB, rawA, "B is a different dose and needs a different identity")
 
-        XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so finalizing A at 7 of its 60 minutes re-keys it",
-            strict: true
-        ) {
-            XCTAssertEqual(
-                finalizedA.raw,
-                rawA,
-                "A's raw changed when it was cut short: \(LoopDoseStoreOracle.describe(rawA)) -> \(LoopDoseStoreOracle.describe(finalizedA.raw))"
-            )
-        }
+        XCTAssertEqual(
+            finalizedA.raw,
+            rawA,
+            "A's raw changed when it was cut short: \(LoopDoseStoreOracle.describe(rawA)) -> \(LoopDoseStoreOracle.describe(finalizedA.raw))"
+        )
 
         // B stays live across further syncs: nothing complete may drop it by silence (guide §3).
         let beforeSyncs = allPumpEventBatches.count

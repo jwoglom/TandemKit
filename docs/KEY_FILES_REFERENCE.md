@@ -42,7 +42,7 @@ pieces fit together. Paths are relative to the repository root.
 | `ReportedBasalLedger.swift` | Every non-bolus row reported to the host, folded as Trio folds them; `HostBasalSchedule`. |
 | `BasalReconciler.swift` | Pump basal chunks against what the host counts. |
 | `HistoryTimestampReconciler.swift` | Pump timestamps → UTC, corrected for clock changes recorded in the log; `HistoryRecordDates` adds the pump clock offset, for every date a history pass takes. |
-| `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses (#344). |
+| `HistoryLogSyncIdentifier.swift` | Stable `raw` identifiers for history-derived doses and the temp basals the app sets (#344). |
 | `BolusReportLedger.swift` | Persisted record of recent boluses, so history does not report app boluses a second time. |
 
 ## State — `Sources/TandemKit/State/`

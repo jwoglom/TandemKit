@@ -614,12 +614,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let previous = loop.doses.filter { $0.dose.type == .tempBasal && $0.dose.startDate == firstStart && !$0.isMutable }
         XCTAssertEqual(previous.count, 1, "the replaced temp basal is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
         XCTAssertEqual(previous.first.map { abs($0.dose.endDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "finalized at its true end, the stop")
-        XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so finalizing the replaced temp basal at 5 of its 30 minutes re-keys it",
-            strict: true
-        ) {
-            _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
-        }
+        _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
         XCTAssertEqual(trio.tempBasals.count, 2, "Trio holds both temp basals: \(trio.tempBasals)")
 
         let diff = timeline.diff(against: loop)
@@ -676,12 +671,7 @@ final class InterruptConformanceTests: ConformanceTestCase {
         let previous = loop.doses.filter { $0.dose.type == .tempBasal && $0.dose.startDate == firstStart && !$0.isMutable }
         XCTAssertEqual(previous.count, 1, "the replaced temp basal is finalized once: \(loop.doses.map(LoopDoseStoreOracle.describe))")
         XCTAssertEqual(previous.first.map { abs($0.dose.endDate.timeIntervalSince(pumpSecondStart)) } ?? .infinity, 0, accuracy: 2, "at its true end, the stop")
-        XCTExpectFailure(
-            "jwoglom/TandemKit#344: the temp basal raw embeds programmedUnits (rate × duration), so finalizing the replaced temp basal at 5 of its 30 minutes re-keys it",
-            strict: true
-        ) {
-            _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
-        }
+        _ = loop.assertPermanent(raw: firstRaw, "the replaced temp basal")
         XCTAssertEqual(trio.tempBasals.count, 2, "Trio holds both temp basals: \(trio.tempBasals)")
 
         let diff = try timeline().diff(against: loop)
