@@ -110,6 +110,12 @@ enum VirtualPumpControl {
             case bolus
             /// `syncPumpData`, as a pull to refresh does; answers with `lastSync`.
             case sync
+            /// `syncBasalRateSchedule(items:)` with `basalSchedule`, as saving the basal profile does.
+            case syncBasalSchedule
+            /// `enactTempBasal(unitsPerHour:for:)`; a `duration` of 0 cancels, as hosts cancel.
+            case tempBasal
+            case suspend
+            case resume
             /// Every batch sent to the delegate after index `after`.
             case pumpEventBatches
         }
@@ -121,6 +127,10 @@ enum VirtualPumpControl {
         var units: Double?
         var automatic: Bool?
         var after: Int?
+        var unitsPerHour: Double?
+        /// Seconds.
+        var duration: TimeInterval?
+        var basalSchedule: [RepeatingScheduleValue<Double>]?
     }
 
     struct Response: Codable, Equatable {
@@ -246,6 +256,14 @@ enum VirtualPumpControl {
                     try bolus(manager, units: request.units, automatic: request.automatic ?? false)
                 case .sync:
                     response.lastSync = try sync(manager)
+                case .syncBasalSchedule:
+                    try syncBasalSchedule(manager, items: request.basalSchedule)
+                case .tempBasal:
+                    try tempBasal(manager, unitsPerHour: request.unitsPerHour, duration: request.duration)
+                case .suspend:
+                    try deliveryChange("suspendDelivery") { manager.suspendDelivery(completion: $0) }
+                case .resume:
+                    try deliveryChange("resumeDelivery") { manager.resumeDelivery(completion: $0) }
                 case .pumpEventBatches:
                     response.batches = VirtualPumpControl.batches(of: manager, after: request.after)
                 }
@@ -309,6 +327,34 @@ enum VirtualPumpControl {
             let synced = Completion<Date?>()
             manager.syncPumpData { synced.finish($0) }
             return try synced.wait("syncPumpData", timeout: 240)
+        }
+
+        private static func syncBasalSchedule(_ manager: TandemPumpManager, items: [RepeatingScheduleValue<Double>]?) throws {
+            guard let items else {
+                throw ControlError("syncBasalSchedule needs basalSchedule")
+            }
+            let synced = Completion<Result<BasalRateSchedule, Error>>()
+            manager.syncBasalRateSchedule(items: items) { synced.finish($0) }
+            _ = try synced.wait("syncBasalRateSchedule", timeout: 240).get()
+        }
+
+        private static func tempBasal(_ manager: TandemPumpManager, unitsPerHour: Double?, duration: TimeInterval?) throws {
+            guard let unitsPerHour, let duration else {
+                throw ControlError("tempBasal needs unitsPerHour and duration")
+            }
+            let enacted = Completion<PumpManagerError?>()
+            manager.enactTempBasal(unitsPerHour: unitsPerHour, for: duration) { enacted.finish($0) }
+            if let error = try enacted.wait("enactTempBasal", timeout: 120) {
+                throw error
+            }
+        }
+
+        private static func deliveryChange(_ name: String, _ command: (@escaping (Error?) -> Void) -> Void) throws {
+            let changed = Completion<Error?>()
+            command { changed.finish($0) }
+            if let error = try changed.wait(name, timeout: 120) {
+                throw error
+            }
         }
     }
 

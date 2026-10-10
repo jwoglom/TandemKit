@@ -19,22 +19,7 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
     }
 
     func testABolusMadeThroughTheChannelReadsBackAsTheDelegateReceivedIt() throws {
-        // Trio's clock: the bolus is finalized on real time, as it would be in the app.
-        let driver = makeDriver(clock: SystemClock())
-        let manager = driver.manager
-        let server = try VirtualPumpControl.Server { manager }
-        self.server = server
-        let control = try VirtualPumpControl.Client(port: server.port)
-        self.control = control
-
-        var key = Data(count: 32)
-        for index in key.indices {
-            key[index] = UInt8.random(in: .min ... .max)
-        }
-        _ = try harness.control.setLongTermKey(key)
-        let paired = try send(.init(command: .pair, code: FaketandemHarness.pairingCode, longTermKey: key.hexadecimalString))
-        XCTAssertEqual(paired.status?.onboarded, true)
-        _ = try send(.init(command: .sync))
+        let driver = try pairThroughTheChannel()
         try harness.client.setState(["bolus_rate_units_per_second": 0.25])
 
         _ = try send(.init(command: .bolus, units: 1.0))
@@ -46,26 +31,73 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
         }
         XCTAssertEqual(finalized.dose?.deliveredUnits, 1.0)
 
+        let oracle = try assertChannelReadsBackWhatTheDelegateReceived(driver)
+        XCTAssertEqual(oracle.boluses.map(\.bolusAmount), [1.0])
+    }
+
+    func testBasalCommandsMadeThroughTheChannelReadBackAsTheDelegateReceivedThem() throws {
+        let driver = try pairThroughTheChannel(stageBasalScheduleSync: false)
+        XCTAssertFalse(driver.manager.state.hasSyncedBasalRateSchedule)
+
+        _ = try send(.init(command: .syncBasalSchedule, basalSchedule: [RepeatingScheduleValue(startTime: 0, value: 1.0)]))
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
+        XCTAssertEqual(try harness.client.snapshot().idpProfiles?.first?.segments.map(\.basalRate), [1000])
+        _ = try send(.init(command: .tempBasal, unitsPerHour: 1.5, duration: .minutes(30)))
+        _ = try send(.init(command: .tempBasal, unitsPerHour: 0, duration: 0))
+        _ = try send(.init(command: .suspend))
+        _ = try send(.init(command: .resume))
+
+        let oracle = try assertChannelReadsBackWhatTheDelegateReceived(driver)
+        let temps = oracle.events.filter { $0.type == .tempBasal && !$0.isScheduledBasal }
+        XCTAssertEqual(temps.map(\.tempBasalRate), [1.5], "\(oracle.events)")
+        XCTAssertEqual(temps.map(\.isMutable), [false])
+        XCTAssertEqual(oracle.events.filter { $0.type == .pumpSuspend || $0.type == .pumpResume }.map(\.type), [.pumpSuspend, .pumpResume])
+    }
+
+    // MARK: - Helpers
+
+    /// Trio's clock: doses are finalized on real time, as they would be in the app.
+    private func pairThroughTheChannel(stageBasalScheduleSync: Bool = true) throws -> FaketandemHarness.Driver {
+        let driver = makeDriver(clock: SystemClock(), stageBasalScheduleSync: stageBasalScheduleSync)
+        let manager = driver.manager
+        let server = try VirtualPumpControl.Server { manager }
+        self.server = server
+        control = try VirtualPumpControl.Client(port: server.port)
+
+        var key = Data(count: 32)
+        for index in key.indices {
+            key[index] = UInt8.random(in: .min ... .max)
+        }
+        _ = try harness.control.setLongTermKey(key)
+        let paired = try send(.init(command: .pair, code: FaketandemHarness.pairingCode, longTermKey: key.hexadecimalString))
+        XCTAssertEqual(paired.status?.onboarded, true)
+        _ = try send(.init(command: .sync))
+        return driver
+    }
+
+    /// Returns a Trio oracle fed from the channel.
+    private func assertChannelReadsBackWhatTheDelegateReceived(
+        _ driver: FaketandemHarness.Driver,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> TrioDoseStoreOracle {
         driver.drainDelegate()
         let batches = try XCTUnwrap(send(.init(command: .pumpEventBatches)).batches)
-        XCTAssertEqual(batches.map(\.pumpEvents), driver.delegate.pumpEventBatches.map(\.events))
-        XCTAssertEqual(batches.map(\.replacePendingEvents), driver.delegate.pumpEventBatches.map(\.replacePendingEvents))
-        XCTAssertEqual(batches.map(\.lastReconciliation), driver.delegate.pumpEventBatches.map(\.lastReconciliation))
-        XCTAssertTrue(batches.allSatisfy { $0.completed && $0.delegateError == nil })
+        XCTAssertEqual(batches.map(\.pumpEvents), driver.delegate.pumpEventBatches.map(\.events), file: file, line: line)
+        XCTAssertEqual(batches.map(\.replacePendingEvents), driver.delegate.pumpEventBatches.map(\.replacePendingEvents), file: file, line: line)
+        XCTAssertEqual(batches.map(\.lastReconciliation), driver.delegate.pumpEventBatches.map(\.lastReconciliation), file: file, line: line)
+        XCTAssertTrue(batches.allSatisfy { $0.completed && $0.delegateError == nil }, file: file, line: line)
 
-        let fromChannel = TrioDoseStoreOracle()
+        let oracle = TrioDoseStoreOracle()
         for batch in batches {
-            fromChannel.addPumpEvents(
+            oracle.addPumpEvents(
                 batch.pumpEvents,
                 lastReconciliation: batch.lastReconciliation,
                 replacePendingEvents: batch.replacePendingEvents,
                 now: batch.hostNow
             )
         }
-        let fromDelegate = TrioDoseStoreOracle()
-        driver.delegate.feed(fromDelegate)
-        XCTAssertEqual(fromChannel.events, fromDelegate.events)
-        XCTAssertEqual(fromChannel.boluses.map(\.bolusAmount), [1.0])
+        return oracle
     }
 
     /// Off the main thread: the driver finishes some work on the main queue, which this pumps.
