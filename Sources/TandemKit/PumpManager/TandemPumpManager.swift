@@ -59,6 +59,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private var pendingPumpEventBatches: [PendingPumpEventBatch] = []
     private let pendingPumpEventLock = NSLock()
 
+    /// Setup sets the pump's clock before the host adopts the manager.
+    private var pendingPumpClockAdjustments: [TimeInterval] = []
+    private let pendingPumpClockAdjustmentLock = NSLock()
+
     /// Run once history has reported what `isAwaitingHistory` waits for.
     private var historyWaiters: [() -> Void] = []
     private let historyWaiterLock = NSLock()
@@ -419,6 +423,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
         notifyDelegateStateUpdated()
         flushPendingReservoirReading()
         flushPendingPumpEvents()
+        flushPendingPumpClockAdjustments()
     }
 
     /// Auto-acknowledgement of basal min/max alerts is always on and has no user-facing control:
@@ -1443,6 +1448,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            // Read first: setup writes the clock before any sync has measured it.
+            let offset = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
+                ?? (self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset)
             let epoch = Dates.fromInstantToJan12008EpochSeconds(self.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
@@ -1465,6 +1473,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
+            if let offset {
+                self.reportPumpClockAdjustment(by: -offset)
+            } else {
+                self.logger.warning("Pump clock set without a reading of it; no adjustment to report")
+            }
             completion(nil)
         }
     }
@@ -1739,7 +1752,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 _ = self.bluetooth.write(StopTempRateRequest())
 
                 let dose = UnfinalizedDose(
-                    basalRate: self.getScheduledBasalRate(),
+                    basalRate: self.pumpScheduledBasalRate(),
                     insulinType: self.state.insulinType,
                     startDate: self.now
                 )
@@ -2134,7 +2147,7 @@ extension TandemPumpManager {
     /// Closes out a running temp basal dose at `now` and records scheduled basal from `now`.
     func startScheduledBasalDose() {
         settleDeliveryTransition()
-        let dose = UnfinalizedDose(basalRate: getScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
+        let dose = UnfinalizedDose(basalRate: pumpScheduledBasalRate(), insulinType: state.insulinType, startDate: now)
 
         var events = getActivePumpEvents(endDate: dose.startDate)
         events.append(NewPumpEvent.basal(dose: dose.toDoseEntry(isMutable: false), date: dose.startDate))
@@ -2167,7 +2180,7 @@ extension TandemPumpManager {
 
         if endDate != nil, basalEntry.endDate == state.basalDose.estimatedEndDate {
             let dose = UnfinalizedDose(
-                basalRate: getScheduledBasalRate(),
+                basalRate: pumpScheduledBasalRate(at: basalEntry.endDate),
                 insulinType: state.insulinType,
                 startDate: basalEntry.endDate
             )
@@ -2228,6 +2241,32 @@ extension TandemPumpManager {
         }
 
         deliverPumpEventBatches(takePendingPumpEventBatches() + [batch])
+    }
+
+    /// How far the driver moved the pump's clock, in seconds: negative when it ran ahead. MinimedKit
+    /// passes the drift, the other sign; Loop and Trio only log it.
+    func reportPumpClockAdjustment(by adjustment: TimeInterval) {
+        logger.info("Pump clock adjusted by \(adjustment) s")
+        pendingPumpClockAdjustmentLock.lock()
+        pendingPumpClockAdjustments.append(adjustment)
+        pendingPumpClockAdjustmentLock.unlock()
+        flushPendingPumpClockAdjustments()
+    }
+
+    private func flushPendingPumpClockAdjustments() {
+        guard canNotifyDelegate else { return }
+
+        pendingPumpClockAdjustmentLock.lock()
+        let adjustments = pendingPumpClockAdjustments
+        pendingPumpClockAdjustments = []
+        pendingPumpClockAdjustmentLock.unlock()
+        guard !adjustments.isEmpty else { return }
+
+        pumpDelegate.notify { delegate in
+            for adjustment in adjustments {
+                delegate?.pumpManager(self, didAdjustPumpClockBy: adjustment)
+            }
+        }
     }
 
     func flushPendingPumpEvents() {
@@ -2301,6 +2340,13 @@ extension TandemPumpManager {
 
     func getScheduledBasalRate(at date: Date? = nil) -> Double {
         hostBasalSchedule.rate(at: date ?? now)
+    }
+
+    /// The schedule at `date` read on the pump's clock: the rate the pump's profile has in force
+    /// then, whenever it holds the host's. By the offset, not `currentPumpTime`, a snapshot from the
+    /// last clock read.
+    func pumpScheduledBasalRate(at date: Date? = nil) -> Double {
+        getScheduledBasalRate(at: (date ?? now).addingTimeInterval(state.pumpClockOffset))
     }
 
     var hostBasalSchedule: HostBasalSchedule {

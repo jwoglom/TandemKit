@@ -93,15 +93,6 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         try harness.client.armFault(FaketandemFaultSpec(.radioOn))
     }
 
-    private func syncPumpTime(timeout: TimeInterval? = nil) throws -> Result<Void, PumpManagerError> {
-        let manager = try XCTUnwrap(current, "no driver").manager
-        let box = ResultBox<Result<Void, PumpManagerError>>()
-        manager.syncPumpTime { box.set($0) }
-        let result = try box.wait("syncPumpTime completion", timeout: timeout ?? syncTimeout)
-        drainDelegate()
-        return result
-    }
-
     /// A bolus programmed on the pump's own screen, run to completion. Returns its id and start.
     private func pumpBolus(units: Double) throws -> (bolusId: Int, start: Date) {
         let start = clock.now
@@ -245,6 +236,8 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
         XCTAssertNoThrow(try synced.get())
         XCTAssertTrue(try harness.requestsSeen(since: changeLogMark).contains { $0.message == "ChangeTimeDateRequest" })
         XCTAssertEqual(try harness.client.clock().pumpTimezoneOffsetSeconds, -7 * 3600, "the pump now reads pacific time")
+        XCTAssertEqual(driver.delegate.clockAdjustments.count, 1)
+        XCTAssertEqual(driver.delegate.clockAdjustments.first ?? 0, -TimeInterval.hours(3), accuracy: 5, "moved back to pacific time")
         XCTAssertEqual(try pumpRecords("TimeChanged").count, 1)
         _ = try sync()
         XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 2)
@@ -315,6 +308,8 @@ final class TimeChangeConformanceTests: ConformanceTestCase {
 
         XCTAssertNoThrow(try syncPumpTime().get())
         XCTAssertEqual(try pumpRecords("TimeChanged").count, 2, "the user's change and the app's")
+        XCTAssertEqual(driver.delegate.clockAdjustments.count, 1, "only the app's change is the driver's")
+        XCTAssertEqual(driver.delegate.clockAdjustments.first ?? 0, -TimeInterval.hours(1), accuracy: 5)
         XCTAssertEqual(driver.manager.state.pumpClockOffset, 0, accuracy: 2)
         XCTAssertFalse(driver.manager.state.showPumpTimeSyncWarning)
 

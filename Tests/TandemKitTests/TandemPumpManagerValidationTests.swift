@@ -873,6 +873,111 @@ import XCTest
         XCTAssertEqual(delegate.issuedAlerts.count, 0)
     }
 
+    // MARK: - Scheduled basal on the pump's clock
+
+    /// Phone at 13:58, in the 1.0 segment; the pump 4 minutes ahead, in its 2.0 one.
+    func testACancelReportsTheScheduledRateOnThePumpsClock() throws {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(2), pumpMilliunits: 2000, bluetooth: bluetooth)
+        skewPumpClock(manager, minutes: 4)
+        let (delegate, queue) = attachDelegate(manager)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+
+        queue.sync {}
+        let marker = try XCTUnwrap(delegate.pumpEvents.compactMap(\.dose).last { $0.type == .basal })
+        XCTAssertEqual(marker.unitsPerHour, 2.0)
+        XCTAssertEqual(manager.state.basalDose.value, 2.0)
+    }
+
+    /// Ran out at 13:59, before the change; read at 14:01, after it.
+    func testATempThatRanOutIsFollowedByTheScheduledRateAtItsEnd() throws {
+        let manager = makeBaselineManager(at: .hours(14) + .minutes(1), pumpMilliunits: 2000, bluetooth: StubPumpBluetooth())
+        manager.state.basalDose = UnfinalizedDose(
+            tempRate: 0,
+            duration: .minutes(30),
+            automatic: true,
+            insulinType: .novolog,
+            startDate: at(.hours(14) - .minutes(31))
+        )
+
+        let marker = try XCTUnwrap(manager.getActivePumpEvents(endDate: manager.now).last?.dose)
+
+        XCTAssertEqual(marker.type, .basal)
+        XCTAssertEqual(marker.startDate, at(.hours(14) - .minutes(1)))
+        XCTAssertEqual(marker.unitsPerHour, 1.0)
+    }
+
+    // MARK: - Setting the pump's clock
+
+    private func writePumpTime(_ manager: TandemPumpManager) -> PumpManagerError? {
+        let expectation = expectation(description: "writePumpTime")
+        var error: PumpManagerError?
+        manager.writePumpTime {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return error
+    }
+
+    private func stubPumpClock(_ bluetooth: StubPumpBluetooth, reading date: Date, writeStatus: Int = 0) {
+        bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
+            currentTime: UInt32(Dates.fromInstantToJan12008EpochSeconds(date)),
+            pumpTimeSinceReset: 1000
+        ))
+        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: writeStatus))
+    }
+
+    /// The last sync measured 11 minutes; the pump reads 15 ahead when its clock is set.
+    func testSettingThePumpsClockReportsHowFarItMoved() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.minutes(15)))
+        let (delegate, queue) = attachDelegate(manager)
+
+        XCTAssertNil(writePumpTime(manager))
+
+        queue.sync {}
+        XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(15)])
+    }
+
+    func testWithoutAClockReadingTheLastMeasuredOffsetIsReported() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        bluetooth.stub(ChangeTimeDateRequest.self, with: ChangeTimeDateResponse(status: 0))
+        let (delegate, queue) = attachDelegate(manager)
+
+        XCTAssertNil(writePumpTime(manager))
+
+        queue.sync {}
+        XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.minutes(11)])
+    }
+
+    func testARefusedClockWriteReportsNoAdjustment() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.minutes(15)), writeStatus: 1)
+        let (delegate, queue) = attachDelegate(manager)
+
+        XCTAssertNotNil(writePumpTime(manager))
+
+        queue.sync {}
+        XCTAssertEqual(delegate.clockAdjustments, [])
+    }
+
+    func testAClockAdjustmentMadeBeforeTheHostAttachesReachesItOnceItDoes() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 1000, bluetooth: bluetooth)
+        stubPumpClock(bluetooth, reading: manager.now.addingTimeInterval(.hours(1)))
+
+        XCTAssertNil(writePumpTime(manager))
+        let (delegate, queue) = attachDelegate(manager)
+
+        queue.sync {}
+        XCTAssertEqual(delegate.clockAdjustments, [-TimeInterval.hours(1)])
+    }
+
     #if canImport(SwiftUI)
     func testASkewedPumpClockShowsAStatusHighlight() throws {
         let bluetooth = StubPumpBluetooth()

@@ -221,6 +221,15 @@ class ConformanceTestCase: FaketandemIntegrationTestCase {
         return result
     }
 
+    func syncPumpTime(timeout: TimeInterval? = nil) throws -> Result<Void, PumpManagerError> {
+        let manager = try XCTUnwrap(driver, "no driver").manager
+        let box = ResultBox<Result<Void, PumpManagerError>>()
+        manager.syncPumpTime { box.set($0) }
+        let result = try box.wait("syncPumpTime completion", timeout: timeout ?? syncTimeout)
+        drainDelegate()
+        return result
+    }
+
     /// A full `syncPumpData`; returns the lastSync it handed the host.
     func sync(timeout: TimeInterval? = nil) throws -> Date? {
         let running = try XCTUnwrap(driver, "no driver")

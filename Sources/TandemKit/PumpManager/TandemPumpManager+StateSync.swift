@@ -569,7 +569,7 @@ extension TandemPumpManager {
                     )
                 } else {
                     dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
+                        basalRate: pumpScheduledBasalRate(),
                         insulinType: state.insulinType,
                         startDate: now
                     )
@@ -841,9 +841,7 @@ extension TandemPumpManager {
             return nil
         }
 
-        // Look the schedule up at the pump's time of day. The offset, not `currentPumpTime`, which
-        // is a snapshot from the last clock read.
-        let expected = getScheduledBasalRate(at: now.addingTimeInterval(state.pumpClockOffset))
+        let expected = pumpScheduledBasalRate()
 
         // Compare whole milliunits, as the pump stores them, so float noise isn't a mismatch.
         guard Int((pumpRate * 1000).rounded()) != Int((expected * 1000).rounded()) else {
