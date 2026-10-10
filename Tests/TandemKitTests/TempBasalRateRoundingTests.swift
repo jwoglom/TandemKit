@@ -229,6 +229,18 @@ import XCTest
         }
     }
 
+    // MARK: - Delivered units
+
+    /// 1.13 U/hr for 20 minutes is 0.37666… U.
+    func testAFinalizedTempBasalsDeliveredUnitsIsOnThePumpsMilliunitIncrement() throws {
+        let start = Date(timeIntervalSinceReferenceDate: 700_000_000)
+        let dose = UnfinalizedDose(tempRate: 1.13, duration: .minutes(30), automatic: true, insulinType: nil, startDate: start)
+
+        let entry = dose.toDoseEntry(isMutable: false, endDate: start.addingTimeInterval(.minutes(20)))
+
+        XCTAssertEqual(try XCTUnwrap(entry.deliveredUnits), 0.377, accuracy: 1e-12)
+    }
+
     // MARK: - End to end through enactTempBasal
 
     /// The whole point of the fix: the dose handed to the host carries a rate the host's own

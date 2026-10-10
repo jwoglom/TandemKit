@@ -158,7 +158,7 @@ extension TandemPumpManager {
 
         if response.basalType == .tempBasal {
             reportTempBasalSegmentChanges()
-            stopTempBasalOnFailedProfileUpdate()
+            stopTempBasalOnFailedProfileUpdate(response)
         }
 
         maintainPumpClockSkewCompensation(response)
@@ -166,7 +166,7 @@ extension TandemPumpManager {
 
     /// A temp is a percent of the pump's profile, so on one that differs from the schedule it runs
     /// other than what the host was told. A zero temp is 0% of any profile and keeps running.
-    func stopTempBasalOnFailedProfileUpdate() {
+    func stopTempBasalOnFailedProfileUpdate(_ status: CurrentBasalStatusResponse) {
         guard state.basalProfileUpdateFailed, state.basalDose.type == .tempBasal, state.basalDose.value > 0 else {
             return
         }
@@ -175,7 +175,7 @@ extension TandemPumpManager {
             return
         }
         logger.warning("Stopped the temp basal: the pump's basal rate does not match the schedule")
-        startScheduledBasalDose()
+        startScheduledBasalDose(reading: status)
     }
 
     static let bolusSyncReconcileGrace: TimeInterval = .seconds(30)
@@ -569,7 +569,7 @@ extension TandemPumpManager {
                     )
                 } else {
                     dose = UnfinalizedDose(
-                        basalRate: getScheduledBasalRate(),
+                        basalRate: scheduledBasalRateInForce(),
                         insulinType: state.insulinType,
                         startDate: now
                     )
@@ -665,7 +665,7 @@ extension TandemPumpManager {
         }
         logger.info("Delivered volume for bolus \(bolusId) recovered from pump history")
         return LastBolusReport(
-            deliveredUnits: HistoryToDoseMapper.roundToReportingResolution(Double(completion.insulinDelivered)),
+            deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(completion.insulinDelivered)),
             // Same pump clock and epoch as `LastBolusStatus`, so `finalize` translates it the same way.
             pumpTimestamp: Dates.fromJan12008EpochSecondsToDate(TimeInterval(completion.pumpTimeSec))
         )
@@ -728,7 +728,7 @@ extension TandemPumpManager {
             // `roundToSupportedBolusVolume`: that floors to the 0.05 U command grid, understating
             // a partial delivery by up to an increment — the direction that lets the loop
             // over-deliver.
-            deliveredUnits: HistoryToDoseMapper.roundToReportingResolution(Double(milliunits) / 1000.0),
+            deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(milliunits) / 1000.0),
             pumpTimestamp: pumpTimestamp(from: response, bolusId: bolusId)
         )
     }

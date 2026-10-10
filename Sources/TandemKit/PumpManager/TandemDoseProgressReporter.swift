@@ -85,7 +85,7 @@ class TandemDoseProgressReporter: DoseProgressReporter {
 
         // Nearest milliunit, not the 0.05 U command grid: this estimate can end up as a dose's
         // delivered amount, and flooring it understates IOB.
-        deliveredUnits = HistoryToDoseMapper.roundToReportingResolution(min(runningFor * unitsDeliveredPerSec, total))
+        deliveredUnits = TandemPumpCapabilities.roundToReportingResolution(min(runningFor * unitsDeliveredPerSec, total))
 
         DispatchQueue.main.async {
             for observer in self.observers {

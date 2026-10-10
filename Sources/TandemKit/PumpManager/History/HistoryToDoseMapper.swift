@@ -67,16 +67,6 @@ final class HistoryToDoseMapper {
         return events.sorted { $0.date < $1.date }
     }
 
-    /// Round a pump-reported insulin amount to the pump's native milliunit reporting resolution,
-    /// stripping Float32 representation noise (e.g. `Float(0.9)` = 0.89999997) without
-    /// distorting genuine partial deliveries (e.g. a cancelled bolus of 1.041 U). Round-to-
-    /// **nearest** — NOT the floor-to-command-grid `roundToSupportedBolusVolume`, which combined
-    /// with the Float undershoot could drop a whole increment and understate delivered IOB (the
-    /// unsafe direction).
-    static func roundToReportingResolution(_ units: Double) -> Double {
-        (units * 1000).rounded() / 1000
-    }
-
     /// Set explicitly because Trio reads a nil `automatic` as an SMB.
     private static func controlIqTriggeredBolusIds(in logs: [HistoryLog]) -> Set<Int> {
         var ids = Set<Int>()
@@ -118,9 +108,9 @@ final class HistoryToDoseMapper {
             type: .bolus,
             startDate: startDate,
             endDate: endDate,
-            value: Self.roundToReportingResolution(activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested)),
+            value: TandemPumpCapabilities.roundToReportingResolution(activation.map { Double($0.bolusSize) } ?? Double(completion.insulinRequested)),
             unit: .units,
-            deliveredUnits: Self.roundToReportingResolution(Double(completion.insulinDelivered)),
+            deliveredUnits: TandemPumpCapabilities.roundToReportingResolution(Double(completion.insulinDelivered)),
             description: "Bolus #\(completion.bolusId)",
             syncIdentifier: raw.hexadecimalString,
             insulinType: insulinType,
@@ -144,7 +134,7 @@ final class HistoryToDoseMapper {
         let dose = DoseEntry(
             type: .bolus,
             startDate: startDate,
-            value: Self.roundToReportingResolution(Double(activation.bolusSize)),
+            value: TandemPumpCapabilities.roundToReportingResolution(Double(activation.bolusSize)),
             unit: .units,
             description: "Bolus #\(activation.bolusId)",
             syncIdentifier: raw.hexadecimalString,

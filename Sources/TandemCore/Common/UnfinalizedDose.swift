@@ -245,7 +245,7 @@ public class UnfinalizedDose: Equatable {
                 endDate: actualEndDate,
                 value: value,
                 unit: .unitsPerHour,
-                deliveredUnits: isMutable ? nil : value * (duration / .hours(1)),
+                deliveredUnits: isMutable ? nil : TandemPumpCapabilities.roundToReportingResolution(value * (duration / .hours(1))),
                 insulinType: insulinType,
                 automatic: automatic,
                 isMutable: isMutable

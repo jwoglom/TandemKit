@@ -227,7 +227,7 @@ import XCTest
         stubNoLastBolus()
         cancelBolus()
 
-        let expected = HistoryToDoseMapper.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(in: 20, ofBolus: Self.programmedUnits))
+        let expected = TandemPumpCapabilities.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(in: 20, ofBolus: Self.programmedUnits))
         XCTAssertGreaterThan(expected, 0)
         XCTAssertEqual(try XCTUnwrap(manager.state.pendingBolusFinalization?.deliveredUnits), expected, accuracy: 1e-9)
 
@@ -244,7 +244,7 @@ import XCTest
 
         manager.finalizePendingBolus(now: afterTheWindow)
 
-        let expected = HistoryToDoseMapper.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(in: 30, ofBolus: Self.programmedUnits))
+        let expected = TandemPumpCapabilities.roundToReportingResolution(TandemPumpCapabilities.unitsDelivered(in: 30, ofBolus: Self.programmedUnits))
         XCTAssertGreaterThan(expected, 0, "no delivering status was ever sampled")
         XCTAssertEqual(try finalizedDelivered(), expected, accuracy: 1e-9)
     }
