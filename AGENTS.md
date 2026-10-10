@@ -289,10 +289,10 @@ edit instead of at the next sync.
 - While such a bolus runs, the live bolus status also sets `bolusState` and hands hosts a progress
   reporter for it (`showUntrackedBolus`, `untrackedBolusProgress`), whatever the flags, so Loop's
   and Trio's bolus progress and stop button show it. `cancelBolus` then sends `CancelBolusRequest`
-  for it and returns no dose: history reports what went in, and the live path reports nothing. That
-  firmware accepts a cancel for a bolus started on the pump is unconfirmed; faketandem does. Trio's
-  panel takes its total from a bolus it stored in the last 20 minutes, which this one is not yet, so
-  Trio shows no panel, or a stale total, until it reads the dose in `bolusState`.
+  for it and returns no dose: history reports what went in, and the live path reports nothing.
+  Firmware accepts the cancel for a quick bolus. Trio's panel takes its total from a bolus it stored
+  in the last 20 minutes, which this one is not yet, so Trio shows no panel, or a stale total, until
+  it reads the dose in `bolusState`.
 - With `historyDoseReporting` on, while the pump may bolus on its own (Control-IQ on or handing
   back, or the quick bolus button not read as off: `awaitsHistoryBoluses`), `syncPumpData` waits
   for its history pass (`afterHistoryIsReported`), so the host doses after a pump bolus that
