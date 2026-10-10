@@ -89,4 +89,102 @@ final class BolusIntegrationTests: FaketandemIntegrationTestCase {
             "finalization must read the pump's last-bolus record; pump saw \(messages)"
         )
     }
+
+    /// Enacts a bolus the pump then holds mid-delivery, observes it through
+    /// `createBolusProgressReporter(reportingOn: queue)`, and steps the driver's clock until the
+    /// estimate reaches the programmed amount.
+    private func observeBolusUntilTheEstimateIsComplete(
+        _ driver: FaketandemHarness.Driver,
+        clock: ManualClock,
+        reportingOn queue: DispatchQueue
+    ) throws -> (reporter: DoseProgressReporter, recorder: ProgressRecorder) {
+        XCTAssertNil(try enactBolus(driver))
+        // Held, so progress is read while the pump still delivers however slow the build.
+        try harness.client.stallBolus()
+
+        let recorder = ProgressRecorder(reportingQueue: queue)
+        let reporter = try XCTUnwrap(driver.manager.createBolusProgressReporter(reportingOn: queue))
+        reporter.addObserver(recorder)
+
+        // The estimate counts from the first delivering status; stepping the clock before it is taken
+        // would start the count after the step.
+        try IntegrationWait.until("the driver to see the bolus delivering", timeout: 30) {
+            driver.manager.bolusProgressReport?.bolusStatedOn != nil
+        }
+        clock.advance(by: driver.manager.estimatedDuration(toBolus: Self.units))
+        try IntegrationWait.until("the host to be told the programmed amount went in", timeout: 15) {
+            recorder.updates.last?.progress.deliveredUnits == Self.units
+        }
+        return (reporter, recorder)
+    }
+
+    private func finishHeldBolus(_ driver: FaketandemHarness.Driver) throws {
+        try harness.client.completeBolus()
+        try IntegrationWait.until("the driver to see the bolus finish", timeout: 30) {
+            driver.manager.bolusProgressReport == nil
+        }
+    }
+
+    func testBolusProgressReachesTheHostUntilThePumpFinishesTheBolus() throws {
+        let clock = ManualClock(Date())
+        let driver = makeDriver(clock: clock)
+        try harness.pair(driver)
+        _ = try harness.sync(driver)
+        let eventsBefore = driver.bolusEvents.count
+        let hostQueue = DispatchQueue(label: "bolus-progress-host-queue")
+
+        let (reporter, recorder) = try observeBolusUntilTheEstimateIsComplete(driver, clock: clock, reportingOn: hostQueue)
+
+        XCTAssertTrue(try harness.client.snapshot().bolus.active, "progress was reported while the pump delivered")
+        XCTAssertEqual(recorder.updates.last?.progress.percentComplete, 1)
+        XCTAssertEqual(reporter.progress.deliveredUnits, Self.units)
+
+        reporter.removeObserver(recorder)
+        try finishHeldBolus(driver)
+        XCTAssertNil(driver.manager.createBolusProgressReporter(reportingOn: hostQueue), "no reporter once the bolus is over")
+        let finalized = try IntegrationWait.value("finalized bolus event", timeout: 30) {
+            driver.bolusEvents.dropFirst(eventsBefore).first { $0.dose?.isMutable == false }
+        }
+        XCTAssertEqual(finalized.dose?.programmedUnits, Self.units)
+        XCTAssertEqual(finalized.dose?.deliveredUnits, Self.units)
+    }
+
+    func testBolusProgressIsReportedOnTheQueueTheHostPassed() throws {
+        let clock = ManualClock(Date())
+        let driver = makeDriver(clock: clock)
+        try harness.pair(driver)
+        _ = try harness.sync(driver)
+        let hostQueue = DispatchQueue(label: "bolus-progress-host-queue")
+
+        let (reporter, recorder) = try observeBolusUntilTheEstimateIsComplete(driver, clock: clock, reportingOn: hostQueue)
+
+        XCTAssertTrue(recorder.updates.allSatisfy(\.onReportingQueue), "every progress callback runs on the queue the host passed")
+
+        reporter.removeObserver(recorder)
+        try finishHeldBolus(driver)
+    }
+}
+
+/// Reads progress inside the callback, as Trio's `doseProgressReporterDidUpdate` does.
+private final class ProgressRecorder: DoseProgressObserver {
+    private let reportingQueueKey = DispatchSpecificKey<Void>()
+    private let lock = NSLock()
+    private var recorded: [(onReportingQueue: Bool, progress: DoseProgress)] = []
+
+    init(reportingQueue: DispatchQueue) {
+        reportingQueue.setSpecific(key: reportingQueueKey, value: ())
+    }
+
+    var updates: [(onReportingQueue: Bool, progress: DoseProgress)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func doseProgressReporterDidUpdate(_ doseProgressReporter: DoseProgressReporter) {
+        let update = (onReportingQueue: DispatchQueue.getSpecific(key: reportingQueueKey) != nil, progress: doseProgressReporter.progress)
+        lock.lock()
+        recorded.append(update)
+        lock.unlock()
+    }
 }

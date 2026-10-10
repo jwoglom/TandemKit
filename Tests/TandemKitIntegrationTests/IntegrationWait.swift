@@ -8,8 +8,8 @@ struct IntegrationWaitTimeout: Error, CustomStringConvertible {
 }
 
 /// Polling waits for the integration tests. Pumps the current run loop while waiting, because
-/// parts of the driver (HistoryLogFetcher, the dose progress reporter) complete on the main queue
-/// and a blocked main thread would deadlock them.
+/// parts of the driver (HistoryLogFetcher) complete on the main queue and a blocked main thread
+/// would deadlock them.
 enum IntegrationWait {
     static let pollInterval: TimeInterval = 0.05
 
