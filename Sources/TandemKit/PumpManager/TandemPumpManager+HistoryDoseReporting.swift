@@ -118,7 +118,8 @@ extension TandemPumpManager {
                 raw: event.raw,
                 eventDate: event.date,
                 automatic: dose.automatic ?? false,
-                isFinalized: false
+                isFinalized: false,
+                units: dose.deliveredUnits ?? dose.programmedUnits
             ))
             return event
         }

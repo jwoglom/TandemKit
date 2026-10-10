@@ -1,0 +1,78 @@
+name: Build faketandem
+description: >-
+  Checks out faketandem into `path` and builds it to `binary`, with the pumpX2 cliparser jar it
+  runs for JPAKE in `path`/third_party. The ref is `ref` when given; otherwise a pull request's
+  branch of the same name when faketandem has one, so a change that needs an emulator change is
+  tested against it; otherwise faketandem's default branch.
+
+inputs:
+  ref:
+    description: faketandem branch, tag or SHA; empty picks as described above.
+    default: ''
+  path:
+    description: Workspace directory to check faketandem out into.
+    default: faketandem
+  binary:
+    description: Absolute path to build the faketandem binary to.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Pick the faketandem ref
+      id: ref
+      shell: bash
+      env:
+        REQUESTED: ${{ inputs.ref }}
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        ref="${REQUESTED}"
+        if [[ -z "${ref}" && -n "${HEAD_REF}" ]] \
+          && git ls-remote --exit-code --heads https://github.com/jwoglom/faketandem "refs/heads/${HEAD_REF}" > /dev/null; then
+          ref="${HEAD_REF}"
+        fi
+        echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+        echo "faketandem ref: ${ref:-<default branch>}"
+
+    - name: Checkout faketandem
+      uses: actions/checkout@v6
+      with:
+        repository: jwoglom/faketandem
+        ref: ${{ steps.ref.outputs.ref }}
+        path: ${{ inputs.path }}
+        fetch-depth: 1
+
+    # Before Go 1.24 the internal linker wrote no LC_UUID, and this macOS's dyld refuses such a
+    # binary at launch (golang/go#68678). faketandem vendors its modules: nothing to cache.
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: stable
+        cache: false
+
+    - name: Set up Java
+      uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: '17'
+
+    # The Makefile pins the cliparser version, so it is the whole cache key.
+    - name: Cache the pumpX2 cliparser jar
+      uses: actions/cache@v6
+      with:
+        path: ${{ inputs.path }}/third_party
+        key: pumpx2-cliparser-${{ hashFiles(format('{0}/Makefile', inputs.path)) }}
+
+    - name: Build faketandem and fetch the pumpX2 cliparser jar
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        BINARY: ${{ inputs.binary }}
+      run: |
+        set -euo pipefail
+        if ! ls third_party/pumpx2-cliparser-*.jar >/dev/null 2>&1; then
+          make jar
+        fi
+        ls -l third_party
+        mkdir -p "$(dirname "${BINARY}")"
+        go build -o "${BINARY}" .

@@ -73,7 +73,7 @@ never reached the test process.
 
 `.github/workflows/linux.yml` runs it too, on GitHub-hosted Ubuntu, for every push to `main` and
 `dev`, pull request and manual run. Its `virtual-pump` job builds the suite and its `faketandem`
-job the emulator and jar, side by side; the `integration` job then runs the suite in two halves at
+job the emulator and jar, from the same faketandem ref the macOS job picks, side by side; the `integration` job then runs the suite in two halves at
 once, on that build restored from the Actions cache without rebuilding. `integration_fault` takes the
 classes `FAULT_SUITES` names, the conformance groups built on injected faults; `integration` takes
 the rest, so a new class runs there unless it is added to `FAULT_SUITES`.
@@ -231,7 +231,7 @@ inbound messages since the last reset; each test attaches the whole log to its r
 | `BolusIntegrationTests` | `enactBolus(1.0)`: BolusPermission then InitiateBolus on Control, the mutable dose event, the pump's bolus record (source id 8), then finalization from `LastBolusStatus` with the same `raw`/`syncIdentifier`. |
 | `ReconnectIntegrationTests` | A pump-side drop is followed by a quick reconnect (round 3 first, key unchanged) and the new session serves a sync; a driver rebuilt from persisted `rawValue` reaches the pump on its first command. |
 | `CartridgeProcedureIntegrationTests` | The emulator's `workflow_mode` refuses `EnterChangeCartridgeMode` while fill-tubing (or change mode) is open, and the exit that would back out; `recoverAndReenterChangeCartridgeMode` unwinds it (fill-tubing exit, change-cartridge exit, enter) and re-enters. The refusal rule is inferred from a field report, not confirmed on firmware. |
-| `Conformance/` | The dose-reporting conformance groups A–D, F, G and H (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes and basal read back from the pump's history, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
+| `Conformance/` | The dose-reporting conformance groups A–D and F–I (`docs/conformance-test-plan.md`): interrupts, cancels, idempotency, pump-side failures, outages, time changes, basal read back from the pump's history and the pump's IOB against the boluses reported, A–D, F and G each ending in a diff of the host's stored doses against `PumpTimeline`. |
 | `BasalScheduleSyncIntegrationTests` | `syncBasalRateSchedule` from a pump with no profile (host schedule of 0, 1, 2, 16 and 17 entries) and from a two-segment profile (1, 2 and 3 entries): the profile the pump ends up holding, `CreateIDPRequest` only when it had none, and nothing written for an empty or 17-entry schedule. `enactTempBasal` is refused, with no `SetTempRateRequest` reaching the pump, until a sync first succeeds, including after setup refuses a 17-entry schedule (#443); on a pump holding a different profile the refusal starts an update that writes the schedule, and the next temp basal goes out. |
 | `DeliveryLimitIntegrationTests` | `syncDeliveryLimits` writes both limits and the pump reads them back on its `globalPumpSettings` event; a bolus above the synced max never reaches the pump; one above the pump's own max is refused there and reported nowhere; a temp basal is refused while an app bolus runs; Control-IQ turned on at the pump blocks automatic boluses and temp basals but not a manual bolus; a refused max-bolus write after an accepted max-basal write fails the sync and leaves the driver on the pump's max bolus. |
 | `HistoryBackfillIntegrationTests` | History backfill over logs thousands of records long, measured from the pump's request log: with the flag off no `HistoryLog*` request is ever sent; a pump first seen with two days of history has none of it read or reported; after a relaunch the walk re-reads the seven-hour lookback in 255-record slices across more than one tick, and stops within a slice of it; a bolus during the walk waits for the slice in flight at most; a record lost from a stream is asked for again in the same fetch; a relaunch reports no history bolus twice; an erased log is read from its new start. |
@@ -279,6 +279,35 @@ New files under `Tests/TandemKitIntegrationTests/` must be members of the
 --fix` does it. On Linux SwiftPM picks them up from the directory, except `Conformance/Oracles`,
 which `TandemKitTests` compiles because both test targets use it.
 
+## Trio in the simulator
+
+`TrioIntegrationTests` run Trio itself, built from `nightscout/Trio` `feat/tandem-closed-beta` with
+this TandemKit as its submodule and `VirtualPump.xcconfig` applied to the whole build, so Trio's own
+`DeviceDataManager` and pump history take the driver's reports instead of `TrioDoseStoreOracle`.
+Nothing in Trio changes for it:
+
+- `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
+  no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
+  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
+- `scripts/trio-test.sh test` starts faketandem, installs Trio fresh, and writes into its data
+  container what a set-up install holds: `onboardingCompleted`, an unpaired Tandem pump manager
+  (`PumpManagerState.plist`: `managerIdentifier` `TandemPumpManager`, empty `state`), both telemetry
+  streams off (Trio's default is on), and `settings/settings.json`. It launches Trio with
+  `TANDEMKIT_VIRTUAL_PUMP` and `TANDEMKIT_VIRTUAL_PUMP_CONTROL`, waits for the control port, and
+  runs the bundle with the port and the container path.
+- The tests reach the driver inside Trio through `VirtualPumpControl.Client`: `pair` (with a
+  long-term key the test also gives faketandem, so only the quick-reconnect rounds run), `bolus`,
+  `sync`, `status`, and `pumpEventBatches`, every batch handed to Trio with Trio's completion.
+  Trio completes a batch once it has saved it, so a completed log is all in the store.
+- They read Trio's Core Data store (`TrioCoreDataPersistentContainer.sqlite`, WAL) read-only in
+  place (`TrioStore`), and compare its rows with `TrioDoseStoreOracle` fed the same batches, using
+  the `bolusIncrement` and `maxBasal` Trio itself reads.
+
+The commands call the driver as Trio's code would, but not through Trio's own bolus or loop paths
+(`APSManager.enactBolus`, `determineBasal`), and Trio's loop does not run: it has no CGM.
+Logs (`trio.log` from the simulator's log stream, Trio's own `Documents/logs`, its store) land in
+`LOG_DIR`. The `trio` job in `.github/workflows/macos.yml` runs it on the self-hosted runners.
+
 ## What the harness found
 
 Two driver bugs, fixed in the same change that added the harness and covered by unit
@@ -294,6 +323,17 @@ tests in `TandemKitTests` (`VirtualCoreBluetoothTests`, `BTResponseParserTests`)
 Both were latent on real hardware because a Mobi negotiates a large MTU and most
 responses fit one notification; faketandem fragments every response into 20-byte
 notifications, as pumpX2's cliparser does and as a 23-byte-MTU pump would.
+
+## When CI does not run
+
+Runner minutes, the macOS ones above all, are spent only on work that can still tell something new:
+
+- **Merged or closed pull request.** `cancel-on-close.yml` cancels whatever is queued or running for the pull request's head. The merge's own push run on `dev` is a different concurrency group and carries on, as the check of the merged state.
+- **Superseded commit.** Both workflows cancel an earlier run of the same pull request or of `dev` when a newer one starts (`concurrency`).
+- **Documentation only.** A change whose files are all `docs/**`, `*.md` or `LICENSE*` skips both workflows.
+- **Tree already passed.** Each workflow's `plan` job (`scripts/ci/plan.sh`) skips the run when this workflow already passed on the same tree and the same faketandem and Trio revisions: a `dev` push of a merge whose pull request was tested on the current `dev`, or a `dev` merge into a branch that changed nothing. The pass is the `ci-passed-<workflow>-<hash>` artifact the `passed` job uploads when every job succeeded; it lasts 14 days.
+
+A manual `workflow_dispatch` and a re-run always run, and a plan step that cannot decide runs everything. A skipped run shows its reason in the `plan` job's summary.
 
 ## Known emulator gaps
 
@@ -334,6 +374,12 @@ shape of it explains what the harness is for:
 - **The websocket handler kept one shared client** and cleared it on any close, so an older
   socket closing silenced a newer one. Concurrent clients are supported; the harness still
   keeps one socket per process (`FaketandemControlSocket.shared`) because one is enough.
+- **The pump's IOB was one number that added delivered basal and decayed on a fixed four
+  hours**, answered with `iobType` 0 under Control-IQ too. A pump with Control-IQ off counts
+  bolus insulin alone over the active profile's insulin duration, and under Control-IQ shows a
+  figure that adds basal above and below the profile (`iobType` 1). faketandem keeps both now
+  (faketandem README "Insulin on board"), so group I reads the pump's own IOB instead of
+  setting it before each read, and I7 passes outright.
 - **`PUT /api/state {"pairing_code": …}` did not reach the pumpX2 bridge.** Every pairing
   code change goes through one update path now; the harness still uses the websocket
   `setPairingCode`, which returns the resulting pairing status in the same round trip.

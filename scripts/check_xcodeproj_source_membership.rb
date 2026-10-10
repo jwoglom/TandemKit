@@ -45,7 +45,8 @@ TEST_TARGET = "TandemKitTests"
 # The integration tests need a running faketandem (docs/integration-harness.md),
 # so they live in a separate target and scheme the unit-test CI never runs.
 TEST_TARGET_OVERRIDES = {
-  "Tests/TandemKitIntegrationTests" => "TandemKitIntegrationTests"
+  "Tests/TandemKitIntegrationTests" => "TandemKitIntegrationTests",
+  "Tests/TrioIntegrationTests" => "TrioIntegrationTests"
 }.freeze
 
 def repo_root
