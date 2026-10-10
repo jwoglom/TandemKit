@@ -70,7 +70,6 @@ class TandemKitFillTubingViewModel: ObservableObject {
     /// Keeps a poll that lands while the dismissal is in flight from bringing the prompt back.
     private var isAcknowledgingFillPause = false
 
-    /// Everything but the fill pause, which the prompt handles.
     var otherNotifications: [NotificationItem] {
         notificationsViewModel.notifications.filter { !$0.isFillPause }
     }
@@ -260,7 +259,6 @@ class TandemKitFillTubingViewModel: ObservableObject {
         }
     }
 
-    /// A refused dismissal leaves the alert outstanding, so the prompt comes back for another try.
     func acknowledgeFillPause() {
         guard let item = notificationsViewModel.notifications.first(where: \.isFillPause) else { return }
 

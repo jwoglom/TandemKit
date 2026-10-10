@@ -100,7 +100,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
         }
     }
 
-    /// `completion` runs on the main queue once the pump has answered and the list is updated.
+    /// `completion` runs on the main queue.
     func dismissNotification(_ item: NotificationItem, completion: ((Bool) -> Void)? = nil) {
         guard let pumpManager else {
             completion?(false)
@@ -116,8 +116,7 @@ class TandemKitNotificationsViewModel: ObservableObject {
                 return
             }
 
-            // Matched by what it is, not by `id`: every read builds new items, so a refresh landing
-            // while the pump answers leaves `item` with an id nothing in the list carries.
+            // `id` is new on every read, so it no longer matches if a refresh lands mid-dismissal.
             DispatchQueue.main.async {
                 self.notifications.removeAll { $0.type == item.type && $0.notificationId == item.notificationId }
                 completion?(true)

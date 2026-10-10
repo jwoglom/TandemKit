@@ -190,7 +190,7 @@ import XCTest
         let observation = viewModel.$isShowingFillPausedPrompt.dropFirst().sink { shownSinceOK = shownSinceOK || $0 }
         defer { observation.cancel() }
 
-        // Published ahead of the dismissal's answer, and still carrying the alert the pump has not yet cleared.
+        // Lands before the dismissal's answer, while the pump still reports the alert.
         viewModel.notificationsViewModel.refreshNotifications()
         viewModel.acknowledgeFillPause()
         drainMainQueue()
