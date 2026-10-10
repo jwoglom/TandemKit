@@ -125,13 +125,17 @@ import XCTest
     /// insulin status here, but the basal read is what emits the suspend/resume dose to LoopKit,
     /// and the pump does not always pair these events with a basalChange.
     func testSuspendAndResumeFetchReservoirAndBasalStatus() {
-        for event in [QualifyingEvent.pumpSuspend, .pumpResume] {
-            bluetooth = StubPumpBluetooth()
-            XCTAssertEqual(Set(handle([event])), [
-                "InsulinStatusRequest",
-                "CurrentBasalStatusRequest"
-            ], "\(event)")
-        }
+        XCTAssertEqual(Set(handle([.pumpSuspend])), [
+            "InsulinStatusRequest",
+            "CurrentBasalStatusRequest"
+        ])
+
+        bluetooth = StubPumpBluetooth()
+        XCTAssertEqual(Set(handle([.pumpResume])), [
+            "InsulinStatusRequest",
+            "CurrentBasalStatusRequest",
+            "ProfileStatusRequest"
+        ])
     }
 
     func testGlobalPumpSettingsFetchesLimitsAndSettings() {

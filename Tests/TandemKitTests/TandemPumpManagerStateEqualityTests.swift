@@ -65,6 +65,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
             ("settings", { $0.settings.maxBolus = 5 }),
             ("featureFlags", { $0.featureFlags[.controlIQSupport] = false }),
             ("latestInsulinOnBoard", { $0.latestInsulinOnBoard = nil }),
+            ("pumpInsulinDuration", { $0.pumpInsulinDuration?.update(to: .hours(3), at: later) }),
             ("lastReservoirReading", { $0.lastReservoirReading = nil }),
             ("lastReservoirReading.startDate", {
                 $0.lastReservoirReading = SimpleReservoirValue(startDate: later, unitVolume: 142.5)
@@ -179,6 +180,7 @@ final class TandemPumpManagerStateEqualityTests: XCTestCase {
         state.settings = TandemPumpManagerSettings(maxBolus: 9.5, maxTempBasalRate: 4.2, maxBasalScheduleEntry: 1.5)
         state.featureFlags = TandemFeatureFlags(overrides: [.controlIQSupport: true])
         state.latestInsulinOnBoard = 3.2
+        state.pumpInsulinDuration = PumpInsulinDuration(.hours(5))
         state.lastReservoirReading = SimpleReservoirValue(startDate: t0, unitVolume: 142.5)
         state.lastReservoirReadingNeedsReport = true
         state.lastBatteryReading = .init(date: t0.addingTimeInterval(-120), chargeRemaining: 0.65, isCharging: true)

@@ -11,15 +11,16 @@ import Foundation
 /// serves it.
 ///
 /// A request that maps to no fetch is not sent. Nothing in the driver consumes CGM/EGV, home
-/// screen mirror, profile status, Basal-IQ, temp rate, localization, load status or bolus
-/// permission change reason today, and issuing those would spend a BLE round trip on a response
-/// that gets discarded.
+/// screen mirror, Basal-IQ, temp rate, localization, load status or bolus permission change
+/// reason today, and issuing those would spend a BLE round trip on a response that gets
+/// discarded.
 enum QualifyingEventFetch: CaseIterable {
     /// The whole alert/alarm/reminder/CGM-alert/malfunction bundle (`fetchNotifications`).
     case notifications
     case controlIQStatus
     case basalStatus
     case bolusStatus
+    case insulinDuration
     case insulinOnBoard
     case reservoirStatus
     case batteryStatus
@@ -48,6 +49,8 @@ enum QualifyingEventFetch: CaseIterable {
             return .basalStatus
         case is CurrentBolusStatusRequest:
             return .bolusStatus
+        case is ProfileStatusRequest:
+            return .insulinDuration
         case is ControlIQIOBRequest:
             return .insulinOnBoard
         case is InsulinStatusRequest:

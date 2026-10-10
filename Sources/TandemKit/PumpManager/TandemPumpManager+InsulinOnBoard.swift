@@ -5,10 +5,8 @@ import Foundation
 ///
 /// One-sided, because the host's IOB is out of the driver's sight and runs on another insulin model.
 /// What is left of a bolus never exceeds the bolus, so a pump reading above every bolus reported
-/// within its insulin duration means some were never reported.
+/// within the pump's insulin duration means some were never reported.
 struct UnreportedInsulinOnBoardMonitor {
-    /// Taken as the longest insulin duration a Tandem profile takes, which is unconfirmed.
-    static let window: TimeInterval = .hours(8)
     /// Reports are to 0.001 U and the pump's IOB to the milliunit.
     static let tolerance = 0.05
     /// A pump-UI bolus reaches the host only once history reads its completion.
@@ -44,7 +42,93 @@ struct UnreportedInsulinOnBoardMonitor {
     }
 }
 
+/// The active profile's insulin duration: how long a bolus stays on the pump's IOB.
+public struct PumpInsulinDuration: Equatable {
+    public private(set) var current: TimeInterval
+    /// A longer duration `current` replaced. Whether the pump moves boluses already given to the
+    /// new duration is unknown, so one may stay on board this long after `replacedAt`.
+    public private(set) var replaced: TimeInterval?
+    public private(set) var replacedAt: Date?
+
+    public init(_ current: TimeInterval, replaced: TimeInterval? = nil, replacedAt: Date? = nil) {
+        self.current = current
+        self.replaced = replaced
+        self.replacedAt = replacedAt
+    }
+
+    public func window(at now: Date) -> TimeInterval {
+        guard let replaced, let replacedAt, now < replacedAt.addingTimeInterval(replaced) else {
+            return current
+        }
+        return max(current, replaced)
+    }
+
+    public mutating func update(to duration: TimeInterval, at date: Date) {
+        guard duration != current else {
+            return
+        }
+        let inEffect = window(at: date)
+        if duration >= inEffect {
+            replaced = nil
+            replacedAt = nil
+        } else if inEffect == current {
+            replaced = current
+            replacedAt = date
+        }
+        current = duration
+    }
+}
+
+extension PumpInsulinDuration: RawRepresentable {
+    public typealias RawValue = [String: Any]
+
+    public init?(rawValue: RawValue) {
+        guard let current = rawValue["current"] as? TimeInterval else {
+            return nil
+        }
+        self.init(
+            current,
+            replaced: rawValue["replaced"] as? TimeInterval,
+            replacedAt: (rawValue["replacedAt"] as? TimeInterval).map(Date.init(timeIntervalSinceReferenceDate:))
+        )
+    }
+
+    public var rawValue: RawValue {
+        var raw: RawValue = ["current": current]
+        raw["replaced"] = replaced
+        raw["replacedAt"] = replacedAt?.timeIntervalSinceReferenceDate
+        return raw
+    }
+}
+
 extension TandemPumpManager {
+    func fetchInsulinDuration() {
+        guard let status = bluetooth.write(ProfileStatusRequest()) else {
+            logger.error("Failed to fetch profile status for the insulin duration")
+            return
+        }
+        guard status.numberOfProfiles > 0 else {
+            return
+        }
+        guard let settings = bluetooth.write(IDPSettingsRequest(idpId: status.activeIdpSlotId)) else {
+            logger.error("Failed to fetch the active profile's insulin duration")
+            return
+        }
+
+        let duration = TimeInterval(settings.insulinDuration) * 60
+        guard duration > 0 else {
+            logger.warning("Active profile reports no insulin duration")
+            return
+        }
+        if var known = state.pumpInsulinDuration {
+            known.update(to: duration, at: now)
+            state.pumpInsulinDuration = known
+        } else {
+            state.pumpInsulinDuration = PumpInsulinDuration(duration)
+        }
+        notifyDelegateStateUpdated()
+    }
+
     /// Nil when the pump's IOB was not read, or can't be held against the boluses reported.
     @discardableResult
     func fetchInsulinOnBoard() -> UnreportedInsulinOnBoardMonitor.Finding? {
@@ -64,14 +148,16 @@ extension TandemPumpManager {
         notifyDelegateStateUpdated()
 
         // Under Control-IQ the pump also counts basal above and below the profile.
-        let since = now.addingTimeInterval(-UnreportedInsulinOnBoardMonitor.window)
-        guard response.type == .MUDALIAR, let reported = state.bolusReportLedger.reportedUnits(since: since) else {
+        guard response.type == .MUDALIAR,
+              let window = state.pumpInsulinDuration?.window(at: now),
+              let reported = state.bolusReportLedger.reportedUnits(since: now.addingTimeInterval(-window))
+        else {
             logger.debug("Pump IOB: \(Self.formatUnits(onBoard)) (\(String(describing: response.type)))")
             unreportedInsulinOnBoard.reset()
             return nil
         }
 
-        let hours = Int(UnreportedInsulinOnBoardMonitor.window / .hours(1))
+        let hours = String(format: "%.1f", window / .hours(1))
         logger.debug(
             "Pump bolus IOB: \(Self.formatUnits(onBoard)); boluses reported in the last \(hours) hours: \(Self.formatUnits(reported))"
         )

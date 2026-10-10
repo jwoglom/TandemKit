@@ -23,6 +23,7 @@ import XCTest
         var state = TandemPumpManagerState(rawValue: [:])
         state.pumpState.apiVersion = KnownApiVersion.mobiApiV3_5.value
         state.controlIQEnabled = controlIQEnabled
+        state.pumpInsulinDuration = PumpInsulinDuration(.hours(5))
         state.bolusReportLedger = BolusReportLedger(trackingSince: now.addingTimeInterval(-.hours(12)))
         for (index, units) in reportedBoluses.enumerated() {
             state.bolusReportLedger.record(entry(bolusId: index + 1, hoursAgo: 1, units: units))
@@ -132,12 +133,128 @@ import XCTest
         XCTAssertEqual(manager.state.latestInsulinOnBoard ?? 0, 3.0, accuracy: 0.0001)
     }
 
+    func testBolusesOlderThanTheInsulinDurationDoNotCount() {
+        let manager = makeManager(controlIQEnabled: false)
+        manager.state.bolusReportLedger.record(entry(bolusId: 1, hoursAgo: 6, units: 5))
+        manager.state.bolusReportLedger.record(entry(bolusId: 2, hoursAgo: 1, units: 1))
+        stubInsulinOnBoard(milliunits: 3000, type: .MUDALIAR)
+
+        manager.fetchInsulinOnBoard()
+        clock.advance(by: UnreportedInsulinOnBoardMonitor.persistence)
+
+        XCTAssertEqual(manager.fetchInsulinOnBoard(), .unreported(units: 2))
+    }
+
+    func testWithoutAKnownInsulinDurationNothingIsCompared() {
+        let manager = makeManager(controlIQEnabled: false)
+        manager.state.pumpInsulinDuration = nil
+        stubInsulinOnBoard(milliunits: 3000, type: .MUDALIAR)
+
+        XCTAssertNil(manager.fetchInsulinOnBoard())
+        XCTAssertEqual(manager.state.latestInsulinOnBoard ?? 0, 3.0, accuracy: 0.0001)
+    }
+
     func testBolusesBeforeTheLedgerStartedLeaveNothingToHoldTheReadingAgainst() {
         let manager = makeManager(controlIQEnabled: false)
         manager.state.bolusReportLedger = BolusReportLedger(trackingSince: now.addingTimeInterval(-.hours(1)))
         stubInsulinOnBoard(milliunits: 3000, type: .MUDALIAR)
 
         XCTAssertNil(manager.fetchInsulinOnBoard())
+    }
+
+    // MARK: - Insulin duration
+
+    private func stubActiveProfile(idpId: Int, insulinDurationMinutes: Int) {
+        bluetooth.stub(ProfileStatusRequest.self, with: ProfileStatusResponse(
+            numberOfProfiles: 2,
+            idpSlot0Id: idpId,
+            idpSlot1Id: idpId + 1,
+            idpSlot2Id: 0,
+            idpSlot3Id: 0,
+            idpSlot4Id: 0,
+            idpSlot5Id: 0,
+            activeSegmentIndex: 0
+        ))
+        bluetooth.stub(IDPSettingsRequest.self) { request in
+            IDPSettingsResponse(
+                idpId: (request as? IDPSettingsRequest)?.idpId ?? 0,
+                name: "Profile",
+                numberOfProfileSegments: 1,
+                insulinDuration: insulinDurationMinutes,
+                maxBolus: 10000,
+                carbEntry: true
+            )
+        }
+    }
+
+    func testInsulinDurationIsReadFromTheActiveProfile() {
+        let manager = makeManager(controlIQEnabled: false)
+        manager.state.pumpInsulinDuration = nil
+        stubActiveProfile(idpId: 3, insulinDurationMinutes: 270)
+
+        manager.fetchInsulinDuration()
+
+        XCTAssertEqual(bluetooth.sent(IDPSettingsRequest.self).map(\.idpId), [3])
+        XCTAssertEqual(manager.state.pumpInsulinDuration, PumpInsulinDuration(.minutes(270)))
+    }
+
+    func testSyncReadsAnUnknownInsulinDuration() {
+        let manager = makeManager(controlIQEnabled: false)
+        manager.state.pumpInsulinDuration = nil
+        manager.state.lastSettingsCheckedAt = now
+        stubActiveProfile(idpId: 1, insulinDurationMinutes: 300)
+
+        let synced = expectation(description: "syncPumpData")
+        manager.syncPumpData { _ in synced.fulfill() }
+        wait(for: [synced], timeout: 5)
+
+        XCTAssertEqual(manager.state.pumpInsulinDuration?.current, .hours(5))
+    }
+
+    func testProfileChangeReadsTheInsulinDurationBeforeTheIOB() {
+        XCTAssertEqual(
+            QualifyingEventFetch.fetches(
+                for: [.profileChange, .iobChange],
+                context: QualifyingEventContext(controlIQSupported: true)
+            ),
+            [.basalStatus, .insulinDuration, .insulinOnBoard]
+        )
+    }
+
+    func testAShorterDurationKeepsTheLongerWindowUntilItHasPassed() {
+        var duration = PumpInsulinDuration(.hours(8))
+
+        duration.update(to: .hours(4), at: now)
+
+        XCTAssertEqual(duration.window(at: now.addingTimeInterval(.hours(7))), .hours(8))
+        XCTAssertEqual(duration.window(at: now.addingTimeInterval(.hours(8))), .hours(4))
+    }
+
+    func testRereadingTheSameDurationDoesNotExtendTheLongerWindow() {
+        var duration = PumpInsulinDuration(.hours(8))
+        duration.update(to: .hours(4), at: now)
+
+        duration.update(to: .hours(4), at: now.addingTimeInterval(.hours(6)))
+        duration.update(to: .hours(3), at: now.addingTimeInterval(.hours(7)))
+
+        XCTAssertEqual(duration.window(at: now.addingTimeInterval(.hours(7.5))), .hours(8))
+        XCTAssertEqual(duration.window(at: now.addingTimeInterval(.hours(8))), .hours(3))
+    }
+
+    func testALongerDurationAppliesAtOnce() {
+        var duration = PumpInsulinDuration(.hours(8))
+        duration.update(to: .hours(4), at: now)
+
+        duration.update(to: .hours(9), at: now.addingTimeInterval(.hours(1)))
+
+        XCTAssertEqual(duration, PumpInsulinDuration(.hours(9)))
+    }
+
+    func testInsulinDurationSurvivesARawRoundTrip() {
+        var duration = PumpInsulinDuration(.hours(8))
+        duration.update(to: .hours(4), at: now)
+
+        XCTAssertEqual(PumpInsulinDuration(rawValue: duration.rawValue), duration)
     }
 
     // MARK: - Monitor

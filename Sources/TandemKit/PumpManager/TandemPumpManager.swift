@@ -542,6 +542,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchDeliveryLimits()
                 self.fetchGlobalPumpSettings()
                 self.fetchPumpInformation()
+                self.fetchInsulinDuration()
 
                 // Same reason as lastSync below: stamping this after a pump that answered nothing
                 // would suppress the next attempt for 24 hours.
@@ -553,6 +554,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 self.fetchGlobalPumpSettings()
             }
 
+            if self.state.pumpInsulinDuration == nil {
+                self.fetchInsulinDuration()
+            }
             self.enforceQuickBolusDisabled()
 
             // Ahead of the basal read, which looks segments up on the pump's clock.
@@ -2205,6 +2209,8 @@ public class TandemPumpManager: PumpManager, Pluggable {
             fetchBasalStatus()
         case .bolusStatus:
             fetchBolusStatus(fromSync: false)
+        case .insulinDuration:
+            fetchInsulinDuration()
         case .insulinOnBoard:
             fetchInsulinOnBoard()
         case .reservoirStatus:
