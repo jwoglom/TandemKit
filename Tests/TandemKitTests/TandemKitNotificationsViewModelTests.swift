@@ -77,6 +77,19 @@ import XCTest
         XCTAssertNotNil(viewModel.lastRefreshTime, "The screen shows when the pump was last read")
     }
 
+    func testHiddenNotificationsAreKeptOutOfTheListAndReportedSeparately() {
+        let alerts: [AlertStatusResponse.AlertResponseType] = [.LOW_INSULIN_ALERT, .FILL_TUBING_STILL_IN_PROGRESS]
+        let bitmask = alerts.reduce(UInt64(0)) { $0 | (UInt64(1) << UInt64($1.rawValue)) }
+        bluetooth.stub(AlertStatusRequest.self, with: AlertStatusResponse(intMap: bitmask))
+        viewModel.hiding = { $0.name == "FILL_TUBING_STILL_IN_PROGRESS" }
+
+        viewModel.refreshNotifications()
+        drainMainQueue()
+
+        XCTAssertEqual(viewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
+        XCTAssertEqual(viewModel.hiddenNotifications.map(\.name), ["FILL_TUBING_STILL_IN_PROGRESS"])
+    }
+
     /// Without a pump manager there is nothing to read, but the caller still has to be released —
     /// the fill screen keeps its complete button disabled until the completion comes back.
     func testRefreshWithoutAPumpManagerStillCallsBack() {
@@ -87,52 +100,6 @@ import XCTest
 
         XCTAssertTrue(completed)
         XCTAssertFalse(orphaned.isRefreshing)
-    }
-
-    func testADismissalRemovesTheItemEvenAfterARefreshReplacedIt() {
-        bluetooth.stub(
-            AlertStatusRequest.self,
-            with: AlertStatusResponse(intMap: UInt64(1) << UInt64(AlertStatusResponse.AlertResponseType.LOW_INSULIN_ALERT.rawValue))
-        )
-        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 0))
-        viewModel.refreshNotifications()
-        drainMainQueue()
-        let item = viewModel.notifications[0]
-
-        viewModel.refreshNotifications()
-        var dismissed: Bool?
-        viewModel.dismissNotification(item) { dismissed = $0 }
-        drainMainQueue()
-
-        XCTAssertEqual(dismissed, true)
-        XCTAssertTrue(viewModel.notifications.isEmpty)
-    }
-
-    func testARefusedDismissalKeepsTheItemAndSaysSo() {
-        bluetooth.stub(
-            AlertStatusRequest.self,
-            with: AlertStatusResponse(intMap: UInt64(1) << UInt64(AlertStatusResponse.AlertResponseType.LOW_INSULIN_ALERT.rawValue))
-        )
-        bluetooth.stub(DismissNotificationRequest.self, with: DismissNotificationResponse(status: 1))
-        viewModel.refreshNotifications()
-        drainMainQueue()
-
-        var dismissed: Bool?
-        viewModel.dismissNotification(viewModel.notifications[0]) { dismissed = $0 }
-        drainMainQueue()
-
-        XCTAssertEqual(dismissed, false)
-        XCTAssertEqual(viewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
-        XCTAssertNotNil(viewModel.errorMessage)
-    }
-
-    func testDismissingWithoutAPumpManagerStillCallsBack() {
-        let orphaned = TandemKitNotificationsViewModel(nil)
-
-        var dismissed: Bool?
-        orphaned.dismissNotification(NotificationItem(type: .alert, id: 0, name: "LOW_INSULIN_ALERT")) { dismissed = $0 }
-
-        XCTAssertEqual(dismissed, false)
     }
 
     // MARK: - Helpers

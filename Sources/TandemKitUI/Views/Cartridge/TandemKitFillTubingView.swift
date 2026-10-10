@@ -311,7 +311,7 @@ struct TandemKitFillTubingView: View {
                     .foregroundColor(.secondary)
             }
 
-            if !viewModel.hasOtherNotifications {
+            if !viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(
                         "Press and hold the button on your pump to fill tubing.",
@@ -340,7 +340,8 @@ struct TandemKitFillTubingView: View {
                 .wizardCard(background: Color(.secondarySystemGroupedBackground))
             }
 
-            if viewModel.hasOtherNotifications {
+            // Show active notifications warning during fill
+            if viewModel.hasActiveNotifications {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Active Notifications", comment: "Notifications section header")
@@ -349,7 +350,7 @@ struct TandemKitFillTubingView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        ForEach(viewModel.otherNotifications) { item in
+                        ForEach(viewModel.notificationsViewModel.notifications) { item in
                             NotificationRow(
                                 item: item,
                                 onDismiss: {

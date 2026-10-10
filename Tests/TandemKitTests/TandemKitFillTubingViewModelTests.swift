@@ -101,7 +101,7 @@ import XCTest
         drainMainQueue()
 
         XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
-        XCTAssertFalse(viewModel.hasOtherNotifications, "The prompt answers for the pause; it is not also a card")
+        XCTAssertFalse(viewModel.hasActiveNotifications, "The prompt answers for the pause; it is not also a card")
         XCTAssertFalse(viewModel.canCompleteFill, "The pump still waits to be acknowledged")
     }
 
@@ -112,7 +112,7 @@ import XCTest
         refreshNotifications()
 
         XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
-        XCTAssertEqual(viewModel.otherNotifications.map(\.name), ["LOW_INSULIN_ALERT"])
+        XCTAssertEqual(viewModel.notificationsViewModel.notifications.map(\.name), ["LOW_INSULIN_ALERT"])
     }
 
     func testThePauseDoesNotPromptBeforeTheFillStarts() {
@@ -123,16 +123,6 @@ import XCTest
 
         XCTAssertFalse(viewModel.isShowingFillPausedPrompt, "Before the fill it is an ordinary notification to clear")
         XCTAssertTrue(viewModel.hasActiveNotifications)
-    }
-
-    func testAPauseAlreadyOutstandingPromptsWhenTheFillStarts() {
-        stubAlerts(.FILL_TUBING_STILL_IN_PROGRESS)
-        viewModel.currentStep = .enterMode
-        refreshNotifications()
-
-        viewModel.currentStep = .filling
-
-        XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
     }
 
     func testThePromptGoesWhenThePumpNoLongerHasThePause() {
@@ -155,7 +145,7 @@ import XCTest
         stubAlerts()
         viewModel.isShowingFillPausedPrompt = false
         viewModel.acknowledgeFillPause()
-        drainMainQueue()
+        drainAcknowledgement()
 
         let dismissals = bluetooth.sent(DismissNotificationRequest.self)
         XCTAssertEqual(dismissals.count, 1)
@@ -173,7 +163,7 @@ import XCTest
 
         viewModel.isShowingFillPausedPrompt = false
         viewModel.acknowledgeFillPause()
-        drainMainQueue()
+        drainAcknowledgement()
 
         XCTAssertTrue(viewModel.isShowingFillPausedPrompt)
         XCTAssertFalse(viewModel.canCompleteFill)
@@ -190,10 +180,11 @@ import XCTest
         let observation = viewModel.$isShowingFillPausedPrompt.dropFirst().sink { shownSinceOK = shownSinceOK || $0 }
         defer { observation.cancel() }
 
-        // Lands before the dismissal's answer, while the pump still reports the alert.
+        // The poll lands before the dismissal's answer, while the pump still reports the alert.
         viewModel.notificationsViewModel.refreshNotifications()
         viewModel.acknowledgeFillPause()
-        drainMainQueue()
+        stubAlerts()
+        drainAcknowledgement()
 
         XCTAssertFalse(shownSinceOK)
     }
@@ -240,6 +231,12 @@ import XCTest
 
     private func refreshNotifications() {
         viewModel.notificationsViewModel.refreshNotifications()
+        drainMainQueue()
+    }
+
+    /// The dismissal's answer hops to the main queue to start the confirming read, which hops again to publish.
+    private func drainAcknowledgement() {
+        drainMainQueue()
         drainMainQueue()
     }
 

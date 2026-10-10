@@ -12,6 +12,10 @@ class TandemKitNotificationsViewModel: ObservableObject {
     @Published var lastRefreshTime: Date?
     @Published var errorMessage: String?
 
+    /// Notifications the hosting screen handles itself: kept out of `notifications`, listed here.
+    var hiding: (NotificationItem) -> Bool = { _ in false }
+    @Published private(set) var hiddenNotifications: [NotificationItem] = []
+
     /// Callers waiting for a refresh that reflects state read after they asked. Drained on the
     /// main queue when the read they are waiting on finishes; see `refreshNotifications`.
     private var pendingCompletions: [() -> Void] = []
@@ -84,7 +88,9 @@ class TandemKitNotificationsViewModel: ObservableObject {
 
         pumpManager.refreshNotifications { succeeded in
             DispatchQueue.main.async {
-                self.notifications = pumpManager.notificationBundle.get()
+                let current = pumpManager.notificationBundle.get()
+                self.notifications = current.filter { !self.hiding($0) }
+                self.hiddenNotifications = current.filter(self.hiding)
                 self.isRefreshing = false
                 if succeeded {
                     self.lastRefreshTime = Date()
@@ -100,26 +106,17 @@ class TandemKitNotificationsViewModel: ObservableObject {
         }
     }
 
-    /// `completion` runs on the main queue.
-    func dismissNotification(_ item: NotificationItem, completion: ((Bool) -> Void)? = nil) {
-        guard let pumpManager else {
-            completion?(false)
-            return
-        }
-
-        pumpManager.dismissNotification(notification: item) { success in
+    func dismissNotification(_ item: NotificationItem) {
+        pumpManager?.dismissNotification(notification: item) { success in
             guard success else {
                 DispatchQueue.main.async {
                     self.errorMessage = String(localized: "Failed to dismiss notification", comment: "dismiss notification error")
-                    completion?(false)
                 }
                 return
             }
 
-            // `id` is new on every read, so it no longer matches if a refresh lands mid-dismissal.
             DispatchQueue.main.async {
-                self.notifications.removeAll { $0.type == item.type && $0.notificationId == item.notificationId }
-                completion?(true)
+                self.notifications.removeAll { $0.id == item.id }
             }
 
             // Refresh after a short delay to get updated pump state. This has to reflect the
