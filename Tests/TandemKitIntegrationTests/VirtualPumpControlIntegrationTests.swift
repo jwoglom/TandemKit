@@ -54,11 +54,51 @@ final class VirtualPumpControlIntegrationTests: FaketandemIntegrationTestCase {
         XCTAssertEqual(oracle.events.filter { $0.type == .pumpSuspend || $0.type == .pumpResume }.map(\.type), [.pumpSuspend, .pumpResume])
     }
 
+    func testOnboardingThroughTheChannelWritesTheSetupSettingsToThePump() throws {
+        // What the setup screen builds from the host's settings before it pairs.
+        let setup = TandemPumpManagerState(
+            basalRateSchedule: BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)])!,
+            maxBasalRateUnitsPerHour: 2,
+            maxBolusUnits: 10
+        )
+        let driver = try pairThroughTheChannel(state: setup, stageBasalScheduleSync: false)
+
+        _ = try send(.init(command: .applyOnboardingSettings))
+
+        XCTAssertTrue(driver.manager.state.hasSyncedBasalRateSchedule)
+        let pump = try harness.client.snapshot()
+        XCTAssertEqual(pump.idpProfiles?.first?.segments.map(\.basalRate), [1000])
+        XCTAssertEqual(pump.limits?.maxBasalMilliunits, 2000)
+        XCTAssertEqual(pump.limits?.maxBolusMilliunits, 10000)
+    }
+
+    func testABolusCancelledThroughTheChannelIsFinalizedAtWhatThePumpDelivered() throws {
+        let driver = try pairThroughTheChannel()
+        try harness.client.setState(["bolus_rate_units_per_second": 0.05])
+        _ = try send(.init(command: .bolus, units: 2.0))
+        try IntegrationWait.until("the pump to have delivered part of the bolus", timeout: 60) {
+            try self.harness.client.snapshot().bolus.unitsDelivered >= 0.2
+        }
+
+        _ = try send(.init(command: .cancelBolus))
+
+        let delivered = try XCTUnwrap(harness.client.snapshot().lastBolus?.deliveredUnits)
+        XCTAssertLessThan(delivered, 2.0)
+        let oracle = try assertChannelReadsBackWhatTheDelegateReceived(driver)
+        XCTAssertEqual(oracle.boluses.map(\.isMutable), [false])
+        let finalized = try XCTUnwrap(driver.delegate.pumpEventBatches.flatMap(\.events).last { $0.dose?.type == .bolus })
+        XCTAssertEqual(finalized.dose?.isMutable, false)
+        XCTAssertEqual(finalized.dose?.deliveredUnits ?? -1, delivered, accuracy: 0.0005)
+    }
+
     // MARK: - Helpers
 
     /// Trio's clock: doses are finalized on real time, as they would be in the app.
-    private func pairThroughTheChannel(stageBasalScheduleSync: Bool = true) throws -> FaketandemHarness.Driver {
-        let driver = makeDriver(clock: SystemClock(), stageBasalScheduleSync: stageBasalScheduleSync)
+    private func pairThroughTheChannel(
+        state: TandemPumpManagerState = TandemPumpManagerState(rawValue: [:]),
+        stageBasalScheduleSync: Bool = true
+    ) throws -> FaketandemHarness.Driver {
+        let driver = makeDriver(state: state, clock: SystemClock(), stageBasalScheduleSync: stageBasalScheduleSync)
         let manager = driver.manager
         let server = try VirtualPumpControl.Server { manager }
         self.server = server

@@ -98,6 +98,35 @@ final class VirtualPumpControlTests: XCTestCase {
         }
     }
 
+    func testAFeatureFlagIsSetAsTheFlagsScreenSetsIt() throws {
+        XCTAssertFalse(manager.state.featureFlags[.historyDoseReporting])
+
+        try client.send(.init(command: .setFeatureFlag, featureFlag: "historyDoseReporting", enabled: true))
+
+        XCTAssertTrue(manager.state.featureFlags[.historyDoseReporting])
+        XCTAssertThrowsError(try client.send(.init(command: .setFeatureFlag, featureFlag: "noSuchFlag", enabled: true))) { error in
+            XCTAssertEqual(String(describing: error), "no feature flag noSuchFlag")
+        }
+    }
+
+    func testCartridgeAndSiteChangesReadBackAsTheMarkersTheDelegateReceived() throws {
+        try client.send(.init(command: .recordCartridgeChange))
+        try client.send(.init(command: .recordSiteChange, units: 0.3))
+        delegateQueue.sync {}
+
+        let events = try XCTUnwrap(client.send(.init(command: .pumpEventBatches)).batches).flatMap(\.pumpEvents)
+
+        XCTAssertEqual(events, delegate.pumpEventBatches.flatMap(\.events))
+        XCTAssertEqual(events.map(\.type), [.rewind, .replaceComponent(componentType: .infusionSet)])
+        XCTAssertEqual(manager.state.lastCannulaFillAmount, 0.3)
+    }
+
+    func testACancelWithNoBolusRunningAnswersWithTheDriversRefusal() {
+        XCTAssertThrowsError(try client.send(.init(command: .cancelBolus))) { error in
+            XCTAssertTrue(String(describing: error).contains("noActiveBolus"), "\(error)")
+        }
+    }
+
     func testARequestSurvivesTheWireUnchanged() throws {
         let request = VirtualPumpControl.Request(
             id: 7,
@@ -145,6 +174,9 @@ final class VirtualPumpControlTests: XCTestCase {
             ),
             NewPumpEvent(date: start.addingTimeInterval(600), dose: DoseEntry(suspendDate: start.addingTimeInterval(600)), raw: Data([0x0B]), title: "Suspend"),
             NewPumpEvent(date: start.addingTimeInterval(900), dose: DoseEntry(resumeDate: start.addingTimeInterval(900), wasProgrammedByPumpUI: true), raw: Data([0x0C]), title: "Resume"),
+            NewPumpEvent(date: start.addingTimeInterval(960), dose: nil, raw: Data([0x0D]), title: "Cartridge Change", type: .rewind),
+            NewPumpEvent(date: start.addingTimeInterval(990), dose: nil, raw: Data([0x0E]), title: "Site Change", type: .replaceComponent(componentType: .infusionSet)),
+            NewPumpEvent(date: start.addingTimeInterval(1020), dose: nil, raw: Data([0x0F]), title: "Occlusion", type: .alarm, alarmType: .occlusion),
         ]
         let batch = VirtualPumpControl.Batch(
             index: 3,
