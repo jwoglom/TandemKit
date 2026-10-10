@@ -125,13 +125,17 @@ import XCTest
     /// insulin status here, but the basal read is what emits the suspend/resume dose to LoopKit,
     /// and the pump does not always pair these events with a basalChange.
     func testSuspendAndResumeFetchReservoirAndBasalStatus() {
-        for event in [QualifyingEvent.pumpSuspend, .pumpResume] {
-            bluetooth = StubPumpBluetooth()
-            XCTAssertEqual(Set(handle([event])), [
-                "InsulinStatusRequest",
-                "CurrentBasalStatusRequest"
-            ], "\(event)")
-        }
+        XCTAssertEqual(Set(handle([.pumpSuspend])), [
+            "InsulinStatusRequest",
+            "CurrentBasalStatusRequest"
+        ])
+
+        bluetooth = StubPumpBluetooth()
+        XCTAssertEqual(Set(handle([.pumpResume])), [
+            "InsulinStatusRequest",
+            "CurrentBasalStatusRequest",
+            "ProfileStatusRequest"
+        ])
     }
 
     func testGlobalPumpSettingsFetchesLimitsAndSettings() {
@@ -197,6 +201,14 @@ import XCTest
             QualifyingEventFetch.fetches(for: [.iobChange, .bg, .cgmChange], context: legacyContext),
             []
         )
+    }
+
+    func testInsulinOnBoardIsReadOnlyUnderTheControlIQOpcode() {
+        XCTAssertEqual(
+            QualifyingEventFetch.fetches(for: [.iobChange], context: QualifyingEventContext(controlIQSupported: true)),
+            [.insulinOnBoard]
+        )
+        XCTAssertEqual(QualifyingEventFetch.fetches(for: [.iobChange], context: legacyContext), [])
     }
 
     /// The alarm bundle still reloads on a pump too old for the AAM-bits request, because the

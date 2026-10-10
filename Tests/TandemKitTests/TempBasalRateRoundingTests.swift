@@ -218,6 +218,19 @@ import XCTest
         XCTAssertFalse(TandemPumpManager.tempBasalExceedsCeiling(requestedRate: 0, baseline: 1.0))
     }
 
+    /// The pump refuses a percent above 250, so the request is cut, and the host is told what runs.
+    func testEnactAboveTheCeilingSendsTheMaximumPercentAndReportsWhatItDelivers() throws {
+        let manager = makeManager(baseline: 1.0)
+        let (delegate, queue) = attach(manager)
+        stubHappyPump(baseline: 1.0)
+
+        XCTAssertNil(enact(manager, unitsPerHour: 3.0))
+        queue.sync {}
+
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [TandemPumpManager.maximumTempBasalPercent])
+        XCTAssertEqual(try XCTUnwrap(reportedTempBasalRate(delegate)), 2.5, accuracy: 1e-9)
+    }
+
     /// Baselines below 1 U/h quantise finer than the 0.01 U/h grid, so several percents share a
     /// rate. The resolved rate must still never exceed the request.
     func testSubUnitBaselineStillRespectsTheRequest() {

@@ -18,6 +18,9 @@ public struct BolusReportLedger: Equatable {
         public let automatic: Bool
         /// The host never revises a finalized row, so nothing more is sent once this is set.
         public var isFinalized: Bool
+        /// What the host counts: the programmed amount while mutable, the delivered amount once
+        /// finalized. Nil on an entry recorded before amounts were kept.
+        public var units: Double?
 
         public init(
             bolusId: Int,
@@ -26,7 +29,8 @@ public struct BolusReportLedger: Equatable {
             raw: Data,
             eventDate: Date,
             automatic: Bool,
-            isFinalized: Bool
+            isFinalized: Bool,
+            units: Double? = nil
         ) {
             self.bolusId = bolusId
             self.pumpSerial = pumpSerial
@@ -35,6 +39,7 @@ public struct BolusReportLedger: Equatable {
             self.eventDate = eventDate
             self.automatic = automatic
             self.isFinalized = isFinalized
+            self.units = units
         }
     }
 
@@ -90,12 +95,29 @@ public struct BolusReportLedger: Equatable {
         }
     }
 
-    public mutating func markFinalized(raw: Data) {
+    public mutating func markFinalized(raw: Data, units: Double) {
         guard let index = entries.lastIndex(where: { $0.raw == raw }) else {
             return
         }
         entries[index].isFinalized = true
+        entries[index].units = units
         dropUnreported(matching: entries[index])
+    }
+
+    /// What the host counts for the boluses reported since `date`, or nil when the ledger can't
+    /// say: it started later, or holds an entry from then without an amount.
+    public func reportedUnits(since date: Date) -> Double? {
+        guard trackingSince <= date else {
+            return nil
+        }
+        var total = 0.0
+        for entry in entries where entry.eventDate >= date {
+            guard let units = entry.units else {
+                return nil
+            }
+            total += units
+        }
+        return total
     }
 
     /// No-op for a bolus this ledger already has an entry for.
@@ -190,7 +212,8 @@ extension BolusReportLedger.Entry: RawRepresentable {
             raw: raw,
             eventDate: Date(timeIntervalSinceReferenceDate: eventDate),
             automatic: rawValue["automatic"] as? Bool ?? false,
-            isFinalized: rawValue["isFinalized"] as? Bool ?? false
+            isFinalized: rawValue["isFinalized"] as? Bool ?? false,
+            units: rawValue["units"] as? Double
         )
     }
 
@@ -204,6 +227,7 @@ extension BolusReportLedger.Entry: RawRepresentable {
             "isFinalized": isFinalized
         ]
         raw["pumpSerial"] = pumpSerial
+        raw["units"] = units
         return raw
     }
 }

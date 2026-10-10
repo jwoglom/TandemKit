@@ -1,0 +1,49 @@
+name: Plan the run
+description: >-
+  Decides whether the workflow's jobs need to run (scripts/ci/plan.sh): not for a documentation-only
+  change, nor for a tree this workflow already passed with the same external checkouts. Needs a
+  checkout of the commit under test and GH_TOKEN with `actions: read`.
+
+inputs:
+  workflow:
+    description: Short name of the workflow, part of the marker's name.
+    required: true
+  externals:
+    description: >-
+      Lines of "<repository> <ref>" for repositories the jobs check out, whose revision is part of
+      what the workflow tests. An empty ref is the default branch; a comma-separated ref lists
+      candidates, tried in order.
+    default: ''
+  token:
+    description: Token that can read this repository's artifacts and compare commits.
+    default: ${{ github.token }}
+
+outputs:
+  run:
+    description: "'true' when the jobs should run."
+    value: ${{ steps.plan.outputs.run }}
+  reason:
+    description: Why.
+    value: ${{ steps.plan.outputs.reason }}
+  marker:
+    description: Name of the artifact that records a pass of this tree.
+    value: ${{ steps.plan.outputs.marker }}
+
+runs:
+  using: composite
+  steps:
+    - name: Decide
+      id: plan
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REPO: ${{ github.repository }}
+        WORKFLOW: ${{ inputs.workflow }}
+        EXTERNALS: ${{ inputs.externals }}
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_ATTEMPT: ${{ github.run_attempt }}
+        DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        DIFF_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        "${GITHUB_ACTION_PATH}/../../../scripts/ci/plan.sh" || echo "run=true" >> "${GITHUB_OUTPUT}"
+        echo "### Plan: $(grep '^reason=' "${GITHUB_OUTPUT}" | tail -n1 | cut -d= -f2-)" >> "${GITHUB_STEP_SUMMARY}"
