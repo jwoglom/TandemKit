@@ -8,17 +8,41 @@ extension TandemPumpManager {
             return
         }
 
-        let timeSinceReset = response.pumpTimeSinceReset
         let currentPumpTime = response.currentTimeDate
         let checkedAt = now
 
-        state.pumpState.timeSinceReset = timeSinceReset
-        state.currentPumpTime = currentPumpTime
-        state.lastPumpTimeCheckDate = checkedAt
-        state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
+        // Signs every request that follows, so it follows the pump even when its clock read is held.
+        state.pumpState.timeSinceReset = response.pumpTimeSinceReset
+        if confirmsPumpClockRead(offset: currentPumpTime.timeIntervalSince(checkedAt)) {
+            state.currentPumpTime = currentPumpTime
+            state.lastPumpTimeCheckDate = checkedAt
+            state.pumpTimeCheckUTCOffset = TimeZone.current.secondsFromGMT()
+        }
 
         notifyDelegateStateUpdated()
         reconcilePumpClockSkewAlert()
+    }
+
+    /// A read past `pumpClockOffsetTrustLimit` moves nothing until a second one agrees with it, so a
+    /// single bad read right after a reset can't shift every pump date, schedule lookup and alert.
+    /// A read inside the limit is applied at once, which is also what discards a held one.
+    private func confirmsPumpClockRead(offset: TimeInterval) -> Bool {
+        guard !TandemPumpManagerState.trustsPumpClockOffset(offset) else {
+            unconfirmedPumpClockOffset = nil
+            return true
+        }
+
+        if let held = unconfirmedPumpClockOffset,
+           abs(offset - held) <= TandemPumpManagerState.pumpClockOffsetConfirmationTolerance
+        {
+            logger.warning("Pump clock read \(Int(offset)) s off the phone's confirmed by a second read; applying it")
+            unconfirmedPumpClockOffset = nil
+            return true
+        }
+
+        logger.warning("Holding a pump clock read \(Int(offset)) s off the phone's until a second read agrees; keeping \(Int(state.pumpClockOffset)) s")
+        unconfirmedPumpClockOffset = offset
+        return false
     }
 
     func fetchControlIQStatus() {

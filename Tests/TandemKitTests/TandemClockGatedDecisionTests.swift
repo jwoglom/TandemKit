@@ -379,7 +379,7 @@ import XCTest
 
     func testFetchTimeSinceResetStampsTheCheckAtTheClocksCurrentReading() {
         bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
-            currentTime: 500_000_000,
+            currentTime: UInt32(Dates.fromInstantToJan12008EpochSeconds(t1)),
             pumpTimeSinceReset: 1000
         ))
         advance()

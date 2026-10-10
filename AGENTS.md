@@ -457,6 +457,13 @@ edit instead of at the next sync.
   equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
   firmware accepts 100% is unconfirmed, and a refusal fails the command.
   `syncPumpData` reads the pump's clock before its basal status for this.
+- A clock read that puts the pump more than `pumpClockOffsetTrustLimit` (24 h) from the phone's is
+  not a time zone or DST difference, and `fetchTimeSinceReset` holds it (#503: one came 2^32 ms
+  short right after a reset). It applies only once a later read within a minute of it agrees; the
+  offset in force stays meanwhile, and a read inside the limit applies at once and drops the held
+  one. `pumpState.timeSinceReset` always follows the pump, since requests are signed with it.
+  `hostDate(forPumpDate:)` still leaves a date alone under an offset past the limit that was
+  confirmed or saved by an older build, and `writePumpTime` never reports one as an adjustment.
 - The driver sets the pump's clock only from the settings screen and at setup (`writePumpTime`),
   never on its own. It reads the clock first and reports how far it moved through
   `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the

@@ -26,8 +26,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     func hostDate(forPumpDate date: Date) -> Date {
         let offset = state.pumpClockOffset
-        // An offset this large is a bogus clock read (#503, ~2^32 ms), not a skew; the date stays as the pump sent it.
-        guard abs(offset) <= TandemPumpManagerState.pumpClockOffsetTrustLimit else { return date }
+        guard TandemPumpManagerState.trustsPumpClockOffset(offset) else { return date }
         return date.addingTimeInterval(-offset)
     }
 
@@ -176,6 +175,9 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     /// The temp `maintainPumpClockSkewCompensation` has running. Only touched from command queue jobs.
     var skewCompensationTemp: (percent: Int, endsAt: Date)?
+
+    /// The last clock read `fetchTimeSinceReset` held back for a second opinion. Only touched from command queue jobs.
+    var unconfirmedPumpClockOffset: TimeInterval?
 
     /// The 279s whose basal difference has been logged this session. Only touched from command queue jobs.
     var loggedBasalDifferences = Set<UInt32>()
@@ -1520,9 +1522,11 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 return
             }
 
-            // Read first: setup writes the clock before any sync has measured it.
-            let offset = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
-                ?? (self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset)
+            // Read first: setup writes the clock before any sync has measured it. An offset past the
+            // trust limit is not reported as how far the clock moved.
+            let reading = self.bluetooth.write(TimeSinceResetRequest()).map { $0.currentTimeDate.timeIntervalSince(self.now) }
+            let lastMeasured = self.state.currentPumpTime == nil ? nil : self.state.pumpClockOffset
+            let offset = [reading, lastMeasured].compactMap { $0 }.first(where: TandemPumpManagerState.trustsPumpClockOffset)
             let epoch = Dates.fromInstantToJan12008EpochSeconds(self.now)
 
             let request = ChangeTimeDateRequest(tandemEpochTime: UInt32(epoch))
