@@ -189,19 +189,33 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Checkout faketandem
-        uses: actions/checkout@v6
-        with:
-          repository: jwoglom/faketandem
-          ref: ${{ env.FAKETANDEM_REF }}
-          path: faketandem
-          fetch-depth: 1
-
       # The swift image has neither; `make jar` downloads the jar with curl.
       - name: Install curl and make
         run: |
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends ca-certificates curl make > /dev/null
+
+      # As in macos.yml: a pull request whose branch faketandem also has tests against it.
+      - name: Pick the faketandem ref
+        id: faketandem-ref
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          ref="${FAKETANDEM_REF}"
+          if [[ -z "${ref}" && -n "${HEAD_REF}" ]] \
+            && git ls-remote --exit-code --heads https://github.com/jwoglom/faketandem "refs/heads/${HEAD_REF}" > /dev/null; then
+            ref="${HEAD_REF}"
+          fi
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "faketandem ref: ${ref:-<default branch>}"
+
+      - name: Checkout faketandem
+        uses: actions/checkout@v6
+        with:
+          repository: jwoglom/faketandem
+          ref: ${{ steps.faketandem-ref.outputs.ref }}
+          path: faketandem
+          fetch-depth: 1
 
       - name: Set up Go
         uses: actions/setup-go@v7
