@@ -79,9 +79,9 @@ final class FakeVirtualPumpServer {
     private(set) var helloCount = 0
     private var connections: [Connection] = []
 
-    private var listenFd: Int32 = -1
-    private(set) var port: UInt16 = 0
-    private var acceptThread: Thread?
+    private var listener: SocketListener?
+
+    var port: UInt16 { listener?.port ?? 0 }
 
     var endpoint: SocketPumpEndpoint { SocketPumpEndpoint(host: "127.0.0.1", port: port) }
 
@@ -92,79 +92,26 @@ final class FakeVirtualPumpServer {
     }
 
     func start() throws {
-        #if canImport(Glibc)
-        let fd = socket(AF_INET, Int32(SOCK_STREAM.rawValue), 0)
-        #else
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        #endif
-        guard fd >= 0 else {
-            throw SocketPumpError.connectFailed("socket: \(String(cString: strerror(errno)))")
-        }
-        var one: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
-
-        var address = sockaddr_in()
-        address.sin_family = sa_family_t(AF_INET)
-        address.sin_port = 0
-        address.sin_addr.s_addr = inet_addr("127.0.0.1")
-        let bound = withUnsafePointer(to: &address) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+        listener = try SocketListener(name: "FakeVirtualPumpServer") { [weak self] link in
+            guard let self else {
+                return
             }
+            let connection = Connection(link: link)
+            lock.lock()
+            connections.append(connection)
+            lock.unlock()
+            serve(connection)
         }
-        guard bound == 0, listen(fd, 8) == 0 else {
-            throw SocketPumpError.connectFailed("bind/listen: \(String(cString: strerror(errno)))")
-        }
-
-        var assigned = sockaddr_in()
-        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
-        _ = withUnsafeMutablePointer(to: &assigned) { pointer in
-            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                getsockname(fd, $0, &length)
-            }
-        }
-        port = UInt16(bigEndian: assigned.sin_port)
-        listenFd = fd
-
-        let thread = Thread { [weak self] in
-            self?.acceptLoop(fd)
-        }
-        thread.name = "FakeVirtualPumpServer.accept"
-        acceptThread = thread
-        thread.start()
     }
 
     func stop() {
         lock.lock()
         let open = connections
         connections = []
-        let fd = listenFd
-        listenFd = -1
         lock.unlock()
+        listener?.stop()
         for connection in open {
             connection.link.shutdown()
-        }
-        if fd >= 0 {
-            shutdown(fd, Int32(SHUT_RDWR))
-            close(fd)
-        }
-    }
-
-    private func acceptLoop(_ fd: Int32) {
-        while true {
-            let client = accept(fd, nil, nil)
-            guard client >= 0 else {
-                return
-            }
-            let connection = Connection(link: SocketLink(fd: client))
-            lock.lock()
-            connections.append(connection)
-            lock.unlock()
-            let thread = Thread { [weak self] in
-                self?.serve(connection)
-            }
-            thread.name = "FakeVirtualPumpServer.connection"
-            thread.start()
         }
     }
 

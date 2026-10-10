@@ -44,7 +44,10 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     public var lastReconciliation: Date?
     public var settings: TandemPumpManagerSettings = .default
     public var featureFlags: TandemFeatureFlags = .default
+    /// The pump's own IOB in units, as its screen shows it: bolus insulin only, or under
+    /// Control-IQ basal above and below the profile too. Nothing doses on it.
     public var latestInsulinOnBoard: Double?
+    public var pumpInsulinDuration: PumpInsulinDuration?
     public var lastReservoirReading: ReservoirValue?
     /// Cleared once `lastReservoirReading` has reached the delegate. Persisted so a reading taken
     /// while none was attached survives a relaunch.
@@ -190,6 +193,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
               lhs.settings == rhs.settings,
               lhs.featureFlags == rhs.featureFlags,
               lhs.latestInsulinOnBoard == rhs.latestInsulinOnBoard,
+              lhs.pumpInsulinDuration == rhs.pumpInsulinDuration,
               lhs.lastReservoirReading?.startDate == rhs.lastReservoirReading?.startDate,
               lhs.lastReservoirReading?.unitVolume == rhs.lastReservoirReading?.unitVolume,
               lhs.lastReservoirReadingNeedsReport == rhs.lastReservoirReadingNeedsReport,
@@ -276,6 +280,8 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         onboarded = rawValue["onboarded"] as? Bool ?? false
         isConnected = false // To prevent having an old isConnected state
         latestInsulinOnBoard = rawValue["latestInsulinOnBoard"] as? Double
+        pumpInsulinDuration = (rawValue["pumpInsulinDuration"] as? PumpInsulinDuration.RawValue)
+            .flatMap(PumpInsulinDuration.init(rawValue:))
         useSilentTones = rawValue["useSilentTones"] as? Bool ?? false
         // Intentionally ignores any persisted value: state saved before auto-acknowledge became
         // mandatory may hold `false`, and those pumps should migrate on, not stay off.
@@ -506,6 +512,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
         raw["pumpState"] = pumpState.rawValue
         raw["lastReconciliation"] = lastReconciliation?.timeIntervalSinceReferenceDate
         raw["latestInsulinOnBoard"] = latestInsulinOnBoard
+        raw["pumpInsulinDuration"] = pumpInsulinDuration?.rawValue
         raw["autoAcknowledgeBasalAlerts"] = autoAcknowledgeBasalAlerts
         raw["currentPumpTime"] = currentPumpTime
         raw["lastPumpTimeCheckDate"] = lastPumpTimeCheckDate
@@ -652,6 +659,7 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
             "* settings: \(settings)",
             "* featureFlags: \(featureFlags)",
             "* latestInsulinOnBoard: \(String(describing: latestInsulinOnBoard))",
+            "* pumpInsulinDuration: \(String(describing: pumpInsulinDuration))",
             "* lastReservoirReading: \(String(describing: lastReservoirReading))",
             "* lastReservoirReadingNeedsReport: \(lastReservoirReadingNeedsReport)",
             "* lastBatteryReading: \(String(describing: lastBatteryReading))",

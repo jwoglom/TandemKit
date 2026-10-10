@@ -107,6 +107,10 @@ final class BasalHistoryConformanceTests: ConformanceTestCase {
         try IntegrationWait.until("the driver to reconcile the pump's basal through record \(sequence)", timeout: timeout) {
             driver.manager.state.reportedBasal.reconciledThrough.map { Int($0) >= sequence } == true
         }
+        // The pass moves reconciledThrough before it reports, in the same command job; one queued behind it runs after both.
+        let jobsDone = ResultBox<Void>()
+        driver.bluetooth.ensureConnected { _ in jobsDone.set(()) }
+        try jobsDone.wait("the reconciliation's command job to finish", timeout: timeout)
     }
 
     private func radioOff(_ driver: FaketandemHarness.Driver) throws {

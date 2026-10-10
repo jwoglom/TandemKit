@@ -90,70 +90,15 @@ if [[ "$mode" == "build" ]]; then
   exit
 fi
 
-if [[ -z "${FAKETANDEM_BIN:-}" && ! -f "$FAKETANDEM_DIR/go.mod" ]]; then
-  echo "faketandem checkout not found at $FAKETANDEM_DIR; set FAKETANDEM_DIR or FAKETANDEM_BIN" >&2
-  exit 1
-fi
-if [[ -z "${FAKETANDEM_JAR:-}" ]]; then
-  FAKETANDEM_JAR="$(ls -t "$FAKETANDEM_DIR"/third_party/pumpx2-cliparser-*.jar 2>/dev/null | head -n1 || true)"
-fi
-if [[ -z "$FAKETANDEM_JAR" || ! -f "$FAKETANDEM_JAR" ]]; then
-  echo "pumpX2 cliparser jar not found; run 'make jar' in $FAKETANDEM_DIR or set FAKETANDEM_JAR" >&2
-  exit 1
-fi
-if ! command -v java >/dev/null; then
-  echo "java is required for faketandem's JPAKE (pumpX2 jpake-server)" >&2
-  exit 1
-fi
-
-free_port() {
-  python3 -c 'import socket; s=socket.socket(); s.bind(("'"$FAKETANDEM_HOST"'",0)); print(s.getsockname()[1]); s.close()'
-}
-
-if [[ -z "${FAKETANDEM_BIN:-}" ]]; then
-  echo "Building faketandem from $FAKETANDEM_DIR"
-  FAKETANDEM_BIN="$LOG_DIR/faketandem"
-  (cd "$FAKETANDEM_DIR" && go build -o "$FAKETANDEM_BIN" .)
-fi
-
-GATT_PORT="$(free_port)"
-API_PORT="$(free_port)"
-GATT_ADDR="$FAKETANDEM_HOST:$GATT_PORT"
-API_URL="http://$FAKETANDEM_HOST:$API_PORT"
-
-# shellcheck disable=SC2206
-EXTRA_ARGS=(${FAKETANDEM_ARGS:-})
-# ${arr[@]+"${arr[@]}"}: an empty array is "unbound" under set -u in macOS's bash 3.2.
-"$FAKETANDEM_BIN" -transport virtual -virtual-addr "$GATT_ADDR" -api-addr "$FAKETANDEM_HOST:$API_PORT" \
-  -pumpx2-jar-path "$FAKETANDEM_JAR" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} > "$LOG_DIR/faketandem.log" 2>&1 &
-FAKETANDEM_PID=$!
+# shellcheck source=scripts/faketandem.sh
+source "$ROOT/scripts/faketandem.sh"
 
 cleanup() {
-  if kill -0 "$FAKETANDEM_PID" 2>/dev/null; then
-    kill "$FAKETANDEM_PID" 2>/dev/null || true
-    wait "$FAKETANDEM_PID" 2>/dev/null || true
-  fi
-  echo "faketandem log: $LOG_DIR/faketandem.log"
+  stop_faketandem
   echo "test log: $TEST_LOG"
 }
 trap cleanup EXIT
-
-echo "faketandem pid $FAKETANDEM_PID; GATT $GATT_ADDR; API $API_URL"
-for _ in $(seq 1 120); do
-  if curl -sf "$API_URL/api/bluetooth/pairingstate" >/dev/null 2>&1; then
-    break
-  fi
-  if ! kill -0 "$FAKETANDEM_PID" 2>/dev/null; then
-    echo "faketandem exited during startup; see $LOG_DIR/faketandem.log" >&2
-    tail -n 30 "$LOG_DIR/faketandem.log" >&2
-    exit 1
-  fi
-  sleep 0.5
-done
-if ! curl -sf "$API_URL/api/bluetooth/pairingstate" >/dev/null 2>&1; then
-  echo "faketandem API did not come up on $API_URL" >&2
-  exit 1
-fi
+start_faketandem
 
 if [[ $LINUX -eq 1 ]]; then
   # swift test runs the tests in this process's environment.
