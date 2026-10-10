@@ -113,6 +113,16 @@ Bolus progress observers are called on the queue the host passed
 state. `TandemDoseProgressReporter` is shared by the command queue, the telemetry queue and every
 host queue, so its state stays behind its lock, as does the manager's reference to it.
 
+### Handshake failures
+`TandemBluetoothManager` counts JPAKE handshakes the pump ended or left unanswered
+(`recordJpakeFailure`, from the setup task). At `jpakeFailureLimit` (3) in a row it stops the
+connects the driver starts itself: the backoff retry, the one after a disconnect and the one when
+Bluetooth powers on (`reconnectAutomatically`). A host command still tries, since only an attempt
+can tell that the pump has stopped refusing. A successful handshake clears the count, and so does
+Bluetooth powering back on, which is the one thing a person can do to ask for a fresh attempt. Until
+then `connectionIssue` is `.handshakeFailing`, shown at once on the status highlight, settings and
+troubleshooting screens. The count is not persisted, so a relaunch tries afresh.
+
 ### Qualifying events
 `QualifyingEvent.suggestedHandlers` / `groupSuggestedHandlers` are ported from pumpX2's
 suggested-handler table, including the version-dependent Control-IQ info / last-bolus / battery /

@@ -92,6 +92,17 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     // (Bluetooth off) and from deactivate().
     private var reconnectRetry: DispatchWorkItem?
     private var reconnectRetryCount = 0
+    // Handshakes in a row the pump ended or left unanswered before the driver stops reconnecting on
+    // its own: one lost to a dropout is ordinary. Written from setup tasks on global queues and read
+    // by the UI, so guarded by connectStateLock.
+    static let jpakeFailureLimit = 3
+    private var consecutiveJpakeFailures = 0
+
+    var isJpakeFailureLimitReached: Bool {
+        connectStateLock.lock()
+        defer { connectStateLock.unlock() }
+        return consecutiveJpakeFailures >= Self.jpakeFailureLimit
+    }
 
     private var isActive: Bool {
         connectStateLock.lock()
@@ -259,7 +270,23 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// other command and against connection setup. `completion` always runs exactly once, with a
     /// non-nil error if the connection could not be established within `connectTimeout`.
     func ensureConnected(completion: @escaping (Error?) -> Void) {
+        runConnectJob(automatic: false, completion: completion)
+    }
+
+    /// A connect the driver starts on its own, which `isJpakeFailureLimitReached` stops. A host
+    /// command still tries: only an attempt can tell the pump has stopped refusing, and a host cycle
+    /// is minutes apart, not the seconds a disconnect-triggered retry is.
+    func reconnectAutomatically(completion: @escaping (Error?) -> Void) {
+        runConnectJob(automatic: true, completion: completion)
+    }
+
+    private func runConnectJob(automatic: Bool, completion: @escaping (Error?) -> Void) {
         commandQueue.async {
+            if automatic, self.isJpakeFailureLimitReached {
+                self.logger.info("The pump keeps ending the handshake; not reconnecting automatically")
+                completion(PumpCommError.pumpNotConnected)
+                return
+            }
             let error = self.connectIfNeeded()
             // Covers every way connectIfNeeded can fail, including the ones CoreBluetooth never
             // reports as a disconnect. A session that landed since the attempt gave up is live.
@@ -274,7 +301,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
     /// Arms the next background connect attempt, unless one is already pending. Only for a pump
     /// that has been paired: a retry firing mid-pairing would take over that connect's completion.
     private func scheduleReconnectRetry() {
-        guard isActive, manager?.state == .poweredOn, pumpManager?.isOnboarded == true else {
+        guard isActive, !isJpakeFailureLimitReached, manager?.state == .poweredOn, pumpManager?.isOnboarded == true else {
             return
         }
 
@@ -292,7 +319,7 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
             self.reconnectRetry = nil
             self.connectStateLock.unlock()
             self.logger.info("Retrying the reconnect")
-            self.ensureConnected { error in
+            self.reconnectAutomatically { error in
                 if error == nil {
                     self.logger.info("Reconnect retry completed!")
                 }
@@ -309,6 +336,40 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
         reconnectRetry = nil
         reconnectRetryCount = 0
         connectStateLock.unlock()
+    }
+
+    /// Called from the setup task when the pump ended the handshake or never answered it. Reported
+    /// with a second host paired to the same pump: it accepts the link, then drops it mid-handshake.
+    func recordJpakeFailure() {
+        connectStateLock.lock()
+        consecutiveJpakeFailures += 1
+        let failures = consecutiveJpakeFailures
+        connectStateLock.unlock()
+
+        logger.warning("JPAKE handshake failed (\(failures) in a row)")
+        guard failures == Self.jpakeFailureLimit else {
+            return
+        }
+
+        logger.error("The pump ended the handshake \(failures) times in a row; no longer reconnecting automatically")
+        cancelReconnectRetry()
+        pumpManager?.notifyDelegateStateUpdated()
+    }
+
+    func recordJpakeSuccess() {
+        resetJpakeFailures()
+    }
+
+    private func resetJpakeFailures() {
+        connectStateLock.lock()
+        let wasAtLimit = consecutiveJpakeFailures >= Self.jpakeFailureLimit
+        consecutiveJpakeFailures = 0
+        connectStateLock.unlock()
+
+        if wasAtLimit {
+            logger.info("Handshake failures cleared; reconnecting automatically again")
+            pumpManager?.notifyDelegateStateUpdated()
+        }
     }
 
     /// Establishes a connection to the pump if one is not already up. MUST be called on
@@ -512,6 +573,8 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
         // So the UI stops blaming Bluetooth before the reconnect has even been attempted.
         pumpManager?.notifyDelegateStateUpdated()
 
+        // Turning Bluetooth back on is the one thing a person can do to ask for a fresh attempt.
+        resetJpakeFailures()
         autoReconnect()
     }
 
@@ -527,7 +590,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             return
         }
 
-        ensureConnected { error in
+        reconnectAutomatically { error in
             if let error {
                 self.logger.error("Failed to auto-reconnect: \(error)")
             } else {
@@ -593,7 +656,7 @@ extension TandemBluetoothManager: CBCentralManagerDelegate {
             pendingConnect(PumpCommError.pumpNotConnected)
         } else if isActive {
             logger.debug("Auto reconnect...")
-            ensureConnected { error in
+            reconnectAutomatically { error in
                 if let error = error {
                     self.logger.warning("Failed to auto-reconnect: \(error)")
                 }

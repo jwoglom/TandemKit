@@ -23,6 +23,11 @@ extension PumpConnectionIssue {
             )
         case .pumpUnreachable:
             return String(localized: "Pump Disconnected", comment: "title for pump disconnected notice")
+        case .handshakeFailing:
+            return String(
+                localized: "Pump Pairing Problem",
+                comment: "Pump keeps ending the secure connection while the app connects, so the app stopped retrying"
+            )
         case .noRecentSync:
             return String(
                 localized: "No Recent Pump Data",
@@ -63,6 +68,14 @@ extension PumpConnectionIssue {
                 ),
                 appName
             )
+        case .handshakeFailing:
+            return String(
+                format: String(
+                    localized: "%1$@ tried to connect to your pump several times in a row, but each time the pump ended the connection while it was being secured, so %1$@ stopped trying on its own. This can happen when another phone or app is also paired with your pump. Your pump keeps delivering insulin from its own settings. Close or turn off any other app or device connected to your pump, then give %1$@ a few minutes to connect again. An app connected to your pump can also change its settings, such as basal rates, so check that they are what you expect. If this keeps happening, you may need to remove the pump from %1$@ and pair it again.",
+                    comment: "detail for the pump pairing problem notice; the placeholder is the app's name"
+                ),
+                appName
+            )
         case .noRecentSync:
             return String(
                 format: String(
@@ -77,7 +90,7 @@ extension PumpConnectionIssue {
     /// SF Symbol for the home-screen status highlight.
     var imageName: String {
         switch self {
-        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable:
+        case .bluetoothOff, .bluetoothUnauthorized, .bluetoothUnavailable, .handshakeFailing:
             return "exclamationmark.circle.fill"
         case .pumpUnreachable, .noRecentSync:
             return "antenna.radiowaves.left.and.right.slash"

@@ -22,6 +22,7 @@ final class StubPumpBluetooth: PumpBluetoothConnection {
     var manager: CBCentralManager? { nil }
     /// Defaults to a working radio, so a test that says nothing about Bluetooth exercises the link.
     var bluetoothState: CBManagerState = .poweredOn
+    var isJpakeFailureLimitReached = false
 
     private(set) var sentMessages: [Message] = []
     private(set) var responseCount = 0
