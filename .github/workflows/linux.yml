@@ -26,9 +26,38 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
+  # Skips everything for a documentation-only change or a tree that already passed (scripts/ci/plan.sh);
+  # the jobs below are gated on it, and `passed` records a pass for the next run to find.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      marker: ${{ steps.plan.outputs.marker }}
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Plan
+        id: plan
+        uses: ./.github/actions/ci-plan
+        with:
+          workflow: linux
+          externals: |
+            jwoglom/faketandem ${{ github.head_ref }}
+
   plain:
     name: plain build + tests
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
     timeout-minutes: 20
@@ -87,6 +116,8 @@ jobs:
   # compile them, so they need neither the shims nor the driver's build.
   harmonize:
     name: Harmonize lint rules
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
     timeout-minutes: 20
@@ -127,6 +158,8 @@ jobs:
 
   virtual-pump:
     name: virtual pump build + tests
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
     timeout-minutes: 20
@@ -180,6 +213,8 @@ jobs:
   # In the same image as the integration jobs, so the binary links against the libc they run.
   faketandem:
     name: faketandem build
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
     runs-on: ubuntu-latest
     container: swift:6.1.2-noble
     timeout-minutes: 15
@@ -333,3 +368,20 @@ jobs:
         with:
           name: linux-${{ matrix.suite }}-test-logs
           path: integration-logs/
+
+  passed:
+    name: passed
+    needs: [plan, plain, harmonize, virtual-pump, faketandem, integration]
+    if: success() && needs.plan.outputs.run == 'true' && needs.plan.outputs.marker != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout TandemKit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Record the pass
+        uses: ./.github/actions/ci-mark-passed
+        with:
+          marker: ${{ needs.plan.outputs.marker }}
