@@ -101,6 +101,33 @@ import XCTest
         return pump
     }
 
+    /// `pumpGlobals`, with the sounds and quick bolus button as the pump's writes since have set them.
+    private func stubPumpGlobals(quickBolusEnabled: Bool = false) {
+        var quickBolusEnabled = quickBolusEnabled
+        bluetooth.stub(SetQuickBolusSettingsRequest.self) { request in
+            quickBolusEnabled = (request as? SetQuickBolusSettingsRequest)?.enabled ?? quickBolusEnabled
+            return SetQuickBolusSettingsResponse(status: 0)
+        }
+        bluetooth.stub(PumpGlobalsRequest.self) { [unowned self] _ in
+            let written = bluetooth.sent(SetPumpSoundsRequest.self).last.map(soundsChanged(by:)) ?? Sounds()
+            let sound = { (chosen: PumpGlobalsResponse.AnnunciationEnum?) in (chosen ?? .audioHigh).rawValue }
+            return PumpGlobalsResponse(
+                quickBolusEnabledRaw: quickBolusEnabled ? 1 : 0,
+                quickBolusIncrementUnits: pumpGlobals.quickBolusIncrementUnits,
+                quickBolusIncrementCarbs: pumpGlobals.quickBolusIncrementCarbs,
+                quickBolusEntryType: pumpGlobals.quickBolusEntryType,
+                quickBolusStatus: pumpGlobals.quickBolusStatus,
+                buttonAnnun: pumpGlobals.buttonAnnun,
+                quickBolusAnnun: sound(written.quickBolus),
+                generalAnnun: sound(written.general),
+                reminderAnnun: sound(written.reminder),
+                alertAnnun: sound(written.alert),
+                alarmAnnun: sound(written.alarm),
+                fillTubingAnnun: pumpGlobals.fillTubingAnnun
+            )
+        }
+    }
+
     private func soundsChanged(by request: SetPumpSoundsRequest) -> Sounds {
         let changed = request.changeBitmask
         return Sounds(
@@ -410,7 +437,7 @@ import XCTest
 
     func testChosenSoundsSurviveAPumpGlobalsReadBeforeTheyAreWritten() throws {
         stubPump(segments: [.init(startTime: 0, basalRate: 0)])
-        bluetooth.stub(PumpGlobalsRequest.self, with: pumpGlobals)
+        stubPumpGlobals()
         let manager = makeManager(schedule: schedule([(0, 0.65)]), maxBolusUnits: 9.5, sounds: chosenSounds)
         // A .globalPumpSettings event, handled before the sound write as one deferred from pairing would be.
         bluetooth.stub(SetMaxBolusLimitRequest.self) { [weak manager] _ in
@@ -427,5 +454,68 @@ import XCTest
         let request = try XCTUnwrap(bluetooth.sent(SetPumpSoundsRequest.self).first)
         XCTAssertEqual(soundsChanged(by: request), chosenSounds)
         XCTAssertEqual(sounds(in: manager.state), chosenSounds)
+    }
+
+    // MARK: - Quick bolus button
+
+    func testSetupTurnsOffTheQuickBolusButton() throws {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        stubPumpGlobals(quickBolusEnabled: true)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        let request = try XCTUnwrap(bluetooth.sent(SetQuickBolusSettingsRequest.self).first)
+        XCTAssertFalse(request.enabled)
+        XCTAssertEqual(manager.state.quickBolusEnabled, false)
+        let order = bluetooth.sentMessages.map { String(describing: type(of: $0)) }
+        XCTAssertEqual(order.last, "ChangeTimeDateRequest")
+    }
+
+    func testSetupSendsNothingForAQuickBolusButtonAlreadyOff() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        stubPumpGlobals(quickBolusEnabled: false)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertTrue(bluetooth.didSend(PumpGlobalsRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
+        XCTAssertEqual(manager.state.quickBolusEnabled, false)
+    }
+
+    func testSetupLeavesTheQuickBolusButtonAloneWithQuickBolusSupport() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        stubPumpGlobals(quickBolusEnabled: true)
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+        manager.state.featureFlags[.quickBolusButtonSupport] = true
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertFalse(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
+    }
+
+    func testAnUnansweredPumpGlobalsReadDoesNotFailSetup() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertTrue(bluetooth.didSend(PumpGlobalsRequest.self))
+        XCTAssertFalse(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
+        XCTAssertNil(manager.state.quickBolusEnabled)
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
+    }
+
+    func testARefusedQuickBolusDisableDoesNotFailSetup() {
+        stubPump(segments: [.init(startTime: 0, basalRate: 0)])
+        stubPumpGlobals(quickBolusEnabled: true)
+        bluetooth.stub(SetQuickBolusSettingsRequest.self, with: SetQuickBolusSettingsResponse(status: 1))
+        let manager = makeManager(schedule: schedule([(0, 0.65)]))
+
+        XCTAssertNil(applyOnboardingSettings(manager))
+
+        XCTAssertEqual(manager.state.quickBolusEnabled, true, "the first sync tries again")
+        XCTAssertTrue(bluetooth.didSend(ChangeTimeDateRequest.self))
     }
 }

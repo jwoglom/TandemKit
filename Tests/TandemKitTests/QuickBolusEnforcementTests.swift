@@ -117,4 +117,20 @@ import XCTest
         XCTAssertTrue(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
         XCTAssertEqual(manager.state.quickBolusEnabled, true)
     }
+
+    func testAnUnansweredGlobalsReadLeavesTheButtonToTheNextSync() {
+        let manager = makeManager()
+        bluetooth.enqueue(PumpGlobalsRequest.self, responses: [nil, makeGlobals(quickBolusEnabled: true)])
+        bluetooth.stub(SetQuickBolusSettingsRequest.self, with: SetQuickBolusSettingsResponse(status: 0))
+
+        sync(manager)
+
+        XCTAssertFalse(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
+        XCTAssertNil(manager.state.quickBolusEnabled)
+
+        sync(manager)
+
+        XCTAssertTrue(bluetooth.didSend(SetQuickBolusSettingsRequest.self))
+        XCTAssertEqual(manager.state.quickBolusEnabled, false)
+    }
 }

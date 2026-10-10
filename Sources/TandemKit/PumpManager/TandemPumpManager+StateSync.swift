@@ -190,6 +190,41 @@ extension TandemPumpManager {
         return date < bolusDose.estimatedEndDate.addingTimeInterval(Self.bolusSyncReconcileGrace)
     }
 
+    /// History reports a bolus the app did not start only once it completes.
+    private func noteUntrackedBolus(_ response: CurrentBolusStatusResponse) {
+        guard response.status == .delivering || response.status == .requesting,
+              response.bolusId != state.bolusDose?.bolusId,
+              let serial = historyLogStoreSerial?.rawValue,
+              state.bolusReportLedger.entry(bolusId: response.bolusId, pumpSerial: serial) == nil
+        else {
+            return
+        }
+        let source = response.bolusSource.map { "\($0)" } ?? "source \(response.bolusSourceId)"
+        guard state.featureFlags.historyDoseReporting else {
+            logger.warning("Pump is delivering bolus \(response.bolusId) (\(source)), which the app did not start; with History Dose Reporting off it is never reported")
+            return
+        }
+
+        let startDate = response.timestamp == 0 ? now : min(hostDate(forPumpDate: response.timestampDate), now)
+        let floor = HistoryBackfillPlanner.emitFloor(
+            bookkeeping: state.historyBackfill,
+            trackingSince: state.bolusReportLedger.trackingSince,
+            now: now
+        )
+        guard startDate >= floor else { return }
+        let holdsBoundaryAt = max(startDate, state.lastReconciliation ?? startDate)
+        if state.bolusReportLedger.boundaryHold(pumpSerial: serial) == nil {
+            logger.info("Pump is delivering bolus \(response.bolusId) (\(source)), which the app did not start; holding lastReconciliation at \(holdsBoundaryAt) until history reports it")
+        }
+        state.bolusReportLedger.noteUnreported(BolusReportLedger.UnreportedBolus(
+            bolusId: response.bolusId,
+            pumpSerial: serial,
+            startDate: startDate,
+            holdsBoundaryAt: holdsBoundaryAt
+        ))
+        notifyDelegateStateUpdated()
+    }
+
     func fetchBolusStatus(fromSync: Bool) {
         if fromSync, shouldDeferBolusSync() {
             logger.warning("Skip bolus sync during bolus...")
@@ -204,6 +239,8 @@ extension TandemPumpManager {
             logger.error("Failed to fetch bolus status: \(type(of: CurrentBolusStatusRequest.self))")
             return
         }
+
+        noteUntrackedBolus(response)
 
         // The pump runs one bolus at a time: another id delivering means ours finished out of contact.
         let trackedBolusId = state.bolusDose?.bolusId

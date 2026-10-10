@@ -22,6 +22,9 @@ extension TandemPumpManager {
             if self.state.featureFlags.historyDoseReporting, let covered = outcome.sessionCovered {
                 self.reportHistoryBoluses(in: covered, pumpSerial: serial, floor: outcome.emitFloor, now: now)
             }
+            if !self.isAwaitingHistory {
+                self.releaseHistoryWaiters()
+            }
         }
     }
 
