@@ -59,7 +59,8 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         control?.close()
         control = nil
         do {
-            try trio?.stop(sample: testRun?.hasSucceeded == false)
+            // `hasSucceeded` is false until the run stops, which is after tearDown.
+            try trio?.stop(sample: (testRun?.totalFailureCount ?? 0) > 0)
         } catch {
             XCTFail("stopping Trio failed: \(error)")
         }
