@@ -6,7 +6,7 @@ behind an empty Sources build phase. Reads either an xcodebuild / swift test log
 aggregate "Executed N tests" line is the largest one, or with --xunit the report that
 `swift test --parallel --xunit-output` writes, since a parallel run prints no such line.
 
-Usage: check-test-count.py LOG --label NAME [--no-skips]
+Usage: check-test-count.py LOG --label NAME [--no-skips] [--suites CLASS...]
        check-test-count.py --xunit REPORT --label NAME
 """
 import argparse
@@ -24,11 +24,14 @@ parser.add_argument("log", nargs="?")
 parser.add_argument("--xunit", metavar="REPORT")
 parser.add_argument("--label", required=True)
 parser.add_argument("--no-skips", action="store_true", help="fail if any test was skipped")
+parser.add_argument("--suites", nargs="+", default=[], metavar="CLASS", help="fail unless each of these classes ran")
 args = parser.parse_args()
 if bool(args.log) == bool(args.xunit):
     parser.error("give exactly one of LOG or --xunit REPORT")
 if args.xunit and args.no_skips:
     parser.error("--no-skips needs a log: SwiftPM's xunit report records a skipped test as passed")
+if args.xunit and args.suites:
+    parser.error("--suites needs a log")
 
 if args.xunit:
     suites = ET.parse(args.xunit).getroot().iter("testsuite")
@@ -37,13 +40,17 @@ if args.xunit:
     line = f"{args.label}: {executed} tests executed, {failures} failures (parallel; skips not reported)."
 else:
     with open(args.log, errors="replace") as f:
-        runs = [tuple(int(g or 0) for g in m) for m in SUMMARY.findall(f.read())]
+        log = f.read()
+    runs = [tuple(int(g or 0) for g in m) for m in SUMMARY.findall(log)]
     if not runs:
         sys.exit("Could not find an 'Executed N tests' line in the test output. "
                  "Either the tests did not run or the reporting format changed.")
     executed, skipped, failures, unexpected = max(runs)
     if args.no_skips and skipped:
         sys.exit(f"{args.label}: {skipped} of {executed} tests were skipped.")
+    missing = [s for s in args.suites if f"Test Suite '{s}' started" not in log]
+    if missing:
+        sys.exit(f"{args.label}: {', '.join(missing)} did not run.")
     line = f"{args.label}: {executed} tests executed, {skipped} skipped, {failures} failures ({unexpected} unexpected)."
 
 if executed == 0:
