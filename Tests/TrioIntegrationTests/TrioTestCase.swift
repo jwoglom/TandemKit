@@ -190,7 +190,7 @@ class TrioTestCase: FaketandemIntegrationTestCase {
             guard before.allSatisfy(\.completed) else {
                 return nil
             }
-            let stored = try store.pumpEvents().sorted { $0.timestamp < $1.timestamp }
+            let stored = try store.pumpEvents().sorted(by: Self.rowOrder)
             return try self.allBatches() == before ? (before, stored) : nil
         }
         XCTAssertEqual(batches.compactMap(\.delegateError), [], "Trio failed to store a batch", file: file, line: line)
@@ -212,6 +212,11 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         try earlierLaunchesBatches + XCTUnwrap(control.send(.init(command: .pumpEventBatches)).batches)
     }
 
+    /// Trio fetches rows at one timestamp, such as a site change and its prime, in no fixed order.
+    private static func rowOrder(_ a: TrioStoredPumpEvent, _ b: TrioStoredPumpEvent) -> Bool {
+        (a.timestamp, a.syncIdentifier ?? "", a.type) < (b.timestamp, b.syncIdentifier ?? "", b.type)
+    }
+
     /// Row for row, in timestamp order. Trio dates a row `min(event.date, now)` with its own now at
     /// saving, the oracle with the driver's at sending, so timestamps agree to a second or two.
     private func assertSameRows(
@@ -220,11 +225,8 @@ class TrioTestCase: FaketandemIntegrationTestCase {
         file: StaticString,
         line: UInt
     ) {
-        let order: (TrioStoredPumpEvent, TrioStoredPumpEvent) -> Bool = {
-            ($0.timestamp, $0.syncIdentifier ?? "") < ($1.timestamp, $1.syncIdentifier ?? "")
-        }
-        let stored = stored.sorted(by: order)
-        let predicted = predicted.sorted(by: order)
+        let stored = stored.sorted(by: Self.rowOrder)
+        let predicted = predicted.sorted(by: Self.rowOrder)
         let report = "Trio stored:\n\(stored.map { "  \($0)" }.joined(separator: "\n"))\noracle predicted:\n\(predicted.map { "  \($0)" }.joined(separator: "\n"))"
         guard stored.count == predicted.count else {
             return XCTFail("row counts differ\n\(report)", file: file, line: line)
