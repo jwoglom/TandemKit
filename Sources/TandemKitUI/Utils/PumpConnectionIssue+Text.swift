@@ -71,7 +71,7 @@ extension PumpConnectionIssue {
         case .handshakeFailing:
             return String(
                 format: String(
-                    localized: "%1$@ tried to connect to your pump several times in a row, but each time the pump ended the connection while it was being secured, so %1$@ stopped trying on its own. This can happen when another phone or app is also paired with your pump. Your pump keeps delivering insulin from its own settings. Close or turn off any other app or device connected to your pump, then give %1$@ a few minutes to connect again. An app connected to your pump can also change its settings, such as basal rates, so check that they are what you expect. If this keeps happening, you may need to remove the pump from %1$@ and pair it again.",
+                    localized: "Your pump is rejecting connections from this device. This may be caused by a Bluetooth connection problem, pairing the pump to a different device, or running multiple apps that control the pump on the same device. Please disconnect the pump from all apps and re-pair to resume %@ controlling insulin delivery. Your pump's profile settings are used until this is resolved.",
                     comment: "detail for the pump pairing problem notice; the placeholder is the app's name"
                 ),
                 appName
