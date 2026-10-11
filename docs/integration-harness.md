@@ -288,7 +288,8 @@ Nothing in Trio changes for it:
 
 - `scripts/trio-test.sh build` builds Trio (signed ad hoc, since an unsigned simulator build has
   no entitlements and Trio stops when the keychain refuses its first write; `CI=true` to skip its
-  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`) and the test bundle.
+  SwiftFormat and Crashlytics phases; bundle id `org.nightscout.$TRIO_TEAM.trio`;
+  `-enableThreadSanitizer NO`, see below) and the test bundle.
 - `scripts/trio-test.sh test` starts faketandem and `scripts/trio-launcher.py`, and hands the
   launcher's address to the bundle. The tests run in the simulator and cannot reach `simctl`, so
   before each test `TrioTestCase` asks the launcher to install Trio anew (`/install`) and launch it
@@ -363,7 +364,18 @@ Running Trio itself found a third, fixed with a regression test in `PairingInteg
   refuse an unpaired pump, so the race needs a pairing over a derived secret the driver already
   holds, as the control channel's seeded-key pairing is.
 
-And two things in Trio that the scenarios step around:
+And three things in Trio that the scenarios step around:
+
+- Trio's scheme builds it with ThreadSanitizer, which reports a race in Trio at launch:
+  `DeviceDataManager` writes `rawPumpManager` in `pumpManager.didSet` on the main thread, after
+  setting the delegate queue, and in `pumpManagerDidUpdateState` on that queue, which the driver
+  calls once both are set. Now and then the runtime deadlocked symbolizing that report: the main
+  thread, inside the report, waited on libc's `localeconv_l` lock, held by a thread that was
+  itself waiting on TSan. Trio, its control server included, stopped answering, and the test failed
+  on `timedOut` 300 s later, whichever scenario it was. `trio-test.sh` builds Trio with
+  `-enableThreadSanitizer NO`. The reports went to Trio's stderr, which the launcher discards, so
+  the lane loses nothing. tandemkit-stress is the lane that runs Trio under TSan and reads its
+  reports.
 
 - Trio rounds the boluses it stores to the bolus increment it loaded at launch. `DeviceDataManager`
   writes the pump's 0.05 U to `preferences.json` when it sets up the pump manager, but not to the

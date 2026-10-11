@@ -49,6 +49,8 @@ TRIO_APP="$TRIO_DERIVED_DATA/Build/Products/Debug-iphonesimulator/Trio.app"
 # CI=true skips Trio's SwiftFormat and Crashlytics build phases, which rewrite sources and upload.
 # Signed ad hoc, not left unsigned: an unsigned simulator build carries no entitlements, the
 # keychain then refuses every write, and Trio stops on its first one (BaseKeychain).
+# Trio's scheme turns on ThreadSanitizer, whose runtime can deadlock symbolizing a race report and
+# freeze Trio; its reports go to a stderr the launcher discards, and tandemkit-stress is the TSan lane.
 build_trio() {
   if [[ ! -f "$TRIO_DIR/Trio.xcworkspace/contents.xcworkspacedata" || ! -d "$TRIO_DIR/TandemKit/Sources" ]]; then
     echo "No Trio checkout with TandemKit at $TRIO_DIR; set TRIO_DIR" >&2
@@ -56,7 +58,7 @@ build_trio() {
   fi
   xcodebuild build -workspace "$TRIO_DIR/Trio.xcworkspace" -scheme Trio -configuration Debug \
     -destination "${DESTINATION:-platform=iOS Simulator,id=$UDID}" -derivedDataPath "$TRIO_DERIVED_DATA" \
-    -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation \
+    -xcconfig "$ROOT/VirtualPump.xcconfig" -skipMacroValidation -skipPackagePluginValidation -enableThreadSanitizer NO \
     DEVELOPER_TEAM="$TRIO_TEAM" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- PROVISIONING_PROFILE_SPECIFIER= \
     CI=true "$@"
 }
