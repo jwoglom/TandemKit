@@ -65,6 +65,7 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
     case basalScheduleNotSynced
     case failedUpdatePumpProfile
     case pumpProfileBasalRateIsZero
+    case pumpClockUntrusted
     case tempBasalRateMismatch(expected: Double, actual: Double)
     case unsupportedTempBasalDuration(minutes: Int)
 
@@ -111,6 +112,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "The pump's basal rate is 0 U/hr",
                 comment: "Error when a temp basal is blocked because the pump's active profile has a basal rate of zero"
+            )
+        case .pumpClockUntrusted:
+            return String(
+                localized: "The pump's clock is more than a day different from the phone's",
+                comment: "Error when a bolus or temp basal is blocked because the pump's clock is more than a day off the phone's"
             )
         case let .tempBasalRateMismatch(expected, actual):
             return String(
@@ -169,6 +175,11 @@ public enum TandemPumpManagerValidationError: LocalizedError, Equatable {
             return String(
                 localized: "A temporary basal rate is a percentage of the pump's basal rate, so it would deliver no insulin. Check the active profile on the pump, or save your basal rates in the app's settings.",
                 comment: "Recovery suggestion when a temp basal is blocked because the pump's active profile has a basal rate of zero"
+            )
+        case .pumpClockUntrusted:
+            return String(
+                localized: "Boluses and temporary basal rates from the app are paused until the pump's time is set. Open the pump's settings in the app and sync its time.",
+                comment: "Recovery suggestion when a bolus or temp basal is blocked because the pump's clock is more than a day off the phone's"
             )
         case .tempBasalRateMismatch:
             return String(

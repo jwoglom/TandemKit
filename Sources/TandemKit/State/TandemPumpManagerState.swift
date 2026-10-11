@@ -626,7 +626,17 @@ public struct TandemPumpManagerState: RawRepresentable, Equatable {
     /// are worked out against the pump's own and the user is told to sync its clock.
     public static let pumpClockSkewThreshold: TimeInterval = .minutes(5)
 
+    /// Past this the clocks differ by more than any time zone or DST change can explain.
     public static let pumpClockOffsetTrustLimit: TimeInterval = .hours(24)
+
+    public static func trustsPumpClockOffset(_ offset: TimeInterval) -> Bool {
+        abs(offset) <= pumpClockOffsetTrustLimit
+    }
+
+    /// Follows the latest clock read, so it clears as soon as one reads inside the limit.
+    public var isPumpClockUntrusted: Bool {
+        currentPumpTime != nil && !Self.trustsPumpClockOffset(pumpClockOffset)
+    }
 
     public var isPumpClockSkewed: Bool {
         currentPumpTime != nil && abs(pumpClockOffset) > Self.pumpClockSkewThreshold

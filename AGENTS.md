@@ -483,6 +483,16 @@ edit instead of at the next sync.
   equal to the pump's own rate goes out as an explicit 100% temp, reported at that rate; whether
   firmware accepts 100% is unconfirmed, and a refusal fails the command.
   `syncPumpData` reads the pump's clock before its basal status for this.
+- A pump clock more than `pumpClockOffsetTrustLimit` (24 h) off the phone's
+  (`isPumpClockUntrusted`) is more than a time zone or DST change explains, so nothing that adds
+  insulin acts on it. `enactBolus` and `enactTempBasal` fail with `pumpClockUntrusted`, except a zero
+  temp and a cancel, which only reduce delivery. `maintainPumpClockSkewCompensation` starts nothing
+  and stops the temp it has running, `verifyDeliveredBasalRate` skips its profile check, which
+  looks the schedule up on that clock, and `pumpSegmentChanges` finds none. It follows the latest
+  read, so it clears at the first sync that reads the clock inside the limit, as after the settings
+  screen sets it. One read came 2^32 ms short right after a pump reset (#503), so a single bad read
+  refuses dosing until the next sync, up to a loop cycle. `hostDate(forPumpDate:)` leaves a date
+  alone under such an offset.
 - The driver sets the pump's clock only from the settings screen and at setup (`writePumpTime`),
   never on its own. It reads the clock first and reports how far it moved through
   `didAdjustPumpClockBy`, negative for a pump that ran ahead (MinimedKit passes the drift, the

@@ -848,6 +848,10 @@ extension TandemPumpManager {
     /// Writes the host's schedule over a mismatch rather than leaving the pump's profile: hosts take
     /// the pump to hold what they last saved, as Trio keeps a basal profile only once a sync takes.
     func verifyDeliveredBasalRate(_ response: CurrentBasalStatusResponse) {
+        // The schedule is looked up on the pump's clock, so an untrusted one would find a mismatch
+        // that isn't there and start rewriting a profile that is right.
+        guard !state.isPumpClockUntrusted else { return }
+
         guard let mismatch = deliveredBasalRateMismatch(response) else {
             // One matching segment is not the whole profile; only a read-back ends an update.
             if state.basalProfileUpdateStatus != .none {
@@ -970,7 +974,7 @@ extension TandemPumpManager {
         }
 
         let wanted: Int? = {
-            guard state.isPumpClockSkewed, !state.useControlIQ, state.hasSyncedBasalRateSchedule,
+            guard state.isPumpClockSkewed, !state.isPumpClockUntrusted, !state.useControlIQ, state.hasSyncedBasalRateSchedule,
                   state.basalDose.type == .basal, state.deliveryTransitions.pending == nil,
                   status.basalType != .suspend, status.profileBasalRate > 0,
                   bolusProgressReport?.isUnfinalized() != true

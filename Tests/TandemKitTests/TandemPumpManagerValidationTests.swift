@@ -573,6 +573,128 @@ import XCTest
         XCTAssertEqual(manager.hostDate(forPumpDate: manager.now), manager.now)
     }
 
+    // MARK: - A pump clock more than a day off the phone's
+
+    /// #503: one read came 2^32 ms behind the phone.
+    private static let twoToThe32MsShort: TimeInterval = -4_294_967
+
+    private func setPumpClockOffset(_ manager: TandemPumpManager, _ offset: TimeInterval) {
+        manager.state.lastPumpTimeCheckDate = manager.now
+        manager.state.currentPumpTime = manager.now.addingTimeInterval(offset)
+    }
+
+    private func enactBolus(_ manager: TandemPumpManager, units: Double, _ activationType: BolusActivationType) -> PumpManagerError? {
+        let expectation = expectation(description: "Bolus completion")
+        var error: PumpManagerError?
+        manager.enactBolus(units: units, activationType: activationType) {
+            error = $0
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5.0)
+        return error
+    }
+
+    func testBolusesAreRefusedWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        for type in [BolusActivationType.manualNoRecommendation, .manualRecommendationAccepted, .automatic] {
+            XCTAssertEqual(validationError(from: enactBolus(manager, units: 1.0, type)), .pumpClockUntrusted, "\(type)")
+        }
+        XCTAssertFalse(bluetooth.didSend(BolusPermissionRequest.self))
+    }
+
+    func testTempBasalsAreRefusedWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))), .pumpClockUntrusted)
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 0.5, for: .minutes(30))), .pumpClockUntrusted)
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+    }
+
+    func testAZeroTempAndACancelStillGoOutWhileThePumpsClockIsOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: .minutes(30)))
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 0, for: 0))
+        XCTAssertEqual(bluetooth.sent(SetTempRateRequest.self).map(\.percent), [0])
+    }
+
+    func testTempBasalsGoOutOnceAClockReadIsWithinADay() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+        XCTAssertEqual(validationError(from: enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30))), .pumpClockUntrusted)
+
+        bluetooth.stub(TimeSinceResetRequest.self, with: TimeSinceResetResponse(
+            currentTime: UInt32(Dates.fromInstantToJan12008EpochSeconds(manager.now)),
+            pumpTimeSinceReset: 600
+        ))
+        manager.fetchTimeSinceReset()
+
+        XCTAssertFalse(manager.state.isPumpClockUntrusted)
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+    }
+
+    func testAZoneSizedOffsetDoesNotBlockDosing() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(10), pumpMilliunits: 800, bluetooth: bluetooth)
+        setPumpClockOffset(manager, .hours(3))
+
+        XCTAssertNil(enactTempBasal(manager, unitsPerHour: 1.5, for: .minutes(30)))
+    }
+
+    func testNoClockSkewTempIsStartedOnAClockOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(5), pumpMilliunits: 2000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        manager.fetchBasalStatus()
+
+        XCTAssertFalse(bluetooth.didSend(SetTempRateRequest.self))
+        XCTAssertNil(manager.skewCompensationTemp)
+    }
+
+    func testAClockSkewTempRunningWhenTheClockGoesOverADayOffIsStopped() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeSkewedManager(bluetooth: bluetooth)
+        manager.fetchBasalStatus()
+        XCTAssertEqual(manager.skewCompensationTemp?.percent, 50)
+
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+        manager.fetchBasalStatus()
+
+        XCTAssertTrue(bluetooth.didSend(StopTempRateRequest.self))
+        XCTAssertNil(manager.skewCompensationTemp)
+    }
+
+    /// Phone 13:55 with the pump on the 1.0 U/hr segment; an offset of 49 days 17 h puts the schedule lookup in the 2.0 segment.
+    func testNoBasalRateMismatchIsNotedOnAClockOverADayOff() {
+        let bluetooth = StubPumpBluetooth()
+        let manager = makeBaselineManager(at: .hours(14) - .minutes(5), pumpMilliunits: 1000, bluetooth: bluetooth)
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        manager.fetchBasalStatus()
+
+        XCTAssertNil(manager.state.basalRateMismatchDetectedAt)
+    }
+
+    func testNoPumpSegmentChangesAreFoundOnAClockOverADayOff() {
+        let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: StubPumpBluetooth())
+        let through = manager.now.addingTimeInterval(.hours(6))
+        setPumpClockOffset(manager, 0)
+        XCTAssertEqual(manager.pumpSegmentChanges(after: manager.now, through: through).count, 1)
+
+        setPumpClockOffset(manager, Self.twoToThe32MsShort)
+
+        XCTAssertEqual(manager.pumpSegmentChanges(after: manager.now, through: through).count, 0)
+    }
+
     func testPumpSegmentChangesAreDatedOnThePhonesClock() {
         let bluetooth = StubPumpBluetooth()
         let manager = makeBaselineManager(at: .hours(13), pumpMilliunits: 1000, bluetooth: bluetooth)

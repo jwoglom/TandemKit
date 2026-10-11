@@ -26,8 +26,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
 
     func hostDate(forPumpDate date: Date) -> Date {
         let offset = state.pumpClockOffset
-        // An offset this large is a bogus clock read (#503, ~2^32 ms), not a skew; the date stays as the pump sent it.
-        guard abs(offset) <= TandemPumpManagerState.pumpClockOffsetTrustLimit else { return date }
+        guard TandemPumpManagerState.trustsPumpClockOffset(offset) else { return date }
         return date.addingTimeInterval(-offset)
     }
 
@@ -689,6 +688,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if state.isPumpClockUntrusted {
+            logger.warning("[enactBolus] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
+            completion(.deviceState(TandemPumpManagerValidationError.pumpClockUntrusted))
+            return
+        }
+
         // The pump enforces its own max bolus limit (pushed down by syncDeliveryLimits via
         // SetMaxBolusLimitRequest), but check here too so an out-of-range request fails fast with a
         // specific error instead of being rejected mid-handshake as a generic permission denial.
@@ -900,6 +905,12 @@ public class TandemPumpManager: PumpManager, Pluggable {
         let isCancel = duration <= 0
         // 0% of any profile is 0, so a zero temp is safe whatever the pump holds, and always allowed.
         let isZeroTemp = !isCancel && unitsPerHour == 0
+
+        guard isCancel || isZeroTemp || !state.isPumpClockUntrusted else {
+            logger.warning("[enactTempBasal] Blocked: the pump's clock is \(Int(state.pumpClockOffset)) s off the phone's")
+            completion(.deviceState(TandemPumpManagerValidationError.pumpClockUntrusted))
+            return
+        }
 
         // Refused before anything is sent: the pump would refuse it after the running temp was stopped.
         let minutes = Int(exactly: duration.minutes.rounded(.down)) ?? Int.max
@@ -2534,6 +2545,8 @@ extension TandemPumpManager {
         guard items.count > 1, end > start else { return [] }
 
         let offset = state.pumpClockOffset
+        guard TandemPumpManagerState.trustsPumpClockOffset(offset) else { return [] }
+
         let pumpStart = start.addingTimeInterval(offset)
         let startOfDay = Calendar.current.startOfDay(for: pumpStart)
         var rate = getScheduledBasalRate(at: pumpStart)
