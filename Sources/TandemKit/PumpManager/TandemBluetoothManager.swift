@@ -311,8 +311,8 @@ class TandemBluetoothManager: NSObject, PumpBluetoothConnection {
                 self.markLinkDown()
                 self.scheduleReconnectRetry()
             }
-            if automatic, error == nil, !hadSession {
-                self.pumpManager?.didReconnectAutomatically()
+            if error == nil, !hadSession {
+                self.pumpManager?.didReconnect()
             }
             completion(error)
         }

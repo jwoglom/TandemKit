@@ -96,9 +96,9 @@ Each attempt is bounded by `connectTimeout` (30 s). The wait is a semaphore with
 than a timer on the command queue, so a blocked queue cannot starve it.
 
 After an unexpected disconnect, or when Bluetooth comes back on, the manager reconnects on its own
-unless the pump has been deactivated. A reconnect that brings a session up then queues a sync
-(`TandemPumpManager.didReconnectAutomatically`), since the pump's qualifying events were lost while
-the link was down: what the pump did meanwhile reaches the host without waiting for the next
+unless the pump has been deactivated. Any connect job that brings a session up, whoever started it,
+then queues a sync (`TandemPumpManager.didReconnect`), since the pump's qualifying events were lost
+while the link was down: what the pump did meanwhile reaches the host without waiting for the next
 `ensureCurrentPumpData` (#351). Not before the host has adopted the manager, whose first poll syncs.
 
 ### Session setup

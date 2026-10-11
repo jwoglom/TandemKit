@@ -1614,13 +1614,14 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
-    /// The pump's qualifying events are lost while the link is down, so whatever it did meanwhile
-    /// reaches the host only through a sync. Before the host adopts the manager, its first poll syncs.
-    func didReconnectAutomatically() {
+    /// Called by whichever connect brought the session up. The pump's qualifying events are lost while
+    /// the link is down, so what it did meanwhile reaches the host only through a sync.
+    func didReconnect() {
+        // The host's first poll syncs; a sync that reconnected is in flight, and this joins it.
         guard canNotifyDelegate else {
             return
         }
-        logger.info("Reconnected on its own; syncing")
+        logger.info("Reconnected; syncing")
         syncPumpData(onlyIfIdle: true, completion: nil)
     }
 

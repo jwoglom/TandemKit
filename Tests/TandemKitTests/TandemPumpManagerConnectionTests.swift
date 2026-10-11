@@ -298,7 +298,7 @@ import XCTest
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
     }
 
-    // MARK: - Automatic reconnect
+    // MARK: - Reconnect
 
     @discardableResult
     private func attachDelegate() -> (MockPumpManagerDelegate, DispatchQueue) {
@@ -312,7 +312,7 @@ import XCTest
     }
 
     /// The pump's qualifying events go nowhere while the link is down (#351).
-    func testAnAutomaticReconnectSyncsAndReportsAFreshBoundary() {
+    func testAReconnectSyncsAndReportsAFreshBoundary() {
         let (delegate, queue) = attachDelegate()
         stubSyncResponses()
         // Inside the poll's throttle, which the reconnect does not wait out.
@@ -320,7 +320,7 @@ import XCTest
         manager.state.lastReconciliation = beforeTheDrop
         manager.state.isConnected = true
 
-        manager.didReconnectAutomatically()
+        manager.didReconnect()
         queue.sync {}
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
@@ -330,16 +330,16 @@ import XCTest
         XCTAssertEqual(delegate.pumpEventBatches.last?.lastReconciliation, boundary)
     }
 
-    func testAnAutomaticReconnectBeforeTheHostAdoptsThePumpLeavesTheSyncToItsFirstPoll() {
+    func testAReconnectBeforeTheHostAdoptsThePumpLeavesTheSyncToItsFirstPoll() {
         stubSyncResponses()
 
-        manager.didReconnectAutomatically()
+        manager.didReconnect()
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 0)
         XCTAssertTrue(bluetooth.sentMessages.isEmpty)
     }
 
-    func testAnAutomaticReconnectDuringASyncDoesNotQueueAnother() {
+    func testASyncThatReconnectsDoesNotQueueAnother() {
         attachDelegate()
         stubSyncResponses()
 
@@ -347,7 +347,7 @@ import XCTest
         bluetooth.onWrite = { [weak self] _ in
             guard !reconnected, let self else { return }
             reconnected = true
-            self.manager.didReconnectAutomatically()
+            self.manager.didReconnect()
         }
 
         let synced = expectation(description: "syncPumpData completes")
@@ -372,7 +372,7 @@ import XCTest
             self.manager.ensureCurrentPumpData { polledLastSync = $0 }
         }
 
-        manager.didReconnectAutomatically()
+        manager.didReconnect()
 
         XCTAssertEqual(bluetooth.ensureConnectedCount, 1)
         XCTAssertNotEqual(manager.state.lastReconciliation, stale)

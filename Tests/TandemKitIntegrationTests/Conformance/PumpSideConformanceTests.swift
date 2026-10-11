@@ -927,7 +927,7 @@ final class PumpSideConformanceTests: ConformanceTestCase {
     }
 
     /// The pump stops delivery while the link is down, so none of its qualifying events reach the driver;
-    /// the next command runs ahead of any sync an automatic reconnect queues, and finds the state as it was.
+    /// the next command's own connect queues the reconnect's sync behind it, so it finds the state as it was.
     private func suspendOutOfEarshot(reason: String = "user", thenAdvance seconds: TimeInterval) throws -> Date {
         _ = try harness.client.armFault(FaketandemFaultSpec(.radioOff))
         try IntegrationWait.until("the emulator to drop the link", timeout: 30) {

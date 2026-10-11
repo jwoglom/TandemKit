@@ -65,9 +65,40 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
     }
 
     /// Whatever the pump did out of range reaches the host only through a sync, and the host's next
-    /// poll can be minutes off (#351).
-    func testAReconnectRetryThatLandsSyncsAndReportsToTheHost() throws {
+    /// poll can be minutes off (#351). The reconnect retry or a job of the driver's own lands it.
+    func testAReconnectAfterAnOutageSyncsAndReportsToTheHost() throws {
         let driver = makeDriver()
+        let outage = try pairSyncAndGoOutOfRange(driver)
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+
+        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
+        try assertSyncedOnItsOwn(driver, after: outage, timeout: retryBudget)
+    }
+
+    /// A history tick or report reconnecting first left the retry nothing to do, so neither synced.
+    func testACommandThatReconnectsAfterAnOutageIsFollowedByASync() throws {
+        let driver = makeDriver()
+        let outage = try pairSyncAndGoOutOfRange(driver)
+        // Stops the driver's own reconnects, so only the command below can bring the link back.
+        for _ in 0 ..< TandemBluetoothManager.jpakeFailureLimit {
+            driver.bluetooth.recordJpakeFailure()
+        }
+        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+
+        let connected = ResultBox<Error?>()
+        driver.bluetooth.ensureConnected { connected.set($0) }
+        XCTAssertNil(try connected.wait("the command's connect", timeout: 60))
+        try assertSyncedOnItsOwn(driver, after: outage, timeout: 60)
+    }
+
+    private struct Outage {
+        let reconciliationBefore: Date
+        let batchesBefore: Int
+        let logStart: Int
+    }
+
+    /// Leaves the radio off; the caller turns it back on.
+    private func pairSyncAndGoOutOfRange(_ driver: FaketandemHarness.Driver) throws -> Outage {
         try harness.pair(driver)
         addTeardownBlock { try self.harness.client.armFault(FaketandemFaultSpec(.radioOn)) }
         let reconciliationBefore = try XCTUnwrap(try harness.sync(driver))
@@ -78,18 +109,25 @@ final class ReconnectIntegrationTests: FaketandemIntegrationTestCase {
         let logStart = try harness.client.snapshot().requestLog.lastSeq
         // So the reconnect's boundary is strictly newer than the sync's.
         try XCTUnwrap(driver.clock as? ManualClock).advance(by: .minutes(1))
-        try harness.client.armFault(FaketandemFaultSpec(.radioOn))
+        return Outage(reconciliationBefore: reconciliationBefore, batchesBefore: batchesBefore, logStart: logStart)
+    }
 
-        let retryBudget = TandemBluetoothManager.reconnectRetryDelays.prefix(3).reduce(0, +) + 30
-        try IntegrationWait.until("the driver to sync on its own", timeout: retryBudget) {
-            driver.delegate.pumpEventBatches.count > batchesBefore
+    private func assertSyncedOnItsOwn(
+        _ driver: FaketandemHarness.Driver,
+        after outage: Outage,
+        timeout: TimeInterval,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        try IntegrationWait.until("the driver to sync on its own", timeout: timeout) {
+            driver.delegate.pumpEventBatches.count > outage.batchesBefore
         }
-        let boundary = try XCTUnwrap(driver.manager.state.lastReconciliation)
-        XCTAssertGreaterThan(boundary, reconciliationBefore)
-        XCTAssertEqual(driver.delegate.pumpEventBatches.last?.lastReconciliation, boundary)
-        let reads = try harness.requestsSeen(since: logStart).map(\.message)
-        XCTAssertTrue(reads.contains("CurrentBasalStatusRequest"), "\(reads)")
-        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)")
+        let boundary = try XCTUnwrap(driver.manager.state.lastReconciliation, file: file, line: line)
+        XCTAssertGreaterThan(boundary, outage.reconciliationBefore, file: file, line: line)
+        XCTAssertEqual(driver.delegate.pumpEventBatches.last?.lastReconciliation, boundary, file: file, line: line)
+        let reads = try harness.requestsSeen(since: outage.logStart).map(\.message)
+        XCTAssertTrue(reads.contains("CurrentBasalStatusRequest"), "\(reads)", file: file, line: line)
+        XCTAssertTrue(driver.delegate.errors.isEmpty, "\(driver.delegate.errors)", file: file, line: line)
     }
 
     /// A command job queued before the pump was deleted, such as a backfill tick's follow-up, must
