@@ -257,6 +257,57 @@ final class DoseOracleTests: XCTestCase {
         XCTAssertEqual(oracle.iob(at: t0.addingTimeInterval(.hours(6))), 0, accuracy: 1e-9, "fully decayed after the action duration")
     }
 
+    // MARK: - Loop: the basal schedule overlay
+
+    private let utcSchedule = BasalRateSchedule(dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0)], timeZone: TimeZone(identifier: "UTC"))!
+
+    /// The reference date is a UTC midnight.
+    private func utcMidnight(of date: Date) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / .hours(24)).rounded(.down) * .hours(24))
+    }
+
+    private func scheduleFill(_ oracle: LoopDoseStoreOracle) -> [LoopDoseStoreOracle.StoredDose] {
+        oracle.doses.filter { $0.syncIdentifier.hasPrefix("BasalRateSchedule ") }.sorted { $0.dose.startDate < $1.dose.startDate }
+    }
+
+    func testLoopFillsTheDayBeforeTheFirstTempBasalWithItsScheduleSplitAtMidnight() {
+        let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
+        let now = t0.addingTimeInterval(.minutes(5))
+        oracle.addPumpEvents([tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: true)], lastReconciliation: now, replacePendingEvents: true, now: now)
+
+        let fill = scheduleFill(oracle)
+        XCTAssertEqual(fill.map(\.dose.startDate), [now.addingTimeInterval(-.hours(24)), utcMidnight(of: t0)])
+        XCTAssertEqual(fill.last?.dose.endDate, t0)
+        XCTAssertTrue(fill.allSatisfy { !$0.isMutable && $0.dose.type == .basal && $0.dose.unitsPerHour == 1.0 })
+        XCTAssertEqual(fill.reduce(0) { $0 + $1.value }, t0.timeIntervalSince(now.addingTimeInterval(-.hours(24))) / .hours(1), accuracy: 0.05)
+    }
+
+    func testLoopsScheduleFillStartsTheNextSaveAtTheRunningTempBasal() {
+        let oracle = LoopDoseStoreOracle(basalSchedule: utcSchedule)
+        let running = tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: true)
+        oracle.addPumpEvents([running], lastReconciliation: t0.addingTimeInterval(60), replacePendingEvents: true, now: t0.addingTimeInterval(60))
+        let fillBefore = scheduleFill(oracle).count
+
+        let end = t0.addingTimeInterval(.minutes(10))
+        let finished = tempBasal(rate: 2.0, start: t0, duration: .minutes(30), mutable: false, end: end)
+        oracle.addPumpEvents([finished], lastReconciliation: end, replacePendingEvents: true, now: end)
+
+        XCTAssertEqual(scheduleFill(oracle).count, fillBefore, "no gap before the temp basal is filled twice")
+        XCTAssertEqual(oracle.assertPermanent(raw: running.raw)?.dose.endDate, end)
+    }
+
+    func testLoopsScheduleRatesFollowItsSegments() {
+        let schedule = BasalRateSchedule(
+            dailyItems: [RepeatingScheduleValue(startTime: 0, value: 1.0), RepeatingScheduleValue(startTime: .hours(6), value: 0.5)],
+            timeZone: TimeZone(identifier: "UTC")
+        )!
+        let utcDay = utcMidnight(of: t0)
+        let rates = LoopDoseStoreOracle.scheduledRates(schedule, from: utcDay.addingTimeInterval(.hours(5)), to: utcDay.addingTimeInterval(.hours(7)))
+        XCTAssertEqual(rates.map(\.rate), [1.0, 0.5])
+        XCTAssertEqual(rates.map(\.start), [utcDay, utcDay.addingTimeInterval(.hours(6))])
+        XCTAssertEqual(rates.map(\.end), [utcDay.addingTimeInterval(.hours(6)), utcDay.addingTimeInterval(.hours(24))])
+    }
+
     // MARK: - Trio
 
     private func scheduledBasal(rate: Double, at date: Date) -> NewPumpEvent {
