@@ -33,6 +33,18 @@ import XCTest
         XCTAssertEqual(delegate.statusUpdates.count, 1)
     }
 
+    func testAttachingTheDelegateAndItsQueueSendsNoStateUpdateWhenNoneWasMissed() {
+        let delegate = MockPumpManagerDelegate()
+
+        manager.pumpManagerDelegate = delegate
+        manager.delegateQueue = delegateQueue
+
+        drainMainQueue()
+        delegateQueue.sync {}
+
+        XCTAssertEqual(delegate.didUpdateStateCount, 0)
+    }
+
     private func drainMainQueue() {
         let drained = expectation(description: "main queue drained")
         DispatchQueue.main.async { drained.fulfill() }

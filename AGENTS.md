@@ -115,7 +115,9 @@ a direct call from a driver queue crashes it, as a backfill tick reading
 `queue.sync`, which deadlocks a caller already on the delegate queue. Nothing goes out until the
 host has set both the delegate and its queue (`canNotifyDelegate`): `pumpDelegate.queue` reads
 `.main` until then, and Trio sets the delegate first. `deliverStateMissedByTheDelegate` replays
-what was held once the second one lands. `MockPumpManagerDelegate`
+what was held once the second one lands, and a state update only if one was held: Trio's setter
+goes on to write its saved pump state, which `pumpManagerDidUpdateState` also writes, and under
+TSan that race hung Trio at launch. `MockPumpManagerDelegate`
 fails the test on any call that carries the manager and arrives off its `delegateQueue`; a test
 attaches one queue for the manager's life, as hosts do.
 

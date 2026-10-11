@@ -74,6 +74,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
     // Status is published from the command, CoreBluetooth and delegate queues at once; two
     // unserialized swaps of oldState release the same snapshot twice.
     private let publishLock = NSLock()
+    private var stateUpdateMissedByTheDelegate = false
 
     // Those queues all read and write state. It holds class references (UnfinalizedDose), so an
     // unserialized write can over-release them; `_modify` keeps `state.x = y` one locked access.
@@ -370,6 +371,10 @@ public class TandemPumpManager: PumpManager, Pluggable {
                 delegate.pumpManagerDidUpdateState(self)
                 delegate.pumpManager(self, didUpdate: status, oldStatus: oldStatus)
             }
+        } else {
+            publishLock.lock()
+            stateUpdateMissedByTheDelegate = true
+            publishLock.unlock()
         }
 
         statusObservers.forEach { observer in
@@ -442,7 +447,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
     private func deliverStateMissedByTheDelegate() {
         guard pumpDelegate.delegate != nil, hasDelegateQueue else { return }
 
-        notifyDelegateStateUpdated()
+        // Only a missed update: Trio writes the same property from the setter's thread, so an
+        // unneeded one races it, and under TSan that race has hung Trio at launch.
+        publishLock.lock()
+        let missed = stateUpdateMissedByTheDelegate
+        stateUpdateMissedByTheDelegate = false
+        publishLock.unlock()
+        if missed {
+            notifyDelegateStateUpdated()
+        }
         flushPendingReservoirReading()
         flushPendingPumpEvents()
         flushPendingPumpClockAdjustments()
