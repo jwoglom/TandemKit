@@ -445,6 +445,13 @@ edit instead of at the next sync.
   still be delivering.
 - `enactBolus` refuses automatic boluses while Control-IQ is active. `enactTempBasal` refuses
   while Control-IQ is active or a bolus is running.
+- `enactBolus` refuses with `bolusIsRunning` while a bolus it started has not been seen to end
+  (`isBolusInFlight`), and checks again inside its command job: a host's SMB enacted while a manual
+  bolus was being initiated queued behind it and ran right after its `InitiateBolus`, and only the
+  pump's permission nack stopped it (#504). Past the bolus's estimated end it reads
+  `CurrentBolusStatus` first, so a bolus that finished out of contact does not block the next; no
+  answer still refuses. `cancelBolus` resets `bolusState` with `bolusDose`, or the next bolus is
+  refused.
 - A zero temp basal is always allowed, whatever the profile, sync or update state below, since 0%
   of any profile is 0. Control-IQ, a running bolus and a duration the pump refuses still refuse it.
 - `enactTempBasal` refuses a temp outside 15 minutes to 72 hours (`supportedTempBasalMinutes`)

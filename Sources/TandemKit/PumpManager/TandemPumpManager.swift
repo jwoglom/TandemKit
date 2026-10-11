@@ -712,10 +712,25 @@ public class TandemPumpManager: PumpManager, Pluggable {
             return
         }
 
+        if shouldDeferBolusSync() {
+            refuseWhileABolusRuns(completion)
+            return
+        }
+
         bluetooth.ensureConnected { error in
             if let error {
                 self.logger.error("Failed to connect for bolus: \(error.localizedDescription)")
                 completion(.communication(PumpCommError.pumpNotConnected))
+                return
+            }
+
+            // Again here: a second enact queues behind the first's job and runs right after its InitiateBolus.
+            // Past its estimated end a bolus may have finished out of contact, so the pump is read first.
+            if self.isBolusInFlight, !self.shouldDeferBolusSync() {
+                self.fetchBolusStatus(fromSync: true)
+            }
+            guard !self.isBolusInFlight else {
+                self.refuseWhileABolusRuns(completion)
                 return
             }
 
@@ -799,6 +814,15 @@ public class TandemPumpManager: PumpManager, Pluggable {
         }
     }
 
+    private var isBolusInFlight: Bool {
+        state.bolusDose != nil || state.bolusState != .noBolus || bolusProgressReport?.isUnfinalized() == true
+    }
+
+    private func refuseWhileABolusRuns(_ completion: (PumpManagerError?) -> Void) {
+        logger.warning("[enactBolus] Blocked: bolus \(state.bolusDose?.bolusId ?? -1) is still running")
+        completion(.deviceState(TandemPumpManagerValidationError.bolusIsRunning))
+    }
+
     public func cancelBolus(completion: @escaping (_ result: PumpManagerResult<DoseEntry?>) -> Void) {
         logger.info("Cancelling bolus...")
 
@@ -843,6 +867,7 @@ public class TandemPumpManager: PumpManager, Pluggable {
             self.telemetryScheduler.cancelAll()
             self.bolusProgressReport = nil
             self.state.bolusDose = nil
+            self.state.bolusState = .noBolus
 
             guard let lastBolus = self.queryLastBolusReport(bolusId: bolusId) else {
                 // Unknown, not zero: finalizing at 0 would permanently erase the insulin that
