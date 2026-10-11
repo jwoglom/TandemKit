@@ -7,8 +7,7 @@ public final class ErrorResponse: Message {
         size: 2,
         type: .Response,
         characteristic: CharacteristicUUID.CURRENT_STATUS_CHARACTERISTICS,
-        variableSize: true,
-        signed: true
+        variableSize: true
     )
 
     public var cargo: Data
@@ -38,16 +37,8 @@ public final class ErrorResponse: Message {
         errorCode = PumpFaultCode(rawValue: errorCodeId)
     }
 
-    public init(requestCodeId: Int, errorCode: PumpFaultCode, remainingBytes: Data = Data()) {
-        var payload = Data([UInt8(requestCodeId & 0xFF), UInt8(errorCode.rawValue & 0xFF)])
-        if !remainingBytes.isEmpty {
-            payload.append(contentsOf: remainingBytes)
-        }
-        cargo = payload
-        self.requestCodeId = requestCodeId
-        errorCodeId = errorCode.rawValue
-        self.remainingBytes = remainingBytes
-        self.errorCode = errorCode
+    public convenience init(requestCodeId: Int, errorCode: PumpFaultCode, remainingBytes: Data = Data()) {
+        self.init(cargo: Data([UInt8(requestCodeId & 0xFF), UInt8(errorCode.rawValue & 0xFF)]) + remainingBytes)
     }
 
     public convenience init(requestCodeId: Int, errorCodeId: Int, remainingBytes: Data = Data()) {

@@ -88,7 +88,7 @@ public struct Packet {
 
     public func merge(newPacket: Packet) -> Packet {
         Packet(
-            packetsRemaining: 1 + max(packetsRemaining, newPacket.packetsRemaining),
+            packetsRemaining: newPacket.packetsRemaining,
             txId: txId,
             internalCargo: Bytes.combine(internalCargo, newPacket.internalCargo)
         )
